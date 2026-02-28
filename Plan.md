@@ -107,5 +107,65 @@ it needs to look + FEEL kinda like discord, becaue the goal ist to pull my frien
 
 we also on every single platform need to support voice and video calls. you should write in the agents.md to look up flutter packages with native bindings that can help us achieve our goals.
 
-also we are in the age of AI. 
-i did not give you a lot of information about the teams backend, i know. let's treat teams group (chats with multiple users) as something that is under direct messages with the teams icon as the source, just like it would be for an indivudal user. teams groups should become servers like with discord/stoat. matrix i already told you.
+i did not give you a lot of information about the teams backend, i know. let's treat teams group (chats with multiple users) as something that is under direct messages with the teams icon as the source, just like it would be for an indivudal user. actual teams-teams should  become servers like with discord/stoat. matrix i already told you.
+
+i also want to have a general 'notifications' server where i can get my latest notifications for each and every account i added from people/channels/servers that send me direct messages
+oh now that i rember discord in friends view does support 'groups' with multiple users up to 8 or so like teams does. i think matrix does too. yes that should be simillarly discplayed
+
+for the friends page/server i want to be able to have favourites from all accounts/backends as well as search at the top. so search windnow up top, then favourites below, then all the users/team-multiuser-chats/discor-multiuser-groups ordered by last message with the date they send me a message. 
+
+Ok i don't know if stoat/teams/matrix/discord have rust client libraries, i don't think so probably.
+in case they don't we might need a minimal javascript runtime to execute their stuff in the background or implement a stub-client.
+I'm sure i saw a discord terminal client at one point and i'm sure we can start rust crates with minimal broad protocol support for their flows and a minimal javscript runtime to execute any client challenge code they send us to make sure we're not AI. also we need to open up browsers/webviews to excute their oauth flows anyway and can probably extract the tokens for that afterwards. unless they have a rust library already to use them as the client, let's start crates for all their stuff.
+i don't know if matrix has a rust crate but i'm sure it already has a rust client crate
+
+also now that i'm thinking, to test we should probably build a 'demo' client implementation.
+this demo client i can add via the settings implements randomly generated set of demo friends, has demo notifications, has demo chat messages, has demo groups, has demo server that have demo chat, voice, video call channels with demo categories they are under same as a discord server has.
+
+let's stick UI wise to stoat and discord as close as possible as you can get with dioxus and tailwind.
+i leave the UI implementation up to you, ideally i want you to be able to use a browser mcp where you can take screenshots and verify your own work on the ui as well as click buttons.
+
+
+Ok so this project should be implemented in 3 broad phases however phase 3 can have multiple or ever lasing continue phases.
+
+first phase is we create a comprehensive plan where you write yourself multiple plan.mds and prepare them with checkboxes for the individual phases, clear up any uncertainties and so on and so forth with me you also do research on all the apps i mentioned.
+
+write yourself agent.mds for every crate and write in your main agent.md to update the agent.mds to make sure they outlines what needs to be done as well as make yourself readme.mds that should be referenced for each crate in case you forget what the crate is for agent.md. like use agent and readme mds as well as other markdown documents as you Eidetic memory storage.
+do not rely on your limited chat context window for more than required but document every desiscion and turn so when you loose connection or run out of anything we can continue the session.
+ALWAYS update each and every step in the plan and make that comprehensive checklist with progess indicators as well as make substeps when you start a broader item and reference secitons of the plan by giving EVERYTHING numbers. you are your own senior project manager and need to define milestones and subphases. 
+
+
+second phase is we create the broad project
+i kinda want the dioxus project structure in place first before continuing to implement any specific teams/discord/stoat/matrix client stuff for the library. maybe create the crates for those clients already (i want them all to implement a shared poly-client crate protocol that is also loaded from the shared app-library and that will have all the event/state handling and interfaces that abstract teams/discord/matrix/stoat)
+
+i don't want to add any specific stuff for teams/discord/matrix/stoat here yet just the broad project structure with the github actions, .vscode launch profiles, a basic dioxus based ui and everything in place as well as an agent.md for each project.
+
+write yourself code comments etc.
+
+we want 90% of the UI already in place in phase two, as well as the backend sync functionality and the encrypted storage.
+i want to be able to launch the backend sync server by the end of it and save basic settings into the app
+
+did i mention the whole app should have dark mode by default? i want to be able to support dark mode/bright mode based upon device settings, or dark by default and optional setable bright mode.
+i also want what ever dioxus has in petto for multi language! i need a comprehensive multi language solution, supporting a single language is an absolute failure to this project.
+
+third phase
+this is the phase where we implement the clients for teams/stoat/discord/matrix.
+we will probaby do some research here and build ourselfs and agent.md and comprehensive plan on how to implement our client for each of those.
+the idea is not to be a full client that support all their features, but a polygot multiclient that can chat with servers/channels, users and multiuser groups from their backends.
+we do not, absolutely do not want to replace the clients you use for them but be a broad client that can speak all of them without having to switch to 4 different web apps to do messenging.
+all these concrete client implementations need to become feature flags obviously four our main app.
+someone might decide to only build our app with discord + teams support or somethings. that's ok
+
+3.1
+first we are going to implement the stoat client here in this this phase as well as add support for fully working chat, voice and video calling functionality. i need to be able to message individual users, group and stoat server channels as well as add servers to my favourites. only then will we continue with implementing the backends for discord.
+
+
+3.2 now we implement matrix and the fake-servers for matrix
+
+3.3
+now we implement discord - this implementation should not make user of just their login token but maybe have their app somewhere in the background - we will see when we get to it.
+
+3.4
+now we implement teams - this implementation should not make user of just their login token but maybe have their app somewhere in the background - we will see when we get to it.
+
+important
