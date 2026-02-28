@@ -1,0 +1,2 @@
+read this plan.md and execute upon it. ask me questions about it and implement phase one as well as setup a comprehensive plan.md for phase 1, 2 and 3 that all reference  and write yourself a better version of this plan as overall-plan.md where you fill in and reorganize my thoughs into something decent and  ask me any open questions to fill in anything unclea upon the overall plan.
+this is the beginning of a new great project claude 💌
