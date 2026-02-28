@@ -1,0 +1,11 @@
+2026-02-28
+
+# Crate Update Log
+
+This file tracks when workspace dependencies were last updated.
+Read this at the START of every coding session.
+If the date above is older than 3 months, run `cargo update` and update all [workspace.dependencies] versions.
+
+## Update History
+
+- **2026-02-28**: Initial project setup. All crates at latest versions as of this date.
