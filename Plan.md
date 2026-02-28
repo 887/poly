@@ -12,8 +12,6 @@ https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.3
 Also same for surreal db use version 3.0 and have in the agents.md to ONLY use 3.0 documentation. Surrealdb can use a rocksdb backend for now
 https://surrealdb.com/3.0
 
-
-
 The plan is to have a singular monorepo codebase for:
 
 - Desktop
@@ -134,6 +132,10 @@ write yourself agent.mds for every crate and write in your main agent.md to upda
 do not rely on your limited chat context window for more than required but document every desiscion and turn so when you loose connection or run out of anything we can continue the session.
 ALWAYS update each and every step in the plan and make that comprehensive checklist with progess indicators as well as make substeps when you start a broader item and reference secitons of the plan by giving EVERYTHING numbers. you are your own senior project manager and need to define milestones and subphases. 
 
+also write in the angents.md to always use the latest stable version of rust crates and update them when we haven't worked on this in a while.
+leave a last-crate-update-date file around and tell yourself to read that every 3 months to do crate updates.
+also use a crate workspace cargo.toml and use workspace level crates for shared infrastructure where possible
+
 
 second phase is we create the broad project
 i kinda want the dioxus project structure in place first before continuing to implement any specific teams/discord/stoat/matrix client stuff for the library. maybe create the crates for those clients already (i want them all to implement a shared poly-client crate protocol that is also loaded from the shared app-library and that will have all the event/state handling and interfaces that abstract teams/discord/matrix/stoat)
@@ -152,7 +154,7 @@ third phase
 this is the phase where we implement the clients for teams/stoat/discord/matrix.
 we will probaby do some research here and build ourselfs and agent.md and comprehensive plan on how to implement our client for each of those.
 the idea is not to be a full client that support all their features, but a polygot multiclient that can chat with servers/channels, users and multiuser groups from their backends.
-we do not, absolutely do not want to replace the clients you use for them but be a broad client that can speak all of them without having to switch to 4 different web apps to do messenging.
+we do not, absolutely do not want to replace the clients you use for them but be a broad client that can speak all of them without having to switch to 4 different web apps to do messaging.
 all these concrete client implementations need to become feature flags obviously four our main app.
 someone might decide to only build our app with discord + teams support or somethings. that's ok
 
