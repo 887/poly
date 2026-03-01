@@ -79,15 +79,14 @@ impl DevtoolsBackend for DesktopHttpBackend {
             .timeout(std::time::Duration::from_secs(2))
             .send()
             .await
+            && resp.status().is_success()
         {
-            if resp.status().is_success() {
-                let body = resp.text().await.unwrap_or_default();
-                eprintln!("[launch_app] App already running — reusing existing instance ({body})");
-                return Ok(format!(
-                    "App already running on {BASE} — reusing existing instance.\n\
-                     Call connect_cdp to interact with it."
-                ));
-            }
+            let body = resp.text().await.unwrap_or_default();
+            eprintln!("[launch_app] App already running — reusing existing instance ({body})");
+            return Ok(format!(
+                "App already running on {BASE} — reusing existing instance.\n\
+                 Call connect_cdp to interact with it."
+            ));
         }
 
         // ── Step 2: no healthy instance — kill any stale process ─────────────
@@ -144,12 +143,11 @@ impl DevtoolsBackend for DesktopHttpBackend {
                 .timeout(std::time::Duration::from_secs(1))
                 .send()
                 .await
+                && r.status().is_success()
             {
-                if r.status().is_success() {
-                    eprintln!("[launch_app] App ready after ~{}ms", attempt * 500);
-                    ready = true;
-                    break;
-                }
+                eprintln!("[launch_app] App ready after ~{}ms", attempt * 500);
+                ready = true;
+                break;
             }
         }
 
