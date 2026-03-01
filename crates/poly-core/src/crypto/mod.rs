@@ -173,6 +173,8 @@ pub fn decrypt(data: &[u8], _key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+// Tests can panic on assertion failures; unwrap is appropriate here to fail fast
 mod tests {
     use super::*;
 
