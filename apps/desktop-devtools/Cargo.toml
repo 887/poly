@@ -25,8 +25,8 @@ tokio = { workspace = true, features = [
 axum = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-webkit2gtk = { version = "2.0", features = [] }
-cairo-rs = { version = "0.18", features = ["png"] }
+webkit2gtk = { workspace = true }
+cairo-rs = { workspace = true }
 wry = { workspace = true }
 
 [lints]

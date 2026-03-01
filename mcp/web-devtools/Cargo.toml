@@ -17,8 +17,8 @@ tokio = { workspace = true, features = [
     "process",
     "io-std",
 ] }
-tokio-tungstenite = "0.26"
-futures-util = "0.3"
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }

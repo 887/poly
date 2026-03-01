@@ -47,7 +47,7 @@ futures = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
 reqwest = { workspace = true, features = ["json", "multipart"] }
 tokio-tungstenite = { workspace = true, features = ["native-tls"] }
 futures = { workspace = true }
