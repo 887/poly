@@ -76,14 +76,14 @@ pub fn ServerSidebar(app_state: Signal<AppState>) -> Element {
                         .next()
                         .map(|c| c.to_string())
                         .unwrap_or_default();
-                    let tooltip = format!("{server_name}\n{backend_name} — {account_name}"); // Load channels for this server
+                    let tooltip = format!("{server_name}\n{backend_name} — {account_name}");
                     let icon_color = user_color(&server_id);
                     rsx! {
                         div {
                             class: if is_selected { "server-icon active" } else { "server-icon" },
                             onclick: {
                                 let server_id_click = server_id.clone();
-                                move |_| { // Unread badge
+                                move |_| { // Unread badge // Unread badge
                                     app_state.write().nav.view = View::Server;
                                     app_state.write().nav.selected_server = Some(server_id_click.clone());
                                     app_state.write().nav.selected_channel = None;
