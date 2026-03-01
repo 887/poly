@@ -418,7 +418,7 @@ pub fn verify_pow(nonce: &str, counter: u64, difficulty: u32) -> bool {
     }
     if remaining_bits > 0 {
         let mask = 0xFFu8 << (8 - remaining_bits);
-        if hash.get(full_bytes).map_or(false, |b| b & mask != 0) {
+        if hash.get(full_bytes).is_some_and(|b| b & mask != 0) {
             return false;
         }
     }

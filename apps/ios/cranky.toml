@@ -3,6 +3,7 @@
 # These are IN ADDITION to the workspace-level lints in the root Cargo.toml.
 
 [deny]
+warnings = true
 # Safety
 unsafe_code = true
 

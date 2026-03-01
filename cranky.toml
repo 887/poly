@@ -2,6 +2,7 @@
 # `cargo cranky` respects this file (equivalent to cargo clippy but config-file driven).
 
 [deny]
+warnings = true
 # Safety
 unsafe_code = true
 
