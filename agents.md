@@ -74,8 +74,12 @@ Someone should be able to build Poly with only `discord + teams` or any other co
 
 ### 7. Code Quality
 
-- Run `cargo clippy` — zero warnings policy
-- Run `cargo fmt` — consistent formatting
+- Run `cargo cranky --workspace` — zero warnings/errors policy (uses `cranky.toml` in each crate)
+  - `cranky` is a `cargo clippy` wrapper that reads `cranky.toml` for denied/warned lints
+  - Every crate and the workspace root has a `cranky.toml` denying: `unsafe_code`, `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`, `clippy::indexing_slicing`
+  - Install once: `cargo install cranky`
+- Run `cargo check --workspace` — verify all crates compile
+- Run `cargo fmt --all` — consistent formatting
 - Write doc comments on all public items
 - Write `// TODO(phase-X.Y.Z):` comments referencing the plan item number
 - Add `// DECISION(DX):` comments referencing decision numbers from overall-plan.md
@@ -98,9 +102,11 @@ At the START of each coding session:
 5. Check `docs/overall-plan.md` for any open decisions
 
 At the END of each session:
-1. Update phase plan checkboxes for completed items
-2. Update relevant `agents.md` files with new learnings
-3. Write a brief session summary in the phase plan (append to bottom)
+1. Run `cargo cranky --workspace` — fix ALL lint errors before committing
+2. Run `cargo fmt --all` — format all code
+3. Update phase plan checkboxes for completed items
+4. Update relevant `agents.md` files with new learnings
+5. Write a brief session summary in the phase plan (append to bottom)
 
 ### 10. Platform Targets
 

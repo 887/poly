@@ -113,4 +113,3 @@ pub fn App() -> Element {
         }
     }
 }
-

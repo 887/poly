@@ -10,11 +10,11 @@
 //! WebKit2GTK's inspector protocol is NOT Chrome CDP, so we bridge through
 //! dioxus's built-in `eval()` instead.
 
-use dioxus::prelude::*;
 use dioxus::document::eval;
+use dioxus::prelude::*;
 use poly_core::ui::App;
 use std::sync::OnceLock;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 // ─── Eval Bridge ──────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ async fn do_eval(js: impl Into<String>) -> Result<String, String> {
 
         // If the expression looks like a single expression (no bare top-level `;`
         // outside of strings/parens), wrap with `return (expr)`.
-        // Otherwise wrap in an IIFE. We use a heuristic: look for `;` outside 
+        // Otherwise wrap in an IIFE. We use a heuristic: look for `;` outside
         // of string literals in the stripped expression.
         if has_top_level_semicolon(stripped) {
             // Multi-statement: wrap in IIFE. Append `return null;` as a guaranteed
@@ -84,9 +84,12 @@ async fn do_eval(js: impl Into<String>) -> Result<String, String> {
         .get()
         .ok_or_else(|| "Eval bridge not yet initialised".to_string())?;
     let (resp_tx, resp_rx) = oneshot::channel();
-    tx.send(EvalRequest { js: script, resp: resp_tx })
-        .await
-        .map_err(|e| e.to_string())?;
+    tx.send(EvalRequest {
+        js: script,
+        resp: resp_tx,
+    })
+    .await
+    .map_err(|e| e.to_string())?;
     resp_rx.await.map_err(|e| e.to_string())?
 }
 
@@ -149,12 +152,16 @@ fn main() {
     // Initialise the eval bridge channels before dioxus starts.
     let (tx, rx) = mpsc::channel::<EvalRequest>(64);
     EVAL_TX.set(tx).expect("EVAL_TX already set");
-    EVAL_RX.set(Mutex::new(Some(rx))).expect("EVAL_RX already set");
+    EVAL_RX
+        .set(Mutex::new(Some(rx)))
+        .expect("EVAL_RX already set");
 
     // Initialise the screenshot bridge channels.
     let (ss_tx, ss_rx) = mpsc::channel::<ScreenshotRequest>(4);
     SCREENSHOT_TX.set(ss_tx).expect("SCREENSHOT_TX already set");
-    SCREENSHOT_RX.set(Mutex::new(Some(ss_rx))).expect("SCREENSHOT_RX already set");
+    SCREENSHOT_RX
+        .set(Mutex::new(Some(ss_rx)))
+        .expect("SCREENSHOT_RX already set");
 
     poly_core::i18n::init();
     poly_core::theme::init();
@@ -218,8 +225,8 @@ fn DevtoolsShell() -> Element {
         };
 
         while let Some(req) = rx.recv().await {
-            use webkit2gtk::WebViewExt as _;
             use std::sync::mpsc;
+            use webkit2gtk::WebViewExt as _;
 
             let (tx, poll_rx) = mpsc::channel::<Result<Vec<u8>, String>>();
 
@@ -231,11 +238,17 @@ fn DevtoolsShell() -> Element {
                     Ok(surface) => {
                         let mut buf: Vec<u8> = Vec::new();
                         match surface.write_to_png(&mut buf) {
-                            Ok(_) => { let _ = tx.send(Ok(buf)); }
-                            Err(e) => { let _ = tx.send(Err(e.to_string())); }
+                            Ok(_) => {
+                                let _ = tx.send(Ok(buf));
+                            }
+                            Err(e) => {
+                                let _ = tx.send(Err(e.to_string()));
+                            }
                         }
                     }
-                    Err(e) => { let _ = tx.send(Err(e.to_string())); }
+                    Err(e) => {
+                        let _ = tx.send(Err(e.to_string()));
+                    }
                 },
             );
 
@@ -272,14 +285,14 @@ fn DevtoolsShell() -> Element {
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
 
 async fn start_devtools_server() -> anyhow::Result<()> {
-    use axum::{routing, Router};
+    use axum::{Router, routing};
 
     let app = Router::new()
-        .route("/status",     routing::get(http_status))
-        .route("/eval",       routing::post(http_eval))
+        .route("/status", routing::get(http_status))
+        .route("/eval", routing::post(http_eval))
         .route("/screenshot", routing::get(http_screenshot))
-        .route("/dom",        routing::get(http_dom))
-        .route("/console",    routing::get(http_console));
+        .route("/dom", routing::get(http_dom))
+        .route("/console", routing::get(http_console));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:9223").await?;
     tracing::info!("DevTools HTTP server listening on http://127.0.0.1:9223");
@@ -287,15 +300,21 @@ async fn start_devtools_server() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn http_status() -> &'static str { "ok" }
+async fn http_status() -> &'static str {
+    "ok"
+}
 
 /// POST /eval — body is plain JS; returns JSON {"result":"..."} or {"error":"..."}
 async fn http_eval(body: String) -> (axum::http::StatusCode, String) {
     match do_eval(body).await {
-        Ok(r)  => (axum::http::StatusCode::OK,
-                   serde_json::json!({"result": r}).to_string()),
-        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                   serde_json::json!({"error": e}).to_string()),
+        Ok(r) => (
+            axum::http::StatusCode::OK,
+            serde_json::json!({"result": r}).to_string(),
+        ),
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            serde_json::json!({"error": e}).to_string(),
+        ),
     }
 }
 
@@ -305,10 +324,13 @@ async fn http_screenshot() -> axum::response::Response {
 
     let tx = match SCREENSHOT_TX.get() {
         Some(tx) => tx,
-        None => return (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            "Screenshot bridge not initialised",
-        ).into_response(),
+        None => {
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "Screenshot bridge not initialised",
+            )
+                .into_response();
+        }
     };
 
     let (resp_tx, resp_rx) = oneshot::channel();
@@ -316,22 +338,18 @@ async fn http_screenshot() -> axum::response::Response {
         return (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             "Screenshot channel closed",
-        ).into_response();
+        )
+            .into_response();
     }
 
     match resp_rx.await {
-        Ok(Ok(png)) => (
-            [(axum::http::header::CONTENT_TYPE, "image/png")],
-            png,
-        ).into_response(),
-        Ok(Err(e)) => (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            e,
-        ).into_response(),
+        Ok(Ok(png)) => ([(axum::http::header::CONTENT_TYPE, "image/png")], png).into_response(),
+        Ok(Err(e)) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
         Err(_) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             "Screenshot request dropped",
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -339,7 +357,7 @@ async fn http_screenshot() -> axum::response::Response {
 async fn http_dom() -> (axum::http::StatusCode, String) {
     match do_eval("document.documentElement.outerHTML").await {
         Ok(html) => (axum::http::StatusCode::OK, html),
-        Err(e)   => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e),
+        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e),
     }
 }
 
@@ -347,6 +365,6 @@ async fn http_dom() -> (axum::http::StatusCode, String) {
 async fn http_console() -> (axum::http::StatusCode, String) {
     match do_eval("JSON.stringify(window.__polyLogs || [])").await {
         Ok(logs) => (axum::http::StatusCode::OK, logs),
-        Err(e)   => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e),
+        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e),
     }
 }

@@ -203,10 +203,10 @@ impl DevtoolsBackend for DesktopHttpBackend {
 
         // Remove poly's data directory
         let data_dir = dirs_data_path();
-        if let Some(dir) = data_dir {
-            if std::path::Path::new(&dir).exists() {
-                std::fs::remove_dir_all(&dir)?;
-            }
+        if let Some(dir) = data_dir
+            && std::path::Path::new(&dir).exists()
+        {
+            std::fs::remove_dir_all(&dir)?;
         }
 
         Ok(

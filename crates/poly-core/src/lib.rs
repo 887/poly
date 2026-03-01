@@ -54,4 +54,3 @@ pub async fn init() -> anyhow::Result<()> {
     tracing::info!("Poly core initialized successfully");
     Ok(())
 }
-

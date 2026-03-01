@@ -25,8 +25,8 @@
 use std::sync::Arc;
 
 use surrealdb::{
-    engine::local::{Db, SurrealKv},
     Surreal,
+    engine::local::{Db, SurrealKv},
 };
 
 use super::StorageError;
@@ -88,8 +88,8 @@ impl StorageInner {
         match raw {
             None => Ok(None),
             Some(s) => {
-                let val: serde_json::Value = serde_json::from_str(&s)
-                    .map_err(|e| StorageError::Serde(e.to_string()))?;
+                let val: serde_json::Value =
+                    serde_json::from_str(&s).map_err(|e| StorageError::Serde(e.to_string()))?;
                 Ok(Some(val))
             }
         }

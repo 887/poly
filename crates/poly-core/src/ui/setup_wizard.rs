@@ -1,7 +1,7 @@
 //! Setup wizard — first-launch key generation and recovery phrase display.
 
-use dioxus::prelude::*;
 use crate::i18n::t;
+use dioxus::prelude::*;
 
 /// Setup wizard component shown on first launch.
 ///

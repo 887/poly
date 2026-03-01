@@ -145,7 +145,8 @@ impl Storage {
 
     /// Persist application settings.
     pub async fn set_app_settings(&self, settings: &AppSettings) -> Result<(), StorageError> {
-        self.set("app_settings", serde_json::to_value(settings)?).await
+        self.set("app_settings", serde_json::to_value(settings)?)
+            .await
     }
 
     // ── Typed access — AccountToken ───────────────────────────────────────────
@@ -164,13 +165,19 @@ impl Storage {
         let mut tokens = self.get_account_tokens().await?;
         tokens.retain(|t| !(t.backend == token.backend && t.account_id == token.account_id));
         tokens.push(token.clone());
-        self.set("account_tokens", serde_json::to_value(&tokens)?).await
+        self.set("account_tokens", serde_json::to_value(&tokens)?)
+            .await
     }
 
     /// Remove an account token.
-    pub async fn remove_account_token(&self, backend: &str, account_id: &str) -> Result<(), StorageError> {
+    pub async fn remove_account_token(
+        &self,
+        backend: &str,
+        account_id: &str,
+    ) -> Result<(), StorageError> {
         let mut tokens = self.get_account_tokens().await?;
         tokens.retain(|t| !(t.backend == backend && t.account_id == account_id));
-        self.set("account_tokens", serde_json::to_value(&tokens)?).await
+        self.set("account_tokens", serde_json::to_value(&tokens)?)
+            .await
     }
 }

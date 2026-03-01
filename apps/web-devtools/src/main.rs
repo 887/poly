@@ -291,21 +291,20 @@ impl ChromeCdpBackend {
         for target in &targets {
             if target.get("type").and_then(|v| v.as_str()) == Some("page") {
                 let target_url = target.get("url").and_then(|v| v.as_str()).unwrap_or("");
-                if target_url.starts_with(&app_url) {
-                    if let Some(ws_url) =
+                if target_url.starts_with(&app_url)
+                    && let Some(ws_url) =
                         target.get("webSocketDebuggerUrl").and_then(|v| v.as_str())
-                    {
-                        return Ok(ws_url.to_string());
-                    }
+                {
+                    return Ok(ws_url.to_string());
                 }
             }
         }
         // 2nd preference: any page target
         for target in &targets {
-            if target.get("type").and_then(|v| v.as_str()) == Some("page") {
-                if let Some(ws_url) = target.get("webSocketDebuggerUrl").and_then(|v| v.as_str()) {
-                    return Ok(ws_url.to_string());
-                }
+            if target.get("type").and_then(|v| v.as_str()) == Some("page")
+                && let Some(ws_url) = target.get("webSocketDebuggerUrl").and_then(|v| v.as_str())
+            {
+                return Ok(ws_url.to_string());
             }
         }
 
@@ -480,21 +479,20 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .get(format!("http://127.0.0.1:{CDP_PORT}/json"))
             .send()
             .await
+            && let Ok(targets) = resp.json::<Vec<Value>>().await
         {
-            if let Ok(targets) = resp.json::<Vec<Value>>().await {
-                let page_targets: Vec<&Value> = targets
-                    .iter()
-                    .filter(|t| t.get("type").and_then(|v| v.as_str()) == Some("page"))
-                    .collect();
-                // Close all page targets except the first one
-                for extra in page_targets.iter().skip(1) {
-                    if let Some(id) = extra.get("id").and_then(|v| v.as_str()) {
-                        let _ = self
-                            .client
-                            .get(format!("http://127.0.0.1:{CDP_PORT}/json/close/{id}"))
-                            .send()
-                            .await;
-                    }
+            let page_targets: Vec<&Value> = targets
+                .iter()
+                .filter(|t| t.get("type").and_then(|v| v.as_str()) == Some("page"))
+                .collect();
+            // Close all page targets except the first one
+            for extra in page_targets.iter().skip(1) {
+                if let Some(id) = extra.get("id").and_then(|v| v.as_str()) {
+                    let _ = self
+                        .client
+                        .get(format!("http://127.0.0.1:{CDP_PORT}/json/close/{id}"))
+                        .send()
+                        .await;
                 }
             }
         }
