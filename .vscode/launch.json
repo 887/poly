@@ -5,15 +5,8 @@
       "type": "lldb",
       "request": "launch",
       "name": "Desktop Wry (Linux)",
-      "preLaunchTask": "Asset Server: desktop (for lldb debugging)",
-      "cargo": {
-        "args": ["build", "-p", "poly-desktop"],
-        "filter": {
-          "name": "poly-desktop",
-          "kind": "bin"
-        }
-      },
-      "args": [],
+      "program": "/home/laragana/.cargo/bin/dx",
+      "args": ["serve", "--hotpatch"],
       "env": {
         "RUST_LOG": "info,poly_core=debug"
       },
@@ -23,19 +16,56 @@
       "type": "lldb",
       "request": "launch",
       "name": "Desktop Blitz (Linux)",
-      "preLaunchTask": "Asset Server: desktop (for lldb debugging)",
-      "cargo": {
-        "args": ["build", "-p", "poly-desktop-blitz"],
-        "filter": {
-          "name": "poly-desktop-blitz",
-          "kind": "bin"
-        }
-      },
-      "args": [],
+      "program": "/home/laragana/.cargo/bin/dx",
+      "args": ["serve", "--hotpatch"],
       "env": {
         "RUST_LOG": "info,poly_core=debug"
       },
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}/apps/desktop-blitz"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Desktop Electron",
+      "program": "/home/laragana/.cargo/bin/dx",
+      "args": ["serve", "--hotpatch"],
+      "env": {
+        "RUST_LOG": "info,poly_core=debug"
+      },
+      "cwd": "${workspaceFolder}/apps/desktop-electron"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "iOS",
+      "program": "/home/laragana/.cargo/bin/dx",
+      "args": ["serve", "--hotpatch"],
+      "env": {
+        "RUST_LOG": "info,poly_core=debug"
+      },
+      "cwd": "${workspaceFolder}/apps/ios"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Android",
+      "program": "/home/laragana/.cargo/bin/dx",
+      "args": ["serve", "--hotpatch"],
+      "env": {
+        "RUST_LOG": "info,poly_core=debug"
+      },
+      "cwd": "${workspaceFolder}/apps/android"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Web",
+      "program": "/home/laragana/.cargo/bin/dx",
+      "args": ["serve", "--hotpatch"],
+      "env": {
+        "RUST_LOG": "info,poly_core=debug"
+      },
+      "cwd": "${workspaceFolder}/apps/web"
     },
     {
       "type": "lldb",

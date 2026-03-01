@@ -142,8 +142,8 @@
       "label": "Asset Server: desktop (for lldb debugging)",
       "type": "shell",
       "command": "dx",
-      "args": ["serve", "--hotpatch", "--platform", "desktop", "--package", "poly-desktop"],
-      "options": { "cwd": "${workspaceFolder}" },
+      "args": ["serve", "--hotpatch"],
+      "options": { "cwd": "${workspaceFolder}/apps/desktop" },
       "isBackground": true,
       "runOptions": {
         "runOn": "folderOpen"
@@ -156,7 +156,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "^.*Compiling.*$",
-          "endsPattern": "^.*listening.*|^.*Finished.*$"
+          "endsPattern": "^\\s*Listening on:.*|^.*Finished.*$"
         }
       }
     },
