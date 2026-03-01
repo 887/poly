@@ -2,22 +2,10 @@
 name: Build Library
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main, dev]
-    paths:
-      - "crates/poly-core/**"
-      - "crates/poly-client/**"
-      - "crates/poly-demo/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-  pull_request:
-    branches: [main, dev]
-    paths:
-      - "crates/poly-core/**"
-      - "crates/poly-client/**"
-      - "crates/poly-demo/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
+    tags:
+      - 'v*'
 
 env:
   CARGO_TERM_COLOR: always

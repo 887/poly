@@ -2,19 +2,10 @@
 name: Build Backup Server
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "crates/poly-backup-server/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-  pull_request:
-    branches: [main]
-    paths:
-      - "crates/poly-backup-server/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 env:
   CARGO_TERM_COLOR: always
