@@ -202,6 +202,10 @@ voice-no-channel = No channel selected
 voice-no-one-here = No one is here yet
 voice-be-first = Be the first to join!
 voice-watching-screen = Watching screen share
+voice-in-channel = in channel
+voice-go-to-channel = Go to channel
+voice-mute-mic = Mute microphone
+voice-unmute-mic = Unmute microphone
 
 # Emoji / GIF / Reactions
 emoji-picker = Emoji

@@ -67,9 +67,9 @@ pub fn VoiceBanner() -> Element {
                     for participant in &display_participants {
                         div {
                             class: "voice-banner-avatar",
-                            style: "background-color: {user_color(&participant.user_id)};",
-                            title: "{participant.display_name}",
-                            "{participant.display_name.chars().next().unwrap_or('?')}"
+                            style: "background-color: {user_color(&participant.user.id)};",
+                            title: "{participant.user.display_name}",
+                            "{participant.user.display_name.chars().next().unwrap_or('?')}"
                         }
                     }
                 }

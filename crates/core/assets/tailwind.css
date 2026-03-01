@@ -2783,6 +2783,42 @@ select {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   DM FRIENDS ROW BUTTON (Discord-style full-width Friends link)
+   ═══════════════════════════════════════════════════════════════ */
+
+.dm-friends-row-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s ease, color 0.1s ease;
+}
+
+.dm-friends-row-btn:hover {
+    background: var(--bg-hover, rgba(78, 80, 88, 0.32));
+    color: var(--text-primary);
+}
+
+.dm-friends-row-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.dm-friends-row-label {
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    DM SEARCH BAR
    ═══════════════════════════════════════════════════════════════ */
 

@@ -19,6 +19,16 @@ use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
 
+/// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
+/// On web, the browser provides its own back/forward buttons so no space is needed.
+#[component]
+fn NavBarSpacer() -> Element {
+    #[cfg(feature = "native-nav")]
+    return rsx! { div { class: "nav-bar-spacer" } };
+    #[cfg(not(feature = "native-nav"))]
+    return rsx! {};
+}
+
 /// Server sidebar component.
 ///
 /// Shows: DMs icon, Notifications icon, favorited server icons with
@@ -36,8 +46,7 @@ pub fn ServerSidebar() -> Element {
     rsx! {
         nav { class: "server-sidebar",
             // Reserve space for native nav-bar buttons (desktop/mobile only)
-            #[cfg(feature = "native-nav")]
-            div { class: "nav-bar-spacer" }
+            NavBarSpacer {}
 
             // DMs / Friends button
             div {
