@@ -30,6 +30,9 @@
 
   // Markdown Linting
   "markdownlint.enable": false,
+"markdownlint.config": {
+  "default": false
+},
 
   // Spell Checking
   "cSpell.enabled": false,
