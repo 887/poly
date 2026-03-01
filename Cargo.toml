@@ -39,7 +39,13 @@ surrealdb = { version = "3.0.1", default-features = false }
 # Async runtime — strict WASM-compatible subset per tokio's own wasm check:
 # only ["rt","macros","sync","time","io-util"] allowed on wasm32
 # Native crates add ["rt-multi-thread","fs","io-std","net","process","signal"] themselves
-tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util"] }
+tokio = { version = "1", features = [
+    "rt",
+    "macros",
+    "sync",
+    "time",
+    "io-util",
+] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
