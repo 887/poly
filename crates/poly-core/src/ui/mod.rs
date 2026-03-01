@@ -147,7 +147,9 @@ pub fn App() -> Element {
                                 }
                                 // Persist default theme config.
                                 if let Err(e) =
-                                    s.set_theme_config(&crate::theme::ThemeConfig::default()).await
+                                    s
+                                    .set_theme_config(&crate::theme::ThemeConfig::default())
+                                    .await
                                 {
                                     tracing::error!("Failed to persist default theme config: {e}");
                                 }

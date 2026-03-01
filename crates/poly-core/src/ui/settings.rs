@@ -237,7 +237,9 @@ fn LanguageSettings() -> Element {
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::error!("Failed to read settings for locale persist: {e}");
+                                    tracing::error!(
+                                        "Failed to read settings for locale persist: {e}"
+                                    );
                                 }
                             }
                         }
