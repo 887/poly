@@ -74,9 +74,7 @@ pub fn VoiceBanner() -> Element {
                     }
                 }
                 if participant_count > 0 {
-                    span { class: "voice-banner-count",
-                        "{participant_count} {t(\"voice-in-channel\")}"
-                    }
+                    span { class: "voice-banner-count", "{participant_count} {t(\"voice-in-channel\")}" }
                 }
             }
 
@@ -109,7 +107,11 @@ pub fn VoiceBanner() -> Element {
                             vc.is_muted = !vc.is_muted;
                         }
                     },
-                    if is_muted { "🔇" } else { "🎤" }
+                    if is_muted {
+                        "🔇"
+                    } else {
+                        "🎤"
+                    }
                 }
                 button {
                     class: if is_deafened { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
@@ -119,7 +121,11 @@ pub fn VoiceBanner() -> Element {
                             vc.is_deafened = !vc.is_deafened;
                         }
                     },
-                    if is_deafened { "🔕" } else { "🔔" }
+                    if is_deafened {
+                        "🔕"
+                    } else {
+                        "🔔"
+                    }
                 }
                 button {
                     class: "voice-ctrl-btn disconnect",

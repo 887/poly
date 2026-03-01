@@ -60,11 +60,7 @@ pub fn FriendsPanel() -> Element {
         div { class: "friends-panel",
             // Header with back button and title
             div { class: "friends-header",
-                button {
-                    class: "friends-back-btn",
-                    onclick: back_onclick,
-                    "← {t(\"nav-back\")}"
-                }
+                button { class: "friends-back-btn", onclick: back_onclick, "← {t(\"nav-back\")}" }
                 h2 { "{t(\"friends-title\")}" }
             }
 
@@ -89,7 +85,7 @@ pub fn FriendsPanel() -> Element {
                         account_filter.set(if val == "all" { None } else { Some(val) });
                     },
                     option { value: "all", "{t(\"filter-all\")}" }
-                    // TODO: Populate with actual accounts
+                                // TODO: Populate with actual accounts
                 }
 
                 // Server filter dropdown
@@ -101,7 +97,7 @@ pub fn FriendsPanel() -> Element {
                         server_filter.set(if val == "all" { None } else { Some(val) });
                     },
                     option { value: "all", "{t(\"filter-all-servers\")}" }
-                    // TODO: Populate with actual servers
+                                // TODO: Populate with actual servers
                 }
             }
 
@@ -131,7 +127,7 @@ pub fn FriendsPanel() -> Element {
                             div { class: "friend-info",
                                 div { class: "friend-name", "{friend.display_name}" }
                                 div { class: "friend-account", "{backend_badge(&friend.backend)}" }
-                                // TODO: Show mutual servers
+                                                        // TODO: Show mutual servers
                             }
                         }
                     }

@@ -37,14 +37,18 @@ fn NavBar() -> Element {
                 button {
                     class: if can_back { "nav-btn" } else { "nav-btn disabled" },
                     disabled: !can_back,
-                    onclick: move |_| { app_state.write().nav_back(); },
+                    onclick: move |_| {
+                        app_state.write().nav_back();
+                    },
                     title: "{t(\"nav-back\")}",
                     "◀"
                 }
                 button {
                     class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
                     disabled: !can_forward,
-                    onclick: move |_| { app_state.write().nav_forward(); },
+                    onclick: move |_| {
+                        app_state.write().nav_forward();
+                    },
                     title: "{t(\"nav-forward\")}",
                     "▶"
                 }
@@ -93,63 +97,63 @@ pub fn MainLayout() -> Element {
                 // Left: Server sidebar (always visible)
                 ServerSidebar {}
 
-            // Middle content depends on current view.
-            // DECISION(DX): DmsFriends and Server MUST be separate arms so that
-            // Dioxus sees genuinely different VDOM structures and does not reuse
-            // stale component instances when the user switches views.
-            match view {
-                View::DmsFriends => rsx! {
-                    // Channel list panel — NO nav-bar (now at top), NO AccountBar (multi-account app)
-                    div { class: "channel-list-wrapper",
-                        ChannelList {}
-                        VoiceBar {}
-                    }
-                    // Placeholder until a conversation is selected
-                    main { class: "chat-view",
-                        div { class: "chat-header",
-                            span { class: "chat-channel-name", "{t(\"nav-dms\")}" }
+                // Middle content depends on current view.
+                // DECISION(DX): DmsFriends and Server MUST be separate arms so that
+                // Dioxus sees genuinely different VDOM structures and does not reuse
+                // stale component instances when the user switches views.
+                match view {
+                    View::DmsFriends => rsx! {
+                        // Channel list panel — NO nav-bar (now at top), NO AccountBar (multi-account app)
+                        div { class: "channel-list-wrapper",
+                            ChannelList {}
+                            VoiceBar {}
                         }
-                        div { class: "message-list",
-                            div { class: "message-empty",
-                                div { class: "empty-wave", "💬" }
-                                h3 { "{t(\"chat-select-conversation\")}" }
+                        // Placeholder until a conversation is selected
+                        main { class: "chat-view",
+                            div { class: "chat-header",
+                                span { class: "chat-channel-name", "{t(\"nav-dms\")}" }
+                            }
+                            div { class: "message-list",
+                                div { class: "message-empty",
+                                    div { class: "empty-wave", "💬" }
+                                    h3 { "{t(\"chat-select-conversation\")}" }
+                                }
+                            }
+                            div { class: "message-input-area",
+                                div { class: "message-input-disabled", "{t(\"chat-select-conversation\")}" }
                             }
                         }
-                        div { class: "message-input-area",
-                            div { class: "message-input-disabled", "{t(\"chat-select-conversation\")}" }
+                    },
+                    View::Server => rsx! {
+                        // Channel list panel — AccountBar at bottom
+                        div { class: "channel-list-wrapper",
+                            ChannelList {}
+                            VoiceBar {}
+                            AccountBar {}
                         }
-                    }
-                },
-                View::Server => rsx! {
-                    // Channel list panel — AccountBar at bottom
-                    div { class: "channel-list-wrapper",
-                        ChannelList {}
-                        VoiceBar {}
-                        AccountBar {}
-                    }
-                    // Show voice view for voice/video channels, chat view for text
-                    if is_voice_channel {
-                        VoiceChannelView {}
-                    } else {
-                        ChatView {}
-                    }
-                    if show_right && !is_voice_channel {
-                        UserSidebar {}
-                    }
-                },
-                View::Notifications => rsx! {
-                    NotificationsView {}
-                },
-                View::Friends => rsx! {
-                    FriendsPanel {}
-                },
-                View::Settings => rsx! {
-                    SettingsPage {}
-                },
-                View::Setup => rsx! {
-                    div { "Redirecting to setup..." }
-                },
-            }
+                        // Show voice view for voice/video channels, chat view for text
+                        if is_voice_channel {
+                            VoiceChannelView {}
+                        } else {
+                            ChatView {}
+                        }
+                        if show_right && !is_voice_channel {
+                            UserSidebar {}
+                        }
+                    },
+                    View::Notifications => rsx! {
+                        NotificationsView {}
+                    },
+                    View::Friends => rsx! {
+                        FriendsPanel {}
+                    },
+                    View::Settings => rsx! {
+                        SettingsPage {}
+                    },
+                    View::Setup => rsx! {
+                        div { "Redirecting to setup..." }
+                    },
+                }
             } // end main-layout-body
         }
     }
