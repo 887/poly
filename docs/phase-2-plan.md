@@ -139,21 +139,62 @@
 | Take calls | `resp.take::<Option<String>>("field")` | Turbofish required — compiler can't infer `R` through `map_err()?` chain |
 
 ### 2.4.4 Crypto Module
-- [ ] **2.4.4.1** Ed25519 keypair generation
-- [ ] **2.4.4.2** X25519 key derivation from Ed25519
-- [ ] **2.4.4.3** BIP39 mnemonic generation/recovery from Ed25519 private key
-- [ ] **2.4.4.4** Symmetric key derivation for encryption (from X25519 shared secret or direct)
-- [ ] **2.4.4.5** Encrypt/decrypt helpers (XSalsa20-Poly1305 or AES-256-GCM)
-- [ ] **2.4.4.6** Mnemonic export to file
+
+> Lives in `crates/poly-core/src/crypto/`. Pure Rust, no FFI, no platform divergence.
+> See overall-plan.md §6 for algorithm choices and rationale.
+
+- [ ] **2.4.4.1** Ed25519 keypair generation (`ed25519-dalek`) — returns `SigningKey` + `VerifyingKey`
+- [ ] **2.4.4.2** X25519 key derivation from Ed25519 private key (`x25519-dalek`) — for DH key exchange
+- [ ] **2.4.4.3** BIP39 mnemonic generation from Ed25519 private key bytes (`bip39`) — 24-word phrase
+- [ ] **2.4.4.4** BIP39 mnemonic recovery → Ed25519 keypair (reverse: mnemonic → entropy bytes → keypair)
+- [ ] **2.4.4.5** Symmetric encryption key derivation — HKDF-SHA256 from X25519 static keypair or passphrase
+- [ ] **2.4.4.6** Encrypt helper: `encrypt(plaintext: &[u8], key: &SymmetricKey) -> Vec<u8>` — XSalsa20-Poly1305 with random nonce prepended
+- [ ] **2.4.4.7** Decrypt helper: `decrypt(ciphertext: &[u8], key: &SymmetricKey) -> Result<Vec<u8>>` — strips nonce, decrypts, authenticates
+- [ ] **2.4.4.8** Public key hex encoding/decoding — `pubkey_to_hex()` / `hex_to_pubkey()` (Account ID format)
+- [ ] **2.4.4.9** Mnemonic export to file (`.txt`, user-chosen path via file dialog)
+- [ ] **2.4.4.10** Store keypair in SurrealKV on first launch — `set_identity()` / `get_identity()` in storage module
 
 ### 2.4.5 Backup Sync Client
-- [ ] **2.4.5.1** Backup server connection management (add/remove/list servers)
-- [ ] **2.4.5.2** PoW challenge solver
-- [ ] **2.4.5.3** Passphrase authentication flow
-- [ ] **2.4.5.4** Token storage and refresh
-- [ ] **2.4.5.5** Push encrypted settings to server
-- [ ] **2.4.5.6** Pull encrypted settings from server (sync delta)
-- [ ] **2.4.5.7** Multi-server sync (push to all configured servers)
+
+> Lives in `crates/poly-core/src/sync/`. See overall-plan.md §5 for detailed auth flow,
+> passphrase auth, token lifecycle, and per-server status model.
+> See [phase-2.3-plan.md](phase-2.3-plan.md) for the server-side implementation.
+
+#### 2.4.5.A Server Record Model
+```rust
+struct BackupServer {
+    url: String,          // e.g. "https://backup.example.com"
+    label: String,        // User-provided friendly name
+    enabled: bool,        // On/off slider — disabled servers skipped during sync
+    public_key: String,   // Our Ed25519 pubkey (which identity to use)
+    // Derived at runtime — not stored:
+    status: ServerStatus, // Connected | AuthRequired | Unreachable | Syncing
+    last_synced: Option<DateTime>,
+    last_sequence: u64,
+    token_expires_at: Option<DateTime>,
+}
+
+enum ServerStatus { Connected, AuthRequired, Unreachable, Syncing, Disabled }
+```
+
+#### 2.4.5.B Tasks
+- [ ] **2.4.5.1** `BackupServer` storage model — `get/upsert/remove_backup_server()` in storage module
+- [ ] **2.4.5.2** PoW challenge solver — `solve_pow(nonce: &str, difficulty: u32) -> u64` — SHA-256 mining loop
+- [ ] **2.4.5.3** Full auth flow — `authenticate(server: &BackupServer, passphrase: &str) -> Result<Token>`:
+  - POST `/api/challenge` with public key
+  - Mine PoW solution
+  - POST `/api/auth` with solution + passphrase
+  - Store resulting token in SurrealKV under `backup_token:{server_url}`
+- [ ] **2.4.5.4** Token retrieval + expiry check — `get_valid_token(server_url)`: returns stored token if valid, triggers re-auth if expired or within 30-day proactive window
+- [ ] **2.4.5.5** Encrypt settings blob — serialize `AppSettings` → JSON → encrypt with derived symmetric key
+- [ ] **2.4.5.6** Push encrypted settings to one server — `push_settings(server, token, encrypted_blob) -> Result<u64>` (returns new sequence)
+- [ ] **2.4.5.7** Pull encrypted settings delta — `pull_settings(server, token, since_sequence) -> Result<Vec<EncryptedChange>>`
+- [ ] **2.4.5.8** Decrypt + merge pulled changes into local storage
+- [ ] **2.4.5.9** Multi-server sync — iterate all `enabled` servers, push then pull; collect per-server status
+- [ ] **2.4.5.10** Proactive token refresh — on sync, check if token expires within 30 days; if so, re-auth in background
+- [ ] **2.4.5.11** Handle 401 Unauthorized — clear stored token, set server status to `AuthRequired`, surface to UI
+- [ ] **2.4.5.12** Sync status signal — `Signal<HashMap<server_url, ServerStatus>>` consumed by backup settings UI
+- [ ] **2.4.5.13** Manual "Sync now" trigger from settings UI
 
 ## 2.5 Client Trait System — poly-client
 
@@ -302,6 +343,11 @@
 - [ ] **2.7.9.3** **Per-account view**: server browser, favorite management, friend list (searchable with icons)
 - [ ] **2.7.9.4** **Add account flow**: backend selector → login/auth flow
 - [ ] **2.7.9.5** **Backup servers section**: list, add, remove backup servers
+    - Per-server: URL, label, enabled/disabled on/off slider
+    - Per-server status chip: Connected ✓ / Auth Required / Unreachable / Syncing…
+    - Per-server: last synced timestamp, sequence number, token expiry countdown
+    - Actions per server: Sync Now, Re-authenticate, Remove
+    - Add server form: URL + label + passphrase input → trigger auth flow inline
 - [ ] **2.7.9.6** **Identity section**: show public key (user ID), export recovery phrase
 - [ ] **2.7.9.7** **Theme section**: preset selector, per-color editor, CSS editor with live preview, import/export
 - [ ] **2.7.9.8** **Language section**: locale dropdown, immediate switch
@@ -310,18 +356,25 @@
 
 ## 2.8 Backup Server — poly-backup-server
 
-- [ ] **2.8.1** Axum server setup with Dioxus fullstack web UI
-- [ ] **2.8.2** Configuration: passphrase, max accounts, token expiry, PoW difficulty
-- [ ] **2.8.3** REST API: `/api/challenge` — issue PoW challenge
-- [ ] **2.8.4** REST API: `/api/auth` — verify PoW + passphrase, issue token
-- [ ] **2.8.5** REST API: `/api/sync/push` — push encrypted settings
-- [ ] **2.8.6** REST API: `/api/sync/pull` — pull settings changes since sequence
-- [ ] **2.8.7** Token management: device tracking, last-seen, expiry, revocation
-- [ ] **2.8.8** Account management: track public keys, enforce account limit
-- [ ] **2.8.9** Rate limiting + exponential backoff on failed auth
-- [ ] **2.8.10** Admin web UI: connected accounts, active sessions, server config
-- [ ] **2.8.11** SurrealDB backend for server-side storage
-- [ ] **2.8.12** Docker/container build configuration
+> See [phase-2.3-plan.md](phase-2.3-plan.md) for the full detailed sub-plan covering
+> auth, token system, REST API (with utoipa/Swagger), Dioxus admin UI, and storage model.
+
+**Summary checklist** (detail in phase-2.3-plan.md):
+
+- [ ] **2.8.1** Axum + SurrealKV server setup, env-based config (`POLY_PASSPHRASE`, `POLY_MAX_ACCOUNTS`, etc.)
+- [ ] **2.8.2** SurrealDB schema: accounts, tokens, sync_blobs tables
+- [ ] **2.8.3** REST API: `POST /api/challenge` — issue PoW nonce
+- [ ] **2.8.4** REST API: `POST /api/auth` — verify PoW + passphrase, issue token
+- [ ] **2.8.5** REST API: `POST /api/sync/push` — store encrypted blob + sequence number
+- [ ] **2.8.6** REST API: `GET /api/sync/pull?since={seq}` — return changes since sequence
+- [ ] **2.8.7** REST API: `GET /api/sync/status` — return account info, token metadata
+- [ ] **2.8.8** REST API: `DELETE /api/auth/token/{id}` — revoke a specific token (admin)
+- [ ] **2.8.9** Token management: SHA-256 hash storage, last-seen update on each call, rolling expiry
+- [ ] **2.8.10** Account management: enforce `POLY_MAX_ACCOUNTS`, track public keys
+- [ ] **2.8.11** Rate limiting: per-IP counter, exponential backoff, `429 + Retry-After` on exceeded limit
+- [ ] **2.8.12** utoipa + Swagger UI at `/swagger-ui` — full OpenAPI 3.1 spec for all endpoints
+- [ ] **2.8.13** Dioxus web admin UI at `/` — accounts list, active sessions, server stats, revoke tokens
+- [ ] **2.8.14** Docker image: `Dockerfile` + `docker-compose.yml` with env var documentation
 
 ---
 

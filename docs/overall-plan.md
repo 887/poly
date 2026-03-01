@@ -219,37 +219,125 @@ Session Messenger-style:
 ## 5. Backup Server Architecture
 
 ### 5.1 Purpose
-A minimal encrypted settings synchronization server. Knows NOTHING about user data — stores only encrypted blobs identified by public key.
+A minimal encrypted settings synchronization server. Knows NOTHING about user data — stores only encrypted blobs identified by Ed25519 public key. The server cannot read any stored content.
 
 ### 5.2 Auth Flow
 ```
 Client                                    Server
   │                                          │
-  │─── 1. Request auth challenge ──────────►│
+  │─── 1. POST /api/challenge ─────────────►│
+  │    { public_key: "<hex ed25519 pubkey>" }│
+  │                                          │ Generate random nonce + target prefix
+  │                                          │ Store pending challenge (TTL: 60s)
+  │◄── 2. { nonce, difficulty, expires_at } ─│
   │                                          │
-  │◄── 2. PoW challenge (Anubis-style) ────│
+  │    (Client mines: SHA-256(nonce+counter) │
+  │     must start with N zero bits)         │
   │                                          │
-  │─── 3. PoW solution + passphrase ──────►│
-  │    (server-wide passphrase)              │
-  │                                          │ Check: user limit reached?
-  │                                          │ Check: passphrase correct?
-  │                                          │ Check: public key known?
+  │─── 3. POST /api/auth ──────────────────►│
+  │    { public_key, nonce, counter,         │
+  │      passphrase }                        │
+  │    (passphrase = server-wide secret      │
+  │     shared out-of-band by server admin)  │
+  │                                          │ Verify PoW solution
+  │                                          │ Verify passphrase (constant-time compare)
+  │                                          │ Check: max_accounts not exceeded
+  │                                          │ Upsert account record for public_key
+  │                                          │ Generate token: 128-char random Base62
+  │                                          │ Store token with device metadata
+  │◄── 4. { token, expires_at } ───────────│
   │                                          │
-  │◄── 4. Long session token ──────────────│
-  │    (stored with device info,             │
-  │     browser, last-seen timestamp)        │
+  │    Client stores token in SurrealKV:     │
+  │    key = "backup_token:{server_url}"     │
+  │    value = { token, expires_at,          │
+  │              server_url, acquired_at }   │
   │                                          │
-  │─── 5. Sync operations (with token) ───►│
+  │─── 5. Sync operations ─────────────────►│
+  │    Authorization: Bearer <token>         │
   │    Push/pull encrypted settings blobs    │
   └──────────────────────────────────────────┘
 ```
 
-### 5.3 Token System
-- Tokens are long random strings (128+ chars) — impractical to brute force
-- Each token tracks: device name, browser/client info, creation time, last-seen time
-- Tokens can be revoked (remote logout)
-- Tokens expire after configurable inactivity period (e.g., 1 year without activity)
-- Rate limiting + exponential backoff on failed passphrase attempts
+### 5.3 Passphrase Authentication
+- The server is configured with a **server-wide passphrase** (`POLY_PASSPHRASE` env var)
+- This passphrase is shared out-of-band by the server administrator (e.g., published on a private page, shared via Signal, etc.)
+- The passphrase is sent alongside the PoW solution — both must be correct in a single request
+- The passphrase is compared using constant-time equality to prevent timing attacks
+- Failed attempts (wrong passphrase OR invalid PoW) increment a per-IP rate-limit counter
+- After N failures: exponential backoff enforced (429 Too Many Requests + `Retry-After` header)
+- The passphrase is **never stored** beyond comparison — no hash, no log
+- Goal: prevent open registration while keeping the protocol simple (no invite codes, no email)
+
+### 5.4 Token System
+
+**Token format**: 128-character random Base62 string (`[a-zA-Z0-9]`)
+- Generated server-side with `rand::thread_rng().sample_iter(Alphanumeric)`
+- 128 chars × log₂(62) ≈ 760 bits of entropy — brute force is computationally infeasible
+
+**Server-side token record** (stored in SurrealDB):
+```
+{
+  token_hash: SHA-256(token),   // Never store raw token
+  public_key: "<hex>",          // Which account this belongs to
+  device_name: "<user-agent>",  // Client-provided label (e.g. "Linux Desktop")
+  created_at: timestamp,
+  last_seen_at: timestamp,       // Updated on every successful API call
+  expires_at: timestamp          // = created_at + POLY_TOKEN_EXPIRY_DAYS
+}
+```
+
+**Client-side token storage** (in SurrealKV, `poly-core/src/sync/`):
+```
+{
+  server_url: "https://backup.example.com",
+  token: "<raw 128-char token>",
+  expires_at: timestamp,
+  acquired_at: timestamp
+}
+```
+Key: `backup_token:{server_url}` — one token per configured backup server.
+
+**Token lifecycle**:
+1. **Acquisition**: After successful PoW + passphrase auth — token stored locally
+2. **Use**: Sent as `Authorization: Bearer <token>` on every sync request
+3. **Refresh**: Tokens are long-lived (default 1 year inactivity window). No periodic refresh needed. Re-auth only happens when:
+   - Server returns `401 Unauthorized` (token expired or revoked)
+   - `expires_at` is within 30 days (proactive re-auth)
+   - User manually triggers re-auth from backup server settings
+4. **Revocation**: Server admin can revoke tokens via admin UI. Client detects 401, prompts re-auth.
+5. **Expiry**: Tokens expire after `POLY_TOKEN_EXPIRY_DAYS` of inactivity (rolling — reset on each use). A token used today expires N days from today, not from creation.
+
+**Token validation on server** (every API call):
+1. Hash incoming token with SHA-256
+2. Look up hash in DB — 404-equivalent if not found
+3. Check `expires_at` — 401 if expired
+4. Update `last_seen_at` + roll `expires_at` forward
+5. Proceed with request
+
+- Tokens can be revoked (remote logout from admin UI)
+- Rate limiting + exponential backoff on failed passphrase/PoW attempts
+
+### 5.5 Storage Model
+- **Per-user record**: identified by Ed25519 public key
+- **Encrypted blob storage**: app settings encrypted client-side, stored as opaque blobs
+- **Sync protocol**: each setting change gets a monotonic sequence number; client pulls changes since last-seen sequence
+- **Multi-server**: App supports adding multiple backup servers for redundancy. Each server is independently enabled/disabled.
+
+### 5.6 Per-Server Status (Client UI)
+The backup servers settings page shows, per configured server:
+- **URL** + admin-provided label
+- **Enabled/disabled toggle** (on/off slider) — disabled servers are skipped during sync
+- **Status indicator**: Connected ✓ / Auth required / Unreachable / Syncing…
+- **Last synced** timestamp
+- **Sequence number** (last pulled seq)
+- **Token info**: acquired date, days until expiry
+- **Actions**: Sync now, Re-authenticate, Remove server
+
+### 5.7 Server Configuration
+- `POLY_PASSPHRASE` — server-wide access passphrase
+- `POLY_MAX_ACCOUNTS` — maximum user accounts (0 = unlimited)
+- `POLY_TOKEN_EXPIRY_DAYS` — days of inactivity before token expires (default: 365)
+- `POLY_POW_DIFFICULTY` — proof-of-work difficulty in leading zero bits (default: 20)
 
 ### 5.4 Storage Model
 - **Per-user record**: identified by Ed25519 public key
