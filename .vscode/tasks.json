@@ -63,6 +63,40 @@
       "problemMatcher": ["$rustc"]
     },
     {
+      "label": "Build: poly-server",
+      "type": "cargo",
+      "command": "build",
+      "args": ["-p", "poly-server"],
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Run: poly-server (dev)",
+      "type": "cargo",
+      "command": "run",
+      "args": ["-p", "poly-server"],
+      "isBackground": true,
+      "options": {
+        "env": {
+          "RUST_LOG": "debug,poly_server=trace",
+          "POLY_SERVER_BIND": "127.0.0.1:7080",
+          "POLY_SERVER_DB_PATH": "./data/dev.db",
+          "POLY_SERVER_UPLOADS_DIR": "./data/uploads",
+          "POLY_SERVER_NAME": "Dev Poly Server",
+          "POLY_SERVER_JWT_SECRET": "dev-secret-change-in-production"
+        }
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Test: poly-server (integration)",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "poly-server", "--", "--nocapture"],
+      "group": "test",
+      "problemMatcher": ["$rustc"]
+    },
+    {
       "label": "Build: all workspace",
       "type": "cargo",
       "command": "build",

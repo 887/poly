@@ -89,6 +89,28 @@
     {
       "type": "lldb",
       "request": "launch",
+      "name": "Poly Server",
+      "cargo": {
+        "args": ["build", "-p", "poly-server"],
+        "filter": {
+          "name": "poly-server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "env": {
+        "RUST_LOG": "info,poly_server=debug",
+        "POLY_SERVER_BIND": "127.0.0.1:7080",
+        "POLY_SERVER_DB_PATH": "./data/dev.db",
+        "POLY_SERVER_UPLOADS_DIR": "./data/uploads",
+        "POLY_SERVER_NAME": "Dev Poly Server",
+        "POLY_SERVER_JWT_SECRET": "dev-secret-change-in-production"
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
       "name": "Tests: poly-core",
       "cargo": {
         "args": ["test", "-p", "poly-core", "--no-run"],

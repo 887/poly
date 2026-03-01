@@ -9,6 +9,7 @@ members = [
     "crates/poly-discord",
     "crates/poly-teams",
     "crates/poly-backup-server",
+    "crates/poly-server",
     "apps/desktop",
     "apps/desktop-blitz",
     # "apps/desktop-electron",  # Electron wrapper — not a standard Rust crate
@@ -91,6 +92,7 @@ poly-matrix = { path = "crates/poly-matrix" }
 poly-discord = { path = "crates/poly-discord" }
 poly-teams = { path = "crates/poly-teams" }
 poly-backup-server = { path = "crates/poly-backup-server" }
+poly-server = { path = "crates/poly-server" }
 poly-devtools-mcp = { path = "crates/poly-devtools-mcp" }
 poly-devtools-protocol = { path = "crates/poly-devtools-protocol" }
 

@@ -1,0 +1,292 @@
+use axum::{
+    Json, Router,
+    extract::{Extension, Path, State},
+    routing::{get, patch},
+};
+use serde::Deserialize;
+
+use crate::{
+    AppState,
+    auth::AuthUser,
+    error::{AppError, Result},
+    models::{FriendRequest, UserProfile, UserRecord},
+};
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/users/me", get(me).patch(update_me))
+        .route("/users/{id}", get(get_user))
+        .route(
+            "/users/me/friends",
+            get(list_friends).post(send_friend_request),
+        )
+        .route(
+            "/users/me/friends/{id}",
+            patch(respond_friend_request).delete(remove_friend),
+        )
+}
+
+// ── Request types ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct UpdateMeRequest {
+    display_name: Option<String>,
+    avatar_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SendFriendRequest {
+    username: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RespondFriendRequest {
+    status: String, // "accepted" | "rejected"
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+async fn me(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+) -> Result<Json<UserProfile>> {
+    let raw: Option<serde_json::Value> = state
+        .db
+        .query("SELECT * FROM type::thing($id) LIMIT 1")
+        .bind(("id", auth.user_id.clone()))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+    let user: UserRecord = raw
+        .map(|v| {
+            serde_json::from_value::<UserRecord>(v).map_err(|e| AppError::Internal(e.to_string()))
+        })
+        .transpose()?
+        .ok_or(AppError::NotFound)?;
+    Ok(Json(user_to_profile(user)?))
+}
+
+async fn update_me(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Json(req): Json<UpdateMeRequest>,
+) -> Result<Json<UserProfile>> {
+    let raw: Option<serde_json::Value> = state
+        .db
+        .query(
+            "UPDATE type::thing($id) MERGE { \
+              display_name: $dn ?? display_name, \
+              avatar_url: $av ?? avatar_url \
+            } RETURN *",
+        )
+        .bind(("id", auth.user_id.clone()))
+        .bind(("dn", req.display_name))
+        .bind(("av", req.avatar_url))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+    let user: UserRecord = raw
+        .map(|v| {
+            serde_json::from_value::<UserRecord>(v).map_err(|e| AppError::Internal(e.to_string()))
+        })
+        .transpose()?
+        .ok_or(AppError::NotFound)?;
+    Ok(Json(user_to_profile(user)?))
+}
+
+async fn get_user(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<UserProfile>> {
+    let raw: Option<serde_json::Value> = state
+        .db
+        .query("SELECT * FROM type::thing($id) LIMIT 1")
+        .bind(("id", id))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+    let user: UserRecord = raw
+        .map(|v| {
+            serde_json::from_value::<UserRecord>(v).map_err(|e| AppError::Internal(e.to_string()))
+        })
+        .transpose()?
+        .ok_or(AppError::NotFound)?;
+    Ok(Json(user_to_profile(user)?))
+}
+
+async fn list_friends(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+) -> Result<Json<Vec<UserProfile>>> {
+    // Friends = accepted friend_requests where this user is from or to.
+    let records: Vec<serde_json::Value> = state
+        .db
+        .query(
+            "SELECT from.*, to.* FROM friend_request \
+             WHERE status = 'accepted' \
+               AND (from = type::thing($uid) OR to = type::thing($uid)) \
+             FETCH from, to",
+        )
+        .bind(("uid", auth.user_id.clone()))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+
+    let profiles: Vec<UserProfile> = records
+        .into_iter()
+        .filter_map(|v| {
+            let from_id = v.get("from")?.get("id")?.as_str()?.to_owned();
+            let is_from = from_id == auth.user_id;
+            let side = if is_from {
+                v.get("to")?
+            } else {
+                v.get("from")?
+            };
+            Some(UserProfile {
+                id: side.get("id")?.as_str()?.to_owned(),
+                username: side.get("username")?.as_str()?.to_owned(),
+                display_name: side.get("display_name")?.as_str()?.to_owned(),
+                avatar_url: side
+                    .get("avatar_url")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned),
+            })
+        })
+        .collect();
+
+    Ok(Json(profiles))
+}
+
+async fn send_friend_request(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Json(req): Json<SendFriendRequest>,
+) -> Result<Json<FriendRequest>> {
+    let raw: Option<serde_json::Value> = state
+        .db
+        .query("SELECT * FROM user WHERE username = $u LIMIT 1")
+        .bind(("u", req.username))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+    let target: UserRecord = raw
+        .map(|v| {
+            serde_json::from_value::<UserRecord>(v).map_err(|e| AppError::Internal(e.to_string()))
+        })
+        .transpose()?
+        .ok_or(AppError::NotFound)?;
+    let target_id = target
+        .id
+        .ok_or_else(|| AppError::Internal("missing id".into()))?;
+
+    let created_raw: Vec<serde_json::Value> = state
+        .db
+        .query(
+            "CREATE friend_request CONTENT { \
+              `from`: type::thing($from), `to`: type::thing($to), \
+              status: 'pending', created_at: time::now() \
+            } RETURN *",
+        )
+        .bind(("from", auth.user_id.clone()))
+        .bind(("to", target_id))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+
+    created_raw
+        .into_iter()
+        .next()
+        .map(|v| {
+            serde_json::from_value::<FriendRequest>(v)
+                .map_err(|e| AppError::Internal(e.to_string()))
+        })
+        .transpose()?
+        .ok_or_else(|| AppError::Internal("no record returned".into()))
+        .map(Json)
+}
+
+async fn respond_friend_request(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Path(request_id): Path<String>,
+    Json(req): Json<RespondFriendRequest>,
+) -> Result<Json<FriendRequest>> {
+    let status = req.status.as_str();
+    if status != "accepted" && status != "rejected" {
+        return Err(AppError::BadRequest(
+            "status must be accepted or rejected".into(),
+        ));
+    }
+    // Verify this user is the recipient.
+    let raw: Option<serde_json::Value> = state
+        .db
+        .query("SELECT * FROM type::thing($id) LIMIT 1")
+        .bind(("id", request_id.clone()))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+    let fr: FriendRequest = raw
+        .map(|v| {
+            serde_json::from_value::<FriendRequest>(v)
+                .map_err(|e| AppError::Internal(e.to_string()))
+        })
+        .transpose()?
+        .ok_or(AppError::NotFound)?;
+
+    if fr.to != auth.user_id {
+        return Err(AppError::Forbidden);
+    }
+
+    let updated_raw: Option<serde_json::Value> = state
+        .db
+        .query("UPDATE type::thing($id) SET status = $s RETURN *")
+        .bind(("id", request_id))
+        .bind(("s", status.to_owned()))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+
+    updated_raw
+        .map(|v| {
+            serde_json::from_value::<FriendRequest>(v)
+                .map_err(|e| AppError::Internal(e.to_string()))
+        })
+        .transpose()?
+        .ok_or(AppError::NotFound)
+        .map(Json)
+}
+
+async fn remove_friend(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Path(target_user_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    state
+        .db
+        .query(
+            "DELETE friend_request WHERE status = 'accepted' AND \
+             ((`from` = type::thing($me) AND `to` = type::thing($them)) OR \
+              (`from` = type::thing($them) AND `to` = type::thing($me)))",
+        )
+        .bind(("me", auth.user_id.clone()))
+        .bind(("them", target_user_id))
+        .await?
+        .check()
+        .map_err(AppError::Db)?;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+
+/// Convert a `UserRecord` to its public `UserProfile`.
+pub fn user_to_profile(user: UserRecord) -> Result<UserProfile> {
+    let id = user
+        .id
+        .ok_or_else(|| AppError::Internal("missing user id".into()))?;
+    Ok(UserProfile {
+        id,
+        username: user.username,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url,
+    })
+}
