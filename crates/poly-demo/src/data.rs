@@ -1,4 +1,9 @@
 //! Demo data generators for testing the Poly UI.
+//!
+//! SAFETY NOTE: indexing_slicing is allowed in this module because all indices
+//! are bounded by the fixed-size `demo_users()` slice, which is compile-time
+//! constant mock data. This is intentional for readability in test/demo code.
+#![allow(clippy::indexing_slicing)]
 
 use chrono::{Duration, Utc};
 use poly_client::*;

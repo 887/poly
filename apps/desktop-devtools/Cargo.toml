@@ -21,3 +21,6 @@ anyhow = { workspace = true }
 webkit2gtk = { version = "2.0", features = [] }
 cairo-rs = { version = "0.18", features = ["png"] }
 wry = "0.53"
+
+[lints]
+workspace = true

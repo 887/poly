@@ -15,3 +15,6 @@ dioxus = { workspace = true, features = ["mobile"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

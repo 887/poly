@@ -14,3 +14,6 @@ rand = { workspace = true }
 futures = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

@@ -60,8 +60,10 @@ impl Identity {
             bytes.copy_from_slice(&hash);
             Ok(Self::from_private_key_bytes(&bytes))
         } else {
-            let mut bytes = [0u8; 32];
-            bytes.copy_from_slice(&entropy[..32]);
+            let bytes = entropy
+                .get(..32)
+                .and_then(|s| <[u8; 32]>::try_from(s).ok())
+                .unwrap_or([0u8; 32]);
             Ok(Self::from_private_key_bytes(&bytes))
         }
     }

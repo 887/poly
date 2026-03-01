@@ -17,3 +17,6 @@ tracing = { workspace = true }
 # tracing-subscriber only on native (for local dev server if ever added)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

@@ -87,3 +87,15 @@ poly-teams = { path = "crates/poly-teams" }
 poly-backup-server = { path = "crates/poly-backup-server" }
 poly-devtools-mcp = { path = "crates/poly-devtools-mcp" }
 poly-devtools-protocol = { path = "crates/poly-devtools-protocol" }
+
+# ── Workspace-wide lint policy ───────────────────────────────────────────────
+# rust-analyzer, cargo clippy, and cargo cranky all respect these.
+# Each crate's Cargo.toml opts in via `[lints] workspace = true`.
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"

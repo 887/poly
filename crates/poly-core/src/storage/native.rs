@@ -46,7 +46,7 @@ impl StorageInner {
     /// Open (or create) the SurrealKV store in the platform data directory.
     pub async fn init() -> Result<Self, StorageError> {
         let path = poly_data_dir().join("storage.db");
-        std::fs::create_dir_all(path.parent().unwrap())
+        std::fs::create_dir_all(poly_data_dir())
             .map_err(|e| StorageError::Backend(format!("cannot create data dir: {e}")))?;
 
         let path_str = path.to_string_lossy().to_string();

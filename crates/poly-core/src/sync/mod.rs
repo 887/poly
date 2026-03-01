@@ -260,7 +260,7 @@ impl SyncClient {
             .json()
             .await
             .map_err(|e| SyncError::Network(e.to_string()))?;
-        Ok(body["sequence"].as_u64().unwrap_or(0))
+        Ok(body.get("sequence").and_then(|v| v.as_u64()).unwrap_or(0))
     }
 
     /// Pull encrypted settings changes since a sequence number.

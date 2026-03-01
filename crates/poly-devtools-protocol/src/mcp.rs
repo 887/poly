@@ -23,13 +23,15 @@ pub fn image_result(png: &[u8]) -> Value {
 /// Wrap a value in a JSON-RPC response envelope.
 pub fn mcp_response(id: Option<Value>, result: Value) -> String {
     let resp = json!({ "jsonrpc": "2.0", "id": id, "result": result });
-    serde_json::to_string(&resp).unwrap()
+    // json!() always produces a serializable Value; unwrap_or_default is safe here.
+    serde_json::to_string(&resp).unwrap_or_default()
 }
 
 /// Build a JSON-RPC error response.
 pub fn mcp_error(id: Option<Value>, code: i64, msg: &str) -> String {
     let resp = json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": msg } });
-    serde_json::to_string(&resp).unwrap()
+    // json!() always produces a serializable Value; unwrap_or_default is safe here.
+    serde_json::to_string(&resp).unwrap_or_default()
 }
 
 /// Parse a JSON-RPC request line into (id, method, params).

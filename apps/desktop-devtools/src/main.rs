@@ -142,7 +142,7 @@ fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,poly_core=debug".parse().unwrap()),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,poly_core=debug")),
         )
         .init();
 
@@ -151,17 +151,21 @@ fn main() {
 
     // Initialise the eval bridge channels before dioxus starts.
     let (tx, rx) = mpsc::channel::<EvalRequest>(64);
-    EVAL_TX.set(tx).expect("EVAL_TX already set");
-    EVAL_RX
-        .set(Mutex::new(Some(rx)))
-        .expect("EVAL_RX already set");
+    if EVAL_TX.set(tx).is_err() {
+        tracing::error!("EVAL_TX already initialized — duplicate init?");
+    }
+    if EVAL_RX.set(Mutex::new(Some(rx))).is_err() {
+        tracing::error!("EVAL_RX already initialized — duplicate init?");
+    }
 
     // Initialise the screenshot bridge channels.
     let (ss_tx, ss_rx) = mpsc::channel::<ScreenshotRequest>(4);
-    SCREENSHOT_TX.set(ss_tx).expect("SCREENSHOT_TX already set");
-    SCREENSHOT_RX
-        .set(Mutex::new(Some(ss_rx)))
-        .expect("SCREENSHOT_RX already set");
+    if SCREENSHOT_TX.set(ss_tx).is_err() {
+        tracing::error!("SCREENSHOT_TX already initialized — duplicate init?");
+    }
+    if SCREENSHOT_RX.set(Mutex::new(Some(ss_rx))).is_err() {
+        tracing::error!("SCREENSHOT_RX already initialized — duplicate init?");
+    }
 
     poly_core::i18n::init();
     poly_core::theme::init();
@@ -185,13 +189,14 @@ fn main() {
 fn DevtoolsShell() -> Element {
     // Coroutine: drives JS eval requests using dioxus's built-in eval().
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let mut rx = EVAL_RX
-            .get()
-            .expect("EVAL_RX not set")
-            .lock()
-            .await
-            .take()
-            .expect("EVAL_RX receiver already consumed");
+        let Some(eval_rx_mutex) = EVAL_RX.get() else {
+            tracing::error!("EVAL_RX not initialized");
+            return;
+        };
+        let Some(mut rx) = eval_rx_mutex.lock().await.take() else {
+            tracing::error!("EVAL_RX receiver already consumed");
+            return;
+        };
 
         while let Some(req) = rx.recv().await {
             let result: Result<serde_json::Value, _> = eval(&req.js).await;
@@ -210,13 +215,14 @@ fn DevtoolsShell() -> Element {
     // Runs on the GTK main thread (all dioxus-desktop coroutines do), which is
     // required for calling GLib/GDK/WebKit functions.
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let mut rx = SCREENSHOT_RX
-            .get()
-            .expect("SCREENSHOT_RX not set")
-            .lock()
-            .await
-            .take()
-            .expect("SCREENSHOT_RX receiver already consumed");
+        let Some(screenshot_rx_mutex) = SCREENSHOT_RX.get() else {
+            tracing::error!("SCREENSHOT_RX not initialized");
+            return;
+        };
+        let Some(mut rx) = screenshot_rx_mutex.lock().await.take() else {
+            tracing::error!("SCREENSHOT_RX receiver already consumed");
+            return;
+        };
 
         // Grab the webkit2gtk WebView once — it's a GObject clone (cheap).
         let wv = {

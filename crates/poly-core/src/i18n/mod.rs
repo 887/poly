@@ -77,7 +77,7 @@ pub fn init() {
 fn load_locale(locale: &str) {
     let langid: LanguageIdentifier = locale
         .parse()
-        .unwrap_or_else(|_| DEFAULT_LOCALE.parse().unwrap());
+        .unwrap_or_else(|_| DEFAULT_LOCALE.parse().unwrap_or_default());
 
     let mut bundle = FluentBundle::new_concurrent(vec![langid]);
 
@@ -92,7 +92,9 @@ fn load_locale(locale: &str) {
         }
     }
 
-    let mut state = I18N.write().expect("i18n lock poisoned");
+    let mut state = I18N
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     state.bundles.insert(locale.to_string(), bundle);
 }
 
@@ -109,7 +111,9 @@ fn get_embedded_ftl(locale: &str) -> String {
 
 /// Set the current locale.
 pub fn set_locale(locale: &str) {
-    let mut state = I18N.write().expect("i18n lock poisoned");
+    let mut state = I18N
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if SUPPORTED_LOCALES.contains(&locale) {
         state.current_locale = locale.to_string();
         tracing::info!("Locale changed to: {locale}");
@@ -120,7 +124,9 @@ pub fn set_locale(locale: &str) {
 
 /// Get the current locale.
 pub fn current_locale() -> String {
-    let state = I18N.read().expect("i18n lock poisoned");
+    let state = I18N
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     state.current_locale.clone()
 }
 
@@ -135,7 +141,9 @@ pub fn t(key: &str) -> String {
 ///
 /// Falls back to English if the key is not found in the current locale.
 pub fn t_args(key: &str, args: &[(&str, &str)]) -> String {
-    let state = I18N.read().expect("i18n lock poisoned");
+    let state = I18N
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     let fluent_args = if args.is_empty() {
         None

@@ -68,3 +68,6 @@ surrealdb = { workspace = true, features = ["kv-surrealkv"] }
 gloo-storage = "0.3"
 getrandom = { version = "0.2", features = ["js"] }
 uuid = { version = "1", features = ["v4", "serde", "js"] }
+
+[lints]
+workspace = true
