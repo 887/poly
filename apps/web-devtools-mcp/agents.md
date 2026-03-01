@@ -1,4 +1,4 @@
-# poly-web-devtools — Agent Instructions
+# poly-web-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
 > **Last Updated:** 2026-02-28
@@ -7,7 +7,7 @@
 
 ## Purpose
 
-`poly-web-devtools` is the **web MCP server** for Poly. It launches real
+`poly-web-devtools-mcp` is the **web MCP server** for Poly. It launches real
 Chrome/Chromium with a **visible window** (default) or headless (`--headless`),
 connects via the Chrome DevTools Protocol (CDP) over WebSocket, and provides
 pixel-perfect inspection and interaction.
@@ -25,7 +25,7 @@ This is the preferred backend when you want:
 VS Code Copilot / MCP Client
     │ JSON-RPC stdio
     ▼
-poly-web-devtools (this crate)
+poly-web-devtools-mcp (this crate)
     │ CDP WebSocket to 127.0.0.1:9222
     ▼
 Chrome / Chromium
@@ -128,7 +128,7 @@ The binary searches for Chrome/Chromium in this order:
 
 Falls back to `chromium` if nothing found.
 
-## vs Desktop MCP (poly-devtools-mcp)
+## vs Desktop MCP (poly-desktop-devtools-mcp)
 
 | Feature | Desktop MCP | Web MCP |
 |---|---|---|

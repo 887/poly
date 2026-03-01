@@ -1,4 +1,4 @@
-//! # poly-web-devtools
+//! # poly-web-devtools-mcp
 //!
 //! MCP server for the **web** devtools backend.
 //!
@@ -12,10 +12,10 @@
 //! ## Usage
 //! ```bash
 //! # Visible Chrome (default)
-//! cargo run --bin poly-web-devtools
+//! cargo run --bin poly-web-devtools-mcp
 //!
 //! # Headless mode (CI, automated tests)
-//! cargo run --bin poly-web-devtools -- --headless
+//! cargo run --bin poly-web-devtools-mcp -- --headless
 //! ```
 
 use std::process::Stdio;
@@ -88,7 +88,7 @@ impl ChromeCdpBackend {
         // Use a dedicated profile directory so the user's main Chromium profile
         // (with all its extensions) is completely isolated from devtools sessions.
         let profile_dir = std::env::temp_dir()
-            .join("poly-web-devtools-profile")
+            .join("poly-web-devtools-mcp-profile")
             .to_string_lossy()
             .into_owned();
 
@@ -738,11 +738,11 @@ async fn main() {
     let config = CliConfig::parse();
 
     if config.headless {
-        tracing::info!("Starting poly-web-devtools (headless Chrome mode)");
+        tracing::info!("Starting poly-web-devtools-mcp (headless Chrome mode)");
     } else {
-        tracing::info!("Starting poly-web-devtools (visible Chrome window)");
+        tracing::info!("Starting poly-web-devtools-mcp (visible Chrome window)");
     }
 
     let backend = ChromeCdpBackend::new(config.headless);
-    run_mcp_loop(&backend, "poly-devtools-web").await;
+    run_mcp_loop(&backend, "poly-web").await;
 }

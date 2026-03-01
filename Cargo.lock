@@ -5258,7 +5258,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "poly-devtools-mcp"
+name = "poly-desktop-devtools-mcp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -5396,7 +5396,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "poly-web-devtools"
+name = "poly-web-devtools-mcp"
 version = "0.1.0"
 dependencies = [
  "anyhow",

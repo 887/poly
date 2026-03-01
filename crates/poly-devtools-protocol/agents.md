@@ -11,8 +11,8 @@ Shared crate providing the `DevtoolsBackend` trait and MCP JSON-RPC protocol
 handling used by both the desktop and web devtools MCP servers.
 
 **You should never need to run this crate directly.** It is a library consumed by:
-- `poly-devtools-mcp` (desktop HTTP backend)
-- `poly-web-devtools` (web Chrome CDP backend)
+- `poly-desktop-devtools-mcp` (desktop HTTP backend)
+- `poly-web-devtools-mcp` (web Chrome CDP backend)
 
 ---
 

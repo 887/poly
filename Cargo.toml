@@ -17,8 +17,8 @@ members = [
     "apps/ios",
     "apps/web",
     "apps/desktop-devtools",
-    "apps/web-devtools",
-    "crates/poly-devtools-mcp",
+    "apps/web-devtools-mcp",
+    "crates/poly-desktop-devtools-mcp",
     "crates/poly-devtools-protocol",
 ]
 
@@ -93,7 +93,7 @@ poly-discord = { path = "crates/poly-discord" }
 poly-teams = { path = "crates/poly-teams" }
 poly-backup-server = { path = "crates/poly-backup-server" }
 poly-server = { path = "crates/poly-server" }
-poly-devtools-mcp = { path = "crates/poly-devtools-mcp" }
+poly-desktop-devtools-mcp = { path = "crates/poly-desktop-devtools-mcp" }
 poly-devtools-protocol = { path = "crates/poly-devtools-protocol" }
 
 # ── Workspace-wide lint policy ───────────────────────────────────────────────

@@ -2,7 +2,7 @@
 //!
 //! Shared MCP (Model Context Protocol) types and backend trait for Poly devtools.
 //!
-//! Both desktop-devtools (HTTP eval-bridge) and web-devtools (Chrome CDP) implement
+//! Both `poly-desktop-devtools-mcp` (HTTP eval-bridge) and `poly-web-devtools-mcp` (Chrome CDP) implement
 //! the [`DevtoolsBackend`] trait. The MCP JSON-RPC main loop in [`mcp`] dispatches
 //! tool calls to whichever backend is active.
 

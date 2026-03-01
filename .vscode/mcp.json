@@ -1,15 +1,15 @@
 {
   "servers": {
-    "poly-devtools": {
+    "poly-desktop": {
       "type": "stdio",
       "command": "cargo",
-      "args": ["run", "--bin", "poly-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
       "env": {}
     },
-    "poly-devtools-web": {
+    "poly-web": {
       "type": "stdio",
       "command": "cargo",
-      "args": ["run", "--bin", "poly-web-devtools", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
       "env": {}
     }
   }

@@ -25,8 +25,8 @@ and other MCP-compatible AI clients.
              │                     │
      ┌───────┴──────┐      ┌──────┴───────┐
      │  Desktop MCP │      │   Web MCP    │
-     │ (poly-devtools│     │(web-devtools) │
-     │   -mcp)       │     │              │
+     │ (poly-desktop-│     │(web-devtools- │
+     │  devtools-mcp) │     │   mcp)        │
      └───────┬──────┘      └──────┬───────┘
              │ HTTP :9223         │ CDP WebSocket :9222
      ┌───────┴──────┐      ┌──────┴───────┐
@@ -69,16 +69,16 @@ and other MCP-compatible AI clients.
 - [x] **2.1.2.4** Implement `dispatch_tool()` — routes tool calls to `DevtoolsBackend` methods
 - [x] **2.1.2.5** Implement `run_mcp_loop()` — stdio JSON-RPC main loop with `initialize`, `tools/list`, `tools/call` handling
 
-## 2.1.3 Desktop MCP Server (`crates/poly-devtools-mcp`)
+## 2.1.3 Desktop MCP Server (`crates/poly-desktop-devtools-mcp`)
 
 - [x] **2.1.3.1** Implement `DesktopHttpBackend` — HTTP client to eval-bridge (port 9223)
 - [x] **2.1.3.2** `launch_app()` uses `dx build --platform desktop` (not `cargo build`)
 - [x] **2.1.3.3** `reset_app()` kills app + removes `~/.local/share/poly` data dir
 - [x] **2.1.3.4** Refactor to use `poly-devtools-protocol::mcp::run_mcp_loop()`
 
-## 2.1.4 Web DevTools MCP Server (`apps/web-devtools`)
+## 2.1.4 Web DevTools MCP Server (`apps/web-devtools-mcp`)
 
-- [x] **2.1.4.1** Create web-devtools crate with Chrome CDP backend
+- [x] **2.1.4.1** Create web-devtools-mcp crate with Chrome CDP backend
 - [x] **2.1.4.2** `launch_app()` starts `dx serve` + launches Chrome with `--remote-debugging-port=9222`
 - [x] **2.1.4.3** `connect()` discovers WebSocket URL via `GET http://localhost:9222/json`, opens WebSocket
 - [x] **2.1.4.4** `screenshot()` uses `Page.captureScreenshot` (real pixel-perfect PNG)
@@ -90,7 +90,7 @@ and other MCP-compatible AI clients.
 
 ## 2.1.5 VSCode Integration
 
-- [x] **2.1.5.1** `.vscode/mcp.json` with both `poly-devtools` (desktop) and `poly-devtools-web` server entries
+- [x] **2.1.5.1** `.vscode/mcp.json` with both `poly-desktop` (desktop) and `poly-web` server entries
 
 ## 2.1.6 CSS Fix
 
@@ -121,9 +121,9 @@ and other MCP-compatible AI clients.
 | `crates/poly-devtools-protocol/src/lib.rs` | Protocol crate entry point |
 | `crates/poly-devtools-protocol/src/backend.rs` | `DevtoolsBackend` trait + types |
 | `crates/poly-devtools-protocol/src/mcp.rs` | MCP JSON-RPC main loop + helpers |
-| `crates/poly-devtools-mcp/src/main.rs` | Desktop MCP server (HTTP backend) |
+| `crates/poly-desktop-devtools-mcp/src/main.rs` | Desktop MCP server (HTTP backend) |
 | `apps/desktop-devtools/src/main.rs` | Desktop app with embedded HTTP eval-bridge |
-| `apps/web-devtools/src/main.rs` | Web MCP server (Chrome CDP backend) |
+| `apps/web-devtools-mcp/src/main.rs` | Web MCP server (Chrome CDP backend) |
 | `.vscode/mcp.json` | MCP server configuration for VS Code |
 
 ---

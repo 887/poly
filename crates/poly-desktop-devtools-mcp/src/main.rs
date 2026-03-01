@@ -1,4 +1,4 @@
-//! # poly-devtools-mcp
+//! # poly-desktop-devtools-mcp
 //!
 //! MCP server for the **desktop** devtools backend.
 //!
@@ -8,7 +8,7 @@
 //!
 //! ## Usage
 //! ```bash
-//! cargo run --bin poly-devtools-mcp
+//! cargo run --bin poly-desktop-devtools-mcp
 //! ```
 //! Or via `.vscode/mcp.json` for GitHub Copilot integration.
 

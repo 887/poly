@@ -1,12 +1,12 @@
 [package]
-name = "poly-web-devtools"
+name = "poly-web-devtools-mcp"
 description = "Poly web devtools MCP server — uses Chrome CDP for inspection"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "poly-web-devtools"
+name = "poly-web-devtools-mcp"
 path = "src/main.rs"
 
 [dependencies]

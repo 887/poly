@@ -1,4 +1,4 @@
-# poly-devtools-mcp — Agent Instructions
+# poly-desktop-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
 > **Last Updated:** 2026-02-28
@@ -7,13 +7,13 @@
 
 ## Purpose
 
-`poly-devtools-mcp` is the **desktop MCP server** for Poly. It implements the
+`poly-desktop-devtools-mcp` is the **desktop MCP server** for Poly. It implements the
 `DevtoolsBackend` trait from `poly-devtools-protocol` using an HTTP eval-bridge
 to communicate with the running `poly-desktop-devtools` app on port 9223.
 
 This is how you verify UI changes in the **desktop (Wry/WebKit)** build.
 
-For the **web (Chrome)** build, use `poly-web-devtools` instead.
+For the **web (Chrome)** build, use `poly-web-devtools-mcp` instead.
 
 ---
 
@@ -23,7 +23,7 @@ For the **web (Chrome)** build, use `poly-web-devtools` instead.
 VS Code Copilot / MCP Client
     │ JSON-RPC stdio
     ▼
-poly-devtools-mcp (this crate)
+poly-desktop-devtools-mcp (this crate)
     │ HTTP requests to 127.0.0.1:9223
     ▼
 poly-desktop-devtools (apps/desktop-devtools/)
@@ -70,7 +70,7 @@ screenshot {}
 
 Returns a PNG image captured via SVG foreignObject → Canvas → data URL.
 **Note:** This method may not capture external images or iframes perfectly.
-For pixel-perfect screenshots, use the web-devtools backend (Chrome CDP).
+For pixel-perfect screenshots, use the `poly-web-devtools-mcp` backend (Chrome CDP).
 
 ### 4. Inspect the DOM / CSS
 

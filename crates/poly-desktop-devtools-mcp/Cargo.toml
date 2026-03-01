@@ -1,12 +1,12 @@
 [package]
-name = "poly-devtools-mcp"
+name = "poly-desktop-devtools-mcp"
 description = "MCP server for dogfooding Poly — screenshot, JS eval, DOM, console, click"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "poly-devtools-mcp"
+name = "poly-desktop-devtools-mcp"
 path = "src/main.rs"
 
 [dependencies]

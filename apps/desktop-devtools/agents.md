@@ -10,10 +10,10 @@
 `desktop-devtools` is a **special build of the Poly desktop app** with an
 embedded HTTP eval-bridge server on port 9223. It renders the full Poly UI
 (setup wizard, main layout, etc.) in a Wry/WebKit webview while exposing
-inspection endpoints that the MCP server (`poly-devtools-mcp`) calls.
+inspection endpoints that the MCP server (`poly-desktop-devtools-mcp`) calls.
 
 **This is NOT an MCP server itself** — it is the app being inspected.
-The MCP server lives in `crates/poly-devtools-mcp/`.
+The MCP server lives in `crates/poly-desktop-devtools-mcp/`.
 
 ---
 

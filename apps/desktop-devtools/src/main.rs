@@ -1,7 +1,7 @@
 //! Poly Desktop — DevTools build.
 //!
 //! Identical to the normal desktop app but with an embedded HTTP eval-bridge
-//! server on port 9223 that `poly-devtools-mcp` uses to:
+//! server on port 9223 that `poly-desktop-devtools-mcp` uses to:
 //!   - Evaluate JavaScript in the webview (`POST /eval`)
 //!   - Capture a screenshot of the rendered page (`GET /screenshot`)
 //!   - Inspect the DOM (`GET /dom`)

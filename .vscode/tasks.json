@@ -179,9 +179,6 @@
       "args": ["serve", "--hotpatch"],
       "options": { "cwd": "${workspaceFolder}/apps/desktop" },
       "isBackground": true,
-      "runOptions": {
-        "runOn": "folderOpen"
-      },
       "problemMatcher": {
         "pattern": {
           "regexp": "^error\\[E(\\d+)\\]: (.+)$",
