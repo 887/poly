@@ -405,7 +405,7 @@ The backup servers settings page shows, per configured server:
 - **Backup server**: ALL data encrypted with user's key BEFORE leaving the device
   - Account tokens, OAuth cookies, server favorites, friend lists, theme settings
   - Never send plaintext to the backup server
-- **Encryption algorithm**: XSalsa20-Poly1305 (same as Session) or AES-256-GCM
+- **Encryption algorithm**: **ChaCha20-Poly1305** (IETF RFC 8439, same algorithm as TLS 1.3 and WireGuard). See Decision D15.
 
 ### 6.3 Sync Encryption Flow
 ```
@@ -506,6 +506,9 @@ See individual phase plan documents for detailed checklists:
 | D12 | Demo client | Phase 2 alongside UI | Enables full UI testing without real backends | 2026-02-28 |
 | D13 | SurrealDB datetime storage | `TYPE string` + RFC3339 via Rust `Utc::now().to_rfc3339()` | SurrealDB 3.0 `kv-surrealkv` cannot serialize `TYPE datetime` to `serde_json::Value` ("Expected any, got datetime"). All timestamp fields must be `TYPE string`. Never use `time::now()` in SurrealQL — always bind `$now` from Rust. | 2026-03-01 |
 | D14 | Dioxus asset path symlink | `crates/poly-core -> crates/core` symlink required | Dioxus `asset!()` macro constructs serve URLs using the Cargo **package name** (`poly-core`), not the directory name (`core`). Since the directory is `crates/core` but the package is `poly-core`, the URL `dioxus://…/crates/poly-core/assets/tailwind.css` cannot resolve. Fix: create symlink `crates/poly-core -> crates/core` so the URL resolves. This symlink must be committed to git. | 2026-03-01 |
+| D15 | Encryption algorithm | ChaCha20-Poly1305 (chacha20poly1305 crate) | Plan §6.2 originally listed XSalsa20-Poly1305 or AES-256-GCM. Chose ChaCha20-Poly1305 (IETF RFC 8439) — same family as TLS 1.3 and WireGuard, excellent RustCrypto support, 96-bit nonce (vs 192-bit for XSalsa20), IETF-standardized. | 2026-03-01 |
+| D16 | Backup server admin UI | Tailwind+Alpine.js embedded SPA (`const &str` in `web/mod.rs`) | Originally planned as Dioxus fullstack admin. Changed to single-file HTML SPA embedded at compile time: no build step, no Dioxus dependency in backup-server crate, simpler to maintain.  | 2026-03-01 |
+| D17 | rand crate version | rand 0.10 (upgraded from 0.8) + uuid removed from WASM path | rand 0.10 API changes: `distributions`→`distr`, `DistString`→`SampleString`, `thread_rng()`→`rng()`. uuid crate removed from WASM entirely (Account.id is now `String`); IDs generated via `Alphanumeric.sample_string`. Three getrandom semver lines (0.2/0.3/0.4) managed via named workspace aliases. | 2026-03-01 |
 
 ---
 
