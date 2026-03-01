@@ -16,6 +16,21 @@ It intentionally avoids operational complexity — single binary, embedded Surre
 
 ---
 
+## Docker Build & Deployment
+
+**Dockerfile location:** `servers/server/Dockerfile`
+
+**Keep it in sync:** Whenever `servers/server/Cargo.toml` or workspace dependencies change,
+the Dockerfile may need review. Specifically:
+- If new workspace crates are added as dependencies → update `COPY` steps if they live outside `servers/`
+- If dependency versions are updated → rebuild to get new versions
+- If binary name or src structure changes → update `RUN mkdir` / `touch` paths
+
+**Build:** `docker build -t poly-server servers/server/`  
+**Run:** `docker run -e POLY_SERVER_BIND=0.0.0.0:7080 -v /data:/data poly-server`
+
+---
+
 ## Architecture Decisions
 
 ### DECISION(DX-S01): Pragmatic Auth — argon2 + custom JWT

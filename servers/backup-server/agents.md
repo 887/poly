@@ -17,6 +17,19 @@ See [README.md](README.md) for the full feature status checklist and run instruc
 Core implementation complete including E2E protocol tests (10/10 pass). See README.md feature
 table for exact status.
 
+## Docker Build & Deployment
+
+**Dockerfile location:** `servers/backup-server/Dockerfile`
+
+**Keep it in sync:** Whenever `servers/backup-server/Cargo.toml` or workspace dependencies change,
+the Dockerfile may need review. Specifically:
+- If new workspace crates are added as dependencies → update `COPY` steps if they live outside `servers/`
+- If dependency versions are updated → rebuild to get new versions
+- If binary name or src structure changes → update `RUN mkdir` / `touch` paths
+
+**Build:** `docker build -t poly-backup-server servers/backup-server/`  
+**Run:** `docker run -e POLY_BACKUP_PASSPHRASE=... -v /data:/data poly-backup-server`
+
 ## CRITICAL: SurrealDB 3.0 datetime → `serde_json::Value` incompatibility
 
 **DECISION(DX-SURREAL-DATETIME-1):** All timestamp fields in this server use `TYPE string`
