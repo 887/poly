@@ -14,7 +14,7 @@ use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
-use poly_client::ChannelType;
+use poly_client::{BackendType, ChannelType, PresenceStatus, User, VoiceParticipant};
 
 /// Voice channel view component.
 ///
@@ -169,7 +169,16 @@ pub fn VoiceChannelView() -> Element {
                     button {
                         class: "btn btn-voice-disconnect",
                         onclick: move |_| {
-                            chat_data.write().voice_connection = None;
+                            let mut writer = chat_data.write();
+                            // Remove Demo User from participant list when disconnecting
+                            if let Some(ref vc) = writer.voice_connection.clone()
+                                && let Some(participants) = writer
+                                    .voice_channel_participants
+                                    .get_mut(&vc.channel_id)
+                            {
+                                participants.retain(|p| p.user.id != "demo-user-self");
+                            }
+                            writer.voice_connection = None;
                         },
                         "{t(\"voice-disconnect\")}"
                     }
@@ -182,26 +191,47 @@ pub fn VoiceChannelView() -> Element {
                                 if let Some(ref channel_id) = cid {
                                     let ch = chat_data.read().current_channel.clone();
                                     let srv = chat_data.read().current_server.clone();
-                                    chat_data.write().voice_connection =
-                                        Some(poly_client::VoiceConnection {
-                                        channel_id: channel_id.clone(),
-                                        server_id: srv
-                                            .as_ref()
-                                            .map(|s| s.id.clone())
-                                            .unwrap_or_default(),
-                                        channel_name: ch
-                                            .as_ref()
-                                            .map(|c| c.name.clone())
-                                            .unwrap_or_default(),
-                                        server_name: srv
-                                            .as_ref()
-                                            .map(|s| s.name.clone())
-                                            .unwrap_or_default(),
+                                    // Add Demo User as a voice participant
+                                    let demo_participant = VoiceParticipant {
+                                        user: User {
+                                            id: "demo-user-self".to_string(),
+                                            display_name: "Demo User".to_string(),
+                                            avatar_url: None,
+                                            presence: PresenceStatus::Online,
+                                            backend: BackendType::Demo,
+                                        },
                                         is_muted: false,
                                         is_deafened: false,
                                         is_streaming: false,
                                         is_video_on: false,
-                                    });
+                                        is_speaking: false,
+                                    };
+                                    let mut writer = chat_data.write();
+                                    writer
+                                        .voice_channel_participants
+                                        .entry(channel_id.clone())
+                                        .or_default()
+                                        .push(demo_participant);
+                                    writer.voice_connection =
+                                        Some(poly_client::VoiceConnection {
+                                            channel_id: channel_id.clone(),
+                                            server_id: srv
+                                                .as_ref()
+                                                .map(|s| s.id.clone())
+                                                .unwrap_or_default(),
+                                            channel_name: ch
+                                                .as_ref()
+                                                .map(|c| c.name.clone())
+                                                .unwrap_or_default(),
+                                            server_name: srv
+                                                .as_ref()
+                                                .map(|s| s.name.clone())
+                                                .unwrap_or_default(),
+                                            is_muted: false,
+                                            is_deafened: false,
+                                            is_streaming: false,
+                                            is_video_on: false,
+                                        });
                                 }
                             }
                         },

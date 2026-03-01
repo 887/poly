@@ -55,40 +55,36 @@ pub fn MainLayout() -> Element {
             // stale component instances when the user switches views.
             match view {
                 View::DmsFriends => rsx! {
-                    // Channel list with voice bar + account bar
+                    // Channel list panel — nav-bar at top, NO AccountBar.
+                    // Multi-account: there is no single "current user" in DMs.
                     div { class: "channel-list-wrapper",
-                        ChannelList {}
-                        VoiceBar {}
-                        AccountBar {}
-                    }
-                    // DMs view: show placeholder until a DM/group is selected.
-                    main { class: "chat-view",
-                        // Back/Forward navigation bar
                         div { class: "nav-bar",
                             button {
                                 class: if can_back { "nav-btn" } else { "nav-btn disabled" },
                                 disabled: !can_back,
-                                onclick: move |_| {
-                                    app_state.write().nav_back();
-                                },
+                                onclick: move |_| { app_state.write().nav_back(); },
                                 title: "{t(\"nav-back\")}",
                                 "◀"
                             }
                             button {
                                 class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
                                 disabled: !can_forward,
-                                onclick: move |_| {
-                                    app_state.write().nav_forward();
-                                },
+                                onclick: move |_| { app_state.write().nav_forward(); },
                                 title: "{t(\"nav-forward\")}",
                                 "▶"
                             }
                         }
+                        ChannelList {}
+                        VoiceBar {}
+                        // AccountBar intentionally omitted — Poly is multi-account.
+                    }
+                    // Placeholder until a conversation is selected
+                    main { class: "chat-view",
                         div { class: "chat-header",
-                            span { class: "chat-channel-name", "{t(\"nav-dms\")}" } // Channel list with voice bar + account bar
+                            span { class: "chat-channel-name", "{t(\"nav-dms\")}" }
                         }
                         div { class: "message-list",
-                            div { class: "message-empty", // Show voice view for voice/video channels, chat view for text
+                            div { class: "message-empty",
                                 div { class: "empty-wave", "💬" }
                                 h3 { "{t(\"chat-select-conversation\")}" }
                             }
@@ -99,8 +95,24 @@ pub fn MainLayout() -> Element {
                     }
                 },
                 View::Server => rsx! {
-                    // Channel list with voice bar + account bar
+                    // Channel list panel — nav-bar at top + AccountBar at bottom
                     div { class: "channel-list-wrapper",
+                        div { class: "nav-bar",
+                            button {
+                                class: if can_back { "nav-btn" } else { "nav-btn disabled" },
+                                disabled: !can_back,
+                                onclick: move |_| { app_state.write().nav_back(); },
+                                title: "{t(\"nav-back\")}",
+                                "◀"
+                            }
+                            button {
+                                class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
+                                disabled: !can_forward,
+                                onclick: move |_| { app_state.write().nav_forward(); },
+                                title: "{t(\"nav-forward\")}",
+                                "▶"
+                            }
+                        }
                         ChannelList {}
                         VoiceBar {}
                         AccountBar {}

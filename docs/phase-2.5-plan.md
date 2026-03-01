@@ -716,3 +716,193 @@ Populate demo data to showcase all the new features out of the box.
 7. **2.5.19** Account status bar
 8. **2.5.20** Demo data enhancements
 9. **2.5.12** CSS polish for all new components
+
+---
+
+## 2.5.21 Voice Join — Demo User Appears in Participant List
+
+> **File:** `crates/core/src/ui/voice_view.rs`
+
+When the local user (Demo User) clicks "Join Voice", they should appear in the participant
+tile grid, just like any other participant. When disconnecting, they are removed.
+
+- [ ] **2.5.21.1** On "Join Voice" click: create a `VoiceParticipant` for demo-user-self and
+  push it to `voice_channel_participants[channel_id]`
+- [ ] **2.5.21.2** On "Disconnect" click: remove demo-user-self from the participant list
+- [ ] **2.5.21.3** Demo user tile shows their muted/deafened/streaming state from `voice_connection`
+
+---
+
+## 2.5.22 Voice & Video Settings Page (Audio Settings)
+
+> **Files:** `crates/core/src/ui/settings.rs`, `crates/core/src/state/mod.rs`
+
+The gear ⚙ button in the account bar should open Settings directly on the Voice & Video section,
+which mirrors Discord's Voice & Video settings (microphone, speakers, volumes, noise suppression, etc.)
+
+- [ ] **2.5.22.1** Add `VoiceVideo` variant to `SettingsSection` enum
+- [ ] **2.5.22.2** Account bar gear button sets `settings_section = VoiceVideo` before navigating to Settings
+- [ ] **2.5.22.3** VoiceVideoSettings component:
+  - Input device selector (microphone) - dropdown with fake device names for demo
+  - Output device selector (speaker) - dropdown with fake device names
+  - Input volume slider (0–100)
+  - Output volume slider (0–100)
+  - Mic Test button (animates a level indicator)
+  - Input Profile: Voice Activity Detection vs Push-to-Talk (radio buttons)
+  - Noise Suppression: Off / Standard / High (dropdown)
+  - Echo Cancellation (toggle)
+  - Push-to-Talk keybind (placeholder — "Set Keybind" button)
+- [ ] **2.5.22.4** Add VoiceVideo to settings nav sidebar
+- [ ] **2.5.22.5** Settings nav labels for VoiceVideo in all 4 locales
+
+---
+
+## 2.5.23 Notification Settings Page
+
+> **Files:** `crates/core/src/ui/settings.rs`, `crates/core/src/state/mod.rs`
+
+A notification settings page matching Discord's structure. For web, uses the browser
+Notification API (`Notification.requestPermission()`). Desktop uses the same API via
+the system webview. A simple platform abstraction (`request_notification_permission()`) 
+wraps both.
+
+- [ ] **2.5.23.1** Add `Notifications` variant to `SettingsSection` enum
+- [ ] **2.5.23.2** NotificationsSettings component:
+  - "Enable Desktop Notifications" toggle + permission request button
+  - "Notify me when..." subsection:
+    - Someone I know starts streaming (toggle)
+    - Friends join voice channels (toggle)
+    - Someone reacts to my messages (dropdown: Never/Always/When I'm mentioned)
+  - Sounds subsection:
+    - New Message sound (toggle)
+    - DM New Message (toggle)
+    - Incoming Ring (toggle)
+    - Disable All Notification Sounds (master toggle)
+  - Badges subsection:
+    - Enable unread message badge (toggle)
+    - Message badge dot (toggle)
+- [ ] **2.5.23.3** Platform abstraction: JS eval `Notification.requestPermission()` for both web and desktop
+- [ ] **2.5.23.4** Add Notifications to settings nav sidebar (between General and VoiceVideo)
+- [ ] **2.5.23.5** Settings nav labels in all 4 locales
+
+---
+
+## 2.5.24 Searchable Settings Page
+
+> **File:** `crates/core/src/ui/settings.rs`
+
+Like Discord, the settings nav should have a search bar at the top that filters visible sections.
+
+- [ ] **2.5.24.1** Add a search input at the top of the settings nav sidebar
+- [ ] **2.5.24.2** Filter nav items whose labels match the search query (case-insensitive substring)
+- [ ] **2.5.24.3** When search matches no items, show "No results found"
+- [ ] **2.5.24.4** Clear button (×) in the search input clears the filter
+- [ ] **2.5.24.5** Keyboard: Escape clears and blurs the search input
+
+---
+
+## 2.5.25 Back/Forward Navigation — Proper Wiring
+
+> **Files:** `crates/core/src/ui/channel_list.rs`, `crates/core/src/ui/server_sidebar.rs`, `crates/core/src/ui/main_layout.rs`
+
+The `push_nav_history()` method exists but is not called from UI code. This section wires it up properly.
+
+- [ ] **2.5.25.1** Call `push_nav_history()` BEFORE any navigation change in channel_list.rs (channel clicks, DM clicks)
+- [ ] **2.5.25.2** Call `push_nav_history()` in server_sidebar.rs when switching servers
+- [ ] **2.5.25.3** Move the nav-bar (◀/▶) to the top of the `channel-list-wrapper` div (above ChannelList),
+  visible for BOTH `DmsFriends` and `Server` views — not inside the chat-view main element
+- [ ] **2.5.25.4** Remove the nav-bar from inside `main.chat-view` (its current incorrect placement)
+
+---
+
+## 2.5.26 DM List Redesign — Multi-Account Search & Recent-First
+
+> **File:** `crates/core/src/ui/channel_list.rs`, `crates/core/src/ui/main_layout.rs`
+
+The direct messages list needs a complete restructure for Poly's multi-account nature.
+No account bar (since multiple accounts can be active), search at top, sorted by
+most recent activity, works across all accounts.
+
+- [ ] **2.5.26.1** Remove `AccountBar` from the `DmsFriends` view in main_layout.rs (multi-account apps don't have a single "current user")
+- [ ] **2.5.26.2** Keep `AccountBar` in `Server` view (shows which account owns the server)
+- [ ] **2.5.26.3** Add a `dm_filter: Signal<String>` in the ChannelList component
+- [ ] **2.5.26.4** Render a search input bar at the top of the DMs channel list:
+  - Placeholder: "Find or start a conversation"
+  - Updates `dm_filter` on input
+  - Has a × clear button when non-empty
+- [ ] **2.5.26.5** Unified conversation list (DMs + Groups), sorted by:
+  1. Unread count (desc) — conversations with unread messages first  
+  2. Last message timestamp (desc) — most recently active next
+  3. Name (asc) — alphabetical tiebreaker
+- [ ] **2.5.26.6** Filter: when `dm_filter` is non-empty, only show items whose name/user contains the filter text
+- [ ] **2.5.26.7** Friends appear only in search results (not in default list) — show under "Contacts" section when search is active
+- [ ] **2.5.26.8** Show backend badge on every DM entry so users know which account it belongs to
+- [ ] **2.5.26.9** Empty state: when filter has text but no results, show "No conversations matching '{filter}'"
+- [ ] **2.5.26.10** Infinite scroll: load more DMs when scrolled to bottom (placeholder for Phase 3)
+
+---
+
+## Updated Execution Order (2026-03-01 revision)
+
+1. ~~2.5.1–2.5.9~~ ✅ Already completed
+2. ~~2.5.14–2.5.20~~ ✅ Completed (voice view, emoji picker, reactions, drag-drop, nav bar, account bar)
+3. **2.5.21** Demo user appears in voice channel on join ← Next
+4. **2.5.22** Voice & Video settings page (gear button → audio settings)
+5. **2.5.23** Notification settings page
+6. **2.5.24** Searchable settings nav
+7. **2.5.25** Back/forward navigation wiring
+8. **2.5.26** DM list redesign
+
+---
+
+## Session Summary — 2026-03-01 (continuation)
+
+Implemented all 6 features from sections 2.5.21-2.5.26:
+
+### Completed ✅
+
+**2.5.21 — Voice join demo user bug fixed**
+- `voice_view.rs`: Join onclick creates VoiceParticipant for "demo-user-self" and pushes to voice_channel_participants
+- Disconnect onclick removes demo-user-self from participants
+- Verified: Demo User tile appears in the voice grid when joining
+
+**2.5.22 — Gear button → Voice & Video settings**
+- `account_bar.rs`: Gear onclick sets `settings_section = VoiceVideo` before navigating to Settings
+- `state/mod.rs`: Added `VoiceVideo` and `Notifications` variants to `SettingsSection`
+- Verified: Opens directly to Voice & Video page with all controls
+
+**2.5.23 — Back/forward nav-bar repositioned**
+- `main_layout.rs`: Moved nav-bar from inside `main.chat-view` (DmsFriends arm) to TOP of `channel-list-wrapper` in BOTH DmsFriends and Server arms
+- `chat_view.rs`: Removed duplicate nav-bar (was inside the component itself)
+- `server_sidebar.rs`: Added `push_nav_history()` call before server navigation
+- `channel_list.rs`: Added `push_nav_history()` before all channel/DM onclick handlers
+- Verified: Single ◀▶ pair at top-left of channel panel, no more duplicates
+
+**2.5.24 — Notifications settings page**
+- `settings.rs`: Added `NotificationsSettings` component with desktop notif toggle + "Allow Notifications" button, per-event toggles, sound toggles, badge toggle
+- CSS: `toggle-switch` component with sliding animation, `notif-toggle-row` layout
+- i18n: keys added to en/de/fr/es
+- Verified: Full page renders with styled toggles
+
+**2.5.25 — Searchable settings**
+- `settings.rs`: Added `let mut search_text = use_signal(String::new);` + `shows()` closure
+- Added search input at top of settings nav sidebar with × clear button
+- Each nav item wrapped in `if shows(&t("settings-X")) { SettingsNavItem { ... } }`
+- CSS: `settings-search-bar`, `settings-search-input`, `settings-search-clear`
+- i18n: `settings-search = Search settings...`
+- Verified: Typing "notif" filters nav to show only "Notifications"
+
+**2.5.26 — DM list redesign**
+- `main_layout.rs`: Removed AccountBar from DmsFriends arm (multi-account app)
+- `channel_list.rs`: Added `dm_filter` signal + search bar ("Find or start a conversation")
+- Unified sorted list: DMs sorted by unread_count desc then last_message timestamp desc; Groups sorted by timestamp desc
+- Friends shown ONLY when search is active (under "FRIENDS" section header)
+- × clear button in search bar
+- CSS: `dm-search-bar`, `dm-search-input`, `dm-unified-list`, `dm-section-header`, `dm-no-results`
+- i18n: `dm-search-placeholder`, `dm-no-results`
+- Verified: Search filters across DMs + groups; Friends contacts appear in results
+
+### Build status
+- `cargo cranky --workspace` — zero warnings/errors ✅
+- `dx build --platform desktop` — success ✅
+- All 6 features verified via DevTools MCP screenshots ✅

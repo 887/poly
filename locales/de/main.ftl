@@ -214,3 +214,39 @@ chat-attach-file = Datei anhängen
 # Navigation
 nav-back = Zurück
 nav-forward = Vorwärts
+
+# Settings search
+settings-search = Einstellungen durchsuchen...
+settings-voice-video = Sprache & Video
+settings-notifications = Benachrichtigungen
+
+# Voice & Video settings
+voice-input-device = Eingabegerät
+voice-output-device = Ausgabegerät
+voice-input-volume = Eingabelautstärke
+voice-output-volume = Ausgabelautstärke
+voice-mic-test = Mikrofon testen
+voice-mic-test-stop = Test beenden
+voice-input-mode = Eingabemodus
+voice-input-vad = Sprachaktivitätserkennung
+voice-input-ptt = Sprechtaste
+voice-noise-suppression = Rauschunterdrückung
+voice-noise-off = Aus
+voice-noise-standard = Standard
+voice-noise-high = Hoch
+voice-echo-cancel = Echounterdrückung
+
+# Notifications settings
+notif-enable-desktop = Desktop-Benachrichtigungen aktivieren
+notif-permission-request = Benachrichtigungen erlauben
+notif-streams = Bekannte starten einen Stream
+notif-friends-voice = Freunde treten Sprachkanälen bei
+notif-reactions = Jemand reagiert auf meine Nachrichten
+notif-sounds-new-message = Neue Nachricht
+notif-sounds-dm = Direktnachrichten
+notif-sounds-ring = Eingehender Anruf
+notif-badge-unread = Ungelesene-Nachrichten-Badge aktivieren
+
+# DM list
+dm-search-placeholder = Gespräch suchen oder starten
+dm-no-results = Kein Gespräch gefunden

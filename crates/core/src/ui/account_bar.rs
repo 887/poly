@@ -7,7 +7,7 @@
 
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData, SettingsSection, View};
 use dioxus::prelude::*;
 
 /// Account bar component.
@@ -79,11 +79,12 @@ pub fn AccountBar() -> Element {
                         "🔊"
                     }
                 }
-                // Settings gear
+                // Settings gear — opens Voice & Video settings directly
                 button {
                     class: "account-btn",
                     title: "{t(\"nav-settings\")}",
                     onclick: move |_| {
+                        app_state.write().settings_section = SettingsSection::VoiceVideo;
                         app_state.write().nav.view = View::Settings;
                     },
                     "⚙"

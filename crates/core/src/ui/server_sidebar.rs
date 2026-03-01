@@ -100,7 +100,8 @@ pub fn ServerSidebar() -> Element {
                             class: if is_selected { "server-icon active" } else { "server-icon" },
                             onclick: {
                                 let server_id_click = server_id.clone();
-                                move |_| { // Unread badge  Unread badge  Unread badge  Unread badge
+                                move |_| {
+                                    app_state.write().push_nav_history();
                                     app_state.write().nav.view = View::Server;
                                     app_state.write().nav.selected_server = Some(server_id_click.clone());
                                     app_state.write().nav.selected_channel = None;

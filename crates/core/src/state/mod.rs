@@ -70,6 +70,10 @@ pub enum SettingsSection {
     Appearance,
     /// General preferences.
     General,
+    /// Notification settings.
+    Notifications,
+    /// Voice & Video (audio device, noise suppression, etc.).
+    VoiceVideo,
 }
 
 /// Global app state provided at the root level.

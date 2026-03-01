@@ -80,40 +80,88 @@ pub fn SettingsPage() -> Element {
     let section = app_state.read().settings_section;
     // Subscribe to locale signal so nav labels re-render on language change.
     let _locale = crate::i18n::use_locale().read().clone();
+    let mut search_text = use_signal(String::new);
+    let sf_raw = search_text.read().clone();
+    let sf = sf_raw.to_lowercase();
+    // Helper: is this nav item visible given the current search filter?
+    let shows = |label: &str| -> bool { sf.is_empty() || label.to_lowercase().contains(&sf) };
 
     rsx! {
         div { class: "settings-page",
             // Settings navigation
             nav { class: "settings-nav",
-                SettingsNavItem {
-                    label: t("settings-accounts"),
-                    active: section == SettingsSection::Accounts,
-                    onclick: move |_| app_state.write().settings_section = SettingsSection::Accounts,
+                // Search bar
+                div { class: "settings-search-bar",
+                    input {
+                        r#type: "text",
+                        class: "settings-search-input",
+                        placeholder: "{t(\"settings-search\")}",
+                        value: "{sf_raw}",
+                        oninput: move |e| search_text.set(e.value()),
+                    }
+                    if !sf_raw.is_empty() {
+                        button {
+                            class: "settings-search-clear",
+                            onclick: move |_| search_text.set(String::new()),
+                            "×"
+                        }
+                    }
                 }
-                SettingsNavItem {
-                    label: t("settings-backup"),
-                    active: section == SettingsSection::Backup,
-                    onclick: move |_| app_state.write().settings_section = SettingsSection::Backup,
+                if shows(&t("settings-voice-video")) {
+                    SettingsNavItem {
+                        label: t("settings-voice-video"),
+                        active: section == SettingsSection::VoiceVideo,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::VoiceVideo,
+                    }
                 }
-                SettingsNavItem {
-                    label: t("settings-identity"),
-                    active: section == SettingsSection::Identity,
-                    onclick: move |_| app_state.write().settings_section = SettingsSection::Identity,
+                if shows(&t("settings-notifications")) {
+                    SettingsNavItem {
+                        label: t("settings-notifications"),
+                        active: section == SettingsSection::Notifications,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::Notifications,
+                    }
                 }
-                SettingsNavItem {
-                    label: t("settings-theme"),
-                    active: section == SettingsSection::Theme,
-                    onclick: move |_| app_state.write().settings_section = SettingsSection::Theme,
+                if shows(&t("settings-accounts")) {
+                    SettingsNavItem {
+                        label: t("settings-accounts"),
+                        active: section == SettingsSection::Accounts,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::Accounts,
+                    }
                 }
-                SettingsNavItem {
-                    label: t("settings-language"),
-                    active: section == SettingsSection::Language,
-                    onclick: move |_| app_state.write().settings_section = SettingsSection::Language,
+                if shows(&t("settings-backup")) {
+                    SettingsNavItem {
+                        label: t("settings-backup"),
+                        active: section == SettingsSection::Backup,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::Backup,
+                    }
                 }
-                SettingsNavItem {
-                    label: t("settings-general"),
-                    active: section == SettingsSection::General,
-                    onclick: move |_| app_state.write().settings_section = SettingsSection::General,
+                if shows(&t("settings-identity")) {
+                    SettingsNavItem {
+                        label: t("settings-identity"),
+                        active: section == SettingsSection::Identity,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::Identity,
+                    }
+                }
+                if shows(&t("settings-theme")) {
+                    SettingsNavItem {
+                        label: t("settings-theme"),
+                        active: section == SettingsSection::Theme,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::Theme,
+                    }
+                }
+                if shows(&t("settings-language")) {
+                    SettingsNavItem {
+                        label: t("settings-language"),
+                        active: section == SettingsSection::Language,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::Language,
+                    }
+                }
+                if shows(&t("settings-general")) {
+                    SettingsNavItem {
+                        label: t("settings-general"),
+                        active: section == SettingsSection::General,
+                        onclick: move |_| app_state.write().settings_section = SettingsSection::General,
+                    }
                 }
             }
 
@@ -141,6 +189,12 @@ pub fn SettingsPage() -> Element {
                     },
                     SettingsSection::General => rsx! {
                         GeneralSettings {}
+                    },
+                    SettingsSection::VoiceVideo => rsx! {
+                        VoiceVideoSettings {}
+                    },
+                    SettingsSection::Notifications => rsx! {
+                        NotificationsSettings {}
                     },
                 }
             }
@@ -1570,6 +1624,299 @@ fn GeneralSettings() -> Element {
                 }
             }
                 // TODO(phase-2.7.9.10): Notification preferences, startup behavior
+        }
+    }
+}
+/// Voice & Video settings section.
+///
+/// Lets the user configure audio/video input/output devices, volume levels,
+/// voice activity detection mode, noise suppression and echo cancellation.
+/// (Actual device enumeration uses browser/OS APIs wired up in later phases.)
+#[component]
+fn VoiceVideoSettings() -> Element {
+    let mut input_vol = use_signal(|| 80_u32);
+    let mut output_vol = use_signal(|| 80_u32);
+    let mut vad_mode = use_signal(|| "vad"); // "vad" | "ptt"
+    let mut noise_suppress = use_signal(|| "standard"); // "off" | "standard" | "high"
+    let mut echo_cancel = use_signal(|| true);
+    let mut mic_testing = use_signal(|| false);
+
+    rsx! {
+        div { class: "settings-section voice-settings",
+            h2 { "{t(\"settings-voice-video\")}" }
+
+            // Input device
+            div { class: "voice-settings-row",
+                label { class: "voice-settings-label", "{t(\"voice-input-device\")}" }
+                select { class: "poly-select-native",
+                    option { value: "default", "Default Microphone" }
+                }
+            }
+            // Input volume
+            div { class: "voice-settings-row",
+                label { class: "voice-settings-label",
+                    "{t(\"voice-input-volume\")} — {input_vol}%"
+                }
+                input {
+                    r#type: "range",
+                    class: "voice-settings-slider",
+                    min: "0",
+                    max: "100",
+                    value: "{input_vol}",
+                    oninput: move |e| {
+                        if let Ok(v) = e.value().parse::<u32>() {
+                            input_vol.set(v);
+                        }
+                    },
+                }
+            }
+            // Mic test
+            div { class: "voice-settings-row",
+                button {
+                    class: if *mic_testing.read() { "mic-test-btn active" } else { "mic-test-btn" },
+                    onclick: move |_| {
+                        let current = *mic_testing.read();
+                        mic_testing.set(!current);
+                    },
+                    if *mic_testing.read() { "{t(\"voice-mic-test-stop\")}" } else { "{t(\"voice-mic-test\")}" }
+                }
+                if *mic_testing.read() {
+                    div { class: "mic-level-bar",
+                        div { class: "mic-level-fill", style: "width: 40%;" }
+                    }
+                }
+            }
+
+            // Output device
+            div { class: "voice-settings-row",
+                label { class: "voice-settings-label", "{t(\"voice-output-device\")}" }
+                select { class: "poly-select-native",
+                    option { value: "default", "Default Speakers" }
+                }
+            }
+            // Output volume
+            div { class: "voice-settings-row",
+                label { class: "voice-settings-label",
+                    "{t(\"voice-output-volume\")} — {output_vol}%"
+                }
+                input {
+                    r#type: "range",
+                    class: "voice-settings-slider",
+                    min: "0",
+                    max: "100",
+                    value: "{output_vol}",
+                    oninput: move |e| {
+                        if let Ok(v) = e.value().parse::<u32>() {
+                            output_vol.set(v);
+                        }
+                    },
+                }
+            }
+
+            // Voice Activity Detection vs Push-to-Talk
+            div { class: "voice-settings-row voice-mode-row",
+                label { class: "voice-settings-label", "{t(\"voice-input-mode\")}" }
+                div { class: "voice-mode-options",
+                    label { class: "voice-mode-option",
+                        input {
+                            r#type: "radio",
+                            name: "voice-mode",
+                            value: "vad",
+                            checked: *vad_mode.read() == "vad",
+                            onchange: move |_| vad_mode.set("vad"),
+                        }
+                        "{t(\"voice-input-vad\")}"
+                    }
+                    label { class: "voice-mode-option",
+                        input {
+                            r#type: "radio",
+                            name: "voice-mode",
+                            value: "ptt",
+                            checked: *vad_mode.read() == "ptt",
+                            onchange: move |_| vad_mode.set("ptt"),
+                        }
+                        "{t(\"voice-input-ptt\")}"
+                    }
+                }
+            }
+
+            // Noise suppression
+            div { class: "voice-settings-row",
+                label { class: "voice-settings-label", "{t(\"voice-noise-suppression\")}" }
+                div { class: "voice-mode-options",
+                    for (val , lbl) in [("off", t("voice-noise-off")), ("standard", t("voice-noise-standard")), ("high", t("voice-noise-high"))] {
+                        {
+                            let val_owned = val;
+                            let is_checked = *noise_suppress.read() == val_owned;
+                            rsx! {
+                                label { class: "voice-mode-option",
+                                    input {
+                                        r#type: "radio",
+                                        name: "noise-suppress",
+                                        value: "{val_owned}",
+                                        checked: is_checked,
+                                        onchange: move |_| noise_suppress.set(val_owned),
+                                    }
+                                    "{lbl}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Echo cancellation toggle
+            div { class: "voice-settings-row toggle-row",
+                label { class: "voice-settings-label", "{t(\"voice-echo-cancel\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *echo_cancel.read(),
+                        onchange: move |e| echo_cancel.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+        }
+    }
+}
+
+/// Notifications settings section.
+///
+/// Controls desktop notification permission, per-event notification
+/// toggles, sound preferences and badge visibility.
+/// The actual permission request uses the Web Notifications API (on web)
+/// and OS notifications on desktop — wired up in later phases.
+#[component]
+fn NotificationsSettings() -> Element {
+    let mut desktop_notifs = use_signal(|| false);
+    let mut notif_streams = use_signal(|| true);
+    let mut notif_friends_voice = use_signal(|| true);
+    let mut notif_reactions = use_signal(|| true);
+    let mut sound_new_msg = use_signal(|| true);
+    let mut sound_dm = use_signal(|| true);
+    let mut sound_ring = use_signal(|| true);
+    let mut badge_unread = use_signal(|| true);
+
+    rsx! {
+        div { class: "settings-section notif-settings",
+            h2 { "{t(\"settings-notifications\")}" }
+
+            // Desktop notification permission
+            div { class: "notif-toggle-row notif-permission-row",
+                div { class: "notif-toggle-label",
+                    span { class: "notif-toggle-title", "{t(\"notif-enable-desktop\")}" }
+                    span { class: "notif-toggle-desc",
+                        "Requires browser / OS permission"
+                    }
+                }
+                div { class: "notif-permission-controls",
+                    label { class: "toggle-switch",
+                        input {
+                            r#type: "checkbox",
+                            checked: *desktop_notifs.read(),
+                            onchange: move |e| desktop_notifs.set(e.checked()),
+                        }
+                        span { class: "toggle-slider" }
+                    }
+                    if !*desktop_notifs.read() {
+                        button {
+                            class: "btn btn-primary btn-sm",
+                            onclick: move |_| {
+                                // TODO(phase-3): call Notification.requestPermission() via JS eval
+                                desktop_notifs.set(true);
+                            },
+                            "{t(\"notif-permission-request\")}"
+                        }
+                    }
+                }
+            }
+
+            h3 { class: "notif-section-header", "Notify me about" }
+
+            div { class: "notif-toggle-row",
+                span { class: "notif-toggle-title", "{t(\"notif-streams\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *notif_streams.read(),
+                        onchange: move |e| notif_streams.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+            div { class: "notif-toggle-row",
+                span { class: "notif-toggle-title", "{t(\"notif-friends-voice\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *notif_friends_voice.read(),
+                        onchange: move |e| notif_friends_voice.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+            div { class: "notif-toggle-row",
+                span { class: "notif-toggle-title", "{t(\"notif-reactions\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *notif_reactions.read(),
+                        onchange: move |e| notif_reactions.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+
+            h3 { class: "notif-section-header", "Sounds" }
+
+            div { class: "notif-toggle-row",
+                span { class: "notif-toggle-title", "{t(\"notif-sounds-new-message\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *sound_new_msg.read(),
+                        onchange: move |e| sound_new_msg.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+            div { class: "notif-toggle-row",
+                span { class: "notif-toggle-title", "{t(\"notif-sounds-dm\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *sound_dm.read(),
+                        onchange: move |e| sound_dm.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+            div { class: "notif-toggle-row",
+                span { class: "notif-toggle-title", "{t(\"notif-sounds-ring\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *sound_ring.read(),
+                        onchange: move |e| sound_ring.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+
+            h3 { class: "notif-section-header", "Badges" }
+
+            div { class: "notif-toggle-row",
+                span { class: "notif-toggle-title", "{t(\"notif-badge-unread\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: *badge_unread.read(),
+                        onchange: move |e| badge_unread.set(e.checked()),
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
         }
     }
 }

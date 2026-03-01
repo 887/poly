@@ -214,3 +214,39 @@ chat-attach-file = Joindre un fichier
 # Navigation
 nav-back = Retour
 nav-forward = Avancer
+
+# Settings search
+settings-search = Rechercher dans les paramètres...
+settings-voice-video = Voix & Vidéo
+settings-notifications = Notifications
+
+# Voice & Video settings
+voice-input-device = Périphérique d'entrée
+voice-output-device = Périphérique de sortie
+voice-input-volume = Volume d'entrée
+voice-output-volume = Volume de sortie
+voice-mic-test = Tester le micro
+voice-mic-test-stop = Arrêter le test
+voice-input-mode = Mode d'entrée
+voice-input-vad = Détection d'activité vocale
+voice-input-ptt = Appuyer pour parler
+voice-noise-suppression = Suppression du bruit
+voice-noise-off = Désactivé
+voice-noise-standard = Standard
+voice-noise-high = Élevé
+voice-echo-cancel = Annulation d'écho
+
+# Notifications settings
+notif-enable-desktop = Activer les notifications bureau
+notif-permission-request = Autoriser les notifications
+notif-streams = Des personnes que je connais diffusent
+notif-friends-voice = Des amis rejoignent des canaux vocaux
+notif-reactions = Quelqu'un réagit à mes messages
+notif-sounds-new-message = Nouveau message
+notif-sounds-dm = Messages directs
+notif-sounds-ring = Appel entrant
+notif-badge-unread = Activer le badge messages non lus
+
+# DM list
+dm-search-placeholder = Trouver ou démarrer une conversation
+dm-no-results = Aucune conversation trouvée

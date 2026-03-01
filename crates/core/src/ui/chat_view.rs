@@ -13,7 +13,7 @@
 //! - Hover action bar with add-reaction button
 //! - Emoji/GIF/attachment buttons in the input toolbar
 //! - File drag-and-drop overlay
-//! - Back/forward navigation buttons
+
 // TODO(phase-2.5.6): Discord-style chat view rewrite
 
 use super::emoji_picker::EmojiPicker;
@@ -49,9 +49,6 @@ pub fn ChatView() -> Element {
     let current_server = chat_data.read().current_server.clone();
     let members_count = chat_data.read().members.len();
     let loading = chat_data.read().loading;
-
-    let can_back = app_state.read().can_go_back();
-    let can_forward = app_state.read().can_go_forward();
 
     // Scroll message list to bottom when messages change
     let msg_count = messages.len();
@@ -89,28 +86,6 @@ pub fn ChatView() -> Element {
                         span { class: "drag-icon", "📎" }
                         p { "{t(\"chat-drop-files\")}" }
                     }
-                }
-            }
-
-            // ── Back/Forward navigation bar ──────────────────────────────
-            div { class: "nav-bar",
-                button {
-                    class: if can_back { "nav-btn" } else { "nav-btn disabled" },
-                    disabled: !can_back,
-                    onclick: move |_| {
-                        app_state.write().nav_back();
-                    },
-                    title: "{t(\"nav-back\")}",
-                    "◀"
-                }
-                button {
-                    class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
-                    disabled: !can_forward,
-                    onclick: move |_| {
-                        app_state.write().nav_forward();
-                    },
-                    title: "{t(\"nav-forward\")}",
-                    "▶"
                 }
             }
 
