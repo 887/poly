@@ -32,7 +32,6 @@ ed25519-dalek = { workspace = true }
 x25519-dalek = { workspace = true }
 bip39 = { workspace = true }
 sha2 = { workspace = true }
-rand = { workspace = true }
 chacha20poly1305 = { workspace = true }
 
 # i18n
@@ -48,7 +47,6 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-uuid = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 thiserror = { workspace = true }
@@ -62,13 +60,14 @@ async-trait = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 surrealdb = { workspace = true, features = ["kv-surrealkv"] }
 
-# WASM-only: browser localStorage via gloo-storage
-# uuid needs "js" feature on WASM to use JS crypto API for randomness (compile-time error otherwise).
-# getrandom "js" feature propagates to uuid's getrandom 0.2.x dependency as well.
+# WASM-only: browser localStorage + getrandom JS backend forwarding.
+# rand_core 0.6 (aead, ed25519-dalek) and rand 0.10 each pull a different getrandom
+# semver line; both need their WASM JS backend feature enabled or they fail to compile.
+# These aliases are defined once in the workspace; no version numbers live here.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gloo-storage = "0.3"
-getrandom = { version = "0.2", features = ["js"] }
-uuid = { version = "1", features = ["v4", "serde", "js"] }
+gloo-storage = { workspace = true }
+getrandom02-js = { workspace = true }
+getrandom04-wasm = { workspace = true }
 
 [lints]
 workspace = true

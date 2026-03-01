@@ -110,11 +110,6 @@ pub fn SettingsPage(app_state: Signal<AppState>) -> Element {
                     onclick: move |_| app_state.write().settings_section = SettingsSection::Language,
                 }
                 SettingsNavItem {
-                    label: t("settings-appearance"),
-                    active: section == SettingsSection::Appearance,
-                    onclick: move |_| app_state.write().settings_section = SettingsSection::Appearance,
-                }
-                SettingsNavItem {
                     label: t("settings-general"),
                     active: section == SettingsSection::General,
                     onclick: move |_| app_state.write().settings_section = SettingsSection::General,
@@ -139,8 +134,9 @@ pub fn SettingsPage(app_state: Signal<AppState>) -> Element {
                     SettingsSection::Language => rsx! {
                         LanguageSettings {}
                     },
+                    // Appearance merged into Theme — redirect transparently.
                     SettingsSection::Appearance => rsx! {
-                        AppearanceSettings {}
+                        ThemeSettings {}
                     },
                     SettingsSection::General => rsx! {
                         GeneralSettings {}
@@ -177,506 +173,818 @@ fn AccountsSettings() -> Element {
     }
 }
 
+/// Probe status for step 1 of the add-server wizard.
+///
+/// Returned by [`crate::sync::probe_server`] and stored in a [`Signal`] so the
+/// UI can reactively reflect the connection-check result.
+// DECISION(DX-BACKUP-UI-2): Two-step wizard replaces the flat form.
+// ProbeStatus stores structured server info returned by GET /api/info.
+#[derive(Clone, PartialEq)]
+enum ProbeStatus {
+    Idle,
+    Checking,
+    Ready {
+        server_name: String,
+        password_required: bool,
+        registrations_open: bool,
+    },
+    Error(String),
+}
+
+/// Authentication status for step 2 of the add-server wizard.
+#[derive(Clone, PartialEq)]
+enum WizardAuthStatus {
+    Idle,
+    Checking,
+    Error(String),
+}
+
+// BackupSettings — two-step wizard UI for adding servers and per-server sync.
+// Step 1: Enter server URL → probe /api/info → see server name + policies.
+// Step 2: Set server label (pre-filled) + passphrase (if required) → authenticate.
+// Configured servers show status chips, last-sync time, and Sync Now / Re-auth / Remove
+// action buttons. On first render a background pull checks for remote changes.
+// ── BackupSettings — async helpers ───────────────────────────────────────────
+
+/// Pull from all enabled servers on first mount to catch up on remote changes.
+async fn backup_startup_sync(mut servers: Signal<Vec<crate::storage::BackupServerRecord>>) {
+    let Some(storage) = crate::STORAGE.get() else {
+        return;
+    };
+    let Ok(mut list) = storage.get_backup_servers().await else {
+        return;
+    };
+    for rec in list.iter_mut() {
+        if !rec.enabled || rec.token.is_none() {
+            continue;
+        }
+        let Some(ref token) = rec.token.clone() else {
+            continue;
+        };
+        let cfg = crate::sync::BackupServerConfig {
+            url: rec.url.clone(),
+            name: rec.label.clone(),
+            token: Some(token.clone()),
+            last_sequence: rec.last_sequence,
+        };
+        let client = crate::sync::SyncClient::new(cfg);
+        if let Ok(blobs) = client.pull(rec.last_sequence).await
+            && let Some(latest) = blobs.last()
+        {
+            let new_seq = u64::try_from(latest.sequence).unwrap_or(rec.last_sequence);
+            if new_seq > rec.last_sequence {
+                rec.last_sequence = new_seq;
+                rec.last_synced_at = Some(chrono::Utc::now().to_rfc3339());
+            }
+        }
+    }
+    for rec in &list {
+        if let Err(e) = storage.upsert_backup_server(rec).await {
+            tracing::error!("Save startup sync state: {e}");
+        }
+    }
+    servers.set(list);
+}
+
+/// Encrypt current app settings and push them to one backup server.
+///
+/// Manages the status chip for `url` throughout: Syncing → Connected or error.
+async fn backup_sync_now(
+    url: String,
+    servers: Signal<Vec<crate::storage::BackupServerRecord>>,
+    statuses: Signal<HashMap<String, String>>,
+) {
+    let mut st = statuses;
+    st.write()
+        .insert(url.clone(), t("settings-backup-status-syncing"));
+    let Some(storage) = crate::STORAGE.get() else {
+        return;
+    };
+    let Ok(list) = storage.get_backup_servers().await else {
+        return;
+    };
+    let Some(rec) = list.into_iter().find(|r| r.url == url) else {
+        return;
+    };
+    let cfg = crate::sync::BackupServerConfig {
+        url: rec.url.clone(),
+        name: rec.label.clone(),
+        token: rec.token.clone(),
+        last_sequence: rec.last_sequence,
+    };
+    let client = crate::sync::SyncClient::new(cfg);
+    let Ok(settings) = storage.get_app_settings().await else {
+        st.write()
+            .insert(url, t("settings-backup-status-unreachable"));
+        return;
+    };
+    let Ok(payload) = serde_json::to_vec(&settings) else {
+        st.write()
+            .insert(url, t("settings-backup-status-unreachable"));
+        return;
+    };
+    let key = storage
+        .get_identity_key()
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or([0u8; 32]);
+    let Ok(enc) = crate::crypto::encrypt(&payload, &key) else {
+        st.write()
+            .insert(url, t("settings-backup-status-unreachable"));
+        return;
+    };
+    match client.push(&enc).await {
+        Ok(seq) => {
+            let now = chrono::Utc::now().to_rfc3339();
+            if let Ok(mut fresh) = storage.get_backup_servers().await
+                && let Some(r) = fresh.iter_mut().find(|r| r.url == url)
+            {
+                r.last_sequence = seq;
+                r.last_synced_at = Some(now);
+                let upd = r.clone();
+                if storage.upsert_backup_server(&upd).await.is_ok()
+                    && let Ok(reload) = storage.get_backup_servers().await
+                {
+                    let mut srv = servers;
+                    srv.set(reload);
+                }
+            }
+            st.write()
+                .insert(url, t("settings-backup-status-connected"));
+        }
+        Err(e) => {
+            let msg = if e.to_string().contains("token") {
+                t("settings-backup-status-auth-required")
+            } else {
+                t("settings-backup-status-unreachable")
+            };
+            tracing::warn!("Sync push error: {e}");
+            st.write().insert(url, msg);
+        }
+    }
+}
+
+/// Remove a backup server and reload the list.
+async fn backup_remove_server(
+    url: String,
+    servers: Signal<Vec<crate::storage::BackupServerRecord>>,
+) {
+    let mut srv = servers;
+    let Some(s) = crate::STORAGE.get() else {
+        return;
+    };
+    if let Err(e) = s.remove_backup_server(&url).await {
+        tracing::error!("Remove server: {e}");
+    }
+    if let Ok(list) = s.get_backup_servers().await {
+        srv.set(list);
+    }
+}
+
+/// Re-authenticate with an existing server using a new passphrase.
+///
+/// Returns `Ok(())` and reloads the server list on success, or `Err(message)`.
+async fn backup_reauth(
+    url: String,
+    passphrase: String,
+    servers: Signal<Vec<crate::storage::BackupServerRecord>>,
+    reauth_sig: Signal<Option<String>>,
+) -> Result<(), String> {
+    let Some(storage) = crate::STORAGE.get() else {
+        return Err("Storage unavailable".to_string());
+    };
+    let Ok(settings) = storage.get_app_settings().await else {
+        return Err("Failed to load settings".to_string());
+    };
+    let cfg = crate::sync::BackupServerConfig {
+        url: url.clone(),
+        name: String::new(),
+        token: None,
+        last_sequence: 0,
+    };
+    let mut client = crate::sync::SyncClient::new(cfg);
+    let auth = client
+        .authenticate(&passphrase, &settings.account_id, "Poly")
+        .await
+        .map_err(|e| e.to_string())?;
+    let Ok(mut list) = storage.get_backup_servers().await else {
+        return Err("Failed to reload servers".to_string());
+    };
+    if let Some(srv) = list.iter_mut().find(|r| r.url == url) {
+        srv.token = Some(auth.token);
+        srv.token_expires_at = auth.expires_at;
+        let upd = srv.clone();
+        storage
+            .upsert_backup_server(&upd)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    if let Ok(fresh) = storage.get_backup_servers().await {
+        let mut srv = servers;
+        srv.set(fresh);
+    }
+    let mut r = reauth_sig;
+    r.set(None);
+    Ok(())
+}
+
+/// Build and persist a new [`BackupServerRecord`] after authenticating.
+///
+/// Returns the refreshed server list on success.
+async fn wizard_authenticate(
+    url: String,
+    name: String,
+    passphrase: String,
+    pass_required: bool,
+) -> Result<Vec<crate::storage::BackupServerRecord>, String> {
+    let storage = crate::STORAGE
+        .get()
+        .ok_or_else(|| "Storage unavailable".to_string())?;
+    let settings = storage
+        .get_app_settings()
+        .await
+        .map_err(|e| format!("Failed to load settings: {e}"))?;
+    let cfg = crate::sync::BackupServerConfig {
+        url: url.clone(),
+        name: name.clone(),
+        token: None,
+        last_sequence: 0,
+    };
+    let mut client = crate::sync::SyncClient::new(cfg);
+    let auth_phrase = if pass_required {
+        passphrase
+    } else {
+        String::new()
+    };
+    let auth = client
+        .authenticate(&auth_phrase, &settings.account_id, "Poly")
+        .await
+        .map_err(|e| e.to_string())?;
+    let record = crate::storage::BackupServerRecord {
+        url: url.clone(),
+        label: if name.is_empty() { url } else { name },
+        enabled: true,
+        last_sequence: 0,
+        token: Some(auth.token),
+        token_expires_at: auth.expires_at,
+        last_synced_at: None,
+    };
+    storage
+        .upsert_backup_server(&record)
+        .await
+        .map_err(|e| format!("Save error: {e}"))?;
+    storage
+        .get_backup_servers()
+        .await
+        .map_err(|e| format!("Reload error: {e}"))
+}
+
+// ── BackupSettings — sub-components ──────────────────────────────────────────
+
+/// Renders the probe connection result box for Step 1 of the add‐server wizard.
+#[component]
+fn ProbeStatusBox(status: ProbeStatus) -> Element {
+    match status {
+        ProbeStatus::Idle => rsx! {
+            div {}
+        },
+        ProbeStatus::Checking => rsx! {
+            div { class: "probe-status-box probe-checking",
+                span { class: "probe-spinner" }
+                span { "{t(\"settings-backup-checking\")}" }
+            }
+        },
+        ProbeStatus::Ready {
+            server_name,
+            password_required,
+            registrations_open,
+        } => rsx! {
+            div { class: if registrations_open { "probe-status-box probe-ok" } else { "probe-status-box probe-error" },
+                p { class: "probe-server-name", "✓  {server_name}" }
+                p { class: "probe-detail",
+                    if password_required {
+                        "{t(\"settings-backup-password-required\")}"
+                    } else {
+                        "{t(\"settings-backup-no-password-required\")}"
+                    }
+                }
+                if !registrations_open {
+                    p { class: "probe-full-warning", "{t(\"settings-backup-server-full\")}" }
+                }
+            }
+        },
+        ProbeStatus::Error(msg) => rsx! {
+            div { class: "probe-status-box probe-error", "✗  {msg}" }
+        },
+    }
+}
+
+/// Renders the authentication status box for Step 2 of the add-server wizard.
+#[component]
+fn WizardAuthStatusBox(status: WizardAuthStatus) -> Element {
+    match status {
+        WizardAuthStatus::Idle => rsx! {
+            div {}
+        },
+        WizardAuthStatus::Checking => rsx! {
+            div { class: "probe-status-box probe-checking",
+                span { class: "probe-spinner" }
+                span { "{t(\"settings-backup-connecting\")}" }
+            }
+        },
+        WizardAuthStatus::Error(msg) => rsx! {
+            div { class: "probe-status-box probe-error", "✗  {msg}" }
+        },
+    }
+}
+
+/// Inline re-authentication form embedded in a [`ServerCard`].
+///
+/// Manages its own passphrase input and error state. Closes on success or cancel.
+#[component]
+fn ReauthForm(
+    url: String,
+    servers: Signal<Vec<crate::storage::BackupServerRecord>>,
+    statuses: Signal<HashMap<String, String>>,
+    reauth_url_sig: Signal<Option<String>>,
+) -> Element {
+    let mut pass = use_signal(String::new);
+    let mut err = use_signal(String::new);
+    rsx! {
+        div { class: "server-reauth-form",
+            input {
+                r#type: "password",
+                class: "form-input",
+                placeholder: "{t(\"settings-backup-passphrase-label\")}",
+                value: "{pass}",
+                oninput: move |e| pass.set(e.value()),
+            }
+            if !err.read().is_empty() {
+                div { class: "probe-status-box probe-error", "{err}" }
+            }
+            div { class: "server-reauth-actions",
+                button {
+                    class: "btn btn-sm btn-primary",
+                    onclick: move |_| {
+                        let url_inner = url.clone();
+                        let pw = pass.read().clone();
+                        spawn(async move {
+                            err.set(String::new());
+                            if let Err(e) = backup_reauth(url_inner, pw, servers, reauth_url_sig).await {
+                                tracing::warn!("Re-auth: {e}");
+                                err.set(format!("{}: {e}", t("settings-backup-auth-failed")));
+                            }
+                        });
+                    },
+                    "{t(\"settings-backup-connect\")}"
+                }
+                button {
+                    class: "btn btn-sm btn-ghost",
+                    onclick: move |_| {
+                        let mut r = reauth_url_sig;
+                        r.set(None);
+                    },
+                    "{t(\"settings-backup-cancel\")}"
+                }
+            }
+        }
+    }
+}
+
+/// A card representing one configured backup server.
+///
+/// Shows status, last-sync time, and Sync Now / Re-auth / Remove actions.
+/// The re-auth passphrase form is shown inline when "Re-authenticate" is clicked.
+#[component]
+fn ServerCard(
+    record: crate::storage::BackupServerRecord,
+    servers: Signal<Vec<crate::storage::BackupServerRecord>>,
+    statuses: Signal<HashMap<String, String>>,
+) -> Element {
+    let reauth_url_sig: Signal<Option<String>> = use_signal(|| None);
+    let url = record.url.clone();
+    let url_for_sync = url.clone();
+    let url_for_reauth = url.clone();
+    let url_for_remove = url.clone();
+    let label = record.label.clone();
+    let last_synced = record
+        .last_synced_at
+        .clone()
+        .unwrap_or_else(|| t("settings-backup-never-synced"));
+    let status_text = statuses.read().get(&url).cloned().unwrap_or_else(|| {
+        if record.token.is_some() {
+            t("settings-backup-status-connected")
+        } else {
+            t("settings-backup-status-auth-required")
+        }
+    });
+    let connected = status_text == t("settings-backup-status-connected");
+    let syncing = status_text == t("settings-backup-status-syncing");
+    let status_class = if connected {
+        "status-chip status-connected"
+    } else if syncing {
+        "status-chip status-syncing"
+    } else {
+        "status-chip status-disconnected"
+    };
+    let is_reauthenticating = reauth_url_sig.read().as_deref() == Some(url.as_str());
+    rsx! {
+        div { class: "server-card", key: "{url}",
+            div { class: "server-card-header",
+                div { class: "server-card-info",
+                    span { class: "server-card-name", "{label}" }
+                    span { class: "server-card-url", "{url}" }
+                }
+                div { class: "server-card-meta",
+                    span { class: "{status_class}", "{status_text}" }
+                    span { class: "server-last-synced", "{last_synced}" }
+                }
+            }
+            div { class: "server-card-actions",
+                button {
+                    class: "btn btn-sm btn-secondary",
+                    onclick: move |_| {
+                        let u = url_for_sync.clone();
+                        spawn(async move {
+                            backup_sync_now(u, servers, statuses).await;
+                        });
+                    },
+                    "{t(\"settings-backup-sync-now\")}"
+                }
+                button {
+                    class: "btn btn-sm btn-secondary",
+                    onclick: move |_| {
+                        let mut r = reauth_url_sig;
+                        r.set(Some(url_for_reauth.clone()));
+                    },
+                    "{t(\"settings-backup-reauth\")}"
+                }
+                button {
+                    class: "btn btn-sm btn-danger",
+                    onclick: move |_| {
+                        let u = url_for_remove.clone();
+                        spawn(async move {
+                            backup_remove_server(u, servers).await;
+                        });
+                    },
+                    "{t(\"settings-backup-remove\")}"
+                }
+            }
+            if is_reauthenticating {
+                ReauthForm {
+                    url: url.clone(),
+                    servers,
+                    statuses,
+                    reauth_url_sig,
+                }
+            }
+        }
+    }
+}
+
+/// Step 1 of the add-server wizard: URL entry and server probe.
+#[component]
+fn WizardStep1(
+    wizard_url: Signal<String>,
+    probe_status: Signal<ProbeStatus>,
+    wizard_step: Signal<u8>,
+    wizard_name: Signal<String>,
+    wizard_pass_required: Signal<bool>,
+    auth_status: Signal<WizardAuthStatus>,
+) -> Element {
+    rsx! {
+        div { class: "wizard-step-body",
+            p { class: "wizard-step-hint", "{t(\"settings-backup-step1-hint\")}" }
+            div { class: "form-field",
+                label { class: "form-label", "{t(\"settings-backup-url-label\")}" }
+                div { class: "url-check-row",
+                    input {
+                        r#type: "text",
+                        class: "form-input",
+                        placeholder: "{t(\"settings-backup-url-placeholder\")}",
+                        value: "{wizard_url}",
+                        oninput: move |e| {
+                            let mut wu = wizard_url;
+                            wu.set(e.value());
+                            let mut ps = probe_status;
+                            ps.set(ProbeStatus::Idle);
+                        },
+                    }
+                    button {
+                        class: "btn btn-secondary",
+                        disabled: matches!(*probe_status.read(), ProbeStatus::Checking),
+                        onclick: move |_| {
+                            let url = wizard_url.read().trim().to_string();
+                            if url.is_empty() {
+                                let mut ps = probe_status;
+                                ps.set(ProbeStatus::Error(t("settings-backup-url-empty")));
+                                return;
+                            }
+                            let mut ps = probe_status;
+                            ps.set(ProbeStatus::Checking);
+                            spawn(async move {
+                                match crate::sync::probe_server(&url).await {
+                                    Ok(info) => {
+                                        ps.set(ProbeStatus::Ready {
+                                            server_name: info.name,
+                                            password_required: info.password_required,
+                                            registrations_open: info.registrations_open,
+                                        })
+                                    }
+                                    Err(e) => ps.set(ProbeStatus::Error(e.to_string())),
+                                }
+                            });
+                        },
+                        "{t(\"settings-backup-check-btn\")}"
+                    }
+                }
+            }
+            ProbeStatusBox { status: probe_status.read().clone() }
+            div { class: "wizard-actions",
+                button {
+                    class: "btn btn-ghost",
+                    onclick: move |_| {
+                        let mut ws = wizard_step;
+                        ws.set(0);
+                    },
+                    "{t(\"settings-backup-cancel\")}"
+                }
+                button {
+                    class: "btn btn-primary",
+                    disabled: !matches!(*probe_status.read(), ProbeStatus::Ready { registrations_open: true, .. }),
+                    onclick: move |_| {
+                        if let ProbeStatus::Ready { server_name, password_required, .. } = probe_status
+                            .read()
+                            .clone()
+                        {
+                            let mut wn = wizard_name;
+                            wn.set(server_name);
+                            let mut wpr = wizard_pass_required;
+                            wpr.set(password_required);
+                            let mut auth = auth_status;
+                            auth.set(WizardAuthStatus::Idle);
+                            let mut ws = wizard_step;
+                            ws.set(2);
+                        }
+                    },
+                    "{t(\"settings-backup-continue\")}"
+                }
+            }
+        }
+    }
+}
+
+/// Step 2 of the add-server wizard: name, optional passphrase, and authenticate.
+#[component]
+fn WizardStep2(
+    wizard_step: Signal<u8>,
+    wizard_url: Signal<String>,
+    wizard_name: Signal<String>,
+    wizard_pass: Signal<String>,
+    wizard_pass_required: Signal<bool>,
+    servers: Signal<Vec<crate::storage::BackupServerRecord>>,
+) -> Element {
+    let mut auth_status: Signal<WizardAuthStatus> = use_signal(|| WizardAuthStatus::Idle);
+    rsx! {
+        div { class: "wizard-step-body",
+            p { class: "wizard-step-hint", "{t(\"settings-backup-step2-hint\")}" }
+            div { class: "form-field",
+                label { class: "form-label", "{t(\"settings-backup-label-label\")}" }
+                input {
+                    r#type: "text",
+                    class: "form-input",
+                    value: "{wizard_name}",
+                    oninput: move |e| {
+                        let mut wn = wizard_name;
+                        wn.set(e.value());
+                    },
+                }
+            }
+            if *wizard_pass_required.read() {
+                div { class: "form-field",
+                    label { class: "form-label", "{t(\"settings-backup-passphrase-label\")}" }
+                    input {
+                        r#type: "password",
+                        class: "form-input",
+                        value: "{wizard_pass}",
+                        oninput: move |e| {
+                            let mut wp = wizard_pass;
+                            wp.set(e.value());
+                        },
+                    }
+                }
+            }
+            WizardAuthStatusBox { status: auth_status.read().clone() }
+            div { class: "wizard-actions",
+                button {
+                    class: "btn btn-ghost",
+                    onclick: move |_| {
+                        let mut ws = wizard_step;
+                        ws.set(1);
+                        auth_status.set(WizardAuthStatus::Idle);
+                    },
+                    "{t(\"settings-backup-back\")}"
+                }
+                button {
+                    class: "btn btn-primary",
+                    disabled: matches!(*auth_status.read(), WizardAuthStatus::Checking),
+                    onclick: move |_| {
+                        let url = wizard_url.read().trim().to_string();
+                        let name = wizard_name.read().trim().to_string();
+                        let pass = wizard_pass.read().clone();
+                        let pass_req = *wizard_pass_required.read();
+                        auth_status.set(WizardAuthStatus::Checking);
+                        spawn(async move {
+                            match wizard_authenticate(url, name, pass, pass_req).await {
+                                Ok(list) => {
+                                    let mut srv = servers;
+                                    srv.set(list);
+                                    let mut ws = wizard_step;
+                                    ws.set(0);
+                                    auth_status.set(WizardAuthStatus::Idle);
+                                }
+                                Err(e) => auth_status.set(WizardAuthStatus::Error(e)),
+                            }
+                        });
+                    },
+                    "{t(\"settings-backup-finish\")}"
+                }
+            }
+        }
+    }
+}
+
+/// Add-server wizard (button + two-step flow).
+///
+/// Step 0: shows the "Add Server" button.
+/// Step 1: URL entry and server probe.
+/// Step 2: name / passphrase and authenticate.
+// DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
+#[component]
+fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRecord>>) -> Element {
+    let mut wizard_step = use_signal(|| 0u8);
+    let mut wizard_url = use_signal(|| "https://".to_string());
+    let probe_status: Signal<ProbeStatus> = use_signal(|| ProbeStatus::Idle);
+    let mut wizard_name = use_signal(String::new);
+    let mut wizard_pass = use_signal(String::new);
+    let wizard_pass_required = use_signal(|| false);
+    let mut auth_status: Signal<WizardAuthStatus> = use_signal(|| WizardAuthStatus::Idle);
+    if *wizard_step.read() == 0 {
+        rsx! {
+            button {
+                class: "btn btn-primary",
+                onclick: move |_| {
+                    wizard_step.set(1);
+                    wizard_url.set("https://".to_string());
+                    let mut ps = probe_status;
+                    ps.set(ProbeStatus::Idle);
+                    wizard_name.set(String::new());
+                    wizard_pass.set(String::new());
+                    auth_status.set(WizardAuthStatus::Idle);
+                },
+                "{t(\"settings-backup-add-server\")}"
+            }
+        }
+    } else {
+        rsx! {
+            div { class: "backup-wizard-card",
+                div { class: "wizard-steps",
+                    div { class: if *wizard_step.read() >= 1 { "wizard-step active" } else { "wizard-step" },
+                        span { class: "wizard-step-num", "1" }
+                        span { class: "wizard-step-label", "{t(\"settings-backup-wizard-step1\")}" }
+                    }
+                    div { class: "wizard-step-divider" }
+                    div { class: if *wizard_step.read() >= 2 { "wizard-step active" } else { "wizard-step" },
+                        span { class: "wizard-step-num", "2" }
+                        span { class: "wizard-step-label", "{t(\"settings-backup-wizard-step2\")}" }
+                    }
+                }
+                if *wizard_step.read() == 1 {
+                    WizardStep1 {
+                        wizard_url,
+                        probe_status,
+                        wizard_step,
+                        wizard_name,
+                        wizard_pass_required,
+                        auth_status,
+                    }
+                }
+                if *wizard_step.read() == 2 {
+                    WizardStep2 {
+                        wizard_step,
+                        wizard_url,
+                        wizard_name,
+                        wizard_pass,
+                        wizard_pass_required,
+                        servers,
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── BackupSettings — top-level component ─────────────────────────────────────
+
 /// Backup servers settings section.
 ///
-/// Displays all stored backup servers with live status, toggle, and actions.
-/// Provides an inline "add server" form that executes the full auth flow
-/// (challenge → PoW → token) before persisting the server record.
-// DECISION(DX-BACKUP-UI-1): Status is tracked in a HashMap<url, String> signal
-// so each server row can display independent transient state without needing
-// a separate component per row.
+/// Loads the server list on mount and pulls remote changes in the background,
+/// then delegates rendering to [`ServerCard`] (per server) and [`AddServerWizard`].
+// DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
 #[component]
 fn BackupSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
+    let servers: Signal<Vec<crate::storage::BackupServerRecord>> = use_signal(Vec::new);
+    let sync_statuses: Signal<HashMap<String, String>> = use_signal(HashMap::new);
 
-    // Loaded server records from storage.
-    let mut servers: Signal<Vec<crate::storage::BackupServerRecord>> = use_signal(Vec::new);
-    // Transient status text per server URL (not persisted).
-    let statuses: Signal<HashMap<String, String>> = use_signal(HashMap::new);
-    // Whether the "add server" form is expanded.
-    let mut show_add_form = use_signal(|| false);
-    // Add form fields.
-    let mut add_url = use_signal(String::new);
-    let mut add_label = use_signal(String::new);
-    let mut add_passphrase = use_signal(String::new);
-    // Status message shown inside the add form.
-    let mut add_status = use_signal(String::new);
-    // Whether the add form is currently connecting (disable button).
-    let mut add_connecting = use_signal(|| false);
-    // URL of server currently showing re-auth passphrase input.
-    let mut reauth_url: Signal<Option<String>> = use_signal(|| None);
-    let mut reauth_passphrase = use_signal(String::new);
-
-    // Load servers from storage on mount.
-    use_future(move || async move {
-        if let Some(s) = crate::STORAGE.get() {
-            match s.get_backup_servers().await {
-                Ok(list) => servers.set(list),
-                Err(e) => tracing::warn!("Failed to load backup servers: {e}"),
-            }
-        }
+    // Load servers on mount + pull from enabled servers to catch up on remote changes.
+    use_effect(move || {
+        spawn(async move {
+            backup_startup_sync(servers).await;
+        });
     });
 
     rsx! {
         div { class: "settings-section",
-            h2 { "{t(\"settings-backup\")}" }
-            p { class: "settings-description", "{t(\"settings-backup-description\")}" }
-
-            // ── Server list ───────────────────────────────────────────────────
-            div { class: "backup-server-list",
-                {
-                    let srv_list = servers.read().clone();
-                    if srv_list.is_empty() {
-                        rsx! {
-                            p { class: "backup-no-servers", "{t(\"settings-backup-no-servers\")}" }
-                        }
-                    } else {
-                        rsx! {
-                            for record in srv_list {
-                                {
-                                    let url = record.url.clone();
-                                    let url_for_reauth = url.clone();
-                                    let url_for_remove = url.clone();
-                                    let url_for_sync = url.clone();
-                                    let url_for_toggle = url.clone();
-                                    let label = record.label.clone();
-                                    let label_display = if label.is_empty() { url.clone() } else { label.clone() };
-                                    let status_text = statuses
-                                        .read()
-                                        .get(&url)
-                                        .cloned()
-                                        .unwrap_or_else(|| t("settings-backup-status-unknown"));
-                                    let token_present = record.token.is_some();
-                                    let last_synced = record
-                                        .last_synced_at
-                                        .clone()
-                                        .unwrap_or_else(|| t("settings-backup-never-synced"));
-                                    let enabled = record.enabled;
-                                    let is_reathing = reauth_url.read().as_deref() == Some(&url);
-
-                                    let status_class = if status_text.contains("Connected") {
-                                        "status-chip status-connected"
-                                    } else if status_text.contains("Auth") || status_text.contains("required") {
-                                        "status-chip status-auth-required"
-                                    } else if status_text.contains("Sync") || status_text.contains("sync") {
-                                        "status-chip status-syncing"
-                                    } else if status_text.contains("failed") || status_text.contains("error") {
-                                        "status-chip status-unreachable"
-                                    } else {
-                                        "status-chip status-unknown"
-                                    };
-
-                                    rsx! {
-                                        div { class: "backup-server-row", key: "{url}",
-                                            div { class: "backup-server-header",
-                                                div { class: "backup-server-info",
-                                                    span { class: "backup-server-label", "{label_display}" }
-                                                    span { class: "backup-server-url", "{url}" }
-                                                }
-                                                div { class: "backup-server-meta",
-                                                    span { class: "{status_class}", "{status_text}" }
-                                                    span { class: "backup-last-synced", "{last_synced}" }
-                                                }
-                                            }
-                                            div { class: "backup-server-actions",
-                                                // Enabled toggle
-                                                label { class: "toggle-label",
-                                                    input {
-                                                        r#type: "checkbox",
-                                                        checked: enabled,
-                                                        onchange: move |evt| {
-                                                            let checked = evt.checked();
-                                                            let url_t = url_for_toggle.clone();
-                                                            spawn(async move {
-                                                                if let Some(s) = crate::STORAGE.get() {
-                                                                    match s.get_backup_servers().await {
-                                                                        Ok(mut list) => {
-                                                                            if let Some(srv) = list.iter_mut().find(|r| r.url == url_t) {
-                                                                                srv.enabled = checked;
-                                                                                let record_clone = srv.clone();
-                                                                                if let Err(e) = s.upsert_backup_server(&record_clone).await {
-                                                                                    tracing::error!("Failed to update server: {e}");
-                                                                                } else {
-                                                                                    servers.set(list);
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        Err(e) => tracing::error!("Failed to load servers: {e}"),
-                                                                    }
-                                                                }
-                                                            });
-                                                        },
-                                                    }
-                                                    " {t(\"settings-backup-enabled\")}"
-                                                }
-
-                                                // Sync Now button (only if we have a token)
-                                                if token_present {
-                                                    button {
-                                                        class: "btn btn-sm btn-secondary",
-                                                        onclick: move |_| {
-                                                            let url_s = url_for_sync.clone();
-                                                            let mut st = statuses;
-                                                            spawn(async move {
-                                                                st.write().insert(url_s.clone(), t("settings-backup-status-syncing"));
-                                                                if let Some(storage) = crate::STORAGE.get() {
-                                                                    match storage.get_backup_servers().await {
-                                                                        Ok(list) => {
-                                                                            if let Some(rec) = list.iter().find(|r| r.url == url_s) {
-                                                                                let cfg = crate::sync::BackupServerConfig {
-                                                                                    url: rec.url.clone(),
-                                                                                    name: rec.label.clone(),
-                                                                                    token: rec.token.clone(),
-                                                                                    last_sequence: rec.last_sequence,
-                                                                                };
-                                                                                let client = crate::sync::SyncClient::new(cfg);
-                                                                                match storage.get_app_settings().await {
-                                                                                    Ok(settings) => {
-                                                                                        let payload = serde_json::to_vec(&settings)
-                                                                                            .unwrap_or_default();
-                                                                                        if let Ok(identity_key) = storage.get_identity_key().await {
-                                                                                            let enc_result = if let Some(key) = identity_key {
-                                                                                                crate::crypto::encrypt(&payload, &key)
-                                                                                            } else {
-                                                                                                crate::crypto::encrypt(&payload, &[0u8; 32])
-                                                                                            };
-                                                                                            match enc_result {
-                                                                                                Ok(encrypted) => {
-                                                                                                    match client.push(&encrypted).await {
-                                                                                                        Ok(seq) => {
-                                                                                                            let now = chrono::Utc::now().to_rfc3339();
-                                                                                                            match storage.get_backup_servers().await {
-                                                                                                                Ok(mut servers_list) => {
-                                                                                                                    if let Some(srv) = servers_list
-                                                                                                                        .iter_mut()
-                                                                                                                        .find(|r| r.url == url_s)
-                                                                                                                    {
-                                                                                                                        srv.last_sequence = seq;
-                                                                                                                        srv.last_synced_at = Some(now.clone());
-                                                                                                                        let updated = srv.clone();
-                                                                                                                        if let Err(e) = storage.upsert_backup_server(&updated).await
-                                                                                                                        {
-                                                                                                                            tracing::error!("Failed to update server after sync: {e}");
-                                                                                                                        } else {
-                                                                                                                            servers.set(servers_list);
-                                                                                                                            st.write()
-                                                                                                                                .insert(url_s, t("settings-backup-status-connected"));
-                                                                                                                        }
-                                                                                                                    }
-                                                                                                                }
-                                                                                                                Err(e) => tracing::error!("Reload servers: {e}"),
-                                                                                                            }
-                                                                                                        }
-                                                                                                        Err(e) => {
-                                                                                                            let msg = if e.to_string().contains("token") {
-                                                                                                                t("settings-backup-status-auth-required")
-                                                                                                            } else {
-                                                                                                                t("settings-backup-status-unreachable")
-                                                                                                            };
-                                                                                                            tracing::error!("Sync push error: {e}");
-                                                                                                            st.write().insert(url_s, msg);
-                                                                                                        }
-                                                                                                    }
-                                                                                                }
-                                                                                                Err(e) => {
-                                                                                                    tracing::error!("Encrypt failed: {e}");
-                                                                                                    st.write()
-                                                                                                        .insert(url_s, t("settings-backup-status-unreachable"));
-                                                                                                }
-                                                                                            }
-                                                                                        } else {
-                                                                                            st.write()
-                                                                                                .insert(url_s, t("settings-backup-status-unreachable"));
-                                                                                        }
-                                                                                    }
-                                                                                    Err(e) => {
-                                                                                        tracing::error!("Load settings: {e}");
-                                                                                        st.write()
-                                                                                            .insert(url_s, t("settings-backup-status-unreachable"));
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        Err(e) => tracing::error!("Load servers: {e}"),
-                                                                    }
-                                                                }
-                                                            });
-                                                        },
-                                                        "{t(\"settings-backup-sync-now\")}"
-                                                    }
-                                                }
-
-                                                // Re-authenticate button
-                                                button {
-                                                    class: "btn btn-sm btn-secondary",
-                                                    onclick: move |_| {
-                                                        reauth_url.set(Some(url_for_reauth.clone()));
-                                                        reauth_passphrase.set(String::new());
-                                                    },
-                                                    "{t(\"settings-backup-reauth\")}"
-                                                }
-
-                                                // Remove button
-                                                button {
-                                                    class: "btn btn-sm btn-danger",
-                                                    onclick: move |_| {
-                                                        let url_r = url_for_remove.clone();
-                                                        spawn(async move {
-                                                            if let Some(s) = crate::STORAGE.get() {
-                                                                if let Err(e) = s.remove_backup_server(&url_r).await {
-                                                                    tracing::error!("Remove server: {e}");
-                                                                }
-                                                                match s.get_backup_servers().await {
-                                                                    Ok(list) => servers.set(list),
-                                                                    Err(e) => tracing::error!("Reload after remove: {e}"),
-                                                                }
-                                                            }
-                                                        });
-                                                    },
-                                                    "{t(\"settings-backup-remove\")}"
-                                                }
-                                            }
-
-                                            // Inline re-auth form
-                                            if is_reathing {
-                                                {
-                                                    let url_ra = reauth_url.read().clone().unwrap_or_default();
-                                                    rsx! {
-                                                        div { class: "backup-reauth-form",
-                                                            input {
-                                                                r#type: "password",
-                                                                class: "input-field",
-                                                                placeholder: "{t(\"settings-backup-passphrase-label\")}",
-                                                                value: "{reauth_passphrase}",
-                                                                oninput: move |e| reauth_passphrase.set(e.value()),
-                                                            }
-                                                            div { class: "reauth-actions",
-                                                                button {
-                                                                    class: "btn btn-sm btn-primary",
-                                                                    onclick: move |_| {
-                                                                        let url_inner = url_ra.clone();
-                                                                        let passphrase = reauth_passphrase.read().clone();
-                                                                        let mut st = statuses;
-                                                                        spawn(async move {
-                                                                            st.write().insert(url_inner.clone(), t("settings-backup-connecting"));
-                                                                            if let Some(storage) = crate::STORAGE.get() {
-                                                                                match storage.get_app_settings().await {
-                                                                                    Ok(settings) => {
-                                                                                        let cfg = crate::sync::BackupServerConfig {
-                                                                                            url: url_inner.clone(),
-                                                                                            name: String::new(),
-                                                                                            token: None,
-                                                                                            last_sequence: 0,
-                                                                                        };
-                                                                                        let mut client = crate::sync::SyncClient::new(cfg);
-                                                                                        match client
-                                                                                            .authenticate(
-                                                                                                &passphrase,
-                                                                                                &settings.account_id,
-                                                                                                "Poly Desktop",
-                                                                                            )
-                                                                                            .await
-                                                                                        {
-                                                                                            Ok(auth) => {
-                                                                                                match storage.get_backup_servers().await {
-                                                                                                    Ok(mut list) => {
-                                                                                                        let opt_updated = list
-                                                                                                            .iter_mut()
-                                                                                                            .find(|r| r.url == url_inner)
-                                                                                                            .map(|srv| {
-                                                                                                                srv.token = Some(auth.token);
-                                                                                                                srv.token_expires_at = auth.expires_at;
-                                                                                                                srv.clone()
-                                                                                                            });
-                                                                                                        if let Some(updated) = opt_updated {
-                                                                                                            match storage.upsert_backup_server(&updated).await {
-                                                                                                                Ok(()) => {
-                                                                                                                    servers.set(list);
-                                                                                                                    st.write()
-                                                                                                                        .insert(
-                                                                                                                            url_inner.clone(),
-                                                                                                                            t("settings-backup-status-connected"),
-                                                                                                                        );
-                                                                                                                    reauth_url.set(None);
-                                                                                                                }
-                                                                                                                Err(e) => tracing::error!("Save reauth token: {e}"),
-                                                                                                            }
-                                                                                                        }
-                                                                                                    }
-                                                                                                    Err(e) => tracing::error!("Reload: {e}"),
-                                                                                                }
-                                                                                            }
-                                                                                            Err(e) => {
-                                                                                                tracing::warn!("Re-auth failed: {e}");
-                                                                                                st.write()
-                                                                                                    .insert(url_inner, t("settings-backup-auth-failed"));
-                                                                                            }
-                                                                                        }
-                                                                                    }
-                                                                                    Err(e) => tracing::error!("Load settings: {e}"),
-                                                                                }
-                                                                            }
-                                                                        });
-                                                                    },
-                                                                    "{t(\"settings-backup-connect\")}"
-                                                                }
-                                                                button {
-                                                                    class: "btn btn-sm btn-ghost",
-                                                                    onclick: move |_| reauth_url.set(None),
-                                                                    "{t(\"settings-backup-cancel\")}"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            div { class: "settings-section-header",
+                h2 { "{t(\"settings-backup\")}" }
+                p { class: "settings-section-desc", "{t(\"settings-backup-description\")}" }
+            }
+            div { class: "server-list",
+                if servers.read().is_empty() {
+                    p { class: "no-servers-hint", "{t(\"settings-backup-no-servers\")}" }
+                }
+                for rec in servers.read().clone() {
+                    ServerCard { record: rec, servers, statuses: sync_statuses }
                 }
             }
+            AddServerWizard { servers }
+        }
+    }
+}
 
-            // ── Add server button / form ───────────────────────────────────────
-            if !*show_add_form.read() {
-                button {
-                    class: "btn btn-primary",
-                    onclick: move |_| {
-                        show_add_form.set(true);
-                        add_url.set(String::new());
-                        add_label.set(String::new());
-                        add_passphrase.set(String::new());
-                        add_status.set(String::new());
-                    },
-                    "{t(\"settings-backup-add-server\")}"
-                }
-            } else {
-                div { class: "backup-add-form",
-                    div { class: "form-group",
-                        label { "{t(\"settings-backup-url-label\")}" }
-                        input {
-                            r#type: "text",
-                            class: "input-field",
-                            placeholder: "{t(\"settings-backup-url-placeholder\")}",
-                            value: "{add_url}",
-                            oninput: move |e| add_url.set(e.value()),
-                        }
-                    }
-                    div { class: "form-group",
-                        label { "{t(\"settings-backup-label-label\")}" }
-                        input {
-                            r#type: "text",
-                            class: "input-field",
-                            placeholder: "My Backup Server",
-                            value: "{add_label}",
-                            oninput: move |e| add_label.set(e.value()),
-                        }
-                    }
-                    div { class: "form-group",
-                        label { "{t(\"settings-backup-passphrase-label\")}" }
-                        input {
-                            r#type: "password",
-                            class: "input-field",
-                            value: "{add_passphrase}",
-                            oninput: move |e| add_passphrase.set(e.value()),
-                        }
-                    }
-                    if !add_status.read().is_empty() {
-                        p { class: "form-status", "{add_status}" }
-                    }
-                    div { class: "form-actions",
-                        button {
-                            class: "btn btn-primary",
-                            disabled: *add_connecting.read(),
-                            onclick: move |_| {
-                                let url = add_url.read().trim().to_string();
-                                let label = add_label.read().trim().to_string();
-                                let passphrase = add_passphrase.read().clone();
-                                if url.is_empty() {
-                                    add_status.set("Please enter a server URL.".to_string());
-                                    return;
-                                }
-                                add_connecting.set(true);
-                                add_status.set(t("settings-backup-connecting"));
+// ── IdentitySettings — helpers and sub-components ───────────────────────────
 
-                                spawn(async move {
-                                    if let Some(storage) = crate::STORAGE.get() {
-                                        match storage.get_app_settings().await {
-                                            Ok(settings) => {
-                                                let cfg = crate::sync::BackupServerConfig {
-                                                    url: url.clone(),
-                                                    name: label.clone(),
-                                                    token: None,
-                                                    last_sequence: 0,
-                                                };
-                                                let mut client = crate::sync::SyncClient::new(cfg);
-                                                match client
-                                                    .authenticate(
-                                                        &passphrase,
-                                                        &settings.account_id,
-                                                        "Poly Desktop",
-                                                    )
-                                                    .await
-                                                {
-                                                    Ok(auth) => {
-                                                        let record = crate::storage::BackupServerRecord {
-                                                            url: url.clone(),
-                                                            label: if label.is_empty() { url.clone() } else { label },
-                                                            enabled: true,
-                                                            last_sequence: 0,
-                                                            token: Some(auth.token),
-                                                            token_expires_at: auth.expires_at,
-                                                            last_synced_at: None,
-                                                        };
-                                                        match storage.upsert_backup_server(&record).await {
-                                                            Ok(()) => {
-                                                                match storage.get_backup_servers().await {
-                                                                    Ok(list) => {
-                                                                        servers.set(list);
-                                                                        add_status.set(t("settings-backup-auth-success"));
-                                                                        add_connecting.set(false);
-                                                                        show_add_form.set(false);
-                                                                    }
-                                                                    Err(e) => {
-                                                                        add_status.set(format!("Reload error: {e}"));
-                                                                        add_connecting.set(false);
-                                                                    }
-                                                                }
-                                                            }
-                                                            Err(e) => {
-                                                                add_status.set(format!("Save error: {e}"));
-                                                                add_connecting.set(false);
-                                                            }
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        tracing::warn!("Add server auth failed: {e}");
-                                                        add_status.set(t("settings-backup-auth-failed"));
-                                                        add_connecting.set(false);
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                add_status.set(format!("Load settings error: {e}"));
-                                                add_connecting.set(false);
-                                            }
-                                        }
+/// Load the user's 24-word mnemonic from storage.
+async fn load_mnemonic_words() -> Result<Vec<String>, String> {
+    let s = crate::STORAGE
+        .get()
+        .ok_or_else(|| "Storage not ready".to_string())?;
+    let key_bytes = s
+        .get_identity_key()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No identity key in storage".to_string())?;
+    let identity = crate::crypto::Identity::from_private_key_bytes(&key_bytes);
+    let phrase = identity.to_mnemonic().map_err(|e| e.to_string())?;
+    Ok(phrase.split_whitespace().map(str::to_string).collect())
+}
+
+/// Modal overlay that displays and allows copying the 24-word recovery phrase.
+#[component]
+fn MnemonicModal(mnemonic_words: Signal<Vec<String>>, show: Signal<bool>) -> Element {
+    let mut visible = show;
+    rsx! {
+        div { class: "modal-overlay", onclick: move |_| visible.set(false),
+            div {
+                class: "modal-content",
+                onclick: move |e| e.stop_propagation(),
+                h3 { class: "modal-title", "{t(\"settings-identity-phrase-modal-title\")}" }
+                p { class: "modal-warning", "{t(\"settings-identity-phrase-warning\")}" }
+                div { class: "mnemonic-grid",
+                    {
+                        let words = mnemonic_words.read().clone();
+                        words
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, word)| {
+                                rsx! {
+                                    div { class: "mnemonic-word", key: "{i}",
+                                        span { class: "word-number", "{i + 1}." }
+                                        span { class: "word-text", "{word}" }
                                     }
-                                });
-                            },
-                            if *add_connecting.read() {
-                                "{t(\"settings-backup-connecting\")}"
-                            } else {
-                                "{t(\"settings-backup-connect\")}"
-                            }
-                        }
-                        button {
-                            class: "btn btn-ghost",
-                            onclick: move |_| show_add_form.set(false),
-                            "{t(\"settings-backup-cancel\")}"
-                        }
+                                }
+                            })
+                    }
+                }
+                div { class: "modal-actions",
+                    button {
+                        class: "btn btn-secondary",
+                        onclick: move |_| {
+                            let phrase = mnemonic_words.read().join(" ");
+                            let js = format!(
+                                "navigator.clipboard.writeText({:?}).catch(() => {{}})",
+                                phrase,
+                            );
+                            let _ = document::eval(&js);
+                        },
+                        "{t(\"settings-identity-copy-all\")}"
+                    }
+                    button {
+                        class: "btn btn-primary",
+                        onclick: move |_| visible.set(false),
+                        "{t(\"settings-identity-close\")}"
                     }
                 }
             }
@@ -687,31 +995,22 @@ fn BackupSettings() -> Element {
 /// Identity settings section.
 ///
 /// Displays the user's Ed25519 public key (Account ID) and provides a
-/// "Show Recovery Phrase" button that reveals the 24-word BIP39 mnemonic
-/// in an overlay modal.
+/// "Show Recovery Phrase" button that opens a [`MnemonicModal`].
 #[component]
 fn IdentitySettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-
-    // The hex-encoded public key loaded from storage.
     let mut account_id = use_signal(String::new);
-    // Whether the mnemonic modal is visible.
     let mut show_phrase_modal = use_signal(|| false);
-    // The 24 mnemonic words (populated when modal opens).
     let mut mnemonic_words: Signal<Vec<String>> = use_signal(Vec::new);
-    // Status message for the identity section (e.g. errors).
     let mut status_msg = use_signal(String::new);
 
-    // Load account ID from storage on mount.
     use_future(move || async move {
         if let Some(s) = crate::STORAGE.get() {
             match s.get_app_settings().await {
                 Ok(settings) if !settings.account_id.is_empty() => {
                     account_id.set(settings.account_id);
                 }
-                Ok(_) => {
-                    status_msg.set(t("settings-identity-no-identity"));
-                }
+                Ok(_) => status_msg.set(t("settings-identity-no-identity")),
                 Err(e) => {
                     tracing::warn!("Failed to load identity: {e}");
                     status_msg.set(t("settings-identity-no-identity"));
@@ -733,7 +1032,6 @@ fn IdentitySettings() -> Element {
                         button {
                             class: "btn btn-sm btn-ghost",
                             onclick: move |_| {
-                                // Copy to clipboard via eval
                                 let id = account_id.read().clone();
                                 let js = format!("navigator.clipboard.writeText({:?}).catch(() => {{}})", id);
                                 let _ = document::eval(&js);
@@ -742,39 +1040,16 @@ fn IdentitySettings() -> Element {
                         }
                     }
                 }
-
                 button {
                     class: "btn btn-secondary",
                     onclick: move |_| {
-                        // Load private key and generate mnemonic
                         spawn(async move {
-                            if let Some(s) = crate::STORAGE.get() {
-                                match s.get_identity_key().await {
-                                    Ok(Some(key_bytes)) => {
-                                        let identity = crate::crypto::Identity::from_private_key_bytes(
-                                            &key_bytes,
-                                        );
-                                        match identity.to_mnemonic() {
-                                            Ok(phrase) => {
-                                                let words: Vec<String> = phrase
-                                                    .split_whitespace()
-                                                    .map(str::to_string)
-                                                    .collect();
-                                                mnemonic_words.set(words);
-                                                show_phrase_modal.set(true);
-                                            }
-                                            Err(e) => {
-                                                tracing::error!("Mnemonic generation failed: {e}");
-                                            }
-                                        }
-                                    }
-                                    Ok(None) => {
-                                        tracing::warn!("No identity key in storage");
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Failed to load identity key: {e}");
-                                    }
+                            match load_mnemonic_words().await {
+                                Ok(words) => {
+                                    mnemonic_words.set(words);
+                                    show_phrase_modal.set(true);
                                 }
+                                Err(e) => tracing::error!("Mnemonic: {e}"),
                             }
                         });
                     },
@@ -784,57 +1059,8 @@ fn IdentitySettings() -> Element {
                 p { class: "settings-info", "{status_msg}" }
             }
 
-            // ── Mnemonic modal ────────────────────────────────────────────────
             if *show_phrase_modal.read() {
-                div {
-                    class: "modal-overlay",
-                    onclick: move |_| show_phrase_modal.set(false),
-                    div {
-                        class: "modal-content",
-                        // Stop clicks on the modal from bubbling to the overlay
-                        onclick: move |e| e.stop_propagation(),
-
-                        h3 { class: "modal-title", "{t(\"settings-identity-phrase-modal-title\")}" }
-                        p { class: "modal-warning", "{t(\"settings-identity-phrase-warning\")}" }
-
-                        div { class: "mnemonic-grid",
-                            {
-                                let words = mnemonic_words.read().clone();
-                                words
-                                    .into_iter()
-                                    .enumerate()
-                                    .map(|(i, word)| {
-                                        rsx! {
-                                            div { class: "mnemonic-word", key: "{i}",
-                                                span { class: "word-number", "{i + 1}." }
-                                                span { class: "word-text", "{word}" }
-                                            }
-                                        }
-                                    })
-                            }
-                        }
-
-                        div { class: "modal-actions",
-                            button {
-                                class: "btn btn-secondary",
-                                onclick: move |_| {
-                                    let phrase = mnemonic_words.read().join(" ");
-                                    let js = format!(
-                                        "navigator.clipboard.writeText({:?}).catch(() => {{}})",
-                                        phrase,
-                                    );
-                                    let _ = document::eval(&js);
-                                },
-                                "{t(\"settings-identity-copy-all\")}"
-                            }
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| show_phrase_modal.set(false),
-                                "{t(\"settings-identity-close\")}"
-                            }
-                        }
-                    }
-                }
+                MnemonicModal { mnemonic_words, show: show_phrase_modal }
             }
         }
     }
@@ -845,70 +1071,305 @@ fn IdentitySettings() -> Element {
 /// Reads/writes the `Signal<ThemeConfig>` provided by [`crate::ui::App`].
 /// Changing the preset updates the signal immediately (re-renders the
 /// `<style id="poly-theme">` in App) and persists to storage.
-#[component]
-fn ThemeSettings() -> Element {
-    let _locale = crate::i18n::use_locale().read().clone();
-    let mut theme_config = use_context::<Signal<ThemeConfig>>();
+///
+/// Persist the theme config to storage (fire-and-forget helper).
+async fn persist_theme(config: ThemeConfig) {
+    if let Some(s) = crate::STORAGE.get() {
+        if let Err(e) = s.set_theme_config(&config).await {
+            tracing::error!("Failed to persist theme config: {e}");
+        } else {
+            tracing::info!("Theme config persisted ✓");
+        }
+    }
+}
 
-    let current_preset = match theme_config.read().preset {
-        ThemePreset::NeutralDark => "neutral-dark",
-        ThemePreset::Purple => "purple",
-        ThemePreset::Red => "red",
-        ThemePreset::Custom => "custom",
+/// Visual preset picker — colored buttons for each built-in theme.
+#[component]
+fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
+    let current = theme_config.read().preset.canonical();
+    const PRESETS: &[(ThemePreset, &str, &str)] = &[
+        (ThemePreset::Blue, "blue", "theme-blue"),
+        (ThemePreset::Purple, "purple", "theme-purple"),
+        (ThemePreset::Red, "red", "theme-red"),
+        (ThemePreset::Green, "green", "theme-green"),
+        (ThemePreset::Monotone, "monotone", "theme-monotone"),
+    ];
+    rsx! {
+        div { class: "theme-section",
+            label { class: "settings-label", "{t(\"settings-theme-preset\")}" }
+            div { class: "theme-preset-row",
+                for (preset , data_name , i18n_key) in PRESETS {
+                    {
+                        let preset = *preset;
+                        let data_name = *data_name;
+                        let i18n_key = *i18n_key;
+                        let is_active = current == preset;
+                        rsx! {
+                            button {
+                                class: if is_active { "theme-preset-btn active" } else { "theme-preset-btn" },
+                                "data-preset": data_name,
+                                onclick: move |_| {
+                                    let mut cfg = theme_config.read().clone();
+                                    cfg.preset = preset;
+                                    theme_config.set(cfg.clone());
+                                    spawn(async move {
+                                        persist_theme(cfg).await;
+                                    });
+                                },
+                                "{t(i18n_key)}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Dark / Light / Follow Device toggle.
+#[component]
+fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
+    let current = theme_config.read().color_mode;
+    const MODES: &[(crate::theme::ColorMode, &str)] = &[
+        (crate::theme::ColorMode::Dark, "settings-dark-mode"),
+        (crate::theme::ColorMode::Light, "settings-light-mode"),
+        (
+            crate::theme::ColorMode::FollowDevice,
+            "settings-follow-device",
+        ),
+    ];
+    rsx! {
+        div { class: "theme-section",
+            label { class: "settings-label", "{t(\"settings-color-mode\")}" }
+            div { class: "color-mode-row",
+                for (mode , key) in MODES {
+                    {
+                        let mode = *mode;
+                        let key = *key;
+                        let is_active = current == mode;
+                        rsx! {
+                            button {
+                                class: if is_active { "btn btn-sm color-mode-btn active" } else { "btn btn-sm color-mode-btn" },
+                                onclick: move |_| {
+                                    let mut cfg = theme_config.read().clone();
+                                    cfg.color_mode = mode;
+                                    theme_config.set(cfg.clone());
+                                    spawn(async move {
+                                        persist_theme(cfg).await;
+                                    });
+                                },
+                                "{t(key)}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Color pickers for the six most impactful CSS variables.
+///
+/// Picking a color inserts the value into [`ThemeConfig::color_overrides`].
+#[component]
+fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
+    const VARS: &[(&str, &str)] = &[
+        ("--accent-primary", "Accent"),
+        ("--bg-primary", "Background"),
+        ("--bg-surface", "Surface"),
+        ("--text-primary", "Text"),
+        ("--text-secondary", "Secondary Text"),
+        ("--border-primary", "Border"),
+    ];
+    let config = theme_config.read().clone();
+    rsx! {
+        div { class: "theme-section",
+            label { class: "settings-label", "{t(\"settings-color-overrides\")}" }
+            div { class: "color-overrides-grid",
+                for (var_name , display_label) in VARS {
+                    {
+                        let var_name = *var_name;
+                        let display_label = *display_label;
+                        let cur = config
+                            .color_overrides
+                            .get(var_name)
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                crate::theme::extract_var_value(
+                                        config.preset,
+                                        config.color_mode,
+                                        var_name,
+                                    )
+                                    .unwrap_or_else(|| "#808080".to_string())
+                            });
+                        rsx! {
+                            div { class: "color-override-item",
+                                label { class: "color-override-label", "{display_label}" }
+                                input {
+                                    r#type: "color",
+                                    class: "color-picker",
+                                    value: cur,
+                                    oninput: move |e| {
+                                        let color = e.value();
+                                        let mut cfg = theme_config.read().clone();
+                                        cfg.color_overrides.insert(var_name.to_string(), color);
+                                        theme_config.set(cfg.clone());
+                                        spawn(async move {
+                                            persist_theme(cfg).await;
+                                        });
+                                    },
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// CSS editor with enable toggle, pre-populated variable template, and
+/// import/export controls.
+///
+/// When disabled (default), the editor is visible but greyed out and
+/// the CSS is not injected. The template lists every CSS variable
+/// (commented out) so users can see what is available.
+#[component]
+fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
+    let config = theme_config.read().clone();
+
+    // Build the template the very first time (empty custom_css).
+    let initial_css = if config.custom_css.is_empty() {
+        crate::theme::build_css_template(&config)
+    } else {
+        config.custom_css.clone()
     };
+    let mut local_css = use_signal(|| initial_css);
+    let css_enabled = config.custom_css_enabled;
 
     rsx! {
-        div { class: "settings-section",
-            h2 { "{t(\"settings-theme\")}" }
-            p { class: "settings-description", "{t(\"settings-theme-description\")}" }
-            div { class: "theme-presets",
-                label { class: "settings-label", "{t(\"settings-theme-preset\")}" }
-                PolySelect {
-                    options: vec![
-                        SelectOption {
-                            value: "neutral-dark",
-                            label: "Neutral Dark",
+        div { class: "theme-section",
+            // Toggle row
+            div { class: "css-toggle-row",
+                label { class: "settings-label", "{t(\"settings-theme-custom-css\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: css_enabled,
+                        onchange: move |e| {
+                            let enabled = e.checked();
+                            let mut cfg = theme_config.read().clone();
+                            cfg.custom_css_enabled = enabled;
+                            theme_config.set(cfg.clone());
+                            spawn(async move {
+                                persist_theme(cfg).await;
+                            });
                         },
-                        SelectOption {
-                            value: "purple",
-                            label: "Purple",
-                        },
-                        SelectOption {
-                            value: "red",
-                            label: "Red",
-                        },
-                        SelectOption {
-                            value: "custom",
-                            label: "Custom",
-                        },
-                    ],
-                    value: current_preset.to_string(),
-                    onchange: move |new_val: String| {
-                        let preset = match new_val.as_str() {
-                            "purple" => ThemePreset::Purple,
-                            "red" => ThemePreset::Red,
-                            "custom" => ThemePreset::Custom,
-                            _ => ThemePreset::NeutralDark,
-                        };
-                        let mut new_config = theme_config.read().clone();
-                        new_config.preset = preset;
-                        theme_config.set(new_config.clone());
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+            p { class: "css-hint", "{t(\"settings-css-hint\")}" }
+            textarea {
+                class: if css_enabled { "css-editor" } else { "css-editor css-editor-disabled" },
+                rows: 14,
+                value: local_css.read().clone(),
+                oninput: move |e| local_css.set(e.value()),
+                onblur: move |_| {
+                    let css = local_css.read().clone();
+                    let mut cfg = theme_config.read().clone();
+                    cfg.custom_css = css;
+                    theme_config.set(cfg.clone());
+                    spawn(async move {
+                        persist_theme(cfg).await;
+                    });
+                },
+            }
+            div { class: "theme-actions",
+                button {
+                    class: "btn btn-secondary",
+                    onclick: move |_| {
+                        let css = local_css.read().clone();
+                        let mut cfg = theme_config.read().clone();
+                        cfg.custom_css = css;
+                        theme_config.set(cfg.clone());
                         spawn(async move {
-                            if let Some(s) = crate::STORAGE.get() {
-                                if let Err(e) = s.set_theme_config(&new_config).await {
-                                    tracing::error!("Failed to persist theme config: {e}");
-                                } else {
-                                    tracing::info!("Theme config persisted ✓");
-                                }
+                            persist_theme(cfg).await;
+                        });
+                    },
+                    "{t(\"settings-theme-apply-css\")}"
+                }
+                button {
+                    class: "btn btn-secondary",
+                    onclick: move |_| {
+                        let exported = crate::theme::export_theme(&theme_config.read());
+                        let js = format!(
+                            "navigator.clipboard.writeText({:?}).catch(()=>{{}})",
+                            exported,
+                        );
+                        let _ = document::eval(&js);
+                    },
+                    "{t(\"settings-theme-export\")}"
+                }
+                button {
+                    class: "btn btn-secondary",
+                    onclick: move |_| {
+                        spawn(async move {
+                            let mut eval = document::eval(
+                                "navigator.clipboard.readText().then(t=>dioxus.send(t)).catch(()=>dioxus.send(''))",
+                            );
+                            if let Ok(val) = eval.recv::<serde_json::Value>().await
+                                && let Some(s) = val.as_str()
+                            {
+                                let imported = crate::theme::import_theme(s);
+                                local_css
+                                    .set(
+                                        if imported.custom_css.is_empty() {
+                                            crate::theme::build_css_template(&imported)
+                                        } else {
+                                            imported.custom_css.clone()
+                                        },
+                                    );
+                                theme_config.set(imported.clone());
+                                persist_theme(imported).await;
                             }
                         });
                     },
+                    "{t(\"settings-theme-import\")}"
+                }
+                button {
+                    class: "btn btn-secondary",
+                    onclick: move |_| {
+                        let template = crate::theme::build_css_template(&theme_config.read());
+                        local_css.set(template);
+                    },
+                    "{t(\"settings-css-reset-template\")}"
                 }
             }
-            div { class: "theme-actions",
-                button { class: "btn btn-secondary", "{t(\"settings-theme-import\")}" }
-                button { class: "btn btn-secondary", "{t(\"settings-theme-export\")}" }
-            }
+        }
+    }
+}
+
+/// Theme settings page — presets, color mode, color overrides, and CSS editor.
+///
+/// Replaces the separate Appearance page: everything color/theme related
+/// is now in one place.
+#[component]
+fn ThemeSettings() -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
+    let theme_config = use_context::<Signal<ThemeConfig>>();
+    rsx! {
+        div { class: "settings-section theme-settings",
+            h2 { "{t(\"settings-theme\")}" }
+            p { class: "settings-description", "{t(\"settings-theme-description\")}" }
+            ThemePresetPicker { theme_config }
+            ThemeColorModeSelector { theme_config }
+            ThemeColorCustomizer { theme_config }
+            ThemeCssEditor { theme_config }
         }
     }
 }
@@ -976,42 +1437,6 @@ fn LanguageSettings() -> Element {
                         }
                     });
                 },
-            }
-        }
-    }
-}
-
-/// Appearance settings section.
-#[component]
-fn AppearanceSettings() -> Element {
-    let _locale = crate::i18n::use_locale().read().clone();
-    rsx! {
-        div { class: "settings-section",
-            h2 { "{t(\"settings-appearance\")}" }
-            p { class: "settings-description", "{t(\"settings-appearance-description\")}" }
-            // TODO(phase-2.7.9.9): Dark/light mode toggle
-            div { class: "appearance-options",
-                label {
-                    input {
-                        r#type: "radio",
-                        name: "color-mode",
-                        value: "dark",
-                        checked: true,
-                    }
-                    " {t(\"settings-dark-mode\")}"
-                }
-                label {
-                    input { r#type: "radio", name: "color-mode", value: "light" }
-                    " {t(\"settings-light-mode\")}"
-                }
-                label {
-                    input {
-                        r#type: "radio",
-                        name: "color-mode",
-                        value: "follow",
-                    }
-                    " {t(\"settings-follow-device\")}"
-                }
             }
         }
     }

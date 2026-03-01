@@ -52,23 +52,66 @@ pub struct AuthResponse {
 }
 
 /// Encrypted sync blob returned from `GET /api/sync/pull`.
+///
+/// Field names match exactly what the server serialises in [`BlobEntry`]
+/// (`servers/backup-server/src/sync/mod.rs`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct SyncBlob {
     /// Monotonically increasing sequence number.
-    pub sequence: u64,
+    pub sequence: i64,
     /// Base64-encoded encrypted payload (opaque to the server).
-    pub data: String,
-    /// ISO-8601 UTC creation timestamp.
-    pub timestamp: String,
+    pub encrypted_blob: String,
+    /// ISO-8601 UTC timestamp when the blob was pushed.
+    pub pushed_at: String,
 }
 
 impl SyncBlob {
-    /// Decode the base64 `data` field into raw bytes.
+    /// Decode the base64 `encrypted_blob` field into raw bytes.
     pub fn decode_data(&self) -> Result<Vec<u8>, SyncError> {
         base64::engine::general_purpose::STANDARD
-            .decode(&self.data)
+            .decode(&self.encrypted_blob)
             .map_err(|e| SyncError::Protocol(format!("base64 decode: {e}")))
     }
+}
+
+/// Public metadata returned by `GET /api/info`.
+///
+/// Clients call this endpoint during the setup wizard before authenticating.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerInfo {
+    /// Human-readable server name.
+    pub name: String,
+    /// Whether the server requires a passphrase for authentication.
+    pub password_required: bool,
+    /// Whether new user registrations are currently accepted.
+    pub registrations_open: bool,
+    /// Server software version string.
+    pub version: String,
+}
+
+/// Probe a backup server's public info endpoint without authenticating.
+///
+/// Returns [`ServerInfo`] on success. No session token is required.
+/// Use this during the setup wizard to validate the URL and learn the
+/// server's name and password policy before asking the user for credentials.
+pub async fn probe_server(url: &str) -> Result<ServerInfo, SyncError> {
+    let http = reqwest::Client::new();
+
+    let resp = http
+        .get(format!("{url}/api/info"))
+        .send()
+        .await
+        .map_err(|e| SyncError::Network(e.to_string()))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(SyncError::Server(format!("HTTP {status}: {text}")));
+    }
+
+    resp.json::<ServerInfo>()
+        .await
+        .map_err(|e| SyncError::Protocol(format!("Bad /api/info response: {e}")))
 }
 
 /// Account status from `GET /api/sync/status`.
@@ -77,9 +120,9 @@ pub struct SyncStatus {
     /// This account's Ed25519 public key.
     pub public_key: String,
     /// Total number of blobs stored.
-    pub blob_count: u64,
+    pub blob_count: i64,
     /// Highest sequence number stored.
-    pub latest_sequence: u64,
+    pub latest_sequence: i64,
 }
 
 /// Errors from backup sync operations.
@@ -134,10 +177,7 @@ fn check_pow_difficulty(hash: &[u8], difficulty: u32) -> bool {
     }
     if remaining_bits > 0 {
         let mask = 0xFF_u8 << (8 - remaining_bits);
-        if hash
-            .get(full_bytes)
-            .is_some_and(|b| b & mask != 0)
-        {
+        if hash.get(full_bytes).is_some_and(|b| b & mask != 0) {
             return false;
         }
     }
@@ -254,7 +294,7 @@ impl SyncClient {
             .http
             .post(format!("{}/api/sync/push", self.config.url))
             .bearer_auth(token)
-            .json(&serde_json::json!({ "data": b64 }))
+            .json(&serde_json::json!({ "encrypted_blob": b64 }))
             .send()
             .await
             .map_err(|e| SyncError::Network(e.to_string()))?;
@@ -385,8 +425,8 @@ mod tests {
         let encoded = base64::engine::general_purpose::STANDARD.encode(data);
         let blob = SyncBlob {
             sequence: 1,
-            data: encoded,
-            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            encrypted_blob: encoded,
+            pushed_at: "2026-01-01T00:00:00Z".to_string(),
         };
         assert_eq!(blob.decode_data().unwrap(), data.as_slice());
     }

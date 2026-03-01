@@ -7,7 +7,7 @@
 
 use chrono::{Duration, Utc};
 use poly_client::*;
-use uuid::Uuid;
+use rand::distr::{Alphanumeric, SampleString};
 
 /// Generate a demo session for the authenticated user.
 pub fn demo_session() -> Session {
@@ -280,7 +280,10 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
 /// Generate a demo sent message.
 pub fn demo_sent_message(_channel_id: &str, content: MessageContent) -> Message {
     Message {
-        id: format!("msg-sent-{}", Uuid::new_v4()),
+        id: format!(
+            "msg-sent-{}",
+            Alphanumeric.sample_string(&mut rand::rng(), 16)
+        ),
         author: demo_session().user,
         content,
         timestamp: Utc::now(),

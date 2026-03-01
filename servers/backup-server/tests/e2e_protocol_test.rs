@@ -91,6 +91,7 @@ impl TestServer {
         let data_dir = TempDir::new().context("create temp dir")?;
 
         let config = Arc::new(Config {
+            server_name: "Test Poly Server".to_owned(),
             passphrase: passphrase.to_owned(),
             max_accounts: 0,
             token_expiry_days: 365,
@@ -281,7 +282,7 @@ async fn test_full_protocol_happy_path() -> Result<()> {
     assert_eq!(resp.status(), 200, "pull since=0 status");
     let pull: PullResponse = resp.json().await.context("pull json")?;
     assert_eq!(pull.blobs.len(), 2, "should have 2 blobs");
-    let blob0 = pull.blobs.get(0).context("blob 0 missing")?;
+    let blob0 = pull.blobs.first().context("blob 0 missing")?;
     let blob1_entry = pull.blobs.get(1).context("blob 1 missing")?;
     assert_eq!(blob0.encrypted_blob, blob1, "blob 1 data round-trips");
     assert_eq!(blob0.sequence, 1);
@@ -299,7 +300,10 @@ async fn test_full_protocol_happy_path() -> Result<()> {
     assert_eq!(resp.status(), 200, "pull since=1 status");
     let pull_since: PullResponse = resp.json().await.context("pull since=1 json")?;
     assert_eq!(pull_since.blobs.len(), 1, "only blob 2 after since=1");
-    assert_eq!(pull_since.blobs.get(0).context("blob missing")?.sequence, 2);
+    assert_eq!(
+        pull_since.blobs.first().context("blob missing")?.sequence,
+        2
+    );
 
     // Status
     let resp = client

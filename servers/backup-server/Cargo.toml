@@ -42,7 +42,7 @@ tokio = { workspace = true, features = [
     "signal",
     "io-std",
 ] }
-uuid = { workspace = true }
+# uuid removed: backup-server generates random strings via rand::distr::Alphanumeric, not uuid
 chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
@@ -52,7 +52,7 @@ tracing-subscriber = { workspace = true }
 [dev-dependencies]
 tempfile = "3"
 anyhow = { workspace = true }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { workspace = true, features = ["json"] }
 
 [lints]
 workspace = true

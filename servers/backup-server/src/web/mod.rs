@@ -27,7 +27,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use dashmap::DashMap;
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -186,7 +186,7 @@ async fn serve_ui() -> Html<&'static str> {
 
 /// `GET /admin/challenge` — issue a short-lived PoW nonce for the login form.
 async fn admin_challenge(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let nonce = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let nonce = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let difficulty = state.config.admin_pow_difficulty;
     let expiry = Instant::now() + std::time::Duration::from_secs(120);
     state
@@ -280,7 +280,7 @@ async fn admin_login(
     }
 
     // Issue session token.
-    let raw = Alphanumeric.sample_string(&mut rand::thread_rng(), 48);
+    let raw = Alphanumeric.sample_string(&mut rand::rng(), 48);
     let hash = hash_session_token(&raw);
     let expiry =
         Instant::now() + std::time::Duration::from_secs(state.config.admin_session_hours * 3600);

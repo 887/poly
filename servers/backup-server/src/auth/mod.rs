@@ -17,7 +17,7 @@ use axum::{
     http::{StatusCode, request::Parts},
 };
 use chrono::Utc;
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
@@ -106,7 +106,7 @@ pub async fn request_challenge(
         ));
     }
 
-    let nonce = Alphanumeric.sample_string(&mut rand::thread_rng(), 64);
+    let nonce = Alphanumeric.sample_string(&mut rand::rng(), 64);
     let now = Utc::now();
     let expires_at = now + chrono::Duration::seconds(60);
 
@@ -143,6 +143,148 @@ pub async fn request_challenge(
     }))
 }
 
+// ── Helpers for `authenticate` ───────────────────────────────────────────────
+
+/// Validate mandatory fields in an [`AuthRequest`].
+fn validate_auth_input(body: &AuthRequest) -> Result<()> {
+    if body.public_key.len() != 64 || !body.public_key.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(AppError::BadRequest("invalid public_key".into()));
+    }
+    if body.device_name.trim().is_empty() {
+        return Err(AppError::BadRequest("device_name is required".into()));
+    }
+    Ok(())
+}
+
+/// Look up the challenge for `(nonce, public_key)`, check expiry, verify PoW,
+/// verify passphrase, then delete the challenge from the database.
+async fn verify_and_consume_challenge(
+    db: &crate::Db,
+    body: &AuthRequest,
+    config: &crate::Config,
+) -> Result<()> {
+    let challenge: Option<serde_json::Value> = db
+        .query(
+            "SELECT nonce, public_key, difficulty, expires_at FROM challenge \
+             WHERE nonce = $nonce AND public_key = $pk \
+             LIMIT 1",
+        )
+        .bind(("nonce", body.nonce.clone()))
+        .bind(("pk", body.public_key.clone()))
+        .await?
+        .take(0)
+        .map_err(AppError::from)?;
+    let challenge = challenge.ok_or(AppError::Unauthorized)?;
+
+    let expires_at_str = challenge
+        .get("expires_at")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(AppError::Unauthorized)?;
+    if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
+        if exp <= Utc::now() {
+            return Err(AppError::Unauthorized);
+        }
+    } else {
+        return Err(AppError::Unauthorized);
+    }
+
+    let difficulty = challenge
+        .get("difficulty")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(config.pow_difficulty as u64) as u32;
+
+    if !verify_pow(&body.nonce, body.counter, difficulty) {
+        tracing::warn!("PoW verification failed for pk={}", body.public_key);
+        return Err(AppError::Unauthorized);
+    }
+    if !ct_passphrase_eq(&body.passphrase, &config.passphrase) {
+        tracing::warn!("Passphrase mismatch for pk={}", body.public_key);
+        return Err(AppError::Unauthorized);
+    }
+
+    db.query("DELETE challenge WHERE nonce = $nonce")
+        .bind(("nonce", body.nonce.clone()))
+        .await?
+        .check()
+        .map_err(AppError::from)?;
+    Ok(())
+}
+
+/// Enforce the server's account limit (if non-zero) and upsert the account record.
+async fn enforce_limit_and_upsert_account(
+    db: &crate::Db,
+    public_key: &str,
+    max_accounts: usize,
+    now_str: &str,
+) -> Result<()> {
+    if max_accounts > 0 {
+        let existing: Option<serde_json::Value> = db
+            .query("SELECT public_key FROM account WHERE public_key = $pk LIMIT 1")
+            .bind(("pk", public_key.to_owned()))
+            .await?
+            .take(0)
+            .map_err(AppError::from)?;
+        if existing.is_none() {
+            let count: Option<serde_json::Value> = db
+                .query("SELECT count() AS n FROM account GROUP ALL")
+                .await?
+                .take(0)
+                .map_err(AppError::from)?;
+            let n = count
+                .as_ref()
+                .and_then(|v| v.get("n"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            if n >= max_accounts {
+                return Err(AppError::Forbidden("account limit reached".into()));
+            }
+        }
+    }
+    db.query(
+        "IF (SELECT id FROM account WHERE public_key = $pk LIMIT 1) THEN \
+           (UPDATE account SET last_seen_at = $now WHERE public_key = $pk) \
+         ELSE \
+           (CREATE account CONTENT { public_key: $pk, registered_at: $now, last_seen_at: $now }) \
+         END",
+    )
+    .bind(("pk", public_key.to_owned()))
+    .bind(("now", now_str.to_owned()))
+    .await?
+    .check()
+    .map_err(AppError::from)?;
+    Ok(())
+}
+
+/// Generate a 128-char session token, persist its SHA-256 hash, and return
+/// `(raw_token, expires_at_rfc3339)`.
+async fn issue_session_token(
+    db: &crate::Db,
+    public_key: &str,
+    device_name: &str,
+    token_expiry_days: i64,
+    now_str: &str,
+) -> Result<(String, String)> {
+    let raw_token = Alphanumeric.sample_string(&mut rand::rng(), 128);
+    let token_hash = hash_token(&raw_token);
+    let expires_at = Utc::now() + chrono::Duration::days(token_expiry_days);
+    db.query(
+        "CREATE token CONTENT { \
+           token_hash: $hash, public_key: $pk, device_name: $dev, \
+           created_at: $now, last_seen_at: $now, \
+           expires_at: $exp \
+         }",
+    )
+    .bind(("hash", token_hash))
+    .bind(("pk", public_key.to_owned()))
+    .bind(("dev", device_name.to_owned()))
+    .bind(("exp", expires_at.to_rfc3339()))
+    .bind(("now", now_str.to_owned()))
+    .await?
+    .check()
+    .map_err(AppError::from)?;
+    Ok((raw_token, expires_at.to_rfc3339()))
+}
+
 /// `POST /api/auth` — verify PoW + passphrase, issue session token.
 #[utoipa::path(
     post,
@@ -161,145 +303,131 @@ pub async fn authenticate(
     State(state): State<AppState>,
     Json(body): Json<AuthRequest>,
 ) -> Result<Json<AuthResponse>> {
-    if body.public_key.len() != 64 || !body.public_key.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(AppError::BadRequest("invalid public_key".into()));
-    }
-    if body.device_name.trim().is_empty() {
-        return Err(AppError::BadRequest("device_name is required".into()));
-    }
-
-    // Look up the pending challenge (nonce + public key match, not expired).
-    let challenge: Option<serde_json::Value> = state
-        .db
-        .query(
-            "SELECT nonce, public_key, difficulty, expires_at FROM challenge \
-             WHERE nonce = $nonce AND public_key = $pk \
-             LIMIT 1",
-        )
-        .bind(("nonce", body.nonce.clone()))
-        .bind(("pk", body.public_key.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::from)?;
-
-    let challenge = challenge.ok_or(AppError::Unauthorized)?;
-
-    // Expiry check in Rust (expires_at stored as RFC3339 string).
-    let expires_at_str = challenge
-        .get("expires_at")
-        .and_then(serde_json::Value::as_str)
-        .ok_or(AppError::Unauthorized)?;
-    if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
-        if exp <= Utc::now() {
-            return Err(AppError::Unauthorized);
-        }
-    } else {
-        return Err(AppError::Unauthorized);
-    }
-    let difficulty = challenge
-        .get("difficulty")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(state.config.pow_difficulty as u64) as u32;
-
-    // Verify PoW.
-    if !verify_pow(&body.nonce, body.counter, difficulty) {
-        tracing::warn!("PoW verification failed for pk={}", body.public_key);
-        return Err(AppError::Unauthorized);
-    }
-
-    // Constant-time passphrase check.
-    if !ct_passphrase_eq(&body.passphrase, &state.config.passphrase) {
-        tracing::warn!("Passphrase mismatch for pk={}", body.public_key);
-        return Err(AppError::Unauthorized);
-    }
-
-    // Consume the challenge.
-    state
-        .db
-        .query("DELETE challenge WHERE nonce = $nonce")
-        .bind(("nonce", body.nonce))
-        .await?
-        .check()
-        .map_err(AppError::from)?;
-
-    // Enforce account limit.
-    if state.config.max_accounts > 0 {
-        let existing: Option<serde_json::Value> = state
-            .db
-            .query("SELECT public_key FROM account WHERE public_key = $pk LIMIT 1")
-            .bind(("pk", body.public_key.clone()))
-            .await?
-            .take(0)
-            .map_err(AppError::from)?;
-
-        if existing.is_none() {
-            let count: Option<serde_json::Value> = state
-                .db
-                .query("SELECT count() AS n FROM account GROUP ALL")
-                .await?
-                .take(0)
-                .map_err(AppError::from)?;
-            let n = count
-                .as_ref()
-                .and_then(|v| v.get("n"))
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(0) as usize;
-            if n >= state.config.max_accounts {
-                return Err(AppError::Forbidden("account limit reached".into()));
-            }
-        }
-    }
-
-    // Upsert account.
+    validate_auth_input(&body)?;
+    verify_and_consume_challenge(&state.db, &body, &state.config).await?;
     let now_str = Utc::now().to_rfc3339();
-    state
-        .db
-        .query(
-            "IF (SELECT id FROM account WHERE public_key = $pk LIMIT 1) THEN \
-               (UPDATE account SET last_seen_at = $now WHERE public_key = $pk) \
-             ELSE \
-               (CREATE account CONTENT { public_key: $pk, registered_at: $now, last_seen_at: $now }) \
-             END",
-        )
-        .bind(("pk", body.public_key.clone()))
-        .bind(("now", now_str.clone()))
-        .await?
-        .check()
-        .map_err(AppError::from)?;
-
-    // Generate and store session token.
-    let raw_token = Alphanumeric.sample_string(&mut rand::thread_rng(), 128);
-    let token_hash = hash_token(&raw_token);
-    let expires_at = Utc::now() + chrono::Duration::days(state.config.token_expiry_days as i64);
-
-    state
-        .db
-        .query(
-            "CREATE token CONTENT { \
-               token_hash: $hash, public_key: $pk, device_name: $dev, \
-               created_at: $now, last_seen_at: $now, \
-               expires_at: $exp \
-             }",
-        )
-        .bind(("hash", token_hash))
-        .bind(("pk", body.public_key.clone()))
-        .bind(("dev", body.device_name.clone()))
-        .bind(("exp", expires_at.to_rfc3339()))
-        .bind(("now", now_str))
-        .await?
-        .check()
-        .map_err(AppError::from)?;
-
+    enforce_limit_and_upsert_account(
+        &state.db,
+        &body.public_key,
+        state.config.max_accounts,
+        &now_str,
+    )
+    .await?;
+    let (token, expires_at) = issue_session_token(
+        &state.db,
+        &body.public_key,
+        &body.device_name,
+        state.config.token_expiry_days as i64,
+        &now_str,
+    )
+    .await?;
     tracing::info!(
         "Authenticated: pk={} device={}",
         &body.public_key[..8],
         body.device_name
     );
+    Ok(Json(AuthResponse { token, expires_at }))
+}
 
-    Ok(Json(AuthResponse {
-        token: raw_token,
-        expires_at: expires_at.to_rfc3339(),
-    }))
+// ── Helpers for `FromRequestParts` ───────────────────────────────────────────
+
+type AuthRejection = (StatusCode, Json<serde_json::Value>);
+
+/// Extract the raw Bearer token string from request headers.
+fn extract_bearer_token(parts: &Parts) -> std::result::Result<String, AuthRejection> {
+    parts
+        .headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({ "error": "missing Bearer token" })),
+            )
+        })
+}
+
+/// Look up a session-token record from the database by its SHA-256 hash.
+async fn fetch_token_record(
+    db: &crate::Db,
+    token_hash: &str,
+) -> std::result::Result<serde_json::Value, AuthRejection> {
+    let record: Option<serde_json::Value> = db
+        .query(
+            "SELECT token_hash, public_key, expires_at FROM token \
+             WHERE token_hash = $hash \
+             LIMIT 1",
+        )
+        .bind(("hash", token_hash.to_owned()))
+        .await
+        .map_err(|e: surrealdb::Error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        })?
+        .take(0)
+        .map_err(|e: surrealdb::Error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        })?;
+    record.ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "invalid or expired token" })),
+        )
+    })
+}
+
+/// Return `Ok(())` if the token record's `expires_at` is still in the future.
+fn validate_token_expiry(record: &serde_json::Value) -> std::result::Result<(), AuthRejection> {
+    let expires_at_str = record
+        .get("expires_at")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
+        if exp <= Utc::now() {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({ "error": "token expired" })),
+            ));
+        }
+        Ok(())
+    } else {
+        Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "invalid token expiry" })),
+        ))
+    }
+}
+
+/// Roll the token's expiry forward and update `last_seen_at` on account and token.
+async fn refresh_token_and_account(
+    db: &crate::Db,
+    token_hash: &str,
+    public_key: &str,
+    token_expiry_days: i64,
+) {
+    let new_expiry = (Utc::now() + chrono::Duration::days(token_expiry_days)).to_rfc3339();
+    let now_str = Utc::now().to_rfc3339();
+    let _ = db
+        .query(
+            "UPDATE token SET last_seen_at = $now, expires_at = $exp \
+             WHERE token_hash = $hash",
+        )
+        .bind(("exp", new_expiry))
+        .bind(("now", now_str.clone()))
+        .bind(("hash", token_hash.to_owned()))
+        .await;
+    let _ = db
+        .query("UPDATE account SET last_seen_at = $now WHERE public_key = $pk")
+        .bind(("now", now_str))
+        .bind(("pk", public_key.to_owned()))
+        .await;
 }
 
 // ── Bearer token extractor ────────────────────────────────────────────────────
@@ -309,78 +437,17 @@ where
     S: Send + Sync,
     AppState: axum::extract::FromRef<S>,
 {
-    type Rejection = (StatusCode, Json<serde_json::Value>);
+    type Rejection = AuthRejection;
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &S,
     ) -> std::result::Result<Self, Self::Rejection> {
         let app_state = AppState::from_ref(state);
-
-        let raw_token = parts
-            .headers
-            .get(axum::http::header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.strip_prefix("Bearer "))
-            .ok_or_else(|| {
-                (
-                    StatusCode::UNAUTHORIZED,
-                    Json(serde_json::json!({ "error": "missing Bearer token" })),
-                )
-            })?
-            .to_owned();
-
+        let raw_token = extract_bearer_token(parts)?;
         let token_hash = hash_token(&raw_token);
-
-        let record: Option<serde_json::Value> = app_state
-            .db
-            .query(
-                "SELECT token_hash, public_key, expires_at FROM token \
-                 WHERE token_hash = $hash \
-                 LIMIT 1",
-            )
-            .bind(("hash", token_hash.clone()))
-            .await
-            .map_err(|e: surrealdb::Error| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({ "error": e.to_string() })),
-                )
-            })?
-            .take(0)
-            .map_err(|e: surrealdb::Error| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({ "error": e.to_string() })),
-                )
-            })?;
-
-        let record = record.ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({ "error": "invalid or expired token" })),
-            )
-        })?;
-
-        // Expiry check in Rust (expires_at stored as RFC3339 string).
-        let expires_at_str = record
-            .get("expires_at")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("");
-        if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
-            if exp <= Utc::now() {
-                return Err((
-                    StatusCode::UNAUTHORIZED,
-                    Json(serde_json::json!({ "error": "token expired" })),
-                ));
-            }
-        } else {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({ "error": "invalid token expiry" })),
-            ));
-        };
-
+        let record = fetch_token_record(&app_state.db, &token_hash).await?;
+        validate_token_expiry(&record)?;
         let public_key = record
             .get("public_key")
             .and_then(serde_json::Value::as_str)
@@ -391,29 +458,13 @@ where
                 )
             })?
             .to_owned();
-
-        // Roll expiry forward on every use.
-        let new_expiry =
-            Utc::now() + chrono::Duration::days(app_state.config.token_expiry_days as i64);
-        let now_str = Utc::now().to_rfc3339();
-        let _ = app_state
-            .db
-            .query(
-                "UPDATE token SET last_seen_at = $now, expires_at = $exp \
-                 WHERE token_hash = $hash",
-            )
-            .bind(("exp", new_expiry.to_rfc3339()))
-            .bind(("now", now_str.clone()))
-            .bind(("hash", token_hash.clone()))
-            .await;
-
-        let _ = app_state
-            .db
-            .query("UPDATE account SET last_seen_at = $now WHERE public_key = $pk")
-            .bind(("now", now_str))
-            .bind(("pk", public_key.clone()))
-            .await;
-
+        refresh_token_and_account(
+            &app_state.db,
+            &token_hash,
+            &public_key,
+            app_state.config.token_expiry_days as i64,
+        )
+        .await;
         Ok(AuthUser {
             public_key,
             token_hash,

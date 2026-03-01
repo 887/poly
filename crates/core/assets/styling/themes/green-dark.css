@@ -1,0 +1,76 @@
+/* Poly — Green Theme (Dark)
+ * Nature-inspired green accents (#22c55e) with dark background.
+ */
+
+:root {
+    /* Background colors */
+    --bg-primary: #1a2420;
+    --bg-secondary: #162e1e;
+    --bg-tertiary: #0f3d1f;
+    --bg-surface: #1e3328;
+    --bg-hover: #253d2f;
+    --bg-active: #2d4a38;
+    --bg-input: #121e18;
+
+    /* Text colors */
+    --text-primary: #e4e7e5;
+    --text-secondary: #a1aaa5;
+    --text-muted: #717a75;
+    --text-inverse: #18181b;
+    --text-link: #4ade80;
+
+    /* Border colors */
+    --border-primary: #27403a;
+    --border-secondary: #3f5c4e;
+    --border-focus: #22c55e;
+
+    /* Accent colors */
+    --accent-primary: #22c55e;
+    --accent-primary-hover: #16a34a;
+    --accent-secondary: #86efac;
+    --accent-success: #4ade80;
+    --accent-warning: #fbbf24;
+    --accent-danger: #f87171;
+
+    /* Presence colors */
+    --presence-online: #4ade80;
+    --presence-idle: #fbbf24;
+    --presence-dnd: #f87171;
+    --presence-offline: #717a75;
+
+    /* Sidebar */
+    --sidebar-bg: #111e18;
+    --sidebar-icon-bg: #1e3328;
+    --sidebar-icon-hover: #2d4a38;
+    --sidebar-icon-active: #22c55e;
+    --sidebar-separator: #27403a;
+
+    /* Chat */
+    --chat-bg: #1a2420;
+    --chat-message-hover: #1e2e26;
+    --chat-input-bg: #121e18;
+    --chat-input-border: #27403a;
+
+    /* Scrollbar */
+    --scrollbar-thumb: #3f5c4e;
+    --scrollbar-track: transparent;
+
+    /* Badge */
+    --badge-bg: #f87171;
+    --badge-text: #ffffff;
+
+    /* Shadow */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+
+    /* Border radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-full: 9999px;
+
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+}

@@ -8,7 +8,7 @@ license.workspace = true
 [dependencies]
 serde = { workspace = true }
 chrono = { workspace = true }
-uuid = { workspace = true }
+# uuid removed: Account.id uses String (backends format UUIDs as strings; no uuid dep needed here)
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }

@@ -76,11 +76,16 @@ settings-identity-description = Votre identité Poly et options de récupératio
 settings-your-id = Votre identifiant de compte
 settings-export-recovery = Exporter la phrase de récupération
 settings-theme = Thème
-settings-theme-description = Personnaliser les couleurs et l'apparence
+settings-theme-description = Personnaliser les couleurs, thèmes et l'apparence
 settings-theme-preset = Préréglage de thème
 settings-theme-custom-css = CSS personnalisé
 settings-theme-import = Importer un thème
 settings-theme-export = Exporter un thème
+settings-color-mode = Mode de couleur
+settings-color-overrides = Personnalisation des couleurs
+settings-theme-apply-css = Appliquer le CSS
+settings-css-hint = Décommentez une variable pour remplacer le thème. L’interrupteur active/désactive ces modifications CSS.
+settings-css-reset-template = Réinitialiser le modèle
 settings-language = Langue
 settings-language-description = Choisissez votre langue préférée
 settings-appearance = Apparence
@@ -114,6 +119,19 @@ settings-backup-enabled = Activé
 settings-backup-auth-success = Connecté!
 settings-backup-auth-failed = Échec de l'authentification
 settings-backup-no-servers = Aucun serveur de sauvegarde configuré.
+settings-backup-wizard-step1 = URL du serveur
+settings-backup-wizard-step2 = Connecter
+settings-backup-step1-hint = Entrez l'URL de votre serveur de sauvegarde Poly
+settings-backup-step2-hint = Donnez un nom et entrez les identifiants pour terminer
+settings-backup-check-btn = Vérifier la connexion
+settings-backup-checking = Vérification…
+settings-backup-continue = Continuer
+settings-backup-back = Retour
+settings-backup-finish = Terminer la configuration
+settings-backup-url-empty = Veuillez entrer une URL de serveur
+settings-backup-password-required = 🔒 Mot de passe requis
+settings-backup-no-password-required = ✓ Aucun mot de passe requis
+settings-backup-server-full = Serveur plein — inscriptions désactivées
 
 # Identity Settings
 settings-identity-your-id-label = Votre identifiant de compte Poly
@@ -126,10 +144,11 @@ settings-identity-close = Fermer
 settings-identity-no-identity = Identité pas encore générée. Terminez d'abord l'assistant de configuration.
 
 # Préréglages de thème
-theme-neutral-dark = Sombre neutre
-theme-purple = Violet (inspiré de Discord)
-theme-red = Rouge (inspiré de Stoat)
-theme-custom = Personnalisé
+theme-blue = Bleu
+theme-purple = Violet
+theme-red = Rouge
+theme-green = Vert
+theme-monotone = Monotone
 
 # Backends
 backend-stoat = Stoat

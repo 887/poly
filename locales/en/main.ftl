@@ -76,11 +76,16 @@ settings-identity-description = Your Poly identity and recovery options
 settings-your-id = Your Account ID
 settings-export-recovery = Export Recovery Phrase
 settings-theme = Theme
-settings-theme-description = Customize colors and appearance
+settings-theme-description = Customize colors, themes, and appearance
 settings-theme-preset = Theme Preset
 settings-theme-custom-css = Custom CSS
 settings-theme-import = Import Theme
 settings-theme-export = Export Theme
+settings-color-mode = Color Mode
+settings-color-overrides = Color Customization
+settings-theme-apply-css = Apply CSS
+settings-css-hint = Uncomment any variable to override the theme preset. The toggle enables/disables these CSS overrides.
+settings-css-reset-template = Reset Template
 settings-language = Language
 settings-language-description = Choose your preferred language
 settings-appearance = Appearance
@@ -114,6 +119,19 @@ settings-backup-enabled = Enabled
 settings-backup-auth-success = Connected!
 settings-backup-auth-failed = Authentication failed
 settings-backup-no-servers = No backup servers configured.
+settings-backup-wizard-step1 = Server URL
+settings-backup-wizard-step2 = Connect
+settings-backup-step1-hint = Enter the URL of your Poly backup server
+settings-backup-step2-hint = Set a name and enter credentials to complete setup
+settings-backup-check-btn = Check Connection
+settings-backup-checking = Checking…
+settings-backup-continue = Continue
+settings-backup-back = Back
+settings-backup-finish = Finish Setup
+settings-backup-url-empty = Please enter a server URL
+settings-backup-password-required = 🔒 Password required
+settings-backup-no-password-required = ✓ No password required
+settings-backup-server-full = Server is at full capacity — registrations disabled
 
 # Identity Settings
 settings-identity-your-id-label = Your Poly Account ID
@@ -126,10 +144,11 @@ settings-identity-close = Close
 settings-identity-no-identity = Identity not yet generated. Complete the setup wizard first.
 
 # Theme Presets
-theme-neutral-dark = Neutral Dark
-theme-purple = Purple (Discord-inspired)
-theme-red = Red (Stoat-inspired)
-theme-custom = Custom
+theme-blue = Blue
+theme-purple = Purple
+theme-red = Red
+theme-green = Green
+theme-monotone = Monotone
 
 # Backends
 backend-stoat = Stoat

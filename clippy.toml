@@ -1,0 +1,16 @@
+# Clippy threshold configuration.
+# Pairs with the lint denials in every cranky.toml.
+# If you are hitting one of these limits, the answer is ALWAYS to split
+# the function/component into smaller pieces — not to raise the threshold.
+
+# Maximum number of lines in a single function body.
+# 100 lines fills a standard terminal. If it doesn't fit on screen, it's too big.
+too-many-lines-threshold = 100
+
+# Cognitive complexity counts branches, nesting levels, boolean operators,
+# loops, etc. A score of 15 is already non-trivial; beyond that you need a refactor.
+cognitive-complexity-threshold = 15
+
+# Functions with more than 6 parameters are hard to call correctly and signal
+# that a struct or builder pattern should be used instead.
+too-many-arguments-threshold = 6

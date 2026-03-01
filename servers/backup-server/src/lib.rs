@@ -18,6 +18,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod info;
 pub mod sync;
 pub mod web;
 
@@ -66,6 +67,7 @@ pub struct AppState {
         license(name = "MIT OR Apache-2.0"),
     ),
     paths(
+        info::server_info,
         auth::request_challenge,
         auth::authenticate,
         sync::push,
@@ -74,6 +76,7 @@ pub struct AppState {
     ),
     components(
         schemas(
+            info::ServerInfoResponse,
             auth::ChallengeRequest,
             auth::ChallengeResponse,
             auth::AuthRequest,
@@ -87,6 +90,7 @@ pub struct AppState {
         )
     ),
     tags(
+        (name = "info", description = "Public server metadata"),
         (name = "auth", description = "PoW challenge + passphrase authentication"),
         (name = "sync", description = "Push/pull encrypted settings blobs"),
     ),
@@ -163,6 +167,7 @@ async fn swagger_ui() -> Html<&'static str> {
 pub fn create_app(state: AppState) -> Router {
     let api_routes = Router::new()
         .route("/api/health", get(health_check))
+        .route("/api/info", get(info::server_info))
         .route(
             "/api/challenge",
             axum::routing::post(auth::request_challenge),

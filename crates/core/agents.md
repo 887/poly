@@ -135,11 +135,88 @@ all-backends = ["stoat", "matrix", "discord", "teams", "demo"]
 4. **Async via Tokio** — all backend operations are async
 5. **Client backends loaded via `poly-client` trait** — don't import concrete client types directly; use the trait interface
 
+## Dioxus Component Size Limits — MANDATORY
+
+**NEVER create RSX components larger than 150 lines of code.** This is a hard limit, not a guideline.
+
+When a component approaches 150 lines:
+- **Extract sub-components immediately** — split rendering logic into smaller, testable components
+- **Move event handlers to separate helper functions** — async logic should live outside RSX
+- **Use const helper functions for repeated rendering patterns** — `const fn render_status_chip(...) -> String`
+- **Max nesting depth is 4 levels** — if your RSX has `div > div > div > div > div`, extract a component
+- **Inline conditionals (`if/else` in RSX) should be short** — complex logic belongs in Rust, not interpolated in markup
+
+**Why this matters:**
+- Unmaintainable components hide bugs and make hot-reload harder to debug
+- Large RSX with nested loops + signal updates = silent state sync bugs
+- Developers cannot maintain giant RSX blobs
+- Easier testing: small components have testable inputs/outputs
+
+**Bad example:**
+```rust
+#[component]
+fn BackupSettings() -> Element {
+    let mut servers = use_signal(Vec::new);
+    rsx! {
+        div { /* ... 500+ lines of forms, lists, loops, conditionals ... */ }
+    }
+}
+```
+
+**Good example:**
+```rust
+#[component]
+fn BackupSettings() -> Element {
+    rsx! {
+        div { class: "settings-section",
+            h2 { "Backup Servers" }
+            ServerList { }
+            AddServerButton { }
+        }
+    }
+}
+
+#[component]
+fn ServerList() -> Element {
+    rsx! { /* ~30 lines */ }
+}
+
+#[component]
+fn ServerRow(record: ServerRecord) -> Element {
+    rsx! { /* ~20 lines */ }
+}
+```
+
 ## Testing
 
 - Unit tests for crypto, db, i18n modules
 - Integration tests with demo client for UI state flows
 - Hot-reload smoke test: modify a component, verify it updates
+
+## MANDATORY: Visual Testing with MCP desktop-devtools
+
+**After every change that touches `rsx!` blocks** (UI layout, component structure, new
+components, theme changes, etc.), you MUST visually verify the result using the
+desktop-devtools MCP:
+
+```
+1. Ensure desktop app is running (hot-reload or launch fresh via MCP)
+2. Call mcp_poly-desktop_screenshot() to capture the current state
+3. Inspect the screenshot for correctness (layout, text, colors)
+4. If resetting to a clean state is useful: call mcp_poly-desktop_reset_app()
+   then mcp_poly-desktop_launch_app() to walk through the setup wizard fresh
+5. Navigate to the changed area: mcp_poly-desktop_navigate("/path")
+6. Take another screenshot to confirm the change looks correct
+```
+
+**If the visual test reveals problems**: fix them before declaring the task complete.
+A change is only "done" when it looks correct in the actual running app.
+
+This applies especially to:
+- New settings pages / merged pages
+- Theme editor components (color pickers, CSS editor, preset buttons)
+- Layout changes (does it still work on narrow viewports aka "mobile"?)
+- Any component that was split from a large one
 
 ---
 

@@ -6,8 +6,12 @@ use std::path::PathBuf;
 /// Full server configuration loaded from environment variables at startup.
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Human-readable server name shown in the client's setup wizard.
+    /// Set via `POLY_SERVER_NAME` env var; defaults to "Poly Backup Server".
+    pub server_name: String,
     /// Server-wide access passphrase for new account registration.
     /// Clients must include this in the auth request.
+    /// Set to an empty string (`POLY_PASSPHRASE=""`) to disable password requirement.
     pub passphrase: String,
     /// Maximum number of registered accounts. 0 = unlimited.
     pub max_accounts: usize,
@@ -48,6 +52,8 @@ impl Config {
             .unwrap_or_else(|_| SocketAddr::from(([0, 0, 0, 0], 8080)));
 
         Self {
+            server_name: std::env::var("POLY_SERVER_NAME")
+                .unwrap_or_else(|_| "Poly Backup Server".to_string()),
             passphrase: std::env::var("POLY_PASSPHRASE").unwrap_or_else(|_| "changeme".to_string()),
             max_accounts: std::env::var("POLY_MAX_ACCOUNTS")
                 .ok()

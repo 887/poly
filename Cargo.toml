@@ -57,17 +57,17 @@ ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 bip39 = "2.2"
 sha2 = "0.10"
-rand = "0.8"
+rand = "0.10"
 chacha20poly1305 = "0.10"
 
 # i18n
 fluent-bundle = "0.16"
-fluent-syntax = "0.11"
+fluent-syntax = "0.12"
 unic-langid = "0.9"
 sys-locale = "0.3"
 
 # Web / API
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13.2", features = ["json"] }
 axum = "0.8"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
@@ -87,6 +87,22 @@ subtle = "2"
 dashmap = "6"
 argon2 = "0.5"
 utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+# WASM feature-forcing aliases: these are never imported directly in our code.
+# They exist solely so Cargo enables the right JS backend for each getrandom
+# semver line that transitive dependencies pull in on wasm32 targets.
+# rand_core 0.6 (from aead / chacha20poly1305 / ed25519-dalek) → getrandom 0.2
+getrandom02-js = { package = "getrandom", version = "0.2", features = ["js"] }
+# rand 0.10 → getrandom 0.4
+getrandom04-wasm = { package = "getrandom", version = "0.4", features = [
+    "wasm_js",
+] }
+gloo-storage = "0.3"
+tower = { version = "0.4" }
+jsonwebtoken = "9"
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+wry = "0.53"
 
 # Internal crates
 poly-core = { path = "crates/core" }

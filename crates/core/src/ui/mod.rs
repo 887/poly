@@ -30,135 +30,113 @@ use dioxus::prelude::*;
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
 const CSS: Asset = asset!("assets/tailwind.css");
 
+// ── App — async helpers ──────────────────────────────────────────────────────
+
+/// Initialise storage, apply persisted theme + locale, and decide the initial view.
+///
+/// Called once via `use_future` on App mount. Always sets `storage_ready` to
+/// `true` when done — failures fall back to in-memory-only mode.
+// DECISION(DX-STORAGE-4): storage init in use_future ensures it runs after
+// the component mounts but before the first meaningful render completes.
+async fn init_storage(
+    mut theme_config: Signal<crate::theme::ThemeConfig>,
+    mut storage_ready: Signal<bool>,
+    mut app_state: Signal<AppState>,
+    mut locale_sig: Signal<String>,
+) {
+    match crate::storage::Storage::init().await {
+        Ok(storage) => {
+            let _ = crate::STORAGE.set(storage.clone());
+            if let Err(e) = storage.run_migrations().await {
+                tracing::warn!("Storage migration error: {e}");
+            }
+            match storage.get_theme_config().await {
+                Ok(config) => theme_config.set(config),
+                Err(e) => tracing::warn!("Failed to load saved theme config: {e}"),
+            }
+            match storage.get_app_settings().await {
+                Ok(settings) if settings.setup_complete => {
+                    tracing::info!("Storage: setup complete, going to main layout");
+                    crate::i18n::set_locale(&settings.locale);
+                    *locale_sig.write() = settings.locale.clone();
+                    app_state.write().is_setup_complete = true;
+                    app_state.write().nav.view = View::DmsFriends;
+                }
+                Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
+                Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),
+            }
+            storage_ready.set(true);
+        }
+        Err(e) => {
+            tracing::error!("Storage init failed: {e}. Running without persistence.");
+            storage_ready.set(true);
+        }
+    }
+}
+
+/// Persist a completed setup to storage: account ID, locale, and default theme.
+async fn persist_setup_completion(account_id: String) {
+    let Some(s) = crate::STORAGE.get() else {
+        return;
+    };
+    let locale = crate::i18n::current_locale();
+    let settings = crate::storage::AppSettings {
+        setup_complete: true,
+        account_id,
+        locale,
+        theme: "neutral-dark".to_string(),
+    };
+    if let Err(e) = s.set_app_settings(&settings).await {
+        tracing::error!("Failed to persist app settings: {e}");
+    } else {
+        tracing::info!("App settings persisted ✓");
+    }
+    if let Err(e) = s
+        .set_theme_config(&crate::theme::ThemeConfig::default())
+        .await
+    {
+        tracing::error!("Failed to persist default theme config: {e}");
+    }
+}
+
+// ── App component ─────────────────────────────────────────────────────────────
+
 /// Root application component.
 ///
-/// On first render, initialises the storage backend and reads persisted
-/// settings to decide whether to show the setup wizard or the main layout.
-/// Until storage is ready, a blank loading screen is shown (typically <50 ms).
+/// Shows a blank loading screen while storage initialises (<50 ms), then
+/// routes to the setup wizard or the main layout based on saved settings.
 ///
 /// ## Context provided to children
-/// - `Signal<String>` — current locale code (from `crate::i18n::provide_locale_context()`)
-/// - `Signal<crate::theme::ThemeConfig>` — active theme configuration
+/// - `Signal<String>` — current locale (from [`crate::i18n::provide_locale_context`])
+/// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
 #[component]
 pub fn App() -> Element {
-    // Global app state
     let mut app_state = use_signal(AppState::default);
-    // True once storage has been initialised and settings loaded.
-    let mut storage_ready = use_signal(|| false);
-
-    // Reactive locale context — child components call crate::i18n::use_locale()
-    // to subscribe and get a setter that triggers app-wide re-renders.
-    // DECISION(DX-I18N-1): Signal<String> provided as context; use_locale() hook
-    // in child components subscribes them to locale changes automatically.
+    let storage_ready = use_signal(|| false);
+    // DECISION(DX-I18N-1): Signal<String> context; use_locale() in children subscribes.
     crate::i18n::provide_locale_context();
-    // Get the locale signal now (after provide) so the use_future closure can
-    // write the persisted locale into it without calling a hook inside async.
-    let mut locale_sig = crate::i18n::use_locale();
-
-    // Reactive theme config context — ThemeSettings reads/writes this signal.
-    // The App RSX renders a <style> element from it so all theme changes are
-    // immediately visible without any eval() or page reload.
-    // DECISION(DX-THEME-1): Signal<ThemeConfig> context + <style> element injection
-    // is more idiomatic in Dioxus than eval() CSS injection.
+    let locale_sig = crate::i18n::use_locale();
+    // DECISION(DX-THEME-1): Signal<ThemeConfig> context + <style> injection.
     let theme_config: Signal<crate::theme::ThemeConfig> =
         use_signal(crate::theme::ThemeConfig::default);
     provide_context(theme_config);
-
-    // Initialise storage exactly once. Stores the handle in the global
-    // `STORAGE` OnceLock so that event handlers and coroutines can reach it
-    // without prop-drilling.
-    // DECISION(DX-STORAGE-4): storage init in use_future ensures it runs after
-    // the component mounts but before the first meaningful render completes.
     use_future(move || async move {
-        let mut tc = theme_config;
-        match crate::storage::Storage::init().await {
-            Ok(storage) => {
-                // Persist the handle globally.
-                let _ = crate::STORAGE.set(storage.clone());
-
-                // Run schema migrations before reading any data.
-                if let Err(e) = storage.run_migrations().await {
-                    tracing::warn!("Storage migration error: {e}");
-                }
-
-                // Apply saved theme before first content render.
-                match storage.get_theme_config().await {
-                    Ok(config) => {
-                        tc.set(config);
-                    }
-                    Err(e) => tracing::warn!("Failed to load saved theme config: {e}"),
-                }
-
-                // Read persisted settings to decide initial view.
-                match storage.get_app_settings().await {
-                    Ok(settings) if settings.setup_complete => {
-                        tracing::info!("Storage: setup already complete, going to main layout");
-                        // Restore saved locale — update both the global bundle and
-                        // the reactive Signal so PolySelect shows the right value.
-                        crate::i18n::set_locale(&settings.locale);
-                        *locale_sig.write() = settings.locale.clone();
-                        app_state.write().is_setup_complete = true;
-                        app_state.write().nav.view = View::DmsFriends;
-                    }
-                    Ok(_) => {
-                        tracing::info!("Storage: no previous setup found, showing wizard");
-                    }
-                    Err(e) => {
-                        tracing::warn!("Storage: failed to read app_settings: {e}");
-                    }
-                }
-                storage_ready.set(true);
-            }
-            Err(e) => {
-                // Storage failure is non-fatal — fall back to in-memory only.
-                tracing::error!("Storage init failed: {e}. Running without persistence.");
-                storage_ready.set(true);
-            }
-        }
+        init_storage(theme_config, storage_ready, app_state, locale_sig).await;
     });
-
-    // Generate theme CSS reactively — re-evaluates on every theme_config change.
     let theme_css = crate::theme::generate_css(&theme_config.read());
-
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }
-        // Reactive theme injection: updating theme_config signal re-renders this
-        // <style> element with new CSS. No eval() or page reload required.
         style { id: "poly-theme", "{theme_css}" }
         div { class: "poly-app",
             if !*storage_ready.read() {
-                // Brief loading state while storage opens (<50 ms typically).
                 div { class: "storage-loading" }
             } else if !app_state.read().is_setup_complete {
                 SetupWizard {
                     on_complete: move |account_id: String| {
                         app_state.write().is_setup_complete = true;
                         app_state.write().nav.view = View::DmsFriends;
-
-                        // Persist setup completion to storage (fire-and-forget).
                         spawn(async move {
-                            if let Some(s) = crate::STORAGE.get() {
-                                let locale = crate::i18n::current_locale();
-                                let settings = crate::storage::AppSettings {
-                                    setup_complete: true,
-                                    account_id,
-                                    locale,
-                                    theme: "neutral-dark".to_string(),
-                                };
-                                if let Err(e) = s.set_app_settings(&settings).await {
-                                    tracing::error!("Failed to persist app settings: {e}");
-                                } else {
-                                    tracing::info!("App settings persisted to storage ✓");
-                                }
-                                // Persist default theme config.
-                                if let Err(e) =
-                                    s
-                                    .set_theme_config(&crate::theme::ThemeConfig::default())
-                                    .await
-                                {
-                                    tracing::error!("Failed to persist default theme config: {e}");
-                                }
-                            }
+                            persist_setup_completion(account_id).await;
                         });
                     },
                 }

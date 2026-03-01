@@ -62,5 +62,11 @@
   },
 
   // Terminal settings
-  "terminal.integrated.cwd": "${workspaceFolder}"
+  "terminal.integrated.cwd": "${workspaceFolder}",
+
+  // GitHub Copilot Chat — auto-approve all tool invocations (terminal, file edits, etc.)
+  "chat.tools.eligibleForAutoApproval": {
+    "awaitTerminal": true,
+    "editFiles": true
+  }
 }

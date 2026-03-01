@@ -48,10 +48,11 @@
 ### 4. Workspace Structure
 
 - **Cargo workspace** with `[workspace.dependencies]` for shared dependency versions
-- Each crate has its own `agents.md` (agent instructions) and `README.md`
-- **Read the crate's `agents.md` before working on that crate**
+- **Every crate, app, client, server, and MCP project (anything with a `Cargo.toml`) MUST have its own `agents.md`**
+- **Read the crate's `agents.md` before working on that crate** — it contains crate-specific rules, constraints, and architectural decisions
 - **Update the crate's `agents.md`** when you make architectural decisions or learn something important
 - Use agent.md and README.md files as **eidetic memory** — document everything
+- Each crate has its own `README.md`
 
 ### 5. Feature Flags
 

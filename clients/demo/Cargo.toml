@@ -9,7 +9,7 @@ license.workspace = true
 poly-client = { workspace = true }
 serde = { workspace = true }
 chrono = { workspace = true }
-uuid = { workspace = true }
+# uuid removed: ID generation uses rand (already a dep), avoiding getrandom 0.2 on WASM
 rand = { workspace = true }
 futures = { workspace = true }
 async-trait = { workspace = true }

@@ -76,11 +76,16 @@ settings-identity-description = Ihre Poly-Identität und Wiederherstellungsoptio
 settings-your-id = Ihre Konto-ID
 settings-export-recovery = Wiederherstellungsphrase exportieren
 settings-theme = Design
-settings-theme-description = Farben und Erscheinungsbild anpassen
+settings-theme-description = Farben, Designs und Erscheinungsbild anpassen
 settings-theme-preset = Design-Vorlage
 settings-theme-custom-css = Benutzerdefiniertes CSS
 settings-theme-import = Design importieren
 settings-theme-export = Design exportieren
+settings-color-mode = Farbmodus
+settings-color-overrides = Farbanpassung
+settings-theme-apply-css = CSS anwenden
+settings-css-hint = Kommentierung einer Variable aufheben, um die Design-Vorlage zu überschreiben. Der Schalter aktiviert/deaktiviert diese CSS-Anpassungen.
+settings-css-reset-template = Vorlage zurücksetzen
 settings-language = Sprache
 settings-language-description = Wählen Sie Ihre bevorzugte Sprache
 settings-appearance = Erscheinungsbild
@@ -114,6 +119,19 @@ settings-backup-enabled = Aktiviert
 settings-backup-auth-success = Verbunden!
 settings-backup-auth-failed = Authentifizierung fehlgeschlagen
 settings-backup-no-servers = Keine Backup-Server konfiguriert.
+settings-backup-wizard-step1 = Server-URL
+settings-backup-wizard-step2 = Verbinden
+settings-backup-step1-hint = Gib die URL deines Poly-Backup-Servers ein
+settings-backup-step2-hint = Vergib einen Namen und gib die Zugangsdaten ein
+settings-backup-check-btn = Verbindung prüfen
+settings-backup-checking = Wird geprüft…
+settings-backup-continue = Weiter
+settings-backup-back = Zurück
+settings-backup-finish = Einrichtung abschließen
+settings-backup-url-empty = Bitte gib eine Server-URL ein
+settings-backup-password-required = 🔒 Passwort erforderlich
+settings-backup-no-password-required = ✓ Kein Passwort erforderlich
+settings-backup-server-full = Server ist voll — Registrierungen deaktiviert
 
 # Identity Settings
 settings-identity-your-id-label = Deine Poly-Konto-ID
@@ -126,10 +144,11 @@ settings-identity-close = Schließen
 settings-identity-no-identity = Identität noch nicht generiert. Schließe zuerst den Einrichtungsassistenten ab.
 
 # Design-Vorlagen
-theme-neutral-dark = Neutral Dunkel
-theme-purple = Lila (Discord-inspiriert)
-theme-red = Rot (Stoat-inspiriert)
-theme-custom = Benutzerdefiniert
+theme-blue = Blau
+theme-purple = Lila
+theme-red = Rot
+theme-green = Grün
+theme-monotone = Monoton
 
 # Backends
 backend-stoat = Stoat

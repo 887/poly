@@ -183,108 +183,112 @@ fn main() {
         .launch(DevtoolsShell);
 }
 
-// ─── Dioxus Wrapper Component ─────────────────────────────────────────────────
+// ─── Coroutine Tasks ──────────────────────────────────────────────────────────
 
-#[component]
-fn DevtoolsShell() -> Element {
-    // Coroutine: drives JS eval requests using dioxus's built-in eval().
-    use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let Some(eval_rx_mutex) = EVAL_RX.get() else {
-            tracing::error!("EVAL_RX not initialized");
-            return;
+/// Drives JS eval requests using dioxus's built-in eval().
+///
+/// Blocks until the channel is exhausted (i.e. the component is unmounted).
+async fn run_eval_coroutine() {
+    let Some(eval_rx_mutex) = EVAL_RX.get() else {
+        tracing::error!("EVAL_RX not initialized");
+        return;
+    };
+    let Some(mut rx) = eval_rx_mutex.lock().await.take() else {
+        tracing::error!("EVAL_RX receiver already consumed");
+        return;
+    };
+    while let Some(req) = rx.recv().await {
+        let result: Result<serde_json::Value, _> = eval(&req.js).await;
+        let out = match result {
+            Ok(v) => Ok(match v {
+                serde_json::Value::String(s) => s,
+                other => other.to_string(),
+            }),
+            Err(e) => Err(e.to_string()),
         };
-        let Some(mut rx) = eval_rx_mutex.lock().await.take() else {
-            tracing::error!("EVAL_RX receiver already consumed");
-            return;
-        };
+        let _ = req.resp.send(out);
+    }
+}
 
-        while let Some(req) = rx.recv().await {
-            let result: Result<serde_json::Value, _> = eval(&req.js).await;
-            let out = match result {
-                Ok(v) => Ok(match v {
-                    serde_json::Value::String(s) => s,
-                    other => other.to_string(),
-                }),
-                Err(e) => Err(e.to_string()),
-            };
-            let _ = req.resp.send(out);
-        }
-    });
+/// Captures WebKit content via the native snapshot API.
+///
+/// Must run on the GTK main thread — all dioxus-desktop coroutines do.
+async fn run_screenshot_coroutine() {
+    let Some(screenshot_rx_mutex) = SCREENSHOT_RX.get() else {
+        tracing::error!("SCREENSHOT_RX not initialized");
+        return;
+    };
+    let Some(mut rx) = screenshot_rx_mutex.lock().await.take() else {
+        tracing::error!("SCREENSHOT_RX receiver already consumed");
+        return;
+    };
+    // Grab the WebView handle once — GObject clone is cheap.
+    let wv = {
+        use wry::WebViewExtUnix as _;
+        dioxus::desktop::window().webview.webview()
+    };
+    while let Some(req) = rx.recv().await {
+        use std::sync::mpsc;
+        use webkit2gtk::WebViewExt as _;
 
-    // Coroutine: captures WebKit content via webkit2gtk's native snapshot API.
-    // Runs on the GTK main thread (all dioxus-desktop coroutines do), which is
-    // required for calling GLib/GDK/WebKit functions.
-    use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let Some(screenshot_rx_mutex) = SCREENSHOT_RX.get() else {
-            tracing::error!("SCREENSHOT_RX not initialized");
-            return;
-        };
-        let Some(mut rx) = screenshot_rx_mutex.lock().await.take() else {
-            tracing::error!("SCREENSHOT_RX receiver already consumed");
-            return;
-        };
-
-        // Grab the webkit2gtk WebView once — it's a GObject clone (cheap).
-        let wv = {
-            use wry::WebViewExtUnix as _;
-            dioxus::desktop::window().webview.webview()
-        };
-
-        while let Some(req) = rx.recv().await {
-            use std::sync::mpsc;
-            use webkit2gtk::WebViewExt as _;
-
-            let (tx, poll_rx) = mpsc::channel::<Result<Vec<u8>, String>>();
-
-            wv.snapshot(
-                webkit2gtk::SnapshotRegion::Visible,
-                webkit2gtk::SnapshotOptions::empty(),
-                webkit2gtk::gio::Cancellable::NONE,
-                move |result: Result<cairo::Surface, webkit2gtk::glib::Error>| match result {
-                    Ok(surface) => {
-                        let mut buf: Vec<u8> = Vec::new();
-                        match surface.write_to_png(&mut buf) {
-                            Ok(_) => {
-                                let _ = tx.send(Ok(buf));
-                            }
-                            Err(e) => {
-                                let _ = tx.send(Err(e.to_string()));
-                            }
+        let (cb_tx, poll_rx) = mpsc::channel::<Result<Vec<u8>, String>>();
+        wv.snapshot(
+            webkit2gtk::SnapshotRegion::Visible,
+            webkit2gtk::SnapshotOptions::empty(),
+            webkit2gtk::gio::Cancellable::NONE,
+            move |result: Result<cairo::Surface, webkit2gtk::glib::Error>| match result {
+                Ok(surface) => {
+                    let mut buf: Vec<u8> = Vec::new();
+                    match surface.write_to_png(&mut buf) {
+                        Ok(_) => {
+                            let _ = cb_tx.send(Ok(buf));
+                        }
+                        Err(e) => {
+                            let _ = cb_tx.send(Err(e.to_string()));
                         }
                     }
-                    Err(e) => {
-                        let _ = tx.send(Err(e.to_string()));
-                    }
-                },
-            );
-
-            // Yield control to the GTK main loop in small slices so the
-            // snapshot callback can fire, then collect the result.
-            let result = loop {
-                tokio::time::sleep(std::time::Duration::from_millis(16)).await;
-                match poll_rx.try_recv() {
-                    Ok(r) => break r,
-                    Err(mpsc::TryRecvError::Empty) => continue,
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        break Err("Screenshot channel disconnected".to_string());
-                    }
                 }
-            };
+                Err(e) => {
+                    let _ = cb_tx.send(Err(e.to_string()));
+                }
+            },
+        );
+        // Poll in 16 ms slices so the GTK main loop can fire the snapshot callback.
+        let result = loop {
+            tokio::time::sleep(std::time::Duration::from_millis(16)).await;
+            match poll_rx.try_recv() {
+                Ok(r) => break r,
+                Err(mpsc::TryRecvError::Empty) => continue,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    break Err("Screenshot channel disconnected".to_string());
+                }
+            }
+        };
+        let _ = req.resp.send(result);
+    }
+}
 
-            let _ = req.resp.send(result);
-        }
+// ─── Dioxus Wrapper Component ─────────────────────────────────────────────────
+
+/// Root component for the devtools build.
+///
+/// Spawns the eval and screenshot coroutines, then starts the HTTP server,
+/// before delegating rendering entirely to [`App`].
+#[component]
+fn DevtoolsShell() -> Element {
+    use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        run_eval_coroutine().await;
     });
-
-    // Future: start the axum HTTP server (background, non-blocking).
+    use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        run_screenshot_coroutine().await;
+    });
     use_future(|| async {
         if let Err(e) = start_devtools_server().await {
             tracing::error!("DevTools HTTP server stopped: {e}");
         }
     });
-
     rsx! {
         App {}
-
     }
 }
 

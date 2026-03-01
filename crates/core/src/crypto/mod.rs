@@ -15,11 +15,10 @@
 //! and 96-bit random nonce. Wire format: `nonce (12 bytes) || ciphertext+tag`.
 
 use chacha20poly1305::{
-    ChaCha20Poly1305, KeyInit, Key, Nonce,
-    aead::{Aead, OsRng as AeadOsRng},
+    ChaCha20Poly1305, Key, KeyInit, Nonce,
+    aead::{Aead, AeadCore, OsRng as AeadOsRng},
 };
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -42,7 +41,9 @@ pub struct PublicIdentity {
 impl Identity {
     /// Generate a new random identity keypair.
     pub fn generate() -> Self {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        // AeadOsRng is rand_core::OsRng (via chacha20poly1305::aead re-export).
+        // ed25519-dalek 2.1 also pins rand_core 0.6 so these ZST types are the same.
+        let signing_key = SigningKey::generate(&mut AeadOsRng);
         Self { signing_key }
     }
 
@@ -166,20 +167,19 @@ pub enum CryptoError {
 /// Returns [`CryptoError::Encryption`] if the AEAD cipher fails (practically impossible
 /// for a fresh random nonce, but handled for correctness).
 pub fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
-    use rand::RngCore;
     let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
 
-    let mut nonce_bytes = [0u8; 12];
-    AeadOsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    // generate_nonce uses AeadOsRng (rand_core 0.6 OsRng re-exported by the aead crate).
+    // This is the same rand_core version ed25519-dalek pins, so no extra dep is needed.
+    let nonce = ChaCha20Poly1305::generate_nonce(&mut AeadOsRng);
 
     let ciphertext = cipher
-        .encrypt(nonce, data)
+        .encrypt(&nonce, data)
         .map_err(|e| CryptoError::Encryption(e.to_string()))?;
 
     // Wire format: nonce || ciphertext+tag
     let mut out = Vec::with_capacity(12 + ciphertext.len());
-    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(nonce.as_slice());
     out.extend_from_slice(&ciphertext);
     Ok(out)
 }
@@ -196,9 +196,9 @@ pub fn decrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
     let nonce_bytes = data.get(..12).ok_or_else(|| {
         CryptoError::Encryption("ciphertext too short — missing nonce (need ≥ 12 bytes)".into())
     })?;
-    let ciphertext = data.get(12..).ok_or_else(|| {
-        CryptoError::Encryption("ciphertext too short — missing payload".into())
-    })?;
+    let ciphertext = data
+        .get(12..)
+        .ok_or_else(|| CryptoError::Encryption("ciphertext too short — missing payload".into()))?;
 
     let nonce = Nonce::from_slice(nonce_bytes);
     let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
