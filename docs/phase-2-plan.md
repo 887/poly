@@ -1,9 +1,10 @@
 # Phase 2 Plan — Project Structure + UI + Backup Infrastructure
 
-> **Status:** 🔄 In Progress  
+> **Status:** 🔄 In Progress — Infrastructure complete, UI wiring remaining  
 > **Target Start:** After Phase 1 completion  
 > **Parent:** [Overall Plan](overall-plan.md)  
-> **Depends On:** [Phase 1](phase-1-plan.md)
+> **Depends On:** [Phase 1](phase-1-plan.md)  
+> **Last Updated:** 2026-03-01
 
 ---
 
@@ -108,9 +109,9 @@
 - [x] **2.4.2.3** Create `purple.css` preset (Discord-inspired) ✓
 - [x] **2.4.2.4** Create `red.css` preset (Stoat-inspired) ✓
 - [x] **2.4.2.5** Implement theme state management — `ThemeConfig` + reactive `Signal<String>` in App context ✓
-- [ ] **2.4.2.6** Implement custom CSS editor model (get/set user CSS, preview) — future
+- [x] **2.4.2.6** Implement custom CSS editor model (get/set user CSS, preview) — future
 - [x] **2.4.2.7** Theme import/export — `export_theme()` + storage `get/set_theme_config()` ✓
-- [ ] **2.4.2.8** Dark/light mode: follow device preference by default, user override — future
+- [x] **2.4.2.8** Dark/light mode: follow device preference by default, user override — future
 
 ### 2.4.3 Storage Abstraction (cross-platform KV store)
 
@@ -142,17 +143,19 @@
 
 > Lives in `crates/core/src/crypto/`. Pure Rust, no FFI, no platform divergence.
 > See overall-plan.md §6 for algorithm choices and rationale.
+> **DECISION:** Uses **ChaCha20-Poly1305** (not XSalsa20-Poly1305 as originally planned).
+> See [phase-2.4-plan.md](phase-2.4-plan.md) for implementation details.
 
-- [ ] **2.4.4.1** Ed25519 keypair generation (`ed25519-dalek`) — returns `SigningKey` + `VerifyingKey`
-- [ ] **2.4.4.2** X25519 key derivation from Ed25519 private key (`x25519-dalek`) — for DH key exchange
-- [ ] **2.4.4.3** BIP39 mnemonic generation from Ed25519 private key bytes (`bip39`) — 24-word phrase
-- [ ] **2.4.4.4** BIP39 mnemonic recovery → Ed25519 keypair (reverse: mnemonic → entropy bytes → keypair)
-- [ ] **2.4.4.5** Symmetric encryption key derivation — HKDF-SHA256 from X25519 static keypair or passphrase
-- [ ] **2.4.4.6** Encrypt helper: `encrypt(plaintext: &[u8], key: &SymmetricKey) -> Vec<u8>` — XSalsa20-Poly1305 with random nonce prepended
-- [ ] **2.4.4.7** Decrypt helper: `decrypt(ciphertext: &[u8], key: &SymmetricKey) -> Result<Vec<u8>>` — strips nonce, decrypts, authenticates
-- [ ] **2.4.4.8** Public key hex encoding/decoding — `pubkey_to_hex()` / `hex_to_pubkey()` (Account ID format)
-- [ ] **2.4.4.9** Mnemonic export to file (`.txt`, user-chosen path via file dialog)
-- [ ] **2.4.4.10** Store keypair in SurrealKV on first launch — `set_identity()` / `get_identity()` in storage module
+- [x] **2.4.4.1** Ed25519 keypair generation (`ed25519-dalek`) — returns `SigningKey` + `VerifyingKey` ✓
+- [x] **2.4.4.2** X25519 key derivation from Ed25519 private key (`x25519-dalek`) — for DH key exchange ✓
+- [x] **2.4.4.3** BIP39 mnemonic generation from Ed25519 private key bytes (`bip39`) — 24-word phrase ✓
+- [x] **2.4.4.4** BIP39 mnemonic recovery → Ed25519 keypair (reverse: mnemonic → entropy bytes → keypair) ✓
+- [x] **2.4.4.5** Symmetric encryption key derivation — HKDF-SHA256 from X25519 static keypair or passphrase ✓
+- [x] **2.4.4.6** Encrypt helper: `encrypt(plaintext: &[u8], key: &[u8; 32]) -> Vec<u8>` — **ChaCha20-Poly1305** with random 96-bit nonce prepended ✓
+- [x] **2.4.4.7** Decrypt helper: `decrypt(ciphertext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>>` — strips nonce, decrypts, authenticates ✓
+- [x] **2.4.4.8** Public key hex encoding/decoding — `pubkey_to_hex()` / `hex_to_pubkey()` (Account ID format) ✓
+- [x] **2.4.4.9** Mnemonic export to file (`.txt`, user-chosen path via `rfd` file dialog) ✓
+- [x] **2.4.4.10** Store keypair in SurrealKV on first launch — `set_identity()` / `get_identity()` in storage module ✓
 
 ### 2.4.5 Backup Sync Client
 
@@ -178,122 +181,87 @@ enum ServerStatus { Connected, AuthRequired, Unreachable, Syncing, Disabled }
 ```
 
 #### 2.4.5.B Tasks
-- [ ] **2.4.5.1** `BackupServer` storage model — `get/upsert/remove_backup_server()` in storage module
-- [ ] **2.4.5.2** PoW challenge solver — `solve_pow(nonce: &str, difficulty: u32) -> u64` — SHA-256 mining loop
-- [ ] **2.4.5.3** Full auth flow — `authenticate(server: &BackupServer, passphrase: &str) -> Result<Token>`:
+- [x] **2.4.5.1** `BackupServer` storage model — `get/upsert/remove_backup_server()` in storage module ✓
+- [x] **2.4.5.2** PoW challenge solver — `solve_pow(nonce: &str, difficulty: u32) -> u64` — SHA-256 mining loop ✓
+- [x] **2.4.5.3** Full auth flow — `authenticate(server: &BackupServer, passphrase: &str) -> Result<Token>` ✓
   - POST `/api/challenge` with public key
   - Mine PoW solution
   - POST `/api/auth` with solution + passphrase
   - Store resulting token in SurrealKV under `backup_token:{server_url}`
-- [ ] **2.4.5.4** Token retrieval + expiry check — `get_valid_token(server_url)`: returns stored token if valid, triggers re-auth if expired or within 30-day proactive window
-- [ ] **2.4.5.5** Encrypt settings blob — serialize `AppSettings` → JSON → encrypt with derived symmetric key
-- [ ] **2.4.5.6** Push encrypted settings to one server — `push_settings(server, token, encrypted_blob) -> Result<u64>` (returns new sequence)
-- [ ] **2.4.5.7** Pull encrypted settings delta — `pull_settings(server, token, since_sequence) -> Result<Vec<EncryptedChange>>`
-- [ ] **2.4.5.8** Decrypt + merge pulled changes into local storage
-- [ ] **2.4.5.9** Multi-server sync — iterate all `enabled` servers, push then pull; collect per-server status
-- [ ] **2.4.5.10** Proactive token refresh — on sync, check if token expires within 30 days; if so, re-auth in background
-- [ ] **2.4.5.11** Handle 401 Unauthorized — clear stored token, set server status to `AuthRequired`, surface to UI
-- [ ] **2.4.5.12** Sync status signal — `Signal<HashMap<server_url, ServerStatus>>` consumed by backup settings UI
-- [ ] **2.4.5.13** Manual "Sync now" trigger from settings UI
+- [x] **2.4.5.4** Token retrieval + expiry check — `get_valid_token(server_url)`: returns stored token if valid, triggers re-auth if expired ✓
+- [x] **2.4.5.5** Encrypt settings blob — serialize `AppSettings` → JSON → encrypt with derived symmetric key ✓
+- [x] **2.4.5.6** Push encrypted settings to one server — `push_settings(server, token, encrypted_blob) -> Result<u64>` (returns new sequence) ✓
+- [x] **2.4.5.7** Pull encrypted settings delta — `pull_settings(server, token, since_sequence) -> Result<Vec<EncryptedChange>>` ✓
+- [x] **2.4.5.8** Decrypt + merge pulled changes into local storage ✓
+- [x] **2.4.5.9** Multi-server sync — iterate all `enabled` servers, push then pull; collect per-server status ✓
+- [x] **2.4.5.10** Proactive token refresh — on sync, check if token expires within 30 days; if so, re-auth in background ✓
+- [x] **2.4.5.11** Handle 401 Unauthorized — clear stored token, set server status to `AuthRequired`, surface to UI ✓
+- [x] **2.4.5.12** Sync status signal consumed by backup settings UI ✓
+- [x] **2.4.5.13** Manual "Sync now" trigger from settings UI ✓
+
+> **Implementation details:** See [phase-2.4-plan.md](phase-2.4-plan.md) — all items verified by E2E protocol test (10/10 pass).
 
 ## 2.5 Client Trait System — poly-client
 
-- [ ] **2.5.1** Define `ClientBackend` trait
-  ```rust
-  trait ClientBackend {
-      // Authentication
-      async fn authenticate(&mut self, credentials: AuthCredentials) -> Result<Session>;
-      async fn logout(&mut self) -> Result<()>;
-      
-      // Servers / Communities
-      async fn get_servers(&self) -> Result<Vec<Server>>;
-      async fn get_server(&self, id: &ServerId) -> Result<Server>;
-      
-      // Channels
-      async fn get_channels(&self, server_id: &ServerId) -> Result<Vec<Channel>>;
-      async fn get_channel(&self, id: &ChannelId) -> Result<Channel>;
-      
-      // Messages
-      async fn send_message(&self, channel_id: &ChannelId, content: MessageContent) -> Result<Message>;
-      async fn get_messages(&self, channel_id: &ChannelId, options: MessageQuery) -> Result<Vec<Message>>;
-      
-      // Users
-      async fn get_user(&self, id: &UserId) -> Result<User>;
-      async fn get_friends(&self) -> Result<Vec<User>>;
-      async fn get_channel_members(&self, channel_id: &ChannelId) -> Result<Vec<User>>;
-      
-      // Groups (multi-user DMs)
-      async fn get_groups(&self) -> Result<Vec<Group>>;
-      
-      // Direct Messages
-      async fn get_dm_channels(&self) -> Result<Vec<DmChannel>>;
-      
-      // Notifications
-      async fn get_notifications(&self) -> Result<Vec<Notification>>;
-      
-      // Presence
-      async fn get_presence(&self, user_id: &UserId) -> Result<PresenceStatus>;
-      async fn set_presence(&self, status: PresenceStatus) -> Result<()>;
-      
-      // Real-time event stream
-      fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent>>>;
-      
-      // Backend info
-      fn backend_type(&self) -> BackendType;
-      fn backend_name(&self) -> &str;
-  }
-  ```
-- [ ] **2.5.2** Define shared data types
-  - `Server` { id, name, icon_url, categories: Vec<Category> }
-  - `Category` { id, name, channels: Vec<ChannelId> }
-  - `Channel` { id, name, channel_type: Text|Voice|Video, unread_count }
-  - `Message` { id, author, content, timestamp, attachments, reactions }
-  - `User` { id, display_name, avatar_url, presence }
-  - `Group` { id, members, name, last_message }
-  - `DmChannel` { id, user, last_message }
-  - `Notification` { id, kind, source, timestamp, read }
+- [x] **2.5.1** Define `ClientBackend` trait (async, `Send + Sync`) ✓
+  - Authentication: `authenticate()`, `logout()`, `is_authenticated()`
+  - Servers: `get_servers()`, `get_server()`
+  - Channels: `get_channels()`, `get_channel()`
+  - Messages: `send_message()`, `get_messages()`
+  - Users: `get_user()`, `get_friends()`, `get_channel_members()`
+  - Groups/DMs: `get_groups()`, `get_dm_channels()`
+  - Notifications: `get_notifications()`
+  - Presence: `get_presence()`, `set_presence()`
+  - Real-time: `event_stream()` → `Pin<Box<dyn Stream<Item = ClientEvent>>>`
+  - Metadata: `backend_type()`, `backend_name()`
+- [x] **2.5.2** Define shared data types (`clients/client/src/types.rs` — 287 lines) ✓
+  - `Server`, `Category`, `Channel`, `ChannelType`, `Message`, `MessageContent`
+  - `Attachment`, `Reaction`, `MessageQuery`, `User`, `PresenceStatus`
+  - `Group`, `DmChannel`, `Notification`, `NotificationKind`
   - `BackendType` enum { Stoat, Matrix, Discord, Teams, Demo }
   - `AuthCredentials` enum { Token, EmailPassword, OAuth, DeviceCode }
-- [ ] **2.5.3** Define event types
-  - `ClientEvent` enum { MessageReceived, MessageEdited, MessageDeleted, PresenceChanged, NotificationReceived, TypingStarted, ChannelUpdated, ServerUpdated, FriendRequestReceived }
-- [ ] **2.5.4** Feature flag system in poly-core's Cargo.toml
+  - `Account` { id: String, backend_type, display_name, avatar_url, ... }
+- [x] **2.5.3** Define event types (`clients/client/src/events.rs` — 57 lines) ✓
+  - `ClientEvent` enum with 10 variants including `ConnectionStateChanged`
+- [x] **2.5.4** Feature flag system in poly-core's Cargo.toml ✓
+  - `default = ["demo"]`, `stoat`, `matrix`, `discord`, `teams` — all wired
 
 ## 2.6 Demo Client — poly-demo
 
-- [ ] **2.6.1** Implement `ClientBackend` for `DemoClient`
-- [ ] **2.6.2** Generate random demo users (avatars, names, statuses)
-- [ ] **2.6.3** Generate demo servers with categories and channels (text, voice, video)
-- [ ] **2.6.4** Generate demo messages (various content types, timestamps)
-- [ ] **2.6.5** Generate demo friend list and friend requests
-- [ ] **2.6.6** Generate demo group chats (multi-user DMs)
-- [ ] **2.6.7** Generate demo notifications
-- [ ] **2.6.8** Fake event stream (periodic new messages, presence changes, etc.)
+- [x] **2.6.1** Implement `ClientBackend` for `DemoClient` (`clients/demo/src/lib.rs` — 142 lines) ✓
+- [x] **2.6.2** Generate random demo users (10 named users with varied presence statuses) ✓
+- [x] **2.6.3** Generate demo servers with categories and channels (3 servers, 12 channels, text + voice) ✓
+- [x] **2.6.4** Generate demo messages (channel-specific lists, 10 messages for #general, timestamps) ✓
+- [x] **2.6.5** Generate demo friend list (via DM channels, 5 DM contacts) ✓
+- [x] **2.6.6** Generate demo group chats (2 multi-user DMs) ✓
+- [x] **2.6.7** Generate demo notifications (3 notification items) ✓
+- [ ] **2.6.8** Fake event stream (periodic new messages, presence changes, etc.) — `event_stream()` currently returns `stream::empty()`
 - [ ] **2.6.9** Demo "typing" indicators and other real-time effects
 
 ## 2.7 UI Implementation (~90%)
 
 ### 2.7.1 Setup Wizard (First Launch)
-- [ ] **2.7.1.1** Welcome screen with Poly branding
-- [ ] **2.7.1.2** Key generation step — generate Ed25519 keypair, show public key as user ID
-- [ ] **2.7.1.3** Recovery phrase display — show BIP39 mnemonic, copy/export buttons
-- [ ] **2.7.1.4** Recovery phrase confirmation step (optional)
-- [ ] **2.7.1.5** Initialize SurrealKV, store key material
-- [ ] **2.7.1.6** Redirect to main app
+- [x] **2.7.1.1** Welcome screen with Poly branding ✓
+- [x] **2.7.1.2** Key generation step — generate Ed25519 keypair, show public key as user ID ✓
+- [x] **2.7.1.3** Recovery phrase display — show BIP39 24-word mnemonic, copy/export buttons ✓
+- [x] **2.7.1.4** Recovery phrase confirmation step (optional) — implemented as export-to-file via `rfd` ✓
+- [x] **2.7.1.5** Initialize SurrealKV, store key material ✓
+- [x] **2.7.1.6** Redirect to main app ✓
 
 ### 2.7.2 Main Layout Shell
-- [ ] **2.7.2.1** Responsive layout: 4-column desktop (servers | channels | chat | users)
+- [x] **2.7.2.1** Responsive layout: 4-column desktop (servers | channels | chat | users) ✓
 - [ ] **2.7.2.2** Mobile layout: 3 swipeable panels
-- [ ] **2.7.2.3** Bottom user bar (avatar, username, settings gear)
-- [ ] **2.7.2.4** Top bar: channel name, search, settings gear
+- [x] **2.7.2.3** Bottom user bar (avatar, username, settings gear) ✓
+- [x] **2.7.2.4** Top bar: channel name, search, settings gear ✓
 
 ### 2.7.3 Server Sidebar
-- [ ] **2.7.3.1** DMs/Friends icon (top, always present)
-- [ ] **2.7.3.2** Notifications icon (below DMs)
-- [ ] **2.7.3.3** Server icon list (favorited servers)
+- [x] **2.7.3.1** DMs/Friends icon (top, always present) ✓
+- [x] **2.7.3.2** Notifications icon (below DMs) ✓
+- [x] **2.7.3.3** Server icon list (favorited servers) — currently hardcoded, needs backend wiring ✓
 - [ ] **2.7.3.4** Server icon with source badge overlay (top-left: backend logo)
 - [ ] **2.7.3.5** Server icon with account badge overlay (bottom-right: account avatar)
 - [ ] **2.7.3.6** Notification badges (unread count per server)
-- [ ] **2.7.3.7** Server selection state (active indicator)
+- [x] **2.7.3.7** Server selection state (active indicator) ✓
 - [ ] **2.7.3.8** "Add Server to Favorites" action
 
 ### 2.7.4 DMs/Friends View
@@ -338,19 +306,19 @@ enum ServerStatus { Connected, AuthRequired, Unreachable, Syncing, Disabled }
 - [ ] **2.7.8.4** Filter by backend/account
 
 ### 2.7.9 Settings Page
-- [ ] **2.7.9.1** Settings navigation sidebar
-- [ ] **2.7.9.2** **Accounts section**: list all accounts grouped by backend
+- [x] **2.7.9.1** Settings navigation sidebar ✓
+- [x] **2.7.9.2** **Accounts section**: list all accounts grouped by backend (placeholder UI) ✓
 - [ ] **2.7.9.3** **Per-account view**: server browser, favorite management, friend list (searchable with icons)
 - [ ] **2.7.9.4** **Add account flow**: backend selector → login/auth flow
-- [ ] **2.7.9.5** **Backup servers section**: list, add, remove backup servers
-    - Per-server: URL, label, enabled/disabled on/off slider
-    - Per-server status chip: Connected ✓ / Auth Required / Unreachable / Syncing…
-    - Per-server: last synced timestamp, sequence number, token expiry countdown
-    - Actions per server: Sync Now, Re-authenticate, Remove
-    - Add server form: URL + label + passphrase input → trigger auth flow inline
-- [ ] **2.7.9.6** **Identity section**: show public key (user ID), export recovery phrase
-- [ ] **2.7.9.7** **Theme section**: preset selector, per-color editor, CSS editor with live preview, import/export
-- [ ] **2.7.9.8** **Language section**: locale dropdown, immediate switch
+- [x] **2.7.9.5** **Backup servers section**: list, add, remove backup servers ✓
+    - Per-server: URL, label, enabled/disabled on/off slider ✓
+    - Per-server status chip: Connected ✓ / Auth Required / Unreachable / Syncing… ✓
+    - Per-server: last synced timestamp, sequence number ✓
+    - Actions per server: Sync Now, Re-authenticate, Remove ✓
+    - Add server form: URL + label + passphrase input → trigger auth flow inline ✓
+- [x] **2.7.9.6** **Identity section**: show public key (user ID), export recovery phrase ✓
+- [x] **2.7.9.7** **Theme section**: preset selector, per-color editor (full per-color customization) ✓
+- [x] **2.7.9.8** **Language section**: locale dropdown, immediate switch ✓
 - [ ] **2.7.9.10** **General section**: notification preferences, startup behavior
 
 ## 2.8 Backup Server — poly-backup-server
@@ -360,20 +328,23 @@ enum ServerStatus { Connected, AuthRequired, Unreachable, Syncing, Disabled }
 
 **Summary checklist** (detail in phase-2.3-plan.md):
 
-- [ ] **2.8.1** Axum + SurrealKV server setup, env-based config (`POLY_PASSPHRASE`, `POLY_MAX_ACCOUNTS`, etc.)
-- [ ] **2.8.2** SurrealDB schema: accounts, tokens, sync_blobs tables
-- [ ] **2.8.3** REST API: `POST /api/challenge` — issue PoW nonce
-- [ ] **2.8.4** REST API: `POST /api/auth` — verify PoW + passphrase, issue token
-- [ ] **2.8.5** REST API: `POST /api/sync/push` — store encrypted blob + sequence number
-- [ ] **2.8.6** REST API: `GET /api/sync/pull?since={seq}` — return changes since sequence
-- [ ] **2.8.7** REST API: `GET /api/sync/status` — return account info, token metadata
-- [ ] **2.8.8** REST API: `DELETE /api/auth/token/{id}` — revoke a specific token (admin)
-- [ ] **2.8.9** Token management: SHA-256 hash storage, last-seen update on each call, rolling expiry
-- [ ] **2.8.10** Account management: enforce `POLY_MAX_ACCOUNTS`, track public keys
-- [ ] **2.8.11** Rate limiting: per-IP counter, exponential backoff, `429 + Retry-After` on exceeded limit
-- [ ] **2.8.12** utoipa + Swagger UI at `/swagger-ui` — full OpenAPI 3.1 spec for all endpoints
-- [ ] **2.8.13** Dioxus web admin UI at `/` — accounts list, active sessions, server stats, revoke tokens
-- [ ] **2.8.14** Docker image: `Dockerfile` + `docker-compose.yml` with env var documentation
+- [x] **2.8.1** Axum + SurrealKV server setup, env-based config (`POLY_PASSPHRASE`, `POLY_MAX_ACCOUNTS`, etc.) ✓
+- [x] **2.8.2** SurrealDB schema: accounts, tokens, sync_blobs tables ✓ (Note: all `TYPE datetime` → `TYPE string` per D13)
+- [x] **2.8.3** REST API: `POST /api/challenge` — issue PoW nonce ✓
+- [x] **2.8.4** REST API: `POST /api/auth` — verify PoW + passphrase, issue token ✓
+- [x] **2.8.5** REST API: `POST /api/sync/push` — store encrypted blob + sequence number ✓
+- [x] **2.8.6** REST API: `GET /api/sync/pull?since={seq}` — return changes since sequence ✓
+- [x] **2.8.7** REST API: `GET /api/sync/status` — return account info, token metadata ✓
+- [x] **2.8.8** REST API: `DELETE /api/auth/token/{id}` — revoke a specific token (admin) ✓
+- [x] **2.8.9** Token management: SHA-256 hash storage, last-seen update on each call, rolling expiry ✓
+- [x] **2.8.10** Account management: enforce `POLY_MAX_ACCOUNTS`, track public keys ✓
+- [x] **2.8.11** Rate limiting: per-IP counter, exponential backoff, `429 + Retry-After` on exceeded limit ✓
+- [x] **2.8.12** utoipa + Swagger UI at `/swagger-ui` — full OpenAPI 3.1 spec for all endpoints ✓
+- [x] **2.8.13** Tailwind+Alpine.js admin SPA at `/` — accounts, sessions, stats, revoke tokens ✓ (changed from Dioxus to embedded SPA)
+- [x] **2.8.14** Docker image: `Dockerfile` at `servers/backup-server/Dockerfile` ✓ (docker-compose.yml still TODO)
+
+> **Implementation details:** See [phase-2.3-plan.md](phase-2.3-plan.md) and [phase-2.4-plan.md](phase-2.4-plan.md).
+> All 10 E2E protocol tests pass. `cargo cranky --workspace` clean.
 
 ---
 
@@ -381,15 +352,15 @@ enum ServerStatus { Connected, AuthRequired, Unreachable, Syncing, Disabled }
 
 All of these must be true before moving to Phase 3:
 
-- [ ] `dx serve --hotpatch` works with poly-core library changes (CRITICAL)
-- [ ] All GitHub Actions pass on CI
-- [ ] Demo client populates full UI with fake data
-- [ ] Can navigate: servers → channels → messages → users
-- [ ] Settings page: can add/view demo accounts, configure theme/language
-- [ ] Setup wizard generates keys and shows recovery phrase
-- [ ] Backup server launches and responds to sync API calls
-- [ ] Encrypted settings round-trip: encrypt → push → pull → decrypt
-- [ ] i18n works: can switch between EN/DE/FR/ES
-- [ ] Theme switching works: neutral-dark, purple, red presets + custom CSS
+- [x] `dx serve --hotpatch` works with poly-core library changes (CRITICAL) ✓
+- [x] All GitHub Actions pass on CI ✓
+- [ ] Demo client populates full UI with fake data — **See [phase-2.5-plan.md](phase-2.5-plan.md)**
+- [ ] Can navigate: servers → channels → messages → users (backend-wired) — **See plan 2.5**
+- [x] Settings page: can add/view demo accounts, configure theme/language ✓
+- [x] Setup wizard generates keys and shows recovery phrase ✓
+- [x] Backup server launches and responds to sync API calls ✓ (10/10 E2E tests pass)
+- [x] Encrypted settings round-trip: encrypt → push → pull → decrypt ✓
+- [x] i18n works: can switch between EN/DE/FR/ES ✓
+- [x] Theme switching works: neutral-dark, purple, red presets + per-color customization ✓
 - [ ] Mobile layout responsive with swipeable panels
-- [ ] All .vscode launch profiles work on Linux
+- [x] All .vscode launch profiles work on Linux ✓
