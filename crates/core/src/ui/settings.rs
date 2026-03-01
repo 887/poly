@@ -139,7 +139,7 @@ pub fn SettingsPage(app_state: Signal<AppState>) -> Element {
                         ThemeSettings {}
                     },
                     SettingsSection::General => rsx! {
-                        GeneralSettings {}
+                        GeneralSettings { app_state }
                     },
                 }
             }
@@ -1442,14 +1442,131 @@ fn LanguageSettings() -> Element {
     }
 }
 
+#[derive(Clone, Copy)]
+enum ResetKind {
+    User,
+    Nuke,
+}
+
+// DECISION(DX-2.5.1): Reset flow uses ClientManager context so all active
+// backends can be logged out before storage is wiped.
+async fn run_reset_flow(
+    kind: ResetKind,
+    mut client_manager: Signal<crate::client_manager::ClientManager>,
+    mut chat_data: Signal<crate::state::ChatData>,
+    mut app_state: Signal<AppState>,
+) -> Result<(), String> {
+    let account_ids = client_manager.read().active_account_ids();
+    for account_id in account_ids {
+        let backend = client_manager.read().get_backend(&account_id);
+        if let Some(backend_handle) = backend {
+            let mut guard = backend_handle.write().await;
+            if let Err(err) = guard.logout().await {
+                tracing::warn!("Logout failed for account {account_id}: {err}");
+            }
+        }
+    }
+    client_manager.write().clear_all_backends();
+
+    chat_data.set(crate::state::ChatData::default());
+    let nav = crate::state::NavigationState {
+        view: crate::state::View::Setup,
+        ..Default::default()
+    };
+    {
+        let mut state = app_state.write();
+        state.is_setup_complete = false;
+        state.nav = nav;
+    }
+
+    let Some(storage) = crate::STORAGE.get() else {
+        return Err(t("settings-reset-error-no-storage"));
+    };
+
+    match kind {
+        ResetKind::User => storage
+            .reset_user_data()
+            .await
+            .map_err(|e| format!("{}: {e}", t("settings-reset-error-failed")))?,
+        ResetKind::Nuke => storage
+            .nuke_all_data()
+            .await
+            .map_err(|e| format!("{}: {e}", t("settings-nuke-error-failed")))?,
+    }
+
+    document::eval("window.location.reload();");
+    Ok(())
+}
+
 /// General settings section.
 #[component]
-fn GeneralSettings() -> Element {
+fn GeneralSettings(app_state: Signal<AppState>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
+    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let chat_data: Signal<crate::state::ChatData> = use_context();
+    let mut busy = use_signal(|| false);
+    let mut error = use_signal(String::new);
+
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-general\")}" }
             p { class: "settings-description", "{t(\"settings-general-description\")}" }
+            div { class: "general-reset-actions",
+                p { class: "settings-description", "{t(\"settings-reset-description\")}" }
+                button {
+                    class: "btn btn-danger",
+                    disabled: *busy.read(),
+                    onclick: move |_| {
+                        if *busy.read() {
+                            return;
+                        }
+                        busy.set(true);
+                        error.set(String::new());
+                        spawn(async move {
+                            if let Err(err) = run_reset_flow(
+                                    ResetKind::User,
+                                    client_manager,
+                                    chat_data,
+                                    app_state,
+                                )
+                                .await
+                            {
+                                error.set(err);
+                                busy.set(false);
+                            }
+                        });
+                    },
+                    "{t(\"settings-reset-app\")}"
+                }
+                button {
+                    class: "btn btn-warning btn-nuke",
+                    disabled: *busy.read(),
+                    onclick: move |_| {
+                        if *busy.read() {
+                            return;
+                        }
+                        busy.set(true);
+                        error.set(String::new());
+                        spawn(async move {
+                            if let Err(err) = run_reset_flow(
+                                    ResetKind::Nuke,
+                                    client_manager,
+                                    chat_data,
+                                    app_state,
+                                )
+                                .await
+                            {
+                                error.set(err);
+                                busy.set(false);
+                            }
+                        });
+                    },
+                    "☢️ {t(\"settings-nuke-app\")}"
+                }
+                if !error.read().is_empty() {
+                    p { class: "general-reset-error", "{error.read()}" }
+                }
+            }
                 // TODO(phase-2.7.9.10): Notification preferences, startup behavior
         }
     }

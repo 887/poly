@@ -53,4 +53,11 @@ impl StorageInner {
         LocalStorage::delete(key);
         Ok(())
     }
+
+    /// Clear all localStorage data.
+    pub async fn clear_all(&self) -> Result<(), StorageError> {
+        use gloo_storage::{LocalStorage, Storage as _};
+        LocalStorage::clear();
+        Ok(())
+    }
 }

@@ -11,6 +11,8 @@ nav-friends = Amigos
 nav-notifications = Notificaciones
 nav-settings = Configuración
 nav-servers = Servidores
+nav-demo = Alternar cliente de demostración
+nav-demo-active = Cliente de demostración activo
 
 # Asistente de configuración
 setup-welcome-title = Bienvenido a Poly
@@ -39,6 +41,7 @@ chat-typing-multiple = { $count } personas están escribiendo...
 chat-no-messages = Aún no hay mensajes. ¡Inicia la conversación!
 chat-load-more = Cargar más
 chat-edited = (editado)
+chat-loading = Cargando mensajes...
 
 # Canales
 channel-text = Canal de texto
@@ -95,6 +98,13 @@ settings-light-mode = Modo claro
 settings-follow-device = Seguir preferencia del dispositivo
 settings-general = General
 settings-general-description = Preferencias de notificación y comportamiento de inicio
+settings-reset-description = Restablece los datos de la app para empezar de nuevo, o destruye todo el estado local para pruebas limpias.
+settings-reset-app = Restablecer datos de la app
+settings-nuke-app = NUKear estado de la app
+settings-reset-error-no-storage = El almacenamiento aún no está listo
+settings-reset-error-failed = Error al restablecer los datos de la app
+settings-nuke-error-failed = Error al NUKear el estado de la app
+settings-reset-error-reload = Restablecimiento exitoso, pero falló la recarga
 
 # Backup Server Settings
 settings-backup-add-server = Agregar servidor

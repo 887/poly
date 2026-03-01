@@ -144,6 +144,17 @@ impl StorageInner {
         let _ = resp.take::<Option<serde_json::Value>>(0usize);
         Ok(())
     }
+
+    /// Remove all records from the `poly_kv` table.
+    pub async fn clear_all(&self) -> Result<(), StorageError> {
+        let mut resp = self
+            .db
+            .query("DELETE poly_kv")
+            .await
+            .map_err(|e| StorageError::Backend(format!("clear_all: {e}")))?;
+        let _ = resp.take::<Option<serde_json::Value>>(0usize);
+        Ok(())
+    }
 }
 
 // ── Data directory resolution ─────────────────────────────────────────────────

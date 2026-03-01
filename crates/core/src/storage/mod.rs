@@ -189,6 +189,31 @@ impl Storage {
         self.0.delete(key).await
     }
 
+    /// Reset user-facing app data while preserving device identity.
+    ///
+    /// This clears setup completion, account tokens, backup server configs,
+    /// favorites, and persisted theme settings.
+    pub async fn reset_user_data(&self) -> Result<(), StorageError> {
+        for key in [
+            "app_settings",
+            "account_tokens",
+            "backup_servers",
+            "favorites",
+            "theme_config",
+        ] {
+            self.delete(key).await?;
+        }
+        Ok(())
+    }
+
+    /// Irreversibly clear all app state from persistent storage.
+    ///
+    /// On native this wipes the whole SurrealKV table. On web this clears all
+    /// browser localStorage keys used by the app.
+    pub async fn nuke_all_data(&self) -> Result<(), StorageError> {
+        self.0.clear_all().await
+    }
+
     // ── Typed access — AppSettings ────────────────────────────────────────────
 
     /// Read application settings, returning [`AppSettings::default`] if not yet set.

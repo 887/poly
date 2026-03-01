@@ -15,6 +15,7 @@
 //! - `discord` — Include the Discord client
 //! - `teams` — Include the Microsoft Teams client
 
+pub mod client_manager;
 pub mod crypto;
 // Legacy database module (native-only; superseded by `storage` for new code).
 #[cfg(not(target_arch = "wasm32"))]

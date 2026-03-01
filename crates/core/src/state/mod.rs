@@ -3,9 +3,14 @@
 //! Uses Dioxus signals and global state for:
 //! - Current navigation state (selected server, channel, view)
 //! - Active accounts and their backends
+//! - Chat data (servers, channels, messages) from backends
 //! - Theme configuration
 //! - i18n locale
 //! - Setup wizard state
+
+pub mod chat_data;
+
+pub use chat_data::ChatData;
 
 use serde::{Deserialize, Serialize};
 

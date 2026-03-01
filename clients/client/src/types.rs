@@ -118,7 +118,7 @@ pub struct Channel {
 }
 
 /// Content that can be sent in a message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MessageContent {
     /// Plain text message.
     Text(String),
@@ -130,7 +130,7 @@ pub enum MessageContent {
 }
 
 /// A file attachment in a message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Attachment {
     /// Attachment ID.
     pub id: String,
@@ -164,7 +164,7 @@ pub struct Message {
 }
 
 /// A reaction on a message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Reaction {
     /// Emoji or custom reaction identifier.
     pub emoji: String,

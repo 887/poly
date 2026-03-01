@@ -24,7 +24,8 @@ mod user_sidebar;
 pub use main_layout::MainLayout;
 pub use setup_wizard::SetupWizard;
 
-use crate::state::{AppState, View};
+use crate::client_manager::ClientManager;
+use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
 
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
@@ -109,6 +110,8 @@ async fn persist_setup_completion(account_id: String) {
 /// ## Context provided to children
 /// - `Signal<String>` — current locale (from [`crate::i18n::provide_locale_context`])
 /// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
+/// - `Signal<ClientManager>` — client manager for active backends
+/// - `Signal<ChatData>` — reactive chat data store
 #[component]
 pub fn App() -> Element {
     let mut app_state = use_signal(AppState::default);
@@ -120,6 +123,13 @@ pub fn App() -> Element {
     let theme_config: Signal<crate::theme::ThemeConfig> =
         use_signal(crate::theme::ThemeConfig::default);
     provide_context(theme_config);
+
+    // DECISION(DX-2.5.1): ClientManager + ChatData as context Signals.
+    let client_manager: Signal<ClientManager> = use_signal(ClientManager::new);
+    provide_context(client_manager);
+    let chat_data: Signal<ChatData> = use_signal(ChatData::default);
+    provide_context(chat_data);
+
     use_future(move || async move {
         init_storage(theme_config, storage_ready, app_state, locale_sig).await;
     });

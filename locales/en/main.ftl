@@ -11,6 +11,8 @@ nav-friends = Friends
 nav-notifications = Notifications
 nav-settings = Settings
 nav-servers = Servers
+nav-demo = Toggle Demo Client
+nav-demo-active = Demo Client Active
 
 # Setup Wizard
 setup-welcome-title = Welcome to Poly
@@ -39,6 +41,7 @@ chat-typing-multiple = { $count } people are typing...
 chat-no-messages = No messages yet. Start the conversation!
 chat-load-more = Load more messages
 chat-edited = (edited)
+chat-loading = Loading messages...
 
 # Channels
 channel-text = Text Channel
@@ -95,6 +98,13 @@ settings-light-mode = Light Mode
 settings-follow-device = Follow Device Preference
 settings-general = General
 settings-general-description = Notification preferences and startup behavior
+settings-reset-description = Reset app data for a fresh start, or fully nuke all local state for clean re-testing.
+settings-reset-app = Reset App Data
+settings-nuke-app = NUKE App State
+settings-reset-error-no-storage = Storage is not ready yet
+settings-reset-error-failed = Failed to reset app data
+settings-nuke-error-failed = Failed to nuke app state
+settings-reset-error-reload = Reset succeeded, but reload failed
 
 # Backup Server Settings
 settings-backup-add-server = Add Server
