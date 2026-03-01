@@ -158,11 +158,7 @@ pub fn ChannelList() -> Element {
                                                     Some(dm_id_click.clone());
                                             }
                                         },
-                                        div {
-                                            class: "dm-avatar-small",
-                                            style: "background-color: {color};",
-                                            "{first_char}"
-                                        }
+                                        div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
                                         span { class: "channel-name", "{name}" }
                                         span { class: "source-badge-inline", "{badge}" }
                                         if unread > 0 {
@@ -175,14 +171,17 @@ pub fn ChannelList() -> Element {
                         // Group chats (sorted by last message timestamp)
                         for group in &filtered_groups {
                             {
-                                let group_name = group.name.clone().unwrap_or_else(|| {
-                                    group
-                                        .members
-                                        .iter()
-                                        .map(|m| m.display_name.clone())
-                                        .collect::<Vec<_>>()
-                                        .join(", ")
-                                });
+                                let group_name = group
+                                    .name
+                                    .clone()
+                                    .unwrap_or_else(|| {
+                                        group
+                                            .members
+                                            .iter()
+                                            .map(|m| m.display_name.clone())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    });
                                 let group_id = group.id.clone();
                                 let badge = backend_badge(&group.backend);
                                 let member_count = group.members.len();
@@ -221,11 +220,7 @@ pub fn ChannelList() -> Element {
                                         .unwrap_or_default();
                                     rsx! {
                                         div { class: "channel-item",
-                                            div {
-                                                class: "dm-avatar-small",
-                                                style: "background-color: {color};",
-                                                "{first_char}"
-                                            }
+                                            div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
                                             span { class: "channel-name", "{name}" }
                                             span { class: "source-badge-inline", "{badge}" }
                                         }

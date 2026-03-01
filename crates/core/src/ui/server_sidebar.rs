@@ -108,12 +108,13 @@ pub fn ServerSidebar() -> Element {
                                     // Load channels for this server
                                     let sid = server_id_click.clone();
                                     spawn(async move {
-                                        load_server_data(sid, app_state, client_manager, chat_data).await; // Unread badge  Unread badge // Unread badge
-                                    });
+                                        load_server_data(sid, app_state, client_manager, chat_data).await; // Unread badge  Unread badge  Unread badge
+                                    }
+                                    },
                                 }
                             },
-                            title: "{tooltip}",
-                            div { class: "server-icon-letter", style: "background-color: {icon_color};", "{first_letter}" }
+                            title: "{tooltip}", // Source badge (backend type)
+                            div { class: "server-icon-letter", style: "background-color: {icon_color};", "{first_letter}" } // Unread badge
                             // Source badge (backend type)
                             span { class: "source-badge", "{badge}" }
                             // Unread badge

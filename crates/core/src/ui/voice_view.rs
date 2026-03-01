@@ -214,24 +214,24 @@ pub fn VoiceChannelView() -> Element {
                                         .push(demo_participant);
                                     writer.voice_connection =
                                         Some(poly_client::VoiceConnection {
-                                            channel_id: channel_id.clone(),
-                                            server_id: srv
-                                                .as_ref()
-                                                .map(|s| s.id.clone())
-                                                .unwrap_or_default(),
-                                            channel_name: ch
-                                                .as_ref()
-                                                .map(|c| c.name.clone())
-                                                .unwrap_or_default(),
-                                            server_name: srv
-                                                .as_ref()
-                                                .map(|s| s.name.clone())
-                                                .unwrap_or_default(),
-                                            is_muted: false,
-                                            is_deafened: false,
-                                            is_streaming: false,
-                                            is_video_on: false,
-                                        });
+                                        channel_id: channel_id.clone(),
+                                        server_id: srv
+                                            .as_ref()
+                                            .map(|s| s.id.clone())
+                                            .unwrap_or_default(),
+                                        channel_name: ch
+                                            .as_ref()
+                                            .map(|c| c.name.clone())
+                                            .unwrap_or_default(),
+                                        server_name: srv
+                                            .as_ref()
+                                            .map(|s| s.name.clone())
+                                            .unwrap_or_default(),
+                                        is_muted: false,
+                                        is_deafened: false,
+                                        is_streaming: false,
+                                        is_video_on: false,
+                                    });
                                 }
                             }
                         },

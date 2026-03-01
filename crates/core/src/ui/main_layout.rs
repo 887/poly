@@ -62,21 +62,25 @@ pub fn MainLayout() -> Element {
                             button {
                                 class: if can_back { "nav-btn" } else { "nav-btn disabled" },
                                 disabled: !can_back,
-                                onclick: move |_| { app_state.write().nav_back(); },
+                                onclick: move |_| {
+                                    app_state.write().nav_back();
+                                },
                                 title: "{t(\"nav-back\")}",
                                 "◀"
                             }
                             button {
                                 class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
-                                disabled: !can_forward,
-                                onclick: move |_| { app_state.write().nav_forward(); },
+                                disabled: !can_forward, // AccountBar intentionally omitted — Poly is multi-account.
+                                onclick: move |_| { // Placeholder until a conversation is selected
+                                    app_state.write().nav_forward();
+                                },
                                 title: "{t(\"nav-forward\")}",
                                 "▶"
                             }
                         }
                         ChannelList {}
                         VoiceBar {}
-                        // AccountBar intentionally omitted — Poly is multi-account.
+                    // AccountBar intentionally omitted — Poly is multi-account.
                     }
                     // Placeholder until a conversation is selected
                     main { class: "chat-view",
@@ -101,14 +105,18 @@ pub fn MainLayout() -> Element {
                             button {
                                 class: if can_back { "nav-btn" } else { "nav-btn disabled" },
                                 disabled: !can_back,
-                                onclick: move |_| { app_state.write().nav_back(); },
+                                onclick: move |_| {
+                                    app_state.write().nav_back();
+                                },
                                 title: "{t(\"nav-back\")}",
                                 "◀"
                             }
                             button {
                                 class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
                                 disabled: !can_forward,
-                                onclick: move |_| { app_state.write().nav_forward(); },
+                                onclick: move |_| {
+                                    app_state.write().nav_forward();
+                                },
                                 title: "{t(\"nav-forward\")}",
                                 "▶"
                             }

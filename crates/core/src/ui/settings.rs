@@ -1654,9 +1654,7 @@ fn VoiceVideoSettings() -> Element {
             }
             // Input volume
             div { class: "voice-settings-row",
-                label { class: "voice-settings-label",
-                    "{t(\"voice-input-volume\")} — {input_vol}%"
-                }
+                label { class: "voice-settings-label", "{t(\"voice-input-volume\")} — {input_vol}%" }
                 input {
                     r#type: "range",
                     class: "voice-settings-slider",
@@ -1678,7 +1676,11 @@ fn VoiceVideoSettings() -> Element {
                         let current = *mic_testing.read();
                         mic_testing.set(!current);
                     },
-                    if *mic_testing.read() { "{t(\"voice-mic-test-stop\")}" } else { "{t(\"voice-mic-test\")}" }
+                    if *mic_testing.read() {
+                        "{t(\"voice-mic-test-stop\")}"
+                    } else {
+                        "{t(\"voice-mic-test\")}"
+                    }
                 }
                 if *mic_testing.read() {
                     div { class: "mic-level-bar",
@@ -1696,9 +1698,7 @@ fn VoiceVideoSettings() -> Element {
             }
             // Output volume
             div { class: "voice-settings-row",
-                label { class: "voice-settings-label",
-                    "{t(\"voice-output-volume\")} — {output_vol}%"
-                }
+                label { class: "voice-settings-label", "{t(\"voice-output-volume\")} — {output_vol}%" }
                 input {
                     r#type: "range",
                     class: "voice-settings-slider",
@@ -1744,7 +1744,12 @@ fn VoiceVideoSettings() -> Element {
             div { class: "voice-settings-row",
                 label { class: "voice-settings-label", "{t(\"voice-noise-suppression\")}" }
                 div { class: "voice-mode-options",
-                    for (val , lbl) in [("off", t("voice-noise-off")), ("standard", t("voice-noise-standard")), ("high", t("voice-noise-high"))] {
+                    for (val , lbl) in [
+                        ("off", t("voice-noise-off")),
+                        ("standard", t("voice-noise-standard")),
+                        ("high", t("voice-noise-high")),
+                    ]
+                    {
                         {
                             let val_owned = val;
                             let is_checked = *noise_suppress.read() == val_owned;
@@ -1806,9 +1811,7 @@ fn NotificationsSettings() -> Element {
             div { class: "notif-toggle-row notif-permission-row",
                 div { class: "notif-toggle-label",
                     span { class: "notif-toggle-title", "{t(\"notif-enable-desktop\")}" }
-                    span { class: "notif-toggle-desc",
-                        "Requires browser / OS permission"
-                    }
+                    span { class: "notif-toggle-desc", "Requires browser / OS permission" }
                 }
                 div { class: "notif-permission-controls",
                     label { class: "toggle-switch",
