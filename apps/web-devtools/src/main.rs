@@ -151,21 +151,32 @@ impl ChromeCdpBackend {
                         // Only restart on a real crash (non-zero exit).
                         match &status {
                             Ok(s) if s.success() => {
-                                tracing::info!("Chrome exited cleanly (code 0) — not restarting (user closed it)");
+                                tracing::info!(
+                                    "Chrome exited cleanly (code 0) — not restarting (user closed it)"
+                                );
                                 break;
                             }
                             Ok(s) => {
-                                tracing::warn!("Chrome crashed (exit status: {s}) — restarting in 3s");
+                                tracing::warn!(
+                                    "Chrome crashed (exit status: {s}) — restarting in 3s"
+                                );
                             }
                             Err(e) => {
-                                tracing::error!("Error waiting on Chrome process: {e} — restarting in 3s");
+                                tracing::error!(
+                                    "Error waiting on Chrome process: {e} — restarting in 3s"
+                                );
                             }
                         }
 
                         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                        if shutting_down.load(Ordering::Relaxed) { break; }
+                        if shutting_down.load(Ordering::Relaxed) {
+                            break;
+                        }
 
-                        tracing::info!("Restarting Chrome after crash ({})...", if headless { "headless" } else { "visible" });
+                        tracing::info!(
+                            "Restarting Chrome after crash ({})...",
+                            if headless { "headless" } else { "visible" }
+                        );
                     }
                     Err(e) => {
                         tracing::error!("Failed to spawn Chrome: {e} — retrying in 5s");
@@ -261,7 +272,8 @@ impl ChromeCdpBackend {
     /// Prefers a page target serving our app URL; falls back to any page target.
     async fn discover_ws_url(&self) -> anyhow::Result<String> {
         let url = format!("http://127.0.0.1:{CDP_PORT}/json");
-        let resp = self.client
+        let resp = self
+            .client
             .get(&url)
             .timeout(std::time::Duration::from_secs(3))
             .send()
@@ -280,7 +292,9 @@ impl ChromeCdpBackend {
             if target.get("type").and_then(|v| v.as_str()) == Some("page") {
                 let target_url = target.get("url").and_then(|v| v.as_str()).unwrap_or("");
                 if target_url.starts_with(&app_url) {
-                    if let Some(ws_url) = target.get("webSocketDebuggerUrl").and_then(|v| v.as_str()) {
+                    if let Some(ws_url) =
+                        target.get("webSocketDebuggerUrl").and_then(|v| v.as_str())
+                    {
                         return Ok(ws_url.to_string());
                     }
                 }
@@ -351,9 +365,13 @@ impl DevtoolsBackend for ChromeCdpBackend {
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()?;
-            messages.push(format!("Started `dx serve` on port {WEB_SERVER_PORT} (building...)"));
+            messages.push(format!(
+                "Started `dx serve` on port {WEB_SERVER_PORT} (building...)"
+            ));
         } else {
-            messages.push(format!("Web server already running on port {WEB_SERVER_PORT}"));
+            messages.push(format!(
+                "Web server already running on port {WEB_SERVER_PORT}"
+            ));
         }
 
         // ── Step 2: Spawn one fresh Chrome ──
@@ -361,9 +379,13 @@ impl DevtoolsBackend for ChromeCdpBackend {
         self.spawn_chrome_with_watchdog().await?;
 
         if self.headless {
-            messages.push(format!("Launched Chrome (headless) with CDP on port {CDP_PORT}"));
+            messages.push(format!(
+                "Launched Chrome (headless) with CDP on port {CDP_PORT}"
+            ));
         } else {
-            messages.push(format!("Launched Chrome (visible window) with CDP on port {CDP_PORT}"));
+            messages.push(format!(
+                "Launched Chrome (visible window) with CDP on port {CDP_PORT}"
+            ));
         }
         messages.push("Wait ~3 seconds then call connect_cdp.".to_string());
 
@@ -410,7 +432,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
             let mut url = None;
             for attempt in 1..=10 {
                 match self.discover_ws_url().await {
-                    Ok(u) => { url = Some(u); break; }
+                    Ok(u) => {
+                        url = Some(u);
+                        break;
+                    }
                     Err(e) => {
                         last_err = e;
                         tracing::debug!("connect attempt {attempt}/10 failed — waiting 1s");
@@ -428,7 +453,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
             let mut ws = None;
             for attempt in 1..=5 {
                 match tokio_tungstenite::connect_async(&ws_url).await {
-                    Ok((stream, _)) => { ws = Some(stream); break; }
+                    Ok((stream, _)) => {
+                        ws = Some(stream);
+                        break;
+                    }
                     Err(e) => {
                         last_err = anyhow::anyhow!("WS attempt {attempt}/5 at {ws_url}: {e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -447,20 +475,25 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
         // Close any extra tabs — only keep the first page target so we don't
         // accumulate phantom tabs from previous launch_app calls.
-        if let Ok(resp) = self.client
+        if let Ok(resp) = self
+            .client
             .get(format!("http://127.0.0.1:{CDP_PORT}/json"))
-            .send().await
+            .send()
+            .await
         {
             if let Ok(targets) = resp.json::<Vec<Value>>().await {
-                let page_targets: Vec<&Value> = targets.iter()
+                let page_targets: Vec<&Value> = targets
+                    .iter()
                     .filter(|t| t.get("type").and_then(|v| v.as_str()) == Some("page"))
                     .collect();
                 // Close all page targets except the first one
                 for extra in page_targets.iter().skip(1) {
                     if let Some(id) = extra.get("id").and_then(|v| v.as_str()) {
-                        let _ = self.client
+                        let _ = self
+                            .client
                             .get(format!("http://127.0.0.1:{CDP_PORT}/json/close/{id}"))
-                            .send().await;
+                            .send()
+                            .await;
                     }
                 }
             }
