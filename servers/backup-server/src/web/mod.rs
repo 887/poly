@@ -406,10 +406,11 @@ async fn api_tokens_for_account(
                string::concat(string::slice(string::from(id), 6, 999)) AS id, \
                device_name, created_at, last_seen_at, expires_at \
              FROM token \
-             WHERE public_key = $pk AND expires_at > time::now() \
+             WHERE public_key = $pk AND expires_at > $now \
              ORDER BY last_seen_at DESC",
         )
         .bind(("pk", pk))
+        .bind(("now", chrono::Utc::now().to_rfc3339()))
         .await
         .ok()
         .and_then(|mut r| r.take(0).ok())

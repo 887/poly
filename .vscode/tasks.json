@@ -244,6 +244,17 @@
       "presentation": {
         "reveal": "silent"
       }
+    },
+    {
+      "label": "Check: poly-web (WASM)",
+      "type": "cargo",
+      "command": "check",
+      "args": ["-p", "poly-web", "--target", "wasm32-unknown-unknown"],
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
     }
   ]
 }

@@ -124,13 +124,14 @@ pub async fn request_challenge(
         .query(
             "CREATE challenge CONTENT { \
               nonce: $nonce, public_key: $pk, difficulty: $diff, \
-              created_at: time::now(), expires_at: $exp \
+              created_at: $now, expires_at: $exp \
             }",
         )
         .bind(("nonce", nonce.clone()))
         .bind(("pk", body.public_key))
         .bind(("diff", state.config.pow_difficulty as i64))
         .bind(("exp", expires_at.to_rfc3339()))
+        .bind(("now", now.to_rfc3339()))
         .await?
         .check()
         .map_err(AppError::from)?;
@@ -167,13 +168,12 @@ pub async fn authenticate(
         return Err(AppError::BadRequest("device_name is required".into()));
     }
 
-    // Look up the pending challenge.
+    // Look up the pending challenge (nonce + public key match, not expired).
     let challenge: Option<serde_json::Value> = state
         .db
         .query(
-            "SELECT * FROM challenge \
+            "SELECT nonce, public_key, difficulty, expires_at FROM challenge \
              WHERE nonce = $nonce AND public_key = $pk \
-             AND expires_at > time::now() \
              LIMIT 1",
         )
         .bind(("nonce", body.nonce.clone()))
@@ -183,6 +183,19 @@ pub async fn authenticate(
         .map_err(AppError::from)?;
 
     let challenge = challenge.ok_or(AppError::Unauthorized)?;
+
+    // Expiry check in Rust (expires_at stored as RFC3339 string).
+    let expires_at_str = challenge
+        .get("expires_at")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(AppError::Unauthorized)?;
+    if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
+        if exp <= Utc::now() {
+            return Err(AppError::Unauthorized);
+        }
+    } else {
+        return Err(AppError::Unauthorized);
+    }
     let difficulty = challenge
         .get("difficulty")
         .and_then(serde_json::Value::as_u64)
@@ -213,7 +226,7 @@ pub async fn authenticate(
     if state.config.max_accounts > 0 {
         let existing: Option<serde_json::Value> = state
             .db
-            .query("SELECT * FROM account WHERE public_key = $pk LIMIT 1")
+            .query("SELECT public_key FROM account WHERE public_key = $pk LIMIT 1")
             .bind(("pk", body.public_key.clone()))
             .await?
             .take(0)
@@ -238,16 +251,18 @@ pub async fn authenticate(
     }
 
     // Upsert account.
+    let now_str = Utc::now().to_rfc3339();
     state
         .db
         .query(
             "IF (SELECT id FROM account WHERE public_key = $pk LIMIT 1) THEN \
-               (UPDATE account SET last_seen_at = time::now() WHERE public_key = $pk) \
+               (UPDATE account SET last_seen_at = $now WHERE public_key = $pk) \
              ELSE \
-               (CREATE account CONTENT { public_key: $pk, registered_at: time::now(), last_seen_at: time::now() }) \
+               (CREATE account CONTENT { public_key: $pk, registered_at: $now, last_seen_at: $now }) \
              END",
         )
         .bind(("pk", body.public_key.clone()))
+        .bind(("now", now_str.clone()))
         .await?
         .check()
         .map_err(AppError::from)?;
@@ -262,7 +277,7 @@ pub async fn authenticate(
         .query(
             "CREATE token CONTENT { \
                token_hash: $hash, public_key: $pk, device_name: $dev, \
-               created_at: time::now(), last_seen_at: time::now(), \
+               created_at: $now, last_seen_at: $now, \
                expires_at: $exp \
              }",
         )
@@ -270,6 +285,7 @@ pub async fn authenticate(
         .bind(("pk", body.public_key.clone()))
         .bind(("dev", body.device_name.clone()))
         .bind(("exp", expires_at.to_rfc3339()))
+        .bind(("now", now_str))
         .await?
         .check()
         .map_err(AppError::from)?;
@@ -319,8 +335,8 @@ where
         let record: Option<serde_json::Value> = app_state
             .db
             .query(
-                "SELECT * FROM token \
-                 WHERE token_hash = $hash AND expires_at > time::now() \
+                "SELECT token_hash, public_key, expires_at FROM token \
+                 WHERE token_hash = $hash \
                  LIMIT 1",
             )
             .bind(("hash", token_hash.clone()))
@@ -346,6 +362,25 @@ where
             )
         })?;
 
+        // Expiry check in Rust (expires_at stored as RFC3339 string).
+        let expires_at_str = record
+            .get("expires_at")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
+            if exp <= Utc::now() {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({ "error": "token expired" })),
+                ));
+            }
+        } else {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({ "error": "invalid token expiry" })),
+            ));
+        };
+
         let public_key = record
             .get("public_key")
             .and_then(serde_json::Value::as_str)
@@ -360,19 +395,22 @@ where
         // Roll expiry forward on every use.
         let new_expiry =
             Utc::now() + chrono::Duration::days(app_state.config.token_expiry_days as i64);
+        let now_str = Utc::now().to_rfc3339();
         let _ = app_state
             .db
             .query(
-                "UPDATE token SET last_seen_at = time::now(), expires_at = $exp \
+                "UPDATE token SET last_seen_at = $now, expires_at = $exp \
                  WHERE token_hash = $hash",
             )
             .bind(("exp", new_expiry.to_rfc3339()))
+            .bind(("now", now_str.clone()))
             .bind(("hash", token_hash.clone()))
             .await;
 
         let _ = app_state
             .db
-            .query("UPDATE account SET last_seen_at = time::now() WHERE public_key = $pk")
+            .query("UPDATE account SET last_seen_at = $now WHERE public_key = $pk")
+            .bind(("now", now_str))
             .bind(("pk", public_key.clone()))
             .await;
 

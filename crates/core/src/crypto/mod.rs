@@ -9,7 +9,15 @@
 //! 2. Derive X25519 Diffie-Hellman key from Ed25519
 //! 3. Public key = Account ID (hex-encoded)
 //! 4. Private key → BIP39 mnemonic (Recovery Phrase)
+//!
+//! ## Encryption
+//! Uses **ChaCha20-Poly1305** (RFC 8439) — AEAD construction with 256-bit key
+//! and 96-bit random nonce. Wire format: `nonce (12 bytes) || ciphertext+tag`.
 
+use chacha20poly1305::{
+    ChaCha20Poly1305, KeyInit, Key, Nonce,
+    aead::{Aead, OsRng as AeadOsRng},
+};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -146,30 +154,57 @@ pub enum CryptoError {
     Encryption(String),
 }
 
-/// Encrypt data with a symmetric key using simple XOR + HMAC.
+/// Encrypt data with a 256-bit symmetric key using ChaCha20-Poly1305.
 ///
-/// TODO(phase-2.4.4.5): Replace with XSalsa20-Poly1305 or AES-256-GCM.
-/// This is a placeholder that just base64-encodes for now.
-pub fn encrypt(data: &[u8], _key: &[u8; 32]) -> Vec<u8> {
-    // Placeholder: base64 encode (NOT REAL ENCRYPTION)
-    // TODO(phase-2.4.4.5): Implement real XSalsa20-Poly1305
-    use base64::Engine;
-    base64::engine::general_purpose::STANDARD
-        .encode(data)
-        .into_bytes()
+/// Wire format: `nonce (12 bytes) || ciphertext || 16-byte Poly1305 tag`.
+///
+/// A fresh random 96-bit nonce is generated for each call via [`OsRng`].
+/// The nonce is prepended to the output so the receiver can split it off
+/// before decrypting.
+///
+/// # Errors
+/// Returns [`CryptoError::Encryption`] if the AEAD cipher fails (practically impossible
+/// for a fresh random nonce, but handled for correctness).
+pub fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
+    use rand::RngCore;
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+
+    let mut nonce_bytes = [0u8; 12];
+    AeadOsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, data)
+        .map_err(|e| CryptoError::Encryption(e.to_string()))?;
+
+    // Wire format: nonce || ciphertext+tag
+    let mut out = Vec::with_capacity(12 + ciphertext.len());
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
 }
 
-/// Decrypt data with a symmetric key.
+/// Decrypt data with a 256-bit symmetric key using ChaCha20-Poly1305.
 ///
-/// TODO(phase-2.4.4.5): Replace with XSalsa20-Poly1305 or AES-256-GCM.
-pub fn decrypt(data: &[u8], _key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
-    // Placeholder: base64 decode (NOT REAL DECRYPTION)
-    // TODO(phase-2.4.4.5): Implement real XSalsa20-Poly1305
-    use base64::Engine;
-    let s = std::str::from_utf8(data).map_err(|e| CryptoError::Encryption(e.to_string()))?;
-    base64::engine::general_purpose::STANDARD
-        .decode(s)
-        .map_err(|e| CryptoError::Encryption(e.to_string()))
+/// Expects the wire format produced by [`encrypt`]: `nonce (12 bytes) || ciphertext || tag`.
+///
+/// # Errors
+/// - [`CryptoError::Encryption`] if the ciphertext is truncated (< 12 bytes).
+/// - [`CryptoError::Encryption`] if the Poly1305 authentication tag is invalid
+///   (tampered data, wrong key, or wrong nonce).
+pub fn decrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
+    let nonce_bytes = data.get(..12).ok_or_else(|| {
+        CryptoError::Encryption("ciphertext too short — missing nonce (need ≥ 12 bytes)".into())
+    })?;
+    let ciphertext = data.get(12..).ok_or_else(|| {
+        CryptoError::Encryption("ciphertext too short — missing payload".into())
+    })?;
+
+    let nonce = Nonce::from_slice(nonce_bytes);
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| CryptoError::Encryption("decryption failed — bad key or tampered data".into()))
 }
 
 #[cfg(test)]
@@ -214,8 +249,37 @@ mod tests {
         let identity = Identity::generate();
         let key = identity.derive_backup_key();
         let data = b"Hello, Poly backup!";
-        let encrypted = encrypt(data, &key);
+        let encrypted = encrypt(data, &key).unwrap();
+        // Verify nonce is prepended
+        assert!(encrypted.len() > 12 + data.len()); // nonce + ciphertext + 16-byte tag
         let decrypted = decrypt(&encrypted, &key).unwrap();
         assert_eq!(data.as_slice(), &decrypted);
+    }
+
+    #[test]
+    fn test_encrypt_different_nonce_each_call() {
+        let identity = Identity::generate();
+        let key = identity.derive_backup_key();
+        let data = b"determinism test";
+        let enc1 = encrypt(data, &key).unwrap();
+        let enc2 = encrypt(data, &key).unwrap();
+        // Different nonces → different ciphertexts
+        assert_ne!(enc1, enc2);
+        // But both decrypt correctly
+        assert_eq!(decrypt(&enc1, &key).unwrap(), data.as_slice());
+        assert_eq!(decrypt(&enc2, &key).unwrap(), data.as_slice());
+    }
+
+    #[test]
+    fn test_decrypt_tampered_data_fails() {
+        let identity = Identity::generate();
+        let key = identity.derive_backup_key();
+        let data = b"tamper me";
+        let mut encrypted = encrypt(data, &key).unwrap();
+        // Flip a byte in the ciphertext
+        if let Some(b) = encrypted.get_mut(20) {
+            *b ^= 0xFF;
+        }
+        assert!(decrypt(&encrypted, &key).is_err());
     }
 }

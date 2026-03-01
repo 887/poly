@@ -37,8 +37,8 @@ const SCHEMA: &str = r#"
 -- Registered accounts (identified by Ed25519 public key)
 DEFINE TABLE OVERWRITE account SCHEMAFULL;
 DEFINE FIELD OVERWRITE public_key    ON account TYPE string;
-DEFINE FIELD OVERWRITE registered_at ON account TYPE datetime DEFAULT time::now();
-DEFINE FIELD OVERWRITE last_seen_at  ON account TYPE datetime DEFAULT time::now();
+DEFINE FIELD OVERWRITE registered_at ON account TYPE string;
+DEFINE FIELD OVERWRITE last_seen_at  ON account TYPE string;
 DEFINE INDEX OVERWRITE account_pk    ON account COLUMNS public_key UNIQUE;
 
 -- Session tokens (stored as SHA-256 hashes — never raw)
@@ -46,9 +46,9 @@ DEFINE TABLE OVERWRITE token SCHEMAFULL;
 DEFINE FIELD OVERWRITE token_hash   ON token TYPE string;
 DEFINE FIELD OVERWRITE public_key   ON token TYPE string;
 DEFINE FIELD OVERWRITE device_name  ON token TYPE string;
-DEFINE FIELD OVERWRITE created_at   ON token TYPE datetime DEFAULT time::now();
-DEFINE FIELD OVERWRITE last_seen_at ON token TYPE datetime DEFAULT time::now();
-DEFINE FIELD OVERWRITE expires_at   ON token TYPE datetime;
+DEFINE FIELD OVERWRITE created_at   ON token TYPE string;
+DEFINE FIELD OVERWRITE last_seen_at ON token TYPE string;
+DEFINE FIELD OVERWRITE expires_at   ON token TYPE string;
 DEFINE INDEX OVERWRITE token_hash_idx ON token COLUMNS token_hash UNIQUE;
 
 -- Encrypted settings blobs — append-only per account
@@ -56,7 +56,7 @@ DEFINE TABLE OVERWRITE sync_blob SCHEMAFULL;
 DEFINE FIELD OVERWRITE public_key     ON sync_blob TYPE string;
 DEFINE FIELD OVERWRITE sequence       ON sync_blob TYPE int;
 DEFINE FIELD OVERWRITE encrypted_blob ON sync_blob TYPE string;
-DEFINE FIELD OVERWRITE pushed_at      ON sync_blob TYPE datetime DEFAULT time::now();
+DEFINE FIELD OVERWRITE pushed_at      ON sync_blob TYPE string;
 DEFINE INDEX OVERWRITE blob_pk_seq    ON sync_blob COLUMNS public_key, sequence UNIQUE;
 
 -- Short-lived PoW challenges for API auth
@@ -64,15 +64,15 @@ DEFINE TABLE OVERWRITE challenge SCHEMAFULL;
 DEFINE FIELD OVERWRITE nonce       ON challenge TYPE string;
 DEFINE FIELD OVERWRITE public_key  ON challenge TYPE string;
 DEFINE FIELD OVERWRITE difficulty  ON challenge TYPE int;
-DEFINE FIELD OVERWRITE created_at  ON challenge TYPE datetime DEFAULT time::now();
-DEFINE FIELD OVERWRITE expires_at  ON challenge TYPE datetime;
+DEFINE FIELD OVERWRITE created_at  ON challenge TYPE string;
+DEFINE FIELD OVERWRITE expires_at  ON challenge TYPE string;
 DEFINE INDEX OVERWRITE challenge_nonce ON challenge COLUMNS nonce UNIQUE;
 
 -- Per-IP rate-limit counters for API auth endpoints
 DEFINE TABLE OVERWRITE rate_limit SCHEMAFULL;
 DEFINE FIELD OVERWRITE ip           ON rate_limit TYPE string;
 DEFINE FIELD OVERWRITE failures     ON rate_limit TYPE int DEFAULT 0;
-DEFINE FIELD OVERWRITE window_start ON rate_limit TYPE datetime DEFAULT time::now();
+DEFINE FIELD OVERWRITE window_start ON rate_limit TYPE string;
 DEFINE INDEX OVERWRITE rate_limit_ip ON rate_limit COLUMNS ip UNIQUE;
 "#;
 

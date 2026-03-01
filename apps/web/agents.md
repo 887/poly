@@ -46,6 +46,20 @@ dx build --release --platform web  # Production build (WASM + server binary)
 - If SurrealKV doesn't compile: use SurrealDB remote mode connecting to a local server, or in-memory with remote backup
 - WASM binary size — use code splitting and lazy loading (Dioxus 0.7.3)
 
+## WASM Compatibility Check
+
+The standard `cargo build --workspace` / `cargo cranky --workspace` only compiles for the host target.
+WASM-specific breakage is invisible until the web build is attempted.
+
+**After any change to `poly-core` or `poly-web`, run:**
+
+```bash
+cargo check -p poly-web --target wasm32-unknown-unknown
+```
+
+Or use the VS Code task **"Check: poly-web (WASM)"** — errors appear in the Problems panel.
+This is a `check` (no link step), so it's fast. The task does NOT run automatically on folder open.
+
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 
 **NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression

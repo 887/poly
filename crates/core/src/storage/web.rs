@@ -19,12 +19,8 @@ use super::StorageError;
 #[derive(Clone)]
 pub struct StorageInner;
 
-// SAFETY: WASM is single-threaded. These impls are required so that
-// `Storage` can live in a `std::sync::OnceLock` (which bounds T: Send + Sync)
-// while remaining correct at runtime.
-// See: https://rustwasm.github.io/docs/wasm-bindgen/reference/types/jsvalue.html
-unsafe impl Send for StorageInner {}
-unsafe impl Sync for StorageInner {}
+// `StorageInner` is a unit struct with no fields, so Rust automatically
+// provides `Send + Sync` — no manual impls needed.
 
 impl StorageInner {
     /// No-op initialisation — `localStorage` is always available.

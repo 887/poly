@@ -5,21 +5,23 @@
 //! being sent to the server.
 //!
 //! ## Auth Flow
-//! 1. Request PoW challenge from server
-//! 2. Solve PoW challenge
-//! 3. Submit solution + server passphrase
-//! 4. Receive long session token
-//! 5. Use token for sync operations
+//! 1. `POST /api/challenge` with `{ public_key }` → `{ nonce, difficulty, expires_at }`
+//! 2. Mine: find `counter` such that SHA-256(nonce + counter_decimal) has `difficulty` leading zero bits
+//! 3. `POST /api/auth` with `{ public_key, nonce, counter, passphrase, device_name }` → `{ token, expires_at }`
+//! 4. Use `Authorization: Bearer <token>` for all subsequent requests
 
 // DECISION(D10): PoW challenge + server passphrase + long tokens + device tracking.
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Backup server connection configuration.
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+/// Backup server connection configuration (stored per-server in SurrealKV).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackupServerConfig {
-    /// Server URL (e.g., "<http://localhost:3000>").
+    /// Server URL (e.g., `"http://localhost:8080"`).
     pub url: String,
     /// Display name for this server.
     pub name: String,
@@ -29,74 +31,61 @@ pub struct BackupServerConfig {
     pub last_sequence: u64,
 }
 
-/// PoW challenge from the server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// PoW challenge response from `POST /api/challenge`.
+#[derive(Debug, Clone, Deserialize)]
 pub struct PowChallenge {
-    /// Challenge ID.
-    pub id: String,
-    /// Challenge data to hash.
-    pub data: String,
-    /// Required number of leading zero bits.
+    /// Random nonce string issued by the server.
+    pub nonce: String,
+    /// Required number of leading zero bits in SHA-256(nonce + counter).
     pub difficulty: u32,
+    /// ISO-8601 UTC timestamp when the challenge expires.
+    pub expires_at: String,
 }
 
-/// PoW solution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PowSolution {
-    /// Challenge ID.
-    pub challenge_id: String,
-    /// The nonce that produces a valid hash.
-    pub nonce: u64,
-}
-
-/// Auth request to the backup server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthRequest {
-    /// PoW solution.
-    pub pow_solution: PowSolution,
-    /// Server-wide passphrase.
-    pub passphrase: String,
-    /// User's Ed25519 public key (hex-encoded).
-    pub public_key: String,
-    /// Device info for token tracking.
-    pub device_info: DeviceInfo,
-}
-
-/// Device information for session tracking.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceInfo {
-    /// Device name.
-    pub name: String,
-    /// Platform (desktop, mobile, web).
-    pub platform: String,
-    /// Client version.
-    pub version: String,
-}
-
-/// Auth response from the backup server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Response from `POST /api/auth`.
+#[derive(Debug, Clone, Deserialize)]
 pub struct AuthResponse {
-    /// Session token.
+    /// 128-character session token.
     pub token: String,
-    /// Token expiry timestamp.
+    /// ISO-8601 UTC expiry timestamp.
     pub expires_at: Option<String>,
 }
 
-/// Encrypted sync blob (what gets pushed/pulled).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Encrypted sync blob returned from `GET /api/sync/pull`.
+#[derive(Debug, Clone, Deserialize)]
 pub struct SyncBlob {
-    /// Sequence number for ordering.
+    /// Monotonically increasing sequence number.
     pub sequence: u64,
-    /// Encrypted data (opaque to the server).
-    pub data: Vec<u8>,
-    /// Timestamp of this sync entry.
+    /// Base64-encoded encrypted payload (opaque to the server).
+    pub data: String,
+    /// ISO-8601 UTC creation timestamp.
     pub timestamp: String,
+}
+
+impl SyncBlob {
+    /// Decode the base64 `data` field into raw bytes.
+    pub fn decode_data(&self) -> Result<Vec<u8>, SyncError> {
+        base64::engine::general_purpose::STANDARD
+            .decode(&self.data)
+            .map_err(|e| SyncError::Protocol(format!("base64 decode: {e}")))
+    }
+}
+
+/// Account status from `GET /api/sync/status`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SyncStatus {
+    /// This account's Ed25519 public key.
+    pub public_key: String,
+    /// Total number of blobs stored.
+    pub blob_count: u64,
+    /// Highest sequence number stored.
+    pub latest_sequence: u64,
 }
 
 /// Errors from backup sync operations.
 #[derive(Debug, thiserror::Error)]
 pub enum SyncError {
-    /// Network/HTTP error.
+    /// Network / HTTP error.
     #[error("network error: {0}")]
     Network(String),
 
@@ -104,57 +93,60 @@ pub enum SyncError {
     #[error("auth failed: {0}")]
     AuthFailed(String),
 
-    /// Server returned an error.
+    /// Server returned an error response.
     #[error("server error: {0}")]
     Server(String),
 
-    /// PoW challenge failed.
-    #[error("PoW challenge failed: {0}")]
-    PowFailed(String),
+    /// Protocol / deserialization mismatch.
+    #[error("protocol error: {0}")]
+    Protocol(String),
 }
 
-/// Solve a PoW challenge by finding a nonce that produces a hash
-/// with the required number of leading zero bits.
-pub fn solve_pow(challenge: &PowChallenge) -> PowSolution {
-    let mut nonce: u64 = 0;
-    loop {
-        let mut hasher = Sha256::new();
-        hasher.update(challenge.data.as_bytes());
-        hasher.update(nonce.to_le_bytes());
-        let hash = hasher.finalize();
+// ── PoW solver ────────────────────────────────────────────────────────────────
 
-        if check_pow_difficulty(&hash, challenge.difficulty) {
-            return PowSolution {
-                challenge_id: challenge.id.clone(),
-                nonce,
-            };
+/// Solve a PoW challenge by finding a `counter` such that
+/// `SHA-256(nonce + counter.to_string())` has `difficulty` leading zero bits.
+///
+/// Matches the server-side `verify_pow()` in `poly-backup-server/src/auth/mod.rs`.
+pub fn solve_pow(nonce: &str, difficulty: u32) -> u64 {
+    let mut counter: u64 = 0;
+    loop {
+        let input = format!("{nonce}{counter}");
+        let hash = Sha256::digest(input.as_bytes());
+        if check_pow_difficulty(&hash, difficulty) {
+            return counter;
         }
-        nonce += 1;
+        counter += 1;
     }
 }
 
-/// Check if a hash meets the required difficulty (leading zero bits).
+/// Check if a hash meets PoW difficulty (leading zero bits).
 fn check_pow_difficulty(hash: &[u8], difficulty: u32) -> bool {
-    let mut bits_checked = 0u32;
-    for &byte in hash {
-        if bits_checked + 8 <= difficulty {
-            if byte != 0 {
-                return false;
-            }
-            bits_checked += 8;
-        } else {
-            let remaining = difficulty - bits_checked;
-            let mask = 0xFF << (8 - remaining);
-            return (byte & mask) == 0;
+    if difficulty == 0 {
+        return true;
+    }
+    let full_bytes = (difficulty / 8) as usize;
+    let remaining_bits = difficulty % 8;
+    for byte in hash.iter().take(full_bytes) {
+        if *byte != 0 {
+            return false;
         }
-        if bits_checked >= difficulty {
-            return true;
+    }
+    if remaining_bits > 0 {
+        let mask = 0xFF_u8 << (8 - remaining_bits);
+        if hash
+            .get(full_bytes)
+            .is_some_and(|b| b & mask != 0)
+        {
+            return false;
         }
     }
     true
 }
 
-/// Backup sync client that communicates with a Poly backup server.
+// ── Sync client ───────────────────────────────────────────────────────────────
+
+/// Backup sync client — communicates with one `poly-backup-server` instance.
 pub struct SyncClient {
     http: reqwest::Client,
     config: BackupServerConfig,
@@ -169,50 +161,64 @@ impl SyncClient {
         }
     }
 
-    /// Get the server URL.
+    /// Base URL of the server.
     pub fn url(&self) -> &str {
         &self.config.url
     }
 
-    /// Request a PoW challenge from the server.
-    pub async fn request_challenge(&self) -> Result<PowChallenge, SyncError> {
+    /// Current stored session token (`None` if not yet authenticated).
+    pub fn token(&self) -> Option<&str> {
+        self.config.token.as_deref()
+    }
+
+    /// Reference to the current config (e.g. to persist after auth).
+    pub fn config(&self) -> &BackupServerConfig {
+        &self.config
+    }
+
+    /// `POST /api/challenge` — request a PoW nonce for the given public key.
+    pub async fn request_challenge(&self, public_key: &str) -> Result<PowChallenge, SyncError> {
         let resp = self
             .http
-            .get(format!("{}/api/challenge", self.config.url))
+            .post(format!("{}/api/challenge", self.config.url))
+            .json(&serde_json::json!({ "public_key": public_key }))
             .send()
             .await
             .map_err(|e| SyncError::Network(e.to_string()))?;
 
+        if !resp.status().is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(SyncError::Server(text));
+        }
+
         resp.json::<PowChallenge>()
             .await
-            .map_err(|e| SyncError::Network(e.to_string()))
+            .map_err(|e| SyncError::Protocol(e.to_string()))
     }
 
-    /// Authenticate with the server (solve PoW + passphrase).
+    /// Full auth flow: challenge → PoW solve → auth → store token.
+    ///
+    /// On success the token is stored in `self.config.token` and returned.
+    /// Persist [`Self::config()`] to storage afterwards.
     pub async fn authenticate(
         &mut self,
         passphrase: &str,
         public_key: &str,
-        device_info: DeviceInfo,
+        device_name: &str,
     ) -> Result<AuthResponse, SyncError> {
-        // 1. Get challenge
-        let challenge = self.request_challenge().await?;
-
-        // 2. Solve PoW
-        let solution = solve_pow(&challenge);
-
-        // 3. Submit auth
-        let auth_req = AuthRequest {
-            pow_solution: solution,
-            passphrase: passphrase.to_string(),
-            public_key: public_key.to_string(),
-            device_info,
-        };
+        let challenge = self.request_challenge(public_key).await?;
+        let counter = solve_pow(&challenge.nonce, challenge.difficulty);
 
         let resp = self
             .http
             .post(format!("{}/api/auth", self.config.url))
-            .json(&auth_req)
+            .json(&serde_json::json!({
+                "public_key": public_key,
+                "nonce": challenge.nonce,
+                "counter": counter,
+                "passphrase": passphrase,
+                "device_name": device_name,
+            }))
             .send()
             .await
             .map_err(|e| SyncError::Network(e.to_string()))?;
@@ -225,63 +231,75 @@ impl SyncClient {
         let auth_resp = resp
             .json::<AuthResponse>()
             .await
-            .map_err(|e| SyncError::Network(e.to_string()))?;
+            .map_err(|e| SyncError::Protocol(e.to_string()))?;
 
-        // Store the token
         self.config.token = Some(auth_resp.token.clone());
-
         Ok(auth_resp)
     }
 
-    /// Push encrypted settings blob to the server.
-    pub async fn push(&self, data: Vec<u8>) -> Result<u64, SyncError> {
+    /// `POST /api/sync/push` — push an encrypted blob.
+    ///
+    /// Encodes `encrypted_data` as base64 and sends it in the JSON body.
+    /// Returns the new sequence number assigned by the server.
+    pub async fn push(&self, encrypted_data: &[u8]) -> Result<u64, SyncError> {
         let token = self
             .config
             .token
-            .as_ref()
+            .as_deref()
             .ok_or_else(|| SyncError::AuthFailed("not authenticated".into()))?;
+
+        let b64 = base64::engine::general_purpose::STANDARD.encode(encrypted_data);
 
         let resp = self
             .http
             .post(format!("{}/api/sync/push", self.config.url))
             .bearer_auth(token)
-            .json(&serde_json::json!({ "data": data }))
+            .json(&serde_json::json!({ "data": b64 }))
             .send()
             .await
             .map_err(|e| SyncError::Network(e.to_string()))?;
 
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(SyncError::AuthFailed("token expired or revoked".into()));
+        }
         if !resp.status().is_success() {
             let text = resp.text().await.unwrap_or_default();
             return Err(SyncError::Server(text));
         }
 
-        // Return the new sequence number
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| SyncError::Network(e.to_string()))?;
-        Ok(body.get("sequence").and_then(|v| v.as_u64()).unwrap_or(0))
+            .map_err(|e| SyncError::Protocol(e.to_string()))?;
+
+        Ok(body
+            .get("sequence")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0))
     }
 
-    /// Pull encrypted settings changes since a sequence number.
+    /// `GET /api/sync/pull?since=<seq>` — pull all blobs after `since_sequence`.
     pub async fn pull(&self, since_sequence: u64) -> Result<Vec<SyncBlob>, SyncError> {
         let token = self
             .config
             .token
-            .as_ref()
+            .as_deref()
             .ok_or_else(|| SyncError::AuthFailed("not authenticated".into()))?;
 
         let resp = self
             .http
             .get(format!(
-                "{}/api/sync/pull?since={}",
-                self.config.url, since_sequence
+                "{}/api/sync/pull?since={since_sequence}",
+                self.config.url
             ))
             .bearer_auth(token)
             .send()
             .await
             .map_err(|e| SyncError::Network(e.to_string()))?;
 
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(SyncError::AuthFailed("token expired or revoked".into()));
+        }
         if !resp.status().is_success() {
             let text = resp.text().await.unwrap_or_default();
             return Err(SyncError::Server(text));
@@ -289,45 +307,87 @@ impl SyncClient {
 
         resp.json::<Vec<SyncBlob>>()
             .await
-            .map_err(|e| SyncError::Network(e.to_string()))
+            .map_err(|e| SyncError::Protocol(e.to_string()))
+    }
+
+    /// `GET /api/sync/status` — account info and latest sequence number.
+    pub async fn status(&self) -> Result<SyncStatus, SyncError> {
+        let token = self
+            .config
+            .token
+            .as_deref()
+            .ok_or_else(|| SyncError::AuthFailed("not authenticated".into()))?;
+
+        let resp = self
+            .http
+            .get(format!("{}/api/sync/status", self.config.url))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| SyncError::Network(e.to_string()))?;
+
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(SyncError::AuthFailed("token expired or revoked".into()));
+        }
+        if !resp.status().is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(SyncError::Server(text));
+        }
+
+        resp.json::<SyncStatus>()
+            .await
+            .map_err(|e| SyncError::Protocol(e.to_string()))
     }
 }
 
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_pow_difficulty_check() {
-        // All zeros pass any difficulty
+    fn test_pow_difficulty_all_zeros() {
         let zeros = [0u8; 32];
         assert!(check_pow_difficulty(&zeros, 16));
         assert!(check_pow_difficulty(&zeros, 32));
-
-        // First byte 0, second byte non-zero
-        let mut hash = [0u8; 32];
-        hash[1] = 0x80; // 10000000
-        assert!(check_pow_difficulty(&hash, 8)); // Need 8 zero bits → first byte is 0 ✓
-        assert!(check_pow_difficulty(&hash, 9)); // Need 9 zero bits → first byte 0 + second byte starts with 1 → fail
-        assert!(!check_pow_difficulty(&hash, 10));
     }
 
     #[test]
-    fn test_solve_pow() {
-        let challenge = PowChallenge {
-            id: "test".to_string(),
-            data: "test-challenge-data".to_string(),
-            difficulty: 8, // Easy difficulty for testing
+    fn test_pow_difficulty_partial_byte() {
+        let mut hash = [0u8; 32];
+        hash[1] = 0x80_u8; // 10000000 — 9th bit is 1
+        assert!(check_pow_difficulty(&hash, 8)); // first 8 bits zero → ok
+        assert!(!check_pow_difficulty(&hash, 9)); // bit 9 is 1 → fail
+    }
+
+    #[test]
+    fn test_solve_pow_low_difficulty() {
+        let nonce = "test-nonce-abc123";
+        let difficulty = 4;
+        let counter = solve_pow(nonce, difficulty);
+
+        let input = format!("{nonce}{counter}");
+        let hash = Sha256::digest(input.as_bytes());
+        assert!(check_pow_difficulty(&hash, difficulty));
+    }
+
+    #[test]
+    fn test_solve_pow_zero_difficulty() {
+        assert_eq!(solve_pow("anything", 0), 0);
+    }
+
+    #[test]
+    fn test_sync_blob_decode() {
+        use base64::Engine as _;
+        let data = b"hello world";
+        let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+        let blob = SyncBlob {
+            sequence: 1,
+            data: encoded,
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
         };
-
-        let solution = solve_pow(&challenge);
-        assert_eq!(solution.challenge_id, "test");
-
-        // Verify the solution
-        let mut hasher = Sha256::new();
-        hasher.update(challenge.data.as_bytes());
-        hasher.update(solution.nonce.to_le_bytes());
-        let hash = hasher.finalize();
-        assert!(check_pow_difficulty(&hash, challenge.difficulty));
+        assert_eq!(blob.decode_data().unwrap(), data.as_slice());
     }
 }

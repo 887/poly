@@ -1,7 +1,7 @@
 # poly-core — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Last Updated:** 2026-03-01 (Phase 2.4)
 
 ---
 
@@ -204,6 +204,79 @@ Table `poly_kv` in SurrealDB namespace `poly` / database `main`:
 MCP self-test (2025-03-01): wizard completion → kill → relaunch → wizard skipped ✓
 WAL grew from 1592 bytes (init-only) to 3925 bytes (init + data write), then read back on new session.
 
+## Phase 2.4 Additions (2026-03-01)
+
+### Crypto — `src/crypto/mod.rs`
+
+Real ChaCha20-Poly1305 encryption (replaced placeholder base64):
+
+```rust
+// Encrypt: nonce(12 bytes) || ciphertext+tag
+pub fn encrypt(plaintext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError>
+
+// Decrypt: strips nonce, decrypts, verifies auth tag
+pub fn decrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError>
+```
+
+Key points:
+- Uses `chacha20poly1305` crate (RustCrypto ecosystem)
+- Nonce is 96-bit random (OsRng), 12 bytes prepended to ciphertext
+- `.get(..12)` / `.get(12..)` used instead of indexing to satisfy `clippy::indexing_slicing`
+
+### Storage — Backup Server Records + Identity Key
+
+New methods on `Storage` in `src/storage/mod.rs`:
+
+```rust
+// Backup server records (keyed by URL)
+pub async fn get_backup_servers(&self) -> Result<Vec<BackupServerRecord>, StorageError>
+pub async fn upsert_backup_server(&self, record: &BackupServerRecord) -> Result<(), StorageError>
+pub async fn remove_backup_server(&self, url: &str) -> Result<(), StorageError>
+
+// Identity key (Ed25519 private key bytes, 32 bytes, hex-encoded in DB)
+pub async fn get_identity_key(&self) -> Result<Option<[u8; 32]>, StorageError>
+pub async fn set_identity_key(&self, key: &[u8; 32]) -> Result<(), StorageError>
+```
+
+`BackupServerRecord` fields: `url`, `label`, `enabled`, `last_sequence`, `token` (Option),
+`token_expires_at` (Option<String> RFC3339), `last_synced_at` (Option<String> RFC3339).
+
+### Sync Client — `src/sync/mod.rs`
+
+Protocol-aligned with actual backup server:
+
+```rust
+pub struct SyncClient { base_url: String, public_key_hex: String, private_key: [u8; 32] }
+
+impl SyncClient {
+    // Full PoW auth: challenge → mine SHA-256 → submit → receive token
+    pub async fn authenticate(&self, passphrase: &str, device_name: &str) -> Result<String, SyncError>
+    // Push encrypted blob → returns sequence number
+    pub async fn push(&self, token: &str, data: &[u8]) -> Result<i64, SyncError>
+    // Pull blobs since sequence → returns Vec<(sequence, data)>
+    pub async fn pull(&self, token: &str, since: i64) -> Result<Vec<(i64, Vec<u8>)>, SyncError>
+    // Get account status
+    pub async fn status(&self, token: &str) -> Result<SyncStatus, SyncError>
+}
+```
+
+PoW: `SHA-256(nonce + counter.to_string())`, check leading zero bits with `difficulty` count.
+
+### Settings UI — `src/ui/settings.rs`
+
+Two new components:
+- `BackupSettings` — server list, add form (URL + label + passphrase), inline auth flow,
+  status chips (connected/auth-required/syncing/unreachable), sync-now, re-auth, remove
+- `IdentitySettings` — public key display with copy, "Export Recovery Phrase" modal (24-word grid)
+
+### Setup Wizard — `src/ui/setup_wizard.rs`
+
+Key generation step added:
+- `Identity::generate()` → `(public_key, private_key: [u8; 32])`
+- Stores `private_key_bytes: Signal<Option<[u8; 32]>>` during wizard
+- On wizard complete: `spawn(async { storage.set_identity_key(&key).await })`
+- Recovery phrase step shows all 24 words; copy-to-clipboard via `document::eval()` + JS
+
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 
 **NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
@@ -213,3 +286,33 @@ attribute to source code. When `cargo cranky` reports a violation, **fix the cod
 and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
 
 See root `agents.md` § 7a for the full rationale.
+
+## CRITICAL: Dioxus Asset Path Symlink (DECISION D14)
+
+The `asset!("assets/tailwind.css")` macro uses the Cargo **package name** (`poly-core`)
+to build the serve URL, not the directory name (`core`). This means:
+
+- URL generated: `dioxus://…/crates/poly-core/assets/tailwind.css`
+- Physical path: `crates/core/assets/tailwind.css`
+
+The symlink `crates/poly-core -> crates/core` MUST exist and be committed to git.
+Without it, the desktop app loads 0 CSS rules and renders as a white page.
+
+Web app uses a hashed asset URL served from its `dist/` tree — not affected by this, but
+both apps share the same `poly-core` package so the symlink fixes both build paths.
+
+## CRITICAL: `storage/web.rs` — Unit struct, no unsafe Send/Sync needed
+
+`StorageInner` is a zero-size unit struct. Rust automatically implements `Send + Sync`
+for unit structs. **Never** add `unsafe impl Send`/`Sync` — it is denied by `unsafe_code`
+and is redundant.
+
+## CRITICAL: `ui/settings.rs` Brace Matching
+
+The backup settings UI is deeply nested (Dioxus RSX inside async closures inside onclick
+handlers). Brace mismatches only show up in the **WASM build** — `cargo cranky --workspace`
+(which targets the host) may pass while `cargo build -p poly-web --target wasm32-unknown-unknown`
+fails. **Always run both checks after editing settings.rs.**
+
+When fixing brace issues, prefer `.map()` over `if let Some(x) = ...` + `drop(x)` when
+you need to mutate a vec element and then move the vec.

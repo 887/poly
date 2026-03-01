@@ -504,6 +504,8 @@ See individual phase plan documents for detailed checklists:
 | D10 | Backup auth | PoW challenge + server passphrase + long tokens + device tracking | Anti-brute-force, session management | 2026-02-28 |
 | D11 | Initial languages | EN + DE + FR + ES | English default, German + 2 more for baseline | 2026-02-28 |
 | D12 | Demo client | Phase 2 alongside UI | Enables full UI testing without real backends | 2026-02-28 |
+| D13 | SurrealDB datetime storage | `TYPE string` + RFC3339 via Rust `Utc::now().to_rfc3339()` | SurrealDB 3.0 `kv-surrealkv` cannot serialize `TYPE datetime` to `serde_json::Value` ("Expected any, got datetime"). All timestamp fields must be `TYPE string`. Never use `time::now()` in SurrealQL — always bind `$now` from Rust. | 2026-03-01 |
+| D14 | Dioxus asset path symlink | `crates/poly-core -> crates/core` symlink required | Dioxus `asset!()` macro constructs serve URLs using the Cargo **package name** (`poly-core`), not the directory name (`core`). Since the directory is `crates/core` but the package is `poly-core`, the URL `dioxus://…/crates/poly-core/assets/tailwind.css` cannot resolve. Fix: create symlink `crates/poly-core -> crates/core` so the URL resolves. This symlink must be committed to git. | 2026-03-01 |
 
 ---
 

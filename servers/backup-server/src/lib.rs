@@ -27,7 +27,7 @@ use axum::{Json, Router, response::Html, routing::get};
 use utoipa::OpenApi;
 
 pub use config::Config;
-pub use db::Db;
+pub use db::{Db, init as init_db};
 pub use web::AdminState;
 
 // ── AppState ───────────────────────────────────────────────────────────────────

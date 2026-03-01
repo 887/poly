@@ -96,6 +96,28 @@ pub struct AccountToken {
     pub display_name: String,
 }
 
+/// Stored backup server configuration.
+///
+/// Persisted under the key `"backup_servers"` as a JSON array.
+/// Identified by `url` — upsert replaces the entry with the same URL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupServerRecord {
+    /// Base URL (e.g. `"http://backup.example.com:8080"`).
+    pub url: String,
+    /// User-chosen friendly name (e.g. `"My Home Server"`).
+    pub label: String,
+    /// Whether this server is active — disabled servers are skipped during sync.
+    pub enabled: bool,
+    /// Highest sequence number successfully synced.
+    pub last_sequence: u64,
+    /// Stored session token (raw, used as Bearer token).
+    pub token: Option<String>,
+    /// ISO-8601 UTC expiry timestamp from the auth response.
+    pub token_expires_at: Option<String>,
+    /// ISO-8601 UTC timestamp of the last successful sync.
+    pub last_synced_at: Option<String>,
+}
+
 /// The kind of favorited item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -267,6 +289,67 @@ impl Storage {
         config: &crate::theme::ThemeConfig,
     ) -> Result<(), StorageError> {
         self.set("theme_config", serde_json::to_value(config)?)
+            .await
+    }
+
+    // ── Typed access — BackupServerRecord ─────────────────────────────────────
+
+    /// List all stored backup server records.
+    pub async fn get_backup_servers(&self) -> Result<Vec<BackupServerRecord>, StorageError> {
+        Ok(self
+            .get("backup_servers")
+            .await?
+            .and_then(|v| serde_json::from_value::<Vec<BackupServerRecord>>(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Add or update a backup server record (keyed by `url`).
+    pub async fn upsert_backup_server(
+        &self,
+        record: &BackupServerRecord,
+    ) -> Result<(), StorageError> {
+        let mut servers = self.get_backup_servers().await?;
+        servers.retain(|s| s.url != record.url);
+        servers.push(record.clone());
+        self.set("backup_servers", serde_json::to_value(&servers)?)
+            .await
+    }
+
+    /// Remove a backup server by URL. No-op if not found.
+    pub async fn remove_backup_server(&self, url: &str) -> Result<(), StorageError> {
+        let mut servers = self.get_backup_servers().await?;
+        servers.retain(|s| s.url != url);
+        self.set("backup_servers", serde_json::to_value(&servers)?)
+            .await
+    }
+
+    // ── Typed access — Identity ───────────────────────────────────────────────
+
+    /// Retrieve the raw Ed25519 private key bytes (32 bytes) from storage.
+    ///
+    /// Returns `None` if the identity has not been generated yet (pre-wizard).
+    pub async fn get_identity_key(&self) -> Result<Option<[u8; 32]>, StorageError> {
+        let raw = self.get("identity_key").await?;
+        match raw {
+            None => Ok(None),
+            Some(v) => {
+                let bytes: Vec<u8> = serde_json::from_value(v)?;
+                if bytes.len() == 32 {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    Ok(Some(arr))
+                } else {
+                    Err(StorageError::Serde(
+                        "identity_key length mismatch — expected 32 bytes".into(),
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Persist the raw Ed25519 private key bytes.
+    pub async fn set_identity_key(&self, key_bytes: &[u8; 32]) -> Result<(), StorageError> {
+        self.set("identity_key", serde_json::to_value(key_bytes.as_slice())?)
             .await
     }
 

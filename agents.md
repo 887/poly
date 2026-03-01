@@ -79,6 +79,7 @@ Someone should be able to build Poly with only `discord + teams` or any other co
   - Every crate and the workspace root has a `cranky.toml` denying: `warnings`, `unsafe_code`, `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`, `clippy::indexing_slicing`, `clippy::print_stdout`, `clippy::print_stderr`
   - Install once: `cargo install cranky`
 - Run `cargo check --workspace` — verify all crates compile
+- **After any change to `poly-core` or `poly-web`**: run the VS Code task **"Check: poly-web (WASM)"** (or `cargo check -p poly-web --target wasm32-unknown-unknown`) to verify WASM compatibility. The desktop build does NOT catch WASM-only breakage.
 - Run `cargo fmt --all` — consistent formatting
 - Write doc comments on all public items
 - Write `// TODO(phase-X.Y.Z):` comments referencing the plan item number

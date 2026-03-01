@@ -19,19 +19,24 @@
     "editor.defaultFormatter": "tamasfe.even-better-toml"
   },
   "[css]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": null
   },
   "[json]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": null
   },
   "[markdown]": {
-    "editor.defaultFormatter": "off"
+    "editor.defaultFormatter": null
+  },
+
+  // YAML Schemas
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
   },
 
   // Markdown Linting
-"markdownlint.config": {
-  "default": false
-},
+  "markdownlint.config": {
+    "default": false
+  },
 
   // Spell Checking
   "cSpell.enabled": false,

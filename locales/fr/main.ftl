@@ -91,6 +91,40 @@ settings-follow-device = Suivre la préférence de l'appareil
 settings-general = Général
 settings-general-description = Préférences de notification et comportement au démarrage
 
+# Backup Server Settings
+settings-backup-add-server = Ajouter un serveur
+settings-backup-url-placeholder = https://backup.example.com
+settings-backup-url-label = URL du serveur
+settings-backup-label-label = Nom du serveur
+settings-backup-passphrase-label = Phrase secrète du serveur
+settings-backup-connect = Connecter
+settings-backup-connecting = Connexion...
+settings-backup-cancel = Annuler
+settings-backup-status-unknown = Inconnu
+settings-backup-status-connected = Connecté
+settings-backup-status-auth-required = Authentification requise
+settings-backup-status-unreachable = Inaccessible
+settings-backup-status-syncing = Synchronisation...
+settings-backup-sync-now = Synchroniser maintenant
+settings-backup-reauth = Ré-authentifier
+settings-backup-remove = Supprimer
+settings-backup-last-synced = Dernière sync: { $time }
+settings-backup-never-synced = Jamais synchronisé
+settings-backup-enabled = Activé
+settings-backup-auth-success = Connecté!
+settings-backup-auth-failed = Échec de l'authentification
+settings-backup-no-servers = Aucun serveur de sauvegarde configuré.
+
+# Identity Settings
+settings-identity-your-id-label = Votre identifiant de compte Poly
+settings-identity-copy-id = Copier l'ID
+settings-identity-show-phrase = Afficher la phrase de récupération
+settings-identity-phrase-modal-title = Votre phrase de récupération
+settings-identity-phrase-warning = Gardez cette phrase secrète. Quiconque la possède peut accéder à votre compte.
+settings-identity-copy-all = Copier tous les mots
+settings-identity-close = Fermer
+settings-identity-no-identity = Identité pas encore générée. Terminez d'abord l'assistant de configuration.
+
 # Préréglages de thème
 theme-neutral-dark = Sombre neutre
 theme-purple = Violet (inspiré de Discord)

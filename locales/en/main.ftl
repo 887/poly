@@ -91,6 +91,40 @@ settings-follow-device = Follow Device Preference
 settings-general = General
 settings-general-description = Notification preferences and startup behavior
 
+# Backup Server Settings
+settings-backup-add-server = Add Server
+settings-backup-url-placeholder = https://backup.example.com
+settings-backup-url-label = Server URL
+settings-backup-label-label = Server Name
+settings-backup-passphrase-label = Server Passphrase
+settings-backup-connect = Connect
+settings-backup-connecting = Connecting...
+settings-backup-cancel = Cancel
+settings-backup-status-unknown = Unknown
+settings-backup-status-connected = Connected
+settings-backup-status-auth-required = Auth Required
+settings-backup-status-unreachable = Unreachable
+settings-backup-status-syncing = Syncing...
+settings-backup-sync-now = Sync Now
+settings-backup-reauth = Re-authenticate
+settings-backup-remove = Remove
+settings-backup-last-synced = Last synced: { $time }
+settings-backup-never-synced = Never synced
+settings-backup-enabled = Enabled
+settings-backup-auth-success = Connected!
+settings-backup-auth-failed = Authentication failed
+settings-backup-no-servers = No backup servers configured.
+
+# Identity Settings
+settings-identity-your-id-label = Your Poly Account ID
+settings-identity-copy-id = Copy ID
+settings-identity-show-phrase = Show Recovery Phrase
+settings-identity-phrase-modal-title = Your Recovery Phrase
+settings-identity-phrase-warning = Keep this phrase secret. Anyone who has it can access your account.
+settings-identity-copy-all = Copy All Words
+settings-identity-close = Close
+settings-identity-no-identity = Identity not yet generated. Complete the setup wizard first.
+
 # Theme Presets
 theme-neutral-dark = Neutral Dark
 theme-purple = Purple (Discord-inspired)

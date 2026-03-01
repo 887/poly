@@ -131,17 +131,19 @@ pub async fn push(
         .unwrap_or(0)
         + 1;
 
+    let now_str = chrono::Utc::now().to_rfc3339();
     state
         .db
         .query(
             "CREATE sync_blob CONTENT { \
                public_key: $pk, sequence: $seq, \
-               encrypted_blob: $blob, pushed_at: time::now() \
+               encrypted_blob: $blob, pushed_at: $now \
              }",
         )
         .bind(("pk", user.public_key))
         .bind(("seq", next_seq))
         .bind(("blob", body.encrypted_blob))
+        .bind(("now", now_str))
         .await?
         .check()
         .map_err(AppError::from)?;
@@ -175,7 +177,7 @@ pub async fn pull(
     let records: Vec<serde_json::Value> = state
         .db
         .query(
-            "SELECT * FROM sync_blob \
+            "SELECT sequence, encrypted_blob, pushed_at FROM sync_blob \
              WHERE public_key = $pk AND sequence > $since \
              ORDER BY sequence ASC",
         )
@@ -235,7 +237,7 @@ pub async fn status(
 ) -> Result<Json<SyncStatusResponse>> {
     let account: Option<serde_json::Value> = state
         .db
-        .query("SELECT * FROM account WHERE public_key = $pk LIMIT 1")
+        .query("SELECT public_key, registered_at FROM account WHERE public_key = $pk LIMIT 1")
         .bind(("pk", user.public_key.clone()))
         .await?
         .take(0)

@@ -1,7 +1,7 @@
 # poly-backup-server — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-01
+> **Last Updated:** 2026-03-01 (Session 2)
 
 ---
 
@@ -14,9 +14,47 @@ See [README.md](README.md) for the full feature status checklist and run instruc
 
 ## Implementation Status
 
-Core implementation complete. See README.md feature table for exact status.
-Open work items: persistent `max_accounts` runtime mutation, per-IP rate limiting,
-Docker image, and integration tests (phase-2.3.7 / phase-2.3.8).
+Core implementation complete including E2E protocol tests (10/10 pass). See README.md feature
+table for exact status.
+
+## CRITICAL: SurrealDB 3.0 datetime → `serde_json::Value` incompatibility
+
+**DECISION(DX-SURREAL-DATETIME-1):** All timestamp fields in this server use `TYPE string`
+(not `TYPE datetime`) and store RFC3339 strings set from Rust-side `Utc::now().to_rfc3339()`.
+
+**WHY:** SurrealDB 3.0.x with `kv-surrealkv` CANNOT serialize `TYPE datetime` fields into
+`serde_json::Value` when using `.take::<serde_json::Value>(0)`. The error is:
+`"Expected any, got datetime"`. This applies to all datetime-typed columns in any `SELECT *` result.
+
+**RULES (NON-NEGOTIABLE):**
+- NEVER use `TYPE datetime` for any schema field (exception: fields never read back in Rust)
+- NEVER use `time::now()` inside SurrealQL string literals
+- ALWAYS bind timestamps as `$now` and set from Rust: `.bind(("now", Utc::now().to_rfc3339()))`
+- ALWAYS do expiry checks in Rust with `chrono::DateTime::parse_from_rfc3339()` not SurrealQL `time::now()`
+- ALWAYS use explicit SELECT column lists (not `SELECT *`) to avoid accidentally retrieving
+  datetime-typed columns that may be added in the future
+
+**Example — correct pattern:**
+```rust
+state.db
+    .query("CREATE table CONTENT { value: $val, created_at: $now }")
+    .bind(("val", value))
+    .bind(("now", Utc::now().to_rfc3339()))
+    .await?.check().map_err(AppError::from)?;
+```
+
+**Example — expiry check in Rust (NOT in SurrealQL):**
+```rust
+let expires_at_str = record
+    .get("expires_at")
+    .and_then(serde_json::Value::as_str)
+    .ok_or(AppError::Unauthorized)?;
+if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
+    if exp <= Utc::now() { return Err(AppError::Unauthorized); }
+} else {
+    return Err(AppError::Unauthorized);
+}
+```
 
 ## Making Changes
 
@@ -51,17 +89,17 @@ All queries follow the pattern established in `poly-server`. Always look there w
 implementing new queries.
 
 ```rust
-// Single optional record:
-let rec: Option<MyRecord> = state.db
-    .query("SELECT * FROM table WHERE field = $val LIMIT 1")
+// Single optional record (use explicit column list, not SELECT *):
+let rec: Option<serde_json::Value> = state.db
+    .query("SELECT nonce, public_key, difficulty, expires_at FROM table WHERE field = $val LIMIT 1")
     .bind(("val", value))
     .await?
     .take(0)
     .map_err(AppError::from)?;
 
-// Multiple records:
-let recs: Vec<MyRecord> = state.db
-    .query("SELECT * FROM table WHERE public_key = $pk ORDER BY seq ASC")
+// Multiple records (explicit columns):
+let recs: Vec<serde_json::Value> = state.db
+    .query("SELECT sequence, encrypted_blob, pushed_at FROM table WHERE public_key = $pk ORDER BY seq ASC")
     .bind(("pk", pk))
     .await?
     .take(0)
@@ -76,10 +114,12 @@ let agg: Option<serde_json::Value> = state.db
     .map_err(AppError::from)?;
 let n = agg.as_ref().and_then(|v| v.get("n")).and_then(serde_json::Value::as_i64).unwrap_or(0);
 
-// Create:
+// Create — ALWAYS bind $now, NEVER use time::now() in SurrealQL:
+let now_str = Utc::now().to_rfc3339();
 state.db
-    .query("CREATE table CONTENT { field: $val, created_at: time::now() }")
+    .query("CREATE table CONTENT { field: $val, created_at: $now }")
     .bind(("val", value))
+    .bind(("now", now_str))
     .await?
     .check()
     .map_err(AppError::from)?;
