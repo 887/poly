@@ -15,7 +15,7 @@ members = [
     "mcp/web-devtools",
     "apps/desktop",
     "apps/desktop-blitz",
-    # "apps/desktop-electron",  # Electron wrapper — not a standard Rust crate
+    "apps/desktop-electron",  # Electron wrapper (WASM → Electron shell)
     "apps/android",
     "apps/ios",
     "apps/web",

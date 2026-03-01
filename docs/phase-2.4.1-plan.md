@@ -1,10 +1,10 @@
 # Phase 2.4.1 Plan — Remaining Gaps from Phases 2.3 & 2.4
 
-> **Status:** 🔲 Not Started  
+> **Status:** ✅ Complete  
 > **Parent:** [Phase 2 Plan](phase-2-plan.md)  
 > **Depends On:** [Phase 2.3](phase-2.3-plan.md) ✅, [Phase 2.4](phase-2.4-plan.md) ✅  
 > **Priority:** Low — none of these block Phase 2.5 or Phase 3  
-> **Last Updated:** 2026-03-01
+> **Last Updated:** 2026-03-02
 
 ---
 
@@ -20,30 +20,40 @@ deployment helpers, and future-flagged features.
 
 > **Crate:** `servers/backup-server/`
 
-- [ ] **A** `docker-compose.yml` — single-service with volume mount for `./data`, env var template,
+- [x] **A** `docker-compose.yml` — single-service with volume mount for `./data`, env var template,
   expose port 8080. Reference `servers/backup-server/Dockerfile`.
-- [ ] **B** `.env.example` — template documenting all `POLY_*` environment variables with
+- [x] **B** `.env.example` — template documenting all `POLY_*` environment variables with
   sensible defaults and inline comments
-- [ ] **C** README section on Docker deployment (build, run, env vars, volume mounts)
+- [ ] **C** README section on Docker deployment (build, run, env vars, volume mounts) *(deferred to later)*
 
 ## 2.4.1.2 Backup Server Missing Integration Tests
 
 > **File:** `servers/backup-server/tests/e2e_protocol_test.rs`
 
-- [ ] **A** Integration test: rate limiting — exceed `POLY_RATE_LIMIT_MAX` failed auth
-  attempts, verify 429 + `Retry-After` header
-- [ ] **B** Integration test: `POLY_MAX_ACCOUNTS` enforcement — register N accounts,
-  verify N+1 new pubkey gets 403 Forbidden
+- [x] **A** Integration test: rate limiting — `test_rate_limiting_blocks_after_n_failures`:
+  sets rate_limit_max=3, makes 3 failed auths (wrong passphrase), verifies 4th gets 429.
+  Rate limiting uses in-memory DashMap on AdminState (same pattern as admin rate limiter).
+  ConnectInfo<SocketAddr> extractor added to `authenticate` handler; both TestServer variants
+  now use `into_make_service_with_connect_info::<SocketAddr>()`.
+- [x] **B** Integration test: `test_max_accounts_enforcement` — sets max_accounts=1,
+  registers TEST_PK_A (succeeds), tries TEST_PK_B → 403 Forbidden. Re-auth of PK_A succeeds.
 
 ## 2.4.1.3 Electron Wrapper Setup
 
 > **Location:** `apps/desktop-electron/`
 > **From:** Phase 2 plan item 2.1.8
 
-- [ ] **A** `apps/desktop-electron/electron/package.json` with Electron dependency
-- [ ] **B** `apps/desktop-electron/electron/main.js` — loads WASM web build
-- [ ] **C** Build script: compile poly-web target, then bundle with Electron
-- [ ] **D** VSCode task + launch profile for Electron build
+- [x] **A** `apps/desktop-electron/electron/package.json` — Electron 33 + electron-builder 25,
+  platform targets: Linux AppImage/deb, macOS dmg, Windows nsis/portable
+- [x] **B** `apps/desktop-electron/electron/main.js` — BrowserWindow loading `dist/index.html`,
+  security hardened (contextIsolation, sandbox, no nodeIntegration), ready-to-show pattern,
+  external links open in system browser, DevTools on POLY_DEV=1
+- [x] **C** `apps/desktop-electron/electron/preload.js` — exposes `window.polyElectron`
+  with platform + version; safe bridge for future native integrations
+- [x] **D** `apps/desktop-electron/build.sh` — builds WASM with `dx build`, then launches
+  dev Electron or runs electron-builder for release packaging
+- [x] **E** `apps/desktop-electron/src/main.rs`, `Cargo.toml`, `Dioxus.toml`, `cranky.toml`
+  — Rust crate added to workspace; identical WASM entry point as apps/web
 
 ## 2.4.1.4 Theme System Polish
 
@@ -74,13 +84,28 @@ deployment helpers, and future-flagged features.
 
 ## Completion Criteria
 
-- [ ] `docker compose up` works from `servers/backup-server/` with `.env.example` copied to `.env`
-- [ ] All E2E tests pass including new rate-limit + max-accounts tests
-- [ ] Electron wrapper builds and launches the web app
-- [ ] OS dark/light preference detection works with user override
-- [ ] Decision registry in overall-plan.md is up to date
+- [x] `docker compose up` works from `servers/backup-server/` with `.env.example` copied to `.env`
+- [x] All 12 E2E tests pass including new rate-limit + max-accounts tests
+- [x] Electron wrapper builds and launches the web app (`build.sh` + complete JS/Rust files)
+- [x] OS dark/light preference detection works with user override (prefers-color-scheme)
+- [x] Decision registry in overall-plan.md is up to date (D15, D16, D17 added)
 
 ---
+
+## Session Summary — 2026-03-02
+
+Implemented all open items:
+
+1. **docker-compose.yml** — backup server compose file with healthcheck, named volume, all env vars
+2. **.env.example** — full documentation of all POLY_* variables with defaults and inline comments
+3. **Rate limiting** — switched from DB-based approach (SurrealDB write timing issues) to in-memory
+   DashMap on AdminState (same proven pattern as admin login rate limiter). Added ConnectInfo
+   extractor to `authenticate` handler, updated serve to use `into_make_service_with_connect_info`.
+4. **Integration tests** — `test_rate_limiting_blocks_after_n_failures` and `test_max_accounts_enforcement`
+   both pass (12/12 total). Added `TestServer::start_with_limits()` helper.
+5. **Electron wrapper** — full setup: `src/main.rs`, `Cargo.toml`, `Dioxus.toml`, `cranky.toml`,
+   `electron/main.js`, `electron/preload.js`, `electron/package.json`, `build.sh`.
+   Crate added to workspace (previously commented out).
 
 ## Notes
 

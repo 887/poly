@@ -1,0 +1,26 @@
+[package]
+name = "poly-desktop-electron"
+description = "Poly desktop app — Dioxus WASM build wrapped in Electron"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-desktop-electron"
+path = "src/main.rs"
+
+[dependencies]
+poly-core = { workspace = true, features = ["demo"] }
+dioxus = { workspace = true, features = ["web"] }
+tracing = { workspace = true }
+
+# tracing-subscriber only on native (shouldn't be needed for WASM, kept for parity)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { workspace = true }
+
+# getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom04-wasm = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,39 @@
+services:
+  backup-server:
+    build:
+      context: ../..
+      dockerfile: servers/backup-server/Dockerfile
+    image: poly-backup-server:latest
+    container_name: poly-backup-server
+    restart: unless-stopped
+    ports:
+      - "${POLY_BIND_PORT:-8080}:8080"
+    volumes:
+      - poly_data:/app/data
+    environment:
+      # Required: server-wide access passphrase (shared out-of-band with users)
+      POLY_PASSPHRASE: ${POLY_PASSPHRASE}
+      # Bind address inside the container (always 0.0.0.0:8080 — expose via ports above)
+      POLY_BIND: "0.0.0.0:8080"
+      # Data directory inside the container (backed by named volume)
+      POLY_DATA_DIR: /app/data
+      # Optional settings — shown with defaults
+      POLY_MAX_ACCOUNTS: ${POLY_MAX_ACCOUNTS:-0}
+      POLY_TOKEN_EXPIRY_DAYS: ${POLY_TOKEN_EXPIRY_DAYS:-365}
+      POLY_POW_DIFFICULTY: ${POLY_POW_DIFFICULTY:-20}
+      POLY_RATE_LIMIT_MAX: ${POLY_RATE_LIMIT_MAX:-5}
+      POLY_RATE_LIMIT_WINDOW_SECS: ${POLY_RATE_LIMIT_WINDOW_SECS:-3600}
+      POLY_SERVER_NAME: ${POLY_SERVER_NAME:-"My Poly Backup Server"}
+      # Admin UI credentials
+      POLY_ADMIN_USER: ${POLY_ADMIN_USER:-admin}
+      POLY_ADMIN_PASSWORD: ${POLY_ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  poly_data:
+    driver: local

@@ -124,7 +124,66 @@ impl TestServer {
 
         tokio::spawn(async move {
             // Ignore serve error — test will fail naturally if server dies.
-            let _ = axum::serve(listener, router).await;
+            let _ = axum::serve(
+                listener,
+                router.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await;
+        });
+
+        Ok(TestServer {
+            addr,
+            _data_dir: data_dir,
+        })
+    }
+
+    /// Spin up a server with configurable account and rate-limit caps.
+    async fn start_with_limits(
+        passphrase: &str,
+        pow_difficulty: u32,
+        max_accounts: usize,
+        rate_limit_max: u32,
+    ) -> Result<Self> {
+        let data_dir = TempDir::new().context("create temp dir")?;
+
+        let config = Arc::new(Config {
+            server_name: "Test Poly Server".to_owned(),
+            passphrase: passphrase.to_owned(),
+            max_accounts,
+            token_expiry_days: 365,
+            pow_difficulty,
+            admin_pow_difficulty: 4,
+            bind: "127.0.0.1:0".parse().context("parse bind addr")?,
+            data_dir: data_dir.path().to_path_buf(),
+            rate_limit_max,
+            rate_limit_window_secs: 3600,
+            admin_user: "admin".to_owned(),
+            admin_password: "adminpass".to_owned(),
+            admin_session_hours: 24,
+            admin_rate_limit_per_minute: 100,
+        });
+
+        let db = init_db(&config).await.context("init db")?;
+
+        let state = AppState {
+            db,
+            config,
+            admin: AdminState::new(),
+        };
+
+        let router = create_app(state);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .context("bind listener")?;
+        let addr = listener.local_addr().context("local addr")?;
+
+        tokio::spawn(async move {
+            let _ = axum::serve(
+                listener,
+                router.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await;
         });
 
         Ok(TestServer {
@@ -601,6 +660,124 @@ async fn test_sequence_numbers_monotonic() -> Result<()> {
         prev_seq = push.sequence;
     }
     assert_eq!(prev_seq, 5, "5 pushes → sequence 5");
+
+    Ok(())
+}
+
+/// IP rate limiting: after `rate_limit_max` failed auth attempts from the same
+/// IP, the server must return 429 Too Many Requests on the next attempt.
+#[tokio::test]
+async fn test_rate_limiting_blocks_after_n_failures() -> Result<()> {
+    // rate_limit_max=3: after 3 failures the 4th attempt must be 429.
+    let server = TestServer::start_with_limits("testpass", 4, 0, 3).await?;
+    let client = Client::new();
+
+    // Request one challenge. Because the server does NOT consume the challenge
+    // on a passphrase failure, we can reuse the same nonce + counter for all
+    // failed attempts.
+    let c_resp = client
+        .post(server.url("/api/challenge"))
+        .json(&ChallengeRequest {
+            public_key: TEST_PK_A,
+        })
+        .send()
+        .await
+        .context("challenge")?;
+    assert_eq!(c_resp.status(), 200, "challenge ok");
+    let challenge: ChallengeResponse = c_resp.json().await.context("challenge json")?;
+
+    // Solve PoW with the correct nonce but we'll submit a wrong passphrase.
+    let counter = solve_pow(&challenge.nonce, challenge.difficulty);
+
+    // Send `rate_limit_max` (3) failed attempts — each must return 401.
+    for attempt in 1u32..=3 {
+        let resp = client
+            .post(server.url("/api/auth"))
+            .json(&AuthRequest {
+                public_key: TEST_PK_A,
+                nonce: challenge.nonce.clone(),
+                counter,
+                passphrase: "WRONG_PASSPHRASE",
+                device_name: "Rate Limit Test",
+            })
+            .send()
+            .await
+            .context("failed auth")?;
+        assert_eq!(
+            resp.status(),
+            401,
+            "attempt {attempt} should return 401 Unauthorized"
+        );
+    }
+
+    // The 4th attempt (same IP, same window) must be rate-limited → 429.
+    let resp = client
+        .post(server.url("/api/auth"))
+        .json(&AuthRequest {
+            public_key: TEST_PK_A,
+            nonce: challenge.nonce.clone(),
+            counter,
+            passphrase: "WRONG_PASSPHRASE",
+            device_name: "Rate Limit Test",
+        })
+        .send()
+        .await
+        .context("rate-limited auth")?;
+    assert_eq!(
+        resp.status(),
+        429,
+        "4th attempt from same IP should be rate-limited (429)"
+    );
+
+    Ok(())
+}
+
+/// `max_accounts` enforcement: once the account limit is reached, a new public
+/// key must receive 403 Forbidden on authentication.
+#[tokio::test]
+async fn test_max_accounts_enforcement() -> Result<()> {
+    // Allow exactly 1 account.
+    let server = TestServer::start_with_limits("testpass", 4, 1, 0).await?;
+    let client = Client::new();
+
+    // First key should authenticate successfully and consume the one slot.
+    let token_a = authenticate(&client, &server, TEST_PK_A, "testpass", "Account A").await?;
+    assert!(!token_a.is_empty(), "TEST_PK_A should receive a token");
+
+    // Second key: challenge succeeds, but auth must fail with 403 after PoW.
+    let c_resp = client
+        .post(server.url("/api/challenge"))
+        .json(&ChallengeRequest {
+            public_key: TEST_PK_B,
+        })
+        .send()
+        .await
+        .context("challenge for B")?;
+    assert_eq!(c_resp.status(), 200, "challenge for B ok");
+    let challenge: ChallengeResponse = c_resp.json().await.context("challenge json")?;
+    let counter = solve_pow(&challenge.nonce, challenge.difficulty);
+
+    let resp = client
+        .post(server.url("/api/auth"))
+        .json(&AuthRequest {
+            public_key: TEST_PK_B,
+            nonce: challenge.nonce,
+            counter,
+            passphrase: "testpass",
+            device_name: "Account B",
+        })
+        .send()
+        .await
+        .context("auth for B")?;
+    assert_eq!(
+        resp.status(),
+        403,
+        "second account must be rejected with 403 when max_accounts=1"
+    );
+
+    // Re-authentication of the first key must still succeed (not a new account).
+    let token_a2 = authenticate(&client, &server, TEST_PK_A, "testpass", "Account A again").await?;
+    assert!(!token_a2.is_empty(), "re-auth of TEST_PK_A must succeed");
 
     Ok(())
 }

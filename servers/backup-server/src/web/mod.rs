@@ -54,6 +54,8 @@ pub struct AdminState {
     pub challenges: DashMap<String, (u32, Instant)>,
     /// Global login rate limiter.
     pub rate: Mutex<AdminLoginTracker>,
+    /// Per-IP API auth failure counter: ip → (failure_count, window_start).
+    pub api_rate: DashMap<String, (u32, Instant)>,
 }
 
 impl AdminState {
@@ -62,6 +64,7 @@ impl AdminState {
             sessions: DashMap::new(),
             challenges: DashMap::new(),
             rate: Mutex::new(AdminLoginTracker::default()),
+            api_rate: DashMap::new(),
         })
     }
 }

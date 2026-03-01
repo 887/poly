@@ -72,6 +72,10 @@ pub struct Server {
     pub backend: BackendType,
     /// Total unread message count across all channels.
     pub unread_count: u32,
+    /// Which account this server comes from (multi-account support).
+    pub account_id: String,
+    /// Display name of the account that owns this server.
+    pub account_display_name: String,
 }
 
 /// A category/folder that groups channels within a server.
@@ -224,6 +228,8 @@ pub struct Group {
     pub last_message: Option<Message>,
     /// Which backend this group is from.
     pub backend: BackendType,
+    /// Which account this group comes from (multi-account support).
+    pub account_id: String,
 }
 
 /// A direct message channel.
@@ -237,6 +243,10 @@ pub struct DmChannel {
     pub last_message: Option<Message>,
     /// Number of unread messages.
     pub unread_count: u32,
+    /// Which backend this DM is from.
+    pub backend: BackendType,
+    /// Which account this DM comes from (multi-account support).
+    pub account_id: String,
 }
 
 /// A notification from a backend.

@@ -11,9 +11,11 @@
 //! ## Token storage
 //! Raw token is returned once. Server stores `SHA-256(token)` — never the raw value.
 
+use std::net::SocketAddr;
+
 use axum::{
     Json,
-    extract::{FromRef, FromRequestParts, State},
+    extract::{ConnectInfo, FromRef, FromRequestParts, State},
     http::{StatusCode, request::Parts},
 };
 use chrono::Utc;
@@ -285,6 +287,60 @@ async fn issue_session_token(
     Ok((raw_token, expires_at.to_rfc3339()))
 }
 
+// ── Rate limiting helpers ────────────────────────────────────────────────────
+
+/// Return `Err(AppError::TooManyRequests)` if `ip` has exceeded the configured
+/// failure limit within the current sliding window, otherwise return `Ok(())`.
+///
+/// Uses the in-memory `api_rate` DashMap on [`crate::web::AdminState`] so that
+/// writes are synchronous, infallible, and not subject to DB write latency.
+fn check_rate_limit(
+    admin: &crate::web::AdminState,
+    config: &crate::Config,
+    ip: &str,
+) -> Result<()> {
+    if config.rate_limit_max == 0 {
+        return Ok(());
+    }
+    if let Some(entry) = admin.api_rate.get(ip) {
+        let (failures, window_start) = *entry;
+        if window_start.elapsed().as_secs() < config.rate_limit_window_secs
+            && failures >= config.rate_limit_max
+        {
+            return Err(AppError::TooManyRequests);
+        }
+    }
+    Ok(())
+}
+
+/// Increment the failed-auth counter for `ip`, resetting the window if it has
+/// already expired.
+fn increment_rate_limit_failure(admin: &crate::web::AdminState, config: &crate::Config, ip: &str) {
+    use std::time::Instant;
+    let window_secs = config.rate_limit_window_secs;
+    admin
+        .api_rate
+        .entry(ip.to_owned())
+        .and_modify(|(failures, window_start): &mut (u32, Instant)| {
+            if window_start.elapsed().as_secs() >= window_secs {
+                // Window expired — reset.
+                *failures = 1;
+                *window_start = Instant::now();
+            } else {
+                *failures += 1;
+            }
+        })
+        .or_insert_with(|| (1, Instant::now()));
+}
+
+/// Clear the rate-limit entry for `ip` on a successful authentication,
+/// so a previously-blocked address can retry immediately after fixing credentials.
+fn clear_rate_limit(admin: &crate::web::AdminState, ip: &str) {
+    admin.api_rate.remove(ip);
+}
+
+// ── Auth handler ──────────────────────────────────────────────────────────────
+
 /// `POST /api/auth` — verify PoW + passphrase, issue session token.
 #[utoipa::path(
     post,
@@ -301,10 +357,23 @@ async fn issue_session_token(
 )]
 pub async fn authenticate(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(body): Json<AuthRequest>,
 ) -> Result<Json<AuthResponse>> {
+    let ip = addr.ip().to_string();
+    // Reject early if this IP has already hit the failure ceiling.
+    check_rate_limit(&state.admin, &state.config, &ip)?;
     validate_auth_input(&body)?;
-    verify_and_consume_challenge(&state.db, &body, &state.config).await?;
+    // Verify challenge, PoW, and passphrase.  On any failure, record it.
+    match verify_and_consume_challenge(&state.db, &body, &state.config).await {
+        Ok(()) => {}
+        Err(e) => {
+            increment_rate_limit_failure(&state.admin, &state.config, &ip);
+            return Err(e);
+        }
+    }
+    // Successful verification — clear the failure window for this IP.
+    clear_rate_limit(&state.admin, &ip);
     let now_str = Utc::now().to_rfc3339();
     enforce_limit_and_upsert_account(
         &state.db,

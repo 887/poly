@@ -1,0 +1,22 @@
+# Cranky lint configuration for the desktop-electron app.
+# Identical to apps/web since this is the same WASM target.
+
+[deny]
+warnings = true
+unsafe_code = true
+"clippy::unwrap_used" = true
+"clippy::expect_used" = true
+"clippy::panic" = true
+"clippy::indexing_slicing" = true
+"clippy::todo" = true
+"clippy::unimplemented" = true
+"clippy::dbg_macro" = true
+"clippy::print_stdout" = true
+"clippy::print_stderr" = true
+"clippy::too_many_lines" = true
+"clippy::cognitive_complexity" = true
+"clippy::too_many_arguments" = true
+
+[warn]
+"clippy::pedantic" = true
+"clippy::nursery" = true

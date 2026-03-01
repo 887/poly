@@ -1,0 +1,45 @@
+{
+  "name": "poly-desktop-electron",
+  "version": "0.1.0",
+  "description": "Poly Desktop — Dioxus WASM app packaged as an Electron application",
+  "main": "main.js",
+  "author": "Poly Contributors",
+  "license": "MIT OR Apache-2.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "electron": "^33.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "chat.poly.desktop",
+    "productName": "Poly",
+    "copyright": "Copyright © 2025 Poly Contributors",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "../dist/**/*"
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Network"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.social-networking"
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    }
+  }
+}

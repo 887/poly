@@ -1,0 +1,86 @@
+'use strict';
+
+/**
+ * Electron main process for Poly Desktop.
+ *
+ * Loads the Dioxus WASM web build produced by:
+ *   dx build --release --platform web
+ * (run from the apps/desktop-electron/ directory).
+ *
+ * The build output lands in apps/desktop-electron/dist/index.html.
+ */
+
+const { app, BrowserWindow, Menu, shell } = require('electron');
+const path = require('node:path');
+
+// ── Security: keep remote content from running Node.js ───────────────────────
+// contextIsolation and nodeIntegration=false prevent any loaded page from
+// accessing Node APIs regardless of what the WASM app does.
+const WINDOW_OPTIONS = {
+  width: 1280,
+  height: 800,
+  minWidth: 800,
+  minHeight: 600,
+  title: 'Poly',
+  webPreferences: {
+    preload: path.join(__dirname, 'preload.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+  },
+  // Use system default background to avoid white flash on first paint.
+  backgroundColor: '#1a1a1a',
+  show: false, // defer show until ready-to-show
+};
+
+function createWindow() {
+  const win = new BrowserWindow(WINDOW_OPTIONS);
+
+  // Show only after the first paint — avoids white-flash on cold start.
+  win.once('ready-to-show', () => win.show());
+
+  // Load the local WASM web-app bundle. Path relative to THIS file (electron/).
+  const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
+  win.loadFile(indexPath).catch((err) => {
+    // Friendly message if the WASM build hasn't been run yet.
+    console.error(
+      `[Poly] Failed to load dist/index.html: ${err.message}\n` +
+      `  Did you run 'dx build --platform web' in apps/desktop-electron/?`,
+    );
+  });
+
+  // Open DevTools in development (NODE_ENV=development or POLY_DEV=1).
+  if (process.env.NODE_ENV === 'development' || process.env.POLY_DEV === '1') {
+    win.webContents.openDevTools({ mode: 'detach' });
+  }
+
+  // Open external links in the system browser, not inside Electron.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url).catch(() => undefined);
+    return { action: 'deny' };
+  });
+}
+
+// ── App lifecycle ─────────────────────────────────────────────────────────────
+
+app.whenReady().then(() => {
+  // Remove the default menu for a cleaner UI.  Platform-specific menus
+  // (e.g. macOS dock behaviour) are handled automatically by Electron.
+  Menu.setApplicationMenu(null);
+
+  createWindow();
+
+  // macOS: re-create window when clicking dock icon with no open windows.
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+// Quit when all windows are closed (except macOS, where the app stays alive).
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});

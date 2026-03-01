@@ -5171,6 +5171,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly-desktop-electron"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "getrandom 0.4.1",
+ "poly-core",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "poly-devtools-protocol"
 version = "0.1.0"
 dependencies = [

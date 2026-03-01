@@ -1,0 +1,12 @@
+[application]
+name = "Poly Desktop (Electron)"
+default_platform = "web"
+
+[web.app]
+title = "Poly — PolyGlot Messenger"
+
+# Build output goes to ./dist/; Electron main.js loads dist/index.html.
+[web.resource]
+dev.style = []
+style = []
+script = []
