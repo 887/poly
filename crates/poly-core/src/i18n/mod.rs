@@ -66,30 +66,32 @@ impl I18nState {
 
 /// Initialize the i18n system.
 ///
-/// Detects the system locale and loads the appropriate `.ftl` files.
-/// Falls back to English if the system locale is not supported.
+/// Detects the system locale via `sys_locale`, then pre-loads **all**
+/// supported locales so that switching languages at runtime never hits a
+/// "bundle not found" state (which would silently fall back to English).
 pub fn init() {
     let system_locale = sys_locale::get_locale().unwrap_or_else(|| DEFAULT_LOCALE.to_string());
 
     // Extract just the language code (e.g., "en-US" -> "en")
     let lang_code = system_locale.split('-').next().unwrap_or(DEFAULT_LOCALE);
 
-    let locale = if SUPPORTED_LOCALES.contains(&lang_code) {
+    let initial_locale = if SUPPORTED_LOCALES.contains(&lang_code) {
         lang_code
     } else {
         DEFAULT_LOCALE
     };
 
-    // Load the locale bundle
-    load_locale(locale);
-    set_locale(locale);
-
-    // Always load English as fallback
-    if locale != DEFAULT_LOCALE {
-        load_locale(DEFAULT_LOCALE);
+    // Pre-load every supported locale so that runtime language switching
+    // always finds a bundle in the map — no lazy "first-switch" fallback
+    // to English bug.
+    for locale in SUPPORTED_LOCALES {
+        load_locale(locale);
     }
 
-    tracing::info!("i18n initialized with locale: {locale}");
+    // Activate the detected locale
+    set_locale(initial_locale);
+
+    tracing::info!("i18n initialized with locale: {initial_locale} (all locales pre-loaded)");
 }
 
 /// Load `.ftl` resources for a locale into the bundle store.
@@ -219,26 +221,17 @@ pub fn provide_locale_context() {
     provide_context(sig);
 }
 
-/// Access the reactive locale signal and return a setter that triggers re-renders.
+/// Access the reactive locale [`Signal<String>`] from Dioxus context.
 ///
-/// Must be called inside a Dioxus component.
-/// Reading `locale.read()` anywhere in the component body subscribes the component to
-/// locale changes — it will re-render whenever the locale switches.
-///
-/// The returned setter is `FnMut` (Dioxus event handlers accept `FnMut`).
+/// Must be called inside a component (after [`provide_locale_context`] was
+/// called in the root). Reading `sig.read()` subscribes the component —
+/// it re-renders whenever the locale changes.
 ///
 /// ```rust,ignore
-/// // In any child component:
-/// let (locale, mut set_locale) = use_locale();
-/// let _ = locale.read(); // subscribe to changes
-/// // ...
-/// set_locale("de"); // updates global + signal → triggers re-render
+/// let mut locale = use_locale();
+/// let current = locale.read().clone(); // subscribes
+/// locale.set("de".to_string());         // updates + triggers re-render
 /// ```
-pub fn use_locale() -> (ReadSignal<String>, impl FnMut(&str) + Clone) {
-    let mut sig = use_context::<Signal<String>>();
-    let setter = move |new_locale: &str| {
-        set_locale(new_locale);
-        *sig.write() = new_locale.to_string();
-    };
-    (sig.into(), setter)
+pub fn use_locale() -> Signal<String> {
+    use_context::<Signal<String>>()
 }

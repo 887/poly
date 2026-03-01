@@ -5,12 +5,83 @@ use crate::state::{AppState, SettingsSection};
 use crate::theme::{ThemeConfig, ThemePreset};
 use dioxus::prelude::*;
 
+// ── Custom select component ───────────────────────────────────────────────────
+
+/// A (value, display-label) pair for [`PolySelect`].
+#[derive(Clone, PartialEq)]
+struct SelectOption {
+    value: &'static str,
+    label: &'static str,
+}
+
+/// Fully themed dropdown select — replaces the ugly native `<select>`.
+///
+/// The native OS select popup ignores CSS custom properties; this component
+/// renders entirely in the webview so it respects the active theme.
+#[component]
+fn PolySelect(
+    options: Vec<SelectOption>,
+    /// Currently selected value.
+    value: String,
+    /// Called with the new value string when the user picks an option.
+    onchange: EventHandler<String>,
+) -> Element {
+    let mut open = use_signal(|| false);
+    let current_label = options
+        .iter()
+        .find(|o| o.value == value)
+        .map(|o| o.label)
+        .unwrap_or(&value);
+
+    rsx! {
+        div { class: "poly-select",
+            // Trigger button
+            div {
+                class: if *open.read() { "poly-select-trigger open" } else { "poly-select-trigger" },
+                onclick: move |_| {
+                    let v = *open.read();
+                    open.set(!v);
+                },
+                span { class: "poly-select-current", "{current_label}" }
+                span { class: "poly-select-chevron", "▾" }
+            }
+            // Options panel
+            if *open.read() {
+                div { class: "poly-select-menu",
+                    for opt in &options {
+                        {
+                            let opt_value = opt.value;
+                            let is_active = opt.value == value;
+                            rsx! {
+                                div {
+                                    class: if is_active {
+                                        "poly-select-option active"
+                                    } else {
+                                        "poly-select-option"
+                                    },
+                                    onclick: move |_| {
+                                        open.set(false);
+                                        onchange.call(opt_value.to_string());
+                                    },
+                                    "{opt.label}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Settings page component.
 ///
 /// Two-column layout: navigation sidebar + content area.
 #[component]
 pub fn SettingsPage(app_state: Signal<AppState>) -> Element {
     let section = app_state.read().settings_section;
+    // Subscribe to locale signal so nav labels re-render on language change.
+    let _locale = crate::i18n::use_locale().read().clone();
 
     rsx! {
         div { class: "settings-page",
@@ -98,6 +169,7 @@ fn SettingsNavItem(label: String, active: bool, onclick: EventHandler<MouseEvent
 /// Accounts settings section.
 #[component]
 fn AccountsSettings() -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-accounts\")}" }
@@ -111,6 +183,7 @@ fn AccountsSettings() -> Element {
 /// Backup servers settings section.
 #[component]
 fn BackupSettings() -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-backup\")}" }
@@ -124,6 +197,7 @@ fn BackupSettings() -> Element {
 /// Identity settings section.
 #[component]
 fn IdentitySettings() -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-identity\")}" }
@@ -145,9 +219,9 @@ fn IdentitySettings() -> Element {
 /// `<style id="poly-theme">` in App) and persists to storage.
 #[component]
 fn ThemeSettings() -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
     let mut theme_config = use_context::<Signal<ThemeConfig>>();
 
-    // Derive the current preset string for the select's selected option.
     let current_preset = match theme_config.read().preset {
         ThemePreset::NeutralDark => "neutral-dark",
         ThemePreset::Purple => "purple",
@@ -159,24 +233,26 @@ fn ThemeSettings() -> Element {
         div { class: "settings-section",
             h2 { "{t(\"settings-theme\")}" }
             p { class: "settings-description", "{t(\"settings-theme-description\")}" }
-            // Theme preset selector
             div { class: "theme-presets",
-                label { "{t(\"settings-theme-preset\")}" }
-                select {
-                    class: "theme-select",
-                    value: "{current_preset}",
-                    onchange: move |evt| {
-                        let preset = match evt.value().as_str() {
+                label { class: "settings-label", "{t(\"settings-theme-preset\")}" }
+                PolySelect {
+                    options: vec![
+                        SelectOption { value: "neutral-dark", label: "Neutral Dark" },
+                        SelectOption { value: "purple", label: "Purple" },
+                        SelectOption { value: "red", label: "Red" },
+                        SelectOption { value: "custom", label: "Custom" },
+                    ],
+                    value: current_preset.to_string(),
+                    onchange: move |new_val: String| {
+                        let preset = match new_val.as_str() {
                             "purple" => ThemePreset::Purple,
                             "red" => ThemePreset::Red,
                             "custom" => ThemePreset::Custom,
                             _ => ThemePreset::NeutralDark,
                         };
-                        // Update context signal → App re-renders <style> with new CSS.
                         let mut new_config = theme_config.read().clone();
                         new_config.preset = preset;
                         theme_config.set(new_config.clone());
-                        // Persist async (fire-and-forget).
                         spawn(async move {
                             if let Some(s) = crate::STORAGE.get() {
                                 if let Err(e) = s.set_theme_config(&new_config).await {
@@ -187,10 +263,6 @@ fn ThemeSettings() -> Element {
                             }
                         });
                     },
-                    option { value: "neutral-dark", "{t(\"theme-neutral-dark\")}" }
-                    option { value: "purple", "{t(\"theme-purple\")}" }
-                    option { value: "red", "{t(\"theme-red\")}" }
-                    option { value: "custom", "{t(\"theme-custom\")}" }
                 }
             }
             div { class: "theme-actions",
@@ -203,28 +275,35 @@ fn ThemeSettings() -> Element {
 
 /// Language settings section.
 ///
-/// Uses [`crate::i18n::use_locale`] for reactive locale switching:
-/// changing the language immediately re-renders all translated strings
-/// across the app (because all components share the locale `Signal`).
-/// The new locale is also persisted to `AppSettings` in storage.
+/// The dropdown pre-selects the OS/browser-detected language (set during
+/// [`crate::i18n::init`]) and switches the entire app's strings reactively
+/// on change. Works identically on desktop (Wry) and web (WASM).
 #[component]
 fn LanguageSettings() -> Element {
-    let (locale_sig, mut set_locale_fn) = crate::i18n::use_locale();
-    // Reading the signal here subscribes this component to locale changes.
+    // Reads the locale Signal from context — subscribes to changes so the
+    // selected option updates immediately when another part of the app
+    // changes the locale.
+    let mut locale_sig = crate::i18n::use_locale();
     let current_locale = locale_sig.read().clone();
 
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-language\")}" }
             p { class: "settings-description", "{t(\"settings-language-description\")}" }
-            select {
-                class: "language-select",
-                value: "{current_locale}",
-                onchange: move |evt| {
-                    let new_locale = evt.value();
-                    // Update global state + trigger re-render via signal.
-                    set_locale_fn(&new_locale);
-                    // Persist the new locale to AppSettings (fire-and-forget).
+            PolySelect {
+                options: vec![
+                    SelectOption { value: "en", label: "English" },
+                    SelectOption { value: "de", label: "Deutsch" },
+                    SelectOption { value: "fr", label: "Français" },
+                    SelectOption { value: "es", label: "Español" },
+                ],
+                value: current_locale.clone(),
+                onchange: move |new_locale: String| {
+                    // Update global i18n state and re-render all subscribed
+                    // components via the shared Signal.
+                    crate::i18n::set_locale(&new_locale);
+                    *locale_sig.write() = new_locale.clone();
+                    // Persist (fire-and-forget).
                     spawn(async move {
                         if let Some(s) = crate::STORAGE.get() {
                             match s.get_app_settings().await {
@@ -236,19 +315,13 @@ fn LanguageSettings() -> Element {
                                         tracing::info!("Locale persisted to storage ✓");
                                     }
                                 }
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to read settings for locale persist: {e}"
-                                    );
-                                }
+                                Err(e) => tracing::error!(
+                                    "Failed to read settings for locale persist: {e}"
+                                ),
                             }
                         }
                     });
                 },
-                option { value: "en", "English" }
-                option { value: "de", "Deutsch" }
-                option { value: "fr", "Français" }
-                option { value: "es", "Español" }
             }
         }
     }
@@ -257,6 +330,7 @@ fn LanguageSettings() -> Element {
 /// Appearance settings section.
 #[component]
 fn AppearanceSettings() -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-appearance\")}" }
@@ -292,6 +366,7 @@ fn AppearanceSettings() -> Element {
 /// General settings section.
 #[component]
 fn GeneralSettings() -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-general\")}" }

@@ -51,6 +51,9 @@ pub fn App() -> Element {
     // DECISION(DX-I18N-1): Signal<String> provided as context; use_locale() hook
     // in child components subscribes them to locale changes automatically.
     crate::i18n::provide_locale_context();
+    // Get the locale signal now (after provide) so the use_future closure can
+    // write the persisted locale into it without calling a hook inside async.
+    let mut locale_sig = crate::i18n::use_locale();
 
     // Reactive theme config context — ThemeSettings reads/writes this signal.
     // The App RSX renders a <style> element from it so all theme changes are
@@ -90,8 +93,10 @@ pub fn App() -> Element {
                 match storage.get_app_settings().await {
                     Ok(settings) if settings.setup_complete => {
                         tracing::info!("Storage: setup already complete, going to main layout");
-                        // Restore saved locale.
+                        // Restore saved locale — update both the global bundle and
+                        // the reactive Signal so PolySelect shows the right value.
                         crate::i18n::set_locale(&settings.locale);
+                        *locale_sig.write() = settings.locale.clone();
                         app_state.write().is_setup_complete = true;
                         app_state.write().nav.view = View::DmsFriends;
                     }
