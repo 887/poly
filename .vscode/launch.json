@@ -5,6 +5,7 @@
       "type": "lldb",
       "request": "launch",
       "name": "Desktop Wry (Linux)",
+      "preLaunchTask": "Asset Server: desktop (for lldb debugging)",
       "cargo": {
         "args": ["build", "-p", "poly-desktop"],
         "filter": {
@@ -16,12 +17,13 @@
       "env": {
         "RUST_LOG": "info,poly_core=debug"
       },
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}/apps/desktop"
     },
     {
       "type": "lldb",
       "request": "launch",
       "name": "Desktop Blitz (Linux)",
+      "preLaunchTask": "Asset Server: desktop (for lldb debugging)",
       "cargo": {
         "args": ["build", "-p", "poly-desktop-blitz"],
         "filter": {
