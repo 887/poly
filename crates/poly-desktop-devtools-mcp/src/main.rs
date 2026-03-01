@@ -70,22 +70,43 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn launch_app(&self, workspace: &str) -> anyhow::Result<String> {
-        // Kill any existing instance first to prevent double-instances on port 9223.
-        // Use pattern that matches app but NOT the MCP server.
+        // ── Step 1: check if an existing instance is already healthy ──────────
+        // Ping /status first. If it responds we reuse the running app instead
+        // of killing it and spawning a duplicate (which caused double-instances).
+        if let Ok(resp) = self
+            .client
+            .get(format!("{BASE}/status"))
+            .timeout(std::time::Duration::from_secs(2))
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                eprintln!("[launch_app] App already running — reusing existing instance ({body})");
+                return Ok(format!(
+                    "App already running on {BASE} — reusing existing instance.\n\
+                     Call connect_cdp to interact with it."
+                ));
+            }
+        }
+
+        // ── Step 2: no healthy instance — kill any stale process ─────────────
+        // Only kill what we couldn't connect to (stale/crashed).
+        eprintln!("[launch_app] No healthy instance found — killing any stale processes");
         let _ = tokio::process::Command::new("pkill")
             .args(["-f", "poly-desktop-devtools[^-]"])
             .status()
             .await;
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-        // Use dx build to get proper asset!() processing, then launch the output binary.
+        // ── Step 3: ensure the binary exists (dx build if needed) ────────────
         let app_dir = format!("{workspace}/apps/desktop-devtools");
         let binary = format!(
             "{workspace}/target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools"
         );
 
-        // Build with dx if binary doesn't exist
         if !std::path::Path::new(&binary).exists() {
+            eprintln!("[launch_app] Binary not found — running dx build first");
             let status = tokio::process::Command::new("dx")
                 .args(["build", "--platform", "desktop"])
                 .current_dir(&app_dir)
@@ -96,16 +117,51 @@ impl DevtoolsBackend for DesktopHttpBackend {
             }
         }
 
-        tokio::process::Command::new(&binary)
+        // ── Step 4: spawn the app and watch for premature exit ────────────────
+        let mut child = tokio::process::Command::new(&binary)
             .current_dir(workspace)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
 
-        Ok(format!(
-            "Launched {binary}\nWait ~2 seconds then call connect_cdp to verify."
-        ))
+        // Background task: log when the app exits so the next launch_app call
+        // knows the port is gone and correctly relaunches instead of reusing.
+        tokio::spawn(async move {
+            match child.wait().await {
+                Ok(status) => eprintln!("[launch_app] poly-desktop-devtools exited: {status}"),
+                Err(e) => eprintln!("[launch_app] Error waiting for poly-desktop-devtools: {e}"),
+            }
+        });
+
+        // ── Step 5: poll /status until the app is ready (up to 12 s) ─────────
+        let mut ready = false;
+        for attempt in 1..=24 {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            if let Ok(r) = self
+                .client
+                .get(format!("{BASE}/status"))
+                .timeout(std::time::Duration::from_secs(1))
+                .send()
+                .await
+            {
+                if r.status().is_success() {
+                    eprintln!("[launch_app] App ready after ~{}ms", attempt * 500);
+                    ready = true;
+                    break;
+                }
+            }
+        }
+
+        if ready {
+            Ok(format!(
+                "Launched {binary}\nEval-bridge is ready — call connect_cdp."
+            ))
+        } else {
+            Ok(format!(
+                "Launched {binary}\nEval-bridge not yet responding — call connect_cdp in a moment."
+            ))
+        }
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {
@@ -164,15 +220,34 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn click(&self, x: i64, y: i64) -> anyhow::Result<String> {
+        // Fire the full pointer→mouse→click sequence so WebKit2GTK accepts the
+        // synthetic events. A lone `click` event is sometimes swallowed by
+        // WebKit's internal state machine without a preceding mousedown/mouseup
+        // pair, so we send the full sequence. Coordinates map 1:1 to CSS pixels
+        // (screenshot uses SnapshotRegion::Visible).
         let js = format!(
-            r#"(function(){{
-                var el = document.elementFromPoint({x},{y});
-                if (!el) return 'No element at ({x},{y})';
-                el.dispatchEvent(new MouseEvent('click',{{bubbles:true,cancelable:true,clientX:{x},clientY:{y}}}));
-                return 'Clicked: ' + el.tagName + (el.id ? '#'+el.id : '') + (el.className ? '.'+el.className.split(' ').join('.') : '');
-            }})();"#,
-            x = x,
-            y = y
+            r#"return (function() {{
+                var x = {x}, y = {y};
+                var el = document.elementFromPoint(x, y);
+                if (!el) return 'No element at (' + x + ',' + y + ')';
+                var opts = {{
+                    bubbles: true, cancelable: true,
+                    clientX: x, clientY: y, screenX: x, screenY: y,
+                    view: window
+                }};
+                el.dispatchEvent(new PointerEvent('pointerdown', Object.assign({{pointerId:1,isPrimary:true}}, opts)));
+                el.dispatchEvent(new MouseEvent('mousedown', opts));
+                el.dispatchEvent(new PointerEvent('pointerup',   Object.assign({{pointerId:1,isPrimary:true}}, opts)));
+                el.dispatchEvent(new MouseEvent('mouseup',   opts));
+                el.dispatchEvent(new MouseEvent('click',     opts));
+                var cls = (el.className || '').toString().trim().replace(/\s+/g, '.');
+                var txt = (el.textContent || '').trim().slice(0, 40);
+                return 'Clicked ' + el.tagName
+                    + (el.id ? '#' + el.id : '')
+                    + (cls   ? '.' + cls   : '')
+                    + (txt   ? ' "' + txt + '"' : '')
+                    + ' at (' + x + ',' + y + ')';
+            }})();"#
         );
         http_eval(&self.client, &js).await
     }

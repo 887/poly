@@ -17,7 +17,7 @@ members = [
     "apps/ios",
     "apps/web",
     "apps/desktop-devtools",
-    "apps/web-devtools-mcp",
+    "crates/poly-web-devtools-mcp",
     "crates/poly-desktop-devtools-mcp",
     "crates/poly-devtools-protocol",
 ]

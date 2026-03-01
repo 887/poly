@@ -237,7 +237,7 @@ fn DevtoolsShell() -> Element {
             let (tx, poll_rx) = mpsc::channel::<Result<Vec<u8>, String>>();
 
             wv.snapshot(
-                webkit2gtk::SnapshotRegion::FullDocument,
+                webkit2gtk::SnapshotRegion::Visible,
                 webkit2gtk::SnapshotOptions::empty(),
                 webkit2gtk::gio::Cancellable::NONE,
                 move |result: Result<cairo::Surface, webkit2gtk::glib::Error>| match result {
@@ -311,17 +311,45 @@ async fn http_status() -> &'static str {
 }
 
 /// POST /eval — body is plain JS; returns JSON {"result":"..."} or {"error":"..."}
+///
+/// Retries automatically if the dioxus eval bridge returns `EvalError::Finished`,
+/// which can happen briefly after a page navigation causes the JS context to reset.
 async fn http_eval(body: String) -> (axum::http::StatusCode, String) {
-    match do_eval(body).await {
-        Ok(r) => (
-            axum::http::StatusCode::OK,
-            serde_json::json!({"result": r}).to_string(),
-        ),
-        Err(e) => (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            serde_json::json!({"error": e}).to_string(),
-        ),
+    const MAX_RETRIES: u32 = 5;
+    const RETRY_DELAY_MS: u64 = 250;
+
+    let mut last_err = String::new();
+    for attempt in 0..=MAX_RETRIES {
+        if attempt > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS)).await;
+            tracing::debug!("Retrying eval (attempt {attempt}/{MAX_RETRIES}) after: {last_err}");
+        }
+        match do_eval(body.clone()).await {
+            Ok(r) => {
+                return (
+                    axum::http::StatusCode::OK,
+                    serde_json::json!({"result": r}).to_string(),
+                );
+            }
+            Err(e) => {
+                // Only retry on Finished/Communication errors — these indicate a
+                // transient JS context reset after a Dioxus navigation.
+                if e.contains("Finished") || e.contains("Communication") {
+                    last_err = e;
+                    continue;
+                }
+                // Any other error: fail immediately.
+                return (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    serde_json::json!({"error": e}).to_string(),
+                );
+            }
+        }
     }
+    (
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        serde_json::json!({"error": format!("Eval failed after {MAX_RETRIES} retries: {last_err}")}).to_string(),
+    )
 }
 
 /// GET /screenshot — captures the GTK window as a PNG via the native GDK API.
