@@ -1,0 +1,17 @@
+[package]
+name = "poly-android"
+description = "Poly Android app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-android"
+path = "src/main.rs"
+
+[dependencies]
+poly-core = { workspace = true, features = ["demo"] }
+dioxus = { workspace = true, features = ["mobile"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }

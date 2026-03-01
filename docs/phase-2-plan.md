@@ -1,6 +1,6 @@
 # Phase 2 Plan — Project Structure + UI + Backup Infrastructure
 
-> **Status:** ⬜ Not Started  
+> **Status:** 🔄 In Progress  
 > **Target Start:** After Phase 1 completion  
 > **Parent:** [Overall Plan](overall-plan.md)  
 > **Depends On:** [Phase 1](phase-1-plan.md)
@@ -9,8 +9,8 @@
 
 ## 2.1 Workspace & Build Setup
 
-- [ ] **2.1.1** Initialize root `Cargo.toml` workspace with all member crates
-- [ ] **2.1.2** Set up workspace-level dependency versions (`[workspace.dependencies]`)
+- [x] **2.1.1** Initialize root `Cargo.toml` workspace with all member crates
+- [x] **2.1.2** Set up workspace-level dependency versions (`[workspace.dependencies]`)
   - dioxus = "0.7.3"
   - surrealdb = "3.0.1" (feature: kv-surrealkv)
   - tokio (multi-threaded runtime)
@@ -18,24 +18,24 @@
   - ed25519-dalek, x25519-dalek, bip39
   - fluent-bundle
   - All other shared deps
-- [ ] **2.1.3** Create `Cargo.toml` for every crate with feature flags
+- [x] **2.1.3** Create `Cargo.toml` for every crate with feature flags
   - poly-core features: `stoat`, `matrix`, `discord`, `teams`, `demo`
   - Each client crate conditionally included
-- [ ] **2.1.4** Configure `Dioxus.toml` for each app target
+- [x] **2.1.4** Configure `Dioxus.toml` for each app target
   - apps/desktop/Dioxus.toml (platform: desktop, renderer: webview)
   - apps/desktop-blitz/Dioxus.toml (platform: desktop, renderer: native/blitz)
   - apps/web/Dioxus.toml (platform: web, fullstack with Axum)
   - apps/android/Dioxus.toml (platform: android)
   - apps/ios/Dioxus.toml (platform: ios)
-- [ ] **2.1.5** Set up `.gitignore` files
+- [x] **2.1.5** Set up `.gitignore` files
   - Root: target/, node_modules/, .env, *.db
   - Per-crate: build artifacts specific to that crate
   - apps/desktop-electron/: electron build output
-- [ ] **2.1.6** Set up TailwindCSS
+- [x] **2.1.6** Set up TailwindCSS
   - `assets/tailwind.css` entry file
   - Theme CSS variable system in `assets/styling/themes/`
   - Verify Dioxus auto-detection works in monorepo
-- [ ] **2.1.7** **CRITICAL: Validate subsecond hot-reload for poly-core**
+- [x] **2.1.7** **CRITICAL: Validate subsecond hot-reload for poly-core**
   - Create minimal poly-core component
   - Run `dx serve --hotpatch` from apps/desktop
   - Modify poly-core component, verify hot-patch works
@@ -48,7 +48,7 @@
 
 ## 2.2 VSCode Configuration
 
-- [ ] **2.2.1** Create `.vscode/launch.json` — all launch profiles
+- [x] **2.2.1** Create `.vscode/launch.json` — all launch profiles
   - Desktop Wry (Linux)
   - Desktop Wry (macOS)
   - Desktop Blitz (Linux)
@@ -60,7 +60,7 @@
   - iOS (simulator)
   - Backup Server
   - Debug poly-core library tests
-- [ ] **2.2.2** Create `.vscode/tasks.json` — build tasks
+- [x] **2.2.2** Create `.vscode/tasks.json` — build tasks
   - Build poly-core (library check)
   - Build desktop-wry
   - Build desktop-blitz
@@ -72,22 +72,22 @@
   - Run all tests
   - Run clippy
   - Run cargo fmt
-- [ ] **2.2.3** Create `.vscode/settings.json` — workspace settings
+- [x] **2.2.3** Create `.vscode/settings.json` — workspace settings
   - Rust analyzer configuration
   - Default formatter
   - File associations
 
 ## 2.3 GitHub Actions CI/CD
 
-- [ ] **2.3.1** CI: `build-library.yml` — build poly-core only (fast feedback)
-- [ ] **2.3.2** CI: `build-all.yml` — cascading build of all crates
-- [ ] **2.3.3** CI: `build-desktop.yml` — Linux, macOS, Windows desktop binaries
-- [ ] **2.3.4** CI: `build-android.yml` — Android APK
-- [ ] **2.3.5** CI: `build-ios.yml` — iOS (macOS runner)
-- [ ] **2.3.6** CI: `build-web.yml` — Web (WASM + Axum server)
-- [ ] **2.3.7** CI: `build-backup-server.yml` — Backup server Docker image
-- [ ] **2.3.8** CI: `lint-test.yml` — cargo clippy + cargo test + cargo fmt check
-- [ ] **2.3.9** Release workflow — tagged releases build all targets
+- [x] **2.3.1** CI: `build-library.yml` — build poly-core only (fast feedback)
+- [x] **2.3.2** CI: `build-all.yml` — cascading build of all crates
+- [x] **2.3.3** CI: `build-desktop.yml` — Linux, macOS, Windows desktop binaries
+- [x] **2.3.4** CI: `build-android.yml` — Android APK
+- [x] **2.3.5** CI: `build-ios.yml` — iOS (macOS runner)
+- [x] **2.3.6** CI: `build-web.yml` — Web (WASM + Axum server)
+- [x] **2.3.7** CI: `build-backup-server.yml` — Backup server Docker image
+- [x] **2.3.8** CI: `lint-test.yml` — cargo clippy + cargo test + cargo fmt check
+- [x] **2.3.9** Release workflow — tagged releases build all targets
 
 ## 2.4 Core Infrastructure — poly-core
 
@@ -112,13 +112,31 @@
 - [ ] **2.4.2.7** Theme import/export (save/load CSS file)
 - [ ] **2.4.2.8** Dark/light mode: follow device preference by default, user override
 
-### 2.4.3 SurrealDB Abstraction
-- [ ] **2.4.3.1** SurrealKV embedded database initialization
-- [ ] **2.4.3.2** Settings CRUD operations (get/set/delete settings)
-- [ ] **2.4.3.3** Account storage (store/retrieve messenger account credentials)
-- [ ] **2.4.3.4** Favorites storage (servers, friends, groups per account)
-- [ ] **2.4.3.5** Theme preferences storage
-- [ ] **2.4.3.6** Migration system for schema changes
+### 2.4.3 Storage Abstraction (cross-platform KV store)
+
+> **Refactored from "SurrealDB Abstraction"** — see Decision DX-STORAGE-1 below.
+
+- [x] **2.4.3.1** SurrealKV embedded database initialization (native: `crates/poly-core/src/storage/native.rs`)
+- [x] **2.4.3.2** Settings CRUD operations — `get_app_settings()` / `set_app_settings()` persisted across restarts ✓
+- [x] **2.4.3.3** Account storage — `get_account_tokens()` / `upsert_account_token()` / `remove_account_token()`
+- [x] **2.4.3.4** WASM / Web backend — `gloo-storage` LocalStorage (`crates/poly-core/src/storage/web.rs`)
+- [x] **2.4.3.5** Platform-transparent `Storage` newtype — same `get()`/`set()`/`delete()` API on both platforms
+- [x] **2.4.3.6** Global `STORAGE: OnceLock<Storage>` initialized at app startup via `use_future` in `App`
+- [x] **2.4.3.7** **Persistence verified by MCP self-test**: wizard completion → kill → relaunch → wizard skipped ✓
+- [ ] **2.4.3.8** Favorites storage (servers, friends, groups per account)
+- [ ] **2.4.3.9** Theme preferences storage
+- [ ] **2.4.3.10** Migration system for schema changes
+
+#### Decision DX-STORAGE-1: Storage abstraction design
+
+| Aspect | Decision | Rationale |
+|---|---|---|
+| Trait approach | `Storage(StorageInner)` newtype (not a dyn trait) | Avoids object-safety issues with async methods; zero-cost monomorphization |
+| Native backend | SurrealDB 3.0 + SurrealKV via raw `.query()` | TypedAPI excluded: `SurrealValue` derive macro not exposed downstream |
+| WASM backend | `gloo-storage` LocalStorage | Simple, battle-tested, matches IndexedDB semantics for KV use-case |
+| Field naming | `payload` (not `value`) | Avoids SurrealQL keyword collision with `VALUE` expression keyword |
+| Bind args | `serde_json::json!({ "payload": serialized })` | `serde_json::Value: SurrealValue` → implements `IntoVariables` as object |
+| Take calls | `resp.take::<Option<String>>("field")` | Turbofish required — compiler can't infer `R` through `map_err()?` chain |
 
 ### 2.4.4 Crypto Module
 - [ ] **2.4.4.1** Ed25519 keypair generation

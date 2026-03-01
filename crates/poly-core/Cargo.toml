@@ -1,0 +1,70 @@
+[package]
+name = "poly-core"
+description = "Shared UI, state, database, i18n, theme, crypto, and sync library for Poly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["demo"]
+stoat = ["dep:poly-stoat"]
+matrix = ["dep:poly-matrix"]
+discord = ["dep:poly-discord"]
+teams = ["dep:poly-teams"]
+demo = ["dep:poly-demo"]
+
+[dependencies]
+# UI
+dioxus = { workspace = true }
+
+# Shared client trait
+poly-client = { workspace = true }
+
+# Backend clients (feature-gated)
+poly-demo = { workspace = true, optional = true }
+poly-stoat = { workspace = true, optional = true }
+poly-matrix = { workspace = true, optional = true }
+poly-discord = { workspace = true, optional = true }
+poly-teams = { workspace = true, optional = true }
+
+# Crypto
+ed25519-dalek = { workspace = true }
+x25519-dalek = { workspace = true }
+bip39 = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+
+# i18n
+fluent-bundle = { workspace = true }
+fluent-syntax = { workspace = true }
+unic-langid = { workspace = true }
+sys-locale = { workspace = true }
+
+# Sync client
+reqwest = { workspace = true }
+
+# Utilities
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+base64 = { workspace = true }
+hex = { workspace = true }
+async-trait = { workspace = true }
+
+# Native-only: SurrealDB (does not compile to WASM)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+surrealdb = { workspace = true, features = ["kv-surrealkv"] }
+
+# WASM-only: browser localStorage via gloo-storage
+# uuid needs "js" feature on WASM to use JS crypto API for randomness (compile-time error otherwise).
+# getrandom "js" feature propagates to uuid's getrandom 0.2.x dependency as well.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-storage = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+uuid = { version = "1", features = ["v4", "serde", "js"] }

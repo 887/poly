@@ -1,0 +1,49 @@
+# CI: Build iOS (macOS runner only)
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-ios:
+    name: iOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli@0.7.3
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-ios-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ios-
+
+      - name: Build iOS (simulator)
+        working-directory: apps/ios
+        run: dx build --platform ios --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: poly-ios
+          path: apps/ios/dist/
+          if-no-files-found: warn

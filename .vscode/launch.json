@@ -1,0 +1,108 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Desktop Wry (Linux)",
+      "cargo": {
+        "args": ["build", "-p", "poly-desktop"],
+        "filter": {
+          "name": "poly-desktop",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "env": {
+        "RUST_LOG": "info,poly_core=debug"
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Desktop Blitz (Linux)",
+      "cargo": {
+        "args": ["build", "-p", "poly-desktop-blitz"],
+        "filter": {
+          "name": "poly-desktop-blitz",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "env": {
+        "RUST_LOG": "info,poly_core=debug"
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Backup Server",
+      "cargo": {
+        "args": ["build", "-p", "poly-backup-server"],
+        "filter": {
+          "name": "poly-backup-server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "env": {
+        "RUST_LOG": "info,poly_backup_server=debug",
+        "POLY_BACKUP_PASSPHRASE": "dev-passphrase",
+        "POLY_BACKUP_BIND": "127.0.0.1:3080"
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tests: poly-core",
+      "cargo": {
+        "args": ["test", "-p", "poly-core", "--no-run"],
+        "filter": {
+          "name": "poly-core",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "env": {
+        "RUST_LOG": "debug"
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tests: poly-demo",
+      "cargo": {
+        "args": ["test", "-p", "poly-demo", "--no-run"],
+        "filter": {
+          "name": "poly-demo",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "env": {
+        "RUST_LOG": "debug"
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tests: all workspace",
+      "cargo": {
+        "args": ["test", "--workspace", "--no-run"],
+        "filter": {
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "env": {
+        "RUST_LOG": "debug"
+      },
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

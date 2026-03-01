@@ -1,0 +1,24 @@
+[package]
+name = "poly-web-devtools"
+description = "Poly web devtools MCP server — uses Chrome CDP for inspection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-web-devtools"
+path = "src/main.rs"
+
+[dependencies]
+poly-devtools-protocol = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "process", "io-std"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+base64 = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

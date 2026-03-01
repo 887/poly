@@ -1,0 +1,16 @@
+[package]
+name = "poly-demo"
+description = "Demo/mock messenger client for Poly UI testing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+poly-client = { workspace = true }
+serde = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }

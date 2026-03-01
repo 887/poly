@@ -1,0 +1,17 @@
+[package]
+name = "poly-ios"
+description = "Poly iOS app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-ios"
+path = "src/main.rs"
+
+[dependencies]
+poly-core = { workspace = true, features = ["demo"] }
+dioxus = { workspace = true, features = ["mobile"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }

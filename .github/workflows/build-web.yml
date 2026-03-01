@@ -1,0 +1,49 @@
+# CI: Build web (WASM + Axum fullstack)
+name: Build Web
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-web:
+    name: Web (WASM + Axum)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli@0.7.3
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-web-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-web-
+
+      - name: Build web
+        working-directory: apps/web
+        run: dx build --platform web --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: poly-web
+          path: apps/web/dist/
+          if-no-files-found: warn

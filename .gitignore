@@ -1,0 +1,61 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Cargo lock — keep for binaries, optional for libraries
+# Cargo.lock  # We keep this committed for reproducible builds
+
+# IDE
+.idea/
+*.iml
+.vscode/.history/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# Node.js (for Electron wrapper)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Build outputs
+dist/
+build/
+*.apk
+*.ipa
+*.app
+*.dmg
+*.exe
+*.msi
+*.deb
+*.rpm
+*.AppImage
+
+# Coverage
+*.profraw
+lcov.info
+coverage/
+
+# Temporary files
+tmp/
+temp/
+
+# MCP devtools screenshots (saved locally, not committed)
+devtools-screenshots/

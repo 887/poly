@@ -1,0 +1,12 @@
+[application]
+name = "Poly Devtools"
+default_platform = "desktop"
+
+[desktop]
+enable_default_menu_bar = true
+
+[desktop.window]
+title = "Poly — DevTools Build"
+width = 1440
+height = 900
+resizable = true

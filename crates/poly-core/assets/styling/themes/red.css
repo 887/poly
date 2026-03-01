@@ -1,0 +1,76 @@
+/* Poly — Red Theme (Stoat-inspired)
+ * Red/coral accents with dark background.
+ */
+
+:root {
+  /* Background colors */
+  --bg-primary: #242424;
+  --bg-secondary: #1e1e1e;
+  --bg-tertiary: #191919;
+  --bg-surface: #2a2a2a;
+  --bg-hover: #303030;
+  --bg-active: #383838;
+  --bg-input: #191919;
+
+  /* Text colors */
+  --text-primary: #f0f0f0;
+  --text-secondary: #b0b0b0;
+  --text-muted: #808080;
+  --text-inverse: #191919;
+  --text-link: #fd6671;
+
+  /* Border colors */
+  --border-primary: #333333;
+  --border-secondary: #444444;
+  --border-focus: #fd6671;
+
+  /* Accent colors */
+  --accent-primary: #fd6671;
+  --accent-primary-hover: #e5525d;
+  --accent-secondary: #ff7f7f;
+  --accent-success: #65e89d;
+  --accent-warning: #ffc857;
+  --accent-danger: #fd6671;
+
+  /* Presence colors */
+  --presence-online: #65e89d;
+  --presence-idle: #ffc857;
+  --presence-dnd: #fd6671;
+  --presence-offline: #808080;
+
+  /* Sidebar */
+  --sidebar-bg: #191919;
+  --sidebar-icon-bg: #242424;
+  --sidebar-icon-hover: #303030;
+  --sidebar-icon-active: #fd6671;
+  --sidebar-separator: #333333;
+
+  /* Chat */
+  --chat-bg: #242424;
+  --chat-message-hover: #2a2a2a;
+  --chat-input-bg: #2a2a2a;
+  --chat-input-border: #333333;
+
+  /* Scrollbar */
+  --scrollbar-thumb: #444444;
+  --scrollbar-track: transparent;
+
+  /* Badge */
+  --badge-bg: #fd6671;
+  --badge-text: #ffffff;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+}

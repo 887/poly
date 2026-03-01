@@ -1,0 +1,89 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/poly-core",
+    "crates/poly-client",
+    "crates/poly-demo",
+    "crates/poly-stoat",
+    "crates/poly-matrix",
+    "crates/poly-discord",
+    "crates/poly-teams",
+    "crates/poly-backup-server",
+    "apps/desktop",
+    "apps/desktop-blitz",
+    # "apps/desktop-electron",  # Electron wrapper — not a standard Rust crate
+    "apps/android",
+    "apps/ios",
+    "apps/web",
+    "apps/desktop-devtools",
+    "apps/web-devtools",
+    "crates/poly-devtools-mcp",
+    "crates/poly-devtools-protocol",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/user/poly"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# UI framework
+dioxus = "0.7.3"
+
+# Database
+surrealdb = { version = "3.0.1", default-features = false }
+
+# Async runtime
+# Async runtime — strict WASM-compatible subset per tokio's own wasm check:
+# only ["rt","macros","sync","time","io-util"] allowed on wasm32
+# Native crates add ["rt-multi-thread","fs","io-std","net","process","signal"] themselves
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Cryptography
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+bip39 = "2.2"
+sha2 = "0.10"
+rand = "0.8"
+
+# i18n
+fluent-bundle = "0.16"
+fluent-syntax = "0.11"
+unic-langid = "0.9"
+sys-locale = "0.3"
+
+# Web / API
+reqwest = { version = "0.12", features = ["json"] }
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+base64 = "0.22"
+hex = "0.4"
+async-trait = "0.1"
+pin-project-lite = "0.2"
+
+# Internal crates
+poly-core = { path = "crates/poly-core" }
+poly-client = { path = "crates/poly-client" }
+poly-demo = { path = "crates/poly-demo" }
+poly-stoat = { path = "crates/poly-stoat" }
+poly-matrix = { path = "crates/poly-matrix" }
+poly-discord = { path = "crates/poly-discord" }
+poly-teams = { path = "crates/poly-teams" }
+poly-backup-server = { path = "crates/poly-backup-server" }
+poly-devtools-mcp = { path = "crates/poly-devtools-mcp" }
+poly-devtools-protocol = { path = "crates/poly-devtools-protocol" }

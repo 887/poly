@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "poly-devtools": {
+      "type": "stdio",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "env": {}
+    },
+    "poly-devtools-web": {
+      "type": "stdio",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "env": {}
+    }
+  }
+}

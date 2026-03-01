@@ -1,0 +1,12 @@
+[application]
+name = "Poly Blitz"
+default_platform = "desktop"
+
+[desktop]
+enable_default_menu_bar = true
+
+[desktop.window]
+title = "Poly — PolyGlot Messenger (Blitz)"
+width = 1280
+height = 800
+resizable = true

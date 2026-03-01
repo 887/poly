@@ -1,0 +1,150 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build: poly-core (library check)",
+      "type": "cargo",
+      "command": "check",
+      "args": ["-p", "poly-core"],
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: desktop-wry",
+      "type": "shell",
+      "command": "dx",
+      "args": ["build", "--platform", "desktop"],
+      "options": { "cwd": "${workspaceFolder}/apps/desktop" },
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: desktop-blitz",
+      "type": "shell",
+      "command": "dx",
+      "args": ["build", "--platform", "desktop"],
+      "options": { "cwd": "${workspaceFolder}/apps/desktop-blitz" },
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: web",
+      "type": "shell",
+      "command": "dx",
+      "args": ["build", "--platform", "web"],
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: android APK",
+      "type": "shell",
+      "command": "dx",
+      "args": ["build", "--platform", "android"],
+      "options": { "cwd": "${workspaceFolder}/apps/android" },
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: iOS",
+      "type": "shell",
+      "command": "dx",
+      "args": ["build", "--platform", "ios"],
+      "options": { "cwd": "${workspaceFolder}/apps/ios" },
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: backup-server",
+      "type": "cargo",
+      "command": "build",
+      "args": ["-p", "poly-backup-server"],
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: all workspace",
+      "type": "cargo",
+      "command": "build",
+      "args": ["--workspace"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Test: all workspace",
+      "type": "cargo",
+      "command": "test",
+      "args": ["--workspace"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Lint: clippy",
+      "type": "cargo",
+      "command": "clippy",
+      "args": ["--workspace", "--", "-D", "warnings"],
+      "group": "test",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Lint: cargo fmt check",
+      "type": "cargo",
+      "command": "fmt",
+      "args": ["--all", "--check"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Serve: desktop (hot-reload)",
+      "type": "shell",
+      "command": "dx",
+      "args": ["serve", "--hotpatch"],
+      "options": { "cwd": "${workspaceFolder}/apps/desktop" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^error\\[E(\\d+)\\]: (.+)$",
+          "message": 2
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Compiling.*$",
+          "endsPattern": "^.*Finished.*$"
+        }
+      }
+    },
+    {
+      "label": "Serve: web (hot-reload)",
+      "type": "shell",
+      "command": "dx",
+      "args": ["serve", "--hotpatch"],
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^error\\[E(\\d+)\\]: (.+)$",
+          "message": 2
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Compiling.*$",
+          "endsPattern": "^.*Finished.*$"
+        }
+      }
+    },
+    {
+      "label": "Run: backup-server",
+      "type": "cargo",
+      "command": "run",
+      "args": ["-p", "poly-backup-server"],
+      "isBackground": true,
+      "problemMatcher": ["$rustc"]
+    }
+  ]
+}

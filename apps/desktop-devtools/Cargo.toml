@@ -1,0 +1,23 @@
+[package]
+name = "poly-desktop-devtools"
+description = "Poly desktop app with devtools/inspector enabled for dogfooding"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-desktop-devtools"
+path = "src/main.rs"
+
+[dependencies]
+poly-core = { workspace = true, features = ["demo"] }
+dioxus = { workspace = true, features = ["desktop"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "process", "signal", "io-std", "fs"] }
+axum = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+webkit2gtk = { version = "2.0", features = [] }
+cairo-rs = { version = "0.18", features = ["png"] }
+wry = "0.53"

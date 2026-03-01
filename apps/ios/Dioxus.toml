@@ -1,0 +1,3 @@
+[application]
+name = "Poly iOS"
+default_platform = "mobile"

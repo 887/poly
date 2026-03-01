@@ -1,0 +1,6 @@
+[application]
+name = "Poly Web"
+default_platform = "web"
+
+[web.app]
+title = "Poly — PolyGlot Messenger"

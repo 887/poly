@@ -1,0 +1,3 @@
+[application]
+name = "Poly Android"
+default_platform = "mobile"

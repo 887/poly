@@ -1,0 +1,18 @@
+[package]
+name = "poly-matrix"
+description = "Matrix messenger client for Poly (wraps matrix-sdk)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+poly-client = { workspace = true }
+# matrix-sdk = "0.16"  # TODO(phase-3.2): Enable when implementing Matrix client
+serde = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }

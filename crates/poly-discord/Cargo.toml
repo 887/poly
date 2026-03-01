@@ -1,0 +1,17 @@
+[package]
+name = "poly-discord"
+description = "Discord messenger client for Poly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+poly-client = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }

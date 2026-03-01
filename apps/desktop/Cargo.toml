@@ -1,0 +1,17 @@
+[package]
+name = "poly-desktop"
+description = "Poly desktop app — Wry (webview) renderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-desktop"
+path = "src/main.rs"
+
+[dependencies]
+poly-core = { workspace = true, features = ["demo"] }
+dioxus = { workspace = true, features = ["desktop"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }

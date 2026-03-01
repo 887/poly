@@ -16,11 +16,19 @@
 ## CRITICAL: Hot Reload
 
 This crate **MUST** support Dioxus subsecond hot-reload:
-- Test with: `dx serve --hotpatch` from any app entry point
+- Test with: `dx serve --hotpatch --package poly-desktop` from workspace root
 - If hot-reload breaks, STOP all other work and fix it
 - Use `subsecond::call()` for function-level hot-patching where needed
 - All Dioxus components in `src/ui/` are automatically hot-patched
 - Ensure the crate is a proper `lib` crate (not bin) — hot-reload only works on library code
+
+### Hot Reload Verified (2026-02-28)
+
+Tested and confirmed working:
+- `dx serve --hotpatch --package poly-desktop` from workspace root
+- Modified `poly-core/src/ui/mod.rs` → hot-patched in ~1.9 seconds
+- App stays running, no restart needed
+- **Note:** Must use `--package poly-desktop` flag — running `dx serve` from `apps/desktop/` alone doesn't work in workspace mode
 
 ## Module Structure
 
@@ -132,3 +140,66 @@ all-backends = ["stoat", "matrix", "discord", "teams", "demo"]
 - Unit tests for crypto, db, i18n modules
 - Integration tests with demo client for UI state flows
 - Hot-reload smoke test: modify a component, verify it updates
+
+---
+
+## Storage Abstraction — `src/storage/` (Implemented 2025-03-01)
+
+### Architecture
+
+```
+src/storage/
+├── mod.rs          # Storage newtype + typed helpers (AppSettings, AccountToken, etc.)
+├── native.rs       # Native backend: SurrealDB 3.0 + SurrealKV (non-WASM)
+└── web.rs          # WASM backend: gloo-storage LocalStorage
+```
+
+A global `STORAGE: OnceLock<Storage>` in `lib.rs` is initialized once at app startup
+via a `use_future` in the `App` component. All storage access goes through it.
+
+### Critical SurrealDB 3.0 Query Patterns (HARD WON LESSONS)
+
+**DO NOT** use the typed SDK (`db.select()`, `db.upsert()`, `db.delete()`) with custom
+structs — these require `#[derive(SurrealValue)]` from `surrealdb-types-derive`, an
+**internal** proc-macro crate not exposed to downstream users.
+
+**USE** raw `.query()` with careful `take` calls:
+
+```rust
+// Correct bind pattern — serde_json::Value: SurrealValue → inferred as IntoVariables
+db.query("UPSERT poly_kv:key SET payload = $payload")
+  .bind(serde_json::json!({ "payload": "value_string" }))
+  .await?;
+
+// Correct take pattern — must use turbofish, usize literal for index
+let raw: Option<String> = resp.take::<Option<String>>("payload")?;
+let result: Option<serde_json::Value> = resp.take::<Option<serde_json::Value>>(0usize)?;
+```
+
+**Key caveats:**
+- Field named `payload` (NOT `value`) — `VALUE` is a SurrealQL keyword, using it as a
+  field name in queries causes silent failures
+- `.bind(("key", reference))` FAILS if the reference type doesn't implement `SurrealValue`
+  (`&String` does NOT, `String` DOES, `serde_json::Value` DOES)
+- `take(0)` fails with type inference — always turbofish: `take::<Option<T>>(0usize)`
+- `.query()` returning a `Response` does NOT propagate SurrealQL errors via `?` — you
+  MUST call `.take()` on the response to surface any query-level errors
+- `IntoVariables` is only implemented for `T: SurrealValue` — passing `("key", T)` only
+  works if the tuple produces a `Value::Array` → entries treated as K-V pairs
+
+### Storage Schema
+
+Table `poly_kv` in SurrealDB namespace `poly` / database `main`:
+- Record ID: `poly_kv:<key>` (e.g. `poly_kv:app_settings`, `poly_kv:account_tokens`)
+- Field `payload`: `String` — double-serialized JSON (matches WASM localStorage approach)
+
+### Platform Path
+
+- Linux: `$XDG_DATA_HOME/poly/storage.db` or `~/.local/share/poly/storage.db`
+- macOS: `~/Library/Application Support/poly/storage.db`
+- Windows: `%APPDATA%\poly\storage.db`
+
+### Persistence Verified
+
+MCP self-test (2025-03-01): wizard completion → kill → relaunch → wizard skipped ✓
+WAL grew from 1592 bytes (init-only) to 3925 bytes (init + data write), then read back on new session.

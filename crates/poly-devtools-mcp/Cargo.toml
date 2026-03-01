@@ -1,0 +1,20 @@
+[package]
+name = "poly-devtools-mcp"
+description = "MCP server for dogfooding Poly — screenshot, JS eval, DOM, console, click"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-devtools-mcp"
+path = "src/main.rs"
+
+[dependencies]
+poly-devtools-protocol = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "process"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+base64 = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }

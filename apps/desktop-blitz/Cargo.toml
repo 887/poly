@@ -1,0 +1,18 @@
+[package]
+name = "poly-desktop-blitz"
+description = "Poly desktop app — Blitz (WGPU native) renderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-desktop-blitz"
+path = "src/main.rs"
+
+[dependencies]
+poly-core = { workspace = true, features = ["demo"] }
+# DECISION(D1): Blitz renderer is experimental — uses native Dioxus renderer
+dioxus = { workspace = true, features = ["desktop"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
