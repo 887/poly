@@ -351,7 +351,6 @@ enum ServerStatus { Connected, AuthRequired, Unreachable, Syncing, Disabled }
 - [ ] **2.7.9.6** **Identity section**: show public key (user ID), export recovery phrase
 - [ ] **2.7.9.7** **Theme section**: preset selector, per-color editor, CSS editor with live preview, import/export
 - [ ] **2.7.9.8** **Language section**: locale dropdown, immediate switch
-- [ ] **2.7.9.9** **Appearance section**: dark/light mode, follow device toggle
 - [ ] **2.7.9.10** **General section**: notification preferences, startup behavior
 
 ## 2.8 Backup Server — poly-backup-server
