@@ -28,7 +28,8 @@ const GROUP_THRESHOLD_MINUTES: i64 = 7;
 /// Shows the channel header, scrollable message list with Discord-style
 /// rendering, and textarea message input.
 #[component]
-pub fn ChatView(app_state: Signal<AppState>) -> Element {
+pub fn ChatView() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let chat_data: Signal<ChatData> = use_context();
     let mut message_input = use_signal(String::new);
@@ -39,6 +40,18 @@ pub fn ChatView(app_state: Signal<AppState>) -> Element {
     let current_server = chat_data.read().current_server.clone();
     let members_count = chat_data.read().members.len();
     let loading = chat_data.read().loading;
+
+    // Scroll message list to bottom when messages change
+    let msg_count = messages.len();
+    use_effect(move || {
+        let _count = msg_count; // track dependency
+        document::eval(
+            r#"
+            let el = document.getElementById('message-list-scroll');
+            if (el) { el.scrollTop = el.scrollHeight; }
+            "#,
+        );
+    });
 
     rsx! {
         main { class: "chat-view",
@@ -69,7 +82,7 @@ pub fn ChatView(app_state: Signal<AppState>) -> Element {
             }
 
             // ── Message list ─────────────────────────────────────────────
-            div { class: "message-list",
+            div { class: "message-list", id: "message-list-scroll",
                 if loading {
                     div { class: "message-loading", "{t(\"chat-loading\")}" }
                 } else if messages.is_empty() {
@@ -195,8 +208,7 @@ pub fn ChatView(app_state: Signal<AppState>) -> Element {
                                             spawn(async move {
                                                 send_message(cid, text, client_manager, chat_data, app_state)
                                                     .await;
-                                            }
-                                            }
+                                            });
                                         }
                                     }
                                 }
@@ -218,8 +230,7 @@ pub fn ChatView(app_state: Signal<AppState>) -> Element {
                                         spawn(async move {
                                             send_message(cid, text, client_manager, chat_data, app_state)
                                                 .await;
-                                        }
-                                        }
+                                        });
                                     }
                                 }
                             }
@@ -245,17 +256,11 @@ fn MessageContentView(content: MessageContent, edited: bool) -> Element {
     rsx! {
         div { class: "message-text",
             // Split on newlines for multi-line rendering
-            for (i , line) in text.split('\n').enumerate() {
-                {
-                    if line.is_empty() {
-                        rsx! {
-                            br { key: "br-{i}" }
-                        }
-                    }
-                        rsx! {
-                            p { key: "p-{i}", class: "message-line", "{line}" }
-                        }
-                    }
+            for line in text.split('\n') {
+                if line.is_empty() {
+                    br {}
+                } else {
+                    p { class: "message-line", "{line}" }
                 }
             }
             if edited {

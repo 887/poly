@@ -24,10 +24,11 @@ use dioxus::prelude::*;
 /// Shows: DMs icon, Notifications icon, favorited server icons with
 /// source badge overlay and account badge overlay, Demo toggle, Settings.
 #[component]
-pub fn ServerSidebar(app_state: Signal<AppState>) -> Element {
+pub fn ServerSidebar() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let current_view = app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
 
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
@@ -39,8 +40,17 @@ pub fn ServerSidebar(app_state: Signal<AppState>) -> Element {
             div {
                 class: if current_view == View::DmsFriends { "server-icon active" } else { "server-icon" },
                 onclick: move |_| {
+                    // Clear server-specific data FIRST (separate writes to trigger
+                    // individual signal notifications per field change).
+                    chat_data.write().current_server = None;
+                    chat_data.write().current_channel = None;
+                    chat_data.write().channels.clear();
+                    chat_data.write().messages.clear();
+                    chat_data.write().members.clear();
+                    // Then switch the view
                     app_state.write().nav.view = View::DmsFriends;
                     app_state.write().nav.selected_server = None;
+                    app_state.write().nav.selected_channel = None;
                 },
                 title: "{t(\"nav-dms\")}",
                 div { class: "icon-dms", "💬" }
@@ -51,6 +61,13 @@ pub fn ServerSidebar(app_state: Signal<AppState>) -> Element {
                 class: if current_view == View::Notifications { "server-icon active" } else { "server-icon" },
                 onclick: move |_| {
                     app_state.write().nav.view = View::Notifications;
+                    // Clear server-specific data
+                    let mut cd = chat_data.write();
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
                 },
                 title: "{t(\"nav-notifications\")}",
                 div { class: "icon-notifications", "🔔" }
@@ -83,14 +100,14 @@ pub fn ServerSidebar(app_state: Signal<AppState>) -> Element {
                             class: if is_selected { "server-icon active" } else { "server-icon" },
                             onclick: {
                                 let server_id_click = server_id.clone();
-                                move |_| { // Unread badge // Unread badge
+                                move |_| { // Unread badge  Unread badge // Unread badge  Unread badge
                                     app_state.write().nav.view = View::Server;
                                     app_state.write().nav.selected_server = Some(server_id_click.clone());
                                     app_state.write().nav.selected_channel = None;
                                     // Load channels for this server
                                     let sid = server_id_click.clone();
                                     spawn(async move {
-                                        load_server_data(sid, app_state, client_manager, chat_data).await;
+                                        load_server_data(sid, app_state, client_manager, chat_data).await; // Unread badge // Unread badge
                                     });
                                 }
                             },
@@ -138,18 +155,34 @@ pub fn ServerSidebar(app_state: Signal<AppState>) -> Element {
     }
 }
 
-/// Toggle the demo client on/off and refresh server list.
+/// Toggle the demo client on/off and refresh all data.
 async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: Signal<ChatData>) {
     #[cfg(feature = "demo")]
     {
         let is_active = client_manager.read().demo_active;
         if is_active {
             client_manager.write().deactivate_demo();
-            // Remove demo servers from chat data
+            // Remove all demo data from chat data
             chat_data
                 .write()
                 .servers
                 .retain(|s| s.backend != poly_client::BackendType::Demo);
+            chat_data
+                .write()
+                .dm_channels
+                .retain(|d| d.backend != poly_client::BackendType::Demo);
+            chat_data
+                .write()
+                .groups
+                .retain(|g| g.backend != poly_client::BackendType::Demo);
+            chat_data
+                .write()
+                .notifications
+                .retain(|n| n.backend != poly_client::BackendType::Demo);
+            chat_data
+                .write()
+                .friends
+                .retain(|u| u.backend != poly_client::BackendType::Demo);
             // Clear channels/messages if current server was demo
             chat_data.write().channels.clear();
             chat_data.write().messages.clear();
@@ -161,9 +194,27 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
                 tracing::error!("Failed to activate demo: {e}");
                 return;
             }
-            // Load demo servers into chat data
+            // Load all demo data into chat data
             let servers = client_manager.read().all_servers().await;
             chat_data.write().servers = servers;
+
+            // Load DMs, groups, notifications, friends from demo backend
+            let backend = client_manager.read().get_backend("demo");
+            if let Some(backend_handle) = backend {
+                let guard = backend_handle.read().await;
+                if let Ok(dms) = guard.get_dm_channels().await {
+                    chat_data.write().dm_channels = dms;
+                }
+                if let Ok(groups) = guard.get_groups().await {
+                    chat_data.write().groups = groups;
+                }
+                if let Ok(notifs) = guard.get_notifications().await {
+                    chat_data.write().notifications = notifs;
+                }
+                if let Ok(friends) = guard.get_friends().await {
+                    chat_data.write().friends = friends;
+                }
+            }
         }
     }
 }

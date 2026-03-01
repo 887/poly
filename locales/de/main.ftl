@@ -42,6 +42,7 @@ chat-no-messages = Noch keine Nachrichten. Starten Sie die Unterhaltung!
 chat-load-more = Mehr laden
 chat-edited = (bearbeitet)
 chat-loading = Nachrichten werden geladen...
+chat-select-conversation = Unterhaltung auswählen
 
 # Kanäle
 channel-text = Textkanal

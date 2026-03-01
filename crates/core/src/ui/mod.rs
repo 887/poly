@@ -130,6 +130,11 @@ pub fn App() -> Element {
     let chat_data: Signal<ChatData> = use_signal(ChatData::default);
     provide_context(chat_data);
 
+    // Provide app_state as context so child components subscribe independently
+    // via use_context() instead of receiving it as a prop (which enables Dioxus
+    // prop-comparison skip optimization that can suppress signal-triggered re-renders).
+    provide_context(app_state);
+
     use_future(move || async move {
         init_storage(theme_config, storage_ready, app_state, locale_sig).await;
     });
@@ -151,7 +156,7 @@ pub fn App() -> Element {
                     },
                 }
             } else {
-                MainLayout { app_state }
+                MainLayout {}
             }
         }
     }

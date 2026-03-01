@@ -42,6 +42,7 @@ chat-no-messages = Aucun message pour le moment. Lancez la conversation !
 chat-load-more = Charger plus
 chat-edited = (modifié)
 chat-loading = Chargement des messages...
+chat-select-conversation = Sélectionnez une conversation
 
 # Salons
 channel-text = Salon textuel

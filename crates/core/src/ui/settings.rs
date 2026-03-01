@@ -75,7 +75,8 @@ fn PolySelect(
 ///
 /// Two-column layout: navigation sidebar + content area.
 #[component]
-pub fn SettingsPage(app_state: Signal<AppState>) -> Element {
+pub fn SettingsPage() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let section = app_state.read().settings_section;
     // Subscribe to locale signal so nav labels re-render on language change.
     let _locale = crate::i18n::use_locale().read().clone();
@@ -139,7 +140,7 @@ pub fn SettingsPage(app_state: Signal<AppState>) -> Element {
                         ThemeSettings {}
                     },
                     SettingsSection::General => rsx! {
-                        GeneralSettings { app_state }
+                        GeneralSettings {}
                     },
                 }
             }
@@ -1500,7 +1501,8 @@ async fn run_reset_flow(
 
 /// General settings section.
 #[component]
-fn GeneralSettings(app_state: Signal<AppState>) -> Element {
+fn GeneralSettings() -> Element {
+    let app_state: Signal<AppState> = use_context();
     let _locale = crate::i18n::use_locale().read().clone();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let chat_data: Signal<crate::state::ChatData> = use_context();

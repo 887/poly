@@ -42,6 +42,7 @@ chat-no-messages = No messages yet. Start the conversation!
 chat-load-more = Load more messages
 chat-edited = (edited)
 chat-loading = Loading messages...
+chat-select-conversation = Select a conversation
 
 # Channels
 channel-text = Text Channel

@@ -5,8 +5,8 @@
 // TODO(phase-2.5.8): Wire notifications to backend data
 
 use crate::i18n::t;
+use crate::state::ChatData;
 use crate::state::chat_data::backend_badge;
-use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_client::NotificationKind;
 
@@ -14,7 +14,7 @@ use poly_client::NotificationKind;
 ///
 /// Shows aggregated notifications from all connected accounts/backends.
 #[component]
-pub fn NotificationsView(app_state: Signal<AppState>) -> Element {
+pub fn NotificationsView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let notifications = chat_data.read().notifications.clone();
 

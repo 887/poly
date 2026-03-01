@@ -1,35 +1,47 @@
 //! Channel list — categories and channels for the selected server.
 //!
-//! Shows the server name + source banner, collapsible categories,
+//! In Server view: shows the server name + source banner, collapsible categories,
 //! and channels with type icons (#, 🔊, 📹) and unread indicators.
+//!
+//! In DMs/Friends view: shows DM channels, groups, and Friends list.
+//!
 //! All data comes from `Signal<ChatData>`.
 // TODO(phase-2.5.5): Wire channel list to backend data
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::chat_data::backend_badge;
-use crate::state::{AppState, ChatData};
+use crate::state::chat_data::{backend_badge, user_color};
+use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
 use poly_client::ChannelType;
 
 /// Channel list component.
 ///
-/// Shows the server name header with source info, categories (collapsible),
+/// In Server view: shows server name header with source info, categories,
 /// and channels with type icons and unread indicators.
+///
+/// In DMs/Friends view: shows DM channels, groups, and friends.
 #[component]
-pub fn ChannelList(app_state: Signal<AppState>) -> Element {
+pub fn ChannelList() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
     let selected_channel = app_state.read().nav.selected_channel.clone();
+    let current_view = app_state.read().nav.view;
 
     let channels = chat_data.read().channels.clone();
     let current_server = chat_data.read().current_server.clone();
+    let dm_channels = chat_data.read().dm_channels.clone();
+    let groups = chat_data.read().groups.clone();
+    let friends = chat_data.read().friends.clone();
 
     rsx! {
         aside { class: "channel-list",
-            // Server header with source info
+            // Header
             div { class: "channel-list-header",
-                if let Some(ref server) = current_server {
+                if current_view == View::DmsFriends {
+                    h3 { "{t(\"nav-dms\")}" }
+                } else if let Some(ref server) = current_server {
                     h3 { class: "server-name", "{server.name}" }
                     div { class: "server-source",
                         span { class: "source-badge-inline", "{backend_badge(&server.backend)}" }
@@ -42,9 +54,140 @@ pub fn ChannelList(app_state: Signal<AppState>) -> Element {
                 }
             }
 
-            // Channel entries grouped by category
             div { class: "channel-entries",
-                if let Some(ref server) = current_server {
+                if current_view == View::DmsFriends {
+                    // ── DMs/Friends view ─────────────────────────────────
+                    // Friends section
+                    if !friends.is_empty() {
+                        div { class: "channel-category",
+                            div { class: "category-header",
+                                span { class: "category-chevron", "▾" }
+                                span { class: "category-name",
+                                    "{t(\"nav-friends\")} — {friends.len()}"
+                                }
+                            }
+                            for friend in &friends {
+                                {
+                                    let name = friend.display_name.clone();
+                                    let badge = backend_badge(&friend.backend);
+                                    let color = user_color(&friend.id);
+                                    let first_char: String = name
+                                        .chars()
+                                        .next()
+                                        .map(|c| c.to_string())
+                                        .unwrap_or_default();
+                                    rsx! {
+                                        div { class: "channel-item",
+                                            div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
+                                            span { class: "channel-name", "{name}" }
+                                            span { class: "source-badge-inline", "{badge}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // DM channels section
+                    if !dm_channels.is_empty() {
+                        div { class: "channel-category",
+                            div { class: "category-header",
+                                span { class: "category-chevron", "▾" }
+                                span { class: "category-name", "DIRECT MESSAGES — {dm_channels.len()}" }
+                            }
+                            for dm in &dm_channels {
+                                {
+                                    let dm_id = dm.id.clone();
+                                    let name = dm.user.display_name.clone();
+                                    let badge = backend_badge(&dm.backend);
+                                    let unread = dm.unread_count;
+                                    let color = user_color(&dm.user.id);
+                                    let first_char: String = name
+                                        .chars()
+                                        .next()
+                                        .map(|c| c.to_string())
+                                        .unwrap_or_default();
+                                    let is_active = selected_channel.as_deref() == Some(&dm_id);
+                                    rsx! {
+                                        div {
+                                            class: if is_active { "channel-item active" } else { "channel-item" },
+                                            onclick: {
+                                                let dm_id_click = dm_id.clone();
+                                                move |_| {
+                                                    app_state.write().nav.selected_channel = Some(dm_id_click.clone());
+                                                    // TODO: load DM messages
+                                                }
+                                            },
+                                            div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
+                                            span { class: "channel-name", "{name}" }
+                                            span { class: "source-badge-inline", "{badge}" }
+                                            if unread > 0 {
+                                                span { class: "unread-badge", "{unread}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Groups section
+                    if !groups.is_empty() {
+                        div { class: "channel-category",
+                            div { class: "category-header",
+                                span { class: "category-chevron", "▾" }
+                                span { class: "category-name", "GROUPS — {groups.len()}" }
+                            }
+                            for group in &groups {
+                                {
+                                    let group_name = group
+                                        .name
+                                        .clone()
+                                        .unwrap_or_else(|| {
+                                            group
+                                                .members
+                                                .iter()
+                                                .map(|m| m.display_name.clone())
+                                                .collect::<Vec<_>>()
+                                                .join(", ")
+                                        });
+                                    let group_id = group.id.clone();
+                                    let badge = backend_badge(&group.backend);
+                                    let member_count = group.members.len();
+                                    let _first_char: String = group_name
+                                        .chars()
+                                        .next()
+                                        .map(|c| c.to_string())
+                                        .unwrap_or_default();
+                                    let is_active = selected_channel.as_deref() == Some(&group_id);
+                                    rsx! {
+                                        div {
+                                            class: if is_active { "channel-item active" } else { "channel-item" },
+                                            onclick: {
+                                                let gid = group_id.clone();
+                                                move |_| {
+                                                    app_state.write().nav.selected_channel = Some(gid.clone());
+                                                    // TODO: load group messages
+                                                }
+                                            },
+                                            span { class: "channel-icon", "👥" }
+                                            span { class: "channel-name", "{group_name}" }
+                                            span { class: "source-badge-inline", "{badge}" }
+                                            span { class: "dm-member-count", "({member_count})" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Empty state
+                    if dm_channels.is_empty() && groups.is_empty() && friends.is_empty() {
+                        div { class: "channel-empty",
+                            p { "Toggle the 🧪 demo to see sample data" }
+                        }
+                    }
+                } else if let Some(ref server) = current_server {
                     // Render channels grouped by categories
                     for category in &server.categories {
                         {

@@ -5,8 +5,8 @@
 // TODO(phase-2.5.7): Wire user sidebar to backend data
 
 use crate::i18n::t;
+use crate::state::ChatData;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_client::PresenceStatus;
 
@@ -14,7 +14,7 @@ use poly_client::PresenceStatus;
 ///
 /// Shows channel members grouped by presence status.
 #[component]
-pub fn UserSidebar(app_state: Signal<AppState>) -> Element {
+pub fn UserSidebar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let members = chat_data.read().members.clone();
 

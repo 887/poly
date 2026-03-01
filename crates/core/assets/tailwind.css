@@ -751,6 +751,27 @@ body {
     font-size: 13px;
 }
 
+/* DMs/Friends channel list items */
+
+.dm-avatar-small {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    flex-shrink: 0;
+}
+
+.dm-member-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
 /* ===========================
  * User Sidebar
  * =========================== */
