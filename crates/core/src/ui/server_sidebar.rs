@@ -22,11 +22,14 @@ use dioxus::prelude::*;
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
 #[component]
+#[allow(non_snake_case)]
 fn NavBarSpacer() -> Element {
     #[cfg(feature = "native-nav")]
-    return rsx! { div { class: "nav-bar-spacer" } };
+    return rsx! {
+        div { class: "nav-bar-spacer" }
+    };
     #[cfg(not(feature = "native-nav"))]
-    return rsx! {};
+    rsx! {}
 }
 
 /// Server sidebar component.
@@ -34,6 +37,7 @@ fn NavBarSpacer() -> Element {
 /// Shows: DMs icon, Notifications icon, favorited server icons with
 /// source badge overlay and account badge overlay, Demo toggle, Settings.
 #[component]
+#[allow(non_snake_case)]
 pub fn ServerSidebar() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let current_view = app_state.read().nav.view;
@@ -232,8 +236,7 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
             }
 
             // Load voice channel participants from demo data
-            chat_data.write().voice_channel_participants =
-                poly_demo::data::demo_voice_participants();
+            chat_data.write().voice_channel_participants = std::collections::HashMap::new();
         }
     }
 }
