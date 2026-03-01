@@ -35,6 +35,9 @@ pub fn ServerSidebar() -> Element {
 
     rsx! {
         nav { class: "server-sidebar",
+            // Reserve space for native nav-bar buttons (desktop/mobile only)
+            #[cfg(feature = "native-nav")]
+            div { class: "nav-bar-spacer" }
 
             // DMs / Friends button
             div {
@@ -108,9 +111,8 @@ pub fn ServerSidebar() -> Element {
                                     // Load channels for this server
                                     let sid = server_id_click.clone();
                                     spawn(async move {
-                                        load_server_data(sid, app_state, client_manager, chat_data).await; // Unread badge  Unread badge  Unread badge
-                                    }
-                                    },
+                                        load_server_data(sid, app_state, client_manager, chat_data).await;
+                                    });
                                 }
                             },
                             title: "{tooltip}", // Source badge (backend type)

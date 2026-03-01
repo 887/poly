@@ -114,6 +114,17 @@ pub fn ChannelList() -> Element {
             div { class: "channel-entries",
                 if current_view == View::DmsFriends {
                     // ── DMs / Friends view ───────────────────────────────
+                    // Friends button — full-width row (Discord-style)
+                    button {
+                        class: "dm-friends-row-btn",
+                        onclick: move |_| {
+                            app_state.write().push_nav_history();
+                            app_state.write().nav.view = View::Friends;
+                        },
+                        span { class: "dm-friends-row-icon", "👥" }
+                        span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }
+                    }
+
                     // Search bar: find conversations or contacts across all accounts
                     div { class: "dm-search-bar",
                         input {

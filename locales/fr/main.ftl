@@ -250,3 +250,10 @@ notif-badge-unread = Activer le badge messages non lus
 # DM list
 dm-search-placeholder = Trouver ou démarrer une conversation
 dm-no-results = Aucune conversation trouvée
+
+# Friends panel
+friends-title = Amis
+friends-search-placeholder = Rechercher des amis...
+friends-none = Aucun ami trouvé
+filter-all = Tous les comptes
+filter-all-servers = Tous les serveurs

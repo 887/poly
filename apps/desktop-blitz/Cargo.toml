@@ -10,7 +10,7 @@ name = "poly-desktop-blitz"
 path = "src/main.rs"
 
 [dependencies]
-poly-core = { workspace = true, features = ["demo"] }
+poly-core = { workspace = true, features = ["demo", "native-nav"] }
 # DECISION(D1): Blitz renderer is experimental — uses native Dioxus renderer
 dioxus = { workspace = true, features = ["desktop"] }
 tracing = { workspace = true }

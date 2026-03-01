@@ -107,8 +107,160 @@ body {
 
 .main-layout {
     display: flex;
+    flex-direction: column;
     height: 100vh;
     overflow: hidden;
+    position: relative;
+}
+
+/* Body row: holds sidebar + channel list + chat horizontally */
+.main-layout-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative; /* for nav-bar-top absolute positioning */
+}
+
+/* ===========================
+ * Voice Connection Banner
+ * =========================== */
+
+.voice-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 40px;
+    min-height: 40px;
+    background: linear-gradient(90deg, var(--accent-primary) 0%, color-mix(in srgb, var(--accent-primary) 60%, #000) 100%);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 50%, #000);
+    z-index: 200;
+}
+
+.voice-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 160px;
+}
+
+.voice-banner-avatars {
+    display: flex;
+    gap: -4px; /* negative to overlap */
+}
+
+.voice-banner-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #fff;
+    border: 2px solid var(--accent-primary);
+    margin-right: -6px;
+    cursor: default;
+}
+
+.voice-banner-count {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-left: 10px;
+    white-space: nowrap;
+}
+
+.voice-banner-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 12px;
+    border-radius: 6px;
+    transition: background 0.15s;
+    flex: 1;
+    justify-content: center;
+    text-align: center;
+}
+
+.voice-banner-center:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.voice-banner-icon {
+    font-size: 0.9rem;
+}
+
+.voice-banner-channel {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voice-banner-server {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.75);
+    white-space: nowrap;
+}
+
+.voice-banner-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 120px;
+    justify-content: flex-end;
+}
+
+.voice-ctrl-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.voice-ctrl-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.08);
+}
+
+.voice-ctrl-btn.muted {
+    background: rgba(255, 100, 100, 0.35);
+}
+
+.voice-ctrl-btn.muted:hover {
+    background: rgba(255, 100, 100, 0.55);
+}
+
+.voice-ctrl-btn.disconnect {
+    background: rgba(237, 66, 69, 0.5);
+}
+
+.voice-ctrl-btn.disconnect:hover {
+    background: rgba(237, 66, 69, 0.8);
+}
+
+/* ===========================
+ * Nav-bar spacer (native only)
+ * =========================== */
+
+.nav-bar-spacer {
+    height: 40px;
+    min-height: 40px;
+    flex-shrink: 0;
 }
 
 /* ===========================
@@ -2554,6 +2706,82 @@ select {
     opacity: 0.3;
     cursor: default;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   TOP-LEFT CORNER NAV BAR (browser-style back/forward)
+   ───────────────────────────────────────────────────────────── */
+
+.nav-bar-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    gap: 4px;
+    padding: 4px 8px;
+    z-index: 100;
+}
+
+.nav-bar-top .nav-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.nav-bar-top .nav-btn:hover:not(.disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.nav-bar-top .nav-btn.disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DM ACTION BUTTONS (Friends, Find)
+   ═══════════════════════════════════════════════════════════════ */
+
+.dm-action-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    align-items: center;
+}
+
+.dm-action-btn {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dm-action-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.dm-action-hint {
+    flex: 1;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    DM SEARCH BAR
    ═══════════════════════════════════════════════════════════════ */
@@ -2885,4 +3113,153 @@ select {
 .toggle-switch input:checked + .toggle-slider::before {
     transform: translateX(18px);
     background: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Friends Panel — Tiled grid view with filtering
+ * ═══════════════════════════════════════════════════════════════ */
+
+.friends-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.friends-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.friends-back-btn {
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.friends-back-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+}
+
+.friends-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+.friends-filters {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.friends-search {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.friends-search::placeholder {
+    color: var(--text-tertiary);
+}
+
+.friends-filter-select {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-width: 140px;
+}
+
+.friends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.friend-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.friend-card:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+}
+
+.friend-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.friend-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.friend-name {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.friend-account {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    grid-column: 1 / -1;
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--text-tertiary);
 }

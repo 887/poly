@@ -11,11 +11,11 @@ members = [
     "servers/backup-server",
     "servers/server",
     "mcp/devtools-protocol",
-    "mcp/desktop-devtools",
-    "mcp/web-devtools",
+    "mcp/desktop-devtools-mcp",
+    "mcp/web-devtools-mcp",
     "apps/desktop",
     "apps/desktop-blitz",
-    "apps/desktop-electron",  # Electron wrapper (WASM → Electron shell)
+    "apps/desktop-electron",    # Electron wrapper (WASM → Electron shell)
     "apps/android",
     "apps/ios",
     "apps/web",
@@ -118,7 +118,8 @@ poly-discord = { path = "clients/discord" }
 poly-teams = { path = "clients/teams" }
 poly-backup-server = { path = "servers/backup-server" }
 poly-server = { path = "servers/server" }
-poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools" }
+poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools-mcp" }
+poly-web-devtools-mcp = { path = "mcp/web-devtools-mcp" }
 poly-devtools-protocol = { path = "mcp/devtools-protocol" }
 
 # ── Workspace-wide lint policy ───────────────────────────────────────────────

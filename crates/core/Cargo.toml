@@ -12,6 +12,7 @@ matrix = ["dep:poly-matrix"]
 discord = ["dep:poly-discord"]
 teams = ["dep:poly-teams"]
 demo = ["dep:poly-demo"]
+native-nav = []  # Back/forward nav buttons (desktop/mobile only, not web)
 
 [dependencies]
 # UI

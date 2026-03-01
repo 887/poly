@@ -20,15 +20,18 @@ mod account_bar;
 mod channel_list;
 mod chat_view;
 mod emoji_picker;
+mod friends_panel;
 mod main_layout;
 mod notifications;
 mod server_sidebar;
 mod settings;
 mod setup_wizard;
 mod user_sidebar;
+mod voice_banner;
 mod voice_bar;
 mod voice_view;
 
+pub use friends_panel::FriendsPanel;
 pub use main_layout::MainLayout;
 pub use setup_wizard::SetupWizard;
 

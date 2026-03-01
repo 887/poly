@@ -21,6 +21,8 @@ pub enum View {
     Setup,
     /// DMs and friends list.
     DmsFriends,
+    /// Friends browser — tiled grid view with filtering (account, server, search)
+    Friends,
     /// Notifications feed.
     Notifications,
     /// A server's channel view.

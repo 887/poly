@@ -8,16 +8,57 @@
 use super::account_bar::AccountBar;
 use super::channel_list::ChannelList;
 use super::chat_view::ChatView;
+use super::friends_panel::FriendsPanel;
 use super::notifications::NotificationsView;
 use super::server_sidebar::ServerSidebar;
 use super::settings::SettingsPage;
 use super::user_sidebar::UserSidebar;
+use super::voice_banner::VoiceBanner;
 use super::voice_bar::VoiceBar;
 use super::voice_view::VoiceChannelView;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
 use poly_client::ChannelType;
+
+/// Navigation bar component — only renders on native platforms (desktop/mobile).
+/// On web, the browser's native back/forward buttons are used, so we don't need
+/// the reserved space or UI buttons.
+#[component]
+fn NavBar() -> Element {
+    #[cfg(feature = "native-nav")]
+    {
+        let mut app_state: Signal<AppState> = use_context();
+        let can_back = app_state.read().can_go_back();
+        let can_forward = app_state.read().can_go_forward();
+
+        return rsx! {
+            div { class: "nav-bar-top",
+                button {
+                    class: if can_back { "nav-btn" } else { "nav-btn disabled" },
+                    disabled: !can_back,
+                    onclick: move |_| { app_state.write().nav_back(); },
+                    title: "{t(\"nav-back\")}",
+                    "◀"
+                }
+                button {
+                    class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
+                    disabled: !can_forward,
+                    onclick: move |_| { app_state.write().nav_forward(); },
+                    title: "{t(\"nav-forward\")}",
+                    "▶"
+                }
+            }
+        };
+    }
+
+    #[cfg(not(feature = "native-nav"))]
+    {
+        return rsx! {
+            Fragment {}
+        };
+    }
+}
 
 /// Main application layout.
 ///
@@ -29,7 +70,7 @@ use poly_client::ChannelType;
 /// when the user switches between them.
 #[component]
 pub fn MainLayout() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
     let view = app_state.read().nav.view;
     let show_right = app_state.read().nav.right_sidebar_visible;
@@ -41,13 +82,16 @@ pub fn MainLayout() -> Element {
         .as_ref()
         .is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
 
-    let can_back = app_state.read().can_go_back();
-    let can_forward = app_state.read().can_go_forward();
-
     rsx! {
         div { class: "main-layout",
-            // Left: Server sidebar (always visible)
-            ServerSidebar {}
+            // Voice connection banner — spans full width when connected
+            VoiceBanner {}
+            // Main body: nav + columns
+            div { class: "main-layout-body",
+                // Back/Forward navigation — only on native platforms (not web)
+                NavBar {}
+                // Left: Server sidebar (always visible)
+                ServerSidebar {}
 
             // Middle content depends on current view.
             // DECISION(DX): DmsFriends and Server MUST be separate arms so that
@@ -55,32 +99,10 @@ pub fn MainLayout() -> Element {
             // stale component instances when the user switches views.
             match view {
                 View::DmsFriends => rsx! {
-                    // Channel list panel — nav-bar at top, NO AccountBar.
-                    // Multi-account: there is no single "current user" in DMs.
+                    // Channel list panel — NO nav-bar (now at top), NO AccountBar (multi-account app)
                     div { class: "channel-list-wrapper",
-                        div { class: "nav-bar",
-                            button {
-                                class: if can_back { "nav-btn" } else { "nav-btn disabled" },
-                                disabled: !can_back,
-                                onclick: move |_| {
-                                    app_state.write().nav_back();
-                                },
-                                title: "{t(\"nav-back\")}",
-                                "◀"
-                            }
-                            button {
-                                class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
-                                disabled: !can_forward, // AccountBar intentionally omitted — Poly is multi-account.
-                                onclick: move |_| { // Placeholder until a conversation is selected
-                                    app_state.write().nav_forward();
-                                },
-                                title: "{t(\"nav-forward\")}",
-                                "▶"
-                            }
-                        }
                         ChannelList {}
                         VoiceBar {}
-                    // AccountBar intentionally omitted — Poly is multi-account.
                     }
                     // Placeholder until a conversation is selected
                     main { class: "chat-view",
@@ -99,28 +121,8 @@ pub fn MainLayout() -> Element {
                     }
                 },
                 View::Server => rsx! {
-                    // Channel list panel — nav-bar at top + AccountBar at bottom
+                    // Channel list panel — AccountBar at bottom
                     div { class: "channel-list-wrapper",
-                        div { class: "nav-bar",
-                            button {
-                                class: if can_back { "nav-btn" } else { "nav-btn disabled" },
-                                disabled: !can_back,
-                                onclick: move |_| {
-                                    app_state.write().nav_back();
-                                },
-                                title: "{t(\"nav-back\")}",
-                                "◀"
-                            }
-                            button {
-                                class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
-                                disabled: !can_forward,
-                                onclick: move |_| {
-                                    app_state.write().nav_forward();
-                                },
-                                title: "{t(\"nav-forward\")}",
-                                "▶"
-                            }
-                        }
                         ChannelList {}
                         VoiceBar {}
                         AccountBar {}
@@ -138,6 +140,9 @@ pub fn MainLayout() -> Element {
                 View::Notifications => rsx! {
                     NotificationsView {}
                 },
+                View::Friends => rsx! {
+                    FriendsPanel {}
+                },
                 View::Settings => rsx! {
                     SettingsPage {}
                 },
@@ -145,6 +150,7 @@ pub fn MainLayout() -> Element {
                     div { "Redirecting to setup..." }
                 },
             }
+            } // end main-layout-body
         }
     }
 }
