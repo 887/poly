@@ -198,6 +198,52 @@
       "args": ["-p", "poly-backup-server"],
       "isBackground": true,
       "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Build: desktop-devtools",
+      "type": "shell",
+      "command": "dx",
+      "args": ["build", "--platform", "desktop"],
+      "options": { "cwd": "${workspaceFolder}/apps/desktop-devtools" },
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Launch: desktop-devtools (separate process)",
+      "type": "shell",
+      "command": "nohup",
+      "args": [
+        "${workspaceFolder}/target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools",
+        ">",
+        "${workspaceFolder}/.devtools-app.log",
+        "2>&1",
+        "&"
+      ],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "Run: desktop-devtools-mcp (protected)",
+      "type": "cargo",
+      "command": "run",
+      "args": ["-p", "poly-desktop-devtools-mcp"],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Kill: desktop-devtools app (MCP-safe)",
+      "type": "shell",
+      "command": "pkill",
+      "args": ["-f", "poly-desktop-devtools(?!-mcp)"],
+      "presentation": {
+        "reveal": "silent"
+      }
     }
   ]
 }

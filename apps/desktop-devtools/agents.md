@@ -17,6 +17,20 @@ The MCP server lives in `crates/poly-desktop-devtools-mcp/`.
 
 ---
 
+## MCP and App Isolation (IMPORTANT)
+
+**As of 2026-03-01:** The MCP and the desktop app are now **decoupled**.
+
+- The MCP runs in its **own background process** with dedicated terminal
+- Calling `kill_app()` from the MCP **does NOT kill the MCP itself**
+- This allows hot-reload: kill + relaunch the app while MCP stays connected
+
+**Pattern:** Use pattern `"poly-desktop-devtools[^-]"` in pkill to match the
+app binary but exclude the `-mcp` variant. This ensures only the UI app dies,
+not the MCP server.
+
+---
+
 ## Architecture
 
 ```
@@ -34,6 +48,11 @@ poly-desktop-devtools
     │
     └── Injected <script> (DEVTOOLS_HEAD)
         └── Console capture: window.__polyLogs[] (intercepts console.*)
+
+poly-desktop-devtools-mcp (separate process)
+    │ Runs in its own background terminal
+    │ Communicates via HTTP to port 9223
+    └── Survives app kill/restart cycles
 ```
 
 ## Screenshot Implementation

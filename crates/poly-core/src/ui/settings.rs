@@ -2,6 +2,7 @@
 
 use crate::i18n::t;
 use crate::state::{AppState, SettingsSection};
+use crate::theme::{ThemeConfig, ThemePreset};
 use dioxus::prelude::*;
 
 /// Settings page component.
@@ -138,8 +139,22 @@ fn IdentitySettings() -> Element {
 }
 
 /// Theme settings section.
+///
+/// Reads/writes the `Signal<ThemeConfig>` provided by [`crate::ui::App`].
+/// Changing the preset updates the signal immediately (re-renders the
+/// `<style id="poly-theme">` in App) and persists to storage.
 #[component]
 fn ThemeSettings() -> Element {
+    let mut theme_config = use_context::<Signal<ThemeConfig>>();
+
+    // Derive the current preset string for the select's selected option.
+    let current_preset = match theme_config.read().preset {
+        ThemePreset::NeutralDark => "neutral-dark",
+        ThemePreset::Purple => "purple",
+        ThemePreset::Red => "red",
+        ThemePreset::Custom => "custom",
+    };
+
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-theme\")}" }
@@ -147,8 +162,31 @@ fn ThemeSettings() -> Element {
             // Theme preset selector
             div { class: "theme-presets",
                 label { "{t(\"settings-theme-preset\")}" }
-                // TODO(phase-2.7.9.7): Theme preset selector, color editor, CSS editor
-                select { class: "theme-select",
+                select {
+                    class: "theme-select",
+                    value: "{current_preset}",
+                    onchange: move |evt| {
+                        let preset = match evt.value().as_str() {
+                            "purple" => ThemePreset::Purple,
+                            "red" => ThemePreset::Red,
+                            "custom" => ThemePreset::Custom,
+                            _ => ThemePreset::NeutralDark,
+                        };
+                        // Update context signal → App re-renders <style> with new CSS.
+                        let mut new_config = theme_config.read().clone();
+                        new_config.preset = preset;
+                        theme_config.set(new_config.clone());
+                        // Persist async (fire-and-forget).
+                        spawn(async move {
+                            if let Some(s) = crate::STORAGE.get() {
+                                if let Err(e) = s.set_theme_config(&new_config).await {
+                                    tracing::error!("Failed to persist theme config: {e}");
+                                } else {
+                                    tracing::info!("Theme config persisted ✓");
+                                }
+                            }
+                        });
+                    },
                     option { value: "neutral-dark", "{t(\"theme-neutral-dark\")}" }
                     option { value: "purple", "{t(\"theme-purple\")}" }
                     option { value: "red", "{t(\"theme-red\")}" }
@@ -164,16 +202,46 @@ fn ThemeSettings() -> Element {
 }
 
 /// Language settings section.
+///
+/// Uses [`crate::i18n::use_locale`] for reactive locale switching:
+/// changing the language immediately re-renders all translated strings
+/// across the app (because all components share the locale `Signal`).
+/// The new locale is also persisted to `AppSettings` in storage.
 #[component]
 fn LanguageSettings() -> Element {
+    let (locale_sig, mut set_locale_fn) = crate::i18n::use_locale();
+    // Reading the signal here subscribes this component to locale changes.
+    let current_locale = locale_sig.read().clone();
+
     rsx! {
         div { class: "settings-section",
             h2 { "{t(\"settings-language\")}" }
             p { class: "settings-description", "{t(\"settings-language-description\")}" }
             select {
                 class: "language-select",
+                value: "{current_locale}",
                 onchange: move |evt| {
-                    crate::i18n::set_locale(&evt.value());
+                    let new_locale = evt.value();
+                    // Update global state + trigger re-render via signal.
+                    set_locale_fn(&new_locale);
+                    // Persist the new locale to AppSettings (fire-and-forget).
+                    spawn(async move {
+                        if let Some(s) = crate::STORAGE.get() {
+                            match s.get_app_settings().await {
+                                Ok(mut settings) => {
+                                    settings.locale = new_locale;
+                                    if let Err(e) = s.set_app_settings(&settings).await {
+                                        tracing::error!("Failed to persist locale: {e}");
+                                    } else {
+                                        tracing::info!("Locale persisted to storage ✓");
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to read settings for locale persist: {e}");
+                                }
+                            }
+                        }
+                    });
                 },
                 option { value: "en", "English" }
                 option { value: "de", "Deutsch" }

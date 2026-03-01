@@ -96,6 +96,41 @@ pub struct AccountToken {
     pub display_name: String,
 }
 
+/// The kind of favorited item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum FavoriteKind {
+    /// A direct message / friend.
+    DirectMessage,
+    /// A group DM.
+    Group,
+    /// A server / guild.
+    Server,
+    /// A channel within a server.
+    Channel,
+}
+
+/// A favorited item (pinned server, friend, group DM, or channel).
+///
+/// Persisted under the key `"favorites"`.
+///
+/// TODO(phase-2.4.3.8): Favorites storage implementation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FavoriteItem {
+    /// Unique entity ID (backend-specific).
+    pub id: String,
+    /// Backend identifier (`"stoat"`, `"matrix"`, `"poly-server"`, …).
+    pub backend: String,
+    /// Account ID this favorite belongs to.
+    pub account_id: String,
+    /// Human-readable display name.
+    pub display_name: String,
+    /// Optional icon / avatar URL.
+    pub icon_url: Option<String>,
+    /// Kind of favorited item.
+    pub kind: FavoriteKind,
+}
+
 // ── Storage handle ────────────────────────────────────────────────────────────
 
 /// Platform-transparent storage handle.
@@ -179,5 +214,93 @@ impl Storage {
         tokens.retain(|t| !(t.backend == backend && t.account_id == account_id));
         self.set("account_tokens", serde_json::to_value(&tokens)?)
             .await
+    }
+
+    // ── Typed access — FavoriteItem ───────────────────────────────────────────
+
+    /// List all stored favorites.
+    ///
+    /// TODO(phase-2.4.3.8): Favorites storage.
+    pub async fn get_favorites(&self) -> Result<Vec<FavoriteItem>, StorageError> {
+        Ok(self
+            .get("favorites")
+            .await?
+            .and_then(|v| serde_json::from_value::<Vec<FavoriteItem>>(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Add or update a favorite (identified by `backend + id`).
+    pub async fn upsert_favorite(&self, item: &FavoriteItem) -> Result<(), StorageError> {
+        let mut favorites = self.get_favorites().await?;
+        favorites.retain(|f| !(f.backend == item.backend && f.id == item.id));
+        favorites.push(item.clone());
+        self.set("favorites", serde_json::to_value(&favorites)?)
+            .await
+    }
+
+    /// Remove a favorite by backend + entity id.
+    pub async fn remove_favorite(&self, backend: &str, id: &str) -> Result<(), StorageError> {
+        let mut favorites = self.get_favorites().await?;
+        favorites.retain(|f| !(f.backend == backend && f.id == id));
+        self.set("favorites", serde_json::to_value(&favorites)?)
+            .await
+    }
+
+    // ── Typed access — ThemeConfig ────────────────────────────────────────────
+
+    /// Read the stored theme configuration.
+    ///
+    /// Returns [`crate::theme::ThemeConfig::default`] (neutral-dark) if not yet set.
+    ///
+    /// TODO(phase-2.4.3.9): Theme preferences storage.
+    pub async fn get_theme_config(&self) -> Result<crate::theme::ThemeConfig, StorageError> {
+        Ok(self
+            .get("theme_config")
+            .await?
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Persist the theme configuration.
+    pub async fn set_theme_config(
+        &self,
+        config: &crate::theme::ThemeConfig,
+    ) -> Result<(), StorageError> {
+        self.set("theme_config", serde_json::to_value(config)?)
+            .await
+    }
+
+    // ── Migrations ────────────────────────────────────────────────────────────
+
+    /// Current storage schema version.
+    const CURRENT_VERSION: u64 = 1;
+
+    /// Run any pending storage schema migrations.
+    ///
+    /// Call once at startup, after [`Storage::init`], before reading any data.
+    ///
+    /// Each migration step is idempotent — safe to re-run after a crash.
+    ///
+    /// TODO(phase-2.4.3.10): Migration system.
+    pub async fn run_migrations(&self) -> Result<(), StorageError> {
+        let version = self
+            .get("storage_version")
+            .await?
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
+        tracing::info!(
+            "Storage schema: current v{version}, target v{}",
+            Self::CURRENT_VERSION
+        );
+
+        // v0 → v1: initial schema. Nothing to migrate; just stamp the version.
+        if version < 1 {
+            tracing::info!("Applying storage migration: v0 → v1 (initial stamp)");
+            self.set("storage_version", serde_json::json!(Self::CURRENT_VERSION))
+                .await?;
+        }
+
+        Ok(())
     }
 }

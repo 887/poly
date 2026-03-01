@@ -1,7 +1,7 @@
 # poly-desktop-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Last Updated:** 2026-03-01
 
 ---
 
@@ -17,6 +17,22 @@ For the **web (Chrome)** build, use `poly-web-devtools-mcp` instead.
 
 ---
 
+## Critical: App and MCP Isolation (2026-03-01)
+
+**The MCP and desktop app are now isolated.** Killing the app **does NOT kill the MCP.**
+
+- `kill_app()` uses pkill pattern `"poly-desktop-devtools[^-]"` to match only the app,
+  excluding the `-mcp` variant
+- The MCP survives app kill/restart cycles
+- Enables hot-reload development: rebuild + kill + relaunch app without MCP downtime
+
+**Pattern explained:**
+- `poly-desktop-devtools` ← matches (the app)
+- `poly-desktop-devtools-mcp` ← does NOT match (protected)
+- Regex `[^-]` at end ensures we don't match lines with `-` after the app name
+
+---
+
 ## Architecture
 
 ```
@@ -25,6 +41,8 @@ VS Code Copilot / MCP Client
     ▼
 poly-desktop-devtools-mcp (this crate)
     │ HTTP requests to 127.0.0.1:9223
+    ├── Runs in its own background process (VSCode task)
+    └── Survives app kill/restart
     ▼
 poly-desktop-devtools (apps/desktop-devtools/)
     ├── Embedded axum HTTP server (port 9223)
@@ -43,18 +61,34 @@ the only reliable path for the desktop build.
 
 ## How to Use (Every Session)
 
-### 1. Launch the DevTools App
+### 1. Build & Run the MCP First (in its own terminal)
 
 ```
-launch_app { workspace: "/home/laragana/workspcacemsg" }
+cargo run -p poly-desktop-devtools-mcp
 ```
 
-This uses `dx build --platform desktop` (NOT `cargo build`) to get proper
-`asset!()` processing, then launches the output binary.
+Or use the VSCode task:
+```
+Run: desktop-devtools-mcp (protected)
+```
 
-Wait ~3 seconds for the app to start, then:
+The MCP listens on stdin for JSON-RPC and waits for commands.
 
-### 2. Connect
+### 2. (elsewhere) Build & Launch the Desktop App
+
+```
+cd apps/desktop-devtools && dx build --platform desktop
+target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools
+```
+
+Or use the VSCode task:
+```
+Build: desktop-devtools
+```
+
+Wait ~3 seconds for the app HTTP server to start.
+
+### 3. Connect from MCP (via Copilot or direct call)
 
 ```
 connect_cdp {}
@@ -62,22 +96,49 @@ connect_cdp {}
 
 Verifies the HTTP eval-bridge at `http://127.0.0.1:9223/status` is reachable.
 
-### 3. Take a Screenshot
+### 4. Use Devtools Functions
+
+All functions now work with the MCP and app isolated:
 
 ```
-screenshot {}
+screenshot {}              → PNG screenshot of desktop app
+get_dom {}                 → HTML of current UI
+js_eval { expression: "..." }  → evaluate JavaScript in the app
+click { x: 100, y: 200 }   → simulate mouse click
+type_text { text: "hello" } → simulate text input
+kill_app {}                → kill ONLY the app, NOT the MCP
+launch_app { workspace: "..." } → relaunch the app
+reset_app {}               → kill app + wipe data + docs for setup wizard
 ```
 
-Returns a PNG image captured via SVG foreignObject → Canvas → data URL.
-**Note:** This method may not capture external images or iframes perfectly.
-For pixel-perfect screenshots, use the `poly-web-devtools-mcp` backend (Chrome CDP).
+---
 
-### 4. Inspect the DOM / CSS
+## Implementation Details
 
+### kill_app() — MCP-Safe Pattern
+
+```rust
+// Uses pattern that matches app but NOT the MCP server
+tokio::process::Command::new("pkill")
+    .args(["-f", "poly-desktop-devtools[^-]"])
+    .status()
+    .await?;
 ```
-get_dom {}
-js_eval { expression: "getComputedStyle(document.body).backgroundColor" }
-```
+
+This pattern:
+- `poly-desktop-devtools[^-]` — match "poly-desktop-devtools" followed by non-dash
+- Will match: `/path/to/poly-desktop-devtools` (the app)
+- Will NOT match: `poly-desktop-devtools-mcp` (has a dash after)
+
+### launch_app() — Rebuilds if Needed
+
+1. Kill any existing app instance (using MCP-safe pattern)
+2. If binary doesn't exist, build with `dx build --platform desktop`
+3. Spawn the binary in background with stdio piped to `/dev/null`
+4. Return immediately (app runs async)
+
+Call `connect_cdp()` ~2-3s later to verify the HTTP server is ready.
+
 
 ### 5. Reset to Setup Wizard
 

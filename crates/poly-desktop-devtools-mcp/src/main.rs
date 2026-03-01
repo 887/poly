@@ -71,8 +71,9 @@ impl DevtoolsBackend for DesktopHttpBackend {
 
     async fn launch_app(&self, workspace: &str) -> anyhow::Result<String> {
         // Kill any existing instance first to prevent double-instances on port 9223.
+        // Use pattern that matches app but NOT the MCP server.
         let _ = tokio::process::Command::new("pkill")
-            .args(["-f", "poly-desktop-devtools"])
+            .args(["-f", "poly-desktop-devtools[^-]"])
             .status()
             .await;
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
@@ -108,8 +109,11 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {
+        // Only kill the desktop app, NOT the MCP server.
+        // Match lines ending with "poly-desktop-devtools" but not "-mcp" variant.
+        // This prevents killing the MCP itself when called from the app's kill_app.
         tokio::process::Command::new("pkill")
-            .args(["-f", "poly-desktop-devtools"])
+            .args(["-f", "poly-desktop-devtools[^-]"])
             .status()
             .await?;
         Ok("Killed poly-desktop-devtools process(es)".to_string())

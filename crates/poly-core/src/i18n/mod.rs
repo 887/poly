@@ -13,6 +13,22 @@
 //!
 //! // With arguments
 //! let hello = t_args("hello-user", &[("name", "Alice")]);
+//!
+//! // With the macro (from lib.rs)
+//! let s = poly_core::t!("app-title");
+//! let s = poly_core::t!("hello-user", name => "Alice");
+//! ```
+//!
+//! ## Reactive locale switching (Dioxus components)
+//!
+//! ```rust,ignore
+//! // In App root — call once:
+//! provide_locale_context();
+//!
+//! // In any child component:
+//! let (locale_sig, set_locale_fn) = use_locale();
+//! // reading locale_sig.read() subscribes to locale changes
+//! set_locale_fn("de"); // updates global + signal, triggers re-renders
 //! ```
 
 use fluent_bundle::concurrent::FluentBundle;
@@ -20,6 +36,9 @@ use fluent_bundle::{FluentArgs, FluentResource};
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
 use unic_langid::LanguageIdentifier;
+
+// Dioxus hooks (for reactive locale context)
+use dioxus::prelude::*;
 
 /// Supported locales.
 pub const SUPPORTED_LOCALES: &[&str] = &["en", "de", "fr", "es"];
@@ -181,4 +200,45 @@ pub fn t_args(key: &str, args: &[(&str, &str)]) -> String {
     // Key not found anywhere — return the key itself as fallback
     tracing::warn!("Missing i18n key: {key}");
     key.to_string()
+}
+
+// ── Dioxus reactive hooks ─────────────────────────────────────────────────────
+
+/// Provide a reactive locale [`Signal<String>`] as Dioxus context.
+///
+/// **Call once from the root [`crate::ui::App`] component.** Child components
+/// can access the signal via [`use_locale`] and will automatically re-render
+/// when the locale changes.
+///
+/// ```rust,ignore
+/// // In App component:
+/// provide_locale_context();
+/// ```
+pub fn provide_locale_context() {
+    let sig: Signal<String> = use_signal(current_locale);
+    provide_context(sig);
+}
+
+/// Access the reactive locale signal and return a setter that triggers re-renders.
+///
+/// Must be called inside a Dioxus component.
+/// Reading `locale.read()` anywhere in the component body subscribes the component to
+/// locale changes — it will re-render whenever the locale switches.
+///
+/// The returned setter is `FnMut` (Dioxus event handlers accept `FnMut`).
+///
+/// ```rust,ignore
+/// // In any child component:
+/// let (locale, mut set_locale) = use_locale();
+/// let _ = locale.read(); // subscribe to changes
+/// // ...
+/// set_locale("de"); // updates global + signal → triggers re-render
+/// ```
+pub fn use_locale() -> (ReadSignal<String>, impl FnMut(&str) + Clone) {
+    let mut sig = use_context::<Signal<String>>();
+    let setter = move |new_locale: &str| {
+        set_locale(new_locale);
+        *sig.write() = new_locale.to_string();
+    };
+    (sig.into(), setter)
 }

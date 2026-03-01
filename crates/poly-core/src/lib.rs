@@ -29,6 +29,32 @@ pub mod ui;
 // Re-export the client trait crate
 pub use poly_client;
 
+/// Translate a localization key (with optional named arguments).
+///
+/// Thin macro wrapper over [`i18n::t`] and [`i18n::t_args`].
+/// All user-facing strings **must** go through this macro.
+///
+/// ## Examples
+/// ```rust,ignore
+/// // Simple key lookup — returns the translated string.
+/// let s = t!("app-title");
+///
+/// // With named arguments (matches `{ $name }` in the .ftl file).
+/// let s = t!("hello-user", name => "Alice");
+/// let s = t!("server-count", count => "5", kind => "text");
+/// ```
+#[macro_export]
+macro_rules! t {
+    // Simple key, no arguments.
+    ($key:expr) => {
+        $crate::i18n::t($key)
+    };
+    // Key + one or more `name => value` pairs.
+    ($key:expr, $($name:ident => $value:expr),+ $(,)?) => {
+        $crate::i18n::t_args($key, &[$( (stringify!($name), $value) ),+])
+    };
+}
+
 /// Global storage handle — initialised exactly once at app startup.
 ///
 /// Access via `poly_core::STORAGE.get()`. Returns `None` until initialised.

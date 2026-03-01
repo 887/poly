@@ -92,25 +92,25 @@
 ## 2.4 Core Infrastructure — poly-core
 
 ### 2.4.1 i18n System
-- [ ] **2.4.1.1** Create i18n wrapper module (`poly-core/src/i18n/`)
-- [ ] **2.4.1.2** Implement `t!()` macro with key + named arguments
-- [ ] **2.4.1.3** Implement `use_i18n()` hook for locale switching
-- [ ] **2.4.1.4** Load `.ftl` files from `locales/` directory (embedded or runtime)
-- [ ] **2.4.1.5** Fallback chain: user locale → English
-- [ ] **2.4.1.6** Write English `.ftl` files for all UI strings
-- [ ] **2.4.1.7** Write German `.ftl` files
-- [ ] **2.4.1.8** Write French `.ftl` files
-- [ ] **2.4.1.9** Write Spanish `.ftl` files
+- [x] **2.4.1.1** Create i18n wrapper module (`poly-core/src/i18n/`) ✓
+- [x] **2.4.1.2** Implement `t!()` macro with key + named arguments (`#[macro_export] macro_rules! t!`) ✓
+- [x] **2.4.1.3** Implement `use_locale()` hook + `provide_locale_context()` for reactive locale switching ✓
+- [x] **2.4.1.4** Load `.ftl` files from `locales/` directory (embedded via `include_str!`) ✓
+- [x] **2.4.1.5** Fallback chain: user locale → English (sys_locale + fallback in `t_args`) ✓
+- [x] **2.4.1.6** Write English `.ftl` files for all UI strings ✓
+- [x] **2.4.1.7** Write German `.ftl` files ✓
+- [x] **2.4.1.8** Write French `.ftl` files ✓
+- [x] **2.4.1.9** Write Spanish `.ftl` files ✓
 
 ### 2.4.2 Theme Engine
-- [ ] **2.4.2.1** Define CSS custom properties for all themeable colors
-- [ ] **2.4.2.2** Create `neutral-dark.css` preset (default)
-- [ ] **2.4.2.3** Create `purple.css` preset (Discord-inspired)
-- [ ] **2.4.2.4** Create `red.css` preset (Stoat-inspired)
-- [ ] **2.4.2.5** Implement theme state management (current theme, custom overrides)
-- [ ] **2.4.2.6** Implement custom CSS editor model (get/set user CSS, preview)
-- [ ] **2.4.2.7** Theme import/export (save/load CSS file)
-- [ ] **2.4.2.8** Dark/light mode: follow device preference by default, user override
+- [x] **2.4.2.1** Define CSS custom properties for all themeable colors (in `neutral-dark.css`) ✓
+- [x] **2.4.2.2** Create `neutral-dark.css` preset (default) ✓
+- [x] **2.4.2.3** Create `purple.css` preset (Discord-inspired) ✓
+- [x] **2.4.2.4** Create `red.css` preset (Stoat-inspired) ✓
+- [x] **2.4.2.5** Implement theme state management — `ThemeConfig` + reactive `Signal<String>` in App context ✓
+- [ ] **2.4.2.6** Implement custom CSS editor model (get/set user CSS, preview) — future
+- [x] **2.4.2.7** Theme import/export — `export_theme()` + storage `get/set_theme_config()` ✓
+- [ ] **2.4.2.8** Dark/light mode: follow device preference by default, user override — future
 
 ### 2.4.3 Storage Abstraction (cross-platform KV store)
 
@@ -123,9 +123,9 @@
 - [x] **2.4.3.5** Platform-transparent `Storage` newtype — same `get()`/`set()`/`delete()` API on both platforms
 - [x] **2.4.3.6** Global `STORAGE: OnceLock<Storage>` initialized at app startup via `use_future` in `App`
 - [x] **2.4.3.7** **Persistence verified by MCP self-test**: wizard completion → kill → relaunch → wizard skipped ✓
-- [ ] **2.4.3.8** Favorites storage (servers, friends, groups per account)
-- [ ] **2.4.3.9** Theme preferences storage
-- [ ] **2.4.3.10** Migration system for schema changes
+- [x] **2.4.3.8** Favorites storage — `FavoriteItem` + `get/upsert/remove_favorite()` ✓
+- [x] **2.4.3.9** Theme preferences storage — `get/set_theme_config()` ✓
+- [x] **2.4.3.10** Migration system — `run_migrations()` with `storage_version` tracking ✓
 
 #### Decision DX-STORAGE-1: Storage abstraction design
 
