@@ -16,8 +16,8 @@ any data leaves the device.
 **Stack:**
 - **Axum 0.8** — HTTP server
 - **SurrealDB 3.0 + SurrealKV** — embedded storage (consistent with rest of project)
-- **Dioxus 0.7.3** — admin web UI (served at `/`)
-- **utoipa + utoipa-swagger-ui** — OpenAPI 3.1 spec + Swagger UI at `/swagger-ui`
+- **Tailwind CSS + Alpine.js** — admin web SPA served at `/` (embedded HTML const, no build step)
+- **utoipa 5** — OpenAPI 3.1 spec; Swagger UI served at `/swagger-ui` via CDN HTML
 - **tokio** — async runtime
 
 ---
@@ -27,28 +27,19 @@ any data leaves the device.
 ```
 crates/poly-backup-server/
 ├── src/
-│   ├── main.rs             # Entry: launch Axum + serve Dioxus admin UI
-│   ├── config.rs           # Server configuration from env vars
-│   ├── db.rs               # SurrealKV init + schema setup
+│   ├── main.rs             # Entry: tokio::main, startup, graceful shutdown
+│   ├── lib.rs              # AppState, create_app(), utoipa ApiDoc
+│   ├── config.rs           # Config::from_env() — all POLY_* env vars
+│   ├── error.rs            # AppError enum, IntoResponse, Result<T> alias
+│   ├── db.rs               # SurrealKV init, SCHEMA const, record structs
 │   ├── auth/
-│   │   ├── mod.rs          # Auth module re-exports
-│   │   ├── challenge.rs    # PoW nonce generation + verification
-│   │   ├── passphrase.rs   # Constant-time passphrase check + rate limiting
-│   │   └── token.rs        # Token generation, hashing, storage, validation
+│   │   └── mod.rs          # Challenge/Auth handlers, AuthUser extractor, hash_token, verify_pow
 │   ├── sync/
-│   │   ├── mod.rs
-│   │   ├── push.rs         # POST /api/sync/push handler
-│   │   └── pull.rs         # GET /api/sync/pull handler
-│   ├── api/
-│   │   ├── mod.rs          # Axum router assembly + utoipa annotation
-│   │   ├── types.rs        # Request/response types (utoipa::ToSchema)
-│   │   └── admin.rs        # DELETE /api/admin/token + GET /api/admin/accounts
-│   └── ui/
-│       ├── mod.rs          # Dioxus fullstack setup
-│       └── app.rs          # Admin UI root component
+│   │   └── mod.rs          # push, pull, status handlers + request/response types
+│   └── web/
+│       └── mod.rs          # admin_router(), AdminState, ADMIN_HTML embedded SPA
+├── cranky.toml
 ├── Cargo.toml
-├── Dockerfile
-├── docker-compose.yml
 ├── agents.md
 └── README.md
 ```
@@ -398,56 +389,55 @@ Tasks:
 
 ---
 
-## 2.3.6 Dioxus Admin Web UI
+## 2.3.6 Admin Web UI (Tailwind CSS + Alpine.js SPA)
 
-Simple Dioxus fullstack web UI served at `/`. Read-only dashboard — no writes from the UI (use API directly for token revocation, or add it in a later revision).
+> **DECISION:** Replaced planned Dioxus fullstack admin UI with a lightweight,
+> single-file HTML SPA embedded as a Rust `const &str` in `src/web/mod.rs`.
+> No build step, no Dioxus dependency in this crate. Fully functional, simpler
+> to maintain, and avoids axum/Dioxus SSR integration complexity.
 
-> **Tech:** Dioxus 0.7 fullstack mode with Axum. Server functions call the same SurrealKV DB.
+Dark enterprise-themed SPA served at `/`. Tailwind CSS via CDN + Alpine.js 3.14 via CDN.
 
-### Pages / Components
+### Layout & Pages
 
-#### `/` — Dashboard
-- Server stats: registered accounts / max, total blobs stored, uptime
-- Config summary (passphrase masked, PoW difficulty, token expiry)
-- Link to Swagger UI
+#### Login Screen (pre-auth)
+- Centered card with Poly brand + server-passphrase field + username/password
+- On submit: mines SHA-256 PoW challenge (16-bit difficulty) via Web Crypto API
+- PoW mining is async — shows spinner while mining
+- `POST /admin/login` → sets `poly_admin` session cookie (HttpOnly, SameSite=Strict)
+- Global rate limit: 10 attempts/minute enforced server-side
 
-#### `/accounts` — Accounts List
-- Table: Public key (truncated), registered date, last seen, # tokens, # blobs
-- Click row → account detail view
-- Shows "Slots used: N / MAX" at top
+#### Users Page (sidebar → "Users")
+- Table: Public key (truncated + hover full), registered date, last seen, # sessions, # blobs
+- Click row → expands inline to show active tokens (device name, last seen, expires, Revoke button)
+- Revoke calls `DELETE /admin/api/tokens/:id`
 
-#### `/accounts/{pubkey}` — Account Detail
-- Full public key (copyable)
-- Timeline: registered, last sync, token count
-- Token list: device name, created, last seen, expiry, Revoke button
-- Blob list: sequence, pushed_at, size (bytes)
+#### Settings Page (sidebar → "Settings")
+- Max accounts input (0 = unlimited) → `POST /admin/api/settings`
+- Server info panel: version, pow_difficulty, token_expiry_days, bind address
 
-#### `/sessions` — All Active Tokens
-- Flat list of all non-expired tokens across all accounts
-- Columns: public key (truncated), device name, last seen, expires
-- Revoke button per row
+### Auth Security
+- Admin PoW challenge: nonce stored in `AdminState.challenges: DashMap<_, _>`
+- Session stored as `SHA-256(cookie_value)` in `AdminState.sessions: DashMap<String, Instant>`
+- Rate limit: `AdminState.rate: Mutex<AdminLoginTracker>` — 10 attempts/minute global window
+- All admin API routes call `check_session()` helper which validates cookie
 
-### Component structure
-```
-ui/
-├── app.rs          # Root: Router component (/ | /accounts | /accounts/:key | /sessions)
-├── dashboard.rs    # Stats cards + quick links
-├── accounts.rs     # Account list table
-├── account_detail.rs  # Per-account view with token + blob lists
-└── sessions.rs     # Global sessions table
-```
+### Implementation
+- `src/web/mod.rs` — all admin backend logic + `ADMIN_HTML: &'static str` const
+- No build step: HTML served directly from the constant
+- CSS theme vars: `--bg: #070b14`, `--surface: #0d1526`, `--accent: #6366f1`
 
 Tasks:
-- [ ] **2.3.6.1** Dioxus fullstack setup in `main.rs` — serve admin UI at `/`, API routes under `/api`
-- [ ] **2.3.6.2** Dioxus `Router` with all pages
-- [ ] **2.3.6.3** Server functions: `get_dashboard_stats()`, `get_accounts()`, `get_account_detail(pubkey)`, `get_all_tokens()`, `revoke_token(token_id)`
-- [ ] **2.3.6.4** `Dashboard` component with stats cards
-- [ ] **2.3.6.5** `AccountsList` component — table with sorting
-- [ ] **2.3.6.6** `AccountDetail` component — token list with revoke action + blob list
-- [ ] **2.3.6.7** `SessionsList` component — all tokens table with revoke
-- [ ] **2.3.6.8** Shared `StatCard`, `Table`, `CopyButton` UI primitives
-- [ ] **2.3.6.9** Apply Poly neutral-dark theme CSS variables (consistent styling with main app)
-- [ ] **2.3.6.10** i18n for admin UI strings (English only initially — admin tool)
+- [x] **2.3.6.1** Admin router with session auth (cookie-based)
+- [x] **2.3.6.2** PoW challenge endpoint (`GET /admin/challenge`)
+- [x] **2.3.6.3** Login endpoint with PoW verification + rate limiting (`POST /admin/login`)
+- [x] **2.3.6.4** Logout endpoint (`POST /admin/logout`)
+- [x] **2.3.6.5** Stats API (`GET /admin/api/stats`)
+- [x] **2.3.6.6** Accounts API (`GET /admin/api/accounts`)
+- [x] **2.3.6.7** Tokens-per-account API + Revoke token (`GET/DELETE /admin/api/accounts/:pk/tokens`, `DELETE /admin/api/tokens/:id`)
+- [x] **2.3.6.8** Settings API (`POST /admin/api/settings`)
+- [x] **2.3.6.9** Embedded Tailwind + Alpine.js HTML SPA (login + users + settings)
+- [x] **2.3.6.10** Dark enterprise theme matching Poly neutral-dark CSS vars
 
 ---
 

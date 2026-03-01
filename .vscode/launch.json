@@ -81,8 +81,14 @@
       "args": [],
       "env": {
         "RUST_LOG": "info,poly_backup_server=debug",
-        "POLY_BACKUP_PASSPHRASE": "dev-passphrase",
-        "POLY_BACKUP_BIND": "127.0.0.1:3080"
+        "POLY_PASSPHRASE": "dev-passphrase",
+        "POLY_ADMIN_USER": "admin",
+        "POLY_ADMIN_PASSWORD": "dev-admin-password",
+        "POLY_BIND": "127.0.0.1:8081",
+        "POLY_DATA_DIR": "${workspaceFolder}/data/backup-dev",
+        "POLY_MAX_ACCOUNTS": "0",
+        "POLY_POW_DIFFICULTY": "16",
+        "POLY_ADMIN_POW_DIFFICULTY": "12"
       },
       "cwd": "${workspaceFolder}"
     },
