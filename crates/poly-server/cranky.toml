@@ -1,4 +1,4 @@
-# Cranky lint configuration for android app.
+# Cranky lint configuration for poly-server.
 # `cargo cranky` respects this file (equivalent to cargo clippy but config-file driven).
 # These are IN ADDITION to the workspace-level lints in the root Cargo.toml.
 

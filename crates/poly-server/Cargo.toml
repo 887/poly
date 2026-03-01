@@ -1,0 +1,49 @@
+[package]
+name = "poly-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Poly self-hosted chat server — reference implementation"
+
+[[bin]]
+name = "poly-server"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "fs", "io-std", "net", "process", "signal"] }
+
+# Web framework
+axum = { workspace = true, features = ["ws", "macros", "multipart"] }
+tower-http = { workspace = true, features = ["cors", "trace"] }
+tower = { version = "0.5", features = ["util"] }
+
+# Database
+surrealdb = { workspace = true, features = ["kv-surrealkv"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Auth
+argon2 = "0.5"
+jsonwebtoken = "9"
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+futures = { workspace = true }
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+[dev-dependencies]
+tempfile = "3"
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+futures = { workspace = true }
+
+[lints]
+workspace = true

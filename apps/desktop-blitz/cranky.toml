@@ -1,7 +1,28 @@
-deny = [
-  "unsafe_code",
-  "clippy::unwrap_used",
-  "clippy::expect_used",
-  "clippy::panic",
-  "clippy::indexing_slicing",
-]
+# Cranky lint configuration for desktop-blitz app.
+# `cargo cranky` respects this file (equivalent to cargo clippy but config-file driven).
+# These are IN ADDITION to the workspace-level lints in the root Cargo.toml.
+
+[deny]
+# Safety
+unsafe_code = true
+
+# Fallible short-circuits
+"clippy::unwrap_used" = true
+"clippy::expect_used" = true
+"clippy::panic" = true
+"clippy::indexing_slicing" = true
+
+# Code hygiene
+"clippy::todo" = true
+"clippy::unimplemented" = true
+"clippy::dbg_macro" = true
+"clippy::print_stdout" = true  # use tracing, not println!
+"clippy::print_stderr" = true
+
+[warn]
+"clippy::pedantic" = true
+"clippy::nursery" = true
+"clippy::missing_docs_in_private_items" = false
+"clippy::missing_errors_doc" = false
+"clippy::must_use_candidate" = false
+"clippy::module_name_repetitions" = false
