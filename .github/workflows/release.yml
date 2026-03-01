@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  ANDROID_HOME: /usr/local/lib/android/sdk
 
 permissions:
   contents: write
@@ -76,8 +77,6 @@ jobs:
   android:
     name: Android APK
     runs-on: ubuntu-latest
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
 
