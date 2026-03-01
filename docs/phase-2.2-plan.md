@@ -1,7 +1,7 @@
 # Phase 2.2 Plan — Poly Server (Self-Hosted Chat Backend)
 
 > **Status:** 🔄 In Progress — Scaffold + Compile-Clean  
-> **Crate:** `crates/poly-server`  
+> **Crate:** `servers/server`  
 > **Parent:** [Phase 2 Plan](phase-2-plan.md)  
 > **Last Updated:** 2026-02-28
 
@@ -209,7 +209,7 @@ a clean, hackable reference implementation.
 
 ## 2.2.12 Testing
 
-- [x] **2.2.12.1** Integration test file created: `crates/poly-server/tests/integration_test.rs` — auth flow scaffold
+- [x] **2.2.12.1** Integration test file created: `servers/server/tests/integration_test.rs` — auth flow scaffold
 - [ ] **2.2.12.2** Test: message send → WS broadcast received by other connected client
 - [ ] **2.2.12.3** Test: device revocation → revoked WS receives `DeviceRevoked` and closes
 - [ ] **2.2.12.4** Test: SurrealDB permissions — user B cannot delete user A's message

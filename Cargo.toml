@@ -1,15 +1,18 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/poly-core",
-    "crates/poly-client",
-    "crates/poly-demo",
-    "crates/poly-stoat",
-    "crates/poly-matrix",
-    "crates/poly-discord",
-    "crates/poly-teams",
-    "crates/poly-backup-server",
-    "crates/poly-server",
+    "crates/core",
+    "clients/client",
+    "clients/demo",
+    "clients/stoat",
+    "clients/matrix",
+    "clients/discord",
+    "clients/teams",
+    "servers/backup-server",
+    "servers/server",
+    "mcp/devtools-protocol",
+    "mcp/desktop-devtools",
+    "mcp/web-devtools",
     "apps/desktop",
     "apps/desktop-blitz",
     # "apps/desktop-electron",  # Electron wrapper — not a standard Rust crate
@@ -17,9 +20,6 @@ members = [
     "apps/ios",
     "apps/web",
     "apps/desktop-devtools",
-    "crates/poly-web-devtools-mcp",
-    "crates/poly-desktop-devtools-mcp",
-    "crates/poly-devtools-protocol",
 ]
 
 [workspace.package]
@@ -88,17 +88,17 @@ argon2 = "0.5"
 utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
 
 # Internal crates
-poly-core = { path = "crates/poly-core" }
-poly-client = { path = "crates/poly-client" }
-poly-demo = { path = "crates/poly-demo" }
-poly-stoat = { path = "crates/poly-stoat" }
-poly-matrix = { path = "crates/poly-matrix" }
-poly-discord = { path = "crates/poly-discord" }
-poly-teams = { path = "crates/poly-teams" }
-poly-backup-server = { path = "crates/poly-backup-server" }
-poly-server = { path = "crates/poly-server" }
-poly-desktop-devtools-mcp = { path = "crates/poly-desktop-devtools-mcp" }
-poly-devtools-protocol = { path = "crates/poly-devtools-protocol" }
+poly-core = { path = "crates/core" }
+poly-client = { path = "clients/client" }
+poly-demo = { path = "clients/demo" }
+poly-stoat = { path = "clients/stoat" }
+poly-matrix = { path = "clients/matrix" }
+poly-discord = { path = "clients/discord" }
+poly-teams = { path = "clients/teams" }
+poly-backup-server = { path = "servers/backup-server" }
+poly-server = { path = "servers/server" }
+poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools" }
+poly-devtools-protocol = { path = "mcp/devtools-protocol" }
 
 # ── Workspace-wide lint policy ───────────────────────────────────────────────
 # rust-analyzer, cargo clippy, and cargo cranky all respect these.

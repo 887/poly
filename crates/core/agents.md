@@ -203,3 +203,13 @@ Table `poly_kv` in SurrealDB namespace `poly` / database `main`:
 
 MCP self-test (2025-03-01): wizard completion → kill → relaunch → wizard skipped ✓
 WAL grew from 1592 bytes (init-only) to 3925 bytes (init + data write), then read back on new session.
+
+## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
+
+**NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
+attribute to source code. When `cargo cranky` reports a violation, **fix the code**.
+
+**The ONLY exception**: inside `#[cfg(test)]` modules, `#[allow(clippy::unwrap_used)]`
+and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
+
+See root `agents.md` § 7a for the full rationale.

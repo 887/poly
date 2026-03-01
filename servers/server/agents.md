@@ -263,3 +263,13 @@ the Array path. This is why `(&'static str, OwnedValue)` works for `.bind()`.
 - Created `src/lib.rs` so integration tests can `use poly_server::…`.
 - `cargo cranky -p poly-server`: 0 errors, 0 warnings.
 - All clippy lints in integration tests suppressed with `#![allow(…)]` (expected for test code).
+
+## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
+
+**NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
+attribute to source code. When `cargo cranky` reports a violation, **fix the code**.
+
+**The ONLY exception**: inside `#[cfg(test)]` modules, `#[allow(clippy::unwrap_used)]`
+and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
+
+See root `agents.md` § 7a for the full rationale.

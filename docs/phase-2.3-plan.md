@@ -3,7 +3,7 @@
 > **Status:** 🔲 Not Started  
 > **Parent:** [Phase 2 Plan](phase-2-plan.md) — Section 2.8  
 > **Overall Context:** [Overall Plan §5](overall-plan.md#5-backup-server-architecture)  
-> **Crate:** `crates/poly-backup-server/`
+> **Crate:** `servers/backup-server/`
 
 ---
 
@@ -25,7 +25,7 @@ any data leaves the device.
 ## 2.3.1 Project Structure
 
 ```
-crates/poly-backup-server/
+servers/backup-server/
 ├── src/
 │   ├── main.rs             # Entry: tokio::main, startup, graceful shutdown
 │   ├── lib.rs              # AppState, create_app(), utoipa ApiDoc

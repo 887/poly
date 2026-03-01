@@ -56,7 +56,7 @@ and other MCP-compatible AI clients.
 - [x] **2.1.1.8** Replace SVG foreignObject screenshot with `webkit2gtk::WebViewExt::snapshot()` — real WebKit capture API, pixel-perfect results, saved to `devtools-screenshots/desktop-{ts}.png`
 - [x] **2.1.1.9** Fix double-instance: `launch_app` kills existing `poly-desktop-devtools` process + 800ms sleep before spawning
 
-## 2.1.2 Shared Protocol Crate (`crates/poly-devtools-protocol`)
+## 2.1.2 Shared Protocol Crate (`mcp/devtools-protocol`)
 
 - [x] **2.1.2.1** Create `DevtoolsBackend` async trait with standard methods:
   - Lifecycle: `launch_app()`, `kill_app()`, `connect()`
@@ -69,7 +69,7 @@ and other MCP-compatible AI clients.
 - [x] **2.1.2.4** Implement `dispatch_tool()` — routes tool calls to `DevtoolsBackend` methods
 - [x] **2.1.2.5** Implement `run_mcp_loop()` — stdio JSON-RPC main loop with `initialize`, `tools/list`, `tools/call` handling
 
-## 2.1.3 Desktop MCP Server (`crates/poly-desktop-devtools-mcp`)
+## 2.1.3 Desktop MCP Server (`mcp/desktop-devtools`)
 
 - [x] **2.1.3.1** Implement `DesktopHttpBackend` — HTTP client to eval-bridge (port 9223)
 - [x] **2.1.3.2** `launch_app()` uses `dx build --platform desktop` (not `cargo build`)
@@ -118,10 +118,10 @@ and other MCP-compatible AI clients.
 
 | File | Purpose |
 |---|---|
-| `crates/poly-devtools-protocol/src/lib.rs` | Protocol crate entry point |
-| `crates/poly-devtools-protocol/src/backend.rs` | `DevtoolsBackend` trait + types |
-| `crates/poly-devtools-protocol/src/mcp.rs` | MCP JSON-RPC main loop + helpers |
-| `crates/poly-desktop-devtools-mcp/src/main.rs` | Desktop MCP server (HTTP backend) |
+| `mcp/devtools-protocol/src/lib.rs` | Protocol crate entry point |
+| `mcp/devtools-protocol/src/backend.rs` | `DevtoolsBackend` trait + types |
+| `mcp/devtools-protocol/src/mcp.rs` | MCP JSON-RPC main loop + helpers |
+| `mcp/desktop-devtools/src/main.rs` | Desktop MCP server (HTTP backend) |
 | `apps/desktop-devtools/src/main.rs` | Desktop app with embedded HTTP eval-bridge |
 | `apps/web-devtools-mcp/src/main.rs` | Web MCP server (Chrome CDP backend) |
 | `.vscode/mcp.json` | MCP server configuration for VS Code |
@@ -138,7 +138,7 @@ and other MCP-compatible AI clients.
 - CSS confirmed working via eval: `rgb(26, 26, 46)` = dark theme background
 
 ### Session 2025-03-01 (continued) — Storage Abstraction
-- **`crates/poly-core/src/storage/`** built: `mod.rs` (typed helpers + `Storage` newtype), `native.rs` (SurrealDB 3.0 + SurrealKV), `web.rs` (gloo-storage LocalStorage)
+- **`crates/core/src/storage/`** built: `mod.rs` (typed helpers + `Storage` newtype), `native.rs` (SurrealDB 3.0 + SurrealKV), `web.rs` (gloo-storage LocalStorage)
 - **Cross-platform**: surrealdb gated to `cfg(not(wasm32))`, gloo-storage to `cfg(wasm32)` in `Cargo.toml`
 - **Global `STORAGE: OnceLock<Storage>`** in `lib.rs`, initialized by `use_future` in `App`; wizard `on_complete` handler spawns async write
 - **SurrealDB 3.0 pitfalls resolved** (see poly-core/agents.md for full notes):

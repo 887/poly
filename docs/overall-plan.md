@@ -77,64 +77,102 @@ poly/
 ├── .github/workflows/              # CI/CD GitHub Actions
 ├── .vscode/                        # Launch profiles, tasks, settings
 │
-├── crates/
-│   ├── poly-core/                  # ★ SHARED LIBRARY — main development target
-│   │   ├── src/
-│   │   │   ├── lib.rs              # Library entry point
-│   │   │   ├── ui/                 # All Dioxus UI components
-│   │   │   ├── state/              # App state management (Dioxus Stores)
-│   │   │   ├── db/                 # SurrealDB abstraction layer
-│   │   │   ├── i18n/               # Custom i18n wrapper over fluent-bundle
-│   │   │   ├── theme/              # Theme engine — presets + custom CSS
-│   │   │   ├── crypto/             # Key generation, encrypt/decrypt
-│   │   │   └── sync/               # Backup server sync client
-│   │   ├── Cargo.toml
-│   │   ├── agents.md
-│   │   └── README.md
-│   │
-│   ├── poly-client/                # Shared messenger client trait/protocol
-│   │   ├── src/lib.rs              # ClientBackend trait + shared types
-│   │   ├── Cargo.toml
-│   │   ├── agents.md
-│   │   └── README.md
-│   │
-│   ├── poly-demo/                  # Demo/mock client for UI testing
-│   ├── poly-stoat/                 # Stoat (Revolt) client implementation
-│   ├── poly-matrix/                # Matrix client (wraps matrix-sdk)
-│   ├── poly-discord/               # Discord client
-│   ├── poly-teams/                 # Microsoft Teams client (Graph API)
-│   │
-│   └── poly-backup-server/         # Encrypted backup sync server
+├── crates/                         # Core library crates (poly- prefix in package names)
+│   └── core/                       # ★ SHARED LIBRARY — main development target
+│       │                           # Package name: poly-core
 │       ├── src/
-│       │   ├── main.rs             # Axum + Dioxus fullstack entry
-│       │   ├── auth/               # PoW challenge + passphrase + tokens
-│       │   ├── sync/               # Encrypted blob storage/retrieval
-│       │   └── web/                # Admin web UI
-│       ├── Cargo.toml
+│       │   ├── lib.rs              # Library entry point
+│       │   ├── ui/                 # All Dioxus UI components
+│       │   ├── state/              # App state management (Dioxus Stores)
+│       │   ├── db/                 # SurrealDB abstraction layer
+│       │   ├── i18n/               # Custom i18n wrapper over fluent-bundle
+│       │   ├── theme/              # Theme engine — presets + custom CSS
+│       │   ├── crypto/             # Key generation, encrypt/decrypt
+│       │   └── sync/               # Backup server sync client
+│       ├── assets/                 # Shared theme CSS + icons
+│       │   ├── tailwind.css        # Tailwind entry (auto-detected by Dioxus)
+│       │   └── styling/themes/     # Theme CSS presets
+│       │       ├── neutral-dark.css    # Default dark theme
+│       │       ├── purple.css          # Discord-inspired
+│       │       └── red.css             # Stoat-inspired
+│       ├── Cargo.toml              # name = "poly-core"
 │       ├── agents.md
 │       └── README.md
 │
+├── clients/                        # Messenger client implementations (poly- prefix in package names)
+│   ├── client/                     # Shared messenger client trait/protocol
+│   │   │                           # Package name: poly-client
+│   │   ├── src/lib.rs              # ClientBackend trait + shared types
+│   │   ├── Cargo.toml              # name = "poly-client"
+│   │   ├── agents.md
+│   │   └── README.md
+│   │
+│   ├── demo/                       # Demo/mock client for UI testing
+│   │                               # Package name: poly-demo
+│   ├── stoat/                      # Stoat (Revolt) client implementation
+│   │                               # Package name: poly-stoat
+│   ├── matrix/                     # Matrix client (wraps matrix-sdk)
+│   │                               # Package name: poly-matrix
+│   ├── discord/                    # Discord client
+│   │                               # Package name: poly-discord
+│   └── teams/                      # Microsoft Teams client (Graph API)
+│                                   # Package name: poly-teams
+│
+├── servers/                        # Server crates (poly- prefix in package names)
+│   │
+│   ├── backup-server/             # Encrypted backup sync server
+│   │   │                           # Package name: poly-backup-server
+│   │   ├── src/
+│   │   │   ├── main.rs             # Axum + Dioxus fullstack entry
+│   │   │   ├── lib.rs
+│   │   │   ├── auth/               # PoW challenge + passphrase + tokens
+│   │   │   ├── sync/               # Encrypted blob storage/retrieval
+│   │   │   └── web/                # Admin web UI
+│   │   ├── Cargo.toml              # name = "poly-backup-server"
+│   │   ├── agents.md
+│   │   └── README.md
+│   │
+│   └── server/                     # Federation/relay server (Phase 3+)
+│                                   # Package name: poly-server
+│
+├── mcp/                            # Model Context Protocol (MCP) servers
+│   ├── devtools-protocol/          # DevTools protocol definitions
+│   │   │                           # Package name: poly-devtools-protocol
+│   │   ├── src/
+│   │   ├── Cargo.toml              # name = "poly-devtools-protocol"
+│   │   └── agents.md
+│   │
+│   ├── desktop-devtools/           # Desktop devtools MCP server
+│   │   │                           # Package name: poly-desktop-devtools-mcp
+│   │   ├── src/
+│   │   ├── Cargo.toml              # name = "poly-desktop-devtools-mcp"
+│   │   └── agents.md
+│   │
+│   └── web-devtools/               # Web devtools MCP server
+│                                   # Package name: poly-web-devtools-mcp
+│
 ├── apps/                           # Platform entry points (thin wrappers)
 │   ├── desktop/                    # Wry (webview) desktop
+│   │                               # Package name: poly-desktop
 │   ├── desktop-blitz/              # Blitz (WGPU native) desktop
+│   │                               # Package name: poly-desktop-blitz
 │   ├── desktop-electron/           # Electron wrapper
+│   │                               # Package name: poly-desktop-electron
+│   │                               # (Not a standard cargo member)
 │   ├── android/                    # Android
+│   │                               # Package name: poly-android
 │   ├── ios/                        # iOS
-│   └── web/                        # Dioxus fullstack web (Axum)
+│   │                               # Package name: poly-ios
+│   ├── web/                        # Dioxus fullstack web (Axum)
+│   │                               # Package name: poly-web
+│   └── desktop-devtools/           # Desktop devtools UI
+│                                   # Package name: poly-desktop-devtools
 │
 ├── locales/                        # Fluent .ftl translation files
 │   ├── en/                         # English (default)
 │   ├── de/                         # German
 │   ├── fr/                         # French
 │   └── es/                         # Spanish
-│
-├── assets/                         # Shared static assets
-│   ├── tailwind.css                # Tailwind entry (auto-detected by Dioxus)
-│   ├── styling/themes/             # Theme CSS presets
-│   │   ├── neutral-dark.css        # Default dark theme
-│   │   ├── purple.css              # Discord-inspired purple theme
-│   │   └── red.css                 # Stoat-inspired red/coral theme
-│   └── icons/                      # App icons, backend logos
 │
 └── docs/                           # Project documentation
     ├── overall-plan.md             # This file
@@ -146,11 +184,12 @@ poly/
 
 ### 3.1 Key Architecture Decisions
 
-- **`poly-core` is THE library crate**. All shared UI, state, DB, crypto, i18n, theme logic lives here. This crate MUST support Dioxus subsecond hot-reload. All apps import it.
-- **`poly-client` defines the protocol**. The `ClientBackend` trait abstracts all messenger operations. Each backend crate (poly-stoat, poly-matrix, etc.) implements this trait.
+- **`core/` is THE library crate** (package: `poly-core`, folder: `crates/core/`). All shared UI, state, DB, crypto, i18n, theme logic lives here. This crate MUST support Dioxus subsecond hot-reload. All apps import it.
+- **`client/` defines the protocol** (package: `poly-client`, folder: `clients/client/`). The `ClientBackend` trait abstracts all messenger operations. Each backend crate (stoat, matrix, discord, teams, demo) in `clients/` implements this trait.
 - **Feature flags** control which backends are compiled: `stoat`, `matrix`, `discord`, `teams`, `demo`.
 - **SurrealKV everywhere**. No RocksDB/SQLite divergence between platforms.
-- **Apps are thin wrappers**. Each app in `apps/` is just a `main.rs` that initializes the platform-specific Dioxus renderer and pulls in `poly-core`.
+- **Apps are thin wrappers** (in `apps/`). Each app is just a `main.rs` that initializes the platform-specific Dioxus renderer and pulls in `poly-core`.
+- **Folder names are stripped of `poly-` prefix** (e.g., `crates/core/`, `clients/stoat/`, `servers/backup-server/`, `mcp/devtools-protocol/`), but **package names in `Cargo.toml` retain the `poly-` prefix** (e.g., `name = "poly-core"`). This keeps the crate ecosystem consistent while keeping the workspace folder structure clean.
 
 ---
 
@@ -488,9 +527,9 @@ See individual phase plan documents for detailed checklists:
 |---|---|
 | **Poly** | This app — PolyGlot Messenger |
 | **Backend** | A messaging platform (Stoat, Matrix, Discord, Teams) |
-| **Client** | Our implementation that speaks a backend's protocol |
+| **Client** | Our implementation that speaks a backend's protocol (located in `clients/{backend}/`) |
 | **Server** (UI) | A community/workspace in the favorites sidebar (e.g., a Discord guild, Stoat server, Matrix Space) |
-| **Backup Server** | Our encrypted settings sync server (poly-backup-server) |
+| **Backup Server** | Our encrypted settings sync server (`servers/backup-server/`, package: `poly-backup-server`)|
 | **Recovery Phrase** | BIP39 mnemonic encoding of the user's Ed25519 private key |
 | **Account ID** | User's Ed25519 public key, used as identifier |
 | **Stoat** | Revolt messenger's new name (formerly Revolt) |

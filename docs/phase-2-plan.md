@@ -116,10 +116,10 @@
 
 > **Refactored from "SurrealDB Abstraction"** — see Decision DX-STORAGE-1 below.
 
-- [x] **2.4.3.1** SurrealKV embedded database initialization (native: `crates/poly-core/src/storage/native.rs`)
+- [x] **2.4.3.1** SurrealKV embedded database initialization (native: `crates/core/src/storage/native.rs`)
 - [x] **2.4.3.2** Settings CRUD operations — `get_app_settings()` / `set_app_settings()` persisted across restarts ✓
 - [x] **2.4.3.3** Account storage — `get_account_tokens()` / `upsert_account_token()` / `remove_account_token()`
-- [x] **2.4.3.4** WASM / Web backend — `gloo-storage` LocalStorage (`crates/poly-core/src/storage/web.rs`)
+- [x] **2.4.3.4** WASM / Web backend — `gloo-storage` LocalStorage (`crates/core/src/storage/web.rs`)
 - [x] **2.4.3.5** Platform-transparent `Storage` newtype — same `get()`/`set()`/`delete()` API on both platforms
 - [x] **2.4.3.6** Global `STORAGE: OnceLock<Storage>` initialized at app startup via `use_future` in `App`
 - [x] **2.4.3.7** **Persistence verified by MCP self-test**: wizard completion → kill → relaunch → wizard skipped ✓
@@ -140,7 +140,7 @@
 
 ### 2.4.4 Crypto Module
 
-> Lives in `crates/poly-core/src/crypto/`. Pure Rust, no FFI, no platform divergence.
+> Lives in `crates/core/src/crypto/`. Pure Rust, no FFI, no platform divergence.
 > See overall-plan.md §6 for algorithm choices and rationale.
 
 - [ ] **2.4.4.1** Ed25519 keypair generation (`ed25519-dalek`) — returns `SigningKey` + `VerifyingKey`
@@ -156,7 +156,7 @@
 
 ### 2.4.5 Backup Sync Client
 
-> Lives in `crates/poly-core/src/sync/`. See overall-plan.md §5 for detailed auth flow,
+> Lives in `crates/core/src/sync/`. See overall-plan.md §5 for detailed auth flow,
 > passphrase auth, token lifecycle, and per-server status model.
 > See [phase-2.3-plan.md](phase-2.3-plan.md) for the server-side implementation.
 

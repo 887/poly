@@ -54,3 +54,13 @@ cd electron && npm run build  # Uses electron-builder or electron-packager
 - Dioxus desktop with Wry is lighter and recommended as primary
 - Electron wrapper exists for compatibility / user preference
 - May have access to Node.js APIs via preload script for platform-specific features
+
+## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
+
+**NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
+attribute to source code. When `cargo cranky` reports a violation, **fix the code**.
+
+**The ONLY exception**: inside `#[cfg(test)]` modules, `#[allow(clippy::unwrap_used)]`
+and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
+
+See root `agents.md` § 7a for the full rationale.

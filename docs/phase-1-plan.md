@@ -21,7 +21,7 @@
 - [x] **1.2.1** Research Dioxus 0.7.3 subsecond hot-reload for library crates
   - Confirmed: `subsecond::call()` pattern, `dx serve --hotpatch`
   - Works with workspace member crates when properly configured
-  - Documented in `crates/poly-core/agents.md`
+  - Documented in `crates/core/agents.md`
 - [x] **1.2.2** Research Dioxus 0.7.3 multi-platform Dioxus.toml configuration
   - Each app target gets its own `Dioxus.toml`
   - Platform-specific settings: AndroidManifest.xml, Info.plist customization
@@ -64,7 +64,7 @@
   - No mature Rust SDK — must build `poly-stoat` from scratch
   - Supports self-hosted instances (different base URL)
   - Voice/video: WebRTC-based
-  - Documented in `crates/poly-stoat/agents.md`
+  - Documented in `clients/stoat/agents.md`
 - [x] **1.3.2** Matrix SDK study
   - `matrix-sdk = "0.16.0"` — production-grade, powers Element X
   - Spaces = server-like groupings (categories of rooms)
@@ -73,32 +73,32 @@
   - E2EE via Olm/Megolm (matrix-sdk-crypto)
   - VoIP for voice/video (WebRTC-based)
   - Federation: any homeserver, matrix.org default
-  - Documented in `crates/poly-matrix/agents.md`
+  - Documented in `clients/matrix/agents.md`
 - [x] **1.3.3** Microsoft Teams / Graph API study
   - Reference: `ttyms` crate — terminal Teams client using Microsoft Graph API
   - OAuth2 Device Code Flow or PKCE browser flow
   - Default Azure AD client ID available
   - Teams-Teams → Poly servers, channels → channels
   - Group chats → DMs with multi-user
-  - Documented in `crates/poly-teams/agents.md`
+  - Documented in `clients/teams/agents.md`
 - [x] **1.3.4** Discord client landscape survey
   - `discord_client_gateway` / `discord_client_rest` — pre-alpha Rust crates
   - TOS explicitly prohibits unofficial clients / self-botting
   - Approach decision deferred to Phase 3.3
   - Options: direct API, bridge, hidden webview, Matrix bridge
-  - Documented in `crates/poly-discord/agents.md`
+  - Documented in `clients/discord/agents.md`
 
 ## 1.4 Agent & Memory File Creation
 
 - [x] **1.4.1** Root `agents.md` — global project rules
-- [x] **1.4.2** `crates/poly-core/agents.md` + `README.md`
-- [x] **1.4.3** `crates/poly-client/agents.md` + `README.md`
-- [x] **1.4.4** `crates/poly-demo/agents.md` + `README.md`
-- [x] **1.4.5** `crates/poly-stoat/agents.md` + `README.md`
-- [x] **1.4.6** `crates/poly-matrix/agents.md` + `README.md`
-- [x] **1.4.7** `crates/poly-discord/agents.md` + `README.md`
-- [x] **1.4.8** `crates/poly-teams/agents.md` + `README.md`
-- [x] **1.4.9** `crates/poly-backup-server/agents.md` + `README.md`
+- [x] **1.4.2** `crates/core/agents.md` + `README.md`
+- [x] **1.4.3** `clients/client/agents.md` + `README.md`
+- [x] **1.4.4** `clients/demo/agents.md` + `README.md`
+- [x] **1.4.5** `clients/stoat/agents.md` + `README.md`
+- [x] **1.4.6** `clients/matrix/agents.md` + `README.md`
+- [x] **1.4.7** `clients/discord/agents.md` + `README.md`
+- [x] **1.4.8** `clients/teams/agents.md` + `README.md`
+- [x] **1.4.9** `servers/backup-server/agents.md` + `README.md`
 - [x] **1.4.10** App entry point agents: `apps/desktop/agents.md`, `apps/desktop-blitz/agents.md`, `apps/desktop-electron/agents.md`, `apps/android/agents.md`, `apps/ios/agents.md`, `apps/web/agents.md`
 
 ## 1.5 Research Documentation

@@ -76,13 +76,36 @@ Someone should be able to build Poly with only `discord + teams` or any other co
 
 - Run `cargo cranky --workspace` — zero warnings/errors policy (uses `cranky.toml` in each crate)
   - `cranky` is a `cargo clippy` wrapper that reads `cranky.toml` for denied/warned lints
-  - Every crate and the workspace root has a `cranky.toml` denying: `unsafe_code`, `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`, `clippy::indexing_slicing`
+  - Every crate and the workspace root has a `cranky.toml` denying: `warnings`, `unsafe_code`, `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`, `clippy::indexing_slicing`, `clippy::print_stdout`, `clippy::print_stderr`
   - Install once: `cargo install cranky`
 - Run `cargo check --workspace` — verify all crates compile
 - Run `cargo fmt --all` — consistent formatting
 - Write doc comments on all public items
 - Write `// TODO(phase-X.Y.Z):` comments referencing the plan item number
 - Add `// DECISION(DX):` comments referencing decision numbers from overall-plan.md
+
+### 7a. ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
+
+**NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression attribute to source code.
+
+This applies to **all** Clippy lints in every `cranky.toml`:
+- `warnings = true` — all compiler warnings are errors
+- `unsafe_code`
+- `clippy::unwrap_used`
+- `clippy::expect_used`
+- `clippy::panic`
+- `clippy::indexing_slicing`
+- `clippy::print_stdout` / `clippy::print_stderr`
+
+When `cargo cranky` reports a lint violation, **FIX THE CODE**. Never suppress it with an allow attribute.
+
+**The ONLY exception** — inside `#[cfg(test)]` modules:
+- `#[allow(clippy::unwrap_used)]` is permitted for test assertions (e.g. `result.unwrap()`)
+- `#[allow(clippy::expect_used)]` is permitted for test setup (e.g. `val.expect("test context")`)
+- No other allows are permitted even in tests
+
+Rationale: these rules exist to prevent real bugs. Suppressing them hides the problem. Smaller models
+try to `#[allow(...)]` their way out of lint errors — this is explicitly prohibited in this project.
 
 ### 8. Documentation Protocol
 
@@ -118,7 +141,7 @@ At the END of each session:
 | Android | Dioxus mobile | `apps/android/` |
 | iOS | Dioxus mobile | `apps/ios/` |
 | Web | Dioxus fullstack + Axum | `apps/web/` |
-| Backup Server | Axum + Dioxus fullstack | `crates/poly-backup-server/` |
+| Backup Server | Axum + Dioxus fullstack | `servers/backup-server/` |
 
 ### 11. Database Engine
 

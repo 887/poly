@@ -20,7 +20,7 @@
 > backend. This proves the `ClientBackend` integration path and gives us a real auth/messaging flow to test
 > UI against. Protocol documented in `docs/poly-server-protocol.md`.
 
-- [ ] **3.0.5** Create `crates/poly-server-client/` — HTTP client crate (`reqwest`) for the built-in poly-server backend
+- [ ] **3.0.5** Create `servers/server-client/` — HTTP client crate (`reqwest`) for the built-in poly-server backend
   - `POST /auth/signup { username, password, display_name }` → `{ token, device_id, user_id }`
   - `POST /auth/signin { username, password }` → `{ token, device_id, user_id }`
   - `DELETE /auth/device` → revoke current device session
@@ -55,7 +55,7 @@
 - [ ] **3.1.1.4** Document Stoat auth flow (email/password, OAuth if available)
 - [ ] **3.1.1.5** Document Stoat voice/video protocol (WebRTC specifics)
 - [ ] **3.1.1.6** Test against official Stoat server and a self-hosted instance
-- [ ] **3.1.1.7** Update `crates/poly-stoat/agents.md` with all findings
+- [ ] **3.1.1.7** Update `clients/stoat/agents.md` with all findings
 
 ### 3.1.2 Core Stoat Client
 - [ ] **3.1.2.1** HTTP client setup (reqwest or similar) with base URL configuration
@@ -135,7 +135,7 @@
 - [ ] **3.2.1.5** Document E2EE setup (Olm/Megolm, cross-signing)
 - [ ] **3.2.1.6** Document VoIP / voice/video signaling
 - [ ] **3.2.1.7** Research public homeserver directory (list of major federated servers)
-- [ ] **3.2.1.8** Update `crates/poly-matrix/agents.md`
+- [ ] **3.2.1.8** Update `clients/matrix/agents.md`
 
 ### 3.2.2 Core Matrix Client
 - [ ] **3.2.2.1** Initialize `matrix-sdk` client with homeserver URL
@@ -246,7 +246,7 @@
 - [ ] **3.4.1.3** Document OAuth2 flow (Device Code + PKCE)
 - [ ] **3.4.1.4** Document Azure AD app registration (or use default client ID from ttyms)
 - [ ] **3.4.1.5** Document API rate limits and throttling
-- [ ] **3.4.1.6** Update `crates/poly-teams/agents.md`
+- [ ] **3.4.1.6** Update `clients/teams/agents.md`
 
 ### 3.4.2 Core Teams Client
 - [ ] **3.4.2.1** OAuth2 authentication (Device Code Flow + PKCE browser flow)

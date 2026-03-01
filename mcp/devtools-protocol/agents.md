@@ -57,3 +57,13 @@ Extension point: backends can add custom tools via `extension_tools()` and
 | `src/lib.rs` | Crate entry point |
 | `src/backend.rs` | `DevtoolsBackend` trait + types |
 | `src/mcp.rs` | MCP main loop + JSON-RPC helpers |
+
+## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
+
+**NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
+attribute to source code. When `cargo cranky` reports a violation, **fix the code**.
+
+**The ONLY exception**: inside `#[cfg(test)]` modules, `#[allow(clippy::unwrap_used)]`
+and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
+
+See root `agents.md` § 7a for the full rationale.

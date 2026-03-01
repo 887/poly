@@ -22,7 +22,7 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Response},
     routing::{delete, get, post},
 };
@@ -134,49 +134,47 @@ pub fn admin_router() -> Router<AppState> {
 
 // ── Middleware helper ─────────────────────────────────────────────────────────
 
-/// Extract + validate the admin session cookie. Returns the cleaned-up key or error.
+/// Extract + validate the admin session cookie.
+///
+/// Returns `Some((status, message))` when the session is missing or invalid
+/// (the caller should build a `Response` from these), or `None` when the
+/// session is valid and the request may proceed.
+///
+/// Returning a small `Option<(StatusCode, &'static str)>` avoids the
+/// `clippy::result_large_err` lint that fires when `Response` appears as an
+/// error type — no `#[allow]` required.
 fn check_session(
     headers: &HeaderMap,
     admin: &AdminState,
     session_hours: u64,
-) -> Result<(), Response> {
+) -> Option<(StatusCode, &'static str)> {
     let cookie_header = headers
         .get(header::COOKIE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let raw_token = cookie_header
+    let raw_token = match cookie_header
         .split(';')
         .map(str::trim)
         .find_map(|part| part.strip_prefix("poly_admin="))
-        .ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({ "error": "not authenticated" })),
-            )
-                .into_response()
-        })?;
+    {
+        Some(t) => t,
+        None => return Some((StatusCode::UNAUTHORIZED, "not authenticated")),
+    };
 
     let hash = hash_session_token(raw_token);
-    let entry = admin.sessions.get(&hash).ok_or_else(|| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({ "error": "session expired or invalid" })),
-        )
-            .into_response()
-    })?;
+    let entry = match admin.sessions.get(&hash) {
+        Some(e) => e,
+        None => return Some((StatusCode::UNAUTHORIZED, "session expired or invalid")),
+    };
 
     if entry.elapsed().as_secs() > session_hours * 3600 {
         drop(entry);
         admin.sessions.remove(&hash);
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({ "error": "session expired" })),
-        )
-            .into_response());
+        return Some((StatusCode::UNAUTHORIZED, "session expired"));
     }
 
-    Ok(())
+    None
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -331,8 +329,10 @@ async fn admin_logout(State(state): State<AppState>, headers: HeaderMap) -> Resp
 
 /// `GET /admin/api/stats` — server statistics.
 async fn api_stats(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    if let Err(e) = check_session(&headers, &state.admin, state.config.admin_session_hours) {
-        return e;
+    if let Some((status, msg)) =
+        check_session(&headers, &state.admin, state.config.admin_session_hours)
+    {
+        return (status, Json(serde_json::json!({ "error": msg }))).into_response();
     }
 
     let count: Option<serde_json::Value> = state
@@ -361,8 +361,10 @@ async fn api_stats(State(state): State<AppState>, headers: HeaderMap) -> Respons
 
 /// `GET /admin/api/accounts` — list all accounts with token + blob counts.
 async fn api_accounts(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    if let Err(e) = check_session(&headers, &state.admin, state.config.admin_session_hours) {
-        return e;
+    if let Some((status, msg)) =
+        check_session(&headers, &state.admin, state.config.admin_session_hours)
+    {
+        return (status, Json(serde_json::json!({ "error": msg }))).into_response();
     }
 
     let accounts: Vec<serde_json::Value> = state
@@ -391,8 +393,10 @@ async fn api_tokens_for_account(
     headers: HeaderMap,
     Path(pk): Path<String>,
 ) -> Response {
-    if let Err(e) = check_session(&headers, &state.admin, state.config.admin_session_hours) {
-        return e;
+    if let Some((status, msg)) =
+        check_session(&headers, &state.admin, state.config.admin_session_hours)
+    {
+        return (status, Json(serde_json::json!({ "error": msg }))).into_response();
     }
 
     let tokens: Vec<serde_json::Value> = state
@@ -420,8 +424,10 @@ async fn api_revoke_token(
     headers: HeaderMap,
     Path(token_id): Path<String>,
 ) -> Response {
-    if let Err(e) = check_session(&headers, &state.admin, state.config.admin_session_hours) {
-        return e;
+    if let Some((status, msg)) =
+        check_session(&headers, &state.admin, state.config.admin_session_hours)
+    {
+        return (status, Json(serde_json::json!({ "error": msg }))).into_response();
     }
 
     // The token_id is the SurrealDB record suffix (after "token:").
@@ -450,8 +456,10 @@ async fn api_update_settings(
     headers: HeaderMap,
     Json(body): Json<UpdateSettingsRequest>,
 ) -> Response {
-    if let Err(e) = check_session(&headers, &state.admin, state.config.admin_session_hours) {
-        return e;
+    if let Some((status, msg)) =
+        check_session(&headers, &state.admin, state.config.admin_session_hours)
+    {
+        return (status, Json(serde_json::json!({ "error": msg }))).into_response();
     }
 
     // We can't mutate Config directly (it's immutable once loaded).
