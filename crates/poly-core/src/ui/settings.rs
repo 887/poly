@@ -54,11 +54,7 @@ fn PolySelect(
                             let is_active = opt.value == value;
                             rsx! {
                                 div {
-                                    class: if is_active {
-                                        "poly-select-option active"
-                                    } else {
-                                        "poly-select-option"
-                                    },
+                                    class: if is_active { "poly-select-option active" } else { "poly-select-option" },
                                     onclick: move |_| {
                                         open.set(false);
                                         onchange.call(opt_value.to_string());
@@ -237,10 +233,22 @@ fn ThemeSettings() -> Element {
                 label { class: "settings-label", "{t(\"settings-theme-preset\")}" }
                 PolySelect {
                     options: vec![
-                        SelectOption { value: "neutral-dark", label: "Neutral Dark" },
-                        SelectOption { value: "purple", label: "Purple" },
-                        SelectOption { value: "red", label: "Red" },
-                        SelectOption { value: "custom", label: "Custom" },
+                        SelectOption {
+                            value: "neutral-dark",
+                            label: "Neutral Dark",
+                        },
+                        SelectOption {
+                            value: "purple",
+                            label: "Purple",
+                        },
+                        SelectOption {
+                            value: "red",
+                            label: "Red",
+                        },
+                        SelectOption {
+                            value: "custom",
+                            label: "Custom",
+                        },
                     ],
                     value: current_preset.to_string(),
                     onchange: move |new_val: String| {
@@ -292,10 +300,22 @@ fn LanguageSettings() -> Element {
             p { class: "settings-description", "{t(\"settings-language-description\")}" }
             PolySelect {
                 options: vec![
-                    SelectOption { value: "en", label: "English" },
-                    SelectOption { value: "de", label: "Deutsch" },
-                    SelectOption { value: "fr", label: "Français" },
-                    SelectOption { value: "es", label: "Español" },
+                    SelectOption {
+                        value: "en",
+                        label: "English",
+                    },
+                    SelectOption {
+                        value: "de",
+                        label: "Deutsch",
+                    },
+                    SelectOption {
+                        value: "fr",
+                        label: "Français",
+                    },
+                    SelectOption {
+                        value: "es",
+                        label: "Español",
+                    },
                 ],
                 value: current_locale.clone(),
                 onchange: move |new_locale: String| {
@@ -315,9 +335,11 @@ fn LanguageSettings() -> Element {
                                         tracing::info!("Locale persisted to storage ✓");
                                     }
                                 }
-                                Err(e) => tracing::error!(
-                                    "Failed to read settings for locale persist: {e}"
-                                ),
+                                Err(e) => {
+                                    tracing::error!(
+                                        "Failed to read settings for locale persist: {e}"
+                                    )
+                                }
                             }
                         }
                     });
