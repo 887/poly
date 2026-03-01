@@ -184,3 +184,33 @@ error-generic = Something went wrong. Please try again.
 error-network = Network error. Check your connection.
 error-auth-failed = Authentication failed. Please check your credentials.
 error-not-found = Not found.
+
+# Voice / Video
+voice-connected = Voice Connected
+voice-join-voice = Join Voice
+voice-join-video = Join Video
+voice-disconnect = Disconnect
+voice-muted = Muted
+voice-deafened = Deafened
+voice-streaming = Sharing Screen
+voice-video-on = Camera On
+voice-mute = Mute
+voice-unmute = Unmute
+voice-deafen = Deafen
+voice-undeafen = Undeafen
+voice-no-channel = No channel selected
+voice-no-one-here = No one is here yet
+voice-be-first = Be the first to join!
+voice-watching-screen = Watching screen share
+
+# Emoji / GIF / Reactions
+emoji-picker = Emoji
+emoji-search = Search emoji...
+gif-picker = GIF
+reaction-add = Add Reaction
+chat-drop-files = Drop files to upload
+chat-attach-file = Attach File
+
+# Navigation
+nav-back = Back
+nav-forward = Forward

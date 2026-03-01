@@ -215,6 +215,20 @@ pub fn ChannelList() -> Element {
                                                     ChannelType::Video => "📹",
                                                 };
 
+                                                // Get voice participants for voice/video channels
+                                                let voice_participants = if matches!(
+                                                    ch_type,
+                                                    ChannelType::Voice | ChannelType::Video
+                                                ) {
+                                                    chat_data
+                                                        .read()
+                                                        .voice_channel_participants
+                                                        .get(&ch_id_click)
+                                                        .cloned()
+                                                        .unwrap_or_default()
+                                                } else {
+                                                    Vec::new()
+                                                };
                                                 rsx! {
                                                     div {
                                                         class: if is_active { "channel-item active" } else { "channel-item" },
@@ -235,6 +249,40 @@ pub fn ChannelList() -> Element {
                                                         span { class: "channel-name", "{ch_name}" }
                                                         if unread > 0 {
                                                             span { class: "unread-badge", "{unread}" }
+                                                        }
+                                                    }
+                                                    // Voice channel: show connected participants underneath
+                                                    if !voice_participants.is_empty() {
+                                                        div { class: "voice-channel-users",
+                                                            for vp in &voice_participants {
+                                                                {
+                                                                    let vp_name = vp.user.display_name.clone();
+                                                                    let vp_color = user_color(&vp.user.id);
+                                                                    let vp_first: String = vp_name
+                                                                        .chars()
+                                                                        .next()
+                                                                        .map(|c| c.to_string())
+                                                                        .unwrap_or_default();
+                                                                    rsx! {
+                                                                        div { class: "voice-user-entry",
+                                                                            div { class: "voice-user-avatar", style: "background-color: {vp_color};", "{vp_first}" }
+                                                                            span { class: "voice-user-name", "{vp_name}" }
+                                                                            if vp.is_muted {
+                                                                                span { class: "voice-user-icon", "🔇" }
+                                                                            }
+                                                                            if vp.is_deafened {
+                                                                                span { class: "voice-user-icon", "🔕" }
+                                                                            }
+                                                                            if vp.is_streaming {
+                                                                                span { class: "voice-user-icon", "🖥" }
+                                                                            }
+                                                                            if vp.is_video_on {
+                                                                                span { class: "voice-user-icon", "📹" }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }

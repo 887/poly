@@ -8,6 +8,7 @@
 // TODO(phase-2.5.2): Reactive Data Stores
 
 use poly_client::*;
+use std::collections::HashMap;
 
 /// Reactive data store for the chat UI.
 ///
@@ -37,6 +38,10 @@ pub struct ChatData {
     pub current_server: Option<Server>,
     /// Currently selected channel info (for chat header).
     pub current_channel: Option<Channel>,
+    /// Participants in each voice channel, keyed by channel ID.
+    pub voice_channel_participants: HashMap<String, Vec<VoiceParticipant>>,
+    /// The local user's current voice connection (None if not in a call).
+    pub voice_connection: Option<VoiceConnection>,
 }
 
 /// Format a file size in human-readable form.

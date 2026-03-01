@@ -5,13 +5,18 @@
 //! - Date separators between different days
 //! - Inline image previews with size labels
 //! - Non-image attachments as download links
-//! - Reaction pills with emoji + count
+//! - Reaction pills with emoji + count (clickable to toggle)
 //! - Multi-line message rendering
 //! - Edited indicator
 //! - Auto-resize textarea input (Enter=send, Shift+Enter=newline)
 //! - Channel header with source info + member count
+//! - Hover action bar with add-reaction button
+//! - Emoji/GIF/attachment buttons in the input toolbar
+//! - File drag-and-drop overlay
+//! - Back/forward navigation buttons
 // TODO(phase-2.5.6): Discord-style chat view rewrite
 
+use super::emoji_picker::EmojiPicker;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
@@ -26,13 +31,17 @@ const GROUP_THRESHOLD_MINUTES: i64 = 7;
 /// Chat view component.
 ///
 /// Shows the channel header, scrollable message list with Discord-style
-/// rendering, and textarea message input.
+/// rendering, and textarea message input with emoji/GIF/attachment toolbar.
 #[component]
 pub fn ChatView() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
     let mut message_input = use_signal(String::new);
+    let mut show_input_emoji = use_signal(|| false);
+    let mut reaction_picker_msg = use_signal(|| None::<String>);
+    let mut drag_over = use_signal(|| false);
+    let mut hovered_msg = use_signal(|| None::<String>);
 
     let channel_id = app_state.read().nav.selected_channel.clone();
     let messages = chat_data.read().messages.clone();
@@ -40,6 +49,9 @@ pub fn ChatView() -> Element {
     let current_server = chat_data.read().current_server.clone();
     let members_count = chat_data.read().members.len();
     let loading = chat_data.read().loading;
+
+    let can_back = app_state.read().can_go_back();
+    let can_forward = app_state.read().can_go_forward();
 
     // Scroll message list to bottom when messages change
     let msg_count = messages.len();
@@ -54,7 +66,54 @@ pub fn ChatView() -> Element {
     });
 
     rsx! {
-        main { class: "chat-view",
+        main {
+            class: if *drag_over.read() { "chat-view drag-over" } else { "chat-view" },
+            // Drag-and-drop handlers
+            ondragover: move |evt| {
+                evt.prevent_default();
+                drag_over.set(true);
+            },
+            ondragleave: move |_| {
+                drag_over.set(false);
+            },
+            ondrop: move |evt| {
+                evt.prevent_default();
+                drag_over.set(false);
+                // TODO(phase-2.5.18): Parse dropped file data
+            },
+
+            // Drag overlay
+            if *drag_over.read() {
+                div { class: "drag-overlay",
+                    div { class: "drag-overlay-content",
+                        span { class: "drag-icon", "📎" }
+                        p { "{t(\"chat-drop-files\")}" }
+                    }
+                }
+            }
+
+            // ── Back/Forward navigation bar ──────────────────────────────
+            div { class: "nav-bar",
+                button {
+                    class: if can_back { "nav-btn" } else { "nav-btn disabled" },
+                    disabled: !can_back,
+                    onclick: move |_| {
+                        app_state.write().nav_back();
+                    },
+                    title: "{t(\"nav-back\")}",
+                    "◀"
+                }
+                button {
+                    class: if can_forward { "nav-btn" } else { "nav-btn disabled" },
+                    disabled: !can_forward,
+                    onclick: move |_| {
+                        app_state.write().nav_forward();
+                    },
+                    title: "{t(\"nav-forward\")}",
+                    "▶"
+                }
+            }
+
             // ── Channel header ───────────────────────────────────────────
             div { class: "chat-header",
                 if let Some(ref ch) = current_channel {
@@ -113,18 +172,18 @@ pub fn ChatView() -> Element {
                                 }
                                 None => false,
                             };
-                            let _msg_id = msg.id.clone();
+                            let msg_id = msg.id.clone();
                             let author = msg.author.clone();
                             let content = msg.content.clone();
                             let timestamp = msg.timestamp;
                             let attachments = msg.attachments.clone();
                             let reactions = msg.reactions.clone();
-                            let edited = msg.edited; // Date separator
+                            let edited = msg.edited;
                             let color = user_color(&author.id);
                             let first_char: String = author
                                 .display_name
                                 .chars()
-                                .next() // Full message: avatar + header
+                                .next()
                                 .map(|c| c.to_string())
                                 .unwrap_or_default();
                             let time_str = format_timestamp(timestamp);
@@ -132,17 +191,61 @@ pub fn ChatView() -> Element {
                                 timestamp.format("%B %d, %Y").to_string()
                             } else {
                                 String::new()
-                            }; // Attachments
+                            };
+                            let is_hovered = hovered_msg.read().as_deref() == Some(&msg_id);
+                            let msg_id_hover = msg_id.clone();
+                            let msg_id_reaction = msg_id.clone();
+                            let msg_id_reactions = msg_id.clone();
+                            let has_reaction_picker = reaction_picker_msg.read().as_deref() == Some(&msg_id);
                             rsx! {
                                 // Date separator
-                                if show_date_sep { // Reactions
+                                if show_date_sep {
                                     div { class: "date-separator",
                                         span { class: "date-separator-text", "{date_str}" }
                                     }
                                 }
 
                                 // Message
-                                div { class: if is_grouped { "message message-grouped" } else { "message message-full" },
+                                div {
+                                    class: if is_grouped { "message message-grouped" } else { "message message-full" },
+                                    onmouseenter: {
+                                        let mid = msg_id_hover.clone();
+                                        move |_| hovered_msg.set(Some(mid.clone()))
+                                    },
+                                    onmouseleave: move |_| hovered_msg.set(None),
+
+                                    // Hover action bar
+                                    if is_hovered {
+                                        div { class: "message-actions",
+                                            button {
+                                                class: "msg-action-btn",
+                                                title: "{t(\"reaction-add\")}",
+                                                onclick: {
+                                                    let mid = msg_id_reaction.clone();
+                                                    move |_| {
+                                                        reaction_picker_msg.set(Some(mid.clone()));
+                                                    }
+                                                },
+                                                "😀+"
+                                            }
+                                        }
+                                    }
+
+                                    // Reaction picker popup
+                                    if has_reaction_picker {
+                                        EmojiPicker {
+                                            on_select: {
+                                                let mid = msg_id_reactions.clone();
+                                                move |emoji: String| {
+                                                    toggle_reaction_on_message(&mut chat_data, &mid, &emoji);
+                                                    reaction_picker_msg.set(None);
+                                                }
+                                            },
+                                            on_close: move |_| {
+                                                reaction_picker_msg.set(None);
+                                            },
+                                        }
+                                    }
 
                                     if !is_grouped {
                                         // Full message: avatar + header
@@ -160,7 +263,7 @@ pub fn ChatView() -> Element {
                                             }
                                             // Reactions
                                             if !reactions.is_empty() {
-                                                ReactionsView { reactions: reactions.clone() }
+                                                ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
                                             }
                                         }
                                     } else {
@@ -174,7 +277,7 @@ pub fn ChatView() -> Element {
                                                 AttachmentsView { attachments: attachments.clone() }
                                             }
                                             if !reactions.is_empty() {
-                                                ReactionsView { reactions: reactions.clone() }
+                                                ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
                                             }
                                         }
                                     }
@@ -185,35 +288,73 @@ pub fn ChatView() -> Element {
                 }
             }
 
-            // ── Message input ────────────────────────────────────────────
+            // ── Message input with toolbar ───────────────────────────────
             div { class: "message-input-area",
                 if channel_id.is_some() {
-                    textarea {
-                        class: "message-input",
-                        placeholder: "{t(\"chat-type-message\")}",
-                        value: "{message_input}",
-                        rows: "1",
-                        oninput: move |evt| message_input.set(evt.value()),
-                        onkeydown: {
-                            let channel_id_send = channel_id.clone();
-                            move |evt: KeyboardEvent| {
-                                if evt.key() == Key::Enter && !evt.modifiers().shift() {
-                                    evt.prevent_default();
-                                    let text = message_input.read().clone();
-                                    if !text.is_empty() {
-                                        message_input.set(String::new());
-                                        if let Some(ref cid) = channel_id_send {
-                                            let cid = cid.clone();
-                                            let text = text.clone();
-                                            spawn(async move {
-                                                send_message(cid, text, client_manager, chat_data, app_state)
-                                                    .await;
-                                            });
+                    // Input toolbar row
+                    div { class: "message-input-row",
+                        textarea {
+                            class: "message-input",
+                            placeholder: "{t(\"chat-type-message\")}",
+                            value: "{message_input}",
+                            rows: "1",
+                            oninput: move |evt| message_input.set(evt.value()),
+                            onkeydown: {
+                                let channel_id_send = channel_id.clone();
+                                move |evt: KeyboardEvent| {
+                                    if evt.key() == Key::Enter && !evt.modifiers().shift() {
+                                        evt.prevent_default();
+                                        let text = message_input.read().clone();
+                                        if !text.is_empty() {
+                                            message_input.set(String::new());
+                                            if let Some(ref cid) = channel_id_send {
+                                                let cid = cid.clone();
+                                                let text = text.clone();
+                                                spawn(async move {
+                                                    send_message(cid, text, client_manager, chat_data, app_state)
+                                                        .await;
+                                                });
+                                            }
                                         }
                                     }
                                 }
+                            },
+                        }
+                        // Input toolbar buttons (right side)
+                        div { class: "input-toolbar",
+                            button {
+                                class: "toolbar-btn",
+                                title: "{t(\"emoji-picker\")}",
+                                onclick: move |_| {
+                                    let current = *show_input_emoji.read();
+                                    show_input_emoji.set(!current);
+                                },
+                                "😀"
                             }
-                        },
+                            button {
+                                class: "toolbar-btn gif-btn",
+                                title: "{t(\"gif-picker\")}",
+                                "GIF"
+                            }
+                            button {
+                                class: "toolbar-btn",
+                                title: "{t(\"chat-attach-file\")}",
+                                "📎"
+                            }
+                        }
+                    }
+                    // Emoji picker for input
+                    if *show_input_emoji.read() {
+                        EmojiPicker {
+                            on_select: move |emoji: String| {
+                                let current = message_input.read().clone();
+                                message_input.set(format!("{current}{emoji}"));
+                                show_input_emoji.set(false);
+                            },
+                            on_close: move |_| {
+                                show_input_emoji.set(false);
+                            },
+                        }
                     }
                     button {
                         class: "btn btn-send",
@@ -307,9 +448,10 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>) -> Element {
     }
 }
 
-/// Render reaction pills.
+/// Render reaction pills (clickable to toggle).
 #[component]
-fn ReactionsView(reactions: Vec<poly_client::Reaction>) -> Element {
+fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> Element {
+    let mut chat_data: Signal<ChatData> = use_context();
     rsx! {
         div { class: "message-reactions",
             for reaction in &reactions {
@@ -317,9 +459,17 @@ fn ReactionsView(reactions: Vec<poly_client::Reaction>) -> Element {
                     let emoji = reaction.emoji.clone();
                     let count = reaction.count;
                     let me_class = if reaction.me { "reaction-pill me" } else { "reaction-pill" };
+                    let emoji_click = emoji.clone();
+                    let mid = message_id.clone();
 
                     rsx! {
-                        span { class: "{me_class}", "{emoji} {count}" }
+                        button {
+                            class: "{me_class}",
+                            onclick: move |_| {
+                                toggle_reaction_on_message(&mut chat_data, &mid, &emoji_click);
+                            },
+                            "{emoji} {count}"
+                        }
                     }
                 }
             }
@@ -342,6 +492,37 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
         format!("Yesterday {}", local.format("%I:%M %p"))
     } else {
         local.format("%m/%d/%Y %I:%M %p").to_string()
+    }
+}
+
+/// Toggle a reaction on a message (add or remove).
+///
+/// If the reaction already exists and we've reacted, remove our reaction.
+/// If it exists but we haven't reacted, add ours. Otherwise create a new reaction.
+fn toggle_reaction_on_message(chat_data: &mut Signal<ChatData>, message_id: &str, emoji: &str) {
+    let mut cd = chat_data.write();
+    if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
+        if let Some(reaction) = msg.reactions.iter_mut().find(|r| r.emoji == emoji) {
+            if reaction.me {
+                // Remove our reaction
+                reaction.count = reaction.count.saturating_sub(1);
+                reaction.me = false;
+                if reaction.count == 0 {
+                    msg.reactions.retain(|r| r.emoji != emoji);
+                }
+            } else {
+                // Add our reaction
+                reaction.count += 1;
+                reaction.me = true;
+            }
+        } else {
+            // New reaction
+            msg.reactions.push(poly_client::Reaction {
+                emoji: emoji.to_string(),
+                count: 1,
+                me: true,
+            });
+        }
     }
 }
 

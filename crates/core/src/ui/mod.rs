@@ -9,17 +9,25 @@
 //!   - [`MainLayout`] — 4-column desktop layout
 //!     - [`ServerSidebar`] — Left server icon list
 //!     - [`ChannelList`] — Channel list for selected server
-//!     - [`ChatView`] — Messages and input
+//!       - [`VoiceBar`] — Voice connection status bar
+//!       - [`AccountBar`] — User info + quick controls
+//!     - [`ChatView`] — Messages and input (text channels)
+//!     - [`VoiceChannelView`] — Voice/video call view (voice channels)
+//!     - [`EmojiPicker`] — Emoji grid for reactions and input
 //!     - [`UserSidebar`] — Right user list
 
+mod account_bar;
 mod channel_list;
 mod chat_view;
+mod emoji_picker;
 mod main_layout;
 mod notifications;
 mod server_sidebar;
 mod settings;
 mod setup_wizard;
 mod user_sidebar;
+mod voice_bar;
+mod voice_view;
 
 pub use main_layout::MainLayout;
 pub use setup_wizard::SetupWizard;

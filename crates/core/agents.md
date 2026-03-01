@@ -393,3 +393,43 @@ fails. **Always run both checks after editing settings.rs.**
 
 When fixing brace issues, prefer `.map()` over `if let Some(x) = ...` + `drop(x)` when
 you need to mutate a vec element and then move the vec.
+
+## MANDATORY: Visual Verification with Desktop DevTools MCP
+
+**After EVERY change to this crate**, you MUST verify the changes using the Desktop DevTools MCP.
+Do NOT declare any change complete without visual confirmation.
+
+**Verification checklist:**
+1. `cargo check --workspace` — error-free
+2. `cargo cranky --workspace` — zero warnings
+3. `cargo check -p poly-web --target wasm32-unknown-unknown` — WASM compat
+4. `dx build --platform desktop` in `apps/desktop-devtools/` — build must succeed
+5. `mcp_poly-desktop_launch_app` → `mcp_poly-desktop_connect_cdp`
+6. `mcp_poly-desktop_screenshot` — enable 🧪 demo, navigate to affected views
+7. Click interactive elements (buttons, pickers, navigation) to verify behavior
+8. Fix any visual/layout issues before declaring done
+
+**Lesson learned (2025-03-01):** RSX macro syntax errors cause misleading Rust diagnostics.
+Two syntax bugs (a `},` instead of `;` and a misplaced closing brace before `else`) passed
+`cargo cranky --workspace` but would have produced broken runtime behavior. Always verify visually.
+
+## Phase 2.5 New Components (Verified 2025-03-01)
+
+| Component | File | Purpose |
+|---|---|---|
+| `VoiceChannelView` | `ui/voice_view.rs` | Full voice channel view with participant tiles |
+| `VoiceBar` | `ui/voice_bar.rs` | Persistent voice connection bar (bottom of channel list) |
+| `EmojiPicker` | `ui/emoji_picker.rs` | Emoji grid picker (reactions + input) |
+| `AccountBar` | `ui/account_bar.rs` | User info + mic/deafen controls at bottom |
+
+**State additions:**
+- `ChatData`: `voice_channel_participants: HashMap<String, Vec<VoiceParticipant>>`, `voice_connection: Option<VoiceConnection>`
+- `AppState`: nav history stack with `push_nav_history()`, `nav_back()`, `nav_forward()`, `can_go_back()`, `can_go_forward()`
+- `NavigationState`: now derives `PartialEq, Eq`
+
+**Visually confirmed working (2025-03-01):**
+- Voice participant tiles (muted 🔇, deafened 🔕, streaming 🖥, video 📹 icons)
+- Join Voice / Disconnect toggle + voice bar persistence across navigation
+- Emoji picker opens above input, emoji selection inserts into textarea
+- Reaction pills on messages, input toolbar (😀 GIF 📎)
+- Voice participants listed in channel list under voice channels

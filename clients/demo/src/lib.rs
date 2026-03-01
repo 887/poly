@@ -8,7 +8,8 @@
 //!
 //! This client implements [`poly_client::ClientBackend`].
 
-mod data;
+/// Public data module — demo data generators for testing.
+pub mod data;
 
 use async_trait::async_trait;
 use futures::stream::{self, Stream};

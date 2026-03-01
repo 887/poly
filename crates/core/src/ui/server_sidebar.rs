@@ -100,14 +100,14 @@ pub fn ServerSidebar() -> Element {
                             class: if is_selected { "server-icon active" } else { "server-icon" },
                             onclick: {
                                 let server_id_click = server_id.clone();
-                                move |_| { // Unread badge  Unread badge // Unread badge  Unread badge
+                                move |_| { // Unread badge  Unread badge  Unread badge  Unread badge
                                     app_state.write().nav.view = View::Server;
                                     app_state.write().nav.selected_server = Some(server_id_click.clone());
                                     app_state.write().nav.selected_channel = None;
                                     // Load channels for this server
                                     let sid = server_id_click.clone();
                                     spawn(async move {
-                                        load_server_data(sid, app_state, client_manager, chat_data).await; // Unread badge // Unread badge
+                                        load_server_data(sid, app_state, client_manager, chat_data).await; // Unread badge  Unread badge // Unread badge
                                     });
                                 }
                             },
@@ -189,6 +189,8 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
             chat_data.write().members.clear();
             chat_data.write().current_server = None;
             chat_data.write().current_channel = None;
+            chat_data.write().voice_channel_participants.clear();
+            chat_data.write().voice_connection = None;
         } else {
             if let Err(e) = client_manager.write().activate_demo().await {
                 tracing::error!("Failed to activate demo: {e}");
@@ -215,6 +217,10 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
                     chat_data.write().friends = friends;
                 }
             }
+
+            // Load voice channel participants from demo data
+            chat_data.write().voice_channel_participants =
+                poly_demo::data::demo_voice_participants();
         }
     }
 }

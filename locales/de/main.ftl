@@ -184,3 +184,33 @@ error-generic = Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.
 error-network = Netzwerkfehler. Überprüfen Sie Ihre Verbindung.
 error-auth-failed = Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.
 error-not-found = Nicht gefunden.
+
+# Sprache / Video
+voice-connected = Sprache verbunden
+voice-join-voice = Sprache beitreten
+voice-join-video = Video beitreten
+voice-disconnect = Trennen
+voice-muted = Stummgeschaltet
+voice-deafened = Taub geschaltet
+voice-streaming = Bildschirm teilen
+voice-video-on = Kamera an
+voice-mute = Stummschalten
+voice-unmute = Stummschaltung aufheben
+voice-deafen = Taub schalten
+voice-undeafen = Taub aufheben
+voice-no-channel = Kein Kanal ausgewählt
+voice-no-one-here = Noch niemand hier
+voice-be-first = Sei der Erste, der beitritt!
+voice-watching-screen = Bildschirmfreigabe ansehen
+
+# Emoji / GIF / Reaktionen
+emoji-picker = Emoji
+emoji-search = Emoji suchen...
+gif-picker = GIF
+reaction-add = Reaktion hinzufügen
+chat-drop-files = Dateien zum Hochladen ablegen
+chat-attach-file = Datei anhängen
+
+# Navigation
+nav-back = Zurück
+nav-forward = Vorwärts

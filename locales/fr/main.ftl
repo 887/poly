@@ -184,3 +184,33 @@ error-generic = Quelque chose s'est mal passé. Veuillez réessayer.
 error-network = Erreur réseau. Vérifiez votre connexion.
 error-auth-failed = Échec de l'authentification. Veuillez vérifier vos identifiants.
 error-not-found = Non trouvé.
+
+# Voix / Vidéo
+voice-connected = Voix connectée
+voice-join-voice = Rejoindre la voix
+voice-join-video = Rejoindre la vidéo
+voice-disconnect = Déconnecter
+voice-muted = Micro coupé
+voice-deafened = Son coupé
+voice-streaming = Partage d'écran
+voice-video-on = Caméra activée
+voice-mute = Couper le micro
+voice-unmute = Activer le micro
+voice-deafen = Couper le son
+voice-undeafen = Activer le son
+voice-no-channel = Aucun canal sélectionné
+voice-no-one-here = Personne n'est ici
+voice-be-first = Soyez le premier à rejoindre !
+voice-watching-screen = Visionnage du partage d'écran
+
+# Emoji / GIF / Réactions
+emoji-picker = Emoji
+emoji-search = Chercher un emoji...
+gif-picker = GIF
+reaction-add = Ajouter une réaction
+chat-drop-files = Déposez des fichiers pour les envoyer
+chat-attach-file = Joindre un fichier
+
+# Navigation
+nav-back = Retour
+nav-forward = Avancer

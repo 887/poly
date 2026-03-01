@@ -117,7 +117,30 @@ When making architectural decisions:
 3. Update the relevant phase plan checklist
 4. Write code comments explaining non-obvious choices
 
-### 9. Session Management
+### 9. poly-core Changes — MANDATORY DevTools Visual Verification
+
+**Every time you make changes to `poly-core` (or `crates/core`) you MUST verify the changes work correctly using the Desktop DevTools MCP.** This is non-negotiable — code that compiles but renders broken UI is a bug.
+
+**Required verification steps after ANY change to poly-core:**
+
+1. `cargo check --workspace` — must be error-free
+2. `cargo cranky --workspace` — must be zero warnings/errors
+3. `cargo check -p poly-web --target wasm32-unknown-unknown` — verify WASM compat
+4. `dx build --platform desktop` in `apps/desktop-devtools/` — full build must succeed
+5. Launch the app via `mcp_poly-desktop_launch_app`
+6. Connect via `mcp_poly-desktop_connect_cdp`
+7. Take screenshots via `mcp_poly-desktop_screenshot` and verify:
+   - Enable demo data (click the 🧪 toggle)
+   - Navigate to affected views/components
+   - Confirm UI renders correctly with no missing elements
+   - Test interactive elements (buttons, pickers, navigation)
+8. Document any visual issues found and fix before declaring done
+
+**Why this rule exists:** RSX macro syntax errors produce misleading Rust error messages. A build that passes `cargo check` may still have component logic bugs that only appear visually. The DevTools MCP is the ground truth for "does the UI work".
+
+---
+
+### 10. Session Management
 
 At the START of each coding session:
 1. Read this `agents.md`

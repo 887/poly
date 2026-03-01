@@ -294,3 +294,41 @@ pub struct Account {
     /// Whether this account is currently connected.
     pub connected: bool,
 }
+
+/// A user connected to a voice or video channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoiceParticipant {
+    /// The user in the voice channel.
+    pub user: User,
+    /// Whether the user has muted their microphone.
+    pub is_muted: bool,
+    /// Whether the user has deafened (muted all audio).
+    pub is_deafened: bool,
+    /// Whether the user is sharing their screen.
+    pub is_streaming: bool,
+    /// Whether the user has their camera on.
+    pub is_video_on: bool,
+    /// Whether the user is currently speaking (activity indicator).
+    pub is_speaking: bool,
+}
+
+/// The local user's voice connection state.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct VoiceConnection {
+    /// Channel ID we are connected to.
+    pub channel_id: String,
+    /// Server ID the channel belongs to.
+    pub server_id: String,
+    /// Display name of the connected channel.
+    pub channel_name: String,
+    /// Display name of the server.
+    pub server_name: String,
+    /// Whether our microphone is muted.
+    pub is_muted: bool,
+    /// Whether we are deafened (all audio muted).
+    pub is_deafened: bool,
+    /// Whether we are streaming our screen.
+    pub is_streaming: bool,
+    /// Whether our camera is on.
+    pub is_video_on: bool,
+}

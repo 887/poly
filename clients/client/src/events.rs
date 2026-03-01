@@ -55,4 +55,19 @@ pub enum ClientEvent {
         backend: BackendType,
         connected: bool,
     },
+
+    /// A user joined a voice channel.
+    VoiceUserJoined {
+        channel_id: String,
+        participant: VoiceParticipant,
+    },
+
+    /// A user left a voice channel.
+    VoiceUserLeft { channel_id: String, user_id: String },
+
+    /// A voice participant's state changed (mute, deafen, stream, etc.).
+    VoiceStateUpdated {
+        channel_id: String,
+        participant: VoiceParticipant,
+    },
 }
