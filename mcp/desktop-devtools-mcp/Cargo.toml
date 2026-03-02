@@ -11,7 +11,12 @@ path = "src/main.rs"
 
 [dependencies]
 poly-devtools-protocol = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "net", "process", "io-util"] }
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "net",
+    "process",
+    "io-util",
+] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }

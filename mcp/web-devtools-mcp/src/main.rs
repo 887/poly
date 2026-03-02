@@ -751,12 +751,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // Reconnect CDP since the page reload may have dropped the WebSocket.
         *self.ws.lock().await = None;
 
-        Ok(
-            "Rebuild triggered (touched crates/core/src/lib.rs).\n\
+        Ok("Rebuild triggered (touched crates/core/src/lib.rs).\n\
              dx serve is recompiling the WASM — this takes 30-90 s with a warm cache.\n\
              The browser will auto-reload when done. Call connect_cdp afterwards."
-                .to_string(),
-        )
+            .to_string())
     }
 
     fn extension_tools(&self) -> Vec<Value> {

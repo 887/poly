@@ -154,7 +154,10 @@ impl DevtoolsBackend for DesktopHttpBackend {
             .await;
         // Also kill any stale dx serve for this app.
         let _ = tokio::process::Command::new("bash")
-            .args(["-c", "pkill -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true"])
+            .args([
+                "-c",
+                "pkill -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true",
+            ])
             .status()
             .await;
         tokio::time::sleep(std::time::Duration::from_millis(600)).await;
@@ -214,7 +217,10 @@ impl DevtoolsBackend for DesktopHttpBackend {
             .await;
         // Kill dx serve for this app.
         let _ = tokio::process::Command::new("bash")
-            .args(["-c", "pkill -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true"])
+            .args([
+                "-c",
+                "pkill -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true",
+            ])
             .status()
             .await;
 
@@ -332,12 +338,17 @@ impl DevtoolsBackend for DesktopHttpBackend {
             .status()
             .await;
         let _ = tokio::process::Command::new("bash")
-            .args(["-c", "pkill -9 -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true"])
+            .args([
+                "-c",
+                "pkill -9 -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true",
+            ])
             .status()
             .await;
 
-        Ok("Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
-            .to_string())
+        Ok(
+            "Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
+                .to_string(),
+        )
     }
 
     async fn browser_reload(&self) -> anyhow::Result<String> {
@@ -379,9 +390,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
         // Wait a moment for the rebuild to start, then poll the bridge.
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         match self.wait_for_bridge(120).await {
-            Ok(()) => Ok(
-                "Rebuild triggered. App is ready — eval bridge responding.".to_string(),
-            ),
+            Ok(()) => Ok("Rebuild triggered. App is ready — eval bridge responding.".to_string()),
             Err(e) => Err(anyhow::anyhow!(
                 "Rebuild triggered but eval bridge didn't come back: {e}"
             )),
