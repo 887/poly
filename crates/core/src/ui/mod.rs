@@ -23,6 +23,7 @@
 //! through the `ClientBackend` trait via `ClientManager`.
 
 mod account_bar;
+mod account_switcher;
 mod channel_list;
 mod chat_view;
 mod emoji_picker;
@@ -37,6 +38,7 @@ mod voice_banner;
 mod voice_bar;
 mod voice_view;
 
+pub use account_switcher::AccountSwitcher;
 pub use friends_panel::FriendsPanel;
 pub use main_layout::MainLayout;
 pub use setup_wizard::SetupWizard;

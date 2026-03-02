@@ -2199,12 +2199,37 @@ select {
     white-space: nowrap;
 }
 
-/* Signal + hang-up icon buttons on the right of the top row */
+/* Signal + mute/deafen/hang-up icon buttons on the right of the top row */
 .voice-bar-quick {
     display: flex;
     align-items: center;
     gap: 0.25rem;
     flex-shrink: 0;
+}
+
+.voice-bar-quick-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.voice-bar-quick-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.voice-bar-quick-btn.active {
+    background: rgba(88, 101, 242, 0.2);
+    color: var(--accent-primary);
 }
 
 .voice-bar-signal {
@@ -2400,6 +2425,94 @@ select {
 .account-btn.active {
     color: var(--danger, #ed4245);
     background: rgba(237, 66, 69, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACCOUNT SWITCHER BAR (full bar for DM context, like AccountBar)
+   ═══════════════════════════════════════════════════════════════ */
+
+.account-switcher-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary, var(--bg-secondary));
+    border-top: 1px solid var(--border-color);
+    min-height: 52px;
+}
+
+.account-switcher-main-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent-primary);
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.account-switcher-main-btn:hover {
+    background: var(--accent-primary);
+    filter: brightness(1.1);
+}
+
+.account-switcher-controls {
+    display: flex;
+    gap: 0.25rem;
+    flex: 1;
+    justify-content: flex-start;
+    padding-left: 0.5rem;
+}
+
+.account-switcher-control-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.account-switcher-control-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.account-switcher-control-btn.active {
+    color: var(--danger, #ed4245);
+    background: rgba(237, 66, 69, 0.1);
+}
+
+.account-switcher-setting-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.account-switcher-setting-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 /* ═══════════════════════════════════════════════════════════════

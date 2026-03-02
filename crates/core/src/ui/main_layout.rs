@@ -10,6 +10,7 @@
 //! Extract sub-components rather than growing this file.
 
 use super::account_bar::AccountBar;
+use super::account_switcher::AccountSwitcher;
 use super::channel_list::ChannelList;
 use super::chat_view::ChatView;
 use super::friends_panel::FriendsPanel;
@@ -107,10 +108,11 @@ pub fn MainLayout() -> Element {
                 // stale component instances when the user switches views.
                 match view {
                     View::DmsFriends => rsx! {
-                        // Channel list panel — NO nav-bar (now at top), NO AccountBar (multi-account app)
+                        // Channel list panel — AccountSwitcher for multi-account access
                         div { class: "channel-list-wrapper",
                             ChannelList {}
                             VoiceBar {}
+                            AccountSwitcher {}
                         }
                         // Placeholder until a conversation is selected
                         main { class: "chat-view",

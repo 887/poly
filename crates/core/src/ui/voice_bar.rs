@@ -31,12 +31,14 @@ pub fn VoiceBar() -> Element {
 
     let channel_name = conn.channel_name.clone();
     let server_name = conn.server_name.clone();
+    let is_muted = conn.is_muted;
+    let is_deafened = conn.is_deafened;
     let is_video_on = conn.is_video_on;
     let is_streaming = conn.is_streaming;
 
     rsx! {
         div { class: "voice-bar",
-            // Top row: status/channel info + signal/hangup icons
+            // Top row: status/channel info + mute/deafen + signal/hangup icons
             div { class: "voice-bar-top",
                 div { class: "voice-bar-info",
                     div { class: "voice-bar-status",
