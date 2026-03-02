@@ -3,7 +3,7 @@ use axum::{
     extract::{Extension, Path, State},
     routing::{delete, get, post},
 };
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -11,6 +11,7 @@ use tracing::info;
 use crate::{
     AppState,
     auth::{AuthUser, Claims},
+    db_ext::{take_many, take_one},
     error::{AppError, Result},
     models::{AuthChallenge, Device, UserRecord},
 };
@@ -120,26 +121,27 @@ async fn create_device(
     ip: Option<&str>,
 ) -> Result<String> {
     let name = device_name.unwrap_or("Unknown device");
-    let created: Option<Device> = state
-        .db
-        .query(
-            "CREATE device CONTENT { \
-              owner: type::thing($uid), \
-              name: $name, \
-              user_agent: $ua, \
-              ip: $ip, \
-              created_at: time::now(), \
-              last_seen: time::now(), \
-              revoked: false \
-            } RETURN *",
-        )
-        .bind(("uid", user_id.to_owned()))
-        .bind(("name", name.to_owned()))
-        .bind(("ua", user_agent.map(str::to_owned)))
-        .bind(("ip", ip.map(str::to_owned)))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let created: Option<Device> = take_one(
+        &mut state
+            .db
+            .query(
+                "CREATE device CONTENT { \
+                  owner: type::record($uid), \
+                  name: $name, \
+                  user_agent: $ua, \
+                  ip: $ip, \
+                  created_at: time::now(), \
+                  last_seen: time::now(), \
+                  revoked: false \
+                } RETURN *",
+            )
+            .bind(("uid", user_id.to_owned()))
+            .bind(("name", name.to_owned()))
+            .bind(("ua", user_agent.map(str::to_owned)))
+            .bind(("ip", ip.map(str::to_owned)))
+            .await?,
+        0,
+    )?;
 
     created
         .and_then(|d| d.id)
@@ -168,25 +170,27 @@ async fn signup(
     let _vk = decode_public_key(&req.public_key)?;
 
     // Check username uniqueness.
-    let existing_name: Option<UserRecord> = state
-        .db
-        .query("SELECT * FROM user WHERE username = $u LIMIT 1")
-        .bind(("u", req.username.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let existing_name: Option<UserRecord> = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM user WHERE username = $u LIMIT 1")
+            .bind(("u", req.username.clone()))
+            .await?,
+        0,
+    )?;
     if existing_name.is_some() {
         return Err(AppError::Conflict("username already taken".into()));
     }
 
     // Check public key uniqueness.
-    let existing_key: Option<UserRecord> = state
-        .db
-        .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
-        .bind(("pk", req.public_key.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let existing_key: Option<UserRecord> = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
+            .bind(("pk", req.public_key.clone()))
+            .await?,
+        0,
+    )?;
     if existing_key.is_some() {
         return Err(AppError::Conflict("public key already registered".into()));
     }
@@ -194,20 +198,21 @@ async fn signup(
     let display_name = req.display_name.unwrap_or_else(|| req.username.clone());
 
     // Create user record with public key (no password hash).
-    let created: Option<UserRecord> = state
-        .db
-        .query(
-            "CREATE user CONTENT { \
-              username: $u, display_name: $d, \
-              public_key: $pk, created_at: time::now() \
-            } RETURN *",
-        )
-        .bind(("u", req.username.clone()))
-        .bind(("d", display_name))
-        .bind(("pk", req.public_key.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let created: Option<UserRecord> = take_one(
+        &mut state
+            .db
+            .query(
+                "CREATE user CONTENT { \
+                  username: $u, display_name: $d, \
+                  public_key: $pk, created_at: time::now() \
+                } RETURN *",
+            )
+            .bind(("u", req.username.clone()))
+            .bind(("d", display_name))
+            .bind(("pk", req.public_key.clone()))
+            .await?,
+        0,
+    )?;
 
     let user_id = created
         .and_then(|u| u.id)
@@ -249,40 +254,42 @@ async fn challenge(
     let _vk = decode_public_key(&req.public_key)?;
 
     // Check the public key is registered.
-    let existing: Option<UserRecord> = state
-        .db
-        .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
-        .bind(("pk", req.public_key.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let existing: Option<UserRecord> = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
+            .bind(("pk", req.public_key.clone()))
+            .await?,
+        0,
+    )?;
     if existing.is_none() {
         return Err(AppError::NotFound);
     }
 
     let nonce = random_nonce();
-    let expires_at = Utc::now() + Duration::seconds(60);
 
-    // Store the challenge.
-    state
-        .db
-        .query(
-            "CREATE auth_challenge CONTENT { \
-              public_key: $pk, nonce: $n, \
-              expires_at: $exp, used: false, \
-              created_at: time::now() \
-            }",
-        )
-        .bind(("pk", req.public_key.clone()))
-        .bind(("n", nonce.clone()))
-        .bind(("exp", expires_at.to_rfc3339()))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    // Store the challenge — use SurrealQL time arithmetic so the datetime
+    // type matches the SCHEMAFULL field (binding a chrono string would fail).
+    let created: AuthChallenge = take_one(
+        &mut state
+            .db
+            .query(
+                "CREATE auth_challenge CONTENT { \
+                  public_key: $pk, nonce: $n, \
+                  expires_at: time::now() + 60s, used: false, \
+                  created_at: time::now() \
+                } RETURN *",
+            )
+            .bind(("pk", req.public_key.clone()))
+            .bind(("n", nonce.clone()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::Internal("failed to create challenge".into()))?;
 
     Ok(Json(ChallengeResponse {
         challenge: nonce,
-        expires_at: expires_at.to_rfc3339(),
+        expires_at: created.expires_at.to_rfc3339(),
     }))
 }
 
@@ -304,19 +311,20 @@ async fn verify(
     let vk = decode_public_key(&req.public_key)?;
 
     // Look up the challenge record.
-    let challenge_record: AuthChallenge = state
-        .db
-        .query(
-            "SELECT * FROM auth_challenge \
-             WHERE public_key = $pk AND nonce = $n AND used = false \
-             LIMIT 1",
-        )
-        .bind(("pk", req.public_key.clone()))
-        .bind(("n", req.challenge.clone()))
-        .await?
-        .take::<Option<AuthChallenge>>(0)
-        .map_err(AppError::Db)?
-        .ok_or(AppError::Unauthorized)?;
+    let challenge_record: AuthChallenge = take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM auth_challenge \
+                 WHERE public_key = $pk AND nonce = $n AND used = false \
+                 LIMIT 1",
+            )
+            .bind(("pk", req.public_key.clone()))
+            .bind(("n", req.challenge.clone()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::Unauthorized)?;
 
     // Check expiry.
     if Utc::now() > challenge_record.expires_at {
@@ -342,21 +350,22 @@ async fn verify(
         .ok_or(AppError::Internal("missing challenge id".into()))?;
     state
         .db
-        .query("UPDATE type::thing($id) SET used = true")
+        .query("UPDATE type::record($id) SET used = true")
         .bind(("id", challenge_id))
         .await?
         .check()
         .map_err(AppError::Db)?;
 
     // Look up the user by public key.
-    let user: UserRecord = state
-        .db
-        .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
-        .bind(("pk", req.public_key.clone()))
-        .await?
-        .take::<Option<UserRecord>>(0)
-        .map_err(AppError::Db)?
-        .ok_or(AppError::Unauthorized)?;
+    let user: UserRecord = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
+            .bind(("pk", req.public_key.clone()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::Unauthorized)?;
 
     let user_id = user
         .id
@@ -388,7 +397,7 @@ async fn signout(
 ) -> Result<Json<serde_json::Value>> {
     state
         .db
-        .query("UPDATE type::thing($id) SET revoked = true")
+        .query("UPDATE type::record($id) SET revoked = true")
         .bind(("id", auth.device_id.clone()))
         .await?
         .check()
@@ -408,13 +417,14 @@ async fn list_devices(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<Vec<Device>>> {
-    let devices: Vec<Device> = state
-        .db
-        .query("SELECT * FROM device WHERE owner = type::thing($id) ORDER BY last_seen DESC")
-        .bind(("id", auth.user_id.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let devices: Vec<Device> = take_many(
+        &mut state
+            .db
+            .query("SELECT * FROM device WHERE owner = type::record($id) ORDER BY last_seen DESC")
+            .bind(("id", auth.user_id.clone()))
+            .await?,
+        0,
+    )?;
 
     Ok(Json(devices))
 }
@@ -426,14 +436,15 @@ async fn revoke_device(
     Path(device_id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
     // Verify ownership.
-    let device: Device = state
-        .db
-        .query("SELECT * FROM type::thing($id) LIMIT 1")
-        .bind(("id", device_id.clone()))
-        .await?
-        .take::<Option<Device>>(0)
-        .map_err(AppError::Db)?
-        .ok_or(AppError::NotFound)?;
+    let device: Device = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM type::record($id) LIMIT 1")
+            .bind(("id", device_id.clone()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)?;
 
     if device.owner != auth.user_id {
         return Err(AppError::Forbidden);
@@ -441,7 +452,7 @@ async fn revoke_device(
 
     state
         .db
-        .query("UPDATE type::thing($id) SET revoked = true")
+        .query("UPDATE type::record($id) SET revoked = true")
         .bind(("id", device_id))
         .await?
         .check()

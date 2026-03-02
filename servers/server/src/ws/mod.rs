@@ -137,6 +137,12 @@ async fn handle_socket(socket: WebSocket, token: String, state: AppState) {
 
     let (mut sink, mut stream) = socket.split();
 
+    // Send an initial ping so clients know the connection is live.
+    let ping_json = serde_json::to_string(&ServerEvent::Ping).unwrap_or_default();
+    if sink.send(Message::Text(ping_json.into())).await.is_err() {
+        return;
+    }
+
     // Clone user_id before the async move so the original remains available below.
     let send_user_id = user_id.clone();
 

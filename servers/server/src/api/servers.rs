@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AppState,
     auth::AuthUser,
+    db_ext::{take_many, take_one},
     error::{AppError, Result},
     models::{Membership, Server},
 };
@@ -54,13 +55,14 @@ async fn list_servers(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<Vec<serde_json::Value>>> {
-    let servers: Vec<serde_json::Value> = state
-        .db
-        .query("SELECT server.* FROM membership WHERE user = type::thing($uid) FETCH server")
-        .bind(("uid", auth.user_id.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let servers: Vec<serde_json::Value> = take_many(
+        &mut state
+            .db
+            .query("SELECT server.* FROM membership WHERE user = type::record($uid) FETCH server")
+            .bind(("uid", auth.user_id.clone()))
+            .await?,
+        0,
+    )?;
     Ok(Json(servers))
 }
 
@@ -74,21 +76,22 @@ async fn create_server(
         return Err(AppError::BadRequest("server name required".into()));
     }
 
-    let raw: Vec<serde_json::Value> = state
-        .db
-        .query(
-            "CREATE server CONTENT { \
-              name: $name, icon_url: $icon, \
-              owner: type::thing($owner), \
-              created_at: time::now() \
-            } RETURN *",
-        )
-        .bind(("name", req.name))
-        .bind(("icon", req.icon_url))
-        .bind(("owner", auth.user_id.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let raw: Vec<serde_json::Value> = take_many(
+        &mut state
+            .db
+            .query(
+                "CREATE server CONTENT { \
+                  name: $name, icon_url: $icon, \
+                  owner: type::record($owner), \
+                  created_at: time::now() \
+                } RETURN *",
+            )
+            .bind(("name", req.name))
+            .bind(("icon", req.icon_url))
+            .bind(("owner", auth.user_id.clone()))
+            .await?,
+        0,
+    )?;
 
     let server: Server = raw
         .into_iter()
@@ -103,8 +106,8 @@ async fn create_server(
             .db
             .query(
                 "CREATE membership CONTENT { \
-                  user: type::thing($uid), \
-                  server: type::thing($sid), \
+                  user: type::record($uid), \
+                  server: type::record($sid), \
                   joined_at: time::now() \
                 }",
             )
@@ -126,41 +129,42 @@ async fn get_server(
 ) -> Result<Json<ServerDetail>> {
     require_member(&state, &auth.user_id, &id).await?;
 
-    let raw_server: Option<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM type::thing($id)")
-        .bind(("id", id.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    let server: Server = raw_server
-        .map(|v| serde_json::from_value::<Server>(v).map_err(|e| AppError::Internal(e.to_string())))
-        .transpose()?
-        .ok_or(AppError::NotFound)?;
+    let server: Server = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM type::record($id)")
+            .bind(("id", id.clone()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)?;
 
-    let members: Vec<serde_json::Value> = state
-        .db
-        .query("SELECT user.* FROM membership WHERE server = type::thing($id) FETCH user")
-        .bind(("id", id.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let members: Vec<serde_json::Value> = take_many(
+        &mut state
+            .db
+            .query("SELECT user.* FROM membership WHERE server = type::record($id) FETCH user")
+            .bind(("id", id.clone()))
+            .await?,
+        0,
+    )?;
 
-    let channels: Vec<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM channel WHERE server = type::thing($id) ORDER BY position")
-        .bind(("id", id.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let channels: Vec<serde_json::Value> = take_many(
+        &mut state
+            .db
+            .query("SELECT * FROM channel WHERE server = type::record($id) ORDER BY position")
+            .bind(("id", id.clone()))
+            .await?,
+        0,
+    )?;
 
-    let categories: Vec<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM category WHERE server = type::thing($id) ORDER BY position")
-        .bind(("id", id))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let categories: Vec<serde_json::Value> = take_many(
+        &mut state
+            .db
+            .query("SELECT * FROM category WHERE server = type::record($id) ORDER BY position")
+            .bind(("id", id))
+            .await?,
+        0,
+    )?;
 
     Ok(Json(ServerDetail {
         server,
@@ -179,25 +183,23 @@ async fn update_server(
 ) -> Result<Json<Server>> {
     require_owner(&state, &auth.user_id, &id).await?;
 
-    let raw: Option<serde_json::Value> = state
-        .db
-        .query(
-            "UPDATE type::thing($id) MERGE { \
-              name: $name ?? name, \
-              icon_url: $icon ?? icon_url \
-            } RETURN *",
-        )
-        .bind(("id", id))
-        .bind(("name", req.name))
-        .bind(("icon", req.icon_url))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-
-    raw.map(|v| serde_json::from_value::<Server>(v).map_err(|e| AppError::Internal(e.to_string())))
-        .transpose()?
-        .ok_or(AppError::NotFound)
-        .map(Json)
+    let server: Server = take_one(
+        &mut state
+            .db
+            .query(
+                "UPDATE type::record($id) MERGE { \
+                  name: $name ?? name, \
+                  icon_url: $icon ?? icon_url \
+                } RETURN *",
+            )
+            .bind(("id", id))
+            .bind(("name", req.name))
+            .bind(("icon", req.icon_url))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)?;
+    Ok(Json(server))
 }
 
 /// `DELETE /servers/:id` — delete server (owner only).
@@ -210,7 +212,7 @@ async fn delete_server(
     // TODO(phase-2.2.4.5): cascade-delete channels, memberships, messages.
     state
         .db
-        .query("DELETE type::thing($id)")
+        .query("DELETE type::record($id)")
         .bind(("id", id))
         .await?
         .check()
@@ -235,8 +237,8 @@ async fn create_invite(
         .db
         .query(
             "CREATE invite CONTENT { \
-              code: $code, server: type::thing($sid), \
-              created_by: type::thing($uid), \
+              code: $code, server: type::record($sid), \
+              created_by: type::record($uid), \
               created_at: time::now(), uses: 0 \
             }",
         )
@@ -255,38 +257,56 @@ async fn join_server(
     Extension(auth): Extension<AuthUser>,
     Path(code): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
-    let invite: Option<serde_json::Value> = state
-        .db
-        .query(
-            "SELECT * FROM invite \
-             WHERE code = $code \
-             AND (expires_at IS NONE OR expires_at > time::now()) \
-             LIMIT 1",
-        )
-        .bind(("code", code))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    let invite = invite.ok_or(AppError::NotFound)?;
+    let invite: serde_json::Value = take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM invite \
+                 WHERE code = $code \
+                 AND (expires_at IS NONE OR expires_at > time::now()) \
+                 LIMIT 1",
+            )
+            .bind(("code", code))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)?;
     let server_id = invite
         .get("server")
         .and_then(|v| v.as_str())
         .ok_or_else(|| AppError::Internal("invalid invite record".into()))?
         .to_owned();
 
-    state
-        .db
-        .query(
-            "CREATE membership CONTENT { \
-              user: type::thing($uid), server: type::thing($sid), \
-              joined_at: time::now() \
-            } ON DUPLICATE KEY IGNORE",
-        )
-        .bind(("uid", auth.user_id.clone()))
-        .bind(("sid", server_id.clone()))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    // Check if already a member.
+    let existing: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM membership \
+                 WHERE user = type::record($uid) AND server = type::record($sid) \
+                 LIMIT 1",
+            )
+            .bind(("uid", auth.user_id.clone()))
+            .bind(("sid", server_id.clone()))
+            .await?,
+        0,
+    )?;
+
+    if existing.is_none() {
+        state
+            .db
+            .query(
+                "CREATE membership CONTENT { \
+                  user: type::record($uid), server: type::record($sid), \
+                  joined_at: time::now() \
+                }",
+            )
+            .bind(("uid", auth.user_id.clone()))
+            .bind(("sid", server_id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+    }
     Ok(Json(serde_json::json!({ "server_id": server_id })))
 }
 
@@ -300,7 +320,7 @@ async fn leave_server(
         .db
         .query(
             "DELETE membership \
-             WHERE user = type::thing($uid) AND server = type::thing($sid)",
+             WHERE user = type::record($uid) AND server = type::record($sid)",
         )
         .bind(("uid", auth.user_id.clone()))
         .bind(("sid", id))
@@ -321,7 +341,7 @@ async fn kick_member(
         .db
         .query(
             "DELETE membership \
-             WHERE user = type::thing($uid) AND server = type::thing($sid)",
+             WHERE user = type::record($uid) AND server = type::record($sid)",
         )
         .bind(("uid", target_user_id))
         .bind(("sid", server_id))
@@ -334,33 +354,32 @@ async fn kick_member(
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 async fn require_member(state: &AppState, user_id: &str, server_id: &str) -> Result<()> {
-    let raw: Option<serde_json::Value> = state
-        .db
-        .query(
-            "SELECT * FROM membership \
-             WHERE user = type::thing($uid) AND server = type::thing($sid) \
-             LIMIT 1",
-        )
-        .bind(("uid", user_id.to_owned()))
-        .bind(("sid", server_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let raw: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM membership \
+                 WHERE user = type::record($uid) AND server = type::record($sid) \
+                 LIMIT 1",
+            )
+            .bind(("uid", user_id.to_owned()))
+            .bind(("sid", server_id.to_owned()))
+            .await?,
+        0,
+    )?;
     raw.map(|_| ()).ok_or(AppError::Forbidden)
 }
 
 async fn require_owner(state: &AppState, user_id: &str, server_id: &str) -> Result<()> {
-    let raw: Option<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM type::thing($id) LIMIT 1")
-        .bind(("id", server_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    let server: Server = raw
-        .map(|v| serde_json::from_value::<Server>(v).map_err(|e| AppError::Internal(e.to_string())))
-        .transpose()?
-        .ok_or(AppError::NotFound)?;
+    let server: Server = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM type::record($id) LIMIT 1")
+            .bind(("id", server_id.to_owned()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)?;
     if server.owner != user_id {
         return Err(AppError::Forbidden);
     }
@@ -373,21 +392,18 @@ pub async fn get_membership(
     user_id: &str,
     server_id: &str,
 ) -> Result<Membership> {
-    let raw: Option<serde_json::Value> = state
-        .db
-        .query(
-            "SELECT * FROM membership \
-             WHERE user = type::thing($uid) AND server = type::thing($sid) \
-             LIMIT 1",
-        )
-        .bind(("uid", user_id.to_owned()))
-        .bind(("sid", server_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    raw.map(|v| {
-        serde_json::from_value::<Membership>(v).map_err(|e| AppError::Internal(e.to_string()))
-    })
-    .transpose()?
+    take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM membership \
+                 WHERE user = type::record($uid) AND server = type::record($sid) \
+                 LIMIT 1",
+            )
+            .bind(("uid", user_id.to_owned()))
+            .bind(("sid", server_id.to_owned()))
+            .await?,
+        0,
+    )?
     .ok_or(AppError::Forbidden)
 }

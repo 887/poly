@@ -16,7 +16,6 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
-use chrono::Utc;
 use serde::Serialize;
 use tokio::io::AsyncWriteExt as _;
 use uuid::Uuid;
@@ -24,6 +23,7 @@ use uuid::Uuid;
 use crate::{
     AppState,
     auth::AuthUser,
+    db_ext::take_one,
     error::{AppError, Result},
     models::Attachment,
 };
@@ -102,37 +102,29 @@ async fn upload(
         .map_err(|e| AppError::Internal(format!("write file: {e}")))?;
 
     // Record in DB — `message` is NONE until the message is sent.
-    let raw: Vec<serde_json::Value> = state
-        .db
-        .query(
-            "CREATE attachment CONTENT { \
-              uploaded_by: type::thing($uid), \
-              message: NONE, \
-              filename: $fn, \
-              storage_name: $sn, \
-              mime_type: $mt, \
-              size_bytes: $sz, \
-              created_at: $now \
-            } RETURN *",
-        )
-        .bind(("uid", auth.user_id.clone()))
-        .bind(("fn", filename.clone()))
-        .bind(("sn", storage_name))
-        .bind(("mt", content_type.clone()))
-        .bind(("sz", size_bytes))
-        .bind(("now", Utc::now()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-
-    let att: Attachment = raw
-        .into_iter()
-        .next()
-        .map(|v| {
-            serde_json::from_value::<Attachment>(v).map_err(|e| AppError::Internal(e.to_string()))
-        })
-        .transpose()?
-        .ok_or_else(|| AppError::Internal("no record".into()))?;
+    let att: Attachment = take_one(
+        &mut state
+            .db
+            .query(
+                "CREATE attachment CONTENT { \
+                  uploaded_by: type::record($uid), \
+                  message: NONE, \
+                  filename: $fn, \
+                  storage_name: $sn, \
+                  mime_type: $mt, \
+                  size_bytes: $sz, \
+                  created_at: time::now() \
+                } RETURN *",
+            )
+            .bind(("uid", auth.user_id.clone()))
+            .bind(("fn", filename.clone()))
+            .bind(("sn", storage_name))
+            .bind(("mt", content_type.clone()))
+            .bind(("sz", size_bytes))
+            .await?,
+        0,
+    )?
+    .ok_or_else(|| AppError::Internal("no record".into()))?;
     let id = att.id.clone().unwrap_or_default();
 
     Ok((
@@ -153,32 +145,29 @@ async fn serve(
     Extension(auth): Extension<AuthUser>,
     Path(att_id): Path<String>,
 ) -> Result<Response<Body>> {
-    let raw: Option<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM type::thing($id) LIMIT 1")
-        .bind(("id", att_id))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    let att: Attachment = raw
-        .map(|v| {
-            serde_json::from_value::<Attachment>(v).map_err(|e| AppError::Internal(e.to_string()))
-        })
-        .transpose()?
-        .ok_or(AppError::NotFound)?;
+    let att: Attachment = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM type::record($id) LIMIT 1")
+            .bind(("id", att_id))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)?;
 
     // Access control: either the uploader, or a user who can read the linked channel.
     let can_access = att.uploaded_by == auth.user_id
         || match &att.message {
             Some(msg_id) => {
                 // Look up the channel for the message.
-                let ch_raw: Option<serde_json::Value> = state
-                    .db
-                    .query("SELECT channel FROM type::thing($id) LIMIT 1")
-                    .bind(("id", msg_id.clone()))
-                    .await?
-                    .take(0)
-                    .map_err(AppError::Db)?;
+                let ch_raw: Option<serde_json::Value> = take_one(
+                    &mut state
+                        .db
+                        .query("SELECT channel FROM type::record($id) LIMIT 1")
+                        .bind(("id", msg_id.clone()))
+                        .await?,
+                    0,
+                )?;
                 if let Some(ch_val) = ch_raw {
                     if let Some(ch_id) = ch_val.get("channel").and_then(|v| v.as_str()) {
                         can_read_channel(&state, ch_id, &auth.user_id).await?
@@ -221,28 +210,30 @@ async fn serve(
 
 async fn can_read_channel(state: &AppState, channel_id: &str, user_id: &str) -> Result<bool> {
     // Participant check first.
-    let part: Option<serde_json::Value> = state
-        .db
-        .query(
-            "SELECT * FROM participant WHERE \
-             channel = type::thing($ch) AND user = type::thing($uid) LIMIT 1",
-        )
-        .bind(("ch", channel_id.to_owned()))
-        .bind(("uid", user_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let part: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM participant WHERE \
+                 channel = type::record($ch) AND user = type::record($uid) LIMIT 1",
+            )
+            .bind(("ch", channel_id.to_owned()))
+            .bind(("uid", user_id.to_owned()))
+            .await?,
+        0,
+    )?;
     if part.is_some() {
         return Ok(true);
     }
     // Server membership.
-    let ch_raw: Option<serde_json::Value> = state
-        .db
-        .query("SELECT server FROM type::thing($ch) LIMIT 1")
-        .bind(("ch", channel_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let ch_raw: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query("SELECT server FROM type::record($ch) LIMIT 1")
+            .bind(("ch", channel_id.to_owned()))
+            .await?,
+        0,
+    )?;
     let Some(server_id) = ch_raw
         .as_ref()
         .and_then(|v| v.get("server"))
@@ -251,16 +242,17 @@ async fn can_read_channel(state: &AppState, channel_id: &str, user_id: &str) -> 
     else {
         return Ok(false);
     };
-    let member: Option<serde_json::Value> = state
-        .db
-        .query(
-            "SELECT * FROM membership WHERE \
-             server = type::thing($sid) AND user = type::thing($uid) LIMIT 1",
-        )
-        .bind(("sid", server_id))
-        .bind(("uid", user_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let member: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM membership WHERE \
+                 server = type::record($sid) AND user = type::record($uid) LIMIT 1",
+            )
+            .bind(("sid", server_id))
+            .bind(("uid", user_id.to_owned()))
+            .await?,
+        0,
+    )?;
     Ok(member.is_some())
 }

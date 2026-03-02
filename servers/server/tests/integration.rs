@@ -319,7 +319,7 @@ async fn test_device_management() {
         assert_eq!(r.status().as_u16(), 200);
     }
 
-    // List devices — should see 2.
+    // List devices — should see 3 (signup + 2 signins).
     let devices: Value = srv
         .client
         .get(srv.url("/auth/devices"))
@@ -331,7 +331,7 @@ async fn test_device_management() {
         .await
         .expect("devices json");
     let arr = devices.as_array().expect("array");
-    assert_eq!(arr.len(), 2);
+    assert_eq!(arr.len(), 3);
 
     // Revoke device 2 from device 1.
     let device2_id = arr
@@ -664,9 +664,8 @@ async fn test_file_upload_and_access() {
     // Invite Heidi.
     let invite: Value = srv
         .client
-        .post(srv.url(&format!("/servers/{sid}/invites")))
+        .post(srv.url(&format!("/servers/{sid}/invite")))
         .header("Authorization", &grace_hdr)
-        .json(&json!({ "max_uses": null, "expires_in_secs": null }))
         .send()
         .await
         .expect("invite")
@@ -675,7 +674,7 @@ async fn test_file_upload_and_access() {
         .expect("invite json");
     let code = invite["code"].as_str().expect("code");
     srv.client
-        .post(srv.url(&format!("/invites/{code}/use")))
+        .post(srv.url(&format!("/servers/join/{code}")))
         .header("Authorization", &heidi_hdr)
         .send()
         .await

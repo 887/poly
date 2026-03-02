@@ -92,13 +92,14 @@ pub async fn auth_middleware(
 
     // Check that the device has not been revoked.
     let device_id = claims.device_id.clone();
-    let revoked: Option<serde_json::Value> = state
-        .db
-        .query("SELECT revoked FROM type::thing($id)")
-        .bind(("id", device_id))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let revoked: Option<serde_json::Value> = crate::db_ext::take_one(
+        &mut state
+            .db
+            .query("SELECT revoked FROM type::record($id)")
+            .bind(("id", device_id))
+            .await?,
+        0,
+    )?;
 
     let is_revoked = revoked
         .as_ref()

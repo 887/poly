@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AppState,
     auth::AuthUser,
+    db_ext::{take_many, take_one},
     error::{AppError, Result},
     models::{Attachment, Message, Reaction},
     ws::events::{MessagePayload, ServerEvent},
@@ -84,34 +85,35 @@ async fn list_messages(
     require_readable_channel(&state, &channel_id, &auth.user_id).await?;
     let limit: u8 = q.limit.unwrap_or(50).min(100);
 
-    let raw: Vec<serde_json::Value> = match &q.before {
-        Some(cursor) => state
-            .db
-            .query(
-                "SELECT * FROM message \
-                     WHERE channel = type::thing($ch) AND id < type::thing($cursor) \
-                     ORDER BY id DESC LIMIT $lim",
-            )
-            .bind(("ch", channel_id.clone()))
-            .bind(("cursor", cursor.clone()))
-            .bind(("lim", limit))
-            .await?
-            .take(0)
-            .map_err(AppError::Db)?,
-        None => state
-            .db
-            .query(
-                "SELECT * FROM message WHERE channel = type::thing($ch) \
-                     ORDER BY id DESC LIMIT $lim",
-            )
-            .bind(("ch", channel_id.clone()))
-            .bind(("lim", limit))
-            .await?
-            .take(0)
-            .map_err(AppError::Db)?,
+    let messages: Vec<Message> = match &q.before {
+        Some(cursor) => take_many(
+            &mut state
+                .db
+                .query(
+                    "SELECT * FROM message \
+                         WHERE channel = type::record($ch) AND id < type::record($cursor) \
+                         ORDER BY id DESC LIMIT $lim",
+                )
+                .bind(("ch", channel_id.clone()))
+                .bind(("cursor", cursor.clone()))
+                .bind(("lim", limit))
+                .await?,
+            0,
+        )?,
+        None => take_many(
+            &mut state
+                .db
+                .query(
+                    "SELECT * FROM message WHERE channel = type::record($ch) \
+                         ORDER BY id DESC LIMIT $lim",
+                )
+                .bind(("ch", channel_id.clone()))
+                .bind(("lim", limit))
+                .await?,
+            0,
+        )?,
     };
 
-    let messages = from_values::<Message>(raw)?;
     let mut responses = Vec::with_capacity(messages.len());
     for msg in messages {
         responses.push(message_to_response(&state, msg).await?);
@@ -132,40 +134,31 @@ async fn create_message(
         ));
     }
 
-    let now = Utc::now();
-    let raw: Vec<serde_json::Value> = state
-        .db
-        .query(
-            "CREATE message CONTENT { \
-              channel: type::thing($ch), \
-              author: type::thing($author), \
-              content: $content, \
-              reply_to: $reply_to, \
-              edited_at: NONE, \
-              deleted: false, \
-              created_at: $now \
-            } RETURN *",
-        )
-        .bind(("ch", channel_id.clone()))
-        .bind(("author", auth.user_id.clone()))
-        .bind(("content", req.content.trim().to_owned()))
-        .bind((
-            "reply_to",
-            req.reply_to.as_ref().map(|r| format!("message:{r}")),
-        ))
-        .bind(("now", now))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-
-    let msg: Message = raw
-        .into_iter()
-        .next()
-        .map(|v| {
-            serde_json::from_value::<Message>(v).map_err(|e| AppError::Internal(e.to_string()))
-        })
-        .transpose()?
-        .ok_or_else(|| AppError::Internal("no record".into()))?;
+    let msg: Message = take_one(
+        &mut state
+            .db
+            .query(
+                "CREATE message CONTENT { \
+                  channel: type::record($ch), \
+                  author: type::record($author), \
+                  content: $content, \
+                  reply_to: $reply_to, \
+                  edited_at: NONE, \
+                  deleted: false, \
+                  created_at: time::now() \
+                } RETURN *",
+            )
+            .bind(("ch", channel_id.clone()))
+            .bind(("author", auth.user_id.clone()))
+            .bind(("content", req.content.trim().to_owned()))
+            .bind((
+                "reply_to",
+                req.reply_to.as_ref().map(|r| format!("message:{r}")),
+            ))
+            .await?,
+        0,
+    )?
+    .ok_or_else(|| AppError::Internal("no record".into()))?;
     let msg_id = msg
         .id
         .clone()
@@ -176,7 +169,7 @@ async fn create_message(
         for att_id in attachment_ids {
             state
                 .db
-                .query("UPDATE type::thing($id) SET message = type::thing($mid)")
+                .query("UPDATE type::record($id) SET message = type::record($mid)")
                 .bind(("id", att_id.clone()))
                 .bind(("mid", msg_id.clone()))
                 .await?
@@ -215,22 +208,16 @@ async fn edit_message(
         return Err(AppError::BadRequest("cannot edit a deleted message".into()));
     }
     let channel_id = msg.channel.clone();
-    let now = Utc::now();
-    let raw: Option<serde_json::Value> = state
-        .db
-        .query("UPDATE type::thing($id) SET content = $c, edited_at = $now RETURN *")
-        .bind(("id", msg_id.clone()))
-        .bind(("c", req.content.trim().to_owned()))
-        .bind(("now", now))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    let updated: Message = raw
-        .map(|v| {
-            serde_json::from_value::<Message>(v).map_err(|e| AppError::Internal(e.to_string()))
-        })
-        .transpose()?
-        .ok_or(AppError::NotFound)?;
+    let updated: Message = take_one(
+        &mut state
+            .db
+            .query("UPDATE type::record($id) SET content = $c, edited_at = time::now() RETURN *")
+            .bind(("id", msg_id.clone()))
+            .bind(("c", req.content.trim().to_owned()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)?;
     let resp = message_to_response(&state, updated).await?;
     let payload = MessagePayload {
         id: msg_id,
@@ -263,7 +250,7 @@ async fn delete_message(
     }
     state
         .db
-        .query("UPDATE type::thing($id) SET deleted = true, content = '[deleted]'")
+        .query("UPDATE type::record($id) SET deleted = true, content = '[deleted]'")
         .bind(("id", msg_id.clone()))
         .await?
         .check()
@@ -293,10 +280,10 @@ async fn add_reaction(
     state
         .db
         .query(
-            "IF (SELECT count() FROM reaction WHERE message = type::thing($mid) \
-                AND user = type::thing($uid) AND emoji = $em GROUP ALL)[0].count == 0 { \
+            "IF (SELECT count() FROM reaction WHERE message = type::record($mid) \
+                AND user = type::record($uid) AND emoji = $em GROUP ALL)[0].count == 0 { \
               CREATE reaction CONTENT { \
-                message: type::thing($mid), user: type::thing($uid), emoji: $em \
+                message: type::record($mid), user: type::record($uid), emoji: $em \
               } \
             }",
         )
@@ -330,8 +317,8 @@ async fn remove_reaction(
     state
         .db
         .query(
-            "DELETE reaction WHERE message = type::thing($mid) \
-             AND user = type::thing($uid) AND emoji = $em",
+            "DELETE reaction WHERE message = type::record($mid) \
+             AND user = type::record($uid) AND emoji = $em",
         )
         .bind(("mid", msg_id.clone()))
         .bind(("uid", auth.user_id.clone()))
@@ -361,13 +348,14 @@ async fn list_reactions(
     let msg = get_message_or_404(&state, &msg_id).await?;
     let channel_id = msg.channel.clone();
     require_readable_channel(&state, &channel_id, &auth.user_id).await?;
-    let reactions: Vec<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM reaction WHERE message = type::thing($mid)")
-        .bind(("mid", msg_id))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let reactions: Vec<serde_json::Value> = take_many(
+        &mut state
+            .db
+            .query("SELECT * FROM reaction WHERE message = type::record($mid)")
+            .bind(("mid", msg_id))
+            .await?,
+        0,
+    )?;
     Ok(Json(reactions))
 }
 
@@ -376,44 +364,47 @@ async fn list_reactions(
 /// Verify the requesting user may read this channel.
 async fn require_readable_channel(state: &AppState, channel_id: &str, user_id: &str) -> Result<()> {
     // Check participant record first (covers DMs, groups and server channels with explicit participants).
-    let part: Option<serde_json::Value> = state
-        .db
-        .query(
-            "SELECT * FROM participant WHERE \
-             channel = type::thing($ch) AND user = type::thing($uid) LIMIT 1",
-        )
-        .bind(("ch", channel_id.to_owned()))
-        .bind(("uid", user_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let part: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query(
+                "SELECT * FROM participant WHERE \
+                 channel = type::record($ch) AND user = type::record($uid) LIMIT 1",
+            )
+            .bind(("ch", channel_id.to_owned()))
+            .bind(("uid", user_id.to_owned()))
+            .await?,
+        0,
+    )?;
     if part.is_some() {
         return Ok(());
     }
     // Server membership check.
-    let ch_raw: Option<serde_json::Value> = state
-        .db
-        .query("SELECT server FROM type::thing($ch) LIMIT 1")
-        .bind(("ch", channel_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let ch_raw: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query("SELECT server FROM type::record($ch) LIMIT 1")
+            .bind(("ch", channel_id.to_owned()))
+            .await?,
+        0,
+    )?;
     if let Some(server_id) = ch_raw
         .as_ref()
         .and_then(|ch_val| ch_val.get("server"))
         .and_then(|v| v.as_str())
     {
-        let member: Option<serde_json::Value> = state
-            .db
-            .query(
-                "SELECT * FROM membership WHERE \
-                 server = type::thing($sid) AND user = type::thing($uid) LIMIT 1",
-            )
-            .bind(("sid", server_id.to_owned()))
-            .bind(("uid", user_id.to_owned()))
-            .await?
-            .take(0)
-            .map_err(AppError::Db)?;
+        let member: Option<serde_json::Value> = take_one(
+            &mut state
+                .db
+                .query(
+                    "SELECT * FROM membership WHERE \
+                     server = type::record($sid) AND user = type::record($uid) LIMIT 1",
+                )
+                .bind(("sid", server_id.to_owned()))
+                .bind(("uid", user_id.to_owned()))
+                .await?,
+            0,
+        )?;
         if member.is_some() {
             return Ok(());
         }
@@ -426,13 +417,14 @@ async fn is_server_owner_for_channel(
     channel_id: &str,
     user_id: &str,
 ) -> Result<bool> {
-    let ch_raw: Option<serde_json::Value> = state
-        .db
-        .query("SELECT server FROM type::thing($ch) LIMIT 1")
-        .bind(("ch", channel_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let ch_raw: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query("SELECT server FROM type::record($ch) LIMIT 1")
+            .bind(("ch", channel_id.to_owned()))
+            .await?,
+        0,
+    )?;
     let Some(server_id) = ch_raw
         .as_ref()
         .and_then(|v| v.get("server"))
@@ -441,28 +433,28 @@ async fn is_server_owner_for_channel(
     else {
         return Ok(false);
     };
-    let owner: Option<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM type::thing($sid) WHERE owner = type::thing($uid) LIMIT 1")
-        .bind(("sid", server_id))
-        .bind(("uid", user_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
+    let owner: Option<serde_json::Value> = take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM type::record($sid) WHERE owner = type::record($uid) LIMIT 1")
+            .bind(("sid", server_id))
+            .bind(("uid", user_id.to_owned()))
+            .await?,
+        0,
+    )?;
     Ok(owner.is_some())
 }
 
 async fn get_message_or_404(state: &AppState, msg_id: &str) -> Result<Message> {
-    let raw: Option<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM type::thing($id) LIMIT 1")
-        .bind(("id", msg_id.to_owned()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    raw.map(|v| serde_json::from_value::<Message>(v).map_err(|e| AppError::Internal(e.to_string())))
-        .transpose()?
-        .ok_or(AppError::NotFound)
+    take_one(
+        &mut state
+            .db
+            .query("SELECT * FROM type::record($id) LIMIT 1")
+            .bind(("id", msg_id.to_owned()))
+            .await?,
+        0,
+    )?
+    .ok_or(AppError::NotFound)
 }
 
 async fn message_to_response(state: &AppState, msg: Message) -> Result<MessageResponse> {
@@ -474,14 +466,14 @@ async fn message_to_response(state: &AppState, msg: Message) -> Result<MessageRe
     };
 
     // Fetch attachments for this message.
-    let att_raw: Vec<serde_json::Value> = state
-        .db
-        .query("SELECT * FROM attachment WHERE message = type::thing($mid)")
-        .bind(("mid", id.clone()))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-    let attachments: Vec<Attachment> = from_values(att_raw)?;
+    let attachments: Vec<Attachment> = take_many(
+        &mut state
+            .db
+            .query("SELECT * FROM attachment WHERE message = type::record($mid)")
+            .bind(("mid", id.clone()))
+            .await?,
+        0,
+    )?;
     let attachment_refs = attachments
         .into_iter()
         .map(|a| AttachmentRef {
@@ -507,26 +499,53 @@ async fn message_to_response(state: &AppState, msg: Message) -> Result<MessageRe
 
 /// Gather all channel members and push a WS event to each.
 async fn broadcast_to_channel(state: &AppState, channel_id: &str, event: ServerEvent) {
+    use crate::db_ext::record_id_to_string;
+
     // Collect member user IDs from server memberships and participants.
     let server_members: Vec<String> = state
         .db
         .query(
-            "SELECT user FROM membership WHERE server = \
-             (SELECT server FROM type::thing($ch) LIMIT 1)[0].server",
+            "SELECT VALUE user FROM membership WHERE server = \
+             (SELECT server FROM type::record($ch) LIMIT 1)[0].server",
         )
         .bind(("ch", channel_id.to_owned()))
         .await
         .ok()
-        .and_then(|mut r| r.take::<Vec<String>>("user").ok())
+        .map(|mut r| {
+            // user values are Record IDs — extract them via native Value
+            use surrealdb::types::Value;
+            let vals: Vec<Value> = r.take(0).unwrap_or_default();
+            vals.into_iter()
+                .filter_map(|v| {
+                    if let Value::RecordId(rid) = v {
+                        Some(record_id_to_string(&rid))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     let participants: Vec<String> = state
         .db
-        .query("SELECT user FROM participant WHERE channel = type::thing($ch)")
+        .query("SELECT VALUE user FROM participant WHERE channel = type::record($ch)")
         .bind(("ch", channel_id.to_owned()))
         .await
         .ok()
-        .and_then(|mut r| r.take::<Vec<String>>("user").ok())
+        .map(|mut r| {
+            use surrealdb::types::Value;
+            let vals: Vec<Value> = r.take(0).unwrap_or_default();
+            vals.into_iter()
+                .filter_map(|v| {
+                    if let Value::RecordId(rid) = v {
+                        Some(record_id_to_string(&rid))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     let user_ids: Vec<String> = {
@@ -538,13 +557,6 @@ async fn broadcast_to_channel(state: &AppState, channel_id: &str, event: ServerE
     };
 
     state.ws.broadcast_to_users(&user_ids, event).await;
-}
-
-/// Deserialise a `Vec<serde_json::Value>` into `Vec<T>`.
-fn from_values<T: serde::de::DeserializeOwned>(raw: Vec<serde_json::Value>) -> Result<Vec<T>> {
-    raw.into_iter()
-        .map(|v| serde_json::from_value::<T>(v).map_err(|e| AppError::Internal(e.to_string())))
-        .collect()
 }
 
 // Ensure Reaction is used (avoids unused-import lints).
