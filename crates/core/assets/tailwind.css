@@ -118,7 +118,8 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
-    position: relative; /* for nav-bar-top absolute positioning */
+    position: relative;
+    /* for nav-bar-top absolute positioning */
 }
 
 /* ===========================
@@ -146,7 +147,8 @@ body {
 
 .voice-banner-avatars {
     display: flex;
-    gap: -4px; /* negative to overlap */
+    gap: -4px;
+    /* negative to overlap */
 }
 
 .voice-banner-avatar {
@@ -2055,8 +2057,15 @@ select {
 }
 
 @keyframes speaking-pulse {
-    0%, 100% { box-shadow: 0 0 0 3px var(--status-speaking, #43b581), 0 0 12px rgba(67, 181, 129, 0.4); }
-    50% { box-shadow: 0 0 0 5px var(--status-speaking, #43b581), 0 0 20px rgba(67, 181, 129, 0.6); }
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 3px var(--status-speaking, #43b581), 0 0 12px rgba(67, 181, 129, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 0 5px var(--status-speaking, #43b581), 0 0 20px rgba(67, 181, 129, 0.6);
+    }
 }
 
 .voice-tile-name {
@@ -2187,8 +2196,15 @@ select {
 }
 
 @keyframes pulse-dot {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 .voice-bar-channel {
@@ -3314,12 +3330,12 @@ select {
     transition: transform 0.2s, background 0.2s;
 }
 
-.toggle-switch input:checked + .toggle-slider {
+.toggle-switch input:checked+.toggle-slider {
     background: var(--accent-primary);
     border-color: var(--accent-primary);
 }
 
-.toggle-switch input:checked + .toggle-slider::before {
+.toggle-switch input:checked+.toggle-slider::before {
     transform: translateX(18px);
     background: #fff;
 }
