@@ -1,7 +1,7 @@
 # Poly — Routing & Notification Overhaul Plan
 
 > Created: 2026-03-03  
-> Status: In Progress
+> Status: **COMPLETE** ✅
 
 ---
 
@@ -254,17 +254,17 @@ Stored at key `notif:{account_id}` in SurrealKV.
 ## Work Order (Checklist)
 
 - [x] Write this plan
-- [ ] **Phase B**: Update `NavigationState`, remove dead nav history code
-- [ ] **Phase A**: Rewrite `Route` enum + `sync_route_to_app_state`  
-- [ ] **Phase A**: Update `on_update` root redirect logic  
-- [ ] **Phase C**: Update all `navigator().push()` callsites with backend + account_id  
-- [ ] **Phase E**: Add `AccountNotificationSettings` to storage  
-- [ ] **Phase E**: Update notifications settings UI to per-account  
-- [ ] **Phase F**: Update server sidebar navigator calls  
-- [ ] Full build verification: `cargo check --workspace`
-- [ ] WASM check: `cargo check -p poly-web --target wasm32-unknown-unknown`
-- [ ] `cargo cranky -p poly-core`
-- [ ] `cargo fmt --all`
+- [x] **Phase B**: Update `NavigationState`, remove dead nav history code
+- [x] **Phase A**: Rewrite `Route` enum + `sync_route_to_app_state`  
+- [x] **Phase A**: Update `on_update` root redirect logic  
+- [x] **Phase C**: Update all `navigator().push()` callsites with backend + account_id  
+- [x] **Phase E**: Add `AccountNotificationSettings` to storage  
+- [x] **Phase E**: Update notifications settings UI to per-account  
+- [x] **Phase F**: Update server sidebar navigator calls  
+- [x] Full build verification: `cargo check --workspace`
+- [x] WASM check: `cargo check -p poly-web --target wasm32-unknown-unknown`
+- [x] `cargo cranky --workspace`
+- [x] `cargo fmt --all`
 
 ---
 

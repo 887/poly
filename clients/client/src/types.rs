@@ -29,6 +29,35 @@ impl BackendType {
             Self::Demo => "Demo",
         }
     }
+
+    /// URL path segment used to identify this backend in routes.
+    ///
+    /// These slugs appear in every account-scoped URL:
+    /// `/:backend/:account_id/dms`, `/:backend/:account_id/channels/…`, etc.
+    pub fn slug(&self) -> &'static str {
+        match self {
+            Self::Stoat => "stoat",
+            Self::Matrix => "matrix",
+            Self::Discord => "discord",
+            Self::Teams => "teams",
+            Self::Demo => "demo",
+        }
+    }
+
+    /// Parse a backend slug from a URL path segment.
+    ///
+    /// Returns `None` for unrecognised slugs so the router can redirect to a
+    /// 404 / root rather than panicking.
+    pub fn from_slug(s: &str) -> Option<Self> {
+        match s {
+            "stoat" => Some(Self::Stoat),
+            "matrix" => Some(Self::Matrix),
+            "discord" => Some(Self::Discord),
+            "teams" => Some(Self::Teams),
+            "demo" => Some(Self::Demo),
+            _ => None,
+        }
+    }
 }
 
 /// Authentication credentials for logging in to a backend.
@@ -313,7 +342,7 @@ pub struct VoiceParticipant {
 }
 
 /// The local user's voice connection state.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoiceConnection {
     /// Channel ID we are connected to.
     pub channel_id: String,
@@ -323,6 +352,10 @@ pub struct VoiceConnection {
     pub channel_name: String,
     /// Display name of the server.
     pub server_name: String,
+    /// Which backend this voice connection belongs to (for routing).
+    pub backend: BackendType,
+    /// Account ID that owns this voice connection (for routing).
+    pub account_id: String,
     /// Whether our microphone is muted.
     pub is_muted: bool,
     /// Whether we are deafened (all audio muted).

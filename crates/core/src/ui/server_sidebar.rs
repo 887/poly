@@ -68,8 +68,19 @@ pub fn ServerSidebar() -> Element {
                     chat_data.write().channels.clear();
                     chat_data.write().messages.clear();
                     chat_data.write().members.clear();
-                    // Navigate via router
-                    navigator().push(Route::DmsHome);
+                    // Navigate to the currently active account's DMs.
+                    // Fall back to demo if no active account is recorded yet.
+                    let (backend_slug, account_id) = {
+                        let nav = &app_state.read().nav;
+                        match (nav.active_backend, nav.active_account_id.clone()) {
+                            (Some(b), Some(id)) => (b.slug().to_string(), id),
+                            _ if client_manager.read().demo_active => {
+                                ("demo".to_string(), "demo".to_string())
+                            }
+                            _ => ("demo".to_string(), "demo".to_string()),
+                        }
+                    };
+                    navigator().push(Route::DmsHome { backend: backend_slug, account_id });
                 },
                 title: "{t(\"nav-dms\")}",
                 div { class: "icon-dms", "💬" }
@@ -113,6 +124,8 @@ pub fn ServerSidebar() -> Element {
                     let badge = backend_badge(&server.backend);
                     let backend_name = server.backend.display_name();
                     let account_name = server.account_display_name.clone();
+                    let server_backend_slug = server.backend.slug().to_string();
+                    let server_account_id = server.account_id.clone();
                     let unread = server.unread_count;
                     let is_selected = app_state.read().nav.selected_server.as_deref()
                         == Some(&server_id);
@@ -128,6 +141,8 @@ pub fn ServerSidebar() -> Element {
                             class: if is_selected { "server-icon active" } else { "server-icon" },
                             onclick: {
                                 let server_id_click = server_id.clone();
+                                let backend_click = server_backend_slug.clone();
+                                let account_id_click = server_account_id.clone();
                                 move |_| {
                                     app_state.write().nav.selected_server = Some(server_id_click.clone());
                                     app_state.write().nav.selected_channel = None;
@@ -138,11 +153,13 @@ pub fn ServerSidebar() -> Element {
                                     });
                                     navigator()
                                         .push(Route::ServerHome {
+                                            backend: backend_click.clone(),
+                                            account_id: account_id_click.clone(),
                                             server_id: server_id_click.clone(),
-                                        }); // Unread badge
+                                        });
                                 }
                             },
-                            title: "{tooltip}", // Source badge (backend type)
+                            title: "{tooltip}",
                             div { class: "server-icon-letter", style: "background-color: {icon_color};", "{first_letter}" }
                             // Source badge (backend type)
                             span { class: "source-badge", "{badge}" }

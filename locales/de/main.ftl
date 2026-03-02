@@ -252,6 +252,10 @@ voice-echo-cancel = Echounterdrückung
 # Notifications settings
 notif-enable-desktop = Desktop-Benachrichtigungen aktivieren
 notif-permission-request = Benachrichtigungen erlauben
+notif-global-header = Global (Gerät)
+notif-notify-about = Benachrichtige mich über
+notif-sounds = Töne
+notif-badges = Abzeichen
 notif-streams = Bekannte starten einen Stream
 notif-friends-voice = Freunde treten Sprachkanälen bei
 notif-reactions = Jemand reagiert auf meine Nachrichten
@@ -259,6 +263,7 @@ notif-sounds-new-message = Neue Nachricht
 notif-sounds-dm = Direktnachrichten
 notif-sounds-ring = Eingehender Anruf
 notif-badge-unread = Ungelesene-Nachrichten-Badge aktivieren
+notif-no-accounts = Keine Konten aktiv. Konto unter Einstellungen → Konten hinzufügen.
 
 # DM list
 dm-search-placeholder = Gespräch suchen oder starten

@@ -81,12 +81,17 @@ pub struct AppSettings {
     pub theme: String,
 }
 
-/// Notification preferences.
+/// Global notification preferences — device-level settings only.
 ///
-/// Persisted under the key `"notification_settings"`.
+/// Persisted under the key `"notification_settings"` (for backwards compat).
+/// Per-account preferences are stored separately in [`AccountNotificationSettings`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationSettings {
     /// Desktop notification permission granted & enabled.
+    ///
+    /// This is device-level — it requires OS/browser permission and applies
+    /// regardless of which account is active. Per-account event preferences
+    /// live in [`AccountNotificationSettings`].
     pub desktop_enabled: bool,
     /// Notify when people I know start streaming.
     pub notify_streams: bool,
@@ -102,6 +107,42 @@ pub struct NotificationSettings {
     pub sound_ring: bool,
     /// Show unread badge.
     pub badge_unread: bool,
+}
+
+/// Per-account notification preferences.
+///
+/// Keyed by `account_id` — stored under `"notif:{account_id}"`.
+/// Does NOT include `desktop_enabled` (device-level, kept in [`NotificationSettings`]).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountNotificationSettings {
+    /// Notify when people I know start streaming.
+    pub notify_streams: bool,
+    /// Notify when friends join voice channels.
+    pub notify_friends_voice: bool,
+    /// Notify when someone reacts to my messages.
+    pub notify_reactions: bool,
+    /// Play sound on new messages.
+    pub sound_new_message: bool,
+    /// Play sound on DMs.
+    pub sound_dm: bool,
+    /// Play sound on incoming ring.
+    pub sound_ring: bool,
+    /// Show unread badge.
+    pub badge_unread: bool,
+}
+
+impl Default for AccountNotificationSettings {
+    fn default() -> Self {
+        Self {
+            notify_streams: true,
+            notify_friends_voice: true,
+            notify_reactions: true,
+            sound_new_message: true,
+            sound_dm: true,
+            sound_ring: true,
+            badge_unread: true,
+        }
+    }
 }
 
 impl Default for NotificationSettings {
@@ -300,10 +341,8 @@ impl Storage {
 
     // ── Typed access — NotificationSettings ───────────────────────────────────
 
-    /// Read notification settings, returning defaults if not yet set.
-    pub async fn get_notification_settings(
-        &self,
-    ) -> Result<NotificationSettings, StorageError> {
+    /// Read the global (device-level) notification settings, returning defaults if not yet set.
+    pub async fn get_notification_settings(&self) -> Result<NotificationSettings, StorageError> {
         Ok(self
             .get("notification_settings")
             .await?
@@ -311,16 +350,42 @@ impl Storage {
             .unwrap_or_default())
     }
 
-    /// Persist notification settings.
+    /// Persist the global (device-level) notification settings.
     pub async fn set_notification_settings(
         &self,
         settings: &NotificationSettings,
     ) -> Result<(), StorageError> {
-        self.set(
-            "notification_settings",
-            serde_json::to_value(settings)?,
-        )
-        .await
+        self.set("notification_settings", serde_json::to_value(settings)?)
+            .await
+    }
+
+    // ── Typed access — AccountNotificationSettings ────────────────────────────
+
+    /// Read per-account notification settings for `account_id`.
+    ///
+    /// Storage key: `"notif:{account_id}"`. Returns defaults if not yet saved.
+    pub async fn get_account_notification_settings(
+        &self,
+        account_id: &str,
+    ) -> Result<AccountNotificationSettings, StorageError> {
+        let key = format!("notif:{account_id}");
+        Ok(self
+            .get(&key)
+            .await?
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Persist per-account notification settings for `account_id`.
+    ///
+    /// Storage key: `"notif:{account_id}"`.
+    pub async fn set_account_notification_settings(
+        &self,
+        account_id: &str,
+        settings: &AccountNotificationSettings,
+    ) -> Result<(), StorageError> {
+        let key = format!("notif:{account_id}");
+        self.set(&key, serde_json::to_value(settings)?).await
     }
 
     // ── Typed access — VoiceSettings ──────────────────────────────────────────
@@ -335,10 +400,7 @@ impl Storage {
     }
 
     /// Persist voice/video settings.
-    pub async fn set_voice_settings(
-        &self,
-        settings: &VoiceSettings,
-    ) -> Result<(), StorageError> {
+    pub async fn set_voice_settings(&self, settings: &VoiceSettings) -> Result<(), StorageError> {
         self.set("voice_settings", serde_json::to_value(settings)?)
             .await
     }

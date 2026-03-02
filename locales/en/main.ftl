@@ -252,6 +252,10 @@ voice-echo-cancel = Echo Cancellation
 # Notifications settings
 notif-enable-desktop = Enable Desktop Notifications
 notif-permission-request = Allow Notifications
+notif-global-header = Global (Device)
+notif-notify-about = Notify me about
+notif-sounds = Sounds
+notif-badges = Badges
 notif-streams = People I know start streaming
 notif-friends-voice = Friends join voice channels
 notif-reactions = Someone reacts to my messages
@@ -259,6 +263,7 @@ notif-sounds-new-message = New Message
 notif-sounds-dm = Direct Messages
 notif-sounds-ring = Incoming Ring
 notif-badge-unread = Enable Unread Message Badge
+notif-no-accounts = No accounts are active. Add an account in Settings → Accounts.
 
 # DM list
 dm-search-placeholder = Find or start a conversation

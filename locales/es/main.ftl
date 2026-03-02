@@ -252,6 +252,10 @@ voice-echo-cancel = Cancelación de eco
 # Notifications settings
 notif-enable-desktop = Activar notificaciones de escritorio
 notif-permission-request = Permitir notificaciones
+notif-global-header = Global (Dispositivo)
+notif-notify-about = Notificarme sobre
+notif-sounds = Sonidos
+notif-badges = Insignias
 notif-streams = Personas que conozco empiezan a transmitir
 notif-friends-voice = Amigos se unen a canales de voz
 notif-reactions = Alguien reacciona a mis mensajes
@@ -259,6 +263,7 @@ notif-sounds-new-message = Mensaje nuevo
 notif-sounds-dm = Mensajes directos
 notif-sounds-ring = Llamada entrante
 notif-badge-unread = Activar insignia de mensajes no leídos
+notif-no-accounts = Sin cuentas activas. Agrega una cuenta en Ajustes → Cuentas.
 
 # DM list
 dm-search-placeholder = Encuentra o inicia una conversación

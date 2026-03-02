@@ -149,7 +149,11 @@ impl ClientBackend for DemoClient {
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         let users = data::demo_users();
         let channels = vec![
-            "ch-general", "ch-off-topic", "ch-rust", "ch-dioxus", "ch-minecraft",
+            "ch-general",
+            "ch-off-topic",
+            "ch-rust",
+            "ch-dioxus",
+            "ch-minecraft",
         ];
         let typing_messages = vec![
             "That's a great point!",
@@ -174,7 +178,10 @@ impl ClientBackend for DemoClient {
 
                 // Stagger timing: 4s, 6s, 8s, 5s, 7s cycle.
                 let delays = [4u64, 6, 8, 5, 7];
-                let delay_secs = delays.get((counter as usize) % delays.len()).copied().unwrap_or(5);
+                let delay_secs = delays
+                    .get((counter as usize) % delays.len())
+                    .copied()
+                    .unwrap_or(5);
                 tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
 
                 let user_idx = (counter as usize) % users.len();
@@ -215,7 +222,10 @@ impl ClientBackend for DemoClient {
                             PresenceStatus::Online,
                         ];
                         let s_idx = (counter as usize / 3) % statuses.len();
-                        let status = statuses.get(s_idx).cloned().unwrap_or(PresenceStatus::Online);
+                        let status = statuses
+                            .get(s_idx)
+                            .cloned()
+                            .unwrap_or(PresenceStatus::Online);
                         ClientEvent::PresenceChanged {
                             user_id: user.id.clone(),
                             status,

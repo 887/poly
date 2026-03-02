@@ -296,9 +296,15 @@ async fn join_voice_channel(
 
     // Get backend for this server
     let backend_info = client_manager.read().get_backend_for_server(&server_id);
-    let Some((_account_id, backend)) = backend_info else {
+    let Some((voice_account_id, backend)) = backend_info else {
         return;
     };
+
+    // Resolve the backend type from the current server for routing
+    let voice_backend = current_server
+        .as_ref()
+        .map(|s| s.backend)
+        .unwrap_or(poly_client::BackendType::Demo);
 
     // Fetch current participants from backend
     let mut participants = {
@@ -344,6 +350,8 @@ async fn join_voice_channel(
             .as_ref()
             .map(|s| s.name.clone())
             .unwrap_or_default(),
+        backend: voice_backend,
+        account_id: voice_account_id,
         is_muted: false,
         is_deafened: false,
         is_streaming: false,

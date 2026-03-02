@@ -1,24 +1,33 @@
-//! URL-based routing for Poly — Discord-style URL structure.
+//! URL-based routing for Poly — multi-account, multi-backend URL structure.
 //!
-//! Uses Dioxus Router for browser-history–aware navigation:
-//! - `/channels/@me` — DMs/Friends list
-//! - `/channels/@me/:channel_id` — DM conversation
-//! - `/channels/:server_id` — Server view (auto-selects first channel)
-//! - `/channels/:server_id/:channel_id` — Server channel view
-//! - `/friends` — Friends browser
-//! - `/notifications` — Notifications feed
-//! - `/settings` — Settings page
+//! Every account-scoped view encodes two pieces of identity in its URL:
+//! - `:backend` — one of `demo | stoat | matrix | discord | teams`
+//! - `:account_id` — the account key used in `ClientManager`
 //!
-//! On web the router integrates with browser history (back/forward buttons
-//! work out of the box). On desktop it uses memory-based history with our
-//! custom NavBar buttons calling `navigator().go_back()`/`go_forward()`.
+//! This lets Poly deep-link into any account and express per-backend visual
+//! variations. App-level views (`/notifications`, `/settings`) are not scoped
+//! to any account.
+//!
+//! # URL scheme
+//! ```text
+//! /                                                   → root redirect
+//! /:backend/:account_id/dms                           → DM home
+//! /:backend/:account_id/dms/:channel_id               → DM conversation
+//! /:backend/:account_id/friends                       → Friends list
+//! /:backend/:account_id/channels/:server_id           → Server home
+//! /:backend/:account_id/channels/:server_id/:channel_id → Server channel
+//! /notifications                                      → Aggregated feed
+//! /settings                                           → App settings
+//! ```
 //!
 //! # AppState bridge
-//! `on_update` callback syncs the current route into `AppState.nav` *before*
-//! any component re-renders, so existing components that read from AppState
-//! (ChannelList, ServerSidebar, …) continue to work unchanged.
-// DECISION(DX-ROUTER-1): Dioxus Router replaces manual View enum matching.
-// Browser back/forward works on web; desktop uses navigator() API.
+//! `on_update` syncs the current route into `AppState.nav` *before* any
+//! component re-renders so components reading from AppState continue to work.
+//!
+//! # Demo account
+//! The demo account always uses backend=`demo`, account_id=`demo`.
+// DECISION(DX-ROUTER-2): Multi-account routing replaces Discord-style single-account URLs.
+// Backend slug + account_id in URL enables per-backend rendering and deep linking.
 
 use super::account_bar::AccountBar;
 use super::account_switcher::AccountSwitcher;
@@ -34,108 +43,149 @@ use super::voice_view::VoiceChannelView;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
-use poly_client::ChannelType;
+use poly_client::{BackendType, ChannelType};
 
 // ── Route enum ──────────────────────────────────────────────────────────────
 
-/// Application routes — Discord-style URL structure.
+/// Application routes — multi-account, multi-backend URL structure.
 ///
-/// The Dioxus Router manages browser history (web) or memory-based history
-/// (desktop), enabling back/forward navigation across all platforms.
+/// Account-scoped routes carry `:backend` and `:account_id` URL segments so
+/// that:
+/// - Any URL can be deep-linked to the correct account
+/// - Backend-specific UI rendering can be keyed on `:backend`
+/// - Browser back/forward work correctly across account switches
+///
+/// See module-level docs for the full URL scheme.
 #[derive(Routable, Clone, PartialEq, Debug)]
 #[rustfmt::skip]
 pub enum Route {
     #[layout(MainLayout)]
-        // Root path — memory history starts here on desktop; immediately replaces
-        // with DmsHome so there is no flash and no back-stack entry added.
+
+        // Root redirect — memory history starts here on desktop; on_update
+        // replaces immediately with the best active account DMs route.
         #[route("/")]
         Root,
 
-        // ── DM views (shared ChannelList via DmsLayout) ─────────────
+        // ── Account-scoped: DMs ─────────────────────────────────────
         #[layout(DmsLayout)]
-            #[route("/channels/@me")]
-            DmsHome,
+            #[route("/:backend/:account_id/dms")]
+            DmsHome { backend: String, account_id: String },
 
-            #[route("/channels/@me/:channel_id")]
-            DmChat { channel_id: String },
+            #[route("/:backend/:account_id/dms/:channel_id")]
+            DmChat { backend: String, account_id: String, channel_id: String },
         #[end_layout]
 
-        // ── Server views (shared ChannelList via ServerLayout) ──────
+        // ── Account-scoped: Server channels ─────────────────────────
         #[layout(ServerLayout)]
-            #[route("/channels/:server_id/:channel_id")]
-            ServerChat { server_id: String, channel_id: String },
+            #[route("/:backend/:account_id/channels/:server_id/:channel_id")]
+            ServerChat {
+                backend: String,
+                account_id: String,
+                server_id: String,
+                channel_id: String,
+            },
 
-            #[route("/channels/:server_id")]
-            ServerHome { server_id: String },
+            #[route("/:backend/:account_id/channels/:server_id")]
+            ServerHome {
+                backend: String,
+                account_id: String,
+                server_id: String,
+            },
         #[end_layout]
 
-        // ── Standalone views ────────────────────────────────────────
-        #[route("/friends")]
-        FriendsRoute,
+        // ── Account-scoped: Friends ──────────────────────────────────
+        #[route("/:backend/:account_id/friends")]
+        FriendsRoute { backend: String, account_id: String },
 
+        // ── App-level (not account-scoped) ───────────────────────────
         #[route("/notifications")]
         NotificationsRoute,
 
         #[route("/settings")]
         SettingsRoute,
+
     #[end_layout]
 
-    // Catch-all → redirected to DmsHome by on_update callback
+    // Catch-all → redirected by on_update to the best active route
     #[route("/:..segments")]
     PageNotFound { segments: Vec<String> },
 }
 
 // ── Route → AppState sync ───────────────────────────────────────────────────
 
-/// Synchronize the current route into [`AppState::nav`] so that existing
-/// components (ChannelList, ServerSidebar, etc.) that read from AppState
-/// continue to work.
+/// Synchronize the current route into [`AppState::nav`] so existing components
+/// (ChannelList, ServerSidebar, …) that read AppState continue to work.
+///
+/// Also extracts the `:backend` slug into [`BackendType`] and writes it to
+/// `nav.active_backend`, and writes `:account_id` to `nav.active_account_id`.
 ///
 /// Called from [`RouterConfig::on_update`] *before* dependent components
 /// re-render.
 pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
     let mut s = app_state.write();
     match route {
-        Route::DmsHome => {
+        Route::DmsHome {
+            backend,
+            account_id,
+        } => {
             s.nav.view = View::DmsFriends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
         }
-        Route::DmChat { channel_id } => {
+        Route::DmChat {
+            backend,
+            account_id,
+            channel_id,
+        } => {
             s.nav.view = View::DmsFriends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = Some(channel_id.clone());
         }
-        Route::ServerHome { server_id } => {
+        Route::ServerHome {
+            backend,
+            account_id,
+            server_id,
+        } => {
             s.nav.view = View::Server;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             // Don't clear selected_channel — load_server_data sets it
         }
         Route::ServerChat {
+            backend,
+            account_id,
             server_id,
             channel_id,
         } => {
             s.nav.view = View::Server;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = Some(channel_id.clone());
         }
-        Route::FriendsRoute => {
+        Route::FriendsRoute {
+            backend,
+            account_id,
+        } => {
             s.nav.view = View::Friends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_account_id = Some(account_id.clone());
         }
         Route::NotificationsRoute => {
             s.nav.view = View::Notifications;
+            // App-level — don't change active_account_id / active_backend
         }
         Route::SettingsRoute => {
             s.nav.view = View::Settings;
+            // App-level — don't change active_account_id / active_backend
         }
-        Route::Root => {
-            // Will be replaced by DmsHome immediately
-            s.nav.view = View::DmsFriends;
-            s.nav.selected_server = None;
-            s.nav.selected_channel = None;
-        }
-        Route::PageNotFound { .. } => {
-            // Will be redirected to DmsHome
+        Route::Root | Route::PageNotFound { .. } => {
+            // on_update will redirect — nothing to sync here
         }
     }
 }
@@ -193,7 +243,7 @@ fn ServerLayout() -> Element {
 
 /// DM home — placeholder when no conversation is selected.
 #[component]
-fn DmsHome() -> Element {
+fn DmsHome(backend: String, account_id: String) -> Element {
     rsx! {
         main { class: "chat-view",
             div { class: "chat-header",
@@ -214,7 +264,7 @@ fn DmsHome() -> Element {
 
 /// DM chat — renders a conversation with an individual or group.
 #[component]
-fn DmChat(channel_id: String) -> Element {
+fn DmChat(backend: String, account_id: String, channel_id: String) -> Element {
     rsx! {
         ChatView {}
     }
@@ -222,7 +272,7 @@ fn DmChat(channel_id: String) -> Element {
 
 /// Server home — auto-selects first channel, renders chat / voice view.
 #[component]
-fn ServerHome(server_id: String) -> Element {
+fn ServerHome(backend: String, account_id: String, server_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
 
     let is_voice_channel = chat_data
@@ -242,7 +292,12 @@ fn ServerHome(server_id: String) -> Element {
 
 /// Server channel — specific channel view within a server.
 #[component]
-fn ServerChat(server_id: String, channel_id: String) -> Element {
+fn ServerChat(
+    backend: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+) -> Element {
     let chat_data: Signal<ChatData> = use_context();
 
     let is_voice_channel = chat_data
@@ -262,13 +317,13 @@ fn ServerChat(server_id: String, channel_id: String) -> Element {
 
 /// Friends browser — tiled grid view.
 #[component]
-fn FriendsRoute() -> Element {
+fn FriendsRoute(backend: String, account_id: String) -> Element {
     rsx! {
         FriendsPanel {}
     }
 }
 
-/// Notifications feed.
+/// Notifications feed — aggregated across all accounts.
 #[component]
 fn NotificationsRoute() -> Element {
     rsx! {
@@ -276,7 +331,7 @@ fn NotificationsRoute() -> Element {
     }
 }
 
-/// Settings page.
+/// Settings page — app-level, not account-scoped.
 #[component]
 fn SettingsRoute() -> Element {
     rsx! {
@@ -285,14 +340,13 @@ fn SettingsRoute() -> Element {
 }
 
 /// Root redirect — desktop memory history starts at "/"; on_update intercepts
-/// this before the component renders and replaces with DmsHome.
-/// This component body is never seen by the user.
+/// and replaces with the best active account's DMs route before rendering.
 #[component]
 fn Root() -> Element {
     rsx! {}
 }
 
-/// Catch-all 404 — rendered briefly before on_update redirects to DmsHome.
+/// Catch-all 404 — redirected to best route by on_update before being seen.
 #[component]
 fn PageNotFound(segments: Vec<String>) -> Element {
     rsx! {}

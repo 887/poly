@@ -186,9 +186,26 @@ pub fn App() -> Element {
                             .on_update(move |state: dioxus_router::GenericRouterContext<Route>| {
                                 let route = state.current();
                                 sync_route_to_app_state(&route, app_state);
-                                // Redirect root path and catch-all to DMs home
+                                // Redirect root path and catch-all 404 to the best
+                                // active account's DMs route.
+                                //
+                                // Priority:
+                                //   1. Demo account (if active)     → /demo/demo/dms
+                                //   2. First real account (future)  → /:backend/:id/dms
+                                //   3. No accounts at all           → /settings (Accounts tab)
+                                //
+                                // TODO(phase-2.7): Read last-active account from AppSettings
+                                // and prefer real accounts over demo when multiple exist.
                                 if matches!(route, Route::PageNotFound { .. } | Route::Root) {
-                                    return Some(NavigationTarget::Internal(Route::DmsHome));
+                                    let cm = client_manager.read();
+                                    if cm.demo_active {
+                                        return Some(NavigationTarget::Internal(Route::DmsHome {
+                                            backend: "demo".to_string(),
+                                            account_id: "demo".to_string(),
+                                        }));
+                                    }
+                                    // No active accounts — send to settings
+                                    return Some(NavigationTarget::Internal(Route::SettingsRoute));
                                 }
                                 None
                             })

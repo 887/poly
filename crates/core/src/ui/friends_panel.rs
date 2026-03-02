@@ -32,10 +32,8 @@ pub fn FriendsPanel() -> Element {
     let search_lower = search_filter.read().to_lowercase();
 
     // Collect distinct backends from friends for the account filter
-    let mut backend_names: Vec<String> = friends
-        .iter()
-        .map(|f| format!("{:?}", f.backend))
-        .collect();
+    let mut backend_names: Vec<String> =
+        friends.iter().map(|f| format!("{:?}", f.backend)).collect();
     backend_names.sort();
     backend_names.dedup();
 
@@ -157,8 +155,19 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                     let fid = friend_id.clone();
                                     move |_| {
                                         app_state.write().nav.selected_channel = Some(fid.clone());
+                                        // Use the friend's backend slug for the route; read
+                                        // the active account_id from nav state (the account
+                                        // that owns this friend relationship).
+                                        let account_id = app_state
+                                            .read()
+                                            .nav
+                                            .active_account_id
+                                            .clone()
+                                            .unwrap_or_else(|| backend.slug().to_string());
                                         navigator()
                                             .push(Route::DmChat {
+                                                backend: backend.slug().to_string(),
+                                                account_id,
                                                 channel_id: fid.clone(),
                                             });
                                     }
