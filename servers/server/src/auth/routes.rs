@@ -1,12 +1,10 @@
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng},
-};
 use axum::{
     Json, Router,
     extract::{Extension, Path, State},
     routing::{delete, get, post},
 };
+use chrono::{Duration, Utc};
+use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -14,7 +12,7 @@ use crate::{
     AppState,
     auth::{AuthUser, Claims},
     error::{AppError, Result},
-    models::{Device, UserRecord},
+    models::{AuthChallenge, Device, UserRecord},
 };
 
 // ── Router ───────────────────────────────────────────────────────────────────
@@ -23,7 +21,8 @@ use crate::{
 pub fn public_router() -> Router<AppState> {
     Router::new()
         .route("/auth/signup", post(signup))
-        .route("/auth/signin", post(signin))
+        .route("/auth/challenge", post(challenge))
+        .route("/auth/verify", post(verify))
         .route("/server-info", get(server_info))
 }
 
@@ -37,22 +36,45 @@ pub fn protected_router() -> Router<AppState> {
 
 // ── Request / response types ──────────────────────────────────────────────────
 
+/// Ed25519 key-based signup — no password required.
 #[derive(Debug, Deserialize)]
 pub struct SignupRequest {
+    /// Hex-encoded Ed25519 public key (64 hex chars = 32 bytes).
+    pub public_key: String,
     pub username: String,
-    pub password: String,
     pub display_name: Option<String>,
     pub device_name: Option<String>,
 }
 
+/// Request a challenge nonce for Ed25519 signin.
 #[derive(Debug, Deserialize)]
-pub struct SigninRequest {
-    pub username: String,
-    pub password: String,
-    pub device_name: Option<String>,
-    pub user_agent: Option<String>,
+pub struct ChallengeRequest {
+    /// Hex-encoded Ed25519 public key.
+    pub public_key: String,
 }
 
+/// Challenge response from the server.
+#[derive(Debug, Serialize)]
+pub struct ChallengeResponse {
+    /// Hex-encoded 32-byte random nonce.
+    pub challenge: String,
+    /// When this challenge expires (ISO 8601).
+    pub expires_at: String,
+}
+
+/// Client submits signature over the challenge nonce.
+#[derive(Debug, Deserialize)]
+pub struct VerifyRequest {
+    /// Hex-encoded Ed25519 public key.
+    pub public_key: String,
+    /// Hex-encoded challenge nonce (received from /auth/challenge).
+    pub challenge: String,
+    /// Hex-encoded Ed25519 signature over the raw challenge bytes.
+    pub signature: String,
+    pub device_name: Option<String>,
+}
+
+/// Successful auth response (used by both signup and verify).
 #[derive(Debug, Serialize)]
 pub struct AuthResponse {
     pub token: String,
@@ -60,6 +82,7 @@ pub struct AuthResponse {
     pub device_id: String,
 }
 
+/// Public server info (no auth required).
 #[derive(Debug, Serialize)]
 pub struct ServerInfo {
     pub name: String,
@@ -67,63 +90,128 @@ pub struct ServerInfo {
     pub invite_only: bool,
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Decode a hex-encoded Ed25519 public key into a `VerifyingKey`.
+fn decode_public_key(hex_key: &str) -> Result<VerifyingKey> {
+    let bytes = hex::decode(hex_key)
+        .map_err(|_| AppError::BadRequest("invalid hex in public_key".into()))?;
+    let key_bytes: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| AppError::BadRequest("public_key must be 32 bytes (64 hex chars)".into()))?;
+    VerifyingKey::from_bytes(&key_bytes)
+        .map_err(|_| AppError::BadRequest("invalid Ed25519 public key".into()))
+}
+
+/// Generate 32 random bytes, hex-encoded.
+fn random_nonce() -> String {
+    use rand::RngExt;
+    let mut rng = rand::rng();
+    let buf: [u8; 32] = rng.random();
+    hex::encode(buf)
+}
+
+/// Insert a new `device` record and return its string ID.
+async fn create_device(
+    state: &AppState,
+    user_id: &str,
+    device_name: Option<&str>,
+    user_agent: Option<&str>,
+    ip: Option<&str>,
+) -> Result<String> {
+    let name = device_name.unwrap_or("Unknown device");
+    let created: Option<Device> = state
+        .db
+        .query(
+            "CREATE device CONTENT { \
+              owner: type::thing($uid), \
+              name: $name, \
+              user_agent: $ua, \
+              ip: $ip, \
+              created_at: time::now(), \
+              last_seen: time::now(), \
+              revoked: false \
+            } RETURN *",
+        )
+        .bind(("uid", user_id.to_owned()))
+        .bind(("name", name.to_owned()))
+        .bind(("ua", user_agent.map(str::to_owned)))
+        .bind(("ip", ip.map(str::to_owned)))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+
+    created
+        .and_then(|d| d.id)
+        .ok_or_else(|| AppError::Internal("failed to create device".into()))
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
-/// `POST /auth/signup` — create a new account + return token.
+/// `POST /auth/signup` — register a new account using Ed25519 public key.
+///
+/// The public key becomes the cryptographic identity for this user on this server.
+/// No password is needed — authentication happens via challenge-response.
 async fn signup(
     State(state): State<AppState>,
     Json(req): Json<SignupRequest>,
 ) -> Result<Json<AuthResponse>> {
-    // Reject empty username/password.
-    if req.username.trim().is_empty() || req.password.is_empty() {
-        return Err(AppError::BadRequest(
-            "username and password required".into(),
-        ));
+    // Validate inputs.
+    if req.username.trim().is_empty() {
+        return Err(AppError::BadRequest("username required".into()));
+    }
+    if req.public_key.trim().is_empty() {
+        return Err(AppError::BadRequest("public_key required".into()));
     }
 
+    // Validate the public key is well-formed.
+    let _vk = decode_public_key(&req.public_key)?;
+
     // Check username uniqueness.
-    let existing: Option<serde_json::Value> = state
+    let existing_name: Option<UserRecord> = state
         .db
-        .query("SELECT id FROM user WHERE username = $u")
+        .query("SELECT * FROM user WHERE username = $u LIMIT 1")
         .bind(("u", req.username.clone()))
         .await?
         .take(0)
         .map_err(AppError::Db)?;
-    if existing.is_some() {
+    if existing_name.is_some() {
         return Err(AppError::Conflict("username already taken".into()));
     }
 
-    // Hash password.
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = Argon2::default()
-        .hash_password(req.password.as_bytes(), &salt)
-        .map_err(|e| AppError::Internal(format!("hash error: {e}")))?
-        .to_string();
+    // Check public key uniqueness.
+    let existing_key: Option<UserRecord> = state
+        .db
+        .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
+        .bind(("pk", req.public_key.clone()))
+        .await?
+        .take(0)
+        .map_err(AppError::Db)?;
+    if existing_key.is_some() {
+        return Err(AppError::Conflict("public key already registered".into()));
+    }
 
     let display_name = req.display_name.unwrap_or_else(|| req.username.clone());
 
-    // Create user record.
-    let created: Vec<serde_json::Value> = state
+    // Create user record with public key (no password hash).
+    let created: Option<UserRecord> = state
         .db
         .query(
             "CREATE user CONTENT { \
               username: $u, display_name: $d, \
-              password_hash: $h, created_at: time::now() \
-            } RETURN id",
+              public_key: $pk, created_at: time::now() \
+            } RETURN *",
         )
         .bind(("u", req.username.clone()))
         .bind(("d", display_name))
-        .bind(("h", hash))
+        .bind(("pk", req.public_key.clone()))
         .await?
         .take(0)
         .map_err(AppError::Db)?;
 
     let user_id = created
-        .first()
-        .and_then(|v| v.get("id"))
-        .and_then(|v| v.as_str())
-        .map(str::to_owned)
-        .ok_or_else(|| AppError::Internal("failed to get user id".into()))?;
+        .and_then(|u| u.id)
+        .ok_or_else(|| AppError::Internal("failed to create user".into()))?;
 
     let device_id = create_device(&state, &user_id, req.device_name.as_deref(), None, None).await?;
     let token = Claims::encode(
@@ -133,7 +221,11 @@ async fn signup(
         state.config.jwt_expiry_secs,
     )?;
 
-    info!("New user signed up: {}", req.username);
+    info!(
+        "New user signed up: {} (key: {}…)",
+        req.username,
+        &req.public_key.get(..8).unwrap_or("?")
+    );
     Ok(Json(AuthResponse {
         token,
         user_id,
@@ -141,48 +233,136 @@ async fn signup(
     }))
 }
 
-/// `POST /auth/signin` — authenticate + return token.
-async fn signin(
+/// `POST /auth/challenge` — request a random nonce for Ed25519 signin.
+///
+/// The client must sign this nonce and submit it to `/auth/verify`.
+/// Challenges expire after 60 seconds.
+async fn challenge(
     State(state): State<AppState>,
-    Json(req): Json<SigninRequest>,
-) -> Result<Json<AuthResponse>> {
-    // Fetch user by username.
-    let raw: Option<serde_json::Value> = state
+    Json(req): Json<ChallengeRequest>,
+) -> Result<Json<ChallengeResponse>> {
+    if req.public_key.trim().is_empty() {
+        return Err(AppError::BadRequest("public_key required".into()));
+    }
+
+    // Validate the public key format.
+    let _vk = decode_public_key(&req.public_key)?;
+
+    // Check the public key is registered.
+    let existing: Option<UserRecord> = state
         .db
-        .query("SELECT * FROM user WHERE username = $u LIMIT 1")
-        .bind(("u", req.username.clone()))
+        .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
+        .bind(("pk", req.public_key.clone()))
         .await?
         .take(0)
         .map_err(AppError::Db)?;
+    if existing.is_none() {
+        return Err(AppError::NotFound);
+    }
 
-    let user: UserRecord = raw
-        .map(|v| {
-            serde_json::from_value::<UserRecord>(v).map_err(|e| AppError::Internal(e.to_string()))
-        })
-        .transpose()?
+    let nonce = random_nonce();
+    let expires_at = Utc::now() + Duration::seconds(60);
+
+    // Store the challenge.
+    state
+        .db
+        .query(
+            "CREATE auth_challenge CONTENT { \
+              public_key: $pk, nonce: $n, \
+              expires_at: $exp, used: false, \
+              created_at: time::now() \
+            }",
+        )
+        .bind(("pk", req.public_key.clone()))
+        .bind(("n", nonce.clone()))
+        .bind(("exp", expires_at.to_rfc3339()))
+        .await?
+        .check()
+        .map_err(AppError::Db)?;
+
+    Ok(Json(ChallengeResponse {
+        challenge: nonce,
+        expires_at: expires_at.to_rfc3339(),
+    }))
+}
+
+/// `POST /auth/verify` — complete Ed25519 challenge-response signin.
+///
+/// The client signs the challenge nonce with their private key. The server
+/// verifies using the stored public key and issues a JWT.
+async fn verify(
+    State(state): State<AppState>,
+    Json(req): Json<VerifyRequest>,
+) -> Result<Json<AuthResponse>> {
+    if req.public_key.trim().is_empty() || req.challenge.is_empty() || req.signature.is_empty() {
+        return Err(AppError::BadRequest(
+            "public_key, challenge, and signature required".into(),
+        ));
+    }
+
+    // Decode and validate the public key.
+    let vk = decode_public_key(&req.public_key)?;
+
+    // Look up the challenge record.
+    let challenge_record: AuthChallenge = state
+        .db
+        .query(
+            "SELECT * FROM auth_challenge \
+             WHERE public_key = $pk AND nonce = $n AND used = false \
+             LIMIT 1",
+        )
+        .bind(("pk", req.public_key.clone()))
+        .bind(("n", req.challenge.clone()))
+        .await?
+        .take::<Option<AuthChallenge>>(0)
+        .map_err(AppError::Db)?
         .ok_or(AppError::Unauthorized)?;
 
-    // Verify password.
-    let parsed_hash = PasswordHash::new(&user.password_hash)
-        .map_err(|e| AppError::Internal(format!("hash parse: {e}")))?;
-    Argon2::default()
-        .verify_password(req.password.as_bytes(), &parsed_hash)
+    // Check expiry.
+    if Utc::now() > challenge_record.expires_at {
+        return Err(AppError::Unauthorized);
+    }
+
+    // Verify the Ed25519 signature over the raw challenge bytes.
+    let challenge_bytes = hex::decode(&req.challenge)
+        .map_err(|_| AppError::BadRequest("invalid hex in challenge".into()))?;
+    let sig_bytes = hex::decode(&req.signature)
+        .map_err(|_| AppError::BadRequest("invalid hex in signature".into()))?;
+    let sig_arr: [u8; 64] = sig_bytes
+        .try_into()
+        .map_err(|_| AppError::BadRequest("signature must be 64 bytes (128 hex chars)".into()))?;
+    let signature = Signature::from_bytes(&sig_arr);
+
+    vk.verify_strict(&challenge_bytes, &signature)
         .map_err(|_| AppError::Unauthorized)?;
+
+    // Mark the challenge as used.
+    let challenge_id = challenge_record
+        .id
+        .ok_or(AppError::Internal("missing challenge id".into()))?;
+    state
+        .db
+        .query("UPDATE type::thing($id) SET used = true")
+        .bind(("id", challenge_id))
+        .await?
+        .check()
+        .map_err(AppError::Db)?;
+
+    // Look up the user by public key.
+    let user: UserRecord = state
+        .db
+        .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
+        .bind(("pk", req.public_key.clone()))
+        .await?
+        .take::<Option<UserRecord>>(0)
+        .map_err(AppError::Db)?
+        .ok_or(AppError::Unauthorized)?;
 
     let user_id = user
         .id
-        .clone()
         .ok_or_else(|| AppError::Internal("missing user id".into()))?;
 
-    let device_id = create_device(
-        &state,
-        &user_id,
-        req.device_name.as_deref(),
-        req.user_agent.as_deref(),
-        None,
-    )
-    .await?;
-
+    let device_id = create_device(&state, &user_id, req.device_name.as_deref(), None, None).await?;
     let token = Claims::encode(
         &user_id,
         &device_id,
@@ -190,7 +370,10 @@ async fn signin(
         state.config.jwt_expiry_secs,
     )?;
 
-    info!("User signed in: {}", req.username);
+    info!(
+        "User signed in via challenge-response (key: {}…)",
+        &req.public_key.get(..8).unwrap_or("?")
+    );
     Ok(Json(AuthResponse {
         token,
         user_id,
@@ -225,18 +408,13 @@ async fn list_devices(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<Vec<Device>>> {
-    let raw: Vec<serde_json::Value> = state
+    let devices: Vec<Device> = state
         .db
         .query("SELECT * FROM device WHERE owner = type::thing($id) ORDER BY last_seen DESC")
         .bind(("id", auth.user_id.clone()))
         .await?
         .take(0)
         .map_err(AppError::Db)?;
-
-    let devices = raw
-        .into_iter()
-        .map(|v| serde_json::from_value::<Device>(v).map_err(|e| AppError::Internal(e.to_string())))
-        .collect::<Result<Vec<_>>>()?;
 
     Ok(Json(devices))
 }
@@ -248,17 +426,13 @@ async fn revoke_device(
     Path(device_id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
     // Verify ownership.
-    let raw: Option<serde_json::Value> = state
+    let device: Device = state
         .db
         .query("SELECT * FROM type::thing($id) LIMIT 1")
         .bind(("id", device_id.clone()))
         .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-
-    let device: Device = raw
-        .map(|v| serde_json::from_value::<Device>(v).map_err(|e| AppError::Internal(e.to_string())))
-        .transpose()?
+        .take::<Option<Device>>(0)
+        .map_err(AppError::Db)?
         .ok_or(AppError::NotFound)?;
 
     if device.owner != auth.user_id {
@@ -289,48 +463,4 @@ async fn server_info(State(state): State<AppState>) -> Json<ServerInfo> {
         version: env!("CARGO_PKG_VERSION"),
         invite_only: state.config.invite_only,
     })
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/// Insert a new `device` record and return its string ID.
-async fn create_device(
-    state: &AppState,
-    user_id: &str,
-    device_name: Option<&str>,
-    user_agent: Option<&str>,
-    ip: Option<&str>,
-) -> Result<String> {
-    let name = device_name.unwrap_or("Unknown device");
-    let created: Vec<serde_json::Value> = state
-        .db
-        .query(
-            "CREATE device CONTENT { \
-              owner: type::thing($uid), \
-              name: $name, \
-              user_agent: $ua, \
-              ip: $ip, \
-              created_at: time::now(), \
-              last_seen: time::now(), \
-              revoked: false \
-            } RETURN id",
-        )
-        .bind(("uid", user_id.to_owned()))
-        .bind(("name", name.to_owned()))
-        .bind(("ua", user_agent.map(str::to_owned)))
-        .bind(("ip", ip.map(str::to_owned)))
-        .await?
-        .take(0)
-        .map_err(AppError::Db)?;
-
-    extract_id(&created)
-}
-
-/// Extract a record ID string from a `RETURN id` SurrealQL result.
-fn extract_id(rows: &[serde_json::Value]) -> Result<String> {
-    rows.first()
-        .and_then(|v| v.get("id"))
-        .and_then(|v| v.as_str())
-        .map(str::to_owned)
-        .ok_or_else(|| AppError::Internal("failed to get record id".into()))
 }

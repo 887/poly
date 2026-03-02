@@ -33,9 +33,18 @@ DEFINE TABLE OVERWRITE user SCHEMAFULL;
 DEFINE FIELD OVERWRITE username       ON user TYPE string;
 DEFINE FIELD OVERWRITE display_name   ON user TYPE string;
 DEFINE FIELD OVERWRITE avatar_url     ON user TYPE option<string>;
-DEFINE FIELD OVERWRITE password_hash  ON user TYPE string;
+DEFINE FIELD OVERWRITE public_key     ON user TYPE string;
 DEFINE FIELD OVERWRITE created_at     ON user TYPE datetime DEFAULT time::now();
 DEFINE INDEX OVERWRITE user_username  ON user COLUMNS username UNIQUE;
+DEFINE INDEX OVERWRITE user_pubkey    ON user COLUMNS public_key UNIQUE;
+
+-- Auth challenges (short-lived nonces for Ed25519 challenge-response signin)
+DEFINE TABLE OVERWRITE auth_challenge SCHEMAFULL;
+DEFINE FIELD OVERWRITE public_key   ON auth_challenge TYPE string;
+DEFINE FIELD OVERWRITE nonce        ON auth_challenge TYPE string;
+DEFINE FIELD OVERWRITE expires_at   ON auth_challenge TYPE datetime;
+DEFINE FIELD OVERWRITE used         ON auth_challenge TYPE bool DEFAULT false;
+DEFINE FIELD OVERWRITE created_at   ON auth_challenge TYPE datetime DEFAULT time::now();
 
 -- Devices
 DEFINE TABLE OVERWRITE device SCHEMAFULL;

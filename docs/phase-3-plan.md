@@ -14,32 +14,9 @@
 - [ ] **3.0.3** Verify demo client still works as expected after any Dioxus/SurrealDB updates
 - [ ] **3.0.4** Review overall plan for any changes needed based on Phase 2 learnings
 
-### 3.0 — Poly-Server Test Client (FIRST IMPLEMENTATION TARGET)
-
-> **Goal:** Before tackling external protocols, validate the full account lifecycle using our own `poly-server`
-> backend. This proves the `ClientBackend` integration path and gives us a real auth/messaging flow to test
-> UI against. Protocol documented in `docs/poly-server-protocol.md`.
-
-- [ ] **3.0.5** Create `servers/server-client/` — HTTP client crate (`reqwest`) for the built-in poly-server backend
-  - `POST /auth/signup { username, password, display_name }` → `{ token, device_id, user_id }`
-  - `POST /auth/signin { username, password }` → `{ token, device_id, user_id }`
-  - `DELETE /auth/device` → revoke current device session
-  - All subsequent requests carry `Authorization: Bearer <token>`
-  - Configurable base URL (default: `http://localhost:3000`)
-- [ ] **3.0.6** Implement the `ClientBackend` trait for `PolyServerClient`
-  - Fetch channel list, message history, send messages
-  - Handle WebSocket event stream at `/ws` (message/channel/user events)
-  - Map poly-server events → `ClientEvent` enum
-- [ ] **3.0.7** Add "Poly Server" account type to Settings → Accounts UI (`ui/settings.rs`)
-  - Login form: server URL + username + password
-  - Registration form: server URL + username + password + display name
-  - On success: store `AccountToken { backend: "poly-server", ... }` in storage
-  - Show connected account in account list; allow disconnect/logout
-- [ ] **3.0.8** End-to-end verification via MCP desktop-devtools screenshots
-  - Register a new account on a local poly-server instance
-  - Login → see real channels and messages
-  - Send a message → receive server-side echo in real-time
-  - Disconnect → reconnect → session token still valid
+> **NOTE:** The Poly-Server Test Client (formerly 3.0.5–3.0.8) has been moved to
+> [Phase 2.7](phase-2.7-plan.md). It is now completed as part of Phase 2 to validate
+> the `ClientBackend` integration path before external protocol work begins.
 
 ---
 

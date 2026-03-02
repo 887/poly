@@ -89,6 +89,7 @@ settings-theme-import = Importar tema
 settings-theme-export = Exportar tema
 settings-color-mode = Modo de color
 settings-color-overrides = Personalización de colores
+settings-color-hint = Activa esta opción para reemplazar colores individuales del tema. Desactívala para volver al tema predeterminado.
 settings-theme-apply-css = Aplicar CSS
 settings-css-hint = Descomenta una variable para reemplazar el tema. El interruptor activa/desactiva estas modificaciones CSS.
 settings-css-reset-template = Restablecer plantilla
@@ -111,7 +112,7 @@ settings-reset-error-reload = Restablecimiento exitoso, pero falló la recarga
 
 # Backup Server Settings
 settings-backup-add-server = Agregar servidor
-settings-backup-url-placeholder = https://backup.example.com
+settings-backup-url-placeholder = http://127.0.0.1:8080
 settings-backup-url-label = URL del servidor
 settings-backup-label-label = Nombre del servidor
 settings-backup-passphrase-label = Frase de contraseña del servidor

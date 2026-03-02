@@ -669,7 +669,7 @@ pub(super) fn WizardStep2(
 #[component]
 pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRecord>>) -> Element {
     let mut wizard_step = use_signal(|| 0u8);
-    let mut wizard_url = use_signal(|| "https://".to_string());
+    let mut wizard_url = use_signal(|| "http://127.0.0.1:8080".to_string());
     let probe_status: Signal<ProbeStatus> = use_signal(|| ProbeStatus::Idle);
     let mut wizard_name = use_signal(String::new);
     let mut wizard_pass = use_signal(String::new);
@@ -681,7 +681,7 @@ pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRe
                 class: "btn btn-primary",
                 onclick: move |_| {
                     wizard_step.set(1);
-                    wizard_url.set("https://".to_string());
+                    wizard_url.set("http://127.0.0.1:8080".to_string());
                     let mut ps = probe_status;
                     ps.set(ProbeStatus::Idle);
                     wizard_name.set(String::new());

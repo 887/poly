@@ -5,6 +5,7 @@
 //! - `DMFriendsView`: DM + group + friends unified list with search
 //! - `ServerChannelView`: server categories and channels
 
+use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::backend_badge;
@@ -64,7 +65,7 @@ fn ChannelListHeader(current_view: View, current_server: Option<Server>) -> Elem
 /// DMs and Friends view — search, unified list of DMs + groups + friend contacts.
 #[component]
 fn DMFriendsView() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
 
     let dm_channels = chat_data.read().dm_channels.clone();
@@ -141,8 +142,7 @@ fn DMFriendsView() -> Element {
         button {
             class: "dm-friends-row-btn",
             onclick: move |_| {
-                app_state.write().push_nav_history();
-                app_state.write().nav.view = View::Friends;
+                navigator().push(Route::FriendsRoute);
             },
             span { class: "dm-friends-row-icon", "👥" }
             span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }
@@ -266,7 +266,6 @@ fn DMChannelItem(
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
-                app_state.write().push_nav_history();
                 app_state.write().nav.selected_channel = Some(channel_id.clone());
                 // Synthesize a Channel so ChatView can display the DM header
                 chat_data.write().current_channel = Some(Channel {
@@ -283,6 +282,10 @@ fn DMChannelItem(
                 spawn(async move {
                     load_dm_messages(cid, aid, client_manager, chat_data).await;
                 });
+                navigator()
+                    .push(Route::DmChat {
+                        channel_id: channel_id.clone(),
+                    });
             },
             div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
             span { class: "channel-name", "{display_name}" }
@@ -321,7 +324,6 @@ fn GroupChannelItem(
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
-                app_state.write().push_nav_history();
                 app_state.write().nav.selected_channel = Some(group_id.clone());
                 // Synthesize a Channel so ChatView can display the group header
                 chat_data.write().current_channel = Some(Channel {
@@ -338,6 +340,10 @@ fn GroupChannelItem(
                 spawn(async move {
                     load_dm_messages(cid, aid, client_manager, chat_data).await;
                 });
+                navigator()
+                    .push(Route::DmChat {
+                        channel_id: group_id.clone(),
+                    });
             },
             span { class: "channel-icon", "👥" }
             span { class: "channel-name", "{display_name}" }
@@ -431,13 +437,18 @@ fn ChannelItemRow(channel: Channel) -> Element {
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
-                app_state.write().push_nav_history();
                 app_state.write().nav.selected_channel = Some(ch_id.clone());
                 chat_data.write().current_channel = Some(channel.clone());
                 let cid = ch_id.clone();
                 spawn(async move {
                     load_channel_data(cid, client_manager, chat_data, app_state).await;
                 });
+                let server_id = app_state.read().nav.selected_server.clone().unwrap_or_default();
+                navigator()
+                    .push(Route::ServerChat {
+                        server_id,
+                        channel_id: ch_id.clone(),
+                    });
             },
             span { class: "channel-icon", "{type_icon}" }
             span { class: "channel-name", "{ch_name}" }

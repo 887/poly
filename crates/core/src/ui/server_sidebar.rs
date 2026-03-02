@@ -17,6 +17,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.3): Demo toggle + TODO(phase-2.5.4): Wire to backends
 
+use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
@@ -67,10 +68,8 @@ pub fn ServerSidebar() -> Element {
                     chat_data.write().channels.clear();
                     chat_data.write().messages.clear();
                     chat_data.write().members.clear();
-                    // Then switch the view
-                    app_state.write().nav.view = View::DmsFriends;
-                    app_state.write().nav.selected_server = None;
-                    app_state.write().nav.selected_channel = None;
+                    // Navigate via router
+                    navigator().push(Route::DmsHome);
                 },
                 title: "{t(\"nav-dms\")}",
                 div { class: "icon-dms", "💬" }
@@ -88,6 +87,7 @@ pub fn ServerSidebar() -> Element {
                     cd.channels.clear();
                     cd.messages.clear();
                     cd.members.clear();
+                    navigator().push(Route::NotificationsRoute);
                 },
                 title: "{t(\"nav-notifications\")}",
                 div { class: "icon-notifications", "🔔" }
@@ -121,8 +121,6 @@ pub fn ServerSidebar() -> Element {
                             onclick: {
                                 let server_id_click = server_id.clone();
                                 move |_| {
-                                    app_state.write().push_nav_history();
-                                    app_state.write().nav.view = View::Server;
                                     app_state.write().nav.selected_server = Some(server_id_click.clone());
                                     app_state.write().nav.selected_channel = None;
                                     // Load channels for this server
@@ -130,6 +128,10 @@ pub fn ServerSidebar() -> Element {
                                     spawn(async move {
                                         load_server_data(sid, app_state, client_manager, chat_data).await;
                                     });
+                                    navigator()
+                                        .push(Route::ServerHome {
+                                            server_id: server_id_click.clone(),
+                                        }); // Unread badge
                                 }
                             },
                             title: "{tooltip}", // Source badge (backend type)
@@ -167,7 +169,7 @@ pub fn ServerSidebar() -> Element {
             div {
                 class: if current_view == View::Settings { "server-icon active" } else { "server-icon" },
                 onclick: move |_| {
-                    app_state.write().nav.view = View::Settings;
+                    navigator().push(Route::SettingsRoute);
                 },
                 title: "{t(\"nav-settings\")}",
                 div { class: "icon-settings", "⚙" }

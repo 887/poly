@@ -1785,6 +1785,11 @@ select {
     padding: 2px;
 }
 
+.color-picker-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .css-editor {
     width: 100%;
     min-height: 180px;
@@ -1827,6 +1832,21 @@ select {
     font-size: 12px;
     color: var(--text-muted);
     margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.colors-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.colors-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
     line-height: 1.4;
 }
 
@@ -2896,15 +2916,18 @@ select {
 
 /* ─────────────────────────────────────────────────────────────
    TOP-LEFT CORNER NAV BAR (browser-style back/forward)
+   Symmetrically centered within the server sidebar width.
    ───────────────────────────────────────────────────────────── */
 
 .nav-bar-top {
     position: absolute;
     top: 0;
     left: 0;
+    width: 72px;
     display: flex;
+    justify-content: center;
     gap: 4px;
-    padding: 4px 8px;
+    padding: 4px 0;
     z-index: 100;
 }
 

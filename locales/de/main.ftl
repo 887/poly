@@ -89,6 +89,7 @@ settings-theme-import = Design importieren
 settings-theme-export = Design exportieren
 settings-color-mode = Farbmodus
 settings-color-overrides = Farbanpassung
+settings-color-hint = Aktivieren Sie diese Option, um einzelne Farben von der Vorlage zu überschreiben. Deaktivieren Sie, um zur Vorlage zurückzukehren.
 settings-theme-apply-css = CSS anwenden
 settings-css-hint = Kommentierung einer Variable aufheben, um die Design-Vorlage zu überschreiben. Der Schalter aktiviert/deaktiviert diese CSS-Anpassungen.
 settings-css-reset-template = Vorlage zurücksetzen
@@ -111,7 +112,7 @@ settings-reset-error-reload = Zurücksetzen erfolgreich, aber Neuladen fehlgesch
 
 # Backup Server Settings
 settings-backup-add-server = Server hinzufügen
-settings-backup-url-placeholder = https://backup.example.com
+settings-backup-url-placeholder = http://127.0.0.1:8080
 settings-backup-url-label = Server-URL
 settings-backup-label-label = Servername
 settings-backup-passphrase-label = Server-Passphrase

@@ -32,8 +32,10 @@ surrealdb = { workspace = true, features = ["kv-surrealkv"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-# Auth
-argon2 = { workspace = true }
+# Auth (Ed25519 challenge-response, JWT sessions)
+ed25519-dalek = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
 jsonwebtoken = { workspace = true }
 
 # Utilities
@@ -51,6 +53,10 @@ tempfile = { workspace = true }
 reqwest = { workspace = true, features = ["json", "multipart"] }
 tokio-tungstenite = { workspace = true, features = ["native-tls"] }
 futures = { workspace = true }
+ed25519-dalek = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

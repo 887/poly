@@ -13,9 +13,10 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5): Voice connection banner — tracked in overall-plan.md
 
+use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 
 /// Full-width voice connection banner.
@@ -90,10 +91,13 @@ pub fn VoiceBanner() -> Element {
                     let channel_id = channel_id.clone();
                     let server_id = server_id.clone();
                     move |_| {
-                        app_state.write().push_nav_history();
-                        app_state.write().nav.view = View::Server;
                         app_state.write().nav.selected_server = Some(server_id.clone());
                         app_state.write().nav.selected_channel = Some(channel_id.clone());
+                        navigator()
+                            .push(Route::ServerChat {
+                                server_id: server_id.clone(),
+                                channel_id: channel_id.clone(),
+                            });
                     }
                 },
                 span { class: "voice-banner-icon", "🔊" }

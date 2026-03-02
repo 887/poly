@@ -31,7 +31,7 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 # UI framework
-dioxus = "0.7.3"
+dioxus = { version = "0.7.3", features = ["router"] }
 
 # Database
 surrealdb = { version = "3.0.1", default-features = false }

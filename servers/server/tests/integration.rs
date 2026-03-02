@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::middleware;
+use ed25519_dalek::{Signer, SigningKey};
 use reqwest::Client;
 use serde_json::{Value, json};
 use tokio::net::TcpListener as TokioListener;
@@ -34,6 +35,12 @@ struct TestServer {
 
 impl TestServer {
     async fn start() -> Self {
+        // Initialize tracing for debug output in tests.
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter("poly_server=debug,warn")
+            .with_test_writer()
+            .try_init();
+
         // Find a free port.
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let port = listener.local_addr().expect("local addr").port();
@@ -115,10 +122,39 @@ impl TestServer {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async fn signup(srv: &TestServer, username: &str, password: &str) -> Value {
+/// Generate a fresh Ed25519 keypair and return (signing_key, hex_public_key).
+fn gen_keypair() -> (SigningKey, String) {
+    // Generate 32 random bytes and use them as Ed25519 seed.
+    use rand::RngExt;
+    let mut rng = rand::rng();
+    let seed: [u8; 32] = rng.random();
+    let sk = SigningKey::from_bytes(&seed);
+    let pk_hex = hex::encode(sk.verifying_key().to_bytes());
+    (sk, pk_hex)
+}
+
+/// Sign up with a fresh keypair.
+async fn signup(srv: &TestServer, username: &str) -> (SigningKey, Value) {
+    let (sk, pk_hex) = gen_keypair();
+    let resp = srv
+        .client
+        .post(srv.url("/auth/signup"))
+        .json(&json!({ "public_key": pk_hex, "username": username, "display_name": username }))
+        .send()
+        .await
+        .expect("signup request");
+    let status = resp.status();
+    let body: Value = resp.json().await.expect("signup json");
+    assert!(status.is_success(), "signup failed: {status} — {body}");
+    (sk, body)
+}
+
+/// Sign up with a specific keypair (for key-reuse scenarios).
+async fn signup_with_key(srv: &TestServer, sk: &SigningKey, username: &str) -> Value {
+    let pk_hex = hex::encode(sk.verifying_key().to_bytes());
     srv.client
         .post(srv.url("/auth/signup"))
-        .json(&json!({ "username": username, "password": password, "display_name": username }))
+        .json(&json!({ "public_key": pk_hex, "username": username, "display_name": username }))
         .send()
         .await
         .expect("signup request")
@@ -127,18 +163,49 @@ async fn signup(srv: &TestServer, username: &str, password: &str) -> Value {
         .expect("signup json")
 }
 
-async fn signin(srv: &TestServer, username: &str, password: &str) -> String {
-    let body: Value = srv
+/// Challenge-response signin. Returns the JWT token.
+async fn signin(srv: &TestServer, sk: &SigningKey) -> String {
+    let pk_hex = hex::encode(sk.verifying_key().to_bytes());
+
+    // Step 1: Request challenge.
+    let challenge_resp: Value = srv
         .client
-        .post(srv.url("/auth/signin"))
-        .json(&json!({ "username": username, "password": password }))
+        .post(srv.url("/auth/challenge"))
+        .json(&json!({ "public_key": pk_hex }))
         .send()
         .await
-        .expect("signin request")
+        .expect("challenge request")
         .json()
         .await
-        .expect("signin json");
-    body["token"].as_str().expect("token field").to_owned()
+        .expect("challenge json");
+    let challenge_hex = challenge_resp["challenge"]
+        .as_str()
+        .expect("challenge field");
+
+    // Step 2: Sign the challenge.
+    let challenge_bytes = hex::decode(challenge_hex).expect("decode challenge");
+    let signature = sk.sign(&challenge_bytes);
+    let sig_hex = hex::encode(signature.to_bytes());
+
+    // Step 3: Verify.
+    let verify_resp: Value = srv
+        .client
+        .post(srv.url("/auth/verify"))
+        .json(&json!({
+            "public_key": pk_hex,
+            "challenge": challenge_hex,
+            "signature": sig_hex,
+        }))
+        .send()
+        .await
+        .expect("verify request")
+        .json()
+        .await
+        .expect("verify json");
+    verify_resp["token"]
+        .as_str()
+        .expect("token field")
+        .to_owned()
 }
 
 fn auth_header(token: &str) -> String {
@@ -170,32 +237,34 @@ async fn test_auth_flow() {
     let srv = TestServer::start().await;
 
     // Signup.
-    let signup_resp = signup(&srv, "alice", "hunter2").await;
+    let (sk, signup_resp) = signup(&srv, "alice").await;
     assert!(signup_resp["token"].is_string(), "signup returns token");
 
-    // Duplicate signup should fail.
+    // Duplicate username should fail.
+    let (_, dup_pk) = gen_keypair();
     let dup = srv
         .client
         .post(srv.url("/auth/signup"))
-        .json(&json!({ "username": "alice", "password": "x", "display_name": "a" }))
+        .json(&json!({ "public_key": dup_pk, "username": "alice", "display_name": "a" }))
         .send()
         .await
         .expect("dup req");
     assert_eq!(dup.status().as_u16(), 409);
 
-    // Signin.
-    let token = signin(&srv, "alice", "hunter2").await;
+    // Signin via challenge-response.
+    let token = signin(&srv, &sk).await;
     assert!(!token.is_empty());
 
-    // Wrong password.
+    // Wrong key should fail challenge (unregistered key → 404).
+    let (_bad_sk, bad_pk) = gen_keypair();
     let bad = srv
         .client
-        .post(srv.url("/auth/signin"))
-        .json(&json!({ "username": "alice", "password": "wrong" }))
+        .post(srv.url("/auth/challenge"))
+        .json(&json!({ "public_key": bad_pk }))
         .send()
         .await
         .expect("bad req");
-    assert_eq!(bad.status().as_u16(), 401);
+    assert_eq!(bad.status().as_u16(), 404);
 
     // Authenticated request.
     let me: Value = srv
@@ -234,9 +303,9 @@ async fn test_auth_flow() {
 #[tokio::test]
 async fn test_device_management() {
     let srv = TestServer::start().await;
-    signup(&srv, "bob", "pass123").await;
-    let token1 = signin(&srv, "bob", "pass123").await;
-    let token2 = signin(&srv, "bob", "pass123").await;
+    let (sk, _) = signup(&srv, "bob").await;
+    let token1 = signin(&srv, &sk).await;
+    let token2 = signin(&srv, &sk).await;
 
     // Both tokens work.
     for t in [&token1, &token2] {
@@ -284,8 +353,8 @@ async fn test_device_management() {
 #[tokio::test]
 async fn test_server_and_channels() {
     let srv = TestServer::start().await;
-    signup(&srv, "carol", "pw").await;
-    let token = signin(&srv, "carol", "pw").await;
+    let (sk, _) = signup(&srv, "carol").await;
+    let token = signin(&srv, &sk).await;
     let hdr = auth_header(&token);
 
     // Create a server.
@@ -376,8 +445,8 @@ async fn test_server_and_channels() {
 #[tokio::test]
 async fn test_reactions() {
     let srv = TestServer::start().await;
-    signup(&srv, "dan", "pw").await;
-    let token = signin(&srv, "dan", "pw").await;
+    let (sk, _) = signup(&srv, "dan").await;
+    let token = signin(&srv, &sk).await;
     let hdr = auth_header(&token);
 
     // Minimal setup.
@@ -465,13 +534,13 @@ async fn test_reactions() {
 #[tokio::test]
 async fn test_direct_messages() {
     let srv = TestServer::start().await;
-    signup(&srv, "eve", "pw").await;
-    signup(&srv, "frank", "pw").await;
-    let eve_token = signin(&srv, "eve", "pw").await;
+    let (eve_sk, _) = signup(&srv, "eve").await;
+    let (frank_sk, _) = signup(&srv, "frank").await;
+    let eve_token = signin(&srv, &eve_sk).await;
     let eve_hdr = auth_header(&eve_token);
 
     let frank_me: Value = {
-        let ft = signin(&srv, "frank", "pw").await;
+        let ft = signin(&srv, &frank_sk).await;
         srv.client
             .get(srv.url("/users/me"))
             .header("Authorization", auth_header(&ft))
@@ -530,11 +599,11 @@ async fn test_direct_messages() {
 #[tokio::test]
 async fn test_file_upload_and_access() {
     let srv = TestServer::start().await;
-    signup(&srv, "grace", "pw").await;
-    signup(&srv, "heidi", "pw").await;
-    let grace_token = signin(&srv, "grace", "pw").await;
+    let (grace_sk, _) = signup(&srv, "grace").await;
+    let (heidi_sk, _) = signup(&srv, "heidi").await;
+    let grace_token = signin(&srv, &grace_sk).await;
     let grace_hdr = auth_header(&grace_token);
-    let heidi_token = signin(&srv, "heidi", "pw").await;
+    let heidi_token = signin(&srv, &heidi_sk).await;
     let heidi_hdr = auth_header(&heidi_token);
 
     // Grace uploads a file.
@@ -648,11 +717,11 @@ async fn test_file_upload_and_access() {
 #[tokio::test]
 async fn test_friend_requests() {
     let srv = TestServer::start().await;
-    signup(&srv, "ivan", "pw").await;
-    signup(&srv, "judy", "pw").await;
-    let ivan_token = signin(&srv, "ivan", "pw").await;
+    let (ivan_sk, _) = signup(&srv, "ivan").await;
+    let (judy_sk, _) = signup(&srv, "judy").await;
+    let ivan_token = signin(&srv, &ivan_sk).await;
     let ivan_hdr = auth_header(&ivan_token);
-    let judy_token = signin(&srv, "judy", "pw").await;
+    let judy_token = signin(&srv, &judy_sk).await;
     let judy_hdr = auth_header(&judy_token);
 
     // Ivan sends friend request.
@@ -706,8 +775,8 @@ async fn test_websocket_event_delivery() {
     use tokio_tungstenite::{connect_async, tungstenite::Message as WsMsg};
 
     let srv = TestServer::start().await;
-    signup(&srv, "kate", "pw").await;
-    let kate_token = signin(&srv, "kate", "pw").await;
+    let (kate_sk, _) = signup(&srv, "kate").await;
+    let kate_token = signin(&srv, &kate_sk).await;
     let kate_hdr = auth_header(&kate_token);
 
     // Create server + channel.

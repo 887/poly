@@ -89,6 +89,7 @@ settings-theme-import = Import Theme
 settings-theme-export = Export Theme
 settings-color-mode = Color Mode
 settings-color-overrides = Color Customization
+settings-color-hint = Enable to override individual colors from the preset. Disable to revert to the preset theme.
 settings-theme-apply-css = Apply CSS
 settings-css-hint = Uncomment any variable to override the theme preset. The toggle enables/disables these CSS overrides.
 settings-css-reset-template = Reset Template
@@ -111,7 +112,7 @@ settings-reset-error-reload = Reset succeeded, but reload failed
 
 # Backup Server Settings
 settings-backup-add-server = Add Server
-settings-backup-url-placeholder = https://backup.example.com
+settings-backup-url-placeholder = http://127.0.0.1:8080
 settings-backup-url-label = Server URL
 settings-backup-label-label = Server Name
 settings-backup-passphrase-label = Server Passphrase

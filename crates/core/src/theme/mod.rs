@@ -86,6 +86,8 @@ pub struct ThemeConfig {
     pub custom_css_enabled: bool,
     /// Custom CSS overrides (applied after preset when enabled).
     pub custom_css: String,
+    /// Whether per-color overrides are applied.
+    pub color_overrides_enabled: bool,
     /// Per-color overrides (CSS variable name -> value).
     pub color_overrides: std::collections::HashMap<String, String>,
 }
@@ -97,6 +99,7 @@ impl Default for ThemeConfig {
             color_mode: ColorMode::Dark,
             custom_css_enabled: false,
             custom_css: String::new(),
+            color_overrides_enabled: false,
             color_overrides: std::collections::HashMap::new(),
         }
     }
@@ -239,8 +242,8 @@ pub fn generate_css(config: &ThemeConfig) -> String {
     css.push_str(&preset_css(config.preset, config.color_mode));
     css.push('\n');
 
-    // 2. Color overrides as CSS variables
-    if !config.color_overrides.is_empty() {
+    // 2. Color overrides as CSS variables (only if toggle is on)
+    if config.color_overrides_enabled && !config.color_overrides.is_empty() {
         css.push_str(":root {\n");
         for (var, value) in &config.color_overrides {
             css.push_str(&format!("  {var}: {value};\n"));
@@ -314,10 +317,12 @@ pub fn export_theme(config: &ThemeConfig) -> String {
         "/* Poly Theme Export */\n\
          /* @poly-preset: {:?} */\n\
          /* @poly-mode: {:?} */\n\
-         /* @poly-css-enabled: {} */\n\n",
+         /* @poly-css-enabled: {} */\n\
+         /* @poly-color-overrides-enabled: {} */\n\n",
         config.preset.canonical(),
         config.color_mode,
         config.custom_css_enabled,
+        config.color_overrides_enabled,
     );
 
     // Write overrides as magic comments
@@ -377,6 +382,13 @@ pub fn import_theme(exported: &str) -> ThemeConfig {
         if let Some(rest) = trimmed.strip_prefix("/* @poly-css-enabled:") {
             let val = rest.trim().trim_end_matches("*/").trim();
             config.custom_css_enabled = val == "true";
+            continue;
+        }
+
+        // Color overrides enabled
+        if let Some(rest) = trimmed.strip_prefix("/* @poly-color-overrides-enabled:") {
+            let val = rest.trim().trim_end_matches("*/").trim();
+            config.color_overrides_enabled = val == "true";
             continue;
         }
 

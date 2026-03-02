@@ -9,8 +9,9 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.20): Account switcher bar for DMs
 
+use super::routes::Route;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, SettingsSection, View};
+use crate::state::{AppState, ChatData, SettingsSection};
 use dioxus::prelude::*;
 
 /// Account switcher bar component (replaces AccountBar in DMs).
@@ -34,7 +35,7 @@ pub fn AccountSwitcher() -> Element {
                 title: "{t(\"account-switch\")}",
                 onclick: move |_| {
                     app_state.write().settings_section = SettingsSection::Accounts;
-                    app_state.write().nav.view = View::Settings;
+                    navigator().push(Route::SettingsRoute);
                 },
                 "👥"
             }
@@ -77,7 +78,7 @@ pub fn AccountSwitcher() -> Element {
                 title: "{t(\"nav-settings\")}",
                 onclick: move |_| {
                     app_state.write().settings_section = SettingsSection::General;
-                    app_state.write().nav.view = View::Settings;
+                    navigator().push(Route::SettingsRoute);
                 },
                 "⚙"
             }

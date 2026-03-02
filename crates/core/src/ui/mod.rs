@@ -30,6 +30,7 @@ mod emoji_picker;
 mod friends_panel;
 mod main_layout;
 mod notifications;
+pub mod routes;
 mod server_sidebar;
 mod settings;
 mod setup_wizard;
@@ -41,11 +42,13 @@ mod voice_view;
 pub use account_switcher::AccountSwitcher;
 pub use friends_panel::FriendsPanel;
 pub use main_layout::MainLayout;
+pub use routes::Route;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, ChatData, SettingsSection, View};
+use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
+use routes::sync_route_to_app_state;
 
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
 const CSS: Asset = asset!("assets/tailwind.css");
@@ -169,26 +172,28 @@ pub fn App() -> Element {
                     on_complete: move |account_id: String| {
                         app_state.write().is_setup_complete = true;
                         spawn(async move {
-                            // Check if any accounts exist; if not, route to Accounts settings
-                            if let Some(storage) = crate::STORAGE.get() {
-                                match storage.get_account_tokens().await {
-                                    Ok(tokens) if tokens.is_empty() => {
-                                        app_state.write().settings_section = SettingsSection::Accounts;
-                                        app_state.write().nav.view = View::Settings;
-                                    }
-                                    _ => {
-                                        app_state.write().nav.view = View::DmsFriends;
-                                    }
-                                }
-                            } else {
-                                app_state.write().nav.view = View::DmsFriends;
-                            }
+                            // Router handles initial route via on_update redirect.
+                            // TODO(phase-2.7): If no accounts exist, prompt user to
+                            // add one via a modal or navigate to settings after mount.
                             persist_setup_completion(account_id).await;
                         });
                     },
                 }
             } else {
-                MainLayout {}
+                Router::<Route> {
+                    config: move || {
+                        dioxus_router::RouterConfig::default()
+                            .on_update(move |state: dioxus_router::GenericRouterContext<Route>| {
+                                let route = state.current();
+                                sync_route_to_app_state(&route, app_state);
+                                // Redirect root path and catch-all to DMs home
+                                if matches!(route, Route::PageNotFound { .. } | Route::Root) {
+                                    return Some(NavigationTarget::Internal(Route::DmsHome));
+                                }
+                                None
+                            })
+                    },
+                }
             }
         }
     }

@@ -10,10 +10,11 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
+use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::backend_badge;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 
 /// Friends browser panel with tiled grid display and filtering options.
@@ -57,7 +58,7 @@ pub fn FriendsPanel() -> Element {
         .collect::<Vec<_>>();
 
     let back_onclick = move |_| {
-        app_state.write().nav.view = View::DmsFriends;
+        navigator().go_back();
     };
 
     rsx! {
@@ -116,9 +117,11 @@ pub fn FriendsPanel() -> Element {
                             onclick: {
                                 let friend_id = friend.id.clone();
                                 move |_| {
-                                    app_state.write().push_nav_history();
                                     app_state.write().nav.selected_channel = Some(friend_id.clone());
-                                    app_state.write().nav.view = View::DmsFriends;
+                                    navigator()
+                                        .push(Route::DmChat {
+                                            channel_id: friend_id.clone(),
+                                        });
                                 }
                             },
                             // Avatar

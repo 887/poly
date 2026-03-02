@@ -22,18 +22,29 @@ pub struct UserProfile {
     pub avatar_url: Option<String>,
 }
 
-/// Database record — includes password hash (never returned to clients).
+/// Database record — includes public key (never returned to clients).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserRecord {
     pub id: Option<String>,
     pub username: String,
     pub display_name: String,
     pub avatar_url: Option<String>,
-    pub password_hash: String,
+    pub public_key: String,
     pub created_at: DateTime<Utc>,
 }
 
 // ── Device ───────────────────────────────────────────────────────────────────
+
+/// A short-lived nonce for Ed25519 challenge-response authentication.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthChallenge {
+    pub id: Option<String>,
+    pub public_key: String,
+    pub nonce: String,
+    pub expires_at: DateTime<Utc>,
+    pub used: bool,
+    pub created_at: DateTime<Utc>,
+}
 
 /// A logged-in device session.
 #[derive(Debug, Clone, Serialize, Deserialize)]

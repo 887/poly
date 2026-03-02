@@ -108,7 +108,9 @@ pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Eleme
 
 /// Color pickers for the six most impactful CSS variables.
 ///
-/// Picking a color inserts the value into [`ThemeConfig::color_overrides`].
+/// When disabled (default), the color pickers are greyed out and no
+/// color overrides are applied. When enabled, users can customize
+/// individual colors which then override the preset.
 #[component]
 pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -121,9 +123,31 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
         ("--border-primary", "Border"),
     ];
     let config = theme_config.read().clone();
+    let colors_enabled = config.color_overrides_enabled;
     rsx! {
         div { class: "theme-section",
-            label { class: "settings-label", "{t(\"settings-color-overrides\")}" }
+            // Toggle row
+            div { class: "colors-toggle-row",
+                label { class: "settings-label", "{t(\"settings-color-overrides\")}" }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: colors_enabled,
+                        onchange: move |e| {
+                            let enabled = e.checked();
+                            let mut cfg = theme_config.read().clone();
+                            cfg.color_overrides_enabled = enabled;
+                            theme_config.set(cfg.clone());
+                            spawn(async move {
+                                persist_theme(cfg).await;
+                            });
+                        },
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+            p { class: "colors-hint", "{t(\"settings-color-hint\")}" }
+            // Color pickers grid
             div { class: "color-overrides-grid",
                 for (var_name , display_label) in VARS {
                     {
@@ -146,16 +170,19 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
                                 label { class: "color-override-label", "{display_label}" }
                                 input {
                                     r#type: "color",
-                                    class: "color-picker",
+                                    class: if colors_enabled { "color-picker" } else { "color-picker color-picker-disabled" },
+                                    disabled: !colors_enabled,
                                     value: cur,
                                     oninput: move |e| {
-                                        let color = e.value();
-                                        let mut cfg = theme_config.read().clone();
-                                        cfg.color_overrides.insert(var_name.to_string(), color);
-                                        theme_config.set(cfg.clone());
-                                        spawn(async move {
-                                            persist_theme(cfg).await;
-                                        });
+                                        if colors_enabled {
+                                            let color = e.value();
+                                            let mut cfg = theme_config.read().clone();
+                                            cfg.color_overrides.insert(var_name.to_string(), color);
+                                            theme_config.set(cfg.clone());
+                                            spawn(async move {
+                                                persist_theme(cfg).await;
+                                            });
+                                        }
                                     },
                                 }
                             }
