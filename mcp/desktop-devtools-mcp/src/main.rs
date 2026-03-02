@@ -2,16 +2,14 @@
 //!
 //! MCP server for the **desktop** devtools backend.
 //!
-//! Launches the desktop-devtools app via `dx serve --hotpatch` so that Dioxus
-//! hot-reload works automatically for code changes. Communicates with the app
+//! Launches the desktop-devtools app via `dx serve` and communicates with the app
 //! via its embedded HTTP eval-bridge at `http://127.0.0.1:9223`.
 //!
 //! ## Hot Reload
 //!
-//! Because the app runs under `dx serve --hotpatch`, RSX-only changes are
-//! applied automatically via subsecond hot-patching. For structural code
-//! changes that require recompilation, use the `rebuild_app` MCP tool which
-//! touches a source file to trigger the file watcher.
+//! The app runs under `dx serve` with file-watcher-based hot-reload. When you
+//! make changes to poly-core, use the `rebuild_app` MCP tool which touches a
+//! source file to trigger a full rebuild.
 //!
 //! ## Usage
 //! ```bash
@@ -26,7 +24,6 @@ use async_trait::async_trait;
 use poly_devtools_protocol::backend::{DevtoolsBackend, ScreenshotResult};
 use poly_devtools_protocol::mcp::run_mcp_loop;
 use serde_json::Value;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 const BASE: &str = "http://127.0.0.1:9223";
@@ -57,20 +54,17 @@ async fn http_get(client: &reqwest::Client, path: &str) -> anyhow::Result<Vec<u8
 
 // ─── dx serve Process State ──────────────────────────────────────────────────
 
-/// Handle to a managed `dx serve --hotpatch` process.
+/// Handle to a managed `dx serve` process.
 ///
-/// Keeps the piped stdin so we can attempt to send interactive commands (like
-/// `r` for rebuild). The background child is reaped by a tokio task.
+/// Tracks the process ID for hard-kill via SIGKILL.
 struct DxServeProcess {
-    /// Piped stdin — write `r` to attempt an interactive rebuild trigger.
-    stdin: tokio::process::ChildStdin,
     /// OS process ID — used for hard-kill via SIGKILL.
     pid: u32,
 }
 
 // ─── Desktop HTTP Backend ─────────────────────────────────────────────────────
 
-/// Desktop devtools backend — launches the app via `dx serve --hotpatch` and
+/// Desktop devtools backend — launches the app via `dx serve` and
 /// talks to the embedded HTTP eval-bridge at [`BASE`].
 struct DesktopHttpBackend {
     client: reqwest::Client,
@@ -162,25 +156,21 @@ impl DevtoolsBackend for DesktopHttpBackend {
             .await;
         tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-        // ── Step 3: start dx serve --hotpatch ─────────────────────────────
+        // ── Step 3: start dx serve ───────────────────────────────────────
         let app_dir = format!("{workspace}/apps/desktop-devtools");
         let mut child = tokio::process::Command::new("dx")
-            .args(["serve", "--hotpatch", "--platform", "desktop"])
+            .args(["serve", "--platform", "desktop"])
             .current_dir(&app_dir)
-            .stdin(Stdio::piped())
+            .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .spawn()?;
 
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Failed to capture dx serve stdin"))?;
         let pid = child
             .id()
             .ok_or_else(|| anyhow::anyhow!("dx serve process has no PID"))?;
 
-        *self.dx_serve.lock().await = Some(DxServeProcess { stdin, pid });
+        *self.dx_serve.lock().await = Some(DxServeProcess { pid });
 
         // Background task: reap the child and clean up state on exit.
         let dx_ref = self.dx_serve.clone();
@@ -193,13 +183,13 @@ impl DevtoolsBackend for DesktopHttpBackend {
         // Poll for up to 120 s — initial compilation can be slow.
         match self.wait_for_bridge(120).await {
             Ok(()) => Ok(format!(
-                "dx serve --hotpatch started in {app_dir}\n\
+                "dx serve started in {app_dir}\n\
                  Eval bridge ready at {BASE}\n\
-                 Hot reload is active — code changes are applied automatically.\n\
-                 Use rebuild_app for a full rebuild, kill_app to stop everything."
+                 Hot reload is active — file changes trigger automatic rebuild.\n\
+                 Use rebuild_app for forced rebuild, kill_app to stop everything."
             )),
             Err(_) => Ok(format!(
-                "dx serve --hotpatch started in {app_dir}\n\
+                "dx serve started in {app_dir}\n\
                  Eval bridge not yet responding at {BASE} — first build may still be compiling.\n\
                  Call connect_cdp in a moment to check."
             )),
@@ -371,26 +361,17 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
-        // Primary strategy: try sending 'r' to dx serve stdin (triggers a full
-        // rebuild in the dioxus TUI). This only works when dx serve was started
-        // by us with a piped stdin.
-        {
-            let mut guard = self.dx_serve.lock().await;
-            if let Some(ref mut state) = *guard {
-                // Send 'r' — the dioxus CLI interprets this as "rebuild".
-                let _ = state.stdin.write_all(b"r").await;
-            }
-        }
-
-        // Fallback / additional trigger: touch a source file so the file watcher
-        // fires even if the stdin approach didn't work (e.g. dx serve was
-        // started externally, or it ignores piped stdin).
+        // Touch a source file to trigger dx serve's file watcher, causing a
+        // full rebuild.
         Self::touch_source_file(workspace).await?;
 
         // Wait a moment for the rebuild to start, then poll the bridge.
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         match self.wait_for_bridge(120).await {
-            Ok(()) => Ok("Rebuild triggered. App is ready — eval bridge responding.".to_string()),
+            Ok(()) => Ok("Rebuild triggered (touched crates/core/src/lib.rs).\n\
+                 dx serve is recompiling — this takes 10-30s with a warm cache.\n\
+                 Eval bridge will reconnect when done."
+                .to_string()),
             Err(e) => Err(anyhow::anyhow!(
                 "Rebuild triggered but eval bridge didn't come back: {e}"
             )),

@@ -1,45 +1,85 @@
 //! Channel list — categories and channels for the selected server.
 //!
-//! In Server view: shows the server name + source banner, collapsible categories,
-//! and channels with type icons (#, 🔊, 📹) and unread indicators.
-//!
-//! In DMs/Friends view: shows DM channels, groups, and Friends list.
-//!
-//! All data comes from `Signal<ChatData>`.
-// TODO(phase-2.5.5): Wire channel list to backend data
+//! Delegates to sub-components to stay under 150-line component size limit:
+//! - `ChannelListHeader`: displays server name or "Direct Messages"
+//! - `DMFriendsView`: DM + group + friends unified list with search
+//! - `ServerChannelView`: server categories and channels
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::chat_data::{backend_badge, user_color};
+use crate::state::chat_data::backend_badge;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
-use poly_client::ChannelType;
+use poly_client::{Channel, ChannelType, Server, User, VoiceParticipant};
 
-/// Channel list component.
-///
-/// In Server view: shows server name header with source info, categories,
-/// and channels with type icons and unread indicators.
-///
-/// In DMs/Friends view: shows DM channels, groups, and friends.
+/// Main channel list component — delegates to sub-views based on current view.
 #[component]
 pub fn ChannelList() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
-    let selected_channel = app_state.read().nav.selected_channel.clone();
+    let app_state: Signal<AppState> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
     let current_view = app_state.read().nav.view;
-
-    let channels = chat_data.read().channels.clone();
     let current_server = chat_data.read().current_server.clone();
+
+    rsx! {
+        aside { class: "channel-list",
+            ChannelListHeader { current_view, current_server: current_server.clone() }
+
+            div { class: "channel-entries",
+                if current_view == View::DmsFriends {
+                    DMFriendsView {}
+                } else if current_server.is_some() {
+                    ServerChannelView {}
+                } else {
+                    div { class: "channel-empty",
+                        p { "{t(\"chat-no-messages\")}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Header section — server name or "Direct Messages" title.
+#[component]
+fn ChannelListHeader(
+    current_view: View,
+    current_server: Option<Server>,
+) -> Element {
+    rsx! {
+        div { class: "channel-list-header",
+            if current_view == View::DmsFriends {
+                h3 { "{t(\"nav-dms\")}" }
+            } else if let Some(ref server) = current_server {
+                h3 { class: "server-name", "{server.name}" }
+                div { class: "server-source",
+                    span { class: "source-badge-inline", "{backend_badge(&server.backend)}" }
+                    span { class: "source-text",
+                        "{server.backend.display_name()} — {server.account_display_name}"
+                    }
+                }
+            } else {
+                h3 { "{t(\"nav-dms\")}" }
+            }
+        }
+    }
+}
+
+/// DMs and Friends view — search, unified list of DMs + groups + friend contacts.
+#[component]
+fn DMFriendsView() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
+
     let dm_channels = chat_data.read().dm_channels.clone();
     let groups = chat_data.read().groups.clone();
     let friends = chat_data.read().friends.clone();
+    let selected_channel = app_state.read().nav.selected_channel.clone();
     let mut dm_filter = use_signal(String::new);
 
-    // Pre-compute DM filter/sort so values can be referenced inside rsx! arms.
     let filter_val = dm_filter.read().clone();
     let filter_lower = filter_val.to_lowercase();
 
+    // Sort DMs by unread + recency
     let mut sorted_dms = dm_channels.clone();
     sorted_dms.sort_by(|a, b| {
         b.unread_count.cmp(&a.unread_count).then_with(|| {
@@ -49,6 +89,8 @@ pub fn ChannelList() -> Element {
                 .cmp(&a.last_message.as_ref().map(|m| m.timestamp))
         })
     });
+
+    // Sort groups by recency
     let mut sorted_groups = groups.clone();
     sorted_groups.sort_by(|a, b| {
         b.last_message
@@ -56,12 +98,15 @@ pub fn ChannelList() -> Element {
             .map(|m| m.timestamp)
             .cmp(&a.last_message.as_ref().map(|m| m.timestamp))
     });
+
+    // Apply filter
     let filtered_dms: Vec<_> = sorted_dms
         .into_iter()
         .filter(|dm| {
             filter_lower.is_empty() || dm.user.display_name.to_lowercase().contains(&filter_lower)
         })
         .collect();
+
     let filtered_groups: Vec<_> = sorted_groups
         .into_iter()
         .filter(|g| {
@@ -78,6 +123,7 @@ pub fn ChannelList() -> Element {
             name.to_lowercase().contains(&filter_lower)
         })
         .collect();
+
     let show_friends: Vec<_> = if filter_lower.is_empty() {
         vec![]
     } else {
@@ -86,6 +132,7 @@ pub fn ChannelList() -> Element {
             .filter(|f| f.display_name.to_lowercase().contains(&filter_lower))
             .collect()
     };
+
     let has_no_data = dm_channels.is_empty() && groups.is_empty() && friends.is_empty();
     let no_filter_results = !filter_lower.is_empty()
         && filtered_dms.is_empty()
@@ -93,275 +140,318 @@ pub fn ChannelList() -> Element {
         && show_friends.is_empty();
 
     rsx! {
-        aside { class: "channel-list",
-            // Header
-            div { class: "channel-list-header",
-                if current_view == View::DmsFriends {
-                    h3 { "{t(\"nav-dms\")}" }
-                } else if let Some(ref server) = current_server {
-                    h3 { class: "server-name", "{server.name}" }
-                    div { class: "server-source",
-                        span { class: "source-badge-inline", "{backend_badge(&server.backend)}" }
-                        span { class: "source-text",
-                            "{server.backend.display_name()} — {server.account_display_name}"
-                        }
-                    }
-                } else {
-                    h3 { "{t(\"nav-dms\")}" }
+        // Friends button
+        button {
+            class: "dm-friends-row-btn",
+            onclick: move |_| {
+                app_state.write().push_nav_history();
+                app_state.write().nav.view = View::Friends;
+            },
+            span { class: "dm-friends-row-icon", "👥" }
+            span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }
+        }
+
+        // Search bar
+        div { class: "dm-search-bar",
+            input {
+                r#type: "text",
+                class: "dm-search-input",
+                placeholder: "{t(\"dm-search-placeholder\")}",
+                value: "{filter_val}",
+                oninput: move |e| dm_filter.set(e.value()),
+            }
+            if !filter_val.is_empty() {
+                button {
+                    class: "dm-search-clear",
+                    onclick: move |_| dm_filter.set(String::new()),
+                    "×"
+                }
+            }
+        }
+
+        // Unified DM + Group list
+        div { class: "dm-unified-list",
+            for dm in &filtered_dms {
+                DMChannelItem {
+                    channel_id: dm.id.clone(),
+                    display_name: dm.user.display_name.clone(),
+                    user_id: dm.user.id.clone(),
+                    badge: backend_badge(&dm.backend),
+                    unread: dm.unread_count,
+                    is_active: selected_channel.as_deref() == Some(&dm.id),
                 }
             }
 
-            div { class: "channel-entries",
-                if current_view == View::DmsFriends {
-                    // ── DMs / Friends view ───────────────────────────────
-                    // Friends button — full-width row (Discord-style)
-                    button {
-                        class: "dm-friends-row-btn",
-                        onclick: move |_| {
-                            app_state.write().push_nav_history();
-                            app_state.write().nav.view = View::Friends;
-                        },
-                        span { class: "dm-friends-row-icon", "👥" }
-                        span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }
-                    }
+            for group in &filtered_groups {
+                GroupChannelItem {
+                    group_id: group.id.clone(),
+                    group_name: group.name.clone(),
+                    members: group.members.clone(),
+                    badge: backend_badge(&group.backend),
+                    is_active: selected_channel.as_deref() == Some(&group.id),
+                }
+            }
 
-                    // Search bar: find conversations or contacts across all accounts
-                    div { class: "dm-search-bar",
-                        input {
-                            r#type: "text",
-                            class: "dm-search-input",
-                            placeholder: "{t(\"dm-search-placeholder\")}",
-                            value: "{filter_val}",
-                            oninput: move |e| dm_filter.set(e.value()),
-                        }
-                        if !filter_val.is_empty() {
-                            button {
-                                class: "dm-search-clear",
-                                onclick: move |_| dm_filter.set(String::new()),
-                                "×"
-                            }
-                        }
-                    }
-                    // Unified DM + Group list sorted by recency (newest up top)
-                    div { class: "dm-unified-list",
-                        // Direct message channels
-                        for dm in &filtered_dms {
-                            {
-                                let dm_id = dm.id.clone();
-                                let name = dm.user.display_name.clone();
-                                let badge = backend_badge(&dm.backend);
-                                let unread = dm.unread_count;
-                                let color = user_color(&dm.user.id);
-                                let first_char: String = name
-                                    .chars()
-                                    .next()
-                                    .map(|c| c.to_string())
-                                    .unwrap_or_default();
-                                let is_active = selected_channel.as_deref() == Some(&dm_id);
-                                rsx! {
-                                    div {
-                                        class: if is_active { "channel-item active" } else { "channel-item" },
-                                        onclick: {
-                                            let dm_id_click = dm_id.clone();
-                                            move |_| {
-                                                app_state.write().push_nav_history();
-                                                app_state.write().nav.selected_channel =
-                                                    Some(dm_id_click.clone());
-                                            }
-                                        },
-                                        div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
-                                        span { class: "channel-name", "{name}" }
-                                        span { class: "source-badge-inline", "{badge}" }
-                                        if unread > 0 {
-                                            span { class: "unread-badge", "{unread}" }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // Group chats (sorted by last message timestamp)
-                        for group in &filtered_groups {
-                            {
-                                let group_name = group
-                                    .name
-                                    .clone()
-                                    .unwrap_or_else(|| {
-                                        group
-                                            .members
-                                            .iter()
-                                            .map(|m| m.display_name.clone())
-                                            .collect::<Vec<_>>()
-                                            .join(", ")
-                                    });
-                                let group_id = group.id.clone();
-                                let badge = backend_badge(&group.backend);
-                                let member_count = group.members.len();
-                                let is_active = selected_channel.as_deref() == Some(&group_id);
-                                rsx! {
-                                    div {
-                                        class: if is_active { "channel-item active" } else { "channel-item" },
-                                        onclick: {
-                                            let gid = group_id.clone();
-                                            move |_| {
-                                                app_state.write().push_nav_history();
-                                                app_state.write().nav.selected_channel =
-                                                    Some(gid.clone());
-                                            }
-                                        },
-                                        span { class: "channel-icon", "👥" }
-                                        span { class: "channel-name", "{group_name}" }
-                                        span { class: "source-badge-inline", "{badge}" }
-                                        span { class: "dm-member-count", "({member_count})" }
-                                    }
-                                }
-                            }
-                        }
-                        // Contacts from all accounts — shown only when search is active
-                        if !show_friends.is_empty() {
-                            div { class: "dm-section-header", "{t(\"nav-friends\")}" }
-                            for friend in &show_friends {
-                                {
-                                    let name = friend.display_name.clone();
-                                    let badge = backend_badge(&friend.backend);
-                                    let color = user_color(&friend.id);
-                                    let first_char: String = name
-                                        .chars()
-                                        .next()
-                                        .map(|c| c.to_string())
-                                        .unwrap_or_default();
-                                    rsx! {
-                                        div { class: "channel-item",
-                                            div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
-                                            span { class: "channel-name", "{name}" }
-                                            span { class: "source-badge-inline", "{badge}" }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // Empty states
-                        if has_no_data {
-                            div { class: "channel-empty",
-                                p { "Toggle the 🧪 demo to see sample data" }
-                            }
-                        } else if no_filter_results {
-                            div { class: "dm-no-results", "{t(\"dm-no-results\")}" }
-                        }
-                    }
-                } else if let Some(ref server) = current_server {
-                    // Render channels grouped by categories
-                    for category in &server.categories {
-                        {
-                            let cat_name = category.name.clone();
-                            let cat_channel_ids = category.channel_ids.clone();
-                            rsx! {
-                                div { class: "channel-category",
-                                    div { class: "category-header",
-                                        span { class: "category-chevron", "▾" }
-                                        span { class: "category-name", "{cat_name}" }
-                                    }
-                                    for ch_id in &cat_channel_ids {
-                                        {
-                                            // Find the channel in loaded data
-                                            let channel = channels.iter().find(|c| &c.id == ch_id).cloned();
-                                            if let Some(channel) = channel {
-                                                let ch_id_click = channel.id.clone();
-                                                let ch_name = channel.name.clone();
-                                                let ch_type = channel.channel_type;
-                                                let unread = channel.unread_count;
-                                                let is_active = selected_channel.as_deref() == Some(&ch_id_click);
-                                                let type_icon = match ch_type {
-                                                    ChannelType::Text => "#",
-                                                    ChannelType::Voice => "🔊",
-                                                    ChannelType::Video => "📹",
-                                                };
-
-                                                // Get voice participants for voice/video channels
-                                                let voice_participants = if matches!(
-                                                    ch_type,
-                                                    ChannelType::Voice | ChannelType::Video
-                                                ) {
-                                                    chat_data
-                                                        .read()
-                                                        .voice_channel_participants
-                                                        .get(&ch_id_click)
-                                                        .cloned()
-                                                        .unwrap_or_default()
-                                                } else {
-                                                    Vec::new()
-                                                };
-                                                rsx! {
-                                                    div {
-                                                        class: if is_active { "channel-item active" } else { "channel-item" },
-                                                        onclick: {
-                                                            let ch_id_inner = ch_id_click.clone();
-                                                            let channel_clone = channel.clone();
-                                                            move |_| {
-                                                                app_state.write().push_nav_history();
-                                                                app_state.write().nav.selected_channel = Some(ch_id_inner.clone());
-                                                                chat_data.write().current_channel = Some(channel_clone.clone());
-                                                                // Load messages for this channel
-                                                                let cid = ch_id_inner.clone();
-                                                                spawn(async move {
-                                                                    load_channel_data(cid, client_manager, chat_data, app_state).await;
-                                                                });
-                                                            }
-                                                        },
-                                                        span { class: "channel-icon", "{type_icon}" }
-                                                        span { class: "channel-name", "{ch_name}" }
-                                                        if unread > 0 {
-                                                            span { class: "unread-badge", "{unread}" }
-                                                        }
-                                                    }
-                                                    // Voice channel: show connected participants underneath
-                                                    if !voice_participants.is_empty() {
-                                                        div { class: "voice-channel-users",
-                                                            for vp in &voice_participants {
-                                                                {
-                                                                    let vp_name = vp.user.display_name.clone();
-                                                                    let vp_color = user_color(&vp.user.id);
-                                                                    let vp_first: String = vp_name
-                                                                        .chars()
-                                                                        .next()
-                                                                        .map(|c| c.to_string())
-                                                                        .unwrap_or_default();
-                                                                    rsx! {
-                                                                        div { class: "voice-user-entry",
-                                                                            div { class: "voice-user-avatar", style: "background-color: {vp_color};", "{vp_first}" }
-                                                                            span { class: "voice-user-name", "{vp_name}" }
-                                                                            if vp.is_muted {
-                                                                                span { class: "voice-user-icon", "🔇" }
-                                                                            }
-                                                                            if vp.is_deafened {
-                                                                                span { class: "voice-user-icon", "🔕" }
-                                                                            }
-                                                                            if vp.is_streaming {
-                                                                                span { class: "voice-user-icon", "🖥" }
-                                                                            }
-                                                                            if vp.is_video_on {
-                                                                                span { class: "voice-user-icon", "📹" }
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                rsx! {}
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if channels.is_empty() {
-                    div { class: "channel-empty",
-                        p { "{t(\"chat-no-messages\")}" }
+            if !show_friends.is_empty() {
+                div { class: "dm-section-header", "{t(\"nav-friends\")}" }
+                for friend in &show_friends {
+                    FriendItem {
+                        display_name: friend.display_name.clone(),
+                        user_id: friend.id.clone(),
+                        badge: backend_badge(&friend.backend),
                     }
                 }
+            }
+
+            if has_no_data {
+                div { class: "channel-empty",
+                    p { "Toggle the 🧪 demo to see sample data" }
+                }
+            } else if no_filter_results {
+                div { class: "dm-no-results", "{t(\"dm-no-results\")}" }
+            }
+        }
+    }
+}
+
+/// Server channel view — categories and channels.
+#[component]
+fn ServerChannelView() -> Element {
+    let app_state: Signal<AppState> = use_context();
+    let _client_manager: Signal<ClientManager> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
+
+    let channels = chat_data.read().channels.clone();
+    let current_server = chat_data.read().current_server.clone();
+    let _selected_channel = app_state.read().nav.selected_channel.clone();
+
+    if let Some(ref server) = current_server {
+        rsx! {
+            for category in &server.categories {
+                CategorySection {
+                    cat_name: category.name.clone(),
+                    cat_channel_ids: category.channel_ids.clone(),
+                    channels: channels.clone(),
+                }
+            }
+        }
+    } else {
+        rsx! {}
+    }
+}
+
+/// Single DM channel item.
+#[component]
+fn DMChannelItem(
+    channel_id: String,
+    display_name: String,
+    user_id: String,
+    badge: String,
+    unread: u32,
+    is_active: bool,
+) -> Element {
+    use crate::state::chat_data::user_color;
+    let mut app_state: Signal<AppState> = use_context();
+
+    let color = user_color(&user_id);
+    let first_char: String = display_name
+        .chars()
+        .next()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
+
+    rsx! {
+        div {
+            class: if is_active { "channel-item active" } else { "channel-item" },
+            onclick: move |_| {
+                app_state.write().push_nav_history();
+                app_state.write().nav.selected_channel = Some(channel_id.clone());
+            },
+            div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
+            span { class: "channel-name", "{display_name}" }
+            span { class: "source-badge-inline", "{badge}" }
+            if unread > 0 {
+                span { class: "unread-badge", "{unread}" }
+            }
+        }
+    }
+}
+
+/// Single group channel item.
+#[component]
+fn GroupChannelItem(
+    group_id: String,
+    group_name: Option<String>,
+    members: Vec<User>,
+    badge: String,
+    is_active: bool,
+) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+
+    let display_name = group_name.unwrap_or_else(|| {
+        members
+            .iter()
+            .map(|m| m.display_name.clone())
+            .collect::<Vec<_>>()
+            .join(", ")
+    });
+    let member_count = members.len();
+
+    rsx! {
+        div {
+            class: if is_active { "channel-item active" } else { "channel-item" },
+            onclick: move |_| {
+                app_state.write().push_nav_history();
+                app_state.write().nav.selected_channel = Some(group_id.clone());
+            },
+            span { class: "channel-icon", "👥" }
+            span { class: "channel-name", "{display_name}" }
+            span { class: "source-badge-inline", "{badge}" }
+            span { class: "dm-member-count", "({member_count})" }
+        }
+    }
+}
+
+/// Friend contact in search results.
+#[component]
+fn FriendItem(display_name: String, user_id: String, badge: String) -> Element {
+    use crate::state::chat_data::user_color;
+
+    let color = user_color(&user_id);
+    let first_char: String = display_name
+        .chars()
+        .next()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
+
+    rsx! {
+        div { class: "channel-item",
+            div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
+            span { class: "channel-name", "{display_name}" }
+            span { class: "source-badge-inline", "{badge}" }
+        }
+    }
+}
+
+/// Category header + channels within the category.
+#[component]
+fn CategorySection(
+    cat_name: String,
+    cat_channel_ids: Vec<String>,
+    channels: Vec<Channel>,
+) -> Element {
+    rsx! {
+        div { class: "channel-category",
+            div { class: "category-header",
+                span { class: "category-chevron", "▾" }
+                span { class: "category-name", "{cat_name}" }
+            }
+            for ch_id in &cat_channel_ids {
+                {
+                    if let Some(channel) = channels.iter().find(|c| &c.id == ch_id).cloned() {
+                        rsx! {
+                            ChannelItemRow { channel }
+                        }
+                    } else {
+                        rsx! {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Single server channel row (with voice participants if applicable).
+#[component]
+fn ChannelItemRow(channel: Channel) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+
+    let selected_channel = app_state.read().nav.selected_channel.clone();
+    let ch_id = channel.id.clone();
+    let ch_name = channel.name.clone();
+    let ch_type = channel.channel_type;
+    let unread = channel.unread_count;
+    let is_active = selected_channel.as_deref() == Some(&ch_id);
+
+    let type_icon = match ch_type {
+        ChannelType::Text => "#",
+        ChannelType::Voice => "🔊",
+        ChannelType::Video => "📹",
+    };
+
+    let voice_participants = if matches!(ch_type, ChannelType::Voice | ChannelType::Video) {
+        chat_data
+            .read()
+            .voice_channel_participants
+            .get(&ch_id)
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    rsx! {
+        div {
+            class: if is_active { "channel-item active" } else { "channel-item" },
+            onclick: move |_| {
+                app_state.write().push_nav_history();
+                app_state.write().nav.selected_channel = Some(ch_id.clone());
+                chat_data.write().current_channel = Some(channel.clone());
+                let cid = ch_id.clone();
+                spawn(async move {
+                    load_channel_data(cid, client_manager, chat_data, app_state).await;
+                });
+            },
+            span { class: "channel-icon", "{type_icon}" }
+            span { class: "channel-name", "{ch_name}" }
+            if unread > 0 {
+                span { class: "unread-badge", "{unread}" }
+            }
+        }
+        if !voice_participants.is_empty() {
+            div { class: "voice-channel-users",
+                for vp in &voice_participants {
+                    VoiceParticipantEntry { participant: vp.clone() }
+                }
+            }
+        }
+    }
+}
+
+/// Single connected voice participant entry.
+#[component]
+fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
+    use crate::state::chat_data::user_color;
+
+    let vp_name = participant.user.display_name.clone();
+    let vp_color = user_color(&participant.user.id);
+    let vp_first: String = vp_name
+        .chars()
+        .next()
+        .map(|c: char| c.to_string())
+        .unwrap_or_default();
+
+    rsx! {
+        div { class: "voice-user-entry",
+            div {
+                class: "voice-user-avatar",
+                style: "background-color: {vp_color};",
+                "{vp_first}"
+            }
+            span { class: "voice-user-name", "{vp_name}" }
+            if participant.is_muted {
+                span { class: "voice-user-icon", "🔇" }
+            }
+            if participant.is_deafened {
+                span { class: "voice-user-icon", "🔕" }
+            }
+            if participant.is_streaming {
+                span { class: "voice-user-icon", "🖥" }
+            }
+            if participant.is_video_on {
+                span { class: "voice-user-icon", "📹" }
             }
         }
     }

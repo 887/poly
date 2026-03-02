@@ -1,7 +1,7 @@
 # poly-desktop-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-01
+> **Last Updated:** 2026-03-02
 
 ---
 
@@ -156,6 +156,18 @@ Call `launch_app` again to restart at the setup wizard.
 - **MUST use `dx build`** — `cargo build` leaves `asset!()` placeholder URLs intact 
 - Binary output: `target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools`
 - CSS asset: `target/dx/poly-desktop-devtools/debug/linux/app/assets/tailwind-*.css`
+
+## Rebuild Strategy — NO `--hotpatch` (DECISION)
+
+The desktop MCP uses the **same strategy as the web MCP**: standard file-watcher-based hot-reload.
+
+**`--hotpatch` is NOT used.** Reasons:
+- Hotpatch mode can cause infinite rebuild loops with the HTTP eval-bridge
+- File-watcher + full rebuild is more stable and predictable
+- Matches the web MCP approach for consistency
+
+**`rebuild_app` strategy**: Touch `crates/core/src/lib.rs` to trigger the file
+watcher. dx serve will recompile and hot-reload the page automatically.
 
 ## Debugging CSS Not Loading
 
