@@ -90,6 +90,7 @@ settings-theme-export = Design exportieren
 settings-color-mode = Farbmodus
 settings-color-overrides = Farbanpassung
 settings-color-hint = Aktivieren Sie diese Option, um einzelne Farben von der Vorlage zu überschreiben. Deaktivieren Sie, um zur Vorlage zurückzukehren.
+settings-reset-colors = Farben zurücksetzen
 settings-theme-apply-css = CSS anwenden
 settings-css-hint = Kommentierung einer Variable aufheben, um die Design-Vorlage zu überschreiben. Der Schalter aktiviert/deaktiviert diese CSS-Anpassungen.
 settings-css-reset-template = Vorlage zurücksetzen

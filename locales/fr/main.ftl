@@ -90,6 +90,7 @@ settings-theme-export = Exporter un thème
 settings-color-mode = Mode de couleur
 settings-color-overrides = Personnalisation des couleurs
 settings-color-hint = Activez cette option pour remplacer les couleurs individuelles du thème. Désactivez pour revenir au thème par défaut.
+settings-reset-colors = Réinitialiser les couleurs
 settings-theme-apply-css = Appliquer le CSS
 settings-css-hint = Décommentez une variable pour remplacer le thème. L’interrupteur active/désactive ces modifications CSS.
 settings-css-reset-template = Réinitialiser le modèle

@@ -90,6 +90,7 @@ settings-theme-export = Export Theme
 settings-color-mode = Color Mode
 settings-color-overrides = Color Customization
 settings-color-hint = Enable to override individual colors from the preset. Disable to revert to the preset theme.
+settings-reset-colors = Reset Colors
 settings-theme-apply-css = Apply CSS
 settings-css-hint = Uncomment any variable to override the theme preset. The toggle enables/disables these CSS overrides.
 settings-css-reset-template = Reset Template

@@ -190,6 +190,21 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
                     }
                 }
             }
+            // Reset button
+            div { class: "theme-actions",
+                button {
+                    class: "btn btn-secondary",
+                    onclick: move |_| {
+                        let mut cfg = theme_config.read().clone();
+                        cfg.color_overrides.clear();
+                        theme_config.set(cfg.clone());
+                        spawn(async move {
+                            persist_theme(cfg).await;
+                        });
+                    },
+                    {t("settings-reset-colors")}
+                }
+            }
         }
     }
 }
