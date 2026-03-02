@@ -263,6 +263,7 @@ notif-badge-unread = Enable Unread Message Badge
 # DM list
 dm-search-placeholder = Find or start a conversation
 dm-no-results = No conversations found
+dm-no-data-hint = Toggle the 🧪 demo to see sample data
 
 # Friends panel
 friends-title = Friends
@@ -270,3 +271,38 @@ friends-search-placeholder = Search friends...
 friends-none = No friends found
 filter-all = All Accounts
 filter-all-servers = All Servers
+
+# Time-ago formatting
+time-just-now = just now
+time-one-minute-ago = 1 minute ago
+time-minutes-ago = { $count } minutes ago
+time-one-hour-ago = 1 hour ago
+time-hours-ago = { $count } hours ago
+time-one-day-ago = 1 day ago
+time-days-ago = { $count } days ago
+
+# Chat extras
+chat-toggle-members = Toggle member list
+chat-select-channel = Select a channel to start chatting
+chat-timestamp-yesterday = Yesterday { $time }
+
+# Users extras
+user-no-members = No members to show
+account-not-signed-in = Not signed in
+
+# Theme color labels
+color-accent = Accent
+color-background = Background
+color-surface = Surface
+color-text = Text
+color-secondary-text = Secondary Text
+color-border = Border
+
+# Voice device defaults
+voice-default-mic = Default Microphone
+voice-default-speakers = Default Speakers
+
+# Error messages
+error-storage-unavailable = Storage unavailable
+error-load-settings = Failed to load settings
+error-reload-servers = Failed to reload servers

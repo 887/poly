@@ -12,7 +12,7 @@
 pub mod data;
 
 use async_trait::async_trait;
-use futures::stream::{self, Stream};
+use futures::stream::Stream;
 use poly_client::*;
 use std::pin::Pin;
 
@@ -147,9 +147,87 @@ impl ClientBackend for DemoClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        // Return an empty stream for now — will add periodic fake events later
-        // TODO(phase-2.6.8): Implement fake event stream with periodic messages
-        Box::pin(stream::empty())
+        let users = data::demo_users();
+        let channels = vec![
+            "ch-general", "ch-off-topic", "ch-rust", "ch-dioxus", "ch-minecraft",
+        ];
+        let typing_messages = vec![
+            "That's a great point!",
+            "I'll look into it.",
+            "Has anyone else seen this?",
+            "Working on a fix now \u{1f527}",
+            "brb",
+            "lol nice",
+            "Can confirm, same issue here.",
+            "\u{1f44d}",
+        ];
+
+        // Emit a fake event every 4–8 seconds (alternating cycle).
+        let stream = futures::stream::unfold(0u64, move |counter| {
+            let users = users.clone();
+            let channels = channels.clone();
+            let typing_messages = typing_messages.clone();
+            async move {
+                if users.is_empty() || channels.is_empty() || typing_messages.is_empty() {
+                    return None;
+                }
+
+                // Stagger timing: 4s, 6s, 8s, 5s, 7s cycle.
+                let delays = [4u64, 6, 8, 5, 7];
+                let delay_secs = delays.get((counter as usize) % delays.len()).copied().unwrap_or(5);
+                tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
+
+                let user_idx = (counter as usize) % users.len();
+                let ch_idx = (counter as usize) % channels.len();
+                let user = users.get(user_idx)?;
+                let channel_id = (*channels.get(ch_idx)?).to_string();
+
+                let event = match counter % 4 {
+                    // Message event.
+                    0 | 2 => {
+                        let msg_idx = (counter as usize / 4) % typing_messages.len();
+                        let text = typing_messages.get(msg_idx).copied().unwrap_or("...");
+                        ClientEvent::MessageReceived {
+                            channel_id,
+                            message: Message {
+                                id: format!("msg-live-{counter}"),
+                                author: user.clone(),
+                                content: MessageContent::Text(text.to_string()),
+                                timestamp: chrono::Utc::now(),
+                                attachments: vec![],
+                                reactions: vec![],
+                                edited: false,
+                            },
+                        }
+                    }
+                    // Typing event.
+                    1 => ClientEvent::TypingStarted {
+                        channel_id,
+                        user_id: user.id.clone(),
+                        timestamp: chrono::Utc::now(),
+                    },
+                    // Presence change.
+                    _ => {
+                        let statuses = [
+                            PresenceStatus::Online,
+                            PresenceStatus::Idle,
+                            PresenceStatus::DoNotDisturb,
+                            PresenceStatus::Online,
+                        ];
+                        let s_idx = (counter as usize / 3) % statuses.len();
+                        let status = statuses.get(s_idx).cloned().unwrap_or(PresenceStatus::Online);
+                        ClientEvent::PresenceChanged {
+                            user_id: user.id.clone(),
+                            status,
+                        }
+                    }
+                };
+
+                Some((event, counter + 1))
+            }
+        });
+
+        Box::pin(stream)
     }
 
     fn backend_type(&self) -> BackendType {

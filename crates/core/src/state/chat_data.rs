@@ -47,6 +47,12 @@ pub struct ChatData {
     /// Used to identify the local user (e.g. when joining a voice channel).
     /// In a multi-account world this is the "primary" or last-activated session.
     pub local_session: Option<Session>,
+    /// Users currently typing in the selected channel.
+    ///
+    /// Each entry is a display name string. Updated by the event stream
+    /// consumer when `TypingStarted` events arrive, cleared after a
+    /// few-second timeout.
+    pub typing_users: Vec<String>,
 }
 
 /// Format a file size in human-readable form.

@@ -263,6 +263,7 @@ notif-badge-unread = Ungelesene-Nachrichten-Badge aktivieren
 # DM list
 dm-search-placeholder = Gespräch suchen oder starten
 dm-no-results = Kein Gespräch gefunden
+dm-no-data-hint = 🧪 Demo aktivieren, um Beispieldaten zu sehen
 
 # Friends panel
 friends-title = Freunde
@@ -270,3 +271,38 @@ friends-search-placeholder = Freunde durchsuchen...
 friends-none = Keine Freunde gefunden
 filter-all = Alle Konten
 filter-all-servers = Alle Server
+
+# Zeitformatierung
+time-just-now = gerade eben
+time-one-minute-ago = vor 1 Minute
+time-minutes-ago = vor { $count } Minuten
+time-one-hour-ago = vor 1 Stunde
+time-hours-ago = vor { $count } Stunden
+time-one-day-ago = vor 1 Tag
+time-days-ago = vor { $count } Tagen
+
+# Chat-Extras
+chat-toggle-members = Mitgliederliste ein-/ausblenden
+chat-select-channel = Wähle einen Kanal, um zu chatten
+chat-timestamp-yesterday = Gestern { $time }
+
+# Benutzer-Extras
+user-no-members = Keine Mitglieder vorhanden
+account-not-signed-in = Nicht angemeldet
+
+# Farbbezeichnungen
+color-accent = Akzent
+color-background = Hintergrund
+color-surface = Oberfläche
+color-text = Text
+color-secondary-text = Sekundärer Text
+color-border = Rahmen
+
+# Audiogeräte-Standards
+voice-default-mic = Standard-Mikrofon
+voice-default-speakers = Standard-Lautsprecher
+
+# Fehlermeldungen
+error-storage-unavailable = Speicher nicht verfügbar
+error-load-settings = Einstellungen konnten nicht geladen werden
+error-reload-servers = Server konnten nicht neu geladen werden

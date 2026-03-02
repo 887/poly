@@ -114,13 +114,13 @@ pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Eleme
 #[component]
 pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-    const VARS: &[(&str, &str)] = &[
-        ("--accent-primary", "Accent"),
-        ("--bg-primary", "Background"),
-        ("--bg-surface", "Surface"),
-        ("--text-primary", "Text"),
-        ("--text-secondary", "Secondary Text"),
-        ("--border-primary", "Border"),
+    let vars: Vec<(&str, String)> = vec![
+        ("--accent-primary", t("color-accent")),
+        ("--bg-primary", t("color-background")),
+        ("--bg-surface", t("color-surface")),
+        ("--text-primary", t("color-text")),
+        ("--text-secondary", t("color-secondary-text")),
+        ("--border-primary", t("color-border")),
     ];
     let config = theme_config.read().clone();
     let colors_enabled = config.color_overrides_enabled;
@@ -149,10 +149,10 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
             p { class: "colors-hint", "{t(\"settings-color-hint\")}" }
             // Color pickers grid
             div { class: "color-overrides-grid",
-                for (var_name , display_label) in VARS {
+                for (var_name , display_label) in &vars {
                     {
                         let var_name = *var_name;
-                        let display_label = *display_label;
+                        let display_label = display_label.clone();
                         let cur = config
                             .color_overrides
                             .get(var_name)

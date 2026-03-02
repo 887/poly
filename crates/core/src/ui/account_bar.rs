@@ -24,13 +24,27 @@ pub fn AccountBar() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
+    let session = chat_data.read().local_session.clone();
 
-    // Demo user info — in real impl this comes from the active session
-    let user_name = "Demo User";
-    let user_id = "demo-user-self";
-    let status_text = t("user-online");
-    let color = user_color(user_id);
-    let first_char = "D";
+    // Use session data if available, otherwise show fallback
+    let (user_name, _user_id, status_text, color, first_char) = if let Some(ref s) = session {
+        let name = s.user.display_name.clone();
+        let id = s.user.id.clone();
+        let fc: String = name
+            .chars()
+            .next()
+            .map(|c| c.to_string())
+            .unwrap_or_default();
+        (name, id.clone(), t("user-online"), user_color(&id), fc)
+    } else {
+        (
+            t("account-not-signed-in"),
+            "no-session".to_string(),
+            t("user-offline"),
+            user_color("no-session"),
+            "?".to_string(),
+        )
+    };
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);

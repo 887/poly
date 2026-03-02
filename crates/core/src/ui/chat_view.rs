@@ -53,6 +53,7 @@ pub fn ChatView() -> Element {
     let current_server = chat_data.read().current_server.clone();
     let members_count = chat_data.read().members.len();
     let loading = chat_data.read().loading;
+    let reaction_picker_id = reaction_picker_msg.read().clone();
 
     // Scroll message list to bottom when messages change
     let msg_count = messages.len();
@@ -80,7 +81,10 @@ pub fn ChatView() -> Element {
             ondrop: move |evt| {
                 evt.prevent_default();
                 drag_over.set(false);
-                // TODO(phase-2.5.18): Parse dropped file data
+                // TODO(phase-3): parse dropped files into PendingFile attachments
+                // The Dioxus DragEvent provides file data on web targets.
+                // On desktop (Wry) the drop data arrives differently.
+                tracing::debug!("File(s) dropped on chat view");
             },
 
             // Drag overlay
@@ -120,7 +124,27 @@ pub fn ChatView() -> Element {
             }
 
             // ── Message list ─────────────────────────────────────────────
-            div { class: "message-list", id: "message-list-scroll",
+            div {
+                class: "message-list",
+                id: "message-list-scroll",
+                // Scroll-up pagination: detect near-top and trigger load more
+                onscroll: move |_| {
+                    spawn(async move {
+                        let mut eval = document::eval(
+                            r#"
+                                                    let el = document.getElementById('message-list-scroll');
+                                                    if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                    else { dioxus.send(false); }
+                                                    "#,
+                        );
+                        if let Ok(near_top) = eval.recv::<bool>().await
+                            && near_top
+                        {
+                            // TODO(phase-3): call backend load_more_messages with before cursor
+                            tracing::trace!("Scroll near top — would load more messages");
+                        }
+                    });
+                },
                 if loading {
                     div { class: "message-loading", "{t(\"chat-loading\")}" }
                 } else if messages.is_empty() {
@@ -174,8 +198,6 @@ pub fn ChatView() -> Element {
                             let is_hovered = hovered_msg.read().as_deref() == Some(&msg_id);
                             let msg_id_hover = msg_id.clone();
                             let msg_id_reaction = msg_id.clone();
-                            let msg_id_reactions = msg_id.clone();
-                            let has_reaction_picker = reaction_picker_msg.read().as_deref() == Some(&msg_id);
                             rsx! {
                                 // Date separator
                                 if show_date_sep {
@@ -207,22 +229,6 @@ pub fn ChatView() -> Element {
                                                 },
                                                 "😀+"
                                             }
-                                        }
-                                    }
-
-                                    // Reaction picker popup
-                                    if has_reaction_picker {
-                                        EmojiPicker {
-                                            on_select: {
-                                                let mid = msg_id_reactions.clone();
-                                                move |emoji: String| {
-                                                    toggle_reaction_on_message(&mut chat_data, &mid, &emoji);
-                                                    reaction_picker_msg.set(None);
-                                                }
-                                            },
-                                            on_close: move |_| {
-                                                reaction_picker_msg.set(None);
-                                            },
                                         }
                                     }
 
@@ -264,6 +270,25 @@ pub fn ChatView() -> Element {
                             }
                         }
                     }
+                }
+            }
+
+            // ── Typing indicator ──────────────────────────────────────
+            TypingIndicator {}
+
+            // ── Reaction emoji picker (top-level to escape message-list overflow) ──
+            if let Some(ref picker_msg_id) = reaction_picker_id {
+                EmojiPicker {
+                    on_select: {
+                        let msg_id = picker_msg_id.clone();
+                        move |emoji: String| {
+                            toggle_reaction_on_message(&mut chat_data, &msg_id, &emoji);
+                            reaction_picker_msg.set(None);
+                        }
+                    },
+                    on_close: move |_| {
+                        reaction_picker_msg.set(None);
+                    },
                 }
             }
 
@@ -318,9 +343,29 @@ pub fn ChatView() -> Element {
                             button {
                                 class: "toolbar-btn",
                                 title: "{t(\"chat-attach-file\")}",
+                                onclick: move |_| {
+                                    // Trigger hidden file input via JS
+                                    document::eval(
+                                        r#"
+                                                                                                let input = document.getElementById('poly-file-input');
+                                                                                                if (input) { input.click(); }
+                                                                                                "#,
+                                    );
+                                },
                                 "📎"
                             }
                         }
+                    }
+                    // Hidden file input for the attach button
+                    input {
+                        r#type: "file",
+                        id: "poly-file-input",
+                        multiple: true,
+                        style: "display:none;",
+                        onchange: move |_evt| {
+                            // TODO(phase-3): read selected files and create PendingFile attachments
+                            tracing::debug!("File selected via attach button");
+                        },
                     }
                     // Emoji picker for input
                     if *show_input_emoji.read() {
@@ -471,6 +516,33 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
         format!("Yesterday {}", local.format("%I:%M %p"))
     } else {
         local.format("%m/%d/%Y %I:%M %p").to_string()
+    }
+}
+
+/// Typing indicator shown above the message input when users are typing.
+#[component]
+fn TypingIndicator() -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let typing = chat_data.read().typing_users.clone();
+
+    if typing.is_empty() {
+        return rsx! {};
+    }
+
+    let text = match typing.len() {
+        1 => t("chat-typing").replace("{$user}", typing.first().map_or("", |s| s.as_str())),
+        n => t("chat-typing-multiple").replace("{$count}", &n.to_string()),
+    };
+
+    rsx! {
+        div { class: "typing-indicator",
+            span { class: "typing-dots",
+                span { class: "typing-dot" }
+                span { class: "typing-dot" }
+                span { class: "typing-dot" }
+            }
+            span { class: "typing-text", "{text}" }
+        }
     }
 }
 

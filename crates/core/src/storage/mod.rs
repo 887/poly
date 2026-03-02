@@ -81,6 +81,73 @@ pub struct AppSettings {
     pub theme: String,
 }
 
+/// Notification preferences.
+///
+/// Persisted under the key `"notification_settings"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationSettings {
+    /// Desktop notification permission granted & enabled.
+    pub desktop_enabled: bool,
+    /// Notify when people I know start streaming.
+    pub notify_streams: bool,
+    /// Notify when friends join voice channels.
+    pub notify_friends_voice: bool,
+    /// Notify when someone reacts to my messages.
+    pub notify_reactions: bool,
+    /// Play sound on new message.
+    pub sound_new_message: bool,
+    /// Play sound on DM.
+    pub sound_dm: bool,
+    /// Play sound on incoming ring.
+    pub sound_ring: bool,
+    /// Show unread badge.
+    pub badge_unread: bool,
+}
+
+impl Default for NotificationSettings {
+    fn default() -> Self {
+        Self {
+            desktop_enabled: false,
+            notify_streams: true,
+            notify_friends_voice: true,
+            notify_reactions: true,
+            sound_new_message: true,
+            sound_dm: true,
+            sound_ring: true,
+            badge_unread: true,
+        }
+    }
+}
+
+/// Voice & video preferences.
+///
+/// Persisted under the key `"voice_settings"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoiceSettings {
+    /// Input volume (0–100).
+    pub input_volume: u32,
+    /// Output volume (0–100).
+    pub output_volume: u32,
+    /// Input mode: `"vad"` (voice activity) or `"ptt"` (push-to-talk).
+    pub input_mode: String,
+    /// Noise suppression: `"off"`, `"standard"`, or `"high"`.
+    pub noise_suppression: String,
+    /// Echo cancellation enabled.
+    pub echo_cancellation: bool,
+}
+
+impl Default for VoiceSettings {
+    fn default() -> Self {
+        Self {
+            input_volume: 80,
+            output_volume: 80,
+            input_mode: "vad".to_string(),
+            noise_suppression: "standard".to_string(),
+            echo_cancellation: true,
+        }
+    }
+}
+
 /// A stored messenger account credential/token.
 ///
 /// Persisted under the key `"account:{backend}:{id}"`.
@@ -228,6 +295,51 @@ impl Storage {
     /// Persist application settings.
     pub async fn set_app_settings(&self, settings: &AppSettings) -> Result<(), StorageError> {
         self.set("app_settings", serde_json::to_value(settings)?)
+            .await
+    }
+
+    // ── Typed access — NotificationSettings ───────────────────────────────────
+
+    /// Read notification settings, returning defaults if not yet set.
+    pub async fn get_notification_settings(
+        &self,
+    ) -> Result<NotificationSettings, StorageError> {
+        Ok(self
+            .get("notification_settings")
+            .await?
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Persist notification settings.
+    pub async fn set_notification_settings(
+        &self,
+        settings: &NotificationSettings,
+    ) -> Result<(), StorageError> {
+        self.set(
+            "notification_settings",
+            serde_json::to_value(settings)?,
+        )
+        .await
+    }
+
+    // ── Typed access — VoiceSettings ──────────────────────────────────────────
+
+    /// Read voice/video settings, returning defaults if not yet set.
+    pub async fn get_voice_settings(&self) -> Result<VoiceSettings, StorageError> {
+        Ok(self
+            .get("voice_settings")
+            .await?
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Persist voice/video settings.
+    pub async fn set_voice_settings(
+        &self,
+        settings: &VoiceSettings,
+    ) -> Result<(), StorageError> {
+        self.set("voice_settings", serde_json::to_value(settings)?)
             .await
     }
 

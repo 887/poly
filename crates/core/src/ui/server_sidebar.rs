@@ -91,7 +91,15 @@ pub fn ServerSidebar() -> Element {
                 },
                 title: "{t(\"nav-notifications\")}",
                 div { class: "icon-notifications", "🔔" }
-                        // TODO(phase-2.5.8): Show aggregated unread count badge
+                // Aggregated unread notification count badge
+                {
+                    let unread_count = chat_data.read().notifications.iter().filter(|n| !n.read).count();
+                    if unread_count > 0 {
+                        rsx! { span { class: "badge", "{unread_count}" } }
+                    } else {
+                        rsx! {}
+                    }
+                }
             }
 
             // Separator
@@ -135,9 +143,20 @@ pub fn ServerSidebar() -> Element {
                                 }
                             },
                             title: "{tooltip}", // Source badge (backend type)
-                            div { class: "server-icon-letter", style: "background-color: {icon_color};", "{first_letter}" } // Unread badge
+                            div { class: "server-icon-letter", style: "background-color: {icon_color};", "{first_letter}" }
                             // Source badge (backend type)
                             span { class: "source-badge", "{badge}" }
+                            // Account badge overlay (bottom-right initial)
+                            {
+                                let acct_initial: String = account_name
+                                    .chars()
+                                    .next()
+                                    .map(|c| c.to_string())
+                                    .unwrap_or_default();
+                                rsx! {
+                                    span { class: "account-badge", title: "{account_name}", "{acct_initial}" }
+                                }
+                            }
                             // Unread badge
                             if unread > 0 {
                                 span { class: "badge", "{unread}" }

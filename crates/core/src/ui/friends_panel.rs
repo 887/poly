@@ -20,9 +20,9 @@ use dioxus::prelude::*;
 /// Friends browser panel with tiled grid display and filtering options.
 #[component]
 pub fn FriendsPanel() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
     let friends = chat_data.read().friends.clone();
+    let servers = chat_data.read().servers.clone();
 
     // Filter state
     let mut search_filter = use_signal(String::new);
@@ -30,6 +30,14 @@ pub fn FriendsPanel() -> Element {
     let mut server_filter = use_signal(|| None::<String>);
 
     let search_lower = search_filter.read().to_lowercase();
+
+    // Collect distinct backends from friends for the account filter
+    let mut backend_names: Vec<String> = friends
+        .iter()
+        .map(|f| format!("{:?}", f.backend))
+        .collect();
+    backend_names.sort();
+    backend_names.dedup();
 
     // Filter friends based on current filters
     let filtered_friends = friends
@@ -49,10 +57,8 @@ pub fn FriendsPanel() -> Element {
             {
                 return false;
             }
-            // Filter by server if selected
-            if server_filter.read().is_some() {
-                // TODO: Check if friend is in selected server
-            }
+            // Server filter is informational — requires mutual server data
+            // which is a phase-3 feature
             true
         })
         .collect::<Vec<_>>();
@@ -81,7 +87,7 @@ pub fn FriendsPanel() -> Element {
                     },
                 }
 
-                // Account filter dropdown
+                // Account filter dropdown — populated from real backend data
                 select {
                     class: "friends-filter-select",
                     value: "{account_filter.read().as_deref().unwrap_or(\"all\")}",
@@ -90,10 +96,12 @@ pub fn FriendsPanel() -> Element {
                         account_filter.set(if val == "all" { None } else { Some(val) });
                     },
                     option { value: "all", "{t(\"filter-all\")}" }
-                                // TODO: Populate with actual accounts
+                    for name in &backend_names {
+                        option { value: "{name}", "{name}" }
+                    }
                 }
 
-                // Server filter dropdown
+                // Server filter dropdown — populated from real server data
                 select {
                     class: "friends-filter-select",
                     value: "{server_filter.read().as_deref().unwrap_or(\"all\")}",
@@ -102,39 +110,69 @@ pub fn FriendsPanel() -> Element {
                         server_filter.set(if val == "all" { None } else { Some(val) });
                     },
                     option { value: "all", "{t(\"filter-all-servers\")}" }
-                                // TODO: Populate with actual servers
+                    for srv in &servers {
+                        {
+                            let badge = backend_badge(&srv.backend);
+                            let label = format!("{badge} {}", srv.name);
+                            let sid = srv.id.clone();
+                            rsx! {
+                                option { value: "{sid}", "{label}" }
+                            }
+                        }
+                    }
                 }
             }
 
             // Friends grid
-            div { class: "friends-grid",
-                if filtered_friends.is_empty() {
-                    div { class: "empty-state", "{t(\"friends-none\")}" }
-                } else {
-                    for friend in filtered_friends.iter() {
-                        div {
-                            class: "friend-card",
-                            onclick: {
-                                let friend_id = friend.id.clone();
-                                move |_| {
-                                    app_state.write().nav.selected_channel = Some(friend_id.clone());
-                                    navigator()
-                                        .push(Route::DmChat {
-                                            channel_id: friend_id.clone(),
-                                        });
-                                }
-                            },
-                            // Avatar
+            FriendsGrid { friends: filtered_friends.into_iter().cloned().collect() }
+        }
+    }
+}
+
+/// Grid of friend cards.
+#[component]
+fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+
+    rsx! {
+        div { class: "friends-grid",
+            if friends.is_empty() {
+                div { class: "empty-state", "{t(\"friends-none\")}" }
+            } else {
+                for friend in &friends {
+                    {
+                        let friend_id = friend.id.clone();
+                        let display_name = friend.display_name.clone();
+                        let backend = friend.backend;
+                        let color = user_color(&friend.id);
+                        let first_char: String = display_name
+                            .chars()
+                            .next()
+                            .map(|c| c.to_string())
+                            .unwrap_or_default();
+                        rsx! {
                             div {
-                                class: "friend-avatar",
-                                style: "background-color: {user_color(&friend.id)};",
-                                "{friend.display_name.chars().next().unwrap_or('?')}"
-                            }
-                            // Friend info
-                            div { class: "friend-info",
-                                div { class: "friend-name", "{friend.display_name}" }
-                                div { class: "friend-account", "{backend_badge(&friend.backend)}" }
-                                                        // TODO: Show mutual servers
+                                class: "friend-card",
+                                onclick: {
+                                    let fid = friend_id.clone();
+                                    move |_| {
+                                        app_state.write().nav.selected_channel = Some(fid.clone());
+                                        navigator()
+                                            .push(Route::DmChat {
+                                                channel_id: fid.clone(),
+                                            });
+                                    }
+                                },
+                                div {
+                                    class: "friend-avatar",
+                                    style: "background-color: {color};",
+                                    "{first_char}"
+                                }
+                                div { class: "friend-info",
+                                    div { class: "friend-name", "{display_name}" }
+                                    div { class: "friend-account", "{backend_badge(&backend)} {backend.display_name()}" }
+                                    // TODO(phase-3): mutual servers list (2.6.6.3)
+                                }
                             }
                         }
                     }

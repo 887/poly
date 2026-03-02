@@ -528,32 +528,6 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 edited: false,
             },
         ],
-        "ch-rust" => vec![
-            Message {
-                id: "msg-ch-rust-0".to_string(),
-                author: users[2].clone(),
-                content: MessageContent::Text(
-                    "Quick question: what's the best way to handle errors across async boundaries in this project?\n\nI see we're using `anyhow` in some places and `thiserror` in others."
-                        .to_string(),
-                ),
-                timestamp: now - Duration::hours(4),
-                attachments: vec![],
-                reactions: vec![],
-                edited: false,
-            },
-            Message {
-                id: "msg-ch-rust-1".to_string(),
-                author: users[0].clone(),
-                content: MessageContent::Text(
-                    "Good question! The pattern we follow:\n- `thiserror` for library crate error enums (typed, matchable)\n- `anyhow` for application-level code and tests (convenience)\n\nSee `ClientError` in poly-client for the canonical example."
-                        .to_string(),
-                ),
-                timestamp: now - Duration::hours(3) - Duration::minutes(40),
-                attachments: vec![],
-                reactions: vec![Reaction { emoji: "💡".to_string(), count: 3, me: false }],
-                edited: true,
-            },
-        ],
         _ => vec![
             Message {
                 id: format!("msg-{channel_id}-0"),

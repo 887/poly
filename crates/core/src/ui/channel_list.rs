@@ -204,7 +204,7 @@ fn DMFriendsView() -> Element {
 
             if has_no_data {
                 div { class: "channel-empty",
-                    p { "Toggle the 🧪 demo to see sample data" }
+                    p { "{t(\"dm-no-data-hint\")}" }
                 }
             } else if no_filter_results {
                 div { class: "dm-no-results", "{t(\"dm-no-results\")}" }
@@ -375,26 +375,37 @@ fn FriendItem(display_name: String, user_id: String, badge: String) -> Element {
 }
 
 /// Category header + channels within the category.
+///
+/// Clicking the category header toggles collapse/expand of its channel list.
 #[component]
 fn CategorySection(
     cat_name: String,
     cat_channel_ids: Vec<String>,
     channels: Vec<Channel>,
 ) -> Element {
+    let mut collapsed = use_signal(|| false);
+    let is_collapsed = *collapsed.read();
+
     rsx! {
         div { class: "channel-category",
-            div { class: "category-header",
-                span { class: "category-chevron", "▾" }
+            div {
+                class: "category-header",
+                onclick: move |_| collapsed.set(!is_collapsed),
+                span { class: if is_collapsed { "category-chevron collapsed" } else { "category-chevron" },
+                    "▾"
+                }
                 span { class: "category-name", "{cat_name}" }
             }
-            for ch_id in &cat_channel_ids {
-                {
-                    if let Some(channel) = channels.iter().find(|c| &c.id == ch_id).cloned() {
-                        rsx! {
-                            ChannelItemRow { channel }
+            if !is_collapsed {
+                for ch_id in &cat_channel_ids {
+                    {
+                        if let Some(channel) = channels.iter().find(|c| &c.id == ch_id).cloned() {
+                            rsx! {
+                                ChannelItemRow { channel }
+                            }
+                        } else {
+                            rsx! {}
                         }
-                    } else {
-                        rsx! {}
                     }
                 }
             }

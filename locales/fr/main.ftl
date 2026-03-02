@@ -263,6 +263,7 @@ notif-badge-unread = Activer le badge messages non lus
 # DM list
 dm-search-placeholder = Trouver ou démarrer une conversation
 dm-no-results = Aucune conversation trouvée
+dm-no-data-hint = Activez la démo 🧪 pour voir des exemples de données
 
 # Friends panel
 friends-title = Amis
@@ -270,3 +271,38 @@ friends-search-placeholder = Rechercher des amis...
 friends-none = Aucun ami trouvé
 filter-all = Tous les comptes
 filter-all-servers = Tous les serveurs
+
+# Formatage du temps
+time-just-now = à l'instant
+time-one-minute-ago = il y a 1 minute
+time-minutes-ago = il y a { $count } minutes
+time-one-hour-ago = il y a 1 heure
+time-hours-ago = il y a { $count } heures
+time-one-day-ago = il y a 1 jour
+time-days-ago = il y a { $count } jours
+
+# Chat extras
+chat-toggle-members = Afficher/masquer la liste des membres
+chat-select-channel = Sélectionnez un salon pour commencer à discuter
+chat-timestamp-yesterday = Hier { $time }
+
+# Utilisateurs extras
+user-no-members = Aucun membre à afficher
+account-not-signed-in = Non connecté
+
+# Libellés de couleur
+color-accent = Accent
+color-background = Arrière-plan
+color-surface = Surface
+color-text = Texte
+color-secondary-text = Texte secondaire
+color-border = Bordure
+
+# Périphériques audio par défaut
+voice-default-mic = Microphone par défaut
+voice-default-speakers = Haut-parleurs par défaut
+
+# Messages d'erreur
+error-storage-unavailable = Stockage non disponible
+error-load-settings = Échec du chargement des paramètres
+error-reload-servers = Échec du rechargement des serveurs
