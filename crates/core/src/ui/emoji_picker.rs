@@ -4,6 +4,10 @@
 //! - Reaction picker (hover → add reaction to a message)
 //! - Message input emoji button (insert emoji text at cursor)
 //!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
+//!
 //! Shows a grid of commonly-used emoji organized by categories.
 //! Clicking an emoji triggers the `on_select` callback.
 // TODO(phase-2.5.15): Emoji picker for reactions and input

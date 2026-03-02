@@ -1,4 +1,8 @@
 //! Setup wizard — first-launch key generation and recovery phrase display.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 
 use crate::i18n::t;
 use dioxus::prelude::*;

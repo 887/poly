@@ -41,10 +41,7 @@ pub fn ChannelList() -> Element {
 
 /// Header section — server name or "Direct Messages" title.
 #[component]
-fn ChannelListHeader(
-    current_view: View,
-    current_server: Option<Server>,
-) -> Element {
+fn ChannelListHeader(current_view: View, current_server: Option<Server>) -> Element {
     rsx! {
         div { class: "channel-list-header",
             if current_view == View::DmsFriends {
@@ -457,7 +454,7 @@ fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
     }
 }
 
-/// Load messages and members for a channel.
+/// Load messages, members, and voice participants for a channel.
 async fn load_channel_data(
     channel_id: String,
     client_manager: Signal<ClientManager>,
@@ -479,18 +476,36 @@ async fn load_channel_data(
         return;
     };
 
-    // Load messages
-    let guard = backend.read().await;
-    if let Ok(messages) = guard
-        .get_messages(&channel_id, poly_client::MessageQuery::default())
-        .await
-    {
-        chat_data.write().messages = messages;
-    }
+    let channel_type = chat_data
+        .read()
+        .current_channel
+        .as_ref()
+        .map(|ch| ch.channel_type);
 
-    // Load members
-    if let Ok(members) = guard.get_channel_members(&channel_id).await {
-        chat_data.write().members = members;
+    let guard = backend.read().await;
+
+    match channel_type {
+        Some(poly_client::ChannelType::Voice) | Some(poly_client::ChannelType::Video) => {
+            // Voice/video channel — load participant list from backend
+            if let Ok(participants) = guard.get_voice_participants(&channel_id).await {
+                chat_data
+                    .write()
+                    .voice_channel_participants
+                    .insert(channel_id.clone(), participants);
+            }
+        }
+        _ => {
+            // Text channel — load messages and members
+            if let Ok(messages) = guard
+                .get_messages(&channel_id, poly_client::MessageQuery::default())
+                .await
+            {
+                chat_data.write().messages = messages;
+            }
+            if let Ok(members) = guard.get_channel_members(&channel_id).await {
+                chat_data.write().members = members;
+            }
+        }
     }
 
     chat_data.write().loading = false;

@@ -7,7 +7,7 @@
 //! Provided as `Signal<ClientManager>` at the `App` level.
 // TODO(phase-2.5.1): Client Manager Module
 
-use poly_client::{AuthCredentials, BackendType, ClientBackend, Server};
+use poly_client::{AuthCredentials, BackendType, ClientBackend, Server, Session};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -59,14 +59,16 @@ impl ClientManager {
     ///
     /// Creates a `DemoClient`, authenticates it, and adds it to the backends
     /// map with key `"demo"`. Sets `demo_active = true`.
+    /// Returns the authenticated session so callers can record the local user.
     #[cfg(feature = "demo")]
-    pub async fn activate_demo(&mut self) -> Result<(), String> {
+    pub async fn activate_demo(&mut self) -> Result<Session, String> {
         if self.demo_active {
-            return Ok(());
+            // Return a fresh demo session even if already active
+            return Ok(poly_demo::data::demo_session());
         }
 
         let mut client = poly_demo::DemoClient::new();
-        client
+        let session = client
             .authenticate(AuthCredentials::Token("demo-token".to_string()))
             .await
             .map_err(|e| format!("Demo auth failed: {e}"))?;
@@ -80,7 +82,7 @@ impl ClientManager {
         self.rebuild_server_map().await;
 
         tracing::info!("Demo client activated");
-        Ok(())
+        Ok(session)
     }
 
     /// Deactivate the demo client.

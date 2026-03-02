@@ -7,6 +7,10 @@
 //! - Right: mute mic, deafen, disconnect buttons
 //!
 //! Only rendered when `chat_data.voice_connection` is `Some`.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 // TODO(phase-2.5): Voice connection banner — tracked in overall-plan.md
 
 use crate::i18n::t;

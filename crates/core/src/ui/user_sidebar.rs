@@ -2,6 +2,10 @@
 //!
 //! Reads members from `Signal<ChatData>` and groups them by
 //! presence status: Online, Idle, Do Not Disturb, Offline.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.7): Wire user sidebar to backend data
 
 use crate::i18n::t;

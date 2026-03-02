@@ -122,6 +122,14 @@ impl ClientBackend for DiscordClient {
         Ok(())
     }
 
+    async fn get_voice_participants(
+        &self,
+        _channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        // TODO(phase-3): Implement voice participant fetching for Discord
+        Ok(vec![])
+    }
+
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         Box::pin(stream::empty())
     }

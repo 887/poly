@@ -3,6 +3,10 @@
 //! Displays the current user's info: avatar, display name, online status,
 //! and quick-action buttons (mic mute, audio mute, settings gear).
 //! Like Discord's bottom-left user panel.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.19): Account status bar
 
 use crate::i18n::t;

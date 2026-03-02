@@ -5,6 +5,10 @@
 //! - Server/community they're known from
 //! - Search by username
 //! - Favorite servers
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 
 use crate::i18n::t;
 use crate::state::chat_data::backend_badge;

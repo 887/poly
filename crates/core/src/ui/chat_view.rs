@@ -3,6 +3,10 @@
 //! Features:
 //! - Message grouping (same author within 7 minutes)
 //! - Date separators between different days
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 //! - Inline image previews with size labels
 //! - Non-image attachments as download links
 //! - Reaction pills with emoji + count (clickable to toggle)

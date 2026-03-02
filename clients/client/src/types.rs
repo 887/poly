@@ -45,7 +45,7 @@ pub enum AuthCredentials {
 }
 
 /// An authenticated session with a backend.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
@@ -175,7 +175,7 @@ pub struct Reaction {
 }
 
 /// Query options for fetching messages.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageQuery {
     /// Fetch messages before this message ID.
     pub before: Option<String>,
@@ -313,7 +313,7 @@ pub struct VoiceParticipant {
 }
 
 /// The local user's voice connection state.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoiceConnection {
     /// Channel ID we are connected to.
     pub channel_id: String,

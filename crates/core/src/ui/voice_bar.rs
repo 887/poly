@@ -7,6 +7,10 @@
 //! - Mute mic toggle, deafen toggle, disconnect button
 //!
 //! Like Discord's voice status bar at the bottom-left.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.14): Voice connection bar
 
 use crate::i18n::t;

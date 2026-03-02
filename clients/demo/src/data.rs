@@ -710,3 +710,73 @@ pub fn demo_notifications() -> Vec<Notification> {
         },
     ]
 }
+/// Generate demo voice participants for a given voice channel.
+///
+/// Returns realistic-looking participants for the two demo voice channels.
+/// Real clients get this from the server; the demo client provides static data.
+pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
+    let users = demo_users();
+    match channel_id {
+        "ch-voice-dev" => vec![
+            VoiceParticipant {
+                user: users[0].clone(), // Alice
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: true,
+            },
+            VoiceParticipant {
+                user: users[2].clone(), // Charlie
+                is_muted: true,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            },
+            VoiceParticipant {
+                user: users[6].clone(), // Grace
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: true,
+                is_video_on: false,
+                is_speaking: false,
+            },
+        ],
+        "ch-voice-gaming" => vec![
+            VoiceParticipant {
+                user: users[1].clone(), // Bob
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: true,
+            },
+            VoiceParticipant {
+                user: users[3].clone(), // Diana
+                is_muted: false,
+                is_deafened: true,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            },
+            VoiceParticipant {
+                user: users[9].clone(), // Jack
+                is_muted: true,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: true,
+                is_speaking: false,
+            },
+            VoiceParticipant {
+                user: users[4].clone(), // Eve
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            },
+        ],
+        _ => vec![],
+    }
+}

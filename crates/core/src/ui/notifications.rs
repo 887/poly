@@ -2,6 +2,10 @@
 //!
 //! Reads from `Signal<ChatData>` and displays notifications with
 //! source badges indicating which backend/account they came from.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.8): Wire notifications to backend data
 
 use crate::i18n::t;

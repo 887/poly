@@ -4,6 +4,10 @@
 //! tears down and rebuilds components when switching between these views
 //! (identical component trees in a combined arm would be reused without
 //! re-rendering).
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 
 use super::account_bar::AccountBar;
 use super::channel_list::ChannelList;

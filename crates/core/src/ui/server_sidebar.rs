@@ -11,6 +11,10 @@
 //!
 //! Each server icon shows the backend type badge (🧪/🟣/🔵/🟢/🟡)
 //! so the user always knows which service a server comes from.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.3): Demo toggle + TODO(phase-2.5.4): Wire to backends
 
 use crate::client_manager::ClientManager;
@@ -208,11 +212,16 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
             chat_data.write().current_channel = None;
             chat_data.write().voice_channel_participants.clear();
             chat_data.write().voice_connection = None;
+            chat_data.write().local_session = None;
         } else {
-            if let Err(e) = client_manager.write().activate_demo().await {
-                tracing::error!("Failed to activate demo: {e}");
-                return;
-            }
+            let session = match client_manager.write().activate_demo().await {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!("Failed to activate demo: {e}");
+                    return;
+                }
+            };
+            chat_data.write().local_session = Some(session);
             // Load all demo data into chat data
             let servers = client_manager.read().all_servers().await;
             chat_data.write().servers = servers;
@@ -233,10 +242,27 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
                 if let Ok(friends) = guard.get_friends().await {
                     chat_data.write().friends = friends;
                 }
+                // Load voice participants for all voice channels
+                let servers_snapshot = chat_data.read().servers.clone();
+                for server in &servers_snapshot {
+                    if let Ok(channels) = guard.get_channels(&server.id).await {
+                        for ch in channels {
+                            if matches!(
+                                ch.channel_type,
+                                poly_client::ChannelType::Voice | poly_client::ChannelType::Video
+                            ) && let Ok(participants) =
+                                guard.get_voice_participants(&ch.id).await
+                                && !participants.is_empty()
+                            {
+                                chat_data
+                                    .write()
+                                    .voice_channel_participants
+                                    .insert(ch.id.clone(), participants);
+                            }
+                        }
+                    }
+                }
             }
-
-            // Load voice channel participants from demo data
-            chat_data.write().voice_channel_participants = std::collections::HashMap::new();
         }
     }
 }

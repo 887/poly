@@ -8,13 +8,18 @@
 //! - "Disconnect" button when connected
 //!
 //! Streaming participants get double-wide tiles.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+//! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.14): Voice/Video channel view
 
+use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
-use poly_client::{BackendType, ChannelType, PresenceStatus, User, VoiceParticipant};
+use poly_client::{ChannelType, VoiceParticipant};
 
 /// Voice channel view component.
 ///
@@ -22,7 +27,8 @@ use poly_client::{BackendType, ChannelType, PresenceStatus, User, VoiceParticipa
 /// join/leave buttons, and status indicators.
 #[component]
 pub fn VoiceChannelView() -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
     let app_state: Signal<AppState> = use_context();
 
     let current_channel = chat_data.read().current_channel.clone();
@@ -61,188 +67,289 @@ pub fn VoiceChannelView() -> Element {
 
     rsx! {
         main { class: "voice-view",
-            // ── Voice channel header ─────────────────────────────────
-            div { class: "voice-header",
-                if let Some(ref ch) = current_channel {
-                    span { class: "voice-channel-icon", "{type_icon}" }
-                    span { class: "voice-channel-name", "{ch.name}" }
-                    if let Some(ref server) = current_server {
-                        span { class: "voice-source-badge",
-                            "{backend_badge(&server.backend)} {server.backend.display_name()}"
-                        }
-                    }
-                    span { class: "voice-participant-count", "👥 {participant_count}" }
-                } else {
-                    span { class: "voice-channel-name", "{t(\"voice-no-channel\")}" }
-                }
+            VoiceHeader {
+                current_channel: current_channel.clone(),
+                current_server: current_server.clone(),
+                type_icon,
+                participant_count,
             }
+            VoiceParticipantGrid {
+                participants: participants.clone(),
+                is_connected,
+                channel_type,
+            }
+            VoiceControls {
+                channel_id: channel_id.clone(),
+                current_channel: current_channel.clone(),
+                current_server: current_server.clone(),
+                is_connected,
+                channel_type,
+                chat_data,
+                client_manager,
+                app_state,
+            }
+        }
+    }
+}
 
-            // ── Participant grid ─────────────────────────────────────
-            div { class: "voice-participants-area",
-                if participants.is_empty() && !is_connected {
-                    // Empty state — no one is in the channel
-                    div { class: "voice-empty",
-                        div { class: "voice-empty-icon",
-                            if channel_type == ChannelType::Video {
-                                "📹"
-                            } else {
-                                "🔊"
-                            }
-                        }
-                        h3 { "{t(\"voice-no-one-here\")}" }
-                        p { "{t(\"voice-be-first\")}" }
-                    }
-                } else {
-                    // Participant tiles
-                    div { class: "voice-participants-grid",
-                        for participant in &participants {
-                            {
-                                let user = &participant.user;
-                                let color = user_color(&user.id);
-                                let first_char: String = user
-                                    .display_name
-                                    .chars()
-                                    .next()
-                                    .map(|c| c.to_string())
-                                    .unwrap_or_default();
-                                let is_streaming = participant.is_streaming;
-                                let tile_class = if is_streaming {
-                                    "voice-tile voice-tile-streaming"
-                                } else {
-                                    "voice-tile"
-                                };
-                                let speaking_class = if participant.is_speaking {
-                                    "voice-avatar speaking"
-                                } else {
-                                    "voice-avatar"
-                                };
-                                let name = user.display_name.clone();
-                                rsx! {
-                                    div { class: "{tile_class}",
-                                        div { class: "{speaking_class}", style: "background-color: {color};", "{first_char}" }
-                                        div { class: "voice-tile-name", "{name}" }
-                                        // Status icons row
-                                        div { class: "voice-tile-icons", // Status icons row
-                                            if participant.is_muted {
-                                                span {
-                                                    class: "voice-status-icon muted",
-                                                    title: "{t(\"voice-muted\")}",
-                                                    "🔇"
-                                                }
-                                            }
-                                            if participant.is_deafened {
-                                                span {
-                                                    class: "voice-status-icon deafened",
-                                                    title: "{t(\"voice-deafened\")}",
-                                                    "🔕"
-                                                }
-                                            }
-                                            if participant.is_streaming {
-                                                span {
-                                                    class: "voice-status-icon streaming",
-                                                    title: "{t(\"voice-streaming\")}",
-                                                    "🖥"
-                                                }
-                                            }
-                                            if participant.is_video_on {
-                                                span {
-                                                    class: "voice-status-icon video-on",
-                                                    title: "{t(\"voice-video-on\")}",
-                                                    "📹"
-                                                }
-                                            }
-                                        }
-                                        if is_streaming {
-                                            div { class: "voice-stream-label", "{t(\"voice-watching-screen\")}" }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+/// Header bar showing channel name, backend badge, and participant count.
+#[component]
+fn VoiceHeader(
+    current_channel: Option<poly_client::Channel>,
+    current_server: Option<poly_client::Server>,
+    type_icon: &'static str,
+    participant_count: usize,
+) -> Element {
+    rsx! {
+        div { class: "voice-header",
+            if let Some(ref ch) = current_channel {
+                span { class: "voice-channel-icon", "{type_icon}" }
+                span { class: "voice-channel-name", "{ch.name}" }
+                if let Some(ref server) = current_server {
+                    span { class: "voice-source-badge",
+                        "{backend_badge(&server.backend)} {server.backend.display_name()}"
                     }
                 }
+                span { class: "voice-participant-count", "👥 {participant_count}" }
+            } else {
+                span { class: "voice-channel-name", "{t(\"voice-no-channel\")}" }
             }
+        }
+    }
+}
 
-            // ── Join / Disconnect controls ───────────────────────────
-            div { class: "voice-controls",
-                if is_connected {
-                    button {
-                        class: "btn btn-voice-disconnect",
-                        onclick: move |_| {
-                            let mut writer = chat_data.write();
-                            // Remove Demo User from participant list when disconnecting
-                            if let Some(ref vc) = writer.voice_connection.clone()
-                                && let Some(participants) = writer
-                                    .voice_channel_participants
-                                    .get_mut(&vc.channel_id)
-                            {
-                                participants.retain(|p| p.user.id != "demo-user-self");
-                            }
-                            writer.voice_connection = None;
-                        },
-                        "{t(\"voice-disconnect\")}"
-                    }
-                } else {
-                    button {
-                        class: "btn btn-voice-join",
-                        onclick: {
-                            let cid = channel_id.clone();
-                            move |_| {
-                                if let Some(ref channel_id) = cid {
-                                    let ch = chat_data.read().current_channel.clone();
-                                    let srv = chat_data.read().current_server.clone();
-                                    // Add Demo User as a voice participant
-                                    let demo_participant = VoiceParticipant {
-                                        user: User {
-                                            id: "demo-user-self".to_string(),
-                                            display_name: "Demo User".to_string(),
-                                            avatar_url: None,
-                                            presence: PresenceStatus::Online,
-                                            backend: BackendType::Demo,
-                                        },
-                                        is_muted: false,
-                                        is_deafened: false,
-                                        is_streaming: false,
-                                        is_video_on: false,
-                                        is_speaking: false,
-                                    };
-                                    let mut writer = chat_data.write();
-                                    writer
-                                        .voice_channel_participants
-                                        .entry(channel_id.clone())
-                                        .or_default()
-                                        .push(demo_participant);
-                                    writer.voice_connection =
-                                        Some(poly_client::VoiceConnection {
-                                        channel_id: channel_id.clone(),
-                                        server_id: srv
-                                            .as_ref()
-                                            .map(|s| s.id.clone())
-                                            .unwrap_or_default(),
-                                        channel_name: ch
-                                            .as_ref()
-                                            .map(|c| c.name.clone())
-                                            .unwrap_or_default(),
-                                        server_name: srv
-                                            .as_ref()
-                                            .map(|s| s.name.clone())
-                                            .unwrap_or_default(),
-                                        is_muted: false,
-                                        is_deafened: false,
-                                        is_streaming: false,
-                                        is_video_on: false,
-                                    });
-                                }
-                            }
-                        },
+/// Grid of voice participant tiles.
+#[component]
+fn VoiceParticipantGrid(
+    participants: Vec<VoiceParticipant>,
+    is_connected: bool,
+    channel_type: ChannelType,
+) -> Element {
+    rsx! {
+        div { class: "voice-participants-area",
+            if participants.is_empty() && !is_connected {
+                div { class: "voice-empty",
+                    div { class: "voice-empty-icon",
                         if channel_type == ChannelType::Video {
-                            "{t(\"voice-join-video\")}"
+                            "📹"
                         } else {
-                            "{t(\"voice-join-voice\")}"
+                            "🔊"
                         }
+                    }
+                    h3 { "{t(\"voice-no-one-here\")}" }
+                    p { "{t(\"voice-be-first\")}" }
+                }
+            } else {
+                div { class: "voice-participants-grid",
+                    for participant in &participants {
+                        VoiceTile { participant: participant.clone() }
                     }
                 }
             }
         }
     }
+}
+
+/// Single participant tile in the voice grid.
+#[component]
+fn VoiceTile(participant: VoiceParticipant) -> Element {
+    let user = &participant.user;
+    let color = user_color(&user.id);
+    let first_char: String = user
+        .display_name
+        .chars()
+        .next()
+        .map(|c: char| c.to_string())
+        .unwrap_or_default();
+    let tile_class = if participant.is_streaming {
+        "voice-tile voice-tile-streaming"
+    } else {
+        "voice-tile"
+    };
+    let speaking_class = if participant.is_speaking {
+        "voice-avatar speaking"
+    } else {
+        "voice-avatar"
+    };
+    let name = user.display_name.clone();
+    rsx! {
+        div { class: "{tile_class}",
+            div {
+                class: "{speaking_class}",
+                style: "background-color: {color};",
+                "{first_char}"
+            }
+            div { class: "voice-tile-name", "{name}" }
+            div { class: "voice-tile-icons",
+                if participant.is_muted {
+                    span {
+                        class: "voice-status-icon muted",
+                        title: "{t(\"voice-muted\")}",
+                        "🔇"
+                    }
+                }
+                if participant.is_deafened {
+                    span {
+                        class: "voice-status-icon deafened",
+                        title: "{t(\"voice-deafened\")}",
+                        "🔕"
+                    }
+                }
+                if participant.is_streaming {
+                    span {
+                        class: "voice-status-icon streaming",
+                        title: "{t(\"voice-streaming\")}",
+                        "🖥"
+                    }
+                }
+                if participant.is_video_on {
+                    span {
+                        class: "voice-status-icon video-on",
+                        title: "{t(\"voice-video-on\")}",
+                        "📹"
+                    }
+                }
+            }
+            if participant.is_streaming {
+                div { class: "voice-stream-label", "{t(\"voice-watching-screen\")}" }
+            }
+        }
+    }
+}
+
+/// Join / Disconnect buttons and voice control logic.
+///
+/// On join: fetches participant list from backend, adds local user,
+/// sets `voice_connection`. On disconnect: removes local user from
+/// participants and clears `voice_connection`.
+#[component]
+fn VoiceControls(
+    channel_id: Option<String>,
+    current_channel: Option<poly_client::Channel>,
+    current_server: Option<poly_client::Server>,
+    is_connected: bool,
+    channel_type: ChannelType,
+    mut chat_data: Signal<ChatData>,
+    client_manager: Signal<ClientManager>,
+    app_state: Signal<AppState>,
+) -> Element {
+    rsx! {
+        div { class: "voice-controls",
+            if is_connected {
+                button {
+                    class: "btn btn-voice-disconnect",
+                    onclick: move |_| {
+                        let local_id = chat_data
+                            .read()
+                            .local_session
+                            .as_ref()
+                            .map(|s| s.user.id.clone());
+                        let mut writer = chat_data.write();
+                        if let Some(ref vc) = writer.voice_connection.clone()
+                            && let Some(ref uid) = local_id
+                            && let Some(ps) = writer
+                                .voice_channel_participants
+                                .get_mut(&vc.channel_id)
+                        {
+                            ps.retain(|p| &p.user.id != uid);
+                        }
+                        writer.voice_connection = None;
+                    },
+                    "{t(\"voice-disconnect\")}"
+                }
+            } else {
+                button {
+                    class: "btn btn-voice-join",
+                    onclick: move |_| {
+                        let Some(ref cid) = channel_id else {
+                            return;
+                        }; // Fetch participants via backend (no hardcoded data)
+                        let cid = cid.clone();
+                        let ch = chat_data.read().current_channel.clone();
+                        let srv = chat_data.read().current_server.clone();
+                        spawn(async move {
+                            join_voice_channel(cid, ch, srv, client_manager, chat_data, app_state).await;
+                        });
+                    },
+                    if channel_type == ChannelType::Video {
+                        "{t(\"voice-join-video\")}"
+                    } else {
+                        "{t(\"voice-join-voice\")}"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Join a voice channel: fetch participants from backend, add local user, set connection.
+async fn join_voice_channel(
+    channel_id: String,
+    current_channel: Option<poly_client::Channel>,
+    current_server: Option<poly_client::Server>,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+    mut app_state: Signal<AppState>,
+) {
+    let server_id = app_state.read().nav.selected_server.clone();
+    let Some(server_id) = server_id else { return };
+
+    // Get backend for this server
+    let backend_info = client_manager.read().get_backend_for_server(&server_id);
+    let Some((_account_id, backend)) = backend_info else {
+        return;
+    };
+
+    // Fetch current participants from backend
+    let mut participants = {
+        let guard = backend.read().await;
+        guard
+            .get_voice_participants(&channel_id)
+            .await
+            .unwrap_or_default()
+    };
+
+    // Add the local (self) user to participants if we have a session
+    if let Some(ref session) = chat_data.read().local_session.clone() {
+        let already_in = participants.iter().any(|p| p.user.id == session.user.id);
+        if !already_in {
+            participants.push(poly_client::VoiceParticipant {
+                user: session.user.clone(),
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            });
+        }
+    }
+
+    // Store participants and set the voice connection
+    chat_data
+        .write()
+        .voice_channel_participants
+        .insert(channel_id.clone(), participants);
+
+    chat_data.write().voice_connection = Some(poly_client::VoiceConnection {
+        channel_id: channel_id.clone(),
+        server_id: current_server
+            .as_ref()
+            .map(|s| s.id.clone())
+            .unwrap_or_default(),
+        channel_name: current_channel
+            .as_ref()
+            .map(|c| c.name.clone())
+            .unwrap_or_default(),
+        server_name: current_server
+            .as_ref()
+            .map(|s| s.name.clone())
+            .unwrap_or_default(),
+        is_muted: false,
+        is_deafened: false,
+        is_streaming: false,
+        is_video_on: false,
+    });
+
+    // Update nav state
+    app_state.write().nav.selected_channel = Some(channel_id);
 }

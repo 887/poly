@@ -15,6 +15,12 @@
 //!     - [`VoiceChannelView`] — Voice/video call view (voice channels)
 //!     - [`EmojiPicker`] — Emoji grid for reactions and input
 //!     - [`UserSidebar`] — Right user list
+//!
+//! ## 150-line component rule
+//! Every `#[component]` fn body in any file under `src/ui/` MUST stay under
+//! **150 lines** of RSX + logic. Extract sub-components rather than growing.
+//! **NEVER hardcode demo/test data in UI components** — all data must flow
+//! through the `ClientBackend` trait via `ClientManager`.
 
 mod account_bar;
 mod channel_list;

@@ -135,6 +135,41 @@ all-backends = ["stoat", "matrix", "discord", "teams", "demo"]
 4. **Async via Tokio** — all backend operations are async
 5. **Client backends loaded via `poly-client` trait** — don't import concrete client types directly; use the trait interface
 
+## ABSOLUTE PROHIBITION — Never Hardcode Demo/Test Data in UI
+
+**NEVER** create inline `User`, `VoiceParticipant`, `Message`, `Server`, or any other data
+struct directly inside UI component code (including RSX event handlers). This includes:
+- Constructing a fake user struct to "test" a feature (`User { id: "demo-user-self", ... }`)
+- Calling `poly_demo::data::*` functions directly from UI components
+- Hardcoding backend-specific IDs like `"demo-user-self"` in UI disconnect handlers
+
+**All data must flow from the `ClientBackend` trait.** If a real backend would fetch data from
+a server API, the demo client must also implement that API method — returning static demo data.
+UI components should never know whether they're talking to a real or demo backend.
+
+**Correct pattern:**
+```rust
+// In ClientBackend trait:
+async fn get_voice_participants(&self, channel_id: &str) -> ClientResult<Vec<VoiceParticipant>>;
+
+// In DemoClient:
+async fn get_voice_participants(&self, channel_id: &str) -> ClientResult<Vec<VoiceParticipant>> {
+    Ok(data::demo_voice_participants(channel_id)) // data lives in poly-demo, not UI
+}
+
+// In UI (voice_view.rs):
+let participants = backend.get_voice_participants(&channel_id).await?; // API call, not hardcoded
+```
+
+**When you need to add a new data type/query to the UI:**
+1. Add the method to `ClientBackend` trait in `clients/client/src/lib.rs`
+2. Implement it in all existing clients (stubs return empty/defaults for real backends)
+3. Implement it in `DemoClient` using `data::*` functions in `clients/demo/src/data.rs`
+4. Call it from the UI through `ClientManager` — never directly from `poly_demo`
+
+**Rationale:** This was violated in March 2026 when `VoiceParticipant` was hardcoded in `voice_view.rs`.
+The fix added `get_voice_participants` to the trait and moved all demo data to `poly-demo::data`.
+
 ## Dioxus Component Size Limits — MANDATORY
 
 **NEVER create RSX components larger than 150 lines of code.** This is a hard limit, not a guideline.

@@ -128,6 +128,18 @@ pub trait ClientBackend: Send + Sync {
 
     // --- Presence ---
 
+    // --- Voice / Video ---
+
+    /// Get the current voice participants in a voice or video channel.
+    ///
+    /// Returns the list of users currently connected to the channel.
+    /// Returns an empty list for backends where voice participant tracking is
+    /// not available or the channel is not a voice/video channel.
+    async fn get_voice_participants(&self, channel_id: &str)
+    -> ClientResult<Vec<VoiceParticipant>>;
+
+    // --- Presence ---
+
     /// Get a user's online presence status.
     async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus>;
 

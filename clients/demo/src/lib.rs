@@ -139,6 +139,13 @@ impl ClientBackend for DemoClient {
         Ok(())
     }
 
+    async fn get_voice_participants(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        Ok(data::demo_voice_participants(channel_id))
+    }
+
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         // Return an empty stream for now — will add periodic fake events later
         // TODO(phase-2.6.8): Implement fake event stream with periodic messages
