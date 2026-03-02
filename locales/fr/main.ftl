@@ -206,6 +206,11 @@ voice-in-channel = dans le salon
 voice-go-to-channel = Aller au salon
 voice-mute-mic = Couper le microphone
 voice-unmute-mic = Activer le microphone
+voice-camera = Activer la caméra
+voice-screen-share = Partager l'écran
+voice-activity = Partager une activité
+voice-voiceboard = Tableau vocal
+voice-signal-quality = Qualité du signal
 
 # Emoji / GIF / Réactions
 emoji-picker = Emoji

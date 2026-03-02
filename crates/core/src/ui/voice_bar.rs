@@ -31,59 +31,77 @@ pub fn VoiceBar() -> Element {
 
     let channel_name = conn.channel_name.clone();
     let server_name = conn.server_name.clone();
-    let is_muted = conn.is_muted;
-    let is_deafened = conn.is_deafened;
+    let is_video_on = conn.is_video_on;
+    let is_streaming = conn.is_streaming;
 
     rsx! {
         div { class: "voice-bar",
-            // Status + info
-            div { class: "voice-bar-info",
-                div { class: "voice-bar-status",
-                    span { class: "voice-bar-dot" }
-                    span { class: "voice-bar-status-text", "{t(\"voice-connected\")}" }
+            // Top row: status/channel info + signal/hangup icons
+            div { class: "voice-bar-top",
+                div { class: "voice-bar-info",
+                    div { class: "voice-bar-status",
+                        span { class: "voice-bar-dot" }
+                        span { class: "voice-bar-status-text", "{t(\"voice-connected\")}" }
+                    }
+                    div { class: "voice-bar-channel",
+                        "{channel_name} / {server_name}"
+                    }
                 }
-                div { class: "voice-bar-channel", "{channel_name} / {server_name}" }
+                div { class: "voice-bar-quick",
+                    // Signal quality indicator (non-interactive for now)
+                    span {
+                        class: "voice-bar-signal",
+                        title: "{t(\"voice-signal-quality\")}",
+                        "📶"
+                    }
+                    // Hang up / disconnect
+                    button {
+                        class: "voice-bar-btn voice-bar-hangup",
+                        title: "{t(\"voice-disconnect\")}",
+                        onclick: move |_| {
+                            chat_data.write().voice_connection = None;
+                        },
+                        "📵"
+                    }
+                }
             }
-            // Controls
-            div { class: "voice-bar-controls",
-                // Mute mic toggle
+            // Middle row: media control buttons
+            div { class: "voice-bar-media",
+                // Camera toggle
                 button {
-                    class: if is_muted { "voice-bar-btn active" } else { "voice-bar-btn" },
-                    title: if is_muted { t("voice-unmute") } else { t("voice-mute") },
+                    class: if is_video_on { "voice-bar-media-btn active" } else { "voice-bar-media-btn" },
+                    title: "{t(\"voice-camera\")}",
                     onclick: move |_| {
                         if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_muted = !vc.is_muted;
+                            vc.is_video_on = !vc.is_video_on;
                         }
                     },
-                    if is_muted {
-                        "🔇"
-                    } else {
-                        "🎤"
-                    }
+                    "📹"
                 }
-                // Deafen toggle
+                // Screen share toggle
                 button {
-                    class: if is_deafened { "voice-bar-btn active" } else { "voice-bar-btn" },
-                    title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
+                    class: if is_streaming { "voice-bar-media-btn active" } else { "voice-bar-media-btn" },
+                    title: "{t(\"voice-screen-share\")}",
                     onclick: move |_| {
                         if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_deafened = !vc.is_deafened;
+                            vc.is_streaming = !vc.is_streaming;
                         }
                     },
-                    if is_deafened {
-                        "🔕"
-                    } else {
-                        "🔊"
-                    }
+                    "🖥"
                 }
-                // Disconnect
+                // Activity — disabled/placeholder
                 button {
-                    class: "voice-bar-btn disconnect",
-                    title: "{t(\"voice-disconnect\")}",
-                    onclick: move |_| {
-                        chat_data.write().voice_connection = None;
-                    },
-                    "📞"
+                    class: "voice-bar-media-btn disabled",
+                    title: "{t(\"voice-activity\")}",
+                    disabled: true,
+                    "🎮"
+                }
+                // Voiceboard — disabled/placeholder
+                button {
+                    class: "voice-bar-media-btn disabled",
+                    title: "{t(\"voice-voiceboard\")}",
+                    disabled: true,
+                    "📋"
                 }
             }
         }

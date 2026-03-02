@@ -206,6 +206,11 @@ voice-in-channel = in channel
 voice-go-to-channel = Go to channel
 voice-mute-mic = Mute microphone
 voice-unmute-mic = Unmute microphone
+voice-camera = Toggle Camera
+voice-screen-share = Share Screen
+voice-activity = Share Activity
+voice-voiceboard = Voiceboard
+voice-signal-quality = Signal Quality
 
 # Emoji / GIF / Reactions
 emoji-picker = Emoji
