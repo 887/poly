@@ -43,9 +43,7 @@ pub fn VoiceBar() -> Element {
                         span { class: "voice-bar-dot" }
                         span { class: "voice-bar-status-text", "{t(\"voice-connected\")}" }
                     }
-                    div { class: "voice-bar-channel",
-                        "{channel_name} / {server_name}"
-                    }
+                    div { class: "voice-bar-channel", "{channel_name} / {server_name}" }
                 }
                 div { class: "voice-bar-quick",
                     // Signal quality indicator (non-interactive for now)
