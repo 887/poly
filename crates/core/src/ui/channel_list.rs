@@ -176,6 +176,7 @@ fn DMFriendsView() -> Element {
                     badge: backend_badge(&dm.backend),
                     unread: dm.unread_count,
                     is_active: selected_channel.as_deref() == Some(&dm.id),
+                    account_id: dm.account_id.clone(),
                 }
             }
 
@@ -186,6 +187,7 @@ fn DMFriendsView() -> Element {
                     members: group.members.clone(),
                     badge: backend_badge(&group.backend),
                     is_active: selected_channel.as_deref() == Some(&group.id),
+                    account_id: group.account_id.clone(),
                 }
             }
 
@@ -246,9 +248,12 @@ fn DMChannelItem(
     badge: String,
     unread: u32,
     is_active: bool,
+    account_id: String,
 ) -> Element {
     use crate::state::chat_data::user_color;
     let mut app_state: Signal<AppState> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
 
     let color = user_color(&user_id);
     let first_char: String = display_name
@@ -263,6 +268,21 @@ fn DMChannelItem(
             onclick: move |_| {
                 app_state.write().push_nav_history();
                 app_state.write().nav.selected_channel = Some(channel_id.clone());
+                // Synthesize a Channel so ChatView can display the DM header
+                chat_data.write().current_channel = Some(Channel {
+                    id: channel_id.clone(),
+                    name: display_name.clone(),
+                    channel_type: ChannelType::Text,
+                    server_id: String::new(),
+                    unread_count: 0,
+                    last_message_id: None,
+                });
+                chat_data.write().current_server = None;
+                let cid = channel_id.clone();
+                let aid = account_id.clone();
+                spawn(async move {
+                    load_dm_messages(cid, aid, client_manager, chat_data).await;
+                });
             },
             div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
             span { class: "channel-name", "{display_name}" }
@@ -282,8 +302,11 @@ fn GroupChannelItem(
     members: Vec<User>,
     badge: String,
     is_active: bool,
+    account_id: String,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
 
     let display_name = group_name.unwrap_or_else(|| {
         members
@@ -300,6 +323,21 @@ fn GroupChannelItem(
             onclick: move |_| {
                 app_state.write().push_nav_history();
                 app_state.write().nav.selected_channel = Some(group_id.clone());
+                // Synthesize a Channel so ChatView can display the group header
+                chat_data.write().current_channel = Some(Channel {
+                    id: group_id.clone(),
+                    name: display_name.clone(),
+                    channel_type: ChannelType::Text,
+                    server_id: String::new(),
+                    unread_count: 0,
+                    last_message_id: None,
+                });
+                chat_data.write().current_server = None;
+                let cid = group_id.clone();
+                let aid = account_id.clone();
+                spawn(async move {
+                    load_dm_messages(cid, aid, client_manager, chat_data).await;
+                });
             },
             span { class: "channel-icon", "👥" }
             span { class: "channel-name", "{display_name}" }
@@ -506,6 +544,36 @@ async fn load_channel_data(
                 chat_data.write().members = members;
             }
         }
+    }
+
+    chat_data.write().loading = false;
+}
+/// Load messages for a DM or group channel using the account backend directly
+/// (does not require a selected server).
+async fn load_dm_messages(
+    channel_id: String,
+    account_id: String,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    chat_data.write().loading = true;
+    chat_data.write().messages = Vec::new();
+    chat_data.write().members = Vec::new();
+
+    let Some(backend) = client_manager.read().get_backend(&account_id) else {
+        chat_data.write().loading = false;
+        return;
+    };
+
+    let guard = backend.read().await;
+    if let Ok(messages) = guard
+        .get_messages(&channel_id, poly_client::MessageQuery::default())
+        .await
+    {
+        chat_data.write().messages = messages;
+    }
+    if let Ok(members) = guard.get_channel_members(&channel_id).await {
+        chat_data.write().members = members;
     }
 
     chat_data.write().loading = false;

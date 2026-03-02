@@ -21,7 +21,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use poly_devtools_protocol::backend::{DevtoolsBackend, ScreenshotResult};
+use poly_devtools_protocol::backend::{DevtoolsBackend, ScreenshotParams, ScreenshotResult};
 use poly_devtools_protocol::mcp::run_mcp_loop;
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -233,82 +233,20 @@ impl DevtoolsBackend for DesktopHttpBackend {
         Ok(format!("Eval-bridge connected ✓  ({BASE}/status → {ok})"))
     }
 
-    async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> {
-        let png_bytes = http_get(&self.client, "/screenshot").await?;
-        let dir = "devtools-screenshots";
-        let _ = std::fs::create_dir_all(dir);
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        let path = format!("{dir}/desktop-{ts}.png");
-        let _ = std::fs::write(&path, &png_bytes);
-        Ok(ScreenshotResult { png_bytes })
+    async fn take_screenshot(
+        &self,
+        _params: &ScreenshotParams,
+    ) -> anyhow::Result<ScreenshotResult> {
+        // Desktop Wry only supports PNG — format/quality params are ignored.
+        let image_bytes = http_get(&self.client, "/screenshot").await?;
+        Ok(ScreenshotResult {
+            image_bytes,
+            mime_type: "image/png".to_string(),
+        })
     }
 
     async fn js_eval(&self, expression: &str) -> anyhow::Result<String> {
         http_eval(&self.client, expression).await
-    }
-
-    async fn get_dom(&self) -> anyhow::Result<String> {
-        Ok(String::from_utf8(http_get(&self.client, "/dom").await?)?)
-    }
-
-    async fn get_console(&self) -> anyhow::Result<String> {
-        Ok(String::from_utf8(
-            http_get(&self.client, "/console").await?,
-        )?)
-    }
-
-    async fn click(&self, x: i64, y: i64) -> anyhow::Result<String> {
-        let js = format!(
-            r#"return (function() {{
-                var x = {x}, y = {y};
-                var el = document.elementFromPoint(x, y);
-                if (!el) return 'No element at (' + x + ',' + y + ')';
-                var opts = {{
-                    bubbles: true, cancelable: true,
-                    clientX: x, clientY: y, screenX: x, screenY: y,
-                    view: window
-                }};
-                el.dispatchEvent(new PointerEvent('pointerdown', Object.assign({{pointerId:1,isPrimary:true}}, opts)));
-                el.dispatchEvent(new MouseEvent('mousedown', opts));
-                el.dispatchEvent(new PointerEvent('pointerup',   Object.assign({{pointerId:1,isPrimary:true}}, opts)));
-                el.dispatchEvent(new MouseEvent('mouseup',   opts));
-                el.dispatchEvent(new MouseEvent('click',     opts));
-                var cls = (el.className || '').toString().trim().replace(/\s+/g, '.');
-                var txt = (el.textContent || '').trim().slice(0, 40);
-                return 'Clicked ' + el.tagName
-                    + (el.id ? '#' + el.id : '')
-                    + (cls   ? '.' + cls   : '')
-                    + (txt   ? ' "' + txt + '"' : '')
-                    + ' at (' + x + ',' + y + ')';
-            }})();"#
-        );
-        http_eval(&self.client, &js).await
-    }
-
-    async fn type_text(&self, text: &str) -> anyhow::Result<String> {
-        let escaped = text.replace('\'', "\\'");
-        let js = format!(
-            r#"(function(){{
-                var el = document.activeElement || document.body;
-                var t = '{escaped}';
-                if (el.tagName==='INPUT'||el.tagName==='TEXTAREA') {{
-                    el.value += t;
-                    el.dispatchEvent(new InputEvent('input',{{bubbles:true}}));
-                    el.dispatchEvent(new Event('change',{{bubbles:true}}));
-                }} else {{
-                    for (var i=0;i<t.length;i++) {{
-                        var c=t[i];
-                        el.dispatchEvent(new KeyboardEvent('keydown',{{key:c,bubbles:true}}));
-                        el.dispatchEvent(new KeyboardEvent('keyup',{{key:c,bubbles:true}}));
-                    }}
-                }}
-                return 'typed: '+t;
-            }})();"#
-        );
-        http_eval(&self.client, &js).await
     }
 
     async fn hard_kill(&self) -> anyhow::Result<String> {
@@ -339,25 +277,6 @@ impl DevtoolsBackend for DesktopHttpBackend {
             "Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
                 .to_string(),
         )
-    }
-
-    async fn browser_reload(&self) -> anyhow::Result<String> {
-        // Reload the webview page. After reload, the devtools head script
-        // re-injects automatically (it is in the custom <head>), and the
-        // HTTP eval bridge stays up since it lives in native Rust.
-        // We tolerate an eval error here because a reload disconnects the JS
-        // context briefly — the caller should wait ~1s then call connect_cdp.
-        match http_eval(
-            &self.client,
-            "return (function(){ window.location.reload(); return 'reloading'; })()",
-        )
-        .await
-        {
-            Ok(_) | Err(_) => Ok(
-                "Browser reload triggered. Wait ~1s for the webview to settle, then call connect_cdp."
-                    .to_string(),
-            ),
-        }
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
@@ -404,6 +323,224 @@ impl DevtoolsBackend for DesktopHttpBackend {
                     .to_string(),
             )
         }
+    }
+
+    // ── Input method overrides ────────────────────────────────────────────────
+    //
+    // The desktop eval bridge wraps JS in `async function(dioxus) { SCRIPT }`.
+    // The `do_eval` helper further wraps any script containing top-level
+    // semicolons in a second IIFE `return (function(){ SCRIPT; return null; })()`
+    // which discards the inner function's return value.
+    //
+    // The fix: start every script with `return ` so that `do_eval` passes it
+    // through unchanged (it only skips wrapping when the trimmed JS already
+    // starts with `return `).  We wrap ourselves in `return (function(){...})()`
+    // which correctly propagates the inner return value.
+    //
+    // `click_at` additionally works around the WebKit2GTK `elementFromPoint`
+    // issue (returns null for physical-pixel coords on HiDPI displays) by:
+    //   1. Trying `elementFromPoint(x, y)` at CSS pixel coords.
+    //   2. Retrying at `(x/dpr, y/dpr)` in case the caller used physical pixels.
+    //   3. Falling back to a `getBoundingClientRect()` scan over all elements.
+
+    async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
+        let count = if dbl_click { 2 } else { 1 };
+        // Starts with `return ` → do_eval passes it through without double-wrapping.
+        //
+        // IMPORTANT: x,y must be CSS pixel coordinates (same space as
+        // getBoundingClientRect()), NOT screenshot display pixels.
+        // The displayed screenshot image is scaled by the viewer — do NOT use
+        // image pixel offsets here.  Always use getBoundingClientRect() to find
+        // exact element centres before calling click_at.
+        let js = format!(
+            r#"return (function(){{
+                var rx={x},ry={y},count={count};
+                var dpr=window.devicePixelRatio||1;
+
+                // Interactive tags / roles — prefer these as the click target over
+                // presentational children (span, div, svg, etc).
+                var INTERACTIVE=['A','BUTTON','INPUT','SELECT','TEXTAREA','LABEL'];
+                var INTERACTIVE_ROLES=['button','link','menuitem','option','tab','checkbox','radio','combobox','listbox'];
+
+                function isInteractive(el){{
+                    if(INTERACTIVE.indexOf(el.tagName)!==-1)return true;
+                    var r=(el.getAttribute('role')||'').toLowerCase();
+                    if(INTERACTIVE_ROLES.indexOf(r)!==-1)return true;
+                    if(el.hasAttribute('onclick')||el.hasAttribute('data-dioxus-id'))return true;
+                    return false;
+                }}
+
+                // Walk up from a hit element to the nearest interactive ancestor
+                // (within 8 hops) — this prevents landing on a child span/svg
+                // inside a button and missing the click handler.
+                function liftToInteractive(el){{
+                    var cur=el,hops=0;
+                    while(cur&&hops<8){{
+                        if(isInteractive(cur))return cur;
+                        cur=cur.parentElement;hops++;
+                    }}
+                    return el; // give up — return original
+                }}
+
+                // Hit-test: try native first, then bounding-rect scan.
+                function findAt(cx,cy){{
+                    var el=document.elementFromPoint(cx,cy);
+                    if(el&&el!==document.documentElement&&el!==document.body)return el;
+                    // Manual scan: smallest element whose rect contains the point.
+                    var all=Array.from(document.querySelectorAll('*')),best=null,bestSz=Infinity;
+                    for(var i=0;i<all.length;i++){{
+                        var r=all[i].getBoundingClientRect();
+                        if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom){{
+                            var sz=r.width*r.height;
+                            if(sz>0&&sz<bestSz){{bestSz=sz;best=all[i];}}
+                        }}
+                    }}
+                    return best;
+                }}
+
+                // Try CSS pixel coords; if null and DPR!=1 try scaled fallback.
+                var hit=findAt(rx,ry);
+                var usedX=rx,usedY=ry;
+                if(!hit&&dpr!==1){{
+                    var sx=rx/dpr,sy=ry/dpr;
+                    hit=findAt(sx,sy);
+                    if(hit){{usedX=sx;usedY=sy;}}
+                }}
+                if(!hit)return 'No element at ('+rx+','+ry+') dpr='+dpr+'. Use evaluate_script+getBoundingClientRect() for exact coords.';
+
+                // Lift to nearest interactive ancestor to avoid missing Dioxus handlers.
+                var el=liftToInteractive(hit);
+
+                el.scrollIntoView({{block:'nearest',behavior:'instant'}});
+                if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'){{el.focus();}}
+
+                var opts={{bubbles:true,cancelable:true,clientX:usedX,clientY:usedY,screenX:usedX,screenY:usedY,view:window}};
+                for(var k=0;k<count;k++){{
+                    el.dispatchEvent(new PointerEvent('pointerdown',Object.assign({{pointerId:1,isPrimary:true}},opts)));
+                    el.dispatchEvent(new MouseEvent('mousedown',opts));
+                    el.dispatchEvent(new PointerEvent('pointerup',Object.assign({{pointerId:1,isPrimary:true}},opts)));
+                    el.dispatchEvent(new MouseEvent('mouseup',opts));
+                    el.dispatchEvent(new MouseEvent('click',Object.assign({{detail:count}},opts)));
+                }}
+
+                var tag=el.tagName.toLowerCase();
+                var id=el.id?'#'+el.id:'';
+                var cls=(el.className&&typeof el.className==='string')&&el.className.trim()?'.'+el.className.trim().split(/\s+/)[0]:'';
+                var txt=(el.textContent||el.value||'').trim().slice(0,60);
+                var liftMsg=(el!==hit)?' (lifted from '+hit.tagName.toLowerCase()+')'  :'';
+                return 'Clicked '+tag+(id||cls||'')+liftMsg+' at ('+usedX+','+usedY+')'+(txt?' "'+txt+'"':'');
+            }})()"#
+        );
+        self.js_eval(&js).await
+    }
+
+    async fn click_element(&self, selector: &str) -> anyhow::Result<String> {
+        let escaped = selector.replace('\\', "\\\\").replace('\'', "\\'");
+        // Starts with `return ` → bypasses do_eval double-wrapping.
+        let js = format!(
+            r#"return (function(){{
+                var el=document.querySelector('{escaped}');
+                if(!el)return 'Error: No element found for selector: {escaped}';
+                el.scrollIntoView({{block:'center',behavior:'instant'}});
+                if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'){{el.focus();}}
+                el.dispatchEvent(new MouseEvent('click',{{bubbles:true,cancelable:true}}));
+                var tag=el.tagName.toLowerCase();
+                var id=el.id?'#'+el.id:'';
+                var txt=(el.textContent||el.value||'').trim().slice(0,50);
+                return 'Clicked '+tag+id+(txt?' "'+txt+'"':'');
+            }})()"#
+        );
+        self.js_eval(&js).await
+    }
+
+    async fn hover_element(&self, selector: &str) -> anyhow::Result<String> {
+        let escaped = selector.replace('\\', "\\\\").replace('\'', "\\'");
+        let js = format!(
+            r#"return (function(){{
+                var el=document.querySelector('{escaped}');
+                if(!el)return 'Error: No element found for selector: {escaped}';
+                el.scrollIntoView({{block:'center',behavior:'instant'}});
+                var rect=el.getBoundingClientRect();
+                var cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+                var opts={{bubbles:true,clientX:cx,clientY:cy,view:window}};
+                el.dispatchEvent(new MouseEvent('mouseenter',opts));
+                el.dispatchEvent(new MouseEvent('mouseover',opts));
+                el.dispatchEvent(new MouseEvent('mousemove',opts));
+                return 'Hovered over '+el.tagName.toLowerCase()+(el.id?'#'+el.id:'');
+            }})()"#
+        );
+        self.js_eval(&js).await
+    }
+
+    async fn fill_element(&self, selector: &str, value: &str) -> anyhow::Result<String> {
+        let sel = selector.replace('\\', "\\\\").replace('\'', "\\'");
+        let val = value.replace('\\', "\\\\").replace('\'', "\\'");
+        let js = format!(
+            r#"return (function(){{
+                var el=document.querySelector('{sel}');
+                if(!el)return 'Error: No element found for selector: {sel}';
+                el.scrollIntoView({{block:'center',behavior:'instant'}});
+                el.focus();
+                if(el.tagName==='SELECT'){{
+                    for(var i=0;i<el.options.length;i++){{
+                        if(el.options[i].value==='{val}'||el.options[i].text==='{val}'){{
+                            el.selectedIndex=i;
+                            el.dispatchEvent(new Event('change',{{bubbles:true}}));
+                            return 'Selected "'+el.options[i].text+'"';
+                        }}
+                    }}
+                    return 'Error: Option not found: {val}';
+                }}
+                var nativeSet=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')
+                    ||Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value');
+                if(nativeSet&&nativeSet.set)nativeSet.set.call(el,'{val}');else el.value='{val}';
+                el.dispatchEvent(new Event('input',{{bubbles:true}}));
+                el.dispatchEvent(new Event('change',{{bubbles:true}}));
+                return 'Filled '+el.tagName.toLowerCase()+(el.id?'#'+el.id:'')+' with "'+'{val}'.slice(0,40)+'"';
+            }})()"#
+        );
+        self.js_eval(&js).await
+    }
+
+    async fn type_text(&self, text: &str, submit_key: Option<&str>) -> anyhow::Result<String> {
+        let escaped_text = text.replace('\\', "\\\\").replace('\'', "\\'");
+        let key_js = match submit_key {
+            Some(k) => {
+                let ek = k.replace('\'', "\\'");
+                format!(
+                    "el.dispatchEvent(new KeyboardEvent('keydown',{{key:'{ek}',bubbles:true}}));\
+                     el.dispatchEvent(new KeyboardEvent('keyup',{{key:'{ek}',bubbles:true}}));"
+                )
+            }
+            None => String::new(),
+        };
+        let display = match submit_key {
+            Some(k) => format!("Typed \"{escaped_text}\" + {k}"),
+            None => format!("Typed \"{escaped_text}\""),
+        };
+        let js = format!(
+            r#"return (function(){{
+                var el=document.activeElement||document.body;
+                var t='{escaped_text}';
+                if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'){{
+                    var nativeSet=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')
+                        ||Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value');
+                    if(nativeSet&&nativeSet.set)nativeSet.set.call(el,el.value+t);else el.value+=t;
+                    el.dispatchEvent(new Event('input',{{bubbles:true}}));
+                    el.dispatchEvent(new Event('change',{{bubbles:true}}));
+                }}else{{
+                    for(var i=0;i<t.length;i++){{
+                        var c=t[i];
+                        el.dispatchEvent(new KeyboardEvent('keydown',{{key:c,bubbles:true}}));
+                        el.dispatchEvent(new KeyboardEvent('keypress',{{key:c,bubbles:true}}));
+                        el.dispatchEvent(new KeyboardEvent('keyup',{{key:c,bubbles:true}}));
+                    }}
+                }}
+                {key_js}
+                return '{display}';
+            }})()"#
+        );
+        self.js_eval(&js).await
     }
 }
 

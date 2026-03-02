@@ -83,6 +83,7 @@ pub fn MainLayout() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let view = app_state.read().nav.view;
     let show_right = app_state.read().nav.right_sidebar_visible;
+    let selected_channel = app_state.read().nav.selected_channel.clone();
 
     // Determine if the currently selected channel is a voice/video channel
     let is_voice_channel = chat_data
@@ -114,19 +115,23 @@ pub fn MainLayout() -> Element {
                             VoiceBar {}
                             AccountSwitcher {}
                         }
-                        // Placeholder until a conversation is selected
-                        main { class: "chat-view",
-                            div { class: "chat-header",
-                                span { class: "chat-channel-name", "{t(\"nav-dms\")}" }
-                            }
-                            div { class: "message-list",
-                                div { class: "message-empty",
-                                    div { class: "empty-wave", "💬" }
-                                    h3 { "{t(\"chat-select-conversation\")}" }
+                        // Show chat when a DM/group is selected, otherwise placeholder
+                        if selected_channel.is_some() {
+                            ChatView {}
+                        } else {
+                            main { class: "chat-view",
+                                div { class: "chat-header",
+                                    span { class: "chat-channel-name", "{t(\"nav-dms\")}" }
                                 }
-                            }
-                            div { class: "message-input-area",
-                                div { class: "message-input-disabled", "{t(\"chat-select-conversation\")}" }
+                                div { class: "message-list",
+                                    div { class: "message-empty",
+                                        div { class: "empty-wave", "💬" }
+                                        h3 { "{t(\"chat-select-conversation\")}" }
+                                    }
+                                }
+                                div { class: "message-input-area",
+                                    div { class: "message-input-disabled", "{t(\"chat-select-conversation\")}" }
+                                }
                             }
                         }
                     },

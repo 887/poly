@@ -93,18 +93,40 @@ async fn do_eval(js: impl Into<String>) -> Result<String, String> {
     resp_rx.await.map_err(|e| e.to_string())?
 }
 
-/// Heuristic: does the string contain a `;` outside of string literals?
-/// Handles single and double quoted strings (no template literals for simplicity).
+/// Heuristic: does the string contain a `;` at depth 0 (outside of string
+/// literals, braces, parentheses, and brackets)?
+///
+/// Previously this only tracked string depth, which caused every IIFE of the
+/// form `(function(){ … })()`  to be classified as having a "top-level"
+/// semicolon even though all semicolons are inside the `{}`.  That in turn
+/// caused `do_eval` to double-wrap the IIFE in an outer function that discarded
+/// the inner return value, silently returning `null` for every `js_eval` call.
+///
+/// The fix: also track `{`, `(`, `[` depth.  A `;` is only "top-level" when
+/// depth is 0 (truly outside any block or group).
 fn has_top_level_semicolon(s: &str) -> bool {
+    let mut depth: i32 = 0;
     let mut in_single = false;
     let mut in_double = false;
     let mut prev = '\0';
     for c in s.chars() {
-        match c {
-            '\'' if !in_double && prev != '\\' => in_single = !in_single,
-            '"' if !in_single && prev != '\\' => in_double = !in_double,
-            ';' if !in_single && !in_double => return true,
-            _ => {}
+        if in_single {
+            if c == '\'' && prev != '\\' {
+                in_single = false;
+            }
+        } else if in_double {
+            if c == '"' && prev != '\\' {
+                in_double = false;
+            }
+        } else {
+            match c {
+                '\'' => in_single = true,
+                '"' => in_double = true,
+                '{' | '(' | '[' => depth += 1,
+                '}' | ')' | ']' => depth -= 1,
+                ';' if depth == 0 => return true,
+                _ => {}
+            }
         }
         prev = c;
     }

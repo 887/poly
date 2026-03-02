@@ -24,7 +24,9 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
-use poly_devtools_protocol::backend::{DevtoolsBackend, ScreenshotResult};
+use poly_devtools_protocol::backend::{
+    DevtoolsBackend, NavigateParams, ScreenshotParams, ScreenshotResult,
+};
 use poly_devtools_protocol::mcp::run_mcp_loop;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
@@ -110,6 +112,10 @@ impl ChromeCdpBackend {
             format!("--remote-debugging-port={CDP_PORT}"),
             "--no-first-run".to_string(),
             "--no-default-browser-check".to_string(),
+            // Show the "Chrome is being controlled by automated test software"
+            // info bar under the address bar — same behaviour as Puppeteer/
+            // ChromeDriver so the user always knows this window is MCP-managed.
+            "--enable-automation".to_string(),
             format!("http://127.0.0.1:{WEB_SERVER_PORT}"),
         ];
         if self.headless {
@@ -540,25 +546,56 @@ impl DevtoolsBackend for ChromeCdpBackend {
         Ok(format!("Connected to Chrome CDP ✓  (ws: {ws_url})"))
     }
 
-    async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> {
-        let result = self
-            .cdp_send("Page.captureScreenshot", json!({ "format": "png" }))
-            .await?;
+    async fn take_screenshot(&self, params: &ScreenshotParams) -> anyhow::Result<ScreenshotResult> {
+        // Use CDP format/quality parameters.
+        let format = match params.format.as_str() {
+            "jpeg" => "jpeg",
+            "webp" => "webp",
+            _ => "png",
+        };
+        let mime_type = match format {
+            "jpeg" => "image/jpeg",
+            "webp" => "image/webp",
+            _ => "image/png",
+        };
+        let mut cdp_params = json!({ "format": format });
+        if let Some(q) = params.quality
+            && let Some(m) = cdp_params.as_object_mut()
+        {
+            m.insert("quality".to_string(), json!(q));
+        }
+        if params.full_page {
+            // Get full page metrics for full-page screenshots.
+            if let Ok(metrics) = self.cdp_send("Page.getLayoutMetrics", json!({})).await
+                && let Some(content_size) = metrics.get("contentSize")
+            {
+                let width = content_size
+                    .get("width")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1440.0);
+                let height = content_size
+                    .get("height")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(900.0);
+                if let Some(m) = cdp_params.as_object_mut() {
+                    m.insert(
+                        "clip".to_string(),
+                        json!({"x": 0, "y": 0, "width": width, "height": height, "scale": 1}),
+                    );
+                }
+            }
+        }
+        let result = self.cdp_send("Page.captureScreenshot", cdp_params).await?;
         let b64 = result
             .get("data")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("No data in screenshot response"))?;
         use base64::Engine as _;
-        let png_bytes = base64::engine::general_purpose::STANDARD.decode(b64)?;
-        // Save to devtools-screenshots/ so it appears as a workspace file.
-        let dir = "devtools-screenshots";
-        let _ = std::fs::create_dir_all(dir);
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        let _ = std::fs::write(format!("{dir}/web-{ts}.png"), &png_bytes);
-        Ok(ScreenshotResult { png_bytes })
+        let image_bytes = base64::engine::general_purpose::STANDARD.decode(b64)?;
+        Ok(ScreenshotResult {
+            image_bytes,
+            mime_type: mime_type.to_string(),
+        })
     }
 
     async fn js_eval(&self, expression: &str) -> anyhow::Result<String> {
@@ -594,64 +631,61 @@ impl DevtoolsBackend for ChromeCdpBackend {
         })
     }
 
-    async fn get_dom(&self) -> anyhow::Result<String> {
-        self.js_eval("document.documentElement.outerHTML").await
-    }
-
-    async fn get_console(&self) -> anyhow::Result<String> {
-        // Inject console capture if not already done, then retrieve
-        self.js_eval(
-            r#"(function(){
-                if (!window.__polyLogs) {
-                    window.__polyLogs = [];
-                    var orig = {};
-                    ['log','warn','error','info','debug'].forEach(function(lvl){
-                        orig[lvl] = console[lvl];
-                        console[lvl] = function(){
-                            var args = Array.from(arguments).map(function(a){ try{return JSON.stringify(a);}catch(e){return String(a);} });
-                            window.__polyLogs.push({level:lvl, text:args.join(' '), timestamp:Date.now()});
-                            if (window.__polyLogs.length > 200) window.__polyLogs.shift();
-                            orig[lvl].apply(console, arguments);
-                        };
-                    });
-                }
-                return JSON.stringify(window.__polyLogs);
-            })()"#,
-        )
-        .await
-    }
-
-    async fn click(&self, x: i64, y: i64) -> anyhow::Result<String> {
-        // Use CDP Input.dispatchMouseEvent for precise clicking
-        self.cdp_send(
-            "Input.dispatchMouseEvent",
-            json!({ "type": "mousePressed", "x": x, "y": y, "button": "left", "clickCount": 1 }),
-        )
-        .await?;
-        self.cdp_send(
-            "Input.dispatchMouseEvent",
-            json!({ "type": "mouseReleased", "x": x, "y": y, "button": "left", "clickCount": 1 }),
-        )
-        .await?;
-
-        // Also get info about what we clicked
+    async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
+        let count: i64 = if dbl_click { 2 } else { 1 };
+        let xi = x as i64;
+        let yi = y as i64;
+        // Use CDP Input.dispatchMouseEvent for precise clicking.
+        for click_num in 1..=count {
+            self.cdp_send(
+                "Input.dispatchMouseEvent",
+                json!({ "type": "mousePressed", "x": xi, "y": yi, "button": "left", "clickCount": click_num }),
+            )
+            .await?;
+            self.cdp_send(
+                "Input.dispatchMouseEvent",
+                json!({ "type": "mouseReleased", "x": xi, "y": yi, "button": "left", "clickCount": click_num }),
+            )
+            .await?;
+        }
+        // Get info about what we clicked.
         let info = self
             .js_eval(&format!(
                 r#"(function(){{
                     var el = document.elementFromPoint({x},{y});
                     if (!el) return 'No element at ({x},{y})';
-                    return 'Clicked: ' + el.tagName + (el.id ? '#'+el.id : '') + (el.className ? '.'+el.className.split(' ').join('.') : '');
+                    var tag = el.tagName.toLowerCase();
+                    var id = el.id ? '#'+el.id : '';
+                    var txt = (el.textContent||'').trim().slice(0,40);
+                    return 'Clicked '+tag+id+(txt?' "'+txt+'"':'')+' at ({x},{y})';
                 }})()"#
             ))
             .await?;
         Ok(info)
     }
 
-    async fn type_text(&self, text: &str) -> anyhow::Result<String> {
-        // Use CDP Input.insertText for reliable text input
+    async fn type_text(&self, text: &str, submit_key: Option<&str>) -> anyhow::Result<String> {
+        // Use CDP Input.insertText for reliable text input.
         self.cdp_send("Input.insertText", json!({ "text": text }))
             .await?;
-        Ok(format!("typed: {text}"))
+        // Press optional submit key (Enter, Tab, Escape, etc.).
+        if let Some(key) = submit_key {
+            self.cdp_send(
+                "Input.dispatchKeyEvent",
+                json!({ "type": "keyDown", "key": key }),
+            )
+            .await?;
+            self.cdp_send(
+                "Input.dispatchKeyEvent",
+                json!({ "type": "keyUp", "key": key }),
+            )
+            .await?;
+        }
+        let display = match submit_key {
+            Some(k) => format!("Typed \"{text}\" + {k}"),
+            None => format!("Typed \"{text}\""),
+        };
+        Ok(display)
     }
 
     async fn reset_app(&self) -> anyhow::Result<String> {
@@ -714,19 +748,41 @@ impl DevtoolsBackend for ChromeCdpBackend {
         )
     }
 
-    async fn browser_reload(&self) -> anyhow::Result<String> {
-        // Use CDP to reload the page (equivalent to F5).
-        // Clear the WebSocket so ensure_ws will reconnect after the reload.
-        let result = self
-            .cdp_send("Page.reload", json!({ "ignoreCache": false }))
-            .await;
-        // After reload the WS connection drops — clear it so auto-reconnect
-        // kicks in on the next call.
-        *self.ws.lock().await = None;
-        result.map(|_| {
-            "Page reloaded (F5). CDP connection cleared — call connect_cdp to reconnect."
-                .to_string()
-        })
+    async fn navigate_page(&self, params: &NavigateParams) -> anyhow::Result<String> {
+        match params.nav_type.as_str() {
+            "url" => {
+                let url = params.url.as_deref().unwrap_or("");
+                if url.is_empty() {
+                    anyhow::bail!("A URL is required for navigation of type=url.");
+                }
+                self.cdp_send("Page.navigate", json!({ "url": url }))
+                    .await?;
+                // Navigation may close the WS — clear for auto-reconnect.
+                *self.ws.lock().await = None;
+                Ok(format!("Navigated to {url}"))
+            }
+            "back" => {
+                self.js_eval("(function(){ window.history.back(); return 'Navigated back'; })()")
+                    .await
+            }
+            "forward" => {
+                self.js_eval(
+                    "(function(){ window.history.forward(); return 'Navigated forward'; })()",
+                )
+                .await
+            }
+            "reload" => {
+                let result = self
+                    .cdp_send("Page.reload", json!({ "ignoreCache": params.ignore_cache }))
+                    .await;
+                // After reload the WS connection drops — clear for auto-reconnect.
+                *self.ws.lock().await = None;
+                result.map(|_| "Page reloaded.".to_string())
+            }
+            other => anyhow::bail!(
+                "Unknown navigation type: {other}. Use url, back, forward, or reload."
+            ),
+        }
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
