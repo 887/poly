@@ -73,11 +73,7 @@ async fn run_reset_flow(
 
 /// Reset button component.
 #[component]
-fn ResetButton(
-    kind: ResetKind,
-    busy: Signal<bool>,
-    on_error: EventHandler<String>,
-) -> Element {
+fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let chat_data: Signal<crate::state::ChatData> = use_context();
@@ -85,7 +81,10 @@ fn ResetButton(
 
     let (label, class_name) = match kind {
         ResetKind::User => (t("settings-reset-app"), "btn btn-danger"),
-        ResetKind::Nuke => (format!("☢️ {}", t("settings-nuke-app")), "btn btn-warning btn-nuke"),
+        ResetKind::Nuke => (
+            format!("☢️ {}", t("settings-nuke-app")),
+            "btn btn-warning btn-nuke",
+        ),
     };
 
     rsx! {
@@ -98,7 +97,8 @@ fn ResetButton(
                 }
                 busy_signal.set(true);
                 spawn(async move {
-                    if let Err(err) = run_reset_flow(kind, client_manager, chat_data, app_state).await
+                    if let Err(err) = run_reset_flow(kind, client_manager, chat_data, app_state)
+                        .await
                     {
                         on_error.call(err);
                         busy_signal.set(false);
@@ -131,19 +131,19 @@ fn ResetSection() -> Element {
             p { class: "settings-description", "{t(\"settings-reset-description\")}" }
             ResetButton {
                 kind: ResetKind::User,
-                busy: busy,
+                busy,
                 on_error: move |err: String| {
                     error.set(err);
                     busy.set(false);
-                }
+                },
             }
             ResetButton {
                 kind: ResetKind::Nuke,
-                busy: busy,
+                busy,
                 on_error: move |err: String| {
                     error.set(err);
                     busy.set(false);
-                }
+                },
             }
             ResetError { error }
         }
