@@ -72,18 +72,18 @@ pub(super) fn NotificationsSettings() -> Element {
                     enabled: *desktop_enabled.read(),
                     on_toggle: move |v: bool| {
                         desktop_enabled.set(v);
-                        save_global_notif(&NotificationSettings {
-                            desktop_enabled: v,
-                            // Keep legacy fields in sync with their defaults
-                            // (per-account settings are now the authority for these)
-                            notify_streams: true,
-                            notify_friends_voice: true,
-                            notify_reactions: true,
-                            sound_new_message: true,
-                            sound_dm: true,
-                            sound_ring: true,
-                            badge_unread: true,
-                        });
+                        save_global_notif(
+                            &NotificationSettings { // Keep legacy fields in sync with their defaults
+                                desktop_enabled: v,
+                                notify_streams: true,
+                                notify_friends_voice: true,
+                                notify_reactions: true,
+                                sound_new_message: true,
+                                sound_dm: true,
+                                sound_ring: true,
+                                badge_unread: true,
+                            },
+                        );
                     },
                 }
             }

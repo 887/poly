@@ -150,7 +150,11 @@ fn DMFriendsView() -> Element {
                         _ => ("demo".to_string(), "demo".to_string()),
                     }
                 };
-                navigator().push(Route::FriendsRoute { backend: backend_slug, account_id });
+                navigator()
+                    .push(Route::FriendsRoute {
+                        backend: backend_slug,
+                        account_id,
+                    });
             },
             span { class: "dm-friends-row-icon", "👥" }
             span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }

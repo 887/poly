@@ -172,11 +172,7 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                             });
                                     }
                                 },
-                                div {
-                                    class: "friend-avatar",
-                                    style: "background-color: {color};",
-                                    "{first_char}"
-                                }
+                                div { class: "friend-avatar", style: "background-color: {color};", "{first_char}" }
                                 div { class: "friend-info",
                                     div { class: "friend-name", "{display_name}" }
                                     div { class: "friend-account", "{backend_badge(&backend)} {backend.display_name()}" }

@@ -199,12 +199,13 @@ pub fn App() -> Element {
                                 if matches!(route, Route::PageNotFound { .. } | Route::Root) {
                                     let cm = client_manager.read();
                                     if cm.demo_active {
-                                        return Some(NavigationTarget::Internal(Route::DmsHome {
-                                            backend: "demo".to_string(),
-                                            account_id: "demo".to_string(),
-                                        }));
+                                        return Some(
+                                            NavigationTarget::Internal(Route::DmsHome {
+                                                backend: "demo".to_string(),
+                                                account_id: "demo".to_string(),
+                                            }),
+                                        );
                                     }
-                                    // No active accounts — send to settings
                                     return Some(NavigationTarget::Internal(Route::SettingsRoute));
                                 }
                                 None

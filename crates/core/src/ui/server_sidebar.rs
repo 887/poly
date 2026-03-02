@@ -80,7 +80,11 @@ pub fn ServerSidebar() -> Element {
                             _ => ("demo".to_string(), "demo".to_string()),
                         }
                     };
-                    navigator().push(Route::DmsHome { backend: backend_slug, account_id });
+                    navigator()
+                        .push(Route::DmsHome {
+                            backend: backend_slug,
+                            account_id,
+                        });
                 },
                 title: "{t(\"nav-dms\")}",
                 div { class: "icon-dms", "💬" }
@@ -104,9 +108,16 @@ pub fn ServerSidebar() -> Element {
                 div { class: "icon-notifications", "🔔" }
                 // Aggregated unread notification count badge
                 {
-                    let unread_count = chat_data.read().notifications.iter().filter(|n| !n.read).count();
+                    let unread_count = chat_data
+                        .read()
+                        .notifications
+                        .iter()
+                        .filter(|n| !n.read)
+                        .count();
                     if unread_count > 0 {
-                        rsx! { span { class: "badge", "{unread_count}" } }
+                        rsx! {
+                            span { class: "badge", "{unread_count}" }
+                        }
                     } else {
                         rsx! {}
                     }
