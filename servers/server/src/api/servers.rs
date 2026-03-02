@@ -209,7 +209,75 @@ async fn delete_server(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
     require_owner(&state, &auth.user_id, &id).await?;
-    // TODO(phase-2.2.4.5): cascade-delete channels, memberships, messages.
+
+    // Cascade delete: remove channels + their messages, categories,
+    // memberships, and invites before deleting the server record itself.
+    // Each step is best-effort (we log errors but do not abort).
+    let cascade_result: Result<()> = async {
+        // 1. Delete all messages in all channels of this server.
+        state
+            .db
+            .query("DELETE message WHERE channel.server = type::record($sid)")
+            .bind(("sid", id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+        // 2. Delete all reactions for those messages (already deleted, referential only).
+        state
+            .db
+            .query("DELETE reaction WHERE message.channel.server = type::record($sid)")
+            .bind(("sid", id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+        // 3. Delete all attachments for those messages.
+        state
+            .db
+            .query("DELETE attachment WHERE message.channel.server = type::record($sid)")
+            .bind(("sid", id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+        // 4. Delete all channels in the server.
+        state
+            .db
+            .query("DELETE channel WHERE server = type::record($sid)")
+            .bind(("sid", id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+        // 5. Delete categories.
+        state
+            .db
+            .query("DELETE category WHERE server = type::record($sid)")
+            .bind(("sid", id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+        // 6. Delete memberships.
+        state
+            .db
+            .query("DELETE membership WHERE server = type::record($sid)")
+            .bind(("sid", id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+        // 7. Delete invites.
+        state
+            .db
+            .query("DELETE invite WHERE server = type::record($sid)")
+            .bind(("sid", id.clone()))
+            .await?
+            .check()
+            .map_err(AppError::Db)?;
+        Ok(())
+    }
+    .await;
+    if let Err(e) = cascade_result {
+        tracing::warn!("cascade delete partial failure for server={id}: {e}");
+    }
+
+    // Finally delete the server record itself.
     state
         .db
         .query("DELETE type::record($id)")

@@ -81,6 +81,16 @@ pub enum ServerEvent {
     },
     /// Server ping for keepalive.
     Ping,
+    /// Relay a WebRTC SDP/ICE signal from one peer to another.
+    ///
+    /// The server simply forwards this to the target user — no interpretation
+    /// of the SDP/ICE content is performed.
+    VoiceSignalRelay {
+        /// The user who sent the signal.
+        from_user_id: String,
+        /// Raw SDP or ICE candidate JSON string.
+        sdp: String,
+    },
 }
 
 /// Wire representation of a message in events.

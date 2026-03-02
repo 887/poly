@@ -170,7 +170,7 @@ async fn handle_socket(socket: WebSocket, token: String, state: AppState) {
     while let Some(Ok(msg)) = stream.next().await {
         match msg {
             Message::Text(text) => {
-                handle_client_message(&text, &user_id, &state).await;
+                handle_client_message(&text, &user_id, &device_id, &state).await;
             }
             Message::Close(_) => break,
             // Ignore binary, ping/pong frames (axum handles pong automatically).
@@ -197,19 +197,31 @@ enum ClientMessage {
     VoiceSignal { target_user_id: String, sdp: String },
 }
 
-async fn handle_client_message(text: &str, user_id: &str, state: &AppState) {
+async fn handle_client_message(text: &str, user_id: &str, device_id: &str, state: &AppState) {
     let Ok(msg) = serde_json::from_str::<ClientMessage>(text) else {
         return;
     };
     match msg {
         ClientMessage::TypingStart { channel_id } => {
-            // TODO(phase-2.2.7.4): resolve channel members and broadcast TypingStart.
-            // For now just log.
+            // Resolve the user's profile, then broadcast TypingStart to all channel members.
             debug!("TypingStart: user={user_id} channel={channel_id}");
-            let _ = (channel_id, state);
+            let user_profile = fetch_user_profile(state, user_id).await;
+            if let Some(user) = user_profile {
+                let event = ServerEvent::TypingStart {
+                    channel_id: channel_id.clone(),
+                    user,
+                };
+                broadcast_typing(state, &channel_id, event).await;
+            }
         }
         ClientMessage::Heartbeat => {
-            // TODO(phase-2.2.7.4): update device last_seen in DB.
+            // Update device last_seen timestamp.
+            debug!("Heartbeat: user={user_id} device={device_id}");
+            let _ = state
+                .db
+                .query("UPDATE type::record($id) SET last_seen = time::now()")
+                .bind(("id", device_id.to_owned()))
+                .await;
         }
         ClientMessage::VoiceJoin { channel_id } => {
             debug!("VoiceJoin: user={user_id} channel={channel_id}");
@@ -221,12 +233,96 @@ async fn handle_client_message(text: &str, user_id: &str, state: &AppState) {
             target_user_id,
             sdp,
         } => {
-            // Relay WebRTC signal to target peer.
-            // TODO(phase-2.2.8.4): proper VoiceSignal event type.
+            // Relay the WebRTC SDP signal directly to the target user's devices.
             debug!(
                 "VoiceSignal: {user_id} → {target_user_id} ({} bytes)",
                 sdp.len()
             );
+            let signal_event = ServerEvent::VoiceSignalRelay {
+                from_user_id: user_id.to_owned(),
+                sdp,
+            };
+            state.ws.send_to_user(&target_user_id, signal_event).await;
         }
     }
+}
+
+/// Fetch a `UserProfile` for the given `user_id` from the database.
+async fn fetch_user_profile(state: &AppState, user_id: &str) -> Option<crate::models::UserProfile> {
+    use crate::api::users::user_to_profile;
+    use crate::db_ext::take_one;
+    use crate::models::UserRecord;
+
+    let mut result = state
+        .db
+        .query("SELECT * FROM type::record($id) LIMIT 1")
+        .bind(("id", user_id.to_owned()))
+        .await
+        .ok()?;
+
+    let record: UserRecord = take_one(&mut result, 0).ok()??;
+    user_to_profile(record).ok()
+}
+
+/// Broadcast a TypingStart event to all members of the given channel.
+///
+/// Mirrors `broadcast_to_channel` from messages.rs but lives here to
+/// avoid a circular-module dependency.
+async fn broadcast_typing(state: &AppState, channel_id: &str, event: ServerEvent) {
+    use crate::db_ext::record_id_to_string;
+
+    let server_members: Vec<String> = state
+        .db
+        .query(
+            "SELECT VALUE user FROM membership WHERE server = \
+             (SELECT server FROM type::record($ch) LIMIT 1)[0].server",
+        )
+        .bind(("ch", channel_id.to_owned()))
+        .await
+        .ok()
+        .map(|mut r| {
+            use surrealdb::types::Value;
+            let vals: Vec<Value> = r.take(0).unwrap_or_default();
+            vals.into_iter()
+                .filter_map(|v| {
+                    if let Value::RecordId(rid) = v {
+                        Some(record_id_to_string(&rid))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let participants: Vec<String> = state
+        .db
+        .query("SELECT VALUE user FROM participant WHERE channel = type::record($ch)")
+        .bind(("ch", channel_id.to_owned()))
+        .await
+        .ok()
+        .map(|mut r| {
+            use surrealdb::types::Value;
+            let vals: Vec<Value> = r.take(0).unwrap_or_default();
+            vals.into_iter()
+                .filter_map(|v| {
+                    if let Value::RecordId(rid) = v {
+                        Some(record_id_to_string(&rid))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let user_ids: Vec<String> = {
+        let mut set = std::collections::HashSet::new();
+        for id in server_members.into_iter().chain(participants) {
+            set.insert(id);
+        }
+        set.into_iter().collect()
+    };
+
+    state.ws.broadcast_to_users(&user_ids, event).await;
 }
