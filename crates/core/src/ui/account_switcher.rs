@@ -38,7 +38,7 @@ pub fn AccountSwitcher() -> Element {
                 },
                 "👥"
             }
-            // Mute/Deafen controls (only show if in voice call)
+            // Mute/Deafen controls (always shown)
             div { class: "account-switcher-controls",
                 // Mic mute toggle
                 button {

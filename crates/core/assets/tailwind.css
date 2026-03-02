@@ -2459,13 +2459,13 @@ select {
 }
 
 .account-switcher-main-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
     border: none;
     background: var(--accent-primary);
     color: #fff;
-    font-size: 1.2rem;
+    font-size: 1rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2481,9 +2481,7 @@ select {
 .account-switcher-controls {
     display: flex;
     gap: 0.25rem;
-    flex: 1;
-    justify-content: flex-start;
-    padding-left: 0.5rem;
+    margin-left: auto;
 }
 
 .account-switcher-control-btn {
