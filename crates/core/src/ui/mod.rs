@@ -44,7 +44,7 @@ pub use main_layout::MainLayout;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData, SettingsSection, View};
 use dioxus::prelude::*;
 
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
@@ -168,8 +168,21 @@ pub fn App() -> Element {
                 SetupWizard {
                     on_complete: move |account_id: String| {
                         app_state.write().is_setup_complete = true;
-                        app_state.write().nav.view = View::DmsFriends;
                         spawn(async move {
+                            // Check if any accounts exist; if not, route to Accounts settings
+                            if let Some(storage) = crate::STORAGE.get() {
+                                match storage.get_account_tokens().await {
+                                    Ok(tokens) if tokens.is_empty() => {
+                                        app_state.write().settings_section = SettingsSection::Accounts;
+                                        app_state.write().nav.view = View::Settings;
+                                    }
+                                    _ => {
+                                        app_state.write().nav.view = View::DmsFriends;
+                                    }
+                                }
+                            } else {
+                                app_state.write().nav.view = View::DmsFriends;
+                            }
                             persist_setup_completion(account_id).await;
                         });
                     },
