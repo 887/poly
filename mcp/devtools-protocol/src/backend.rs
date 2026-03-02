@@ -66,6 +66,34 @@ pub trait DevtoolsBackend: Send + Sync {
 
     // ── Navigation / Reset ──────────────────────────────────────────────
 
+    /// Trigger a Dioxus full rebuild (recompilation + app restart).
+    ///
+    /// For `dx serve --hotpatch` setups, RSX-only changes are applied
+    /// automatically via hot-reload. Use this for structural code changes
+    /// that require a full recompilation.
+    ///
+    /// `workspace` is the path to the workspace root.
+    async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
+        let _ = workspace;
+        anyhow::bail!("rebuild_app not supported by this backend")
+    }
+
+    /// Hard-kill the `dx serve` process and the running app with SIGKILL.
+    ///
+    /// Use when [`kill_app`] doesn't work (e.g. the process is stuck).
+    /// After this call, use [`launch_app`] to restart.
+    async fn hard_kill(&self) -> anyhow::Result<String> {
+        anyhow::bail!("hard_kill not supported by this backend")
+    }
+
+    /// Reload the active page/webview (F5 equivalent).
+    ///
+    /// For desktop this reloads the webview content; for web it reloads the
+    /// browser tab. Useful after hot-reload patches a component.
+    async fn browser_reload(&self) -> anyhow::Result<String> {
+        anyhow::bail!("browser_reload not supported by this backend")
+    }
+
     /// Delete the local database and restart at the setup wizard.
     /// Default implementation returns an error (backends override as appropriate).
     async fn reset_app(&self) -> anyhow::Result<String> {

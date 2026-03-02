@@ -110,6 +110,23 @@ pub fn standard_tool_list() -> Vec<Value> {
                 "required": ["text"] }
         }),
         json!({
+            "name": "rebuild_app",
+            "description": "Trigger a Dioxus full rebuild (recompilation + app restart). Hot-reload handles RSX-only changes automatically — use this for structural code changes that need recompilation.",
+            "inputSchema": { "type": "object", "properties": {
+                "workspace": { "type": "string", "description": "Path to workspace root" }
+            }, "required": [] }
+        }),
+        json!({
+            "name": "hard_kill",
+            "description": "Hard-kill the dx serve process and the running app with SIGKILL. Use when kill_app doesn't work (process is stuck). Call launch_app afterwards to restart.",
+            "inputSchema": { "type": "object", "properties": {}, "required": [] }
+        }),
+        json!({
+            "name": "browser_reload",
+            "description": "Reload the active page/webview (F5 equivalent). For desktop reloads the webview; for web reloads the browser tab.",
+            "inputSchema": { "type": "object", "properties": {}, "required": [] }
+        }),
+        json!({
             "name": "reset_app",
             "description": "Delete local database and restart the app at the setup wizard. Useful for testing first-launch flows.",
             "inputSchema": { "type": "object", "properties": {}, "required": [] }
@@ -183,6 +200,18 @@ pub async fn dispatch_tool(backend: &dyn DevtoolsBackend, name: &str, args: &Val
                 Err(e) => text_result(format!("type_text error: {e}"), true),
             }
         }
+        "rebuild_app" => match backend.rebuild_app(ws).await {
+            Ok(r) => text_result(r, false),
+            Err(e) => text_result(format!("rebuild error: {e}"), true),
+        },
+        "hard_kill" => match backend.hard_kill().await {
+            Ok(r) => text_result(r, false),
+            Err(e) => text_result(format!("hard_kill error: {e}"), true),
+        },
+        "browser_reload" => match backend.browser_reload().await {
+            Ok(r) => text_result(r, false),
+            Err(e) => text_result(format!("browser_reload error: {e}"), true),
+        },
         "reset_app" => match backend.reset_app().await {
             Ok(r) => text_result(r, false),
             Err(e) => text_result(format!("reset error: {e}"), true),

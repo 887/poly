@@ -1,7 +1,7 @@
 # poly-web-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Last Updated:** 2026-03-02
 
 ---
 
@@ -29,11 +29,13 @@ poly-web-devtools-mcp (this crate)
     │ CDP WebSocket to 127.0.0.1:9222
     ▼
 Chrome / Chromium
-    │ loads http://127.0.0.1:8080
+    │ loads http://127.0.0.1:3000
     ▼
-dx serve (apps/web/)
-    └── Serves the Poly web app (Dioxus fullstack + Axum)
+dx serve --platform web --port 3000 (apps/web/)
+    └── Serves the Poly web app (WASM, no server component)
 ```
+
+**Port**: `WEB_SERVER_PORT = 3000` (NOT 8080 — desktop dx serve claims 8080; we use 3000 to avoid conflict).
 
 ### Chrome Window Mode
 
@@ -59,7 +61,7 @@ launch_app { workspace: "/home/laragana/workspcacemsg" }
 ```
 
 This:
-1. Starts `dx serve` on port 8080 (if not already running)
+1. Starts `dx serve --platform web --port 3000` (if not already running)
 2. Launches Chrome with `--remote-debugging-port=9222`
 3. Starts the auto-restart watchdog
 
@@ -145,6 +147,33 @@ Falls back to `chromium` if nothing found.
 |---|---|
 | `src/main.rs` | `ChromeCdpBackend` impl + watchdog + entry point |
 | `Cargo.toml` | Dependencies (tokio-tungstenite for CDP, poly-devtools-protocol) |
+
+## Known Constraints & Decisions
+
+### NEVER use `--hotpatch` for web/WASM (DECISION)
+
+`dx serve --hotpatch` is **explicitly prohibited** for the web platform.
+
+When `--hotpatch` is enabled for WASM builds:
+1. dx serve does a normal initial WASM build (shows progress bar at 100%)
+2. It then immediately triggers a second "non-hot-reloadable" rebuild
+3. The browser shows "Your app is being rebuilt" and gets stuck — it never
+   resolves because the second build never sends a completion signal
+
+This is a known limitation of Dioxus 0.7.3 experimental hotpatch mode with WASM.
+Standard hot-reload (file-watcher → full WASM recompile → page refresh via
+hot-reload WebSocket) works correctly without `--hotpatch`.
+
+**`rebuild_app` strategy**: touch `crates/core/src/lib.rs` ONLY — do NOT also
+send `r` to dx serve stdin. Sending both signals causes a double-rebuild loop.
+
+### Port 3000, NOT 8080
+
+`dx serve --platform desktop` binds port 8080 for its hot-reload asset server.
+This web MCP uses port `3000` (`WEB_SERVER_PORT = 3000`) to avoid the conflict.
+Both desktop and web MCPs can run simultaneously.
+
+---
 
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 

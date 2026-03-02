@@ -31,7 +31,10 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 
 /// Default port for the Poly web server (dx serve).
-const WEB_SERVER_PORT: u16 = 8080;
+/// NOTE: Port 8080 is used by `dx serve --platform desktop` for its hot-reload
+/// asset server, so we use 3000 here to avoid the conflict when both MCPs run
+/// simultaneously.
+const WEB_SERVER_PORT: u16 = 3000;
 /// Chrome DevTools Protocol debugging port.
 const CDP_PORT: u16 = 9222;
 
@@ -55,7 +58,7 @@ impl CliConfig {
 
 // ─── Chrome CDP Backend ───────────────────────────────────────────────────────
 
-/// Web devtools backend — talks to Chrome via CDP.
+/// Chrome CDP Backend — talks to Chrome via CDP, app served by `dx serve`.
 struct ChromeCdpBackend {
     ws: Arc<Mutex<Option<WsStream>>>,
     msg_id: AtomicI64,
@@ -66,6 +69,12 @@ struct ChromeCdpBackend {
     shutting_down: Arc<AtomicBool>,
     /// Handle to the Chrome watchdog task (if running).
     watchdog_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    /// Piped stdin of the managed `dx serve` process (for rebuild commands).
+    dx_serve_stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
+    /// PID of the managed `dx serve` process (for hard-kill via SIGKILL).
+    dx_serve_pid: Arc<Mutex<Option<u32>>>,
+    /// Workspace path — set during `launch_app`, used by `rebuild_app`.
+    workspace: Arc<Mutex<Option<String>>>,
 }
 
 impl ChromeCdpBackend {
@@ -80,6 +89,9 @@ impl ChromeCdpBackend {
             headless,
             shutting_down: Arc::new(AtomicBool::new(false)),
             watchdog_handle: Arc::new(Mutex::new(None)),
+            dx_serve_stdin: Arc::new(Mutex::new(None)),
+            dx_serve_pid: Arc::new(Mutex::new(None)),
+            workspace: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -326,8 +338,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
         let app_dir = format!("{workspace}/apps/web");
         let mut messages = Vec::new();
 
+        // Remember workspace for rebuild_app.
+        *self.workspace.lock().await = Some(workspace.to_string());
+
         // ── Step 0: Kill any existing Chrome on the CDP port so we never stack windows ──
-        // This is intentional: launch_app always produces exactly ONE fresh Chrome window.
         self.shutting_down.store(true, Ordering::Relaxed);
         if let Some(handle) = self.watchdog_handle.lock().await.take() {
             handle.abort();
@@ -344,6 +358,12 @@ impl DevtoolsBackend for ChromeCdpBackend {
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
 
         // ── Step 1: Start dx serve (if not already running) ──
+        // NOTE: --hotpatch is intentionally NOT used for web/WASM — it is
+        // experimental and causes WASM to get stuck in an infinite rebuild
+        // loop (initial build finishes, then dx serve triggers a second
+        // "non-hot-reloadable" rebuild that never resolves in the browser).
+        // Standard hot-reload (file-watcher → full WASM recompile → page
+        // refresh) works correctly without --hotpatch.
         let dx_check = self
             .client
             .get(format!("http://127.0.0.1:{WEB_SERVER_PORT}"))
@@ -351,7 +371,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .send()
             .await;
         if dx_check.is_err() {
-            tokio::process::Command::new("dx")
+            let mut child = tokio::process::Command::new("dx")
                 .args([
                     "serve",
                     "--platform",
@@ -360,16 +380,36 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     &WEB_SERVER_PORT.to_string(),
                 ])
                 .current_dir(&app_dir)
-                .stdin(Stdio::null())
+                .stdin(Stdio::piped())
                 .stdout(Stdio::null())
-                .stderr(Stdio::null())
+                .stderr(Stdio::inherit())
                 .spawn()?;
+
+            // Capture stdin for rebuild commands.
+            if let Some(stdin) = child.stdin.take() {
+                *self.dx_serve_stdin.lock().await = Some(stdin);
+            }
+            // Capture PID for hard-kill.
+            if let Some(pid) = child.id() {
+                *self.dx_serve_pid.lock().await = Some(pid);
+            }
+
+            // Background task: reap the child and clean up stdin on exit.
+            let stdin_ref = self.dx_serve_stdin.clone();
+            let pid_ref = self.dx_serve_pid.clone();
+            tokio::spawn(async move {
+                let _ = child.wait().await;
+                *stdin_ref.lock().await = None;
+                *pid_ref.lock().await = None;
+            });
+
             messages.push(format!(
-                "Started `dx serve` on port {WEB_SERVER_PORT} (building...)"
+                "Started `dx serve` on port {WEB_SERVER_PORT} (building...)\n\
+                 Hot reload is active — file changes trigger automatic WASM recompile."
             ));
         } else {
             messages.push(format!(
-                "Web server already running on port {WEB_SERVER_PORT}"
+                "Web server already running on port {WEB_SERVER_PORT} (hot reload active)"
             ));
         }
 
@@ -631,6 +671,90 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .await?;
         Ok(
             "Cleared all web storage and reloaded page. App should restart at setup wizard."
+                .to_string(),
+        )
+    }
+
+    async fn hard_kill(&self) -> anyhow::Result<String> {
+        // Signal watchdog to stop restarting.
+        self.shutting_down.store(true, Ordering::Relaxed);
+
+        // Clear CDP connection.
+        *self.ws.lock().await = None;
+
+        // Cancel watchdog task.
+        if let Some(handle) = self.watchdog_handle.lock().await.take() {
+            handle.abort();
+        }
+
+        // SIGKILL dx serve by PID.
+        let pid = self.dx_serve_pid.lock().await.take();
+        *self.dx_serve_stdin.lock().await = None;
+        if let Some(pid) = pid {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .status()
+                .await;
+        }
+
+        // SIGKILL Chrome.
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-9", "-f", &format!("remote-debugging-port={CDP_PORT}")])
+            .status()
+            .await;
+        // SIGKILL dx serve (pattern fallback for externally started instances).
+        let _ = tokio::process::Command::new("bash")
+            .args(["-c", "pkill -9 -f 'dx.*serve.*web' 2>/dev/null || true"])
+            .status()
+            .await;
+
+        Ok(
+            "Hard-killed Chrome and dx serve (SIGKILL). Watchdog stopped. Call launch_app to restart."
+                .to_string(),
+        )
+    }
+
+    async fn browser_reload(&self) -> anyhow::Result<String> {
+        // Use CDP to reload the page (equivalent to F5).
+        // Clear the WebSocket so ensure_ws will reconnect after the reload.
+        let result = self
+            .cdp_send("Page.reload", json!({ "ignoreCache": false }))
+            .await;
+        // After reload the WS connection drops — clear it so auto-reconnect
+        // kicks in on the next call.
+        *self.ws.lock().await = None;
+        result.map(|_| {
+            "Page reloaded (F5). CDP connection cleared — call connect_cdp to reconnect."
+                .to_string()
+        })
+    }
+
+    async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
+        // Trigger a full WASM rebuild by touching a core source file so the
+        // file watcher fires.  We do NOT send 'r' to stdin here because that
+        // is a hotpatch-mode command; the file-watcher trigger is the correct
+        // way to kick a rebuild in standard `dx serve` mode.
+        //
+        // We also do NOT send both signals at once — that caused a double-rebuild
+        // loop that left the browser permanently stuck on the "rebuilding" overlay.
+        let trigger = format!("{workspace}/crates/core/src/lib.rs");
+        let _ = tokio::process::Command::new("touch")
+            .arg(&trigger)
+            .status()
+            .await;
+
+        // The WASM rebuild takes 30–90 s even with a warm Cargo cache.
+        // dx serve will automatically push a page-reload to the browser via the
+        // hot-reload WebSocket when compilation finishes.
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+        // Reconnect CDP since the page reload may have dropped the WebSocket.
+        *self.ws.lock().await = None;
+
+        Ok(
+            "Rebuild triggered (touched crates/core/src/lib.rs).\n\
+             dx serve is recompiling the WASM — this takes 30-90 s with a warm cache.\n\
+             The browser will auto-reload when done. Call connect_cdp afterwards."
                 .to_string(),
         )
     }
