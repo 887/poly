@@ -394,7 +394,6 @@ fn FavoriteServerIcon(
                 move |_| {
                     let currently_us =
                         chat_data.read().drag_over_id.as_deref() == Some(sid.as_str());
-                        == Some(sid.as_str());
                     if currently_us {
                         chat_data.write().drag_over_id = None;
                     }

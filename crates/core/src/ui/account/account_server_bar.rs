@@ -111,7 +111,6 @@ pub fn AccountServerBar() -> Element {
                     let is_selected = selected_server.as_deref() == Some(&server_id);
                     let is_drag_over =
                         chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
-                        == Some(server_id.as_str());
                     let first_letter: String = server_name
                         .chars()
                         .next()
@@ -123,13 +122,13 @@ pub fn AccountServerBar() -> Element {
                         (true, false) => "server-icon active",
                         (false, true) => "server-icon drag-over-target",
                         (false, false) => "server-icon",
-                    };
+                    }; // Drag leave — clear highlight if we are still the target
                     rsx! {
                         div {
                             class: "{item_class}",
                             draggable: "true",
                             // Right-click → open context menu
-                            oncontextmenu: { // Drag start — mark as dragging from Bar 2
+                            oncontextmenu: { // Drag start — mark as dragging from Bar 2 // Drag start — mark as dragging from Bar 2
                                 let sid = server_id.clone();
                                 let sname = server_name.clone();
                                 let aid = account_id_sv.clone();
@@ -138,14 +137,14 @@ pub fn AccountServerBar() -> Element {
                                     evt.prevent_default();
                                     evt.stop_propagation();
                                     let coords = evt.client_coordinates();
-                                    app_state.write().context_menu = Some(ContextMenuState { // Drag leave — clear highlight if we are still the target
+                                    app_state.write().context_menu = Some(ContextMenuState { // Drag leave — clear highlight if we are still the target // Drag leave — clear highlight if we are still the target
                                         x: coords.x,
                                         y: coords.y,
                                         server_id: sid.clone(),
                                         server_name: sname.clone(),
                                         account_id: aid.clone(),
                                         backend_slug: bslug.clone(),
-                                    }); // Drop on this item — reorder within Bar 2
+                                    }); // Drop on this item — reorder within Bar 2 // Drop on this item — reorder within Bar 2
                                 }
                             },
                             // Drag start — mark as dragging from Bar 2
@@ -175,7 +174,7 @@ pub fn AccountServerBar() -> Element {
                                         .drag_over_id
                                         .as_deref()
                                         == Some(sid.as_str());
-                                    if currently_us { // Drag end — always clean up
+                                    if currently_us { // Drag end — always clean up // Drag end — always clean up
                                         chat_data.write().drag_over_id = None;
                                     }
                                 }
