@@ -232,9 +232,7 @@ pub fn App() -> Element {
                                         let mut as_ = app_state;
                                         as_.write().settings_section =
                                             SettingsSection::Accounts;
-                                        return Some(NavigationTarget::Internal(
-                                            Route::SettingsRoute,
-                                        ));
+                                        return Some(NavigationTarget::Internal(Route::SettingsRoute));
                                     }
                                 }
 
