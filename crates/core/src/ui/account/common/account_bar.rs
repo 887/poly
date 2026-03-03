@@ -15,6 +15,11 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, SettingsSection};
 use dioxus::prelude::*;
 
+/// Avatar image for the cat demo account.
+const CAT_AVATAR: Asset = asset!("assets/icons/cat.png");
+/// Avatar image for the dog demo account.
+const DOG_AVATAR: Asset = asset!("assets/icons/dog.png");
+
 /// Account bar component.
 ///
 /// Shows user avatar + name + status + quick controls at the
@@ -27,24 +32,43 @@ pub fn AccountBar() -> Element {
     let session = chat_data.read().local_session.clone();
 
     // Use session data if available, otherwise show fallback
-    let (user_name, _user_id, status_text, color, first_char) = if let Some(ref s) = session {
-        let name = s.user.display_name.clone();
-        let id = s.user.id.clone();
-        let fc: String = name
-            .chars()
-            .next()
-            .map(|c| c.to_string())
-            .unwrap_or_default();
-        (name, id.clone(), t("user-online"), user_color(&id), fc)
-    } else {
-        (
-            t("account-not-signed-in"),
-            "no-session".to_string(),
-            t("user-offline"),
-            user_color("no-session"),
-            "?".to_string(),
-        )
-    };
+    let (user_name, _user_id, status_text, color, first_char, avatar_url, demo_avatar) =
+        if let Some(ref s) = session {
+            let name = s.user.display_name.clone();
+            let id = s.user.id.clone();
+            let fc: String = name
+                .chars()
+                .next()
+                .map(|c| c.to_string())
+                .unwrap_or_default();
+            // Determine demo avatar or real avatar URL
+            let demo_av = if id == "demo" {
+                Some(CAT_AVATAR)
+            } else if id == "demo2" {
+                Some(DOG_AVATAR)
+            } else {
+                None
+            };
+            (
+                name,
+                id.clone(),
+                t("user-online"),
+                user_color(&id),
+                fc,
+                s.user.avatar_url.clone(),
+                demo_av,
+            )
+        } else {
+            (
+                t("account-not-signed-in"),
+                "no-session".to_string(),
+                t("user-offline"),
+                user_color("no-session"),
+                "?".to_string(),
+                None,
+                None,
+            )
+        };
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);
@@ -53,10 +77,26 @@ pub fn AccountBar() -> Element {
         div { class: "account-bar",
             // User info
             div { class: "account-bar-user",
-                div {
-                    class: "account-avatar",
-                    style: "background-color: {color};",
-                    "{first_char}"
+                div { class: "account-avatar",
+                    if let Some(url) = &avatar_url {
+                        img {
+                            src: "{url}",
+                            alt: "{user_name}",
+                            class: "account-avatar-image",
+                        }
+                    } else if let Some(asset) = demo_avatar {
+                        img {
+                            src: asset,
+                            alt: "{user_name}",
+                            class: "account-avatar-image",
+                        }
+                    } else {
+                        div {
+                            class: "account-avatar-fallback",
+                            style: "background-color: {color};",
+                            "{first_char}"
+                        }
+                    }
                 }
                 div { class: "account-info",
                     div { class: "account-name", "{user_name}" }

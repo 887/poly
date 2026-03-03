@@ -18,7 +18,7 @@
 use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::chat_data::{backend_badge, user_color};
+use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
 use dioxus::prelude::*;
 
@@ -119,27 +119,14 @@ pub fn FavoritesBar() -> Element {
 
             // ── Favorited servers (dragged in from Bar 2) ─────────────
             for server in &favorite_servers {
-                {
-                    // Use account icon_emoji as source badge when available,
-                    // falling back to the generic backend emoji.
-                    let account_icon = chat_data
-                        .read()
-                        .account_sessions
-                        .get(&server.account_id)
-                        .and_then(|s| s.icon_emoji.clone())
-                        .unwrap_or_else(|| backend_badge(&server.backend).to_string());
-                    rsx! {
-                        FavoriteServerIcon {
-                            server_id: server.id.clone(),
-                            server_name: server.name.clone(),
-                            badge: account_icon,
-                            backend_slug: server.backend.slug().to_string(),
-                            account_id: server.account_id.clone(),
-                            account_display_name: server.account_display_name.clone(),
-                            backend_name: server.backend.display_name().to_string(),
-                            unread: server.unread_count,
-                        }
-                    }
+                FavoriteServerIcon {
+                    server_id: server.id.clone(),
+                    server_name: server.name.clone(),
+                    backend_slug: server.backend.slug().to_string(),
+                    account_id: server.account_id.clone(),
+                    account_display_name: server.account_display_name.clone(),
+                    backend_name: server.backend.display_name().to_string(),
+                    unread: server.unread_count,
                 }
             }
 
@@ -336,7 +323,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 fn FavoriteServerIcon(
     server_id: String,
     server_name: String,
-    badge: String,
     backend_slug: String,
     account_id: String,
     account_display_name: String,
@@ -356,6 +342,20 @@ fn FavoriteServerIcon(
         .unwrap_or_default();
     let tooltip = format!("{server_name}\n{backend_name} — {account_display_name}");
     let icon_color = user_color(&server_id);
+
+    // Determine source badge: account's avatar URL or demo asset
+    let account_avatar_url: Option<String> = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .and_then(|s| s.user.avatar_url.clone());
+    let demo_badge_asset: Option<Asset> = if account_id == "demo" {
+        Some(CAT_AVATAR)
+    } else if account_id == "demo2" {
+        Some(DOG_AVATAR)
+    } else {
+        None
+    };
 
     let item_class = match (is_selected, is_drag_over) {
         (true, true) => "server-icon active drag-over-target",
@@ -513,7 +513,22 @@ fn FavoriteServerIcon(
                 style: "background-color: {icon_color};",
                 "{first_letter}"
             }
-            span { class: "source-badge", "{badge}" }
+            // Source badge: show account avatar image (or fallback emoji)
+            if let Some(url) = &account_avatar_url {
+                img {
+                    src: "{url}",
+                    class: "source-badge-image",
+                    alt: "{account_display_name}",
+                }
+            } else if let Some(asset) = demo_badge_asset {
+                img {
+                    src: asset,
+                    class: "source-badge-image",
+                    alt: "{account_display_name}",
+                }
+            } else {
+                span { class: "source-badge", "A" }
+            }
             if unread > 0 {
                 span { class: "badge", "{unread}" }
             }
