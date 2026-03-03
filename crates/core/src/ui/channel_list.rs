@@ -131,7 +131,6 @@ fn DMFriendsView() -> Element {
             .collect()
     };
 
-    let has_no_data = dm_channels.is_empty() && groups.is_empty() && friends.is_empty();
     let no_filter_results = !filter_lower.is_empty()
         && filtered_dms.is_empty()
         && filtered_groups.is_empty()
@@ -216,11 +215,7 @@ fn DMFriendsView() -> Element {
                 }
             }
 
-            if has_no_data {
-                div { class: "channel-empty",
-                    p { "{t(\"dm-no-data-hint\")}" }
-                }
-            } else if no_filter_results {
+            if no_filter_results {
                 div { class: "dm-no-results", "{t(\"dm-no-results\")}" }
             }
         }

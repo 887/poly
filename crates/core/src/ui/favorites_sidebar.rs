@@ -19,7 +19,7 @@ use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData, SettingsSection, View};
 use dioxus::prelude::*;
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
@@ -145,17 +145,17 @@ pub fn FavoritesBar() -> Element {
                     spawn(async move {
                         let was_active = client_manager.read().demo_active;
                         toggle_demo(client_manager, chat_data).await;
-                        // After activating demo, mark setup complete in memory
-                        // (storage persistence is handled inside toggle_demo) and
-                        // navigate to the demo DMs so the user isn't left on
-                        // an empty settings page.
-                        if !was_active && client_manager.read().demo_active {
+                        if !was_active {
+                            // Demo just turned ON — mark setup complete in memory
+                            // (storage is handled inside toggle_demo). Stay on the
+                            // current page; no auto-navigation.
                             app_state.write().is_setup_complete = true;
-                            navigator()
-                                .push(Route::DmsHome {
-                                    backend: "demo".to_string(),
-                                    account_id: "demo".to_string(),
-                                });
+                        } else {
+                            // Demo just turned OFF — any route under /demo/demo/*
+                            // is now invalid. Navigate to Settings › Accounts so the
+                            // user has a valid, useful landing page.
+                            app_state.write().settings_section = SettingsSection::Accounts;
+                            navigator().replace(Route::SettingsRoute);
                         }
                     });
                 },

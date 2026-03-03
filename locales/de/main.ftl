@@ -269,7 +269,6 @@ notif-no-accounts = Keine Konten aktiv. Konto unter Einstellungen → Konten hin
 # DM list
 dm-search-placeholder = Gespräch suchen oder starten
 dm-no-results = Kein Gespräch gefunden
-dm-no-data-hint = 🧪 Demo aktivieren, um Beispieldaten zu sehen
 
 # Friends panel
 friends-title = Freunde

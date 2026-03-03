@@ -206,6 +206,38 @@ pub fn App() -> Element {
                             .on_update(move |state: dioxus_router::GenericRouterContext<Route>| {
                                 let route = state.current();
                                 sync_route_to_app_state(&route, app_state);
+
+                                // If the route is account-scoped and that account no
+                                // longer exists (demo toggled off, account removed, …)
+                                // redirect to Settings › Accounts rather than rendering
+                                // a broken empty shell.
+                                let route_account_id: Option<&str> = match &route {
+                                    Route::DmsHome { account_id, .. }
+                                    | Route::DmChat { account_id, .. }
+                                    | Route::ServerHome { account_id, .. }
+                                    | Route::ServerChat { account_id, .. }
+                                    | Route::FriendsRoute { account_id, .. }
+                                    | Route::AccountSettingsRoute { account_id, .. } => {
+                                        Some(account_id.as_str())
+                                    }
+                                    _ => None,
+                                };
+                                if let Some(aid) = route_account_id {
+                                    let is_known = client_manager
+                                        .read()
+                                        .active_account_ids()
+                                        .iter()
+                                        .any(|id| id == aid);
+                                    if !is_known {
+                                        let mut as_ = app_state;
+                                        as_.write().settings_section =
+                                            SettingsSection::Accounts;
+                                        return Some(NavigationTarget::Internal(
+                                            Route::SettingsRoute,
+                                        ));
+                                    }
+                                }
+
                                 // Redirect root path and catch-all 404 to the best
                                 // active account's DMs route.
                                 //

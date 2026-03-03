@@ -269,7 +269,6 @@ notif-no-accounts = Aucun compte actif. Ajoutez un compte dans Paramètres → C
 # DM list
 dm-search-placeholder = Trouver ou démarrer une conversation
 dm-no-results = Aucune conversation trouvée
-dm-no-data-hint = Activez la démo 🧪 pour voir des exemples de données
 
 # Friends panel
 friends-title = Amis

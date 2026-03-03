@@ -269,7 +269,6 @@ notif-no-accounts = No accounts are active. Add an account in Settings → Accou
 # DM list
 dm-search-placeholder = Find or start a conversation
 dm-no-results = No conversations found
-dm-no-data-hint = Toggle the 🧪 demo to see sample data
 
 # Friends panel
 friends-title = Friends
