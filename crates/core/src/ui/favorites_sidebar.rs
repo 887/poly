@@ -22,6 +22,11 @@ use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
 use dioxus::prelude::*;
 
+/// Avatar image for the cat demo account.
+const CAT_AVATAR: Asset = asset!("assets/icons/cat.png");
+/// Avatar image for the dog demo account.
+const DOG_AVATAR: Asset = asset!("assets/icons/dog.png");
+
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
 #[component]
@@ -206,6 +211,23 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
     let color = user_color(&account_id);
 
+    // Determine avatar URL: real accounts use user.avatar_url; demo accounts
+    // get locally bundled cat/dog images; others fall back to icon_emoji text.
+    let avatar_url: Option<String> = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .and_then(|s| s.user.avatar_url.clone());
+
+    // Pick demo avatar asset based on known demo account IDs.
+    let demo_avatar: Option<Asset> = if account_id == "demo" {
+        Some(CAT_AVATAR)
+    } else if account_id == "demo2" {
+        Some(DOG_AVATAR)
+    } else {
+        None
+    };
+
     // Use icon_emoji from session if available, else fall back to first char
     let icon_label: String = chat_data
         .read()
@@ -275,10 +297,26 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     });
             },
             title: "{account_id}",
-            div {
-                class: "server-icon-letter",
-                style: "background-color: {color};",
-                "{icon_label}"
+            // Render image avatar if available (real avatar_url or demo asset),
+            // otherwise fall back to emoji / first-letter text.
+            if let Some(url) = &avatar_url {
+                img {
+                    src: "{url}",
+                    class: "server-icon-image",
+                    alt: "{account_id}",
+                }
+            } else if let Some(asset) = demo_avatar {
+                img {
+                    src: asset,
+                    class: "server-icon-image",
+                    alt: "{account_id}",
+                }
+            } else {
+                div {
+                    class: "server-icon-letter",
+                    style: "background-color: {color};",
+                    "{icon_label}"
+                }
             }
             if total_unreads > 0 {
                 span { class: "badge", "{total_unreads}" }
@@ -393,7 +431,8 @@ fn FavoriteServerIcon(
                 let sid = server_id.clone();
                 move |_| {
                     let currently_us =
-                        chat_data.read().drag_over_id.as_deref() == Some(sid.as_str());
+                        chat_data.read().drag_over_id.as_deref()
+                        == Some(sid.as_str());
                     if currently_us {
                         chat_data.write().drag_over_id = None;
                     }
