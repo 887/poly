@@ -281,6 +281,41 @@ body {
     padding: 12px 0;
     gap: 8px;
     overflow-y: auto;
+    transition: outline 0.1s ease, background-color 0.1s ease;
+}
+
+/* Drop target highlight when dragging a server from Bar 2 */
+.server-sidebar.drag-over {
+    outline: 2px solid var(--accent-primary, #60a5fa);
+    outline-offset: -2px;
+    background-color: color-mix(in srgb, var(--favorites-bar-bg, var(--sidebar-bg)) 85%, var(--accent-primary, #60a5fa) 15%);
+}
+
+/* Hint text shown in Bar 1 when no servers are favorited yet */
+.favorites-drop-hint {
+    width: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0.5;
+    pointer-events: none;
+    padding: 4px 0;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* Make draggable server icons in Bar 2 show a grab cursor */
+.account-server-bar .server-icon[draggable="true"] {
+    cursor: grab;
+}
+.account-server-bar .server-icon[draggable="true"]:active {
+    cursor: grabbing;
+    opacity: 0.7;
 }
 
 .server-icon {

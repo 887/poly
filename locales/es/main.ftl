@@ -74,6 +74,7 @@ settings-add-account = Agregar cuenta
 settings-remove-account = Eliminar cuenta
 account-switch = Cambiar cuenta
 account-settings = Configuración de cuenta
+settings-account-settings = Configuración de cuenta
 settings-backup = Servidores de respaldo
 settings-backup-description = Configurar servidores de sincronización cifrada
 settings-add-backup = Agregar servidor de respaldo

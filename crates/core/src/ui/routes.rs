@@ -353,19 +353,18 @@ fn NotificationsRoute() -> Element {
 #[component]
 fn SettingsRoute() -> Element {
     rsx! {
-        SettingsPage {}
+        SettingsPage { account_backend: None, account_id: None }
     }
 }
 
 /// Account settings — scoped to a specific backend account.
 ///
-/// Currently delegates to the same settings page but with the account
-/// context preserved in the URL (`:backend/:account_id/settings`),
-/// so Bar 2 remains visible and the account settings gear navigates here.
+/// Passes the account context to SettingsPage so it can show account-specific
+/// settings sections. Bar 2 remains visible.
 #[component]
 fn AccountSettingsRoute(backend: String, account_id: String) -> Element {
     rsx! {
-        SettingsPage {}
+        SettingsPage { account_backend: Some(backend), account_id: Some(account_id) }
     }
 }
 

@@ -30,7 +30,7 @@ use dioxus::prelude::*;
 pub fn AccountServerBar() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
 
     let nav = app_state.read().nav.clone();
     let active_account_id = nav.active_account_id.clone();
@@ -96,6 +96,16 @@ pub fn AccountServerBar() -> Element {
                     rsx! {
                         div {
                             class: if is_selected { "server-icon active" } else { "server-icon" },
+                            draggable: "true",
+                            ondragstart: {
+                                let sid = server_id.clone();
+                                move |_| {
+                                    chat_data.write().dragging_server_id = Some(sid.clone());
+                                }
+                            },
+                            ondragend: move |_| {
+                                chat_data.write().dragging_server_id = None;
+                            },
                             onclick: {
                                 let sid = server_id.clone();
                                 let bslug = backend_slug_sv.clone();

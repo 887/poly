@@ -45,7 +45,7 @@ pub fn FavoritesBar() -> Element {
     let app_state: Signal<AppState> = use_context();
     let current_view = app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
 
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
@@ -54,8 +54,39 @@ pub fn FavoritesBar() -> Element {
     // Collect distinct active account IDs for account icons
     let account_ids = client_manager.read().active_account_ids();
 
+    // Only show servers that have been dragged into favorites.
+    let favorited_ids = chat_data.read().favorited_server_ids.clone();
+    // Preserve the order from favorited_ids list.
+    let favorite_servers: Vec<_> = favorited_ids
+        .iter()
+        .filter_map(|id| servers.iter().find(|s| &s.id == id))
+        .cloned()
+        .collect();
+
+    // Local signal for drop-zone highlight state.
+    let mut drag_over = use_signal(|| false);
+
     rsx! {
-        nav { class: "server-sidebar",
+        nav {
+            class: if drag_over() { "server-sidebar drag-over" } else { "server-sidebar" },
+            // Allow drops from Bar 2 server icons.
+            ondragover: move |evt| {
+                evt.prevent_default();
+                drag_over.set(true);
+            },
+            ondragleave: move |_| drag_over.set(false),
+            ondrop: move |evt| {
+                evt.prevent_default();
+                drag_over.set(false);
+                let drag_id = chat_data.read().dragging_server_id.clone();
+                if let Some(sid) = drag_id {
+                    let mut cd = chat_data.write();
+                    if !cd.favorited_server_ids.contains(&sid) {
+                        cd.favorited_server_ids.push(sid);
+                    }
+                    cd.dragging_server_id = None;
+                }
+            },
             NavBarSpacer {}
 
             // ── Account icons (one per active account) ────────────────
@@ -71,8 +102,8 @@ pub fn FavoritesBar() -> Element {
                 div { class: "sidebar-separator" }
             }
 
-            // ── Favorited servers from all accounts ───────────────────
-            for server in &servers {
+            // ── Favorited servers (dragged in from Bar 2) ─────────────
+            for server in &favorite_servers {
                 {
                     // Use account icon_emoji as source badge when available,
                     // falling back to the generic backend emoji.
@@ -94,6 +125,13 @@ pub fn FavoritesBar() -> Element {
                             unread: server.unread_count,
                         }
                     }
+                }
+            }
+
+            // Drop hint — shown only when no favorites yet.
+            if favorite_servers.is_empty() && demo_active {
+                div { class: "favorites-drop-hint",
+                    span { "← Drag servers here" }
                 }
             }
 
@@ -125,14 +163,19 @@ pub fn FavoritesBar() -> Element {
                 }
             }
 
-            // App Settings button
-            div {
-                class: if current_view == View::Settings { "server-icon active" } else { "server-icon" },
-                onclick: move |_| {
-                    navigator().push(Route::SettingsRoute);
-                },
-                title: "{t(\"nav-settings\")}",
-                div { class: "icon-settings", "⚙" }
+            // App Settings button — only "active" for app-level settings (no account scoped)
+            {
+                let is_app_settings = current_view == View::Settings && active_account.is_none();
+                rsx! {
+                    div {
+                        class: if is_app_settings { "server-icon active" } else { "server-icon" },
+                        onclick: move |_| {
+                            navigator().push(Route::SettingsRoute);
+                        },
+                        title: "{t(\"nav-settings\")}",
+                        div { class: "icon-settings", "⚙" }
+                    }
+                }
             }
         }
     }
@@ -333,6 +376,21 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
                 .write()
                 .account_sessions
                 .retain(|k, _| k != "demo" && k != "demo2");
+            // Remove demo server IDs from favorites (a real account's favorites are unaffected).
+            {
+                let demo_server_ids: Vec<String> = chat_data
+                    .read()
+                    .servers
+                    .iter()
+                    .filter(|s| s.backend == poly_client::BackendType::Demo)
+                    .map(|s| s.id.clone())
+                    .collect();
+                chat_data
+                    .write()
+                    .favorited_server_ids
+                    .retain(|id| !demo_server_ids.contains(id));
+            }
+            chat_data.write().dragging_server_id = None;
         } else {
             let session = match client_manager.write().activate_demo().await {
                 Ok(s) => s,
@@ -356,6 +414,14 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
             }
             // Load all servers from both demo accounts
             let servers = client_manager.read().all_servers().await;
+            // Pre-populate favorites with all demo servers so Bar 1 shows them immediately.
+            // Users can remove entries by rearranging; dragging from Bar 2 adds to this list.
+            let server_ids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
+            for sid in server_ids {
+                if !chat_data.read().favorited_server_ids.contains(&sid) {
+                    chat_data.write().favorited_server_ids.push(sid);
+                }
+            }
             chat_data.write().servers = servers;
 
             // Load DMs, groups, notifications, friends from ALL demo backends

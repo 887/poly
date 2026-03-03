@@ -52,6 +52,16 @@ pub struct ChatData {
     /// Used to look up `icon_emoji`, display name, and other per-account
     /// identity data in sidebar components without traversing all servers.
     pub account_sessions: HashMap<String, Session>,
+    /// Server IDs that are pinned to the Favorites Bar (Bar 1).
+    ///
+    /// Drag a server from Bar 2 to Bar 1 to add it here. Empty means
+    /// no servers are pinned (Bar 1 shows nothing in the server area).
+    pub favorited_server_ids: Vec<String>,
+    /// Server ID currently being dragged (set on dragstart, cleared on drop/dragend).
+    ///
+    /// Used to pass drag state from Bar 2 (Account Server Bar) to Bar 1 (Favorites Bar)
+    /// without needing browser DataTransfer API access.
+    pub dragging_server_id: Option<String>,
     /// Users currently typing in the selected channel.
     ///
     /// Each entry is a display name string. Updated by the event stream

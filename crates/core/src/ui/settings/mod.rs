@@ -61,13 +61,29 @@ fn SettingsNavItem(label: String, active: bool, onclick: EventHandler<MouseEvent
 ///
 /// Two-column layout: navigation sidebar + content area.
 /// Each section is delegated to its own sub-module component.
+///
+/// When `account_backend` and `account_id` are provided, shows account-scoped
+/// settings (e.g., notifications for one account). Otherwise shows app-level
+/// settings (e.g., theme, identity).
 #[component]
-pub fn SettingsPage() -> Element {
+pub fn SettingsPage(
+    account_backend: Option<String>,
+    account_id: Option<String>,
+) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let section = app_state.read().settings_section;
+    let is_account_scoped = account_backend.is_some() && account_id.is_some();
     // Subscribe to locale signal so nav labels re-render on language change.
     let _locale = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
+    
+    // Initialize section based on scope — Notifications for account-scoped,
+    // default to Accounts for app-level.
+    use_effect(move || {
+        if is_account_scoped && section != SettingsSection::Notifications {
+            app_state.write().settings_section = SettingsSection::Notifications;
+        }
+    });
     let sf_raw = search_text.read().clone();
     let sf = sf_raw.to_lowercase();
     // Helper: is this nav item visible given the current search filter?
@@ -112,7 +128,7 @@ pub fn SettingsPage() -> Element {
                         },
                     }
                 }
-                if shows(&t("settings-accounts")) {
+                if !is_account_scoped && shows(&t("settings-accounts")) {
                     SettingsNavItem {
                         label: t("settings-accounts"),
                         active: section == SettingsSection::Accounts,
@@ -121,7 +137,7 @@ pub fn SettingsPage() -> Element {
                         },
                     }
                 }
-                if shows(&t("settings-backup")) {
+                if !is_account_scoped && shows(&t("settings-backup")) {
                     SettingsNavItem {
                         label: t("settings-backup"),
                         active: section == SettingsSection::Backup,
@@ -130,7 +146,7 @@ pub fn SettingsPage() -> Element {
                         },
                     }
                 }
-                if shows(&t("settings-identity")) {
+                if !is_account_scoped && shows(&t("settings-identity")) {
                     SettingsNavItem {
                         label: t("settings-identity"),
                         active: section == SettingsSection::Identity,
@@ -157,7 +173,7 @@ pub fn SettingsPage() -> Element {
                         },
                     }
                 }
-                if shows(&t("settings-general")) {
+                if !is_account_scoped && shows(&t("settings-general")) {
                     SettingsNavItem {
                         label: t("settings-general"),
                         active: section == SettingsSection::General,
@@ -170,6 +186,13 @@ pub fn SettingsPage() -> Element {
 
             // Settings content — each section in its own sub-module.
             div { class: "settings-content",
+                if is_account_scoped {
+                    div { class: "settings-header",
+                        h2 {
+                            "Account Settings — {account_id.as_ref().unwrap_or(&\"?\".to_string()).to_uppercase()}"
+                        }
+                    }
+                }
                 match section {
                     SettingsSection::Accounts => rsx! {
                         AccountsSettings {}

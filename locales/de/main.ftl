@@ -74,6 +74,7 @@ settings-add-account = Konto hinzufügen
 settings-remove-account = Konto entfernen
 account-switch = Konto wechseln
 account-settings = Kontoeinstellungen
+settings-account-settings = Kontoeinstellungen
 settings-backup = Backup-Server
 settings-backup-description = Verschlüsselte Backup-Sync-Server konfigurieren
 settings-add-backup = Backup-Server hinzufügen

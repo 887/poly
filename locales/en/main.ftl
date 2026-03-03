@@ -74,6 +74,7 @@ settings-add-account = Add Account
 settings-remove-account = Remove Account
 account-switch = Switch Account
 account-settings = Account Settings
+settings-account-settings = Account Settings
 settings-backup = Backup Servers
 settings-backup-description = Configure encrypted backup sync servers
 settings-add-backup = Add Backup Server
