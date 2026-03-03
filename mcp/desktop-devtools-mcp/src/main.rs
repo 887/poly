@@ -363,32 +363,30 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     fn extension_tools(&self) -> Vec<Value> {
-        vec![
-            json!({
-                "name": "get_generation",
-                "description": "Returns rebuild-detection counters for this MCP session.\n\n\
-                    **IMPORTANT: Semantics differ by platform!**\n\n\
-                    **Desktop MCP (this tool):**\n\
-                    - **generation**: starts at 1 on launch, increments on each hot-patch (component remount). \
-                      Resets to 1 only on full process restart (PID change).\n\
-                    - **build_id**: increments on each rebuild_app call (reads /tmp/poly-devtools-rebuild-counter). \
-                      0 = no rebuild this session.\n\
-                    - **pid**: OS process ID — stable across hot-patches, changes only on full restart.\n\n\
-                    **Web MCP (poly-web-devtools-mcp):**\n\
-                    - **generation**: increments on EVERY connect_cdp call (not on each rebuild). \
-                      This is because each WASM rebuild drops the CDP WebSocket, requiring explicit reconnection.\n\
-                    - **build_id**: increments on each rebuild_app call (same as desktop, reads /tmp/poly-devtools-web-rebuild-counter).\n\
-                    - **dx_serve_pid**: OS process ID of managed dx serve process.\n\n\
-                    **Decision table (Desktop):**\n\
-                    - generation changed, pid stable → hot-patch applied\n\
-                    - pid changed (generation back to 1) → full rebuild / process restart\n\
-                    - build_id changed → rebuild was triggered (independent of generation / pid)\n\n\
-                    **Key difference:** Desktop generation may NOT change on every rebuild (hot-patches preserve state). \
-                    Always check build_id to know if a rebuild happened. Call connect_cdp explicitly after \
-                    rebuild_app to get updated generation (web) or check if hot-patch succeeded (desktop).",
-                "inputSchema": { "type": "object", "properties": {}, "required": [] }
-            }),
-        ]
+        vec![json!({
+            "name": "get_generation",
+            "description": "Returns rebuild-detection counters for this MCP session.\n\n\
+                **IMPORTANT: Semantics differ by platform!**\n\n\
+                **Desktop MCP (this tool):**\n\
+                - **generation**: starts at 1 on launch, increments on each hot-patch (component remount). \
+                  Resets to 1 only on full process restart (PID change).\n\
+                - **build_id**: increments on each rebuild_app call (reads /tmp/poly-devtools-rebuild-counter). \
+                  0 = no rebuild this session.\n\
+                - **pid**: OS process ID — stable across hot-patches, changes only on full restart.\n\n\
+                **Web MCP (poly-web-devtools-mcp):**\n\
+                - **generation**: increments on EVERY connect_cdp call (not on each rebuild). \
+                  This is because each WASM rebuild drops the CDP WebSocket, requiring explicit reconnection.\n\
+                - **build_id**: increments on each rebuild_app call (same as desktop, reads /tmp/poly-devtools-web-rebuild-counter).\n\
+                - **dx_serve_pid**: OS process ID of managed dx serve process.\n\n\
+                **Decision table (Desktop):**\n\
+                - generation changed, pid stable → hot-patch applied\n\
+                - pid changed (generation back to 1) → full rebuild / process restart\n\
+                - build_id changed → rebuild was triggered (independent of generation / pid)\n\n\
+                **Key difference:** Desktop generation may NOT change on every rebuild (hot-patches preserve state). \
+                Always check build_id to know if a rebuild happened. Call connect_cdp explicitly after \
+                rebuild_app to get updated generation (web) or check if hot-patch succeeded (desktop).",
+            "inputSchema": { "type": "object", "properties": {}, "required": [] }
+        })]
     }
 
     async fn handle_extension_tool(
