@@ -1,5 +1,9 @@
 //! User sidebar — channel member list (right panel).
 //!
+//! Common implementation shared across all messenger backends.
+//! Backend-specific user card decorations (roles, badges, verification)
+//! will live in per-backend directories in future phases.
+//!
 //! Reads members from `Signal<ChatData>` and groups them by
 //! presence status: Online, Idle, Do Not Disturb, Offline.
 //!

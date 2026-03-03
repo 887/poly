@@ -1,5 +1,9 @@
 //! Chat view — Discord-style message list and message input.
 //!
+//! Common implementation shared across all messenger backends.
+//! Backend-specific chat view overrides (e.g., special message types)
+//! will live in per-backend directories in future phases.
+//!
 //! Features:
 //! - Message grouping (same author within 7 minutes)
 //! - Date separators between different days
@@ -132,10 +136,10 @@ pub fn ChatView() -> Element {
                     spawn(async move {
                         let mut eval = document::eval(
                             r#"
-                                                    let el = document.getElementById('message-list-scroll');
-                                                    if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                    else { dioxus.send(false); }
-                                                    "#,
+                                                                let el = document.getElementById('message-list-scroll');
+                                                                if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                else { dioxus.send(false); }
+                                                                "#,
                         );
                         if let Ok(near_top) = eval.recv::<bool>().await
                             && near_top
@@ -347,9 +351,9 @@ pub fn ChatView() -> Element {
                                     // Trigger hidden file input via JS
                                     document::eval(
                                         r#"
-                                                                                                let input = document.getElementById('poly-file-input');
-                                                                                                if (input) { input.click(); }
-                                                                                                "#,
+                                                                                                                            let input = document.getElementById('poly-file-input');
+                                                                                                                            if (input) { input.click(); }
+                                                                                                                            "#,
                                     );
                                 },
                                 "📎"

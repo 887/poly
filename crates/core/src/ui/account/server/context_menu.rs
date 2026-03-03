@@ -20,9 +20,11 @@
 //! - Copy Server ID
 
 use super::super::super::routes::Route;
+use super::super::backend_server_context_menu_extras;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
+use poly_client::BackendType;
 
 /// Server right-click context menu.
 ///
@@ -229,6 +231,17 @@ pub fn ServerContextMenu() -> Element {
                             close();
                         },
                     }
+                }
+            }
+
+            // ── Backend-specific extras ───────────────────────────────
+            // Dispatches to per-backend context menu modules (demo/, stoat/,
+            // discord/, matrix/, teams/, poly_native/) based on BackendType.
+            // DECISION(D20): Per-backend UI dispatch by BackendType match.
+            {
+                let backend = BackendType::from_slug(&backend_slug);
+                rsx! {
+                    {backend_server_context_menu_extras(backend, &server_id, &account_id)}
                 }
             }
         }

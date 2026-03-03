@@ -2,14 +2,17 @@
 //!
 //! MCP server for the **desktop** devtools backend.
 //!
-//! Launches the desktop-devtools app via `dx serve` and communicates with the app
-//! via its embedded HTTP eval-bridge at `http://127.0.0.1:9223`.
+//! Launches the desktop-devtools app via `dx serve --hotpatch` and communicates
+//! with the app via its embedded HTTP eval-bridge at `http://127.0.0.1:9223`.
 //!
 //! ## Hot Reload
 //!
-//! The app runs under `dx serve` with file-watcher-based hot-reload. When you
-//! make changes to poly-core, use the `rebuild_app` MCP tool which touches a
-//! source file to trigger a full rebuild.
+//! The app runs under `dx serve --hotpatch` so the desktop window stays alive
+//! across code changes (no window-jumping on every recompile).  The eval bridge
+//! inside the app uses recreatable channels that survive hot-patch remounts.
+//!
+//! For changes that can't be hot-patched (rare structural changes), Dioxus falls
+//! back to a full rebuild — the MCP waits for the bridge to come back.
 //!
 //! ## Usage
 //! ```bash
@@ -137,7 +140,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
         if self.is_bridge_alive().await {
             return Ok(format!(
                 "App already running on {BASE} — reusing existing instance.\n\
-                 Hot reload is active. Call connect_cdp to interact."
+                 Hot-patch is active. Call connect_cdp to interact."
             ));
         }
 
@@ -156,10 +159,15 @@ impl DevtoolsBackend for DesktopHttpBackend {
             .await;
         tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-        // ── Step 3: start dx serve ───────────────────────────────────────
+        // ── Step 3: start dx serve --hotpatch ─────────────────────────────
+        //
+        // --hotpatch keeps the desktop window alive across code changes by
+        // patching the running binary in-place (subsecond hot-reload).
+        // The eval bridge inside the app uses recreatable channels that
+        // survive hotpatch remounts.
         let app_dir = format!("{workspace}/apps/desktop-devtools");
         let mut child = tokio::process::Command::new("dx")
-            .args(["serve", "--platform", "desktop"])
+            .args(["serve", "--hotpatch", "--platform", "desktop"])
             .current_dir(&app_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -183,13 +191,13 @@ impl DevtoolsBackend for DesktopHttpBackend {
         // Poll for up to 120 s — initial compilation can be slow.
         match self.wait_for_bridge(120).await {
             Ok(()) => Ok(format!(
-                "dx serve started in {app_dir}\n\
+                "dx serve --hotpatch started in {app_dir}\n\
                  Eval bridge ready at {BASE}\n\
-                 Hot reload is active — file changes trigger automatic rebuild.\n\
+                 Hot-patch is active — code changes update the running window in-place.\n\
                  Use rebuild_app for forced rebuild, kill_app to stop everything."
             )),
             Err(_) => Ok(format!(
-                "dx serve started in {app_dir}\n\
+                "dx serve --hotpatch started in {app_dir}\n\
                  Eval bridge not yet responding at {BASE} — first build may still be compiling.\n\
                  Call connect_cdp in a moment to check."
             )),
@@ -280,16 +288,19 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
-        // Touch a source file to trigger dx serve's file watcher, causing a
-        // full rebuild.
+        // Touch a source file to trigger dx serve's file watcher.
+        // With --hotpatch, this triggers a hot-patch (window stays alive)
+        // or a full rebuild (for non-patchable changes).
         Self::touch_source_file(workspace).await?;
 
-        // Wait a moment for the rebuild to start, then poll the bridge.
+        // Brief wait for the compilation + patch cycle.
+        // Hot-patches are near-instant; full rebuilds take 10-30s.
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         match self.wait_for_bridge(120).await {
             Ok(()) => Ok("Rebuild triggered (touched crates/core/src/lib.rs).\n\
-                 dx serve is recompiling — this takes 10-30s with a warm cache.\n\
-                 Eval bridge will reconnect when done."
+                 dx serve --hotpatch is recompiling — hot-patchable changes are near-instant,\n\
+                 full rebuilds take 10-30s with a warm cache.\n\
+                 The window stays alive; eval bridge reconnects automatically."
                 .to_string()),
             Err(e) => Err(anyhow::anyhow!(
                 "Rebuild triggered but eval bridge didn't come back: {e}"

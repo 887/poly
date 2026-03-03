@@ -1,7 +1,7 @@
 # desktop-devtools — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-01
+> **Last Updated:** 2026-03-03
 
 ---
 
@@ -84,15 +84,21 @@ use webkit2gtk::WebViewExt as _;  // brings snapshot() into scope
 // webkit2gtk::gio::Cancellable::NONE — for optional cancellable parameter
 ```
 
-## Eval Bridge Pattern
+## Eval Bridge Pattern (Hot-Reload Safe)
 
-The key pattern for JS evaluation:
+The eval bridge uses a **recreatable channel** pattern so it survives `dx serve --hotpatch`:
 
-1. `EVAL_TX` / `EVAL_RX` — `OnceLock<mpsc::Sender/Receiver>` created before dioxus starts
-2. `DevtoolsShell` component runs `use_coroutine` that reads from `EVAL_RX`
+1. `EVAL_TX` / `SCREENSHOT_TX` — `std::sync::Mutex<Option<mpsc::Sender>>` (NOT `OnceLock`)
+2. On each coroutine start (including after hot-patch remount), fresh `mpsc` channels are
+   created and the sender is stored in the global mutex
 3. Each `EvalRequest` contains `js: String` + `oneshot::Sender<Result<String, String>>`
 4. The coroutine calls `eval(&req.js).await` and sends the result back
-5. HTTP handlers call `do_eval(js)` which sends through `EVAL_TX` and awaits the `oneshot`
+5. HTTP handlers call `do_eval(js)` which clones the current sender from the mutex
+6. HTTP server binds :9223 once (guarded by `AtomicBool`), survives component remounts
+
+**Why not `OnceLock`?** `OnceLock` can only be set once per process. If Dioxus hot-patches
+the component tree and remounts `DevtoolsShell`, the old receiver is dropped but `OnceLock`
+prevents creating new channels — the eval bridge becomes permanently dead.
 
 ### Dioxus eval() Semantics
 

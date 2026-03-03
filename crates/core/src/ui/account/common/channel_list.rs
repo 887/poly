@@ -1,11 +1,15 @@
 //! Channel list — categories and channels for the selected server.
 //!
+//! Common implementation shared across all messenger backends.
+//! Backend-specific channel list decorations live in per-backend
+//! directories (`demo/`, `stoat/`, etc.).
+//!
 //! Delegates to sub-components to stay under 150-line component size limit:
 //! - `ChannelListHeader`: displays server name or "Direct Messages"
 //! - `DMFriendsView`: DM + group + friends unified list with search
 //! - `ServerChannelView`: server categories and channels
 
-use super::super::routes::Route;
+use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::backend_badge;

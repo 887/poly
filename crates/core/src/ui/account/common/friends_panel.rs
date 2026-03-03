@@ -10,7 +10,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::super::routes::Route;
+use super::super::super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::backend_badge;
 use crate::state::chat_data::user_color;

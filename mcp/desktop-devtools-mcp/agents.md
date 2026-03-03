@@ -1,7 +1,7 @@
 # poly-desktop-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-02
+> **Last Updated:** 2026-03-03
 
 ---
 
@@ -157,17 +157,23 @@ Call `launch_app` again to restart at the setup wizard.
 - Binary output: `target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools`
 - CSS asset: `target/dx/poly-desktop-devtools/debug/linux/app/assets/tailwind-*.css`
 
-## Rebuild Strategy — NO `--hotpatch` (DECISION)
+## Rebuild Strategy — `--hotpatch` Enabled (DECISION, 2026-03-03)
 
-The desktop MCP uses the **same strategy as the web MCP**: standard file-watcher-based hot-reload.
+The desktop MCP launches `dx serve --hotpatch --platform desktop`.
 
-**`--hotpatch` is NOT used.** Reasons:
-- Hotpatch mode can cause infinite rebuild loops with the HTTP eval-bridge
-- File-watcher + full rebuild is more stable and predictable
-- Matches the web MCP approach for consistency
+**`--hotpatch` keeps the desktop window alive** across code changes by patching
+the running binary in-place (Dioxus subsecond hot-reload). This eliminates the
+window-jumping problem where every recompile killed and restarted the window.
+
+The eval bridge inside the app uses **recreatable `std::sync::Mutex<Option<Sender>>`
+channels** (not `OnceLock`) that survive hot-patch component remounts.
+
+For changes that can't be hot-patched (rare structural changes to statics or
+type layouts), Dioxus falls back to a full rebuild — the MCP polls and waits
+for the bridge to come back, same as before.
 
 **`rebuild_app` strategy**: Touch `crates/core/src/lib.rs` to trigger the file
-watcher. dx serve will recompile and hot-reload the page automatically.
+watcher. dx serve will hot-patch if possible, or full-rebuild if necessary.
 
 ## Debugging CSS Not Loading
 

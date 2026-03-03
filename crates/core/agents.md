@@ -41,19 +41,43 @@ src/
 │   ├── main_layout.rs  # 4-column desktop layout shell
 │   ├── favorites_sidebar.rs # Left server icon list
 │   ├── voice_banner.rs  # Top-spanning voice connection banner
-│   ├── account/         # All account-scoped UI components
-│   │   ├── mod.rs
-│   │   ├── account_bar.rs       # User info + mic/deafen controls
-│   │   ├── account_server_bar.rs # Bar 2: DMs/Notifications/Servers nav
-│   │   ├── account_switcher.rs  # Multi-account switcher in DM view
-│   │   ├── channel_list.rs      # Channel/DM list
-│   │   ├── chat_view.rs         # Message list + input
-│   │   ├── emoji_picker.rs      # Emoji grid (reactions + input)
-│   │   ├── friends_panel.rs     # Friends browser
-│   │   ├── notifications.rs     # Aggregated notification feed
-│   │   ├── user_sidebar.rs      # Right member list
-│   │   ├── voice_bar.rs         # Persistent voice status bar
-│   │   ├── voice_view.rs        # Voice/video participant tiles
+│   ├── account/         # Account-scoped UI components (multi-backend)
+│   │   ├── mod.rs               # Re-exports + BackendType dispatch
+│   │   ├── common/              # ★ Shared UI — used by ALL backends
+│   │   │   ├── mod.rs
+│   │   │   ├── account_bar.rs       # User info + mic/deafen controls
+│   │   │   ├── account_server_bar.rs # Bar 2: DMs/Notifications/Servers nav
+│   │   │   ├── account_switcher.rs  # Multi-account switcher in DM view
+│   │   │   ├── channel_list.rs      # Channel/DM list
+│   │   │   ├── chat_view.rs         # Message list + input
+│   │   │   ├── emoji_picker.rs      # Emoji grid (reactions + input)
+│   │   │   ├── friends_panel.rs     # Friends browser
+│   │   │   ├── notifications.rs     # Aggregated notification feed
+│   │   │   ├── user_sidebar.rs      # Right member list
+│   │   │   ├── voice_bar.rs         # Persistent voice status bar
+│   │   │   └── voice_view.rs        # Voice/video participant tiles
+│   │   ├── demo/                # Demo backend UI overrides (#[cfg(feature="demo")])
+│   │   │   ├── mod.rs
+│   │   │   └── context_menu.rs
+│   │   ├── stoat/               # Stoat backend UI overrides (#[cfg(feature="stoat")])
+│   │   │   ├── mod.rs
+│   │   │   └── context_menu.rs
+│   │   ├── discord/             # Discord backend UI overrides (#[cfg(feature="discord")])
+│   │   │   ├── mod.rs
+│   │   │   └── context_menu.rs
+│   │   ├── matrix/              # Matrix backend UI overrides (#[cfg(feature="matrix")])
+│   │   │   ├── mod.rs
+│   │   │   └── context_menu.rs
+│   │   ├── teams/               # Teams backend UI overrides (#[cfg(feature="teams")])
+│   │   │   ├── mod.rs
+│   │   │   └── context_menu.rs
+│   │   ├── poly_native/         # Poly native server overrides (always compiled)
+│   │   │   ├── mod.rs
+│   │   │   └── context_menu.rs
+│   │   ├── server/              # Server-scoped components
+│   │   │   ├── mod.rs
+│   │   │   ├── context_menu.rs  # Dispatches to per-backend menus
+│   │   │   └── settings/
 │   │   └── settings/            # Account-scoped settings (notifications only)
 │   │       ├── mod.rs           # AccountSettingsPage
 │   │       └── notifications.rs # Per-account notification toggles

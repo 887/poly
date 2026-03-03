@@ -1,5 +1,7 @@
 //! Voice/Video channel view — participant tiles and join/disconnect controls.
 //!
+//! Common implementation shared across all messenger backends.
+//!
 //! When a voice or video channel is selected in the channel list, this
 //! component replaces the normal ChatView. It shows:
 //! - Channel name + participant count in a header

@@ -358,3 +358,6 @@ server-profile-save = Guardar cambios
 # Server general settings
 server-general-info = Información del servidor
 server-general-danger = Zona de peligro
+
+# Demo backend
+demo-regenerate-data = Regenerar datos de demostración

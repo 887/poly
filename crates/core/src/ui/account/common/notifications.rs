@@ -1,5 +1,7 @@
 //! Notifications view — aggregated notifications from all backends.
 //!
+//! Common implementation shared across all messenger backends.
+//!
 //! Reads from `Signal<ChatData>` and displays notifications with
 //! source badges indicating which backend/account they came from.
 //! Features: mark-as-read, mark-all-as-read, filter by backend.

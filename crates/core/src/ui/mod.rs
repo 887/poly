@@ -3,6 +3,21 @@
 //! All Dioxus UI components live here. The main entry point is [`App`],
 //! which renders the setup wizard or the main app layout.
 //!
+//! ## Multi-Backend UI Architecture
+//!
+//! Account-scoped components live in `account/` with a **per-backend**
+//! override structure:
+//! - `account/common/` — Shared components used by ALL backends
+//! - `account/demo/` — Demo backend UI overrides
+//! - `account/stoat/` — Stoat backend UI overrides
+//! - `account/discord/` — Discord backend UI overrides
+//! - `account/matrix/` — Matrix backend UI overrides
+//! - `account/teams/` — Teams backend UI overrides
+//! - `account/poly_native/` — Poly native server UI overrides
+//!
+//! Dispatch is by `BackendType` match at render time. See
+//! `docs/multi-client-architecture.md` for the full architecture guide.
+//!
 //! ## Component Hierarchy
 //! - [`App`] — Root component (setup wizard or main layout)
 //!   - [`SetupWizard`] — First-launch key generation
@@ -19,8 +34,16 @@
 //! ## Module layout
 //! | Module | Contents |
 //! |---|---|
-//! | `account` | All account-scoped UI components |
-//! | `account::settings` | Account-scoped settings (notifications only) |
+//! | `account` | Multi-backend account-scoped UI (common + per-backend) |
+//! | `account::common` | Shared components across all backends |
+//! | `account::demo` | Demo backend overrides |
+//! | `account::stoat` | Stoat backend overrides |
+//! | `account::discord` | Discord backend overrides |
+//! | `account::matrix` | Matrix backend overrides |
+//! | `account::teams` | Teams backend overrides |
+//! | `account::poly_native` | Poly native server overrides |
+//! | `account::server` | Server-scoped UI (context menu, settings) |
+//! | `account::settings` | Account-scoped settings (notifications) |
 //! | `settings` | App-level settings page |
 //! | `favorites_sidebar` | Left-most server icon list |
 //! | `main_layout` | 4-column desktop shell |

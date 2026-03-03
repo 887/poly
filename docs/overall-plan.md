@@ -490,6 +490,7 @@ locales/
 | **Phase 1** | Planning & Research | All plan docs, agent.md files, technology research, architecture decisions |
 | **Phase 2** | Project Structure + UI | Working monorepo, 90% UI, backup server, demo client, i18n, themes, CI/CD |
 | **Phase 2.9** | Dual Sidebar UI | Favorites Bar + Account Server Bar, per-account notification badges |
+| **Phase 2.11** | Per-Backend UI Abstraction | Backend-specific UI directories, common/ shared components, BackendType dispatch |
 | **Phase 3.1** | Stoat Client + Voice/Video | Chat, voice, video with Stoat servers, WebRTC infrastructure |
 | **Phase 3.2** | Matrix Client | matrix-sdk integration, Spaces-as-servers, E2EE, federation |
 | **Phase 3.3** | Discord Client | TBD approach, server/channel/DM support |
@@ -525,6 +526,7 @@ See individual phase plan documents for detailed checklists:
 | D17 | rand crate version | rand 0.10 (upgraded from 0.8) + uuid removed from WASM path | rand 0.10 API changes: `distributions`→`distr`, `DistString`→`SampleString`, `thread_rng()`→`rng()`. uuid crate removed from WASM entirely (Account.id is now `String`); IDs generated via `Alphanumeric.sample_string`. Three getrandom semver lines (0.2/0.3/0.4) managed via named workspace aliases. | 2026-03-01 |
 | D18 | Dual sidebar architecture | Favorites Bar + Account Server Bar (two 72px columns) | Single sidebar mixed account switching, favorites, and per-account nav. Dual bars clearly separate cross-account favorites from per-account server lists. Clicking favorited server auto-switches account context. Enables future drag-and-drop from account bar to favorites. | 2026-03-03 |
 | D19 | Multi-account URL routing | `/:backend/:account_id/...` URL structure | Every account-scoped URL encodes backend type and account ID. Enables deep-linking, per-backend rendering, and correct back/forward navigation across account switches. | 2026-03-03 |
+| D20 | Per-backend UI directories | `ui/account/{demo,stoat,discord,matrix,teams,poly_native}/` | Each backend gets its own UI subdirectory under `account/`. Common components in `account/common/`. Dispatch by `BackendType` match. Feature-gated. Keeps backend-specific UI isolated and extensible. See `docs/multi-client-architecture.md`. | 2026-03-03 |
 
 ---
 

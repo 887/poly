@@ -9,12 +9,23 @@
 //!
 //! WebKit2GTK's inspector protocol is NOT Chrome CDP, so we bridge through
 //! dioxus's built-in `eval()` instead.
+//!
+//! ## Hot-Reload Survival
+//!
+//! This app is designed to run under `dx serve --hotpatch` so the desktop window
+//! stays alive across code changes (no window-jumping on every recompile).
+//!
+//! The eval and screenshot channels use a **recreatable** pattern: each
+//! coroutine creates fresh `mpsc` channels on start, storing the sender in a
+//! global `std::sync::Mutex`.  If Dioxus hot-patches the component tree and
+//! remounts the root, the coroutines simply recreate their channels — the HTTP
+//! server reads the latest sender from the mutex and everything keeps working.
 
 use dioxus::document::eval;
 use dioxus::prelude::*;
 use poly_core::ui::App;
-use std::sync::OnceLock;
-use tokio::sync::{Mutex, mpsc, oneshot};
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::{mpsc, oneshot};
 
 // ─── Eval Bridge ──────────────────────────────────────────────────────────────
 
@@ -23,10 +34,13 @@ struct EvalRequest {
     resp: oneshot::Sender<Result<String, String>>,
 }
 
-/// Sender half — held globally so HTTP handlers can reach the dioxus eval loop.
-static EVAL_TX: OnceLock<mpsc::Sender<EvalRequest>> = OnceLock::new();
-/// Receiver half — transferred into the dioxus coroutine exactly once.
-static EVAL_RX: OnceLock<Mutex<Option<mpsc::Receiver<EvalRequest>>>> = OnceLock::new();
+/// Current eval sender — replaced by the coroutine on each (re)start.
+///
+/// Uses `std::sync::Mutex` (not `tokio::sync::Mutex`) because:
+/// - We only hold the lock briefly to clone/replace the sender.
+/// - `std::sync::Mutex::new(None)` is const-constructible, so it works in a
+///   `static`.
+static EVAL_TX: std::sync::Mutex<Option<mpsc::Sender<EvalRequest>>> = std::sync::Mutex::new(None);
 
 // ─── WebKit Screenshot Bridge ─────────────────────────────────────────────────
 
@@ -35,8 +49,12 @@ struct ScreenshotRequest {
     resp: oneshot::Sender<Result<Vec<u8>, String>>,
 }
 
-static SCREENSHOT_TX: OnceLock<mpsc::Sender<ScreenshotRequest>> = OnceLock::new();
-static SCREENSHOT_RX: OnceLock<Mutex<Option<mpsc::Receiver<ScreenshotRequest>>>> = OnceLock::new();
+/// Current screenshot sender — replaced by the coroutine on each (re)start.
+static SCREENSHOT_TX: std::sync::Mutex<Option<mpsc::Sender<ScreenshotRequest>>> =
+    std::sync::Mutex::new(None);
+
+/// Guard: HTTP server binds to :9223 exactly once per process.
+static HTTP_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 
 /// Evaluate JS in the webview from any tokio context.
 ///
@@ -80,9 +98,13 @@ async fn do_eval(js: impl Into<String>) -> Result<String, String> {
         }
     };
 
-    let tx = EVAL_TX
-        .get()
-        .ok_or_else(|| "Eval bridge not yet initialised".to_string())?;
+    let tx = {
+        let guard = EVAL_TX.lock().unwrap_or_else(|e| e.into_inner());
+        guard.clone()
+    }
+    .ok_or_else(|| {
+        "Eval bridge not yet initialised (coroutine may still be starting)".to_string()
+    })?;
     let (resp_tx, resp_rx) = oneshot::channel();
     tx.send(EvalRequest {
         js: script,
@@ -171,23 +193,9 @@ fn main() {
     tracing::info!("Starting Poly Desktop — DevTools build");
     tracing::info!("DevTools HTTP server will be available at http://127.0.0.1:9223");
 
-    // Initialise the eval bridge channels before dioxus starts.
-    let (tx, rx) = mpsc::channel::<EvalRequest>(64);
-    if EVAL_TX.set(tx).is_err() {
-        tracing::error!("EVAL_TX already initialized — duplicate init?");
-    }
-    if EVAL_RX.set(Mutex::new(Some(rx))).is_err() {
-        tracing::error!("EVAL_RX already initialized — duplicate init?");
-    }
-
-    // Initialise the screenshot bridge channels.
-    let (ss_tx, ss_rx) = mpsc::channel::<ScreenshotRequest>(4);
-    if SCREENSHOT_TX.set(ss_tx).is_err() {
-        tracing::error!("SCREENSHOT_TX already initialized — duplicate init?");
-    }
-    if SCREENSHOT_RX.set(Mutex::new(Some(ss_rx))).is_err() {
-        tracing::error!("SCREENSHOT_RX already initialized — duplicate init?");
-    }
+    // NOTE: Channels are NOT pre-initialised here.  Each coroutine creates its
+    // own channel pair on start and stores the sender in the global mutex.
+    // This makes the bridge survive Dioxus hot-reload / hotpatch remounts.
 
     poly_core::i18n::init();
     poly_core::theme::init();
@@ -209,16 +217,20 @@ fn main() {
 
 /// Drives JS eval requests using dioxus's built-in eval().
 ///
-/// Blocks until the channel is exhausted (i.e. the component is unmounted).
+/// Creates a fresh channel pair and stores the sender in [`EVAL_TX`].
+/// This design survives hot-reload: if the component remounts, the new
+/// coroutine creates new channels and the HTTP handlers automatically
+/// pick up the latest sender via the global mutex.
 async fn run_eval_coroutine() {
-    let Some(eval_rx_mutex) = EVAL_RX.get() else {
-        tracing::error!("EVAL_RX not initialized");
-        return;
-    };
-    let Some(mut rx) = eval_rx_mutex.lock().await.take() else {
-        tracing::error!("EVAL_RX receiver already consumed");
-        return;
-    };
+    let (tx, mut rx) = mpsc::channel::<EvalRequest>(64);
+
+    // Publish the sender so HTTP handlers can reach us.
+    match EVAL_TX.lock() {
+        Ok(mut guard) => *guard = Some(tx),
+        Err(poisoned) => *poisoned.into_inner() = Some(tx),
+    }
+    tracing::info!("Eval bridge coroutine started (channels recreated)");
+
     while let Some(req) = rx.recv().await {
         let result: Result<serde_json::Value, _> = eval(&req.js).await;
         let out = match result {
@@ -230,30 +242,41 @@ async fn run_eval_coroutine() {
         };
         let _ = req.resp.send(out);
     }
+
+    // Coroutine ending — clear the sender so callers get a clean error
+    // instead of sending into a dead channel.
+    match EVAL_TX.lock() {
+        Ok(mut guard) => *guard = None,
+        Err(poisoned) => *poisoned.into_inner() = None,
+    }
+    tracing::warn!("Eval bridge coroutine stopped");
 }
 
 /// Captures WebKit content via the native snapshot API.
 ///
 /// Must run on the GTK main thread — all dioxus-desktop coroutines do.
+/// Creates a fresh channel pair and stores the sender in [`SCREENSHOT_TX`],
+/// same recreatable pattern as the eval coroutine.
 async fn run_screenshot_coroutine() {
-    let Some(screenshot_rx_mutex) = SCREENSHOT_RX.get() else {
-        tracing::error!("SCREENSHOT_RX not initialized");
-        return;
-    };
-    let Some(mut rx) = screenshot_rx_mutex.lock().await.take() else {
-        tracing::error!("SCREENSHOT_RX receiver already consumed");
-        return;
-    };
+    let (tx, mut rx) = mpsc::channel::<ScreenshotRequest>(4);
+
+    // Publish the sender so HTTP handlers can reach us.
+    match SCREENSHOT_TX.lock() {
+        Ok(mut guard) => *guard = Some(tx),
+        Err(poisoned) => *poisoned.into_inner() = Some(tx),
+    }
+    tracing::info!("Screenshot bridge coroutine started (channels recreated)");
+
     // Grab the WebView handle once — GObject clone is cheap.
     let wv = {
         use wry::WebViewExtUnix as _;
         dioxus::desktop::window().webview.webview()
     };
     while let Some(req) = rx.recv().await {
-        use std::sync::mpsc;
+        use std::sync::mpsc as std_mpsc;
         use webkit2gtk::WebViewExt as _;
 
-        let (cb_tx, poll_rx) = mpsc::channel::<Result<Vec<u8>, String>>();
+        let (cb_tx, poll_rx) = std_mpsc::channel::<Result<Vec<u8>, String>>();
         wv.snapshot(
             webkit2gtk::SnapshotRegion::Visible,
             webkit2gtk::SnapshotOptions::empty(),
@@ -280,14 +303,21 @@ async fn run_screenshot_coroutine() {
             tokio::time::sleep(std::time::Duration::from_millis(16)).await;
             match poll_rx.try_recv() {
                 Ok(r) => break r,
-                Err(mpsc::TryRecvError::Empty) => continue,
-                Err(mpsc::TryRecvError::Disconnected) => {
+                Err(std_mpsc::TryRecvError::Empty) => continue,
+                Err(std_mpsc::TryRecvError::Disconnected) => {
                     break Err("Screenshot channel disconnected".to_string());
                 }
             }
         };
         let _ = req.resp.send(result);
     }
+
+    // Coroutine ending — clear the sender.
+    match SCREENSHOT_TX.lock() {
+        Ok(mut guard) => *guard = None,
+        Err(poisoned) => *poisoned.into_inner() = None,
+    }
+    tracing::warn!("Screenshot bridge coroutine stopped");
 }
 
 // ─── Dioxus Wrapper Component ─────────────────────────────────────────────────
@@ -296,6 +326,9 @@ async fn run_screenshot_coroutine() {
 ///
 /// Spawns the eval and screenshot coroutines, then starts the HTTP server,
 /// before delegating rendering entirely to [`App`].
+///
+/// **Hot-reload safe:** coroutines recreate their channels on each mount.
+/// The HTTP server is guarded by [`HTTP_SERVER_STARTED`] so it only binds once.
 #[component]
 fn DevtoolsShell() -> Element {
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
@@ -305,8 +338,15 @@ fn DevtoolsShell() -> Element {
         run_screenshot_coroutine().await;
     });
     use_future(|| async {
-        if let Err(e) = start_devtools_server().await {
+        // Only start the HTTP server once per process — if we've already bound
+        // :9223, a remount (hot-reload) must not try again.
+        if HTTP_SERVER_STARTED
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+            && let Err(e) = start_devtools_server().await
+        {
             tracing::error!("DevTools HTTP server stopped: {e}");
+            HTTP_SERVER_STARTED.store(false, Ordering::SeqCst);
         }
     });
     rsx! {
@@ -382,15 +422,16 @@ async fn http_eval(body: String) -> (axum::http::StatusCode, String) {
 async fn http_screenshot() -> axum::response::Response {
     use axum::response::IntoResponse;
 
-    let tx = match SCREENSHOT_TX.get() {
-        Some(tx) => tx,
-        None => {
-            return (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "Screenshot bridge not initialised",
-            )
-                .into_response();
-        }
+    let tx = {
+        let guard = SCREENSHOT_TX.lock().unwrap_or_else(|e| e.into_inner());
+        guard.clone()
+    };
+    let Some(tx) = tx else {
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "Screenshot bridge not initialised (coroutine may still be starting)",
+        )
+            .into_response();
     };
 
     let (resp_tx, resp_rx) = oneshot::channel();
