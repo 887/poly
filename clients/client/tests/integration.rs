@@ -19,11 +19,11 @@ use rand::RngExt;
 use tokio::net::TcpListener as TokioListener;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use poly_client::poly_server::PolyServerBackend;
-use poly_client::poly_server::http::{PolyServerConfig, PolyServerHttpClient};
-use poly_client::poly_server::models::ServerEvent;
 use poly_client::{AuthCredentials, BackendType, ClientBackend, MessageContent, MessageQuery};
 use poly_server::{AppState, Config, api, auth, db, ws};
+use poly_server_client::PolyServerBackend;
+use poly_server_client::http::{PolyServerConfig, PolyServerHttpClient};
+use poly_server_client::models::ServerEvent;
 
 // ---------------------------------------------------------------------------
 // Test harness — spins up a real poly-server instance
@@ -212,11 +212,7 @@ async fn test_create_server_invite_join() {
         .create_invite(&server_id, None, None)
         .await
         .expect("create_invite");
-    let invite_code = invite_val
-        .get("code")
-        .and_then(|v| v.as_str())
-        .expect("code field")
-        .to_string();
+    let invite_code = invite_val.code.clone();
     assert!(!invite_code.is_empty());
 
     // Bob joins via invite.
@@ -330,7 +326,7 @@ async fn test_friend_requests() {
         .expect("send_friend_request");
     assert_eq!(
         fr.status,
-        poly_client::poly_server::models::FriendRequestStatus::Pending
+        poly_server_client::models::FriendRequestStatus::Pending
     );
 
     // Alice's friends list should include the pending request.
@@ -373,11 +369,7 @@ async fn test_websocket_message_event() {
         .create_invite(&server_id, None, None)
         .await
         .expect("invite");
-    let invite_code = invite_val
-        .get("code")
-        .and_then(|v| v.as_str())
-        .expect("code field")
-        .to_string();
+    let invite_code = invite_val.code.clone();
 
     let bob_key = random_key();
     let bob_http = PolyServerHttpClient::new(PolyServerConfig {
@@ -389,7 +381,7 @@ async fn test_websocket_message_event() {
 
     // Bob connects a WebSocket and subscribes to events.
     let mut bob_ws =
-        poly_client::poly_server::PolyServerWsClient::new(&srv.base_url(), bob_http.session_lock());
+        poly_server_client::PolyServerWsClient::new(&srv.base_url(), bob_http.session_lock());
     bob_ws.connect();
     let mut rx = bob_ws.subscribe();
 
@@ -552,11 +544,7 @@ async fn test_backend_two_users_communicate() {
         .create_invite(&server_id, None, None)
         .await
         .expect("invite");
-    let invite_code = invite_val
-        .get("code")
-        .and_then(|v| v.as_str())
-        .expect("code field")
-        .to_string();
+    let invite_code = invite_val.code.clone();
 
     // Bob joins.
     bob.http().join_server(&invite_code).await.expect("join");

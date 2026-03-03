@@ -9,10 +9,6 @@
 pub mod events;
 pub mod types;
 
-/// Poly-server client (native-only — requires reqwest + tokio-tungstenite).
-#[cfg(not(target_arch = "wasm32"))]
-pub mod poly_server;
-
 pub use events::*;
 pub use types::*;
 

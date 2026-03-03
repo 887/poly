@@ -215,8 +215,8 @@ impl ClientManager {
         display_name: Option<&str>,
         is_signup: bool,
     ) -> Result<Session, String> {
-        let mut backend =
-            poly_client::poly_server::PolyServerBackend::new(server_url, private_key_bytes);
+        use poly_server_client::PolyServerBackend;
+        let mut backend = PolyServerBackend::new(server_url, private_key_bytes);
 
         let credentials = AuthCredentials::PolyServer {
             server_url: server_url.to_string(),
