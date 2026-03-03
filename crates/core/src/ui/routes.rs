@@ -104,6 +104,10 @@ pub enum Route {
         #[route("/settings")]
         SettingsRoute,
 
+        // ── Account-scoped settings ──────────────────────────────────
+        #[route("/:backend/:account_id/settings")]
+        AccountSettingsRoute { backend: String, account_id: String },
+
     #[end_layout]
 
     // Catch-all → redirected by on_update to the best active route
@@ -182,7 +186,21 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         }
         Route::SettingsRoute => {
             s.nav.view = View::Settings;
-            // App-level — don't change active_account_id / active_backend
+            // App-level — clear account context so Bar 2 hides and no server stays "open"
+            s.nav.active_account_id = None;
+            s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::AccountSettingsRoute {
+            backend,
+            account_id,
+        } => {
+            s.nav.view = View::Settings;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
         }
         Route::Root | Route::PageNotFound { .. } => {
             // on_update will redirect — nothing to sync here
@@ -334,6 +352,18 @@ fn NotificationsRoute() -> Element {
 /// Settings page — app-level, not account-scoped.
 #[component]
 fn SettingsRoute() -> Element {
+    rsx! {
+        SettingsPage {}
+    }
+}
+
+/// Account settings — scoped to a specific backend account.
+///
+/// Currently delegates to the same settings page but with the account
+/// context preserved in the URL (`:backend/:account_id/settings`),
+/// so Bar 2 remains visible and the account settings gear navigates here.
+#[component]
+fn AccountSettingsRoute(backend: String, account_id: String) -> Element {
     rsx! {
         SettingsPage {}
     }

@@ -1,8 +1,12 @@
 //! Demo data generators for testing the Poly UI.
 //!
-//! Generates rich mock data: 3 servers, 12+ channels, 10 users, messages
-//! with images/reactions/edits, DMs, groups, and notifications. All data
-//! is tagged with `account_id = "demo"` and `backend = BackendType::Demo`.
+//! Generates rich mock data: 3 servers for the "cat" demo account,
+//! 4 servers for the "dog" demo account, 12+ channels, 10 users, messages
+//! with images/reactions/edits, DMs, groups, and notifications.
+//!
+//! Two demo accounts are provided to illustrate multi-account support:
+//! - `demo` (🐱 cat) — 3 servers (Poly Dev, Gaming Lounge, Music Enthusiasts)
+//! - `demo2` (🐶 dog) — 4 servers (Open Source Hub, Book Club, Cooking Corner, Fitness Crew)
 //!
 //! SAFETY NOTE: indexing_slicing is allowed in this module because all indices
 //! are bounded by the fixed-size `demo_users()` slice, which is compile-time
@@ -13,25 +17,49 @@ use chrono::{Duration, Utc};
 use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
 
-/// The demo account ID used for all demo data.
+/// The demo account ID used for all demo data (cat account).
 pub const DEMO_ACCOUNT_ID: &str = "demo";
 
 /// The demo account display name.
-pub const DEMO_ACCOUNT_NAME: &str = "Demo Account";
+pub const DEMO_ACCOUNT_NAME: &str = "Cat Demo Account";
 
-/// Generate a demo session for the authenticated user.
+/// The second demo account ID (dog account).
+pub const DEMO2_ACCOUNT_ID: &str = "demo2";
+
+/// The second demo account display name.
+pub const DEMO2_ACCOUNT_NAME: &str = "Dog Demo Account";
+
+/// Generate a demo session for the cat account (demo).
 pub fn demo_session() -> Session {
     Session {
         id: "demo-session-1".to_string(),
         user: User {
             id: "demo-user-self".to_string(),
-            display_name: "Demo User".to_string(),
+            display_name: "Demo User (Cat)".to_string(),
             avatar_url: None,
             presence: PresenceStatus::Online,
             backend: BackendType::Demo,
         },
         token: "demo-token-not-real".to_string(),
         backend: BackendType::Demo,
+        icon_emoji: Some("🐱".to_string()),
+    }
+}
+
+/// Generate a demo session for the dog account (demo2).
+pub fn demo2_session() -> Session {
+    Session {
+        id: "demo2-session-1".to_string(),
+        user: User {
+            id: "demo2-user-self".to_string(),
+            display_name: "Demo User (Dog)".to_string(),
+            avatar_url: None,
+            presence: PresenceStatus::Online,
+            backend: BackendType::Demo,
+        },
+        token: "demo2-token-not-real".to_string(),
+        backend: BackendType::Demo,
+        icon_emoji: Some("🐶".to_string()),
     }
 }
 
@@ -140,6 +168,306 @@ pub fn demo_servers() -> Vec<Server> {
             unread_count: 0,
             account_id: DEMO_ACCOUNT_ID.to_string(),
             account_display_name: DEMO_ACCOUNT_NAME.to_string(),
+        },
+    ]
+}
+
+/// Generate servers for the second demo account (dog 🐶 / demo2).
+///
+/// 4 servers to illustrate that the dog account has different communities
+/// than the cat account. These appear in Bar 2 when demo2 is the active account,
+/// and the favorites bar can show icons from both accounts side-by-side.
+pub fn demo2_servers() -> Vec<Server> {
+    vec![
+        Server {
+            id: "server-opensource".to_string(),
+            name: "Open Source Hub".to_string(),
+            icon_url: None,
+            categories: vec![
+                Category {
+                    id: "cat-projects".to_string(),
+                    name: "Projects".to_string(),
+                    channel_ids: vec![
+                        "ch2-announcements".to_string(),
+                        "ch2-contributions".to_string(),
+                    ],
+                },
+                Category {
+                    id: "cat-support".to_string(),
+                    name: "Support".to_string(),
+                    channel_ids: vec!["ch2-help".to_string(), "ch2-voice-oss".to_string()],
+                },
+            ],
+            backend: BackendType::Demo,
+            unread_count: 3,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
+        },
+        Server {
+            id: "server-bookclub".to_string(),
+            name: "Book Club".to_string(),
+            icon_url: None,
+            categories: vec![Category {
+                id: "cat-books".to_string(),
+                name: "Books".to_string(),
+                channel_ids: vec![
+                    "ch2-current-read".to_string(),
+                    "ch2-recommendations".to_string(),
+                    "ch2-voice-book".to_string(),
+                ],
+            }],
+            backend: BackendType::Demo,
+            unread_count: 7,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
+        },
+        Server {
+            id: "server-cooking".to_string(),
+            name: "Cooking Corner".to_string(),
+            icon_url: None,
+            categories: vec![Category {
+                id: "cat-food".to_string(),
+                name: "Food".to_string(),
+                channel_ids: vec![
+                    "ch2-recipes".to_string(),
+                    "ch2-techniques".to_string(),
+                    "ch2-show-your-dish".to_string(),
+                ],
+            }],
+            backend: BackendType::Demo,
+            unread_count: 0,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
+        },
+        Server {
+            id: "server-fitness".to_string(),
+            name: "Fitness Crew".to_string(),
+            icon_url: None,
+            categories: vec![Category {
+                id: "cat-health".to_string(),
+                name: "Health".to_string(),
+                channel_ids: vec![
+                    "ch2-workouts".to_string(),
+                    "ch2-nutrition".to_string(),
+                    "ch2-voice-workout".to_string(),
+                ],
+            }],
+            backend: BackendType::Demo,
+            unread_count: 2,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
+        },
+    ]
+}
+
+/// Generate channels for demo2 servers.
+pub fn demo2_channels(server_id: &str) -> Vec<Channel> {
+    match server_id {
+        "server-opensource" => vec![
+            Channel {
+                id: "ch2-announcements".to_string(),
+                name: "announcements".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 1,
+                last_message_id: Some("msg2-1".to_string()),
+            },
+            Channel {
+                id: "ch2-contributions".to_string(),
+                name: "contributions".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 2,
+                last_message_id: Some("msg2-2".to_string()),
+            },
+            Channel {
+                id: "ch2-help".to_string(),
+                name: "help".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 0,
+                last_message_id: None,
+            },
+            Channel {
+                id: "ch2-voice-oss".to_string(),
+                name: "Dev Chat".to_string(),
+                channel_type: ChannelType::Voice,
+                server_id: server_id.to_string(),
+                unread_count: 0,
+                last_message_id: None,
+            },
+        ],
+        "server-bookclub" => vec![
+            Channel {
+                id: "ch2-current-read".to_string(),
+                name: "current-read".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 5,
+                last_message_id: Some("msg2-10".to_string()),
+            },
+            Channel {
+                id: "ch2-recommendations".to_string(),
+                name: "recommendations".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 2,
+                last_message_id: Some("msg2-11".to_string()),
+            },
+            Channel {
+                id: "ch2-voice-book".to_string(),
+                name: "Reading Night".to_string(),
+                channel_type: ChannelType::Voice,
+                server_id: server_id.to_string(),
+                unread_count: 0,
+                last_message_id: None,
+            },
+        ],
+        "server-cooking" => vec![
+            Channel {
+                id: "ch2-recipes".to_string(),
+                name: "recipes".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 0,
+                last_message_id: Some("msg2-20".to_string()),
+            },
+            Channel {
+                id: "ch2-techniques".to_string(),
+                name: "techniques".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 0,
+                last_message_id: None,
+            },
+            Channel {
+                id: "ch2-show-your-dish".to_string(),
+                name: "show-your-dish".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 0,
+                last_message_id: None,
+            },
+        ],
+        "server-fitness" => vec![
+            Channel {
+                id: "ch2-workouts".to_string(),
+                name: "workouts".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 1,
+                last_message_id: Some("msg2-30".to_string()),
+            },
+            Channel {
+                id: "ch2-nutrition".to_string(),
+                name: "nutrition".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 1,
+                last_message_id: Some("msg2-31".to_string()),
+            },
+            Channel {
+                id: "ch2-voice-workout".to_string(),
+                name: "Workout Call".to_string(),
+                channel_type: ChannelType::Voice,
+                server_id: server_id.to_string(),
+                unread_count: 0,
+                last_message_id: None,
+            },
+        ],
+        _ => vec![],
+    }
+}
+
+/// Generate messages for demo2 servers (minimal set for UI testing).
+pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
+    let users = demo_users();
+    let now = Utc::now();
+    match channel_id {
+        "ch2-announcements" => vec![
+            Message {
+                id: "msg2-1".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Welcome to the Open Source Hub! 🎉 Check out our pinned projects.".to_string(),
+                ),
+                timestamp: now - Duration::hours(3),
+                edited: false,
+                reactions: vec![],
+                attachments: vec![],
+            },
+            Message {
+                id: "msg2-2".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "Just merged a big PR! See the contributions channel for discussion."
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(1),
+                edited: false,
+                reactions: vec![],
+                attachments: vec![],
+            },
+        ],
+        "ch2-current-read" => vec![Message {
+            id: "msg2-10".to_string(),
+            author: users[2].clone(),
+            content: MessageContent::Text(
+                "Finished chapter 12 — what does everyone think about the plot twist?".to_string(),
+            ),
+            timestamp: now - Duration::hours(5),
+            edited: false,
+            reactions: vec![Reaction {
+                emoji: "📚".to_string(),
+                count: 4,
+                me: true,
+            }],
+            attachments: vec![],
+        }],
+        "ch2-workouts" => vec![Message {
+            id: "msg2-30".to_string(),
+            author: users[6].clone(),
+            content: MessageContent::Text("5K run this morning! 💪 New personal best.".to_string()),
+            timestamp: now - Duration::hours(2),
+            edited: false,
+            reactions: vec![Reaction {
+                emoji: "🔥".to_string(),
+                count: 6,
+                me: false,
+            }],
+            attachments: vec![],
+        }],
+        _ => vec![],
+    }
+}
+
+/// Generate notifications for demo2 account.
+pub fn demo2_notifications() -> Vec<Notification> {
+    let now = Utc::now();
+    vec![
+        Notification {
+            id: "notif2-1".to_string(),
+            kind: NotificationKind::Mention {
+                channel_id: "ch2-current-read".to_string(),
+                message_id: "msg2-10".to_string(),
+            },
+            read: false,
+            timestamp: now - Duration::hours(2),
+            backend: BackendType::Demo,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+            preview: "New discussion in #current-read".to_string(),
+        },
+        Notification {
+            id: "notif2-2".to_string(),
+            kind: NotificationKind::Mention {
+                channel_id: "ch2-workouts".to_string(),
+                message_id: "msg2-30".to_string(),
+            },
+            read: false,
+            timestamp: now - Duration::hours(4),
+            backend: BackendType::Demo,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+            preview: "Bob posted a new workout challenge".to_string(),
         },
     ]
 }

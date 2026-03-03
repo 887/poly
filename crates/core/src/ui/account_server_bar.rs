@@ -19,7 +19,7 @@ use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, SettingsSection, View};
+use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
 
 /// Account server bar — second sidebar column, per-account.
@@ -138,8 +138,10 @@ pub fn AccountServerBar() -> Element {
             div {
                 class: "server-icon",
                 onclick: move |_| {
-                    app_state.write().settings_section = SettingsSection::Accounts;
-                    navigator().push(Route::SettingsRoute);
+                    navigator().push(Route::AccountSettingsRoute {
+                        backend: backend_slug.clone(),
+                        account_id: account_id.clone(),
+                    });
                 },
                 title: "{t(\"account-settings\")}",
                 div { class: "icon-settings", "⚙" }

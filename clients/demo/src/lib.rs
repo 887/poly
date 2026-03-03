@@ -248,3 +248,156 @@ impl ClientBackend for DemoClient {
         "Demo"
     }
 }
+
+/// Second demo messenger client — the "dog" account (demo2 / 🐶).
+///
+/// Provides a second set of demo data (4 different servers, separate
+/// notifications, different communities) so the multi-account UI can be
+/// tested realistically with two simultaneous demo accounts.
+pub struct DemoClient2 {
+    authenticated: bool,
+    session: Option<Session>,
+}
+
+impl DemoClient2 {
+    /// Create a new demo2 client.
+    pub fn new() -> Self {
+        Self {
+            authenticated: false,
+            session: None,
+        }
+    }
+}
+
+impl Default for DemoClient2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl ClientBackend for DemoClient2 {
+    async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
+        let session = data::demo2_session();
+        self.session = Some(session.clone());
+        self.authenticated = true;
+        Ok(session)
+    }
+
+    async fn logout(&mut self) -> ClientResult<()> {
+        self.session = None;
+        self.authenticated = false;
+        Ok(())
+    }
+
+    fn is_authenticated(&self) -> bool {
+        self.authenticated
+    }
+
+    async fn get_servers(&self) -> ClientResult<Vec<Server>> {
+        Ok(data::demo2_servers())
+    }
+
+    async fn get_server(&self, id: &str) -> ClientResult<Server> {
+        data::demo2_servers()
+            .into_iter()
+            .find(|s| s.id == id)
+            .ok_or_else(|| ClientError::NotFound(format!("Server {id}")))
+    }
+
+    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
+        Ok(data::demo2_channels(server_id))
+    }
+
+    async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
+        for server in data::demo2_servers() {
+            for channel in data::demo2_channels(&server.id) {
+                if channel.id == id {
+                    return Ok(channel);
+                }
+            }
+        }
+        Err(ClientError::NotFound(format!("Channel {id}")))
+    }
+
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        Ok(data::demo_sent_message(channel_id, content))
+    }
+
+    async fn get_messages(
+        &self,
+        channel_id: &str,
+        _query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        Ok(data::demo2_messages(channel_id))
+    }
+
+    async fn get_user(&self, id: &str) -> ClientResult<User> {
+        data::demo_users()
+            .into_iter()
+            .find(|u| u.id == id)
+            .ok_or_else(|| ClientError::NotFound(format!("User {id}")))
+    }
+
+    async fn get_friends(&self) -> ClientResult<Vec<User>> {
+        // Dog account has a different friend circle
+        Ok(data::demo_users().into_iter().skip(2).take(6).collect())
+    }
+
+    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
+        Ok(data::demo_users().into_iter().take(6).collect())
+    }
+
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        // No group DMs for demo2 for simplicity
+        Ok(vec![])
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        // A subset of DMs from a different perspective
+        Ok(data::demo_dm_channels()
+            .into_iter()
+            .take(3)
+            .map(|mut dm| {
+                dm.account_id = data::DEMO2_ACCOUNT_ID.to_string();
+                dm
+            })
+            .collect())
+    }
+
+    async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
+        Ok(data::demo2_notifications())
+    }
+
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Online)
+    }
+
+    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn get_voice_participants(
+        &self,
+        _channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        Ok(vec![])
+    }
+
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
+        // Demo2 emits no live events for simplicity
+        Box::pin(futures::stream::empty())
+    }
+
+    fn backend_type(&self) -> BackendType {
+        BackendType::Demo
+    }
+
+    fn backend_name(&self) -> &str {
+        "Demo (Dog)"
+    }
+}

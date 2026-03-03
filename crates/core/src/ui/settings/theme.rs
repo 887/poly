@@ -121,6 +121,8 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
         ("--text-primary", t("color-text")),
         ("--text-secondary", t("color-secondary-text")),
         ("--border-primary", t("color-border")),
+        ("--favorites-bar-bg", t("color-favorites-bar")),
+        ("--account-bar-bg", t("color-account-bar")),
     ];
     let config = theme_config.read().clone();
     let colors_enabled = config.color_overrides_enabled;

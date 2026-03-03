@@ -302,6 +302,8 @@ color-surface = Superficie
 color-text = Texto
 color-secondary-text = Texto secundario
 color-border = Borde
+color-favorites-bar = Fondo barra de favoritos
+color-account-bar = Fondo barra de cuentas
 
 # Dispositivos de audio predeterminados
 voice-default-mic = Micrófono predeterminado

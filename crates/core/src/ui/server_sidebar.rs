@@ -73,15 +73,27 @@ pub fn ServerSidebar() -> Element {
 
             // ── Favorited servers from all accounts ───────────────────
             for server in &servers {
-                FavoriteServerIcon {
-                    server_id: server.id.clone(),
-                    server_name: server.name.clone(),
-                    badge: backend_badge(&server.backend).to_string(),
-                    backend_slug: server.backend.slug().to_string(),
-                    account_id: server.account_id.clone(),
-                    account_display_name: server.account_display_name.clone(),
-                    backend_name: server.backend.display_name().to_string(),
-                    unread: server.unread_count,
+                {
+                    // Use account icon_emoji as source badge when available,
+                    // falling back to the generic backend emoji.
+                    let account_icon = chat_data
+                        .read()
+                        .account_sessions
+                        .get(&server.account_id)
+                        .and_then(|s| s.icon_emoji.clone())
+                        .unwrap_or_else(|| backend_badge(&server.backend).to_string());
+                    rsx! {
+                        FavoriteServerIcon {
+                            server_id: server.id.clone(),
+                            server_name: server.name.clone(),
+                            badge: account_icon,
+                            backend_slug: server.backend.slug().to_string(),
+                            account_id: server.account_id.clone(),
+                            account_display_name: server.account_display_name.clone(),
+                            backend_name: server.backend.display_name().to_string(),
+                            unread: server.unread_count,
+                        }
+                    }
                 }
             }
 
@@ -128,20 +140,29 @@ pub fn ServerSidebar() -> Element {
 
 /// Single account icon in the favorites bar.
 ///
-/// Shows a colored circle with the first character of the account ID,
-/// plus a badge overlay with the backend type emoji.
-/// When clicked, navigates to that account's DMs home.
+/// Shows a colored circle with the account's emoji icon (if set in its session)
+/// or first character of the account ID as fallback. Clicking navigates to that
+/// account's DMs home.
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
 
     let color = user_color(&account_id);
-    let first_char: String = account_id
-        .chars()
-        .next()
-        .map(|c| c.to_uppercase().to_string())
-        .unwrap_or_default();
+
+    // Use icon_emoji from session if available, else fall back to first char
+    let icon_label: String = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .and_then(|s| s.icon_emoji.clone())
+        .unwrap_or_else(|| {
+            account_id
+                .chars()
+                .next()
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_default()
+        });
 
     // Count unread DMs + notifications for this account
     let dm_unreads: u32 = chat_data
@@ -201,7 +222,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             div {
                 class: "server-icon-letter",
                 style: "background-color: {color};",
-                "{first_char}"
+                "{icon_label}"
             }
             if total_unreads > 0 {
                 span { class: "badge", "{total_unreads}" }
@@ -308,6 +329,10 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
             chat_data.write().voice_channel_participants.clear();
             chat_data.write().voice_connection = None;
             chat_data.write().local_session = None;
+            chat_data
+                .write()
+                .account_sessions
+                .retain(|k, _| k != "demo" && k != "demo2");
         } else {
             let session = match client_manager.write().activate_demo().await {
                 Ok(s) => s,
@@ -316,43 +341,66 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
                     return;
                 }
             };
-            chat_data.write().local_session = Some(session);
-            // Load all demo data into chat data
+            chat_data.write().local_session = Some(session.clone());
+            // Store the cat session keyed by "demo"
+            chat_data
+                .write()
+                .account_sessions
+                .insert("demo".to_string(), session);
+            // Store all sessions from the client manager (includes demo2 🐶)
+            for (account_id, sess) in &client_manager.read().sessions {
+                chat_data
+                    .write()
+                    .account_sessions
+                    .insert(account_id.clone(), sess.clone());
+            }
+            // Load all servers from both demo accounts
             let servers = client_manager.read().all_servers().await;
             chat_data.write().servers = servers;
 
-            // Load DMs, groups, notifications, friends from demo backend
-            let backend = client_manager.read().get_backend("demo");
-            if let Some(backend_handle) = backend {
-                let guard = backend_handle.read().await;
-                if let Ok(dms) = guard.get_dm_channels().await {
-                    chat_data.write().dm_channels = dms;
-                }
-                if let Ok(groups) = guard.get_groups().await {
-                    chat_data.write().groups = groups;
-                }
-                if let Ok(notifs) = guard.get_notifications().await {
-                    chat_data.write().notifications = notifs;
-                }
-                if let Ok(friends) = guard.get_friends().await {
-                    chat_data.write().friends = friends;
-                }
-                // Load voice participants for all voice channels
-                let servers_snapshot = chat_data.read().servers.clone();
-                for server in &servers_snapshot {
-                    if let Ok(channels) = guard.get_channels(&server.id).await {
-                        for ch in channels {
-                            if matches!(
-                                ch.channel_type,
-                                poly_client::ChannelType::Voice | poly_client::ChannelType::Video
-                            ) && let Ok(participants) =
-                                guard.get_voice_participants(&ch.id).await
-                                && !participants.is_empty()
-                            {
-                                chat_data
-                                    .write()
-                                    .voice_channel_participants
-                                    .insert(ch.id.clone(), participants);
+            // Load DMs, groups, notifications, friends from ALL demo backends
+            for demo_account_id in &["demo", "demo2"] {
+                let backend = client_manager.read().get_backend(demo_account_id);
+                if let Some(backend_handle) = backend {
+                    let guard = backend_handle.read().await;
+                    if let Ok(dms) = guard.get_dm_channels().await {
+                        chat_data.write().dm_channels.extend(dms);
+                    }
+                    if let Ok(groups) = guard.get_groups().await {
+                        chat_data.write().groups.extend(groups);
+                    }
+                    if let Ok(notifs) = guard.get_notifications().await {
+                        chat_data.write().notifications.extend(notifs);
+                    }
+                    if let Ok(friends) = guard.get_friends().await {
+                        // Deduplicate friends by ID
+                        for friend in friends {
+                            if !chat_data.read().friends.iter().any(|f| f.id == friend.id) {
+                                chat_data.write().friends.push(friend);
+                            }
+                        }
+                    }
+                    // Load voice participants for all voice channels
+                    let servers_snapshot = chat_data.read().servers.clone();
+                    for server in &servers_snapshot {
+                        if server.account_id != *demo_account_id {
+                            continue;
+                        }
+                        if let Ok(channels) = guard.get_channels(&server.id).await {
+                            for ch in channels {
+                                if matches!(
+                                    ch.channel_type,
+                                    poly_client::ChannelType::Voice
+                                        | poly_client::ChannelType::Video
+                                ) && let Ok(participants) =
+                                    guard.get_voice_participants(&ch.id).await
+                                    && !participants.is_empty()
+                                {
+                                    chat_data
+                                        .write()
+                                        .voice_channel_participants
+                                        .insert(ch.id.clone(), participants);
+                                }
                             }
                         }
                     }

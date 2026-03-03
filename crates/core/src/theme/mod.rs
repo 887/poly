@@ -148,6 +148,8 @@ pub const ALL_CSS_VARS: &[(&str, &str)] = &[
     ("--sidebar-icon-hover", "Sidebar icon hover"),
     ("--sidebar-icon-active", "Sidebar active icon"),
     ("--sidebar-separator", "Sidebar divider line"),
+    ("--favorites-bar-bg", "Favorites bar (Bar 1) background"),
+    ("--account-bar-bg", "Account server bar (Bar 2) background"),
     // Chat
     ("--chat-bg", "Chat area background"),
     ("--chat-message-hover", "Hovered message row"),

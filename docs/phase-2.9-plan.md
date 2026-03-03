@@ -137,12 +137,31 @@ Add new locale keys for:
 - [x] **D**: Per-account notification badge computation
 - [x] **E**: Fix desktop empty page on launch (Root component `use_effect` redirect + auto-navigate after demo toggle)
 - [x] **F**: CSS for dual sidebar layout
-- [ ] **G**: i18n locale keys for new UI elements (existing keys cover current needs)
+- [x] **G**: i18n locale keys for new UI elements
+
+### Session 2 Polish (2026-03-03)
+
+- [x] **H**: Fix `/settings` route clearing server/account context (app settings gear left server open)
+- [x] **I**: Add `Route::AccountSettingsRoute` at `/:backend/:account_id/settings` (account gear in Bar 2 navigates here)
+- [x] **J**: `Session.icon_emoji: Option<String>` field for per-account visual icon
+- [x] **K**: `DemoClient2` — second demo backend (🐶 dog account) with 4 servers (Open Source Hub, Book Club, Cooking Corner, Fitness Crew)
+- [x] **L**: `ClientManager.sessions: HashMap<String, Session>` — store sessions per account for UI lookup
+- [x] **M**: `ChatData.account_sessions: HashMap<String, Session>` — reactive store for session data in components
+- [x] **N**: `AccountIcon` shows `icon_emoji` (🐱/🐶) instead of first letter of account ID
+- [x] **O**: `FavoriteServerIcon` shows account's `icon_emoji` as source badge instead of generic backend emoji
+- [x] **P**: `--favorites-bar-bg` and `--account-bar-bg` CSS custom properties in all 10 theme CSS files
+- [x] **Q**: Distinct default colors for Bar 1 and Bar 2 via new CSS vars
+- [x] **R**: Bar color pickers added to Theme Settings UI (`ThemeColorCustomizer`)
+- [x] **S**: i18n keys `color-favorites-bar` / `color-account-bar` in all 4 locale files (en, de, fr, es)
 - [x] Build verification: `cargo check --workspace`
 - [x] WASM check: `cargo check -p poly-web --target wasm32-unknown-unknown`
-- [x] `cargo cranky --workspace`
+- [x] `cargo cranky --workspace` — zero warnings/errors
 - [x] `cargo fmt --all`
-- [x] Visual verification via DevTools MCP
+- [x] Visual verification via DevTools MCP — 🐱/🐶 icons appear, source badges correct, Theme settings shows new color pickers
+
+### Deferred
+
+- [ ] **Drag & Drop**: Bar2 → Bar1 (favorite a server by dragging) — planned for Phase 2.10
 
 ---
 

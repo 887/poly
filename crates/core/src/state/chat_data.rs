@@ -47,6 +47,11 @@ pub struct ChatData {
     /// Used to identify the local user (e.g. when joining a voice channel).
     /// In a multi-account world this is the "primary" or last-activated session.
     pub local_session: Option<Session>,
+    /// Sessions keyed by account ID — one entry per active account.
+    ///
+    /// Used to look up `icon_emoji`, display name, and other per-account
+    /// identity data in sidebar components without traversing all servers.
+    pub account_sessions: HashMap<String, Session>,
     /// Users currently typing in the selected channel.
     ///
     /// Each entry is a display name string. Updated by the event stream

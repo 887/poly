@@ -302,6 +302,8 @@ color-surface = Oberfläche
 color-text = Text
 color-secondary-text = Sekundärer Text
 color-border = Rahmen
+color-favorites-bar = Hintergrund Favoritenleiste
+color-account-bar = Hintergrund Kontobereich
 
 # Audiogeräte-Standards
 voice-default-mic = Standard-Mikrofon

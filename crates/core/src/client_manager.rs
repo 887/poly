@@ -27,6 +27,11 @@ pub struct ClientManager {
     pub demo_active: bool,
     /// Cached mapping from server ID → account ID that owns it.
     server_account_map: HashMap<String, String>,
+    /// Authenticated sessions keyed by account ID.
+    ///
+    /// Stored so the UI can retrieve per-account identity info (e.g. `icon_emoji`)
+    /// without going through the async backend trait.
+    pub sessions: HashMap<String, Session>,
 }
 
 impl std::fmt::Debug for ClientManager {
@@ -52,14 +57,17 @@ impl ClientManager {
             backends: HashMap::new(),
             demo_active: false,
             server_account_map: HashMap::new(),
+            sessions: HashMap::new(),
         }
     }
 
     /// Activate the demo client.
     ///
-    /// Creates a `DemoClient`, authenticates it, and adds it to the backends
-    /// map with key `"demo"`. Sets `demo_active = true`.
-    /// Returns the authenticated session so callers can record the local user.
+    /// Creates two `DemoClient` instances — one for the "cat" demo account (`demo`)
+    /// and one for the "dog" demo account (`demo2`). Both are authenticated and added
+    /// to the backends map, giving the UI a realistic multi-account scenario.
+    /// Returns the session for the first (cat) account so callers can record the
+    /// local user.
     #[cfg(feature = "demo")]
     pub async fn activate_demo(&mut self) -> Result<Session, String> {
         if self.demo_active {
@@ -67,35 +75,51 @@ impl ClientManager {
             return Ok(poly_demo::data::demo_session());
         }
 
+        // Activate demo (cat) account
         let mut client = poly_demo::DemoClient::new();
         let session = client
             .authenticate(AuthCredentials::Token("demo-token".to_string()))
             .await
             .map_err(|e| format!("Demo auth failed: {e}"))?;
-
-        let account_id = "demo".to_string();
+        self.sessions.insert("demo".to_string(), session.clone());
         self.backends
-            .insert(account_id, Arc::new(RwLock::new(Box::new(client))));
+            .insert("demo".to_string(), Arc::new(RwLock::new(Box::new(client))));
+
+        // Activate demo2 (dog) account
+        let mut client2 = poly_demo::DemoClient2::new();
+        let session2 = client2
+            .authenticate(AuthCredentials::Token("demo2-token".to_string()))
+            .await
+            .map_err(|e| format!("Demo2 auth failed: {e}"))?;
+        self.sessions.insert("demo2".to_string(), session2);
+        self.backends.insert(
+            "demo2".to_string(),
+            Arc::new(RwLock::new(Box::new(client2))),
+        );
+
         self.demo_active = true;
 
         // Rebuild server-account map
         self.rebuild_server_map().await;
 
-        tracing::info!("Demo client activated");
+        tracing::info!("Demo clients activated (demo + demo2)");
         Ok(session)
     }
 
     /// Deactivate the demo client.
     ///
-    /// Removes the demo backend from the map and clears demo-related cache.
+    /// Removes both demo backends from the map and clears demo-related cache.
     #[cfg(feature = "demo")]
     pub fn deactivate_demo(&mut self) {
         self.backends.remove("demo");
+        self.backends.remove("demo2");
+        self.sessions.remove("demo");
+        self.sessions.remove("demo2");
         self.demo_active = false;
         // Remove demo entries from server map
         self.server_account_map
-            .retain(|_, account_id| account_id != "demo");
-        tracing::info!("Demo client deactivated");
+            .retain(|_, account_id| account_id != "demo" && account_id != "demo2");
+        tracing::info!("Demo clients deactivated");
     }
 
     /// Get the backend for a specific account ID.

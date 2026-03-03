@@ -84,6 +84,12 @@ pub struct Session {
     pub token: String,
     /// Which backend this session is for.
     pub backend: BackendType,
+    /// Optional emoji/icon to visually distinguish this account in the sidebar.
+    ///
+    /// When `Some`, the favorites bar shows this emoji instead of the first
+    /// letter of the account ID. Useful for demo accounts and for backends
+    /// that wish to show a distinctive icon per account.
+    pub icon_emoji: Option<String>,
 }
 
 /// A server/community/workspace.
