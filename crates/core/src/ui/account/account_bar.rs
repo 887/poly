@@ -9,7 +9,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.19): Account status bar
 
-use super::routes::Route;
+use super::super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, SettingsSection};

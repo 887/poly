@@ -37,30 +37,37 @@ src/
 ├── lib.rs              # Library entry — exports all public modules
 ├── ui/                 # All Dioxus UI components
 │   ├── mod.rs
-│   ├── app.rs          # Root App component
 │   ├── setup_wizard.rs # First-launch key generation flow
 │   ├── main_layout.rs  # 4-column desktop layout shell
-│   ├── mobile_layout.rs # 3-panel swipe mobile layout
-│   ├── server_sidebar.rs # Left server icon list
-│   ├── channel_list.rs  # Channel list for selected server
-│   ├── chat_view.rs     # Message list + input
-│   ├── user_sidebar.rs  # Right user list
-│   ├── dm_view.rs       # DMs/Friends aggregated view
-│   ├── notifications.rs # Notification feed
-│   ├── settings/        # Settings page components
+│   ├── favorites_sidebar.rs # Left server icon list
+│   ├── voice_banner.rs  # Top-spanning voice connection banner
+│   ├── account/         # All account-scoped UI components
 │   │   ├── mod.rs
+│   │   ├── account_bar.rs       # User info + mic/deafen controls
+│   │   ├── account_server_bar.rs # Bar 2: DMs/Notifications/Servers nav
+│   │   ├── account_switcher.rs  # Multi-account switcher in DM view
+│   │   ├── channel_list.rs      # Channel/DM list
+│   │   ├── chat_view.rs         # Message list + input
+│   │   ├── emoji_picker.rs      # Emoji grid (reactions + input)
+│   │   ├── friends_panel.rs     # Friends browser
+│   │   ├── notifications.rs     # Aggregated notification feed
+│   │   ├── user_sidebar.rs      # Right member list
+│   │   ├── voice_bar.rs         # Persistent voice status bar
+│   │   ├── voice_view.rs        # Voice/video participant tiles
+│   │   └── settings/            # Account-scoped settings (notifications only)
+│   │       ├── mod.rs           # AccountSettingsPage
+│   │       └── notifications.rs # Per-account notification toggles
+│   ├── settings/        # App-level settings page
+│   │   ├── mod.rs       # SettingsPage (accounts/backup/identity/theme/language/general)
 │   │   ├── accounts.rs  # Account management
 │   │   ├── backup.rs    # Backup server config
+│   │   ├── common.rs    # PolySelect, SelectOption helpers
+│   │   ├── general.rs   # Reset / nuke
 │   │   ├── identity.rs  # Key/mnemonic management
-│   │   ├── theme.rs     # Theme editor + presets
 │   │   ├── language.rs  # Locale selector
-│   │   └── appearance.rs # Dark/light mode
-│   └── components/      # Reusable UI primitives
-│       ├── mod.rs
-│       ├── message.rs   # Single message component
-│       ├── server_icon.rs # Server icon with badges
-│       ├── user_avatar.rs # User avatar with status
-│       └── search_bar.rs # Reusable search input
+│   │   ├── theme.rs     # Theme editor + presets
+│   │   └── voice_video.rs # Voice & video device settings
+│   └── routes.rs        # Dioxus router definition
 │
 ├── state/              # App state management (Dioxus Stores)
 │   ├── mod.rs
@@ -452,10 +459,10 @@ Two syntax bugs (a `},` instead of `;` and a misplaced closing brace before `els
 
 | Component | File | Purpose |
 |---|---|---|
-| `VoiceChannelView` | `ui/voice_view.rs` | Full voice channel view with participant tiles |
-| `VoiceBar` | `ui/voice_bar.rs` | Persistent voice connection bar (bottom of channel list) |
-| `EmojiPicker` | `ui/emoji_picker.rs` | Emoji grid picker (reactions + input) |
-| `AccountBar` | `ui/account_bar.rs` | User info + mic/deafen controls at bottom |
+| `VoiceChannelView` | `ui/account/voice_view.rs` | Full voice channel view with participant tiles |
+| `VoiceBar` | `ui/account/voice_bar.rs` | Persistent voice connection bar (bottom of channel list) |
+| `EmojiPicker` | `ui/account/emoji_picker.rs` | Emoji grid picker (reactions + input) |
+| `AccountBar` | `ui/account/account_bar.rs` | User info + mic/deafen controls at bottom |
 
 **State additions:**
 - `ChatData`: `voice_channel_participants: HashMap<String, Vec<VoiceParticipant>>`, `voice_connection: Option<VoiceConnection>`
@@ -468,3 +475,21 @@ Two syntax bugs (a `},` instead of `;` and a misplaced closing brace before `els
 - Emoji picker opens above input, emoji selection inserts into textarea
 - Reaction pills on messages, input toolbar (😀 GIF 📎)
 - Voice participants listed in channel list under voice channels
+
+## UI Account Module Refactor (Session 2025)
+
+**Architectural decision:** All account-scoped UI components were moved from flat
+`src/ui/` to `src/ui/account/`. App-level chrome (FavoritesBar, VoiceBanner,
+MainLayout, SetupWizard) stays at `src/ui/`.
+
+**Key changes:**
+- `src/ui/account/` — new home for 11 account-scoped components
+- `src/ui/account/settings/` — account-scoped settings (notifications ONLY)
+- `src/ui/account/settings::AccountSettingsPage` — replaces the `is_account_scoped`
+  flag that previously parameterized `SettingsPage`
+- `src/ui/settings::SettingsPage` now takes **no props** and is app-level only
+- `AccountSettingsRoute` in routes.rs uses `AccountSettingsPage`, not `SettingsPage`
+- `settings/account/` subdirectory removed (content moved to `account/settings/`)
+
+**Rule:** When adding new account-scoped components, put them in `src/ui/account/`.
+When adding app-level chrome, put it at `src/ui/`. Never mix the two.

@@ -9,7 +9,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.20): Account switcher bar for DMs
 
-use super::routes::Route;
+use super::super::routes::Route;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, SettingsSection};
 use dioxus::prelude::*;

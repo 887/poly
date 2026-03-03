@@ -15,7 +15,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::routes::Route;
+use super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
@@ -115,7 +115,7 @@ pub fn AccountServerBar() -> Element {
                                     app_state.write().nav.selected_channel = None;
                                     let sid2 = sid.clone();
                                     spawn(async move {
-                                        super::favorites_sidebar::load_server_data(
+                                        super::super::favorites_sidebar::load_server_data(
                                                 sid2,
                                                 app_state,
                                                 client_manager,

@@ -1,5 +1,7 @@
-//! Settings page — accounts, backup, identity, theme, language, general,
-//! voice/video, and notifications.
+//! Settings page — app-level settings only.
+//!
+//! Account-specific settings (notifications) live in
+//! [`crate::ui::account::settings`] instead.
 //!
 //! The module is split into sub-modules by section to keep each file
 //! under the 150-line component rule.
@@ -19,9 +21,7 @@
 //! | `language` | `LanguageSettings` |
 //! | `general` | `GeneralSettings` (reset / nuke) |
 //! | `voice_video` | `VoiceVideoSettings` |
-//! | `account/notifications` | `NotificationsSettings` (account-scoped) |
 
-mod account;
 mod accounts;
 mod backup;
 mod common;
@@ -35,7 +35,6 @@ use crate::i18n::t;
 use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 
-use account::NotificationsSettings;
 use accounts::AccountsSettings;
 use backup::BackupSettings;
 use general::GeneralSettings;
@@ -57,30 +56,21 @@ fn SettingsNavItem(label: String, active: bool, onclick: EventHandler<MouseEvent
     }
 }
 
-/// Settings page component.
+/// Settings page component (app-level).
 ///
 /// Two-column layout: navigation sidebar + content area.
 /// Each section is delegated to its own sub-module component.
 ///
-/// When `account_backend` and `account_id` are provided, shows account-scoped
-/// settings (e.g., notifications for one account). Otherwise shows app-level
-/// settings (e.g., theme, identity).
+/// Account-specific settings (notifications) are handled by
+/// [`crate::ui::account::settings::AccountSettingsPage`] instead.
 #[component]
-pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>) -> Element {
+pub fn SettingsPage() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let section = app_state.read().settings_section;
-    let is_account_scoped = account_backend.is_some() && account_id.is_some();
     // Subscribe to locale signal so nav labels re-render on language change.
     let _locale = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
 
-    // Initialize section based on scope — Notifications for account-scoped,
-    // default to Accounts for app-level.
-    use_effect(move || {
-        if is_account_scoped && section != SettingsSection::Notifications {
-            app_state.write().settings_section = SettingsSection::Notifications;
-        }
-    });
     let sf_raw = search_text.read().clone();
     let sf = sf_raw.to_lowercase();
     // Helper: is this nav item visible given the current search filter?
@@ -109,7 +99,7 @@ pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>)
                 }
                 // Accounts first — it's the fallback after initial setup and
                 // the most-used section, so it gets top billing.
-                if !is_account_scoped && shows(&t("settings-accounts")) {
+                if shows(&t("settings-accounts")) {
                     SettingsNavItem {
                         label: t("settings-accounts"),
                         active: section == SettingsSection::Accounts,
@@ -127,16 +117,7 @@ pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>)
                         },
                     }
                 }
-                if shows(&t("settings-notifications")) {
-                    SettingsNavItem {
-                        label: t("settings-notifications"),
-                        active: section == SettingsSection::Notifications,
-                        onclick: move |_| {
-                            app_state.write().settings_section = SettingsSection::Notifications;
-                        },
-                    }
-                }
-                if !is_account_scoped && shows(&t("settings-backup")) {
+                if shows(&t("settings-backup")) {
                     SettingsNavItem {
                         label: t("settings-backup"),
                         active: section == SettingsSection::Backup,
@@ -145,7 +126,7 @@ pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>)
                         },
                     }
                 }
-                if !is_account_scoped && shows(&t("settings-identity")) {
+                if shows(&t("settings-identity")) {
                     SettingsNavItem {
                         label: t("settings-identity"),
                         active: section == SettingsSection::Identity,
@@ -172,7 +153,7 @@ pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>)
                         },
                     }
                 }
-                if !is_account_scoped && shows(&t("settings-general")) {
+                if shows(&t("settings-general")) {
                     SettingsNavItem {
                         label: t("settings-general"),
                         active: section == SettingsSection::General,
@@ -185,15 +166,8 @@ pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>)
 
             // Settings content — each section in its own sub-module.
             div { class: "settings-content",
-                if is_account_scoped {
-                    div { class: "settings-header",
-                        h2 {
-                            "Account Settings — {account_id.as_ref().unwrap_or(&\"?\".to_string()).to_uppercase()}"
-                        }
-                    }
-                }
                 match section {
-                    SettingsSection::Accounts => rsx! {
+                    SettingsSection::Accounts | SettingsSection::Notifications => rsx! {
                         AccountsSettings {}
                     },
                     SettingsSection::Backup => rsx! {
@@ -202,10 +176,7 @@ pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>)
                     SettingsSection::Identity => rsx! {
                         IdentitySettings {}
                     },
-                    SettingsSection::Theme => rsx! {
-                        ThemeSettings {}
-                    },
-                    SettingsSection::Appearance => rsx! {
+                    SettingsSection::Theme | SettingsSection::Appearance => rsx! {
                         ThemeSettings {}
                     },
                     SettingsSection::Language => rsx! {
@@ -216,9 +187,6 @@ pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>)
                     },
                     SettingsSection::VoiceVideo => rsx! {
                         VoiceVideoSettings {}
-                    },
-                    SettingsSection::Notifications => rsx! {
-                        NotificationsSettings { account_id: account_id.clone().unwrap_or_default() as String }
                     },
                 }
             }

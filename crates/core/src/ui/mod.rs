@@ -8,13 +8,24 @@
 //!   - [`SetupWizard`] — First-launch key generation
 //!   - [`MainLayout`] — 4-column desktop layout
 //!     - [`FavoritesBar`] — Left server icon list
-//!     - [`ChannelList`] — Channel list for selected server
-//!       - [`VoiceBar`] — Voice connection status bar
-//!       - [`AccountBar`] — User info + quick controls
-//!     - [`ChatView`] — Messages and input (text channels)
-//!     - [`VoiceChannelView`] — Voice/video call view (voice channels)
-//!     - [`EmojiPicker`] — Emoji grid for reactions and input
-//!     - [`UserSidebar`] — Right user list
+//!     - [`account::ChannelList`] — Channel list for selected server
+//!       - [`account::VoiceBar`] — Voice connection status bar
+//!       - [`account::AccountBar`] — User info + quick controls
+//!     - [`account::ChatView`] — Messages and input (text channels)
+//!     - [`account::VoiceChannelView`] — Voice/video call view (voice channels)
+//!     - [`account::EmojiPicker`] — Emoji grid for reactions and input
+//!     - [`account::UserSidebar`] — Right user list
+//!
+//! ## Module layout
+//! | Module | Contents |
+//! |---|---|
+//! | `account` | All account-scoped UI components |
+//! | `account::settings` | Account-scoped settings (notifications only) |
+//! | `settings` | App-level settings page |
+//! | `favorites_sidebar` | Left-most server icon list |
+//! | `main_layout` | 4-column desktop shell |
+//! | `voice_banner` | Top-spanning voice connection banner |
+//! | `setup_wizard` | First-launch key generation wizard |
 //!
 //! ## 150-line component rule
 //! Every `#[component]` fn body in any file under `src/ui/` MUST stay under
@@ -22,26 +33,15 @@
 //! **NEVER hardcode demo/test data in UI components** — all data must flow
 //! through the `ClientBackend` trait via `ClientManager`.
 
-mod account_bar;
-mod account_server_bar;
-mod account_switcher;
-mod channel_list;
-mod chat_view;
-mod emoji_picker;
+pub mod account;
 mod favorites_sidebar;
-mod friends_panel;
 mod main_layout;
-mod notifications;
 pub mod routes;
 mod settings;
 mod setup_wizard;
-mod user_sidebar;
 mod voice_banner;
-mod voice_bar;
-mod voice_view;
 
-pub use account_switcher::AccountSwitcher;
-pub use friends_panel::FriendsPanel;
+pub use account::{AccountSwitcher, FriendsPanel};
 pub use main_layout::MainLayout;
 pub use routes::Route;
 pub use setup_wizard::SetupWizard;

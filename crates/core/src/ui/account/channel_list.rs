@@ -5,7 +5,7 @@
 //! - `DMFriendsView`: DM + group + friends unified list with search
 //! - `ServerChannelView`: server categories and channels
 
-use super::routes::Route;
+use super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::backend_badge;

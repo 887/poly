@@ -29,17 +29,12 @@
 // DECISION(DX-ROUTER-2): Multi-account routing replaces Discord-style single-account URLs.
 // Backend slug + account_id in URL enables per-backend rendering and deep linking.
 
-use super::account_bar::AccountBar;
-use super::account_switcher::AccountSwitcher;
-use super::channel_list::ChannelList;
-use super::chat_view::ChatView;
-use super::friends_panel::FriendsPanel;
+use super::account::{
+    AccountBar, AccountSettingsPage, AccountSwitcher, ChannelList, ChatView, FriendsPanel,
+    NotificationsView, UserSidebar, VoiceBar, VoiceChannelView,
+};
 use super::main_layout::MainLayout;
-use super::notifications::NotificationsView;
 use super::settings::SettingsPage;
-use super::user_sidebar::UserSidebar;
-use super::voice_bar::VoiceBar;
-use super::voice_view::VoiceChannelView;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
@@ -353,18 +348,19 @@ fn NotificationsRoute() -> Element {
 #[component]
 fn SettingsRoute() -> Element {
     rsx! {
-        SettingsPage { account_backend: None, account_id: None }
+        SettingsPage {}
     }
 }
 
 /// Account settings — scoped to a specific backend account.
 ///
-/// Passes the account context to SettingsPage so it can show account-specific
-/// settings sections. Bar 2 remains visible.
+/// Passes the account context to AccountSettingsPage so it shows only
+/// account-relevant settings (notifications). Global settings (theme,
+/// identity, backup) remain in the app-level SettingsRoute.
 #[component]
 fn AccountSettingsRoute(backend: String, account_id: String) -> Element {
     rsx! {
-        SettingsPage { account_backend: Some(backend), account_id: Some(account_id) }
+        AccountSettingsPage { backend, account_id }
     }
 }
 

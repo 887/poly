@@ -14,9 +14,9 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::account_server_bar::AccountServerBar;
-use super::routes::Route;
+use super::account::AccountServerBar;
 use super::favorites_sidebar::FavoritesBar;
+use super::routes::Route;
 use super::voice_banner::VoiceBanner;
 use dioxus::prelude::*;
 

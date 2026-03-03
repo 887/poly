@@ -233,6 +233,7 @@ nav-forward = Vorwärts
 settings-search = Einstellungen durchsuchen...
 settings-voice-video = Sprache & Video
 settings-notifications = Benachrichtigungen
+account-settings-title = Kontoeinstellungen
 
 # Voice & Video settings
 voice-input-device = Eingabegerät

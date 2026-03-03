@@ -233,6 +233,7 @@ nav-forward = Forward
 settings-search = Search settings...
 settings-voice-video = Voice & Video
 settings-notifications = Notifications
+account-settings-title = Account Settings
 
 # Voice & Video settings
 voice-input-device = Input Device

@@ -1,8 +1,8 @@
 //! Account-specific notification settings.
 //!
 //! Provides per-account toggles for event notifications, sounds, and badges.
-//! This module lives under `settings/account/` to clearly separate account-scoped
-//! settings from app-level settings (theme, language, identity, etc.).
+//! This module lives under `account/settings/` to clearly separate account-scoped
+//! settings from app-level settings (theme, language, backup, identity, etc.).
 //!
 //! # Architecture
 //! - `NotificationsSettings` — top-level entry point; accepts a single `account_id`
@@ -35,7 +35,7 @@ fn save_account_notif(account_id: String, settings: AccountNotificationSettings)
 /// Notification settings panel for a single account.
 ///
 /// Loads saved settings on mount and persists any toggle change immediately.
-/// Rendered by [`crate::ui::settings::SettingsPage`] in account-scoped mode.
+/// Rendered by [`crate::ui::account::settings::AccountSettingsPage`].
 #[component]
 pub fn NotificationsSettings(account_id: String) -> Element {
     let mut notif_streams = use_signal(|| true);
