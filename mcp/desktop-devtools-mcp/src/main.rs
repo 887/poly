@@ -112,16 +112,42 @@ impl DesktopHttpBackend {
         anyhow::bail!("Eval bridge at {BASE} did not become ready within {max_seconds}s")
     }
 
-    /// Touch a source file to trigger ``dx serve``'s file watcher, causing a
+    /// Touch source files to trigger ``dx serve``'s file watcher, causing a
     /// full rebuild.
+    ///
+    /// Two files are touched:
+    /// - `crates/core/src/lib.rs`  — triggers poly-core + poly-desktop-devtools
+    ///   recompilation via the normal dependency chain.
+    /// - `apps/desktop-devtools/src/main.rs` — causes the devtools `build.rs`
+    ///   to rerun (it is listed in `cargo:rerun-if-changed`), which emits a
+    ///   fresh `POLY_BUILD_TS` env-var so that `build_id()` in the app returns
+    ///   a new value after each hotpatch, making rebuild detection reliable.
     async fn touch_source_file(workspace: &str) -> anyhow::Result<()> {
-        // Touch the core lib.rs — this is in the hot-reload watch path and
-        // guarantees a recompilation of the devtools binary.
-        let trigger = format!("{workspace}/crates/core/src/lib.rs");
+        // Touch the core lib.rs to trigger dx serve's file watcher and cause
+        // poly-core + poly-desktop-devtools to recompile.
+        let core_trigger = format!("{workspace}/crates/core/src/lib.rs");
         tokio::process::Command::new("touch")
-            .arg(&trigger)
+            .arg(&core_trigger)
             .status()
             .await?;
+
+        // Increment the rebuild counter that `build_id()` in the devtools app
+        // reads at runtime.  Using a runtime counter file is the most reliable
+        // approach: cargo's `rerun-if-changed` uses content checksums so a
+        // bare `touch` never reruns build.rs, making compile-time embedding
+        // fragile.  The running app reads this file on every /generation call.
+        Self::increment_rebuild_counter().await?;
+        Ok(())
+    }
+
+    /// Atomically increment `/tmp/poly-devtools-rebuild-counter`.
+    async fn increment_rebuild_counter() -> anyhow::Result<()> {
+        let path = std::path::Path::new("/tmp/poly-devtools-rebuild-counter");
+        let current: u64 = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(0);
+        std::fs::write(path, (current + 1).to_string())?;
         Ok(())
     }
 }
@@ -337,17 +363,32 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     fn extension_tools(&self) -> Vec<Value> {
-        vec![json!({
-            "name": "get_generation",
-            "description": "Returns the current generation counter and process PID of the running \
-                desktop app.\n\n\
-                **generation**: starts at 1 on launch, increments on each hot-patch (component remount).\n\
-                **pid**: OS process ID — changes on full process restart, stable across hot-patches.\n\n\
-                Use this to detect whether a hot-patch or a full rebuild happened:\n\
-                - generation changed, pid stable → hot-patch applied\n\
-                - pid changed (generation back to 1) → full rebuild / process restart",
-            "inputSchema": { "type": "object", "properties": {}, "required": [] }
-        })]
+        vec![
+            json!({
+                "name": "get_generation",
+                "description": "Returns rebuild-detection counters for this MCP session.\n\n\
+                    **IMPORTANT: Semantics differ by platform!**\n\n\
+                    **Desktop MCP (this tool):**\n\
+                    - **generation**: starts at 1 on launch, increments on each hot-patch (component remount). \
+                      Resets to 1 only on full process restart (PID change).\n\
+                    - **build_id**: increments on each rebuild_app call (reads /tmp/poly-devtools-rebuild-counter). \
+                      0 = no rebuild this session.\n\
+                    - **pid**: OS process ID — stable across hot-patches, changes only on full restart.\n\n\
+                    **Web MCP (poly-web-devtools-mcp):**\n\
+                    - **generation**: increments on EVERY connect_cdp call (not on each rebuild). \
+                      This is because each WASM rebuild drops the CDP WebSocket, requiring explicit reconnection.\n\
+                    - **build_id**: increments on each rebuild_app call (same as desktop, reads /tmp/poly-devtools-web-rebuild-counter).\n\
+                    - **dx_serve_pid**: OS process ID of managed dx serve process.\n\n\
+                    **Decision table (Desktop):**\n\
+                    - generation changed, pid stable → hot-patch applied\n\
+                    - pid changed (generation back to 1) → full rebuild / process restart\n\
+                    - build_id changed → rebuild was triggered (independent of generation / pid)\n\n\
+                    **Key difference:** Desktop generation may NOT change on every rebuild (hot-patches preserve state). \
+                    Always check build_id to know if a rebuild happened. Call connect_cdp explicitly after \
+                    rebuild_app to get updated generation (web) or check if hot-patch succeeded (desktop).",
+                "inputSchema": { "type": "object", "properties": {}, "required": [] }
+            }),
+        ]
     }
 
     async fn handle_extension_tool(
@@ -355,22 +396,23 @@ impl DevtoolsBackend for DesktopHttpBackend {
         name: &str,
         _args: &Value,
     ) -> Option<anyhow::Result<String>> {
-        if name == "get_generation" {
-            let result = async {
-                let resp = self
-                    .client
-                    .get(format!("{BASE}/generation"))
-                    .send()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("HTTP error: {e}"))?;
-                resp.text()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Read error: {e}"))
+        match name {
+            "get_generation" => {
+                let result = async {
+                    let resp = self
+                        .client
+                        .get(format!("{BASE}/generation"))
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("HTTP error: {e}"))?;
+                    resp.text()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Read error: {e}"))
+                }
+                .await;
+                Some(result)
             }
-            .await;
-            Some(result)
-        } else {
-            None
+            _ => None,
         }
     }
 

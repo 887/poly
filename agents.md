@@ -1,7 +1,7 @@
 # Poly — Root Agent Instructions
 
 > **READ THIS FILE FIRST** before any work on this project.  
-> **Last Updated:** 2026-02-28
+> **Last Updated:** 2026-03-03
 
 ---
 
@@ -138,9 +138,52 @@ When making architectural decisions:
 
 **Why this rule exists:** RSX macro syntax errors produce misleading Rust error messages. A build that passes `cargo check` may still have component logic bugs that only appear visually. The DevTools MCP is the ground truth for "does the UI work".
 
+### 9a. DevTools MCP Rebuild Detection — `build_id` (DECISION, 2026-03-03)
+
+Both desktop and web MCPs expose `/generation` endpoints that return a JSON object with three fields:
+
+```json
+{ "generation": 3, "build_id": 2, "pid": 2890763 }  // desktop
+{ "generation": 4, "build_id": 2, "dx_serve_pid": 2898097 }  // web
+```
+
+**All three fields are always included in every response.** Use `build_id` to know if a rebuild was triggered.
+
+| MCP | Endpoint | Counter File | Key Insight |
+|---|---|---|---|
+| **Desktop** | via `poly-desktop-devtools-mcp` | `/tmp/poly-devtools-rebuild-counter` | `generation` may NOT change on hot-patches (state preserved) |
+| **Web** | via `poly-web-devtools-mcp` | `/tmp/poly-devtools-web-rebuild-counter` | `generation` increments on EVERY `connect_cdp` (page reload) |
+
+### ⭐ Complete Decision Table — Check All Three
+
+To verify **nothing changed**, all three must be identical from the previous poll:
+
+**Desktop:**
+
+| `generation` | `build_id` | `pid` | Meaning |
+|---|---|---|---|
+| **Same** | **Same** | **Same** | ✅ No changes |
+| Any | **Changed** | Any | 🔨 Rebuild triggered |
+| Changed | Same | Same | Hot-patch |
+| Changed | Changed | Changed | Process restart |
+
+**Web:**
+
+| `generation` | `build_id` | `dx_serve_pid` | Meaning |
+|---|---|---|---|
+| **Same** | **Same** | **Same** | ✅ No changes |
+| Changed | **Changed** | Same | 🔨 **Rebuild + reconnect succeeded** |
+| Changed | Changed | Changed | `dx serve` restarted |
+
+**Key rule:** 
+- **If all three fields are identical to the previous poll, nothing changed**
+- **If `build_id` changed, a rebuild was triggered** (most reliable indicator)
+- Use for visual/screenshot testing: poll `get_generation()`, compare all three fields to previous state
+
+See `mcp/desktop-devtools-mcp/agents.md` and `mcp/web-devtools-mcp/agents.md` for platform-specific details.
+
 ---
 
-### 10. Session Management
 
 At the START of each coding session:
 1. Read this `agents.md`

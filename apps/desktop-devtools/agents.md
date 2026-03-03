@@ -1,7 +1,7 @@
 # desktop-devtools — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-03
+> **Last Updated:** 2026-03-03 (Build-id counter file + rebuild detection best practices)
 
 ---
 
@@ -44,7 +44,8 @@ poly-desktop-devtools
     │   ├── POST /eval       — evaluate JS via dioxus eval() bridge
     │   ├── GET  /screenshot — PNG via webkit2gtk::WebViewExt::snapshot()
     │   ├── GET  /dom        — document.documentElement.outerHTML
-    │   └── GET  /console    — buffered console messages (JSON array)
+    │   ├── GET  /console    — buffered console messages (JSON array)
+    │   └── GET  /generation — {generation, build_id, pid} for rebuild detection
     │
     └── Injected <script> (DEVTOOLS_HEAD)
         └── Console capture: window.__polyLogs[] (intercepts console.*)
@@ -109,7 +110,113 @@ This means:
 - Must use `return document.title` explicitly
 - `do_eval()` auto-prefixes `return` and strips trailing `;` for convenience
 
-## Build Requirements
+## `/generation` Endpoint — Rebuild Detection
+
+`GET /generation` returns a JSON object with three fields for detecting rebuild cycles:
+
+```json
+{ "generation": 1, "build_id": 3, "pid": 2890763 }
+```
+
+**All three fields are always included in every response** — they're returned together in one JSON object.
+
+| Field | Reset condition | Increments on |
+|---|---|---|
+| `generation` | Process restart (→1) | `DevtoolsShell` component FULLY unmounts + remounts (rare under hotpatch — see below) |
+| `build_id` | System reboot / file deleted | Every `rebuild_app` MCP call — the MCP writes `/tmp/poly-devtools-rebuild-counter` |
+| `pid` | Never resets (OS assigns) | Process restart only |
+
+### ⭐ **ALWAYS USE `build_id` TO DETECT REBUILDS — Check All Three Together**
+
+**`build_id` is the universal rebuild indicator.** To verify **nothing changed**, all three fields must be identical from the previous poll:
+
+| `generation` | `build_id` | `pid` | Meaning |
+|---|---|---|---|
+| **Same** | **Same** | **Same** | ✅ No changes (no rebuild, no hot-patch, no process restart) |
+| Changed | Same | Same | 🔨 Hot-patch occurred (window alive, component remounted — rare) |
+| **Changed** | **Changed** | **Same** | 🔨 **Rebuild triggered** (most common case — window stayed alive) |
+| Changed | Changed | Changed | 🔄 Full process restart |
+| Any changed | **Any changed** | Any changed | ⚠️ **Something changed** — `build_id` specifically indicates rebuild |
+
+**For visual/screenshot testing:** After each rebuild, verify that `build_id` increased from the previous poll.  
+**Do NOT rely on `generation` alone** — it may not change even if a rebuild was triggered (component state preserved by hot-patch).
+
+**Always check all three to verify no changes occurred** — if all three values match the previous poll, then nothing happened.
+
+### Why NOT `generation` — Hot-Patch State Preservation
+
+Under Dioxus 0.7 `--hotpatch`, `use_coroutine` hook state is **preserved** because
+subsecond patches function bodies in-place — the component scope is NOT dropped. This means:
+
+- `GENERATION` atomically increments **only when `DevtoolsShell` fully unmounts + remounts**
+- For RSX-only structural changes that Dioxus classifies as non-hot-reloadable, Dioxus
+  reloads the component tree from scratch → `generation` increments to 2
+- But in practice, **many structural changes skip a full unmount → generation stays at 1**
+- **`generation` is unreliable for rebuild detection** — use `build_id` instead
+
+### `build_id` — Counter File Approach
+
+The counter file (`/tmp/poly-devtools-rebuild-counter`) is **incremented by the MCP** on
+each `rebuild_app` call, and **read at runtime by the app** on each `/generation` request.
+
+This is more reliable than the previously-attempted compile-time `env!("POLY_BUILD_TS")`
+approach because:
+
+1. `touch`-only file changes do NOT trigger `build.rs` reruns — cargo uses **content checksums**,
+   not mtime. Only actual content changes trigger build script reruns.
+2. The `rerun-if-changed` trigger file (`crates/core/src/lib.rs`) is touched by the MCP via
+   `touch`, so cargo sees no content change → `build.rs` never reruns → `POLY_BUILD_TS` is
+   always the same value.
+3. Runtime file read has zero compile-time complexity and works immediately without any
+   recompilation.
+
+---
+
+## Hotpatch Behaviour — Verified Findings (2026-03-03)
+
+### What works ✅
+
+- **RSX color/text changes**: Hot-patched instantly (< 1s) without any component remount
+- **RSX structural changes** (adding/removing elements): Classified as "non-hot-reloadable"
+  by `dx serve`; triggers a full cargo recompile + hotpatch. Window stays alive (same PID).
+  The Dioxus toast "Your app is being rebuilt" appears during compilation.
+- **Eval bridge**: Works correctly before, during (if rebuild finishes), and after hotpatch
+- **Navigation via eval + click**: Works across all rebuild cycles
+
+### What resets on hotpatch (non-hot-reloadable structural changes) ⚠️
+
+- **Navigation state**: The app resets to the setup wizard (Welcome to Poly) after a
+  structural RSX change + hotpatch. This is because Dioxus re-initialises the component tree.
+- **Page-level state** (form inputs, etc.): Also reset
+
+### Multiple dx serve instances accumulate — ALWAYS kill before relaunch
+
+Each `launch_app` call starts a **new `dx serve` process**. If `kill_app` is not called
+(or fails) before the next `launch_app`, multiple `dx serve` instances will accumulate and
+ALL watch the same workspace directory. This causes rebuild conflicts and can prevent
+hotpatching from working correctly (multiple instances compete to rebuild and hotpatch).
+
+**Workaround:** At the start of each coding session, call `kill_app` (or `pkill -f "dx serve"`)
+before `launch_app` to ensure a clean slate. The MCP's process tracking should handle this,
+but if you see multiple `dx serve` processes in `ps aux`, kill the stale ones manually.
+
+### `touch` vs content change for cargo (critical pitfall)
+
+The MCP's `rebuild_app` calls `touch crates/core/src/lib.rs` to wake up dx serve's
+file watcher. This works for triggering a cargo recompile (because dx serve sees the mtime
+change and invokes cargo). **BUT** cargo itself uses content checksums (not mtime) internally
+for `rerun-if-changed` build script triggers. This means:
+
+- `touch lib.rs` → dx serve fires → cargo checks → `lib.rs` content unchanged → cargo reruns
+  `poly-core` compile (because the package changed) but does NOT rerun `poly-desktop-devtools/build.rs`
+  (because its tracked files' content didn't change)
+- Only an actual content edit to `src/main.rs` or `build.rs` causes `build.rs` to rerun
+
+This is why the compile-time `POLY_BUILD_TS` approach failed: the build script never reran.
+
+---
+
+
 
 **MUST use `dx build --platform desktop`** — NOT `cargo build`.
 

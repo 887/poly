@@ -186,7 +186,65 @@ js_eval { expression: "document.querySelector('link[rel=stylesheet]').href" }
 If the href contains "This should be replaced by dx", the app was built with
 `cargo build` instead of `dx build`. Re-build with dx.
 
-## Key Files
+## Rebuild Detection — Extension Tools (2026-03-03)
+
+Two extension tools help detect rebuilds and hot-patches:
+
+### `get_generation()`
+
+Returns a JSON object with three counters: `{generation, build_id, pid}`.
+
+**All three fields are always included in the response:**
+
+```json
+{ "generation": 1, "build_id": 3, "pid": 2890763 }
+```
+
+| Field | Meaning |
+|---|---|
+| `generation` | Starts at 1 on launch. **Increments on each hot-patch (component remount).** Resets to 1 only on full process restart (PID change). |
+| `build_id` | **⭐ PRIMARY INDICATOR**: Increments on each `rebuild_app` call (reads `/tmp/poly-devtools-rebuild-counter` at runtime). 0 = no rebuild this session. |
+| `pid` | OS process ID. Stable across hot-patches; changes only on full restart. |
+
+### ⭐ **ALWAYS USE `build_id` TO DETECT REBUILDS**
+
+**`build_id` is the universal, platform-independent way to know if a rebuild happened.**
+
+For visual/screenshot testing: after each `rebuild_app()`, check `build_id` increased.
+Do NOT rely on `generation` — it may not change if hot-patch succeeded (hot-patches preserve state).
+
+### ⭐ Complete Decision Table — Check All Three Together
+
+To verify nothing changed, all three must be identical from the previous poll:
+
+| `generation` | `build_id` | `pid` | Meaning |
+|---|---|---|---|
+| **Same** | **Same** | **Same** | ✅ No changes (no rebuild, no hot-patch, no process restart) |
+| Changed | Same | Same | 🔨 Hot-patch occurred (window alive, component remounted — rare) |
+| **Changed** | **Changed** | **Same** | 🔨 **Rebuild triggered** (most common case — window stayed alive) |
+| Changed | Changed | Changed | 🔄 Full process restart |
+| Any changed | **Any changed** | Any changed | ⚠️ **Something rebuilding** — check `build_id` to confirm |
+
+**Key insight:** `build_id` is the universal rebuild indicator. Even if `generation`/`pid` stay the same, if `build_id` changed, a rebuild was triggered.  
+
+### Counter File
+
+`/tmp/poly-devtools-rebuild-counter` — plain text U64, incremented by `rebuild_app()`.
+
+**Important:** Web MCP uses a separate counter file `/tmp/poly-devtools-web-rebuild-counter` to avoid cross-contamination when both MCPs run simultaneously.
+
+### Platform Difference
+
+**Desktop `generation`** may NOT change on every rebuild (hot-patches preserve state).
+Always check **`build_id`** to know if a rebuild happened.
+
+**Web `generation`** increments on EVERY `connect_cdp` call (because WASM rebuilds drop the CDP WebSocket).
+
+**In both cases, `build_id` is the reliable indicator** of "did a rebuild happen?"
+
+See the tool descriptions in `src/main.rs:extension_tools()` for full cross-platform semantics.
+
+---
 
 | File | Purpose |
 |---|---|

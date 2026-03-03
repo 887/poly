@@ -56,11 +56,16 @@ static SCREENSHOT_TX: std::sync::Mutex<Option<mpsc::Sender<ScreenshotRequest>>> 
 /// Guard: HTTP server binds to :9223 exactly once per process.
 static HTTP_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 
-/// Generation counter — increments on each component mount (hot-patch cycle).
+/// Generation counter — increments on each **full component remount**.
 ///
-/// Starts at 0, becomes 1 on first mount, 2 on first hot-patch remount, etc.
-/// Resets to 0 on full process restart (full rebuild / kill + relaunch).
-/// Use it to answer "did a hot-patch or full rebuild just happen?".
+/// Starts at 0; becomes 1 on first mount.  Under Dioxus 0.7 `--hotpatch`,
+/// `use_coroutine` hook state is preserved across hotpatches, so this counter
+/// stays at 1 across most hotpatch cycles (the hook does NOT restart unless
+/// the scope is fully dropped).
+///
+/// For per-rebuild change detection, use `build_id()` instead — that reads
+/// the MCP-managed counter in `/tmp/poly-devtools-rebuild-counter` which
+/// increments on every `rebuild_app` call regardless of cargo caching.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Evaluate JS in the webview from any tokio context.
@@ -389,20 +394,47 @@ async fn http_status() -> &'static str {
     "ok"
 }
 
-/// GET /generation — returns the current generation counter and process PID.
+/// Path to the rebuild counter file written by `poly-desktop-devtools-mcp`.
 ///
-/// **generation**: increments each time `DevtoolsShell` mounts (i.e. each hot-patch
-/// cycle). Resets to 0 + starts at 1 on process restart (full rebuild / kill+relaunch).
+/// The MCP increments this file's contents on every `rebuild_app` call.
+/// Reading it at runtime is the most reliable way to detect "did a rebuild
+/// just happen?" — it avoids the `cargo rerun-if-changed` checksum pitfall
+/// where a `touch`-only mtime update is ignored by cargo.
+const REBUILD_COUNTER_PATH: &str = "/tmp/poly-devtools-rebuild-counter";
+
+/// Returns a monotonically increasing rebuild counter written by the MCP.
 ///
-/// **pid**: OS process ID. Changes on full restart; stable across hot-patches.
+/// | Value | Meaning |
+/// |---|---|
+/// | 0 | No `rebuild_app` call has been made yet this session (or counter file was deleted) |
+/// | N | `rebuild_app` has been called N times since the counter was last reset |
 ///
-/// Use this to answer:
-/// - "Did a hot-patch just happen?" → generation changed, pid stable
-/// - "Did a full rebuild (process restart) happen?" → pid changed (generation back to 1)
+/// Combine with `pid` to distinguish hotpatch rebuilds from full restarts:
+/// - `build_id` increased, `pid` same → hotpatch (window survived, code updated)
+/// - `pid` changed (generation back to 1) → full process restart
+fn build_id() -> u64 {
+    std::fs::read_to_string(REBUILD_COUNTER_PATH)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// GET /generation — returns rebuild-detection fields.
+///
+/// | Field | Meaning |
+/// |---|---|
+/// | `generation` | Component-mount count (increments when `DevtoolsShell` fully unmounts+remounts; stays at 1 across hotpatches in Dioxus 0.7 because hook state is preserved) |
+/// | `build_id`   | MCP rebuild counter — increments on every `rebuild_app` call (reads `/tmp/poly-devtools-rebuild-counter`). 0 = no rebuild called yet this session. |
+/// | `pid`        | OS process ID — changes only on full kill+relaunch |
 async fn http_generation() -> String {
     let generation_num = GENERATION.load(Ordering::Relaxed);
     let pid = std::process::id();
-    serde_json::json!({ "generation": generation_num, "pid": pid }).to_string()
+    serde_json::json!({
+        "generation": generation_num,
+        "build_id": build_id(),
+        "pid": pid
+    })
+    .to_string()
 }
 
 /// POST /eval — body is plain JS; returns JSON {"result":"..."} or {"error":"..."}

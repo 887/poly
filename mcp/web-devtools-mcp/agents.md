@@ -1,7 +1,7 @@
 # poly-web-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-02
+> **Last Updated:** 2026-03-03
 
 ---
 
@@ -148,7 +148,74 @@ Falls back to `chromium` if nothing found.
 | `src/main.rs` | `ChromeCdpBackend` impl + watchdog + entry point |
 | `Cargo.toml` | Dependencies (tokio-tungstenite for CDP, poly-devtools-protocol) |
 
-## Known Constraints & Decisions
+## `get_generation` — Rebuild Detection Counters
+
+The `get_generation` extension tool returns a JSON object with three fields:
+
+```json
+{ "generation": 4, "build_id": 2, "dx_serve_pid": 2898097 }
+```
+
+**All three fields are always included in every response** — they're not separate, they come together in one JSON object.
+
+| Field | Semantics |
+|---|---|
+| `generation` | Increments on each successful `connect_cdp` call. Starts at 0 before first connect, 1 after. |
+| `build_id` | **⭐ PRIMARY INDICATOR**: Increments on each `rebuild_app` call. Reads `/tmp/poly-devtools-web-rebuild-counter`. 0 = no rebuild this session. |
+| `dx_serve_pid` | OS PID of the managed `dx serve` process (null if not started by this MCP). |
+
+### ⭐ Complete Decision Table — Check All Three Together
+
+To verify nothing changed, all three must be identical from the previous poll:
+
+| `generation` | `build_id` | `dx_serve_pid` | Meaning |
+|---|---|---|---|
+| **Same** | **Same** | **Same** | ✅ No changes (no rebuild, no reconnect, no process restart) |
+| Changed | Same | Same | 🔨 Hot-patch occurred (window alive, component remounted — rare under hotpatch) |
+| **Changed** | **Changed** | **Same** | 🔨 **Rebuild triggered + reconnected** (most common case) |
+| Changed | Changed | Changed | 🔄 `dx serve` restarted (full process restart) |
+| Any changed | Any changed | Any changed | ⚠️ Something changed — investigate which field(s) |
+
+**Key insight:** Check `build_id` first to know if a rebuild happened. If `build_id` is the same, no rebuild occurred — even if other fields changed.
+
+### ⭐ **ALWAYS USE `build_id` TO DETECT REBUILDS**
+
+**`build_id` is the universal, platform-independent way to know if a rebuild happened.**
+
+For visual/screenshot testing: after each `rebuild_app()`, check `build_id` increased.
+Do NOT rely on `generation` — it may not change if you haven't called `connect_cdp` yet.
+
+### Important: web `generation` vs desktop `generation`
+
+Web `generation` **correctly increments on every `connect_cdp` call** because each WASM
+rebuild causes a full page reload, which drops the CDP WebSocket — requiring explicit
+reconnection. You MUST call `connect_cdp` after each rebuild for `generation` to advance.
+
+Desktop `generation` may stay at 1 across hot-patches because the Dioxus component state
+is preserved (no page reload). This is the key behavioural difference between the two MCPs.
+
+In both cases, **`build_id` is the reliable indicator** of "did a rebuild happen?"
+
+### Counter file
+
+`/tmp/poly-devtools-web-rebuild-counter` — plain text U64, separate from the desktop
+counter (`/tmp/poly-devtools-rebuild-counter`) to avoid cross-contamination when running
+both MCPs simultaneously.
+
+### Visual verification (2026-03-02)
+
+Three-rebuild test confirmed all counters work correctly:
+
+| Step | Banner | `generation` | `build_id` | Notes |
+|---|---|---|---|---|
+| Baseline (launch + connect×2) | 🔴 Alpha | 2 | 0 | No rebuild yet |
+| After rebuild + `connect_cdp` | 🟡 Beta | 3 | 1 | ✅ `build_id` increased immediately |
+| After rebuild + `connect_cdp` | 🟢 Gamma | 4 | 2 | ✅ `build_id` increased immediately |
+
+Decision table validated: **`build_id` advances immediately on `rebuild_app`** (before `connect_cdp`);
+`generation` advances only after `connect_cdp`.
+
+---
 
 ### NEVER use `--hotpatch` for web/WASM (DECISION)
 

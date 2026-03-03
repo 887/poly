@@ -336,6 +336,28 @@ impl ChromeCdpBackend {
             serde_json::to_string_pretty(&targets)?
         )
     }
+
+    /// Increment `/tmp/poly-devtools-web-rebuild-counter` atomically.
+    ///
+    /// This file is read by `get_generation` to populate the `build_id` field,
+    /// giving callers a reliable way to detect that a rebuild was triggered
+    /// without waiting for `connect_cdp` to be called first.
+    fn increment_rebuild_counter() {
+        let path = std::path::Path::new("/tmp/poly-devtools-web-rebuild-counter");
+        let current: u64 = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(0);
+        let _ = std::fs::write(path, (current + 1).to_string());
+    }
+
+    /// Read the current rebuild counter from `/tmp/poly-devtools-web-rebuild-counter`.
+    fn read_rebuild_counter() -> u64 {
+        std::fs::read_to_string("/tmp/poly-devtools-web-rebuild-counter")
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0)
+    }
 }
 
 #[async_trait]
@@ -808,6 +830,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .status()
             .await;
 
+        // Increment the rebuild counter so get_generation's build_id field
+        // increases on each rebuild_app call (mirrors desktop-devtools MCP).
+        Self::increment_rebuild_counter();
+
         // The WASM rebuild takes 30–90 s even with a warm Cargo cache.
         // dx serve will automatically push a page-reload to the browser via the
         // hot-reload WebSocket when compilation finishes.
@@ -843,13 +869,16 @@ impl DevtoolsBackend for ChromeCdpBackend {
             }),
             json!({
                 "name": "get_generation",
-                "description": "Returns the current generation counter for this MCP session.\n\n\
+                "description": "Returns rebuild-detection counters for this MCP session.\n\n\
                     **generation**: increments on each successful connect_cdp call (each CDP session).\n\
                     Starts at 0 before first connect, 1 after first connect, 2 after first reconnect, etc.\n\
+                    **build_id**: increments on each rebuild_app call (reads /tmp/poly-devtools-web-rebuild-counter).\n\
+                    0 = no rebuild triggered yet this session. Mirrors the desktop MCP build_id semantics.\n\
                     **dx_serve_pid**: PID of the managed dx serve process (null if not started by this MCP).\n\n\
-                    Use this to detect whether a rebuild/reload happened:\n\
-                    - generation incremented since last check → a reconnect occurred (rebuild or reload)\n\
-                    - dx_serve_pid changed → dx serve was restarted (full rebuild)",
+                    Decision table:\n\
+                    - build_id increased, generation same → rebuild triggered, connect_cdp not yet called\n\
+                    - build_id increased, generation increased → full rebuild+reconnect completed\n\
+                    - dx_serve_pid changed → dx serve was restarted",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
         ]
@@ -892,8 +921,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
             "get_generation" => {
                 let generation_num = self.generation.load(Ordering::Relaxed);
                 let pid = *self.dx_serve_pid.lock().await;
+                let build_id = Self::read_rebuild_counter();
                 Some(Ok(serde_json::json!({
                     "generation": generation_num,
+                    "build_id": build_id,
                     "dx_serve_pid": pid
                 })
                 .to_string()))
