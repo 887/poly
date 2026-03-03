@@ -339,14 +339,29 @@ fn SettingsRoute() -> Element {
     }
 }
 
-/// Root redirect — desktop memory history starts at "/"; on_update intercepts
-/// and replaces with the best active account's DMs route before rendering.
+/// Root redirect — desktop memory history starts at "/".
+///
+/// Uses `use_effect` to navigate away on mount since the `on_update`
+/// callback may not process its redirect return value on the very first
+/// render in Dioxus memory-history mode.
 #[component]
 fn Root() -> Element {
+    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    use_effect(move || {
+        let cm = client_manager.read();
+        if cm.demo_active {
+            navigator().replace(Route::DmsHome {
+                backend: "demo".to_string(),
+                account_id: "demo".to_string(),
+            });
+        } else {
+            navigator().replace(Route::SettingsRoute);
+        }
+    });
     rsx! {}
 }
 
-/// Catch-all 404 — redirected to best route by on_update before being seen.
+/// Catch-all 404 — redirected by on_update before being seen.
 #[component]
 fn PageNotFound(segments: Vec<String>) -> Element {
     rsx! {}

@@ -23,6 +23,7 @@
 //! through the `ClientBackend` trait via `ClientManager`.
 
 mod account_bar;
+mod account_server_bar;
 mod account_switcher;
 mod channel_list;
 mod chat_view;

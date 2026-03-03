@@ -287,6 +287,8 @@ pub struct Notification {
     pub kind: NotificationKind,
     /// Which backend sent this notification.
     pub backend: BackendType,
+    /// The account ID that owns this notification.
+    pub account_id: String,
     /// When the notification was created.
     pub timestamp: DateTime<Utc>,
     /// Whether the user has read this notification.

@@ -1,21 +1,19 @@
-//! Server sidebar — favorited server icons with source badges.
+//! Favorites bar — account icons + favorited server icons (Bar 1).
 //!
-//! This is the "favorites bar" — a vertical icon strip showing:
-//! 1. DMs/Friends button (aggregated across all accounts)
-//! 2. Notifications button
-//! 3. Separator
-//! 4. Favorited server icons from ALL active backends (each showing source badge)
-//! 5. Spacer
-//! 6. Demo toggle button (above settings)
-//! 7. Settings button
+//! This is the **leftmost sidebar column** (Bar 1), always visible.
 //!
-//! Each server icon shows the backend type badge (🧪/🟣/🔵/🟢/🟡)
-//! so the user always knows which service a server comes from.
+//! Shows:
+//! 1. Account icons (top) — one per active backend account, click to switch
+//!    - Shows unread badge (total DMs + friend requests + mentions)
+//! 2. Separator
+//! 3. Favorited server icons from ALL accounts (cross-account)
+//! 4. Spacer
+//! 5. Demo toggle button
+//! 6. App Settings button
 //!
 //! # 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
-// TODO(phase-2.5.3): Demo toggle + TODO(phase-2.5.4): Wire to backends
 
 use super::routes::Route;
 use crate::client_manager::ClientManager;
@@ -37,164 +35,57 @@ fn NavBarSpacer() -> Element {
     rsx! {}
 }
 
-/// Server sidebar component.
+/// Server sidebar component — **Favorites Bar** (Bar 1).
 ///
-/// Shows: DMs icon, Notifications icon, favorited server icons with
-/// source badge overlay and account badge overlay, Demo toggle, Settings.
+/// Shows: Account icons, separator, favorited server icons with
+/// source badge, spacer, Demo toggle, App Settings.
 #[component]
 #[allow(non_snake_case)]
 pub fn ServerSidebar() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: Signal<AppState> = use_context();
     let current_view = app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
 
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
+    let active_account = app_state.read().nav.active_account_id.clone();
+
+    // Collect distinct active account IDs for account icons
+    let account_ids = client_manager.read().active_account_ids();
 
     rsx! {
         nav { class: "server-sidebar",
-            // Reserve space for native nav-bar buttons (desktop/mobile only)
             NavBarSpacer {}
 
-            // DMs / Friends button
-            div {
-                class: if current_view == View::DmsFriends { "server-icon active" } else { "server-icon" },
-                onclick: move |_| {
-                    // Clear server-specific data FIRST (separate writes to trigger
-                    // individual signal notifications per field change).
-                    chat_data.write().current_server = None;
-                    chat_data.write().current_channel = None;
-                    chat_data.write().channels.clear();
-                    chat_data.write().messages.clear();
-                    chat_data.write().members.clear();
-                    // Navigate to the currently active account's DMs.
-                    // Fall back to demo if no active account is recorded yet.
-                    let (backend_slug, account_id) = {
-                        let nav = &app_state.read().nav;
-                        match (nav.active_backend, nav.active_account_id.clone()) {
-                            (Some(b), Some(id)) => (b.slug().to_string(), id),
-                            _ if client_manager.read().demo_active => {
-                                ("demo".to_string(), "demo".to_string())
-                            }
-                            _ => ("demo".to_string(), "demo".to_string()),
-                        }
-                    };
-                    navigator()
-                        .push(Route::DmsHome {
-                            backend: backend_slug,
-                            account_id,
-                        });
-                },
-                title: "{t(\"nav-dms\")}",
-                div { class: "icon-dms", "💬" }
-            }
-
-            // Notifications button
-            div {
-                class: if current_view == View::Notifications { "server-icon active" } else { "server-icon" },
-                onclick: move |_| {
-                    app_state.write().nav.view = View::Notifications;
-                    // Clear server-specific data
-                    let mut cd = chat_data.write();
-                    cd.current_server = None;
-                    cd.current_channel = None;
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                    navigator().push(Route::NotificationsRoute);
-                },
-                title: "{t(\"nav-notifications\")}",
-                div { class: "icon-notifications", "🔔" }
-                // Aggregated unread notification count badge
-                {
-                    let unread_count = chat_data
-                        .read()
-                        .notifications
-                        .iter()
-                        .filter(|n| !n.read)
-                        .count();
-                    if unread_count > 0 {
-                        rsx! {
-                            span { class: "badge", "{unread_count}" }
-                        }
-                    } else {
-                        rsx! {}
-                    }
+            // ── Account icons (one per active account) ────────────────
+            for aid in &account_ids {
+                AccountIcon {
+                    account_id: aid.clone(),
+                    is_active: active_account.as_deref() == Some(aid.as_str()),
                 }
             }
 
-            // Separator
-            div { class: "sidebar-separator" }
+            // Separator (between accounts and favorites)
+            if !account_ids.is_empty() {
+                div { class: "sidebar-separator" }
+            }
 
-            // Favorited servers from all active backends
+            // ── Favorited servers from all accounts ───────────────────
             for server in &servers {
-                {
-                    let server_id = server.id.clone();
-                    let server_name = server.name.clone();
-                    let badge = backend_badge(&server.backend);
-                    let backend_name = server.backend.display_name();
-                    let account_name = server.account_display_name.clone();
-                    let server_backend_slug = server.backend.slug().to_string();
-                    let server_account_id = server.account_id.clone();
-                    let unread = server.unread_count;
-                    let is_selected = app_state.read().nav.selected_server.as_deref()
-                        == Some(&server_id);
-                    let first_letter: String = server_name
-                        .chars()
-                        .next()
-                        .map(|c| c.to_string())
-                        .unwrap_or_default();
-                    let tooltip = format!("{server_name}\n{backend_name} — {account_name}");
-                    let icon_color = user_color(&server_id);
-                    rsx! {
-                        div {
-                            class: if is_selected { "server-icon active" } else { "server-icon" },
-                            onclick: {
-                                let server_id_click = server_id.clone();
-                                let backend_click = server_backend_slug.clone();
-                                let account_id_click = server_account_id.clone();
-                                move |_| {
-                                    app_state.write().nav.selected_server = Some(server_id_click.clone());
-                                    app_state.write().nav.selected_channel = None;
-                                    // Load channels for this server
-                                    let sid = server_id_click.clone();
-                                    spawn(async move {
-                                        load_server_data(sid, app_state, client_manager, chat_data).await;
-                                    });
-                                    navigator()
-                                        .push(Route::ServerHome {
-                                            backend: backend_click.clone(),
-                                            account_id: account_id_click.clone(),
-                                            server_id: server_id_click.clone(),
-                                        });
-                                }
-                            },
-                            title: "{tooltip}",
-                            div { class: "server-icon-letter", style: "background-color: {icon_color};", "{first_letter}" }
-                            // Source badge (backend type)
-                            span { class: "source-badge", "{badge}" }
-                            // Account badge overlay (bottom-right initial)
-                            {
-                                let acct_initial: String = account_name
-                                    .chars()
-                                    .next()
-                                    .map(|c| c.to_string())
-                                    .unwrap_or_default();
-                                rsx! {
-                                    span { class: "account-badge", title: "{account_name}", "{acct_initial}" }
-                                }
-                            }
-                            // Unread badge
-                            if unread > 0 {
-                                span { class: "badge", "{unread}" }
-                            }
-                        }
-                    }
+                FavoriteServerIcon {
+                    server_id: server.id.clone(),
+                    server_name: server.name.clone(),
+                    badge: backend_badge(&server.backend).to_string(),
+                    backend_slug: server.backend.slug().to_string(),
+                    account_id: server.account_id.clone(),
+                    account_display_name: server.account_display_name.clone(),
+                    backend_name: server.backend.display_name().to_string(),
+                    unread: server.unread_count,
                 }
             }
 
-            // Spacer to push bottom controls down
+            // Spacer
             div { class: "sidebar-spacer" }
 
             // Demo toggle button
@@ -202,7 +93,17 @@ pub fn ServerSidebar() -> Element {
                 class: if demo_active { "server-icon demo-active" } else { "server-icon demo-inactive" },
                 onclick: move |_| {
                     spawn(async move {
+                        let was_active = client_manager.read().demo_active;
                         toggle_demo(client_manager, chat_data).await;
+                        // After activating demo, auto-navigate to demo DMs
+                        // so the user isn't left on an empty settings page.
+                        if !was_active && client_manager.read().demo_active {
+                            navigator()
+                                .push(Route::DmsHome {
+                                    backend: "demo".to_string(),
+                                    account_id: "demo".to_string(),
+                                });
+                        }
                     });
                 },
                 title: if demo_active { t("nav-demo-active") } else { t("nav-demo") },
@@ -212,7 +113,7 @@ pub fn ServerSidebar() -> Element {
                 }
             }
 
-            // Settings button
+            // App Settings button
             div {
                 class: if current_view == View::Settings { "server-icon active" } else { "server-icon" },
                 onclick: move |_| {
@@ -220,6 +121,151 @@ pub fn ServerSidebar() -> Element {
                 },
                 title: "{t(\"nav-settings\")}",
                 div { class: "icon-settings", "⚙" }
+            }
+        }
+    }
+}
+
+/// Single account icon in the favorites bar.
+///
+/// Shows a colored circle with the first character of the account ID,
+/// plus a badge overlay with the backend type emoji.
+/// When clicked, navigates to that account's DMs home.
+#[component]
+fn AccountIcon(account_id: String, is_active: bool) -> Element {
+    let client_manager: Signal<ClientManager> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
+
+    let color = user_color(&account_id);
+    let first_char: String = account_id
+        .chars()
+        .next()
+        .map(|c| c.to_uppercase().to_string())
+        .unwrap_or_default();
+
+    // Count unread DMs + notifications for this account
+    let dm_unreads: u32 = chat_data
+        .read()
+        .dm_channels
+        .iter()
+        .filter(|dm| dm.account_id == account_id)
+        .map(|dm| dm.unread_count)
+        .sum();
+    let notif_unreads = chat_data
+        .read()
+        .notifications
+        .iter()
+        .filter(|n| !n.read && n.account_id == account_id)
+        .count() as u32;
+    let total_unreads = dm_unreads.saturating_add(notif_unreads);
+
+    // Resolve backend slug for routing
+    let aid_for_click = account_id.clone();
+
+    rsx! {
+        div {
+            class: if is_active { "server-icon account-icon active" } else { "server-icon account-icon" },
+            onclick: move |_| {
+                let aid = aid_for_click.clone();
+                let cm = client_manager.read();
+                // Look up backend type for this account
+                let backend_slug = {
+                    // Check all servers to find backend type, or just use
+                    // a known mapping for demo
+                    if aid == "demo" {
+                        "demo".to_string()
+                    } else {
+                        // Try to find from servers
+                        chat_data
+                            .read()
+                            .servers
+                            .iter()
+                            .find(|s| s.account_id == aid)
+                            .map(|s| s.backend.slug().to_string())
+                            .unwrap_or_else(|| "demo".to_string())
+                    }
+                };
+                drop(cm);
+                chat_data.write().current_server = None;
+                chat_data.write().current_channel = None;
+                chat_data.write().channels.clear();
+                chat_data.write().messages.clear();
+                chat_data.write().members.clear();
+                navigator()
+                    .push(Route::DmsHome {
+                        backend: backend_slug,
+                        account_id: aid,
+                    });
+            },
+            title: "{account_id}",
+            div {
+                class: "server-icon-letter",
+                style: "background-color: {color};",
+                "{first_char}"
+            }
+            if total_unreads > 0 {
+                span { class: "badge", "{total_unreads}" }
+            }
+        }
+    }
+}
+
+/// Single favorited server icon in the favorites bar.
+#[component]
+fn FavoriteServerIcon(
+    server_id: String,
+    server_name: String,
+    badge: String,
+    backend_slug: String,
+    account_id: String,
+    account_display_name: String,
+    backend_name: String,
+    unread: u32,
+) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
+
+    let is_selected = app_state.read().nav.selected_server.as_deref() == Some(&server_id);
+    let first_letter: String = server_name
+        .chars()
+        .next()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
+    let tooltip = format!("{server_name}\n{backend_name} — {account_display_name}");
+    let icon_color = user_color(&server_id);
+
+    rsx! {
+        div {
+            class: if is_selected { "server-icon active" } else { "server-icon" },
+            onclick: {
+                let sid = server_id.clone();
+                let bslug = backend_slug.clone();
+                let aid = account_id.clone();
+                move |_| {
+                    app_state.write().nav.selected_server = Some(sid.clone());
+                    app_state.write().nav.selected_channel = None;
+                    let sid2 = sid.clone();
+                    spawn(async move {
+                        load_server_data(sid2, app_state, client_manager, chat_data).await;
+                    });
+                    navigator()
+                        .push(Route::ServerHome {
+                            backend: bslug.clone(),
+                            account_id: aid.clone(),
+                            server_id: sid.clone(),
+                        });
+                }
+            },
+            title: "{tooltip}",
+            div {
+                class: "server-icon-letter",
+                style: "background-color: {icon_color};",
+                "{first_letter}"
+            }
+            span { class: "source-badge", "{badge}" }
+            if unread > 0 {
+                span { class: "badge", "{unread}" }
             }
         }
     }
@@ -317,7 +363,7 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
 }
 
 /// Load channels and select the first text channel for a server.
-async fn load_server_data(
+pub async fn load_server_data(
     server_id: String,
     mut app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,

@@ -322,6 +322,28 @@ body {
     flex: 1;
 }
 
+/* ===========================
+ * Account Server Bar (Bar 2)
+ * =========================== */
+
+.account-server-bar {
+    width: 72px;
+    min-width: 72px;
+    background-color: color-mix(in srgb, var(--sidebar-bg) 85%, var(--bg-primary));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 8px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-primary);
+}
+
+/* Account icon extra styling — ring indicator for active account */
+.server-icon.account-icon.active {
+    box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 .badge {
     position: absolute;
     bottom: -2px;

@@ -14,6 +14,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
+use super::account_server_bar::AccountServerBar;
 use super::routes::Route;
 use super::server_sidebar::ServerSidebar;
 use super::voice_banner::VoiceBanner;
@@ -75,8 +76,10 @@ pub fn MainLayout() -> Element {
             div { class: "main-layout-body",
                 // Back/Forward navigation — only on native platforms (not web)
                 NavBar {}
-                // Left: Server sidebar (always visible)
+                // Left: Favorites Bar (Bar 1 — always visible)
                 ServerSidebar {}
+                // Left: Account Server Bar (Bar 2 — when an account is active)
+                AccountServerBar {}
                 // Route content: DmsLayout, ServerLayout, or standalone views
                 Outlet::<Route> {}
             } // end main-layout-body

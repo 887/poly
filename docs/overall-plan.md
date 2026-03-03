@@ -219,15 +219,28 @@ poly/
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 Server Sidebar Details
-- **Top**: DMs/Friends icon (aggregated across all accounts)
-- **Below**: Notifications icon (aggregated feed)
-- **Below**: Favorited server icons, each showing:
-  - Large: Server icon
-  - Small overlay (top-left): Source network badge (Stoat/Matrix/Discord/Teams icon)
-  - Small overlay (bottom-right): Account avatar for the account it's from
+### 4.2 Dual Sidebar Architecture (Phase 2.9)
+
+**Two vertical icon bars** sit on the left edge of the app:
+
+**Bar 1 — Favorites Bar** (leftmost, always visible, 72px):
+- **Top**: Account icons — one per active account, click to switch. Shows unread badge (DMs + friend requests + mentions).
+- **Separator**
+- **Below**: Favorited server icons from ALL accounts (cross-account). Each shows:
+  - Large: Server icon letter
+  - Small overlay (top-left): Source network badge (🟣/🔵/🟢/🟡/🧪)
   - Notification badge (unread count)
-- Source network + account shown in channel list banner when server is selected
+- **Bottom**: Demo toggle (🧪) + App Settings (⚙)
+
+**Bar 2 — Account Server Bar** (second column, 72px, shown when an account is active):
+- **Top**: DMs/Friends button (account-scoped) + Notifications button (account-scoped, with badge)
+- **Separator**
+- **Below**: ALL servers for this account (not just favorites)
+- **Bottom**: Account Settings (⚙) — settings for this specific account
+
+Clicking a favorited server in Bar 1 navigates to the server route, which sets `active_account_id`, causing Bar 2 to show that account's servers with the clicked server highlighted.
+
+See [Phase 2.9 Plan](phase-2.9-plan.md) for full details.
 
 ### 4.3 Layout (Mobile — 3 swipeable panels)
 - **Left swipe**: Server list + Channel list for current server
@@ -476,6 +489,7 @@ locales/
 |---|---|---|
 | **Phase 1** | Planning & Research | All plan docs, agent.md files, technology research, architecture decisions |
 | **Phase 2** | Project Structure + UI | Working monorepo, 90% UI, backup server, demo client, i18n, themes, CI/CD |
+| **Phase 2.9** | Dual Sidebar UI | Favorites Bar + Account Server Bar, per-account notification badges |
 | **Phase 3.1** | Stoat Client + Voice/Video | Chat, voice, video with Stoat servers, WebRTC infrastructure |
 | **Phase 3.2** | Matrix Client | matrix-sdk integration, Spaces-as-servers, E2EE, federation |
 | **Phase 3.3** | Discord Client | TBD approach, server/channel/DM support |
@@ -509,6 +523,8 @@ See individual phase plan documents for detailed checklists:
 | D15 | Encryption algorithm | ChaCha20-Poly1305 (chacha20poly1305 crate) | Plan §6.2 originally listed XSalsa20-Poly1305 or AES-256-GCM. Chose ChaCha20-Poly1305 (IETF RFC 8439) — same family as TLS 1.3 and WireGuard, excellent RustCrypto support, 96-bit nonce (vs 192-bit for XSalsa20), IETF-standardized. | 2026-03-01 |
 | D16 | Backup server admin UI | Tailwind+Alpine.js embedded SPA (`const &str` in `web/mod.rs`) | Originally planned as Dioxus fullstack admin. Changed to single-file HTML SPA embedded at compile time: no build step, no Dioxus dependency in backup-server crate, simpler to maintain.  | 2026-03-01 |
 | D17 | rand crate version | rand 0.10 (upgraded from 0.8) + uuid removed from WASM path | rand 0.10 API changes: `distributions`→`distr`, `DistString`→`SampleString`, `thread_rng()`→`rng()`. uuid crate removed from WASM entirely (Account.id is now `String`); IDs generated via `Alphanumeric.sample_string`. Three getrandom semver lines (0.2/0.3/0.4) managed via named workspace aliases. | 2026-03-01 |
+| D18 | Dual sidebar architecture | Favorites Bar + Account Server Bar (two 72px columns) | Single sidebar mixed account switching, favorites, and per-account nav. Dual bars clearly separate cross-account favorites from per-account server lists. Clicking favorited server auto-switches account context. Enables future drag-and-drop from account bar to favorites. | 2026-03-03 |
+| D19 | Multi-account URL routing | `/:backend/:account_id/...` URL structure | Every account-scoped URL encodes backend type and account ID. Enables deep-linking, per-backend rendering, and correct back/forward navigation across account switches. | 2026-03-03 |
 
 ---
 
