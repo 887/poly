@@ -35,13 +35,13 @@ fn NavBarSpacer() -> Element {
     rsx! {}
 }
 
-/// Server sidebar component — **Favorites Bar** (Bar 1).
+/// Favorites Bar component — **Favorites Bar** (Bar 1).
 ///
 /// Shows: Account icons, separator, favorited server icons with
 /// source badge, spacer, Demo toggle, App Settings.
 #[component]
 #[allow(non_snake_case)]
-pub fn ServerSidebar() -> Element {
+pub fn FavoritesBar() -> Element {
     let app_state: Signal<AppState> = use_context();
     let current_view = app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();

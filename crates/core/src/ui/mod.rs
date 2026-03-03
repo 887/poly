@@ -7,7 +7,7 @@
 //! - [`App`] — Root component (setup wizard or main layout)
 //!   - [`SetupWizard`] — First-launch key generation
 //!   - [`MainLayout`] — 4-column desktop layout
-//!     - [`ServerSidebar`] — Left server icon list
+//!     - [`FavoritesBar`] — Left server icon list
 //!     - [`ChannelList`] — Channel list for selected server
 //!       - [`VoiceBar`] — Voice connection status bar
 //!       - [`AccountBar`] — User info + quick controls
@@ -32,7 +32,7 @@ mod friends_panel;
 mod main_layout;
 mod notifications;
 pub mod routes;
-mod server_sidebar;
+mod favorites_sidebar;
 mod settings;
 mod setup_wizard;
 mod user_sidebar;

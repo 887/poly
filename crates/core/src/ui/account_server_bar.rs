@@ -105,7 +105,7 @@ pub fn AccountServerBar() -> Element {
                                     app_state.write().nav.selected_channel = None;
                                     let sid2 = sid.clone();
                                     spawn(async move {
-                                        super::server_sidebar::load_server_data(
+                                        super::favorites_sidebar::load_server_data(
                                                 sid2,
                                                 app_state,
                                                 client_manager,
@@ -138,10 +138,11 @@ pub fn AccountServerBar() -> Element {
             div {
                 class: "server-icon",
                 onclick: move |_| {
-                    navigator().push(Route::AccountSettingsRoute {
-                        backend: backend_slug.clone(),
-                        account_id: account_id.clone(),
-                    });
+                    navigator()
+                        .push(Route::AccountSettingsRoute {
+                            backend: backend_slug.clone(),
+                            account_id: account_id.clone(),
+                        });
                 },
                 title: "{t(\"account-settings\")}",
                 div { class: "icon-settings", "⚙" }

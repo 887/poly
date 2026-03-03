@@ -118,7 +118,7 @@ pub enum Route {
 // ── Route → AppState sync ───────────────────────────────────────────────────
 
 /// Synchronize the current route into [`AppState::nav`] so existing components
-/// (ChannelList, ServerSidebar, …) that read AppState continue to work.
+/// (ChannelList, FavoritesBar, …) that read AppState continue to work.
 ///
 /// Also extracts the `:backend` slug into [`BackendType`] and writes it to
 /// `nav.active_backend`, and writes `:account_id` to `nav.active_account_id`.

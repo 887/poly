@@ -16,7 +16,7 @@
 
 use super::account_server_bar::AccountServerBar;
 use super::routes::Route;
-use super::server_sidebar::ServerSidebar;
+use super::favorites_sidebar::FavoritesBar;
 use super::voice_banner::VoiceBanner;
 use dioxus::prelude::*;
 
@@ -77,7 +77,7 @@ pub fn MainLayout() -> Element {
                 // Back/Forward navigation — only on native platforms (not web)
                 NavBar {}
                 // Left: Favorites Bar (Bar 1 — always visible)
-                ServerSidebar {}
+                FavoritesBar {}
                 // Left: Account Server Bar (Bar 2 — when an account is active)
                 AccountServerBar {}
                 // Route content: DmsLayout, ServerLayout, or standalone views
