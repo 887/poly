@@ -75,11 +75,16 @@ pub fn ServerContextMenu() -> Element {
     let y = menu.y;
 
     rsx! {
-        // Transparent backdrop that closes the menu on click
+        // Transparent backdrop that closes the menu on click AND prevents native context menu
         div {
             class: "context-menu-backdrop",
             onclick: move |_| {
                 app_state.write().context_menu = None;
+            },
+            oncontextmenu: move |evt| {
+                // Prevent browser's native context menu from appearing
+                evt.prevent_default();
+                // Let event propagate so the right-clicked element's handler can fire
             },
         }
 
