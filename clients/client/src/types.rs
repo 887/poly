@@ -16,6 +16,8 @@ pub enum BackendType {
     Teams,
     /// Demo/mock client for UI testing.
     Demo,
+    /// Poly native server (self-hosted).
+    Poly,
 }
 
 impl BackendType {
@@ -27,6 +29,7 @@ impl BackendType {
             Self::Discord => "Discord",
             Self::Teams => "Teams",
             Self::Demo => "Demo",
+            Self::Poly => "Poly Server",
         }
     }
 
@@ -41,6 +44,7 @@ impl BackendType {
             Self::Discord => "discord",
             Self::Teams => "teams",
             Self::Demo => "demo",
+            Self::Poly => "poly",
         }
     }
 
@@ -55,6 +59,7 @@ impl BackendType {
             "discord" => Some(Self::Discord),
             "teams" => Some(Self::Teams),
             "demo" => Some(Self::Demo),
+            "poly" => Some(Self::Poly),
             _ => None,
         }
     }
@@ -71,6 +76,23 @@ pub enum AuthCredentials {
     OAuth { token: String },
     /// Microsoft device code flow for Teams.
     DeviceCode { code: String },
+    /// Poly server Ed25519 challenge-response authentication.
+    ///
+    /// The `server_url` is the base URL of the poly-server instance.
+    /// `private_key_bytes` are the raw 32-byte Ed25519 signing key.
+    /// On signup, `username` and `display_name` are also provided.
+    PolyServer {
+        /// Base URL of the poly-server instance (e.g. `http://127.0.0.1:7080`).
+        server_url: String,
+        /// Raw 32-byte Ed25519 private key.
+        private_key_bytes: Vec<u8>,
+        /// Username (used for signup only).
+        username: Option<String>,
+        /// Display name (used for signup only).
+        display_name: Option<String>,
+        /// Whether this is a signup (true) or signin (false).
+        is_signup: bool,
+    },
 }
 
 /// An authenticated session with a backend.

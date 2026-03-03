@@ -176,5 +176,13 @@ pub fn backend_server_context_menu_extras(
         },
         #[cfg(not(feature = "teams"))]
         BackendType::Teams => rsx! {},
+
+        // Poly native server — always compiled (our own protocol)
+        BackendType::Poly => rsx! {
+            poly_native::context_menu::ServerContextMenuExtras {
+                server_id: server_id.to_string(),
+                account_id: account_id.to_string(),
+            }
+        },
     }
 }

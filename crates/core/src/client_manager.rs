@@ -194,4 +194,70 @@ impl ClientManager {
         self.server_account_map.clear();
         self.demo_active = false;
     }
+
+    /// Add a poly-server account.
+    ///
+    /// Creates a [`PolyServerBackend`], authenticates (signup or signin), and
+    /// registers it in the backends map. Returns the session on success.
+    ///
+    /// # Arguments
+    /// * `server_url` — Base URL of the poly-server instance
+    /// * `private_key_bytes` — Raw 32-byte Ed25519 signing key
+    /// * `username` — Username (for signup only)
+    /// * `display_name` — Display name (for signup only)
+    /// * `is_signup` — `true` for signup, `false` for signin
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn add_poly_server(
+        &mut self,
+        server_url: &str,
+        private_key_bytes: [u8; 32],
+        username: Option<&str>,
+        display_name: Option<&str>,
+        is_signup: bool,
+    ) -> Result<Session, String> {
+        let mut backend =
+            poly_client::poly_server::PolyServerBackend::new(server_url, private_key_bytes);
+
+        let credentials = AuthCredentials::PolyServer {
+            server_url: server_url.to_string(),
+            private_key_bytes: private_key_bytes.to_vec(),
+            username: username.map(|s| s.to_string()),
+            display_name: display_name.map(|s| s.to_string()),
+            is_signup,
+        };
+
+        let session = backend
+            .authenticate(credentials)
+            .await
+            .map_err(|e| format!("Poly server auth failed: {e}"))?;
+
+        let account_id = session.id.clone();
+        self.sessions.insert(account_id.clone(), session.clone());
+        self.backends
+            .insert(account_id, Arc::new(RwLock::new(Box::new(backend))));
+
+        // Rebuild server map to include the new account's servers.
+        self.rebuild_server_map().await;
+
+        tracing::info!(
+            "Poly server account added: {} ({})",
+            session.user.display_name,
+            server_url
+        );
+        Ok(session)
+    }
+
+    /// Remove a poly-server account by account ID.
+    pub async fn remove_poly_server(&mut self, account_id: &str) -> Result<(), String> {
+        if let Some(backend) = self.backends.remove(account_id) {
+            let mut guard = backend.write().await;
+            if let Err(e) = guard.logout().await {
+                tracing::warn!("Logout failed for poly-server {account_id}: {e}");
+            }
+        }
+        self.sessions.remove(account_id);
+        self.server_account_map.retain(|_, aid| aid != account_id);
+        tracing::info!("Poly server account removed: {account_id}");
+        Ok(())
+    }
 }

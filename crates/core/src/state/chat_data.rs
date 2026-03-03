@@ -125,6 +125,7 @@ pub fn backend_badge(backend: &BackendType) -> &'static str {
         BackendType::Discord => "🟢",
         BackendType::Teams => "🟡",
         BackendType::Demo => "🧪",
+        BackendType::Poly => "🔶",
     }
 }
 

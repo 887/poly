@@ -5102,10 +5102,25 @@ name = "poly-client"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum",
  "chrono",
+ "ed25519-dalek",
  "futures",
+ "futures-util",
+ "hex",
+ "poly-server",
+ "rand 0.10.0",
+ "reqwest 0.13.2",
  "serde",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.26.2",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -5303,6 +5318,33 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "poly-server-client"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "ed25519-dalek",
+ "futures",
+ "futures-util",
+ "hex",
+ "poly-client",
+ "poly-server",
+ "rand 0.10.0",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.26.2",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
