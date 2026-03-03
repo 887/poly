@@ -144,9 +144,12 @@ pub fn AccountServerBar() -> Element {
             // Spacer
             div { class: "sidebar-spacer" }
 
-            // Account settings gear
+            // Account settings gear — active when viewing account-scoped settings.
+            // Bar 2 only renders when an account IS active, so checking
+            // `current_view == View::Settings` is sufficient to distinguish this
+            // from the app-level ⚙ in Bar 1 (which guards with `active_account.is_none()`).
             div {
-                class: "server-icon",
+                class: if current_view == View::Settings { "server-icon active" } else { "server-icon" },
                 onclick: move |_| {
                     navigator()
                         .push(Route::AccountSettingsRoute {

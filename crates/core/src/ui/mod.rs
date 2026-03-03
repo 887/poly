@@ -28,11 +28,11 @@ mod account_switcher;
 mod channel_list;
 mod chat_view;
 mod emoji_picker;
+mod favorites_sidebar;
 mod friends_panel;
 mod main_layout;
 mod notifications;
 pub mod routes;
-mod favorites_sidebar;
 mod settings;
 mod setup_wizard;
 mod user_sidebar;
@@ -47,7 +47,7 @@ pub use routes::Route;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData, SettingsSection, View};
 use dioxus::prelude::*;
 use routes::sync_route_to_app_state;
 
@@ -67,6 +67,8 @@ async fn init_storage(
     mut storage_ready: Signal<bool>,
     mut app_state: Signal<AppState>,
     mut locale_sig: Signal<String>,
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
 ) {
     match crate::storage::Storage::init().await {
         Ok(storage) => {
@@ -85,6 +87,12 @@ async fn init_storage(
                     *locale_sig.write() = settings.locale.clone();
                     app_state.write().is_setup_complete = true;
                     app_state.write().nav.view = View::DmsFriends;
+                    // Restore the demo client if it was active when the app last closed.
+                    // toggle_demo activates all demo data; the Router's Root component
+                    // then redirects to /demo/demo/dms once it mounts.
+                    if settings.demo_active {
+                        favorites_sidebar::toggle_demo(client_manager, chat_data).await;
+                    }
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),
@@ -109,6 +117,9 @@ async fn persist_setup_completion(account_id: String) {
         account_id,
         locale,
         theme: "neutral-dark".to_string(),
+        // demo_active remains false — setup wizard completion means a real account;
+        // demo is managed separately by the 🧪 toggle.
+        demo_active: false,
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");
@@ -159,7 +170,15 @@ pub fn App() -> Element {
     provide_context(app_state);
 
     use_future(move || async move {
-        init_storage(theme_config, storage_ready, app_state, locale_sig).await;
+        init_storage(
+            theme_config,
+            storage_ready,
+            app_state,
+            locale_sig,
+            client_manager,
+            chat_data,
+        )
+        .await;
     });
     let theme_css = crate::theme::generate_css(&theme_config.read());
     rsx! {
@@ -207,6 +226,13 @@ pub fn App() -> Element {
                                             }),
                                         );
                                     }
+                                    // No active accounts — land on Settings › Accounts so
+                                    // the user can immediately add an account.
+                                    drop(cm);
+                                    // Signal<T>: Copy — shadow into a local mut binding
+                                    // so we can call .write() inside this Fn closure.
+                                    let mut as_ = app_state;
+                                    as_.write().settings_section = SettingsSection::Accounts;
                                     return Some(NavigationTarget::Internal(Route::SettingsRoute));
                                 }
                                 None

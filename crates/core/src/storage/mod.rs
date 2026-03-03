@@ -79,6 +79,13 @@ pub struct AppSettings {
     pub locale: String,
     /// Selected theme preset (e.g. `"neutral-dark"`, `"purple"`, `"red"`).
     pub theme: String,
+    /// Whether the demo client was active when the app was last closed.
+    ///
+    /// When `true`, the demo client is automatically restored on next launch
+    /// so the user doesn't lose their demo session across restarts. Defaults
+    /// to `false` for backwards compatibility with existing stored records.
+    #[serde(default)]
+    pub demo_active: bool,
 }
 
 /// Global notification preferences — device-level settings only.

@@ -42,7 +42,7 @@ fn NavBarSpacer() -> Element {
 #[component]
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let mut app_state: Signal<AppState> = use_context();
     let current_view = app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
@@ -145,9 +145,12 @@ pub fn FavoritesBar() -> Element {
                     spawn(async move {
                         let was_active = client_manager.read().demo_active;
                         toggle_demo(client_manager, chat_data).await;
-                        // After activating demo, auto-navigate to demo DMs
-                        // so the user isn't left on an empty settings page.
+                        // After activating demo, mark setup complete in memory
+                        // (storage persistence is handled inside toggle_demo) and
+                        // navigate to the demo DMs so the user isn't left on
+                        // an empty settings page.
                         if !was_active && client_manager.read().demo_active {
+                            app_state.write().is_setup_complete = true;
                             navigator()
                                 .push(Route::DmsHome {
                                     backend: "demo".to_string(),
@@ -336,7 +339,14 @@ fn FavoriteServerIcon(
 }
 
 /// Toggle the demo client on/off and refresh all data.
-async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: Signal<ChatData>) {
+///
+/// Called from the 🧪 button click handler and by [`super::init_storage`] on
+/// startup to restore a previously active demo session. Does NOT navigate —
+/// the caller is responsible for routing after this returns.
+pub(crate) async fn toggle_demo(
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
     #[cfg(feature = "demo")]
     {
         let is_active = client_manager.read().demo_active;
@@ -391,6 +401,14 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
                     .retain(|id| !demo_server_ids.contains(id));
             }
             chat_data.write().dragging_server_id = None;
+            // Persist demo_active=false so the next launch skips demo restore.
+            if let Some(s) = crate::STORAGE.get() {
+                let mut settings = s.get_app_settings().await.unwrap_or_default();
+                settings.demo_active = false;
+                if let Err(e) = s.set_app_settings(&settings).await {
+                    tracing::warn!("Failed to persist demo_active=false: {e}");
+                }
+            }
         } else {
             let session = match client_manager.write().activate_demo().await {
                 Ok(s) => s,
@@ -470,6 +488,16 @@ async fn toggle_demo(mut client_manager: Signal<ClientManager>, mut chat_data: S
                             }
                         }
                     }
+                }
+            }
+            // Persist demo_active=true and setup_complete=true to storage so
+            // the demo client is restored on next app launch without re-toggling.
+            if let Some(s) = crate::STORAGE.get() {
+                let mut settings = s.get_app_settings().await.unwrap_or_default();
+                settings.demo_active = true;
+                settings.setup_complete = true;
+                if let Err(e) = s.set_app_settings(&settings).await {
+                    tracing::warn!("Failed to persist demo_active=true: {e}");
                 }
             }
         }

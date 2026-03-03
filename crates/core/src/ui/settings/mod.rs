@@ -19,15 +19,15 @@
 //! | `language` | `LanguageSettings` |
 //! | `general` | `GeneralSettings` (reset / nuke) |
 //! | `voice_video` | `VoiceVideoSettings` |
-//! | `notifications` | `NotificationsSettings` |
+//! | `account/notifications` | `NotificationsSettings` (account-scoped) |
 
+mod account;
 mod accounts;
 mod backup;
 mod common;
 mod general;
 mod identity;
 mod language;
-mod notifications;
 mod theme;
 mod voice_video;
 
@@ -35,12 +35,12 @@ use crate::i18n::t;
 use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 
+use account::NotificationsSettings;
 use accounts::AccountsSettings;
 use backup::BackupSettings;
 use general::GeneralSettings;
 use identity::IdentitySettings;
 use language::LanguageSettings;
-use notifications::NotificationsSettings;
 use theme::ThemeSettings;
 use voice_video::VoiceVideoSettings;
 
@@ -66,17 +66,14 @@ fn SettingsNavItem(label: String, active: bool, onclick: EventHandler<MouseEvent
 /// settings (e.g., notifications for one account). Otherwise shows app-level
 /// settings (e.g., theme, identity).
 #[component]
-pub fn SettingsPage(
-    account_backend: Option<String>,
-    account_id: Option<String>,
-) -> Element {
+pub fn SettingsPage(account_backend: Option<String>, account_id: Option<String>) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let section = app_state.read().settings_section;
     let is_account_scoped = account_backend.is_some() && account_id.is_some();
     // Subscribe to locale signal so nav labels re-render on language change.
     let _locale = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
-    
+
     // Initialize section based on scope — Notifications for account-scoped,
     // default to Accounts for app-level.
     use_effect(move || {
@@ -110,6 +107,17 @@ pub fn SettingsPage(
                         }
                     }
                 }
+                // Accounts first — it's the fallback after initial setup and
+                // the most-used section, so it gets top billing.
+                if !is_account_scoped && shows(&t("settings-accounts")) {
+                    SettingsNavItem {
+                        label: t("settings-accounts"),
+                        active: section == SettingsSection::Accounts,
+                        onclick: move |_| {
+                            app_state.write().settings_section = SettingsSection::Accounts;
+                        },
+                    }
+                }
                 if shows(&t("settings-voice-video")) {
                     SettingsNavItem {
                         label: t("settings-voice-video"),
@@ -125,15 +133,6 @@ pub fn SettingsPage(
                         active: section == SettingsSection::Notifications,
                         onclick: move |_| {
                             app_state.write().settings_section = SettingsSection::Notifications;
-                        },
-                    }
-                }
-                if !is_account_scoped && shows(&t("settings-accounts")) {
-                    SettingsNavItem {
-                        label: t("settings-accounts"),
-                        active: section == SettingsSection::Accounts,
-                        onclick: move |_| {
-                            app_state.write().settings_section = SettingsSection::Accounts;
                         },
                     }
                 }
@@ -219,7 +218,7 @@ pub fn SettingsPage(
                         VoiceVideoSettings {}
                     },
                     SettingsSection::Notifications => rsx! {
-                        NotificationsSettings {}
+                        NotificationsSettings { account_id: account_id.clone().unwrap_or_default() as String }
                     },
                 }
             }
