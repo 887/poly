@@ -44,6 +44,8 @@
   --sidebar-icon-hover: #2d2d55;
   --sidebar-icon-active: #60a5fa;
   --sidebar-separator: #27273f;
+  --favorites-bar-bg: #0d0d20;
+  --account-bar-bg: #161630;
 
   /* Chat */
   --chat-bg: #1a1a2e;

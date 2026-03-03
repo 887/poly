@@ -40,6 +40,8 @@
 
   /* Sidebar */
   --sidebar-bg: #1e1f22;
+  --favorites-bar-bg: #16171a;
+  --account-bar-bg: #202124;
   --sidebar-icon-bg: #313338;
   --sidebar-icon-hover: #3a3c42;
   --sidebar-icon-active: #5865f2;
