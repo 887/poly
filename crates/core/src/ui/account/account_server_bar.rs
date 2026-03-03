@@ -19,7 +19,7 @@ use super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use dioxus::prelude::*;
 
 /// Account server bar — second sidebar column, per-account.
@@ -55,6 +55,28 @@ pub fn AccountServerBar() -> Element {
         .cloned()
         .collect();
 
+    // Apply per-account ordering from drag-and-drop reordering.
+    // Falls back to default (insertion) order if no ordering has been set.
+    let ordered_account_servers = {
+        let cd = chat_data.read();
+        if let Some(order) = cd.account_server_order.get(&account_id) {
+            let mut ordered: Vec<_> = order
+                .iter()
+                .filter_map(|id| account_servers.iter().find(|s| &s.id == id))
+                .cloned()
+                .collect();
+            // Append servers not yet in the saved order (newly joined servers)
+            for s in &account_servers {
+                if !order.contains(&s.id) {
+                    ordered.push(s.clone());
+                }
+            }
+            ordered
+        } else {
+            account_servers.clone()
+        }
+    };
+
     // Count unread notifications for this account
     let notif_count = chat_data
         .read()
@@ -78,8 +100,8 @@ pub fn AccountServerBar() -> Element {
             // Separator
             div { class: "sidebar-separator" }
 
-            // All servers for this account
-            for server in &account_servers {
+            // All servers for this account (ordered by drag-and-drop if reordered)
+            for server in &ordered_account_servers {
                 {
                     let server_id = server.id.clone();
                     let server_name = server.name.clone();
@@ -87,24 +109,137 @@ pub fn AccountServerBar() -> Element {
                     let account_id_sv = server.account_id.clone();
                     let unread = server.unread_count;
                     let is_selected = selected_server.as_deref() == Some(&server_id);
+                    let is_drag_over =
+                        chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
+                        == Some(server_id.as_str());
                     let first_letter: String = server_name
                         .chars()
                         .next()
                         .map(|c| c.to_string())
                         .unwrap_or_default();
                     let icon_color = user_color(&server_id);
+                    let item_class = match (is_selected, is_drag_over) {
+                        (true, true) => "server-icon active drag-over-target",
+                        (true, false) => "server-icon active",
+                        (false, true) => "server-icon drag-over-target",
+                        (false, false) => "server-icon",
+                    };
                     rsx! {
                         div {
-                            class: if is_selected { "server-icon active" } else { "server-icon" },
+                            class: "{item_class}",
                             draggable: "true",
+                            // Right-click → open context menu
+                            oncontextmenu: { // Drag start — mark as dragging from Bar 2
+                                let sid = server_id.clone();
+                                let sname = server_name.clone();
+                                let aid = account_id_sv.clone();
+                                let bslug = backend_slug_sv.clone();
+                                move |evt: Event<MouseData>| {
+                                    evt.prevent_default();
+                                    evt.stop_propagation();
+                                    let coords = evt.client_coordinates();
+                                    app_state.write().context_menu = Some(ContextMenuState { // Drag leave — clear highlight if we are still the target
+                                        x: coords.x,
+                                        y: coords.y,
+                                        server_id: sid.clone(),
+                                        server_name: sname.clone(),
+                                        account_id: aid.clone(),
+                                        backend_slug: bslug.clone(),
+                                    }); // Drop on this item — reorder within Bar 2
+                                }
+                            },
+                            // Drag start — mark as dragging from Bar 2
                             ondragstart: {
                                 let sid = server_id.clone();
                                 move |_| {
-                                    chat_data.write().dragging_server_id = Some(sid.clone());
+                                    let mut cd = chat_data.write();
+                                    cd.dragging_server_id = Some(sid.clone());
+                                    cd.drag_source = DragSource::AccountServer;
                                 }
                             },
+                            // Drag over this item — set as Bar 2 reorder target
+                            ondragover: {
+                                let sid = server_id.clone();
+                                move |evt: Event<DragData>| {
+                                    evt.prevent_default();
+                                    evt.stop_propagation();
+                                    chat_data.write().drag_over_id = Some(sid.clone());
+                                }
+                            },
+                            // Drag leave — clear highlight if we are still the target
+                            ondragleave: {
+                                let sid = server_id.clone();
+                                move |_| {
+                                    let currently_us = chat_data
+                                        .read()
+                                        .drag_over_id
+                                        .as_deref()
+                                        == Some(sid.as_str());
+                                    if currently_us { // Drag end — always clean up
+                                        chat_data.write().drag_over_id = None;
+                                    }
+                                }
+                            },
+                            // Drop on this item — reorder within Bar 2
+                            ondrop: {
+                                let tid = server_id.clone();
+                                let aid_drop = account_id_sv.clone();
+                                move |evt: Event<DragData>| {
+                                    evt.prevent_default();
+                                    evt.stop_propagation();
+                                    let mut cd = chat_data.write();
+                                    let dragging = cd.dragging_server_id.clone();
+                                    let src = cd.drag_source.clone();
+                                    cd.drag_over_id = None;
+                                    let Some(drag_id) = dragging else {
+                                        cd.dragging_server_id = None;
+                                        cd.drag_source = DragSource::None;
+                                        return;
+                                    };
+                                    if matches!(src, DragSource::AccountServer)
+                                        && drag_id != tid
+                                    {
+                                        // Build/mutate the ordering for this account
+                                        let base_order: Vec<String> = cd
+                                            .account_server_order
+                                            .get(&aid_drop)
+                                            .cloned()
+                                            .unwrap_or_else(|| {
+                                                cd.servers
+                                                    .iter()
+                                                    .filter(|s| s.account_id == aid_drop)
+                                                    .map(|s| s.id.clone())
+                                                    .collect()
+                                            });
+                                        let mut order = base_order;
+                                        if !order.contains(&drag_id) {
+                                            order.push(drag_id.clone());
+                                        }
+                                        if let Some(from) =
+                                            order.iter().position(|x| *x == drag_id)
+                                        {
+                                            order.remove(from);
+                                            if let Some(to) =
+                                                order.iter().position(|x| *x == tid)
+                                            {
+                                                order.insert(to, drag_id);
+                                            } else {
+                                                order.push(drag_id);
+                                            }
+                                        }
+                                        cd.account_server_order
+                                            .insert(aid_drop.clone(), order);
+                                    }
+                                    cd.dragging_server_id = None;
+                                    cd.drag_source = DragSource::None;
+                                }
+                            },
+                            // Drag end — always clean up
                             ondragend: move |_| {
-                                chat_data.write().dragging_server_id = None;
+                                let mut cd = chat_data.write();
+                                cd.dragging_server_id = None;
+                                cd.drag_source = DragSource::None;
+                                cd.drag_over_id = None;
                             },
                             onclick: {
                                 let sid = server_id.clone();

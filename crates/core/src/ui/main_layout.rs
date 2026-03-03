@@ -14,10 +14,11 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::account::AccountServerBar;
+use super::account::{AccountServerBar, ServerContextMenu};
 use super::favorites_sidebar::FavoritesBar;
 use super::routes::Route;
 use super::voice_banner::VoiceBanner;
+use crate::state::AppState;
 use dioxus::prelude::*;
 
 /// Navigation bar component — only renders on native platforms (desktop/mobile).
@@ -68,8 +69,18 @@ fn NavBar() -> Element {
 /// Mobile: TBD
 #[component]
 pub fn MainLayout() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     rsx! {
-        div { class: "main-layout",
+        div {
+            class: "main-layout",
+            // Dismiss context menu when clicking outside of it
+            onclick: move |_| {
+                if app_state.read().context_menu.is_some() {
+                    app_state.write().context_menu = None;
+                }
+            },
+            // Floating server right-click context menu (position: fixed, above sidebars)
+            ServerContextMenu {}
             // Voice connection banner — spans full width when connected
             VoiceBanner {}
             // Main body: nav + sidebar + route content

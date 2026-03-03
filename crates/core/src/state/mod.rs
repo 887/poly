@@ -10,7 +10,7 @@
 
 pub mod chat_data;
 
-pub use chat_data::ChatData;
+pub use chat_data::{ChatData, DragSource};
 
 use poly_client::BackendType;
 use serde::{Deserialize, Serialize};
@@ -91,6 +91,26 @@ pub enum SettingsSection {
     VoiceVideo,
 }
 
+/// State for the active right-click server context menu.
+///
+/// Stored in `AppState` so the context menu component can be rendered
+/// at the `MainLayout` level (above sidebar overflow clipping).
+#[derive(Debug, Clone)]
+pub struct ContextMenuState {
+    /// Fixed X position (from `page_coordinates()`).
+    pub x: f64,
+    /// Fixed Y position (from `page_coordinates()`).
+    pub y: f64,
+    /// Server ID this menu was opened for.
+    pub server_id: String,
+    /// Human-readable server name.
+    pub server_name: String,
+    /// Account ID that owns this server.
+    pub account_id: String,
+    /// Backend slug ("demo", "matrix", etc.)
+    pub backend_slug: String,
+}
+
 /// Global app state provided at the root level.
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -100,6 +120,11 @@ pub struct AppState {
     pub nav: NavigationState,
     /// Active settings section.
     pub settings_section: SettingsSection,
+    /// Active right-click context menu, if any.
+    ///
+    /// Set by `oncontextmenu` on server icons; cleared by a global
+    /// click handler in `MainLayout`.
+    pub context_menu: Option<ContextMenuState>,
 }
 
 impl Default for AppState {
@@ -108,6 +133,7 @@ impl Default for AppState {
             is_setup_complete: false,
             nav: NavigationState::default(),
             settings_section: SettingsSection::Accounts,
+            context_menu: None,
         }
     }
 }

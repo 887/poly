@@ -19,7 +19,7 @@ use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
-use crate::state::{AppState, ChatData, SettingsSection, View};
+use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
 use dioxus::prelude::*;
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
@@ -78,14 +78,24 @@ pub fn FavoritesBar() -> Element {
             ondrop: move |evt| {
                 evt.prevent_default();
                 drag_over.set(false);
-                let drag_id = chat_data.read().dragging_server_id.clone();
+                let mut cd = chat_data.write();
+                let drag_id = cd.dragging_server_id.clone();
+                let drag_src = cd.drag_source.clone();
+                // Per-item ondrop handles positional drops via stop_propagation.
+                // This handler catches drops on the nav background (append to end).
                 if let Some(sid) = drag_id {
-                    let mut cd = chat_data.write();
-                    if !cd.favorited_server_ids.contains(&sid) {
-                        cd.favorited_server_ids.push(sid);
+                    match drag_src {
+                        DragSource::AccountServer | DragSource::FavoriteServer => {
+                            if !cd.favorited_server_ids.contains(&sid) {
+                                cd.favorited_server_ids.push(sid);
+                            }
+                        }
+                        DragSource::None | DragSource::AccountIcon => {}
                     }
-                    cd.dragging_server_id = None;
                 }
+                cd.dragging_server_id = None;
+                cd.drag_source = DragSource::None;
+                cd.drag_over_id = None;
             },
             NavBarSpacer {}
 
@@ -278,6 +288,12 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 }
 
 /// Single favorited server icon in the favorites bar.
+///
+/// Supports:
+/// - Click to navigate to the server
+/// - Right-click to open the server context menu
+/// - Drag to reorder within Bar 1 or move back (drag is tracked via `DragSource::FavoriteServer`)
+/// - Accept drops from Bar 2 (`DragSource::AccountServer`) for positional insertion
 #[component]
 fn FavoriteServerIcon(
     server_id: String,
@@ -291,9 +307,10 @@ fn FavoriteServerIcon(
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
 
     let is_selected = app_state.read().nav.selected_server.as_deref() == Some(&server_id);
+    let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
     let first_letter: String = server_name
         .chars()
         .next()
@@ -302,9 +319,18 @@ fn FavoriteServerIcon(
     let tooltip = format!("{server_name}\n{backend_name} — {account_display_name}");
     let icon_color = user_color(&server_id);
 
+    let item_class = match (is_selected, is_drag_over) {
+        (true, true) => "server-icon active drag-over-target",
+        (true, false) => "server-icon active",
+        (false, true) => "server-icon drag-over-target",
+        (false, false) => "server-icon",
+    };
+
     rsx! {
         div {
-            class: if is_selected { "server-icon active" } else { "server-icon" },
+            class: "{item_class}",
+            draggable: "true",
+            // Click → navigate to server
             onclick: {
                 let sid = server_id.clone();
                 let bslug = backend_slug.clone();
@@ -323,6 +349,125 @@ fn FavoriteServerIcon(
                             server_id: sid.clone(),
                         });
                 }
+            },
+            // Right-click → open context menu at cursor position
+            oncontextmenu: {
+                let sid = server_id.clone();
+                let sname = server_name.clone();
+                let aid = account_id.clone();
+                let bslug = backend_slug.clone();
+                move |evt: Event<MouseData>| {
+                    evt.prevent_default();
+                    evt.stop_propagation();
+                    let coords = evt.client_coordinates();
+                    app_state.write().context_menu = Some(ContextMenuState {
+                        x: coords.x,
+                        y: coords.y,
+                        server_id: sid.clone(),
+                        server_name: sname.clone(),
+                        account_id: aid.clone(),
+                        backend_slug: bslug.clone(),
+                    });
+                }
+            },
+            // Drag start — mark as dragging from Bar 1
+            ondragstart: {
+                let sid = server_id.clone();
+                move |_| {
+                    let mut cd = chat_data.write();
+                    cd.dragging_server_id = Some(sid.clone());
+                    cd.drag_source = DragSource::FavoriteServer;
+                }
+            },
+            // Drag over this item — highlight as drop target
+            ondragover: {
+                let sid = server_id.clone();
+                move |evt: Event<DragData>| {
+                    evt.prevent_default();
+                    evt.stop_propagation();
+                    chat_data.write().drag_over_id = Some(sid.clone());
+                }
+            },
+            // Drag leave — clear highlight if we are still the target
+            ondragleave: {
+                let sid = server_id.clone();
+                move |_| {
+                    let currently_us =
+                        chat_data.read().drag_over_id.as_deref() == Some(sid.as_str());
+                        == Some(sid.as_str());
+                    if currently_us {
+                        chat_data.write().drag_over_id = None;
+                    }
+                }
+            },
+            // Drop on this item — reorder within Bar 1, or insert from Bar 2
+            ondrop: {
+                let tid = server_id.clone();
+                move |evt: Event<DragData>| {
+                    evt.prevent_default();
+                    // Stop bubbling so the nav's ondrop doesn't double-handle
+                    evt.stop_propagation();
+                    let mut cd = chat_data.write();
+                    let dragging = cd.dragging_server_id.clone();
+                    let src = cd.drag_source.clone();
+                    cd.drag_over_id = None;
+                    let Some(drag_id) = dragging else {
+                        cd.dragging_server_id = None;
+                        cd.drag_source = DragSource::None;
+                        return;
+                    };
+                    let target_id = tid.clone();
+                    if drag_id == target_id {
+                        cd.dragging_server_id = None;
+                        cd.drag_source = DragSource::None;
+                        return;
+                    }
+                    match src {
+                        DragSource::FavoriteServer => {
+                            // Reorder within Bar 1: move drag_id before target_id
+                            if let Some(from) = cd
+                                .favorited_server_ids
+                                .iter()
+                                .position(|x| *x == drag_id)
+                            {
+                                cd.favorited_server_ids.remove(from);
+                                if let Some(to) = cd
+                                    .favorited_server_ids
+                                    .iter()
+                                    .position(|x| *x == target_id)
+                                {
+                                    cd.favorited_server_ids.insert(to, drag_id);
+                                } else {
+                                    cd.favorited_server_ids.push(drag_id);
+                                }
+                            }
+                        }
+                        DragSource::AccountServer => {
+                            // Insert from Bar 2 before target position
+                            if !cd.favorited_server_ids.contains(&drag_id) {
+                                if let Some(to) = cd
+                                    .favorited_server_ids
+                                    .iter()
+                                    .position(|x| *x == target_id)
+                                {
+                                    cd.favorited_server_ids.insert(to, drag_id);
+                                } else {
+                                    cd.favorited_server_ids.push(drag_id);
+                                }
+                            }
+                        }
+                        DragSource::None | DragSource::AccountIcon => {}
+                    }
+                    cd.dragging_server_id = None;
+                    cd.drag_source = DragSource::None;
+                }
+            },
+            // Drag end — always clean up regardless of drop target
+            ondragend: move |_| {
+                let mut cd = chat_data.write();
+                cd.dragging_server_id = None;
+                cd.drag_source = DragSource::None;
+                cd.drag_over_id = None;
             },
             title: "{tooltip}",
             div {

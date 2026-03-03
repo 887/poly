@@ -21,6 +21,7 @@
 //! | `voice_view` | Voice/video participant tile view |
 //! | `settings` | Account-scoped settings (notifications only) |
 
+pub mod server;
 pub mod settings;
 
 pub mod account_bar;
@@ -43,6 +44,7 @@ pub use chat_view::ChatView;
 pub use emoji_picker::EmojiPicker;
 pub use friends_panel::FriendsPanel;
 pub use notifications::NotificationsView;
+pub use server::{ServerContextMenu, ServerSettingsPage};
 pub use settings::AccountSettingsPage;
 pub use user_sidebar::UserSidebar;
 pub use voice_bar::VoiceBar;

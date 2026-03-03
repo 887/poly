@@ -314,3 +314,47 @@ voice-default-speakers = Altavoces predeterminados
 error-storage-unavailable = Almacenamiento no disponible
 error-load-settings = Error al cargar la configuración
 error-reload-servers = Error al recargar los servidores
+
+# Server context menu
+server-menu-mark-read = Marcar como leído
+server-menu-invite = Invitar al servidor
+server-menu-unmute = Reactivar sonido del servidor
+server-menu-mute = Silenciar servidor
+server-menu-notif-settings = Configuración de notificaciones
+server-menu-hide-muted = Ocultar canales silenciados
+server-menu-show-all = Mostrar todos los canales
+server-menu-privacy = Configuración de privacidad
+server-menu-edit-profile = Editar perfil del servidor
+server-menu-leave = Salir del servidor
+server-menu-copy-id = Copiar ID del servidor
+
+# Server settings page
+server-settings-title = Configuración del servidor
+server-settings-notifications = Notificaciones
+server-settings-profile = Perfil
+server-settings-general = General
+
+# Leave server inline confirm
+leave-server-title = ¿Salir de «{ $name }»?
+leave-server-body = No podrás volver a unirte a menos que seas reinvitado.
+leave-server-cancel = Cancelar
+leave-server-confirm = Salir del servidor
+
+# Server notification settings
+server-notif-all = Todos los mensajes
+server-notif-mentions = Solo @menciones
+server-notif-nothing = Nada
+server-notif-suppress-everyone = Suprimir @everyone y @here
+server-notif-suppress-roles = Suprimir todas las @menciones de rol
+server-notif-suppress-highlights = Suprimir destacados
+server-notif-mute-events = Silenciar nuevos eventos
+server-notif-mobile-push = Notificaciones push móvil
+
+# Server profile settings
+server-profile-nickname = Apodo en el servidor
+server-profile-nickname-hint = Cambia cómo apareces en este servidor
+server-profile-save = Guardar cambios
+
+# Server general settings
+server-general-info = Información del servidor
+server-general-danger = Zona de peligro

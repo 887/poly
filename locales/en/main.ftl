@@ -314,3 +314,47 @@ voice-default-speakers = Default Speakers
 error-storage-unavailable = Storage unavailable
 error-load-settings = Failed to load settings
 error-reload-servers = Failed to reload servers
+
+# Server context menu
+server-menu-mark-read = Mark as Read
+server-menu-invite = Invite to Server
+server-menu-unmute = Unmute Server
+server-menu-mute = Mute Server
+server-menu-notif-settings = Notification Settings
+server-menu-hide-muted = Hide Muted Channels
+server-menu-show-all = Show All Channels
+server-menu-privacy = Privacy Settings
+server-menu-edit-profile = Edit Per-server Profile
+server-menu-leave = Leave Server
+server-menu-copy-id = Copy Server ID
+
+# Server settings page
+server-settings-title = Server Settings
+server-settings-notifications = Notifications
+server-settings-profile = Profile
+server-settings-general = General
+
+# Leave server inline confirm
+leave-server-title = Leave "{ $name }"?
+leave-server-body = You won't be able to rejoin unless you are re-invited.
+leave-server-cancel = Cancel
+leave-server-confirm = Leave Server
+
+# Server notification settings
+server-notif-all = All Messages
+server-notif-mentions = Only @mentions
+server-notif-nothing = Nothing
+server-notif-suppress-everyone = Suppress @everyone and @here
+server-notif-suppress-roles = Suppress All Role @mentions
+server-notif-suppress-highlights = Suppress Highlights
+server-notif-mute-events = Mute New Events
+server-notif-mobile-push = Mobile Push Notifications
+
+# Server profile settings  
+server-profile-nickname = Server Nickname
+server-profile-nickname-hint = Change how you appear in this server
+server-profile-save = Save Changes
+
+# Server general settings
+server-general-info = Server Info
+server-general-danger = Danger Zone

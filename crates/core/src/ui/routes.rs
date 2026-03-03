@@ -31,7 +31,7 @@
 
 use super::account::{
     AccountBar, AccountSettingsPage, AccountSwitcher, ChannelList, ChatView, FriendsPanel,
-    NotificationsView, UserSidebar, VoiceBar, VoiceChannelView,
+    NotificationsView, ServerSettingsPage, UserSidebar, VoiceBar, VoiceChannelView,
 };
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
@@ -102,6 +102,14 @@ pub enum Route {
         // ── Account-scoped settings ──────────────────────────────────
         #[route("/:backend/:account_id/settings")]
         AccountSettingsRoute { backend: String, account_id: String },
+
+        // ── Account-scoped: Server settings ─────────────────────────
+        #[route("/:backend/:account_id/servers/:server_id/settings")]
+        ServerSettingsRoute {
+            backend: String,
+            account_id: String,
+            server_id: String,
+        },
 
     #[end_layout]
 
@@ -190,6 +198,17 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         Route::AccountSettingsRoute {
             backend,
             account_id,
+        } => {
+            s.nav.view = View::Settings;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::ServerSettingsRoute {
+            backend,
+            account_id,
+            server_id: _,
         } => {
             s.nav.view = View::Settings;
             s.nav.active_backend = BackendType::from_slug(backend);
@@ -361,6 +380,17 @@ fn SettingsRoute() -> Element {
 fn AccountSettingsRoute(backend: String, account_id: String) -> Element {
     rsx! {
         AccountSettingsPage { backend, account_id }
+    }
+}
+
+/// Server settings — notifications, profile, and general for a specific server.
+///
+/// Routes to the server-scoped settings page which provides notification levels,
+/// per-server profile (nickname/avatar), and general options including leave server.
+#[component]
+fn ServerSettingsRoute(backend: String, account_id: String, server_id: String) -> Element {
+    rsx! {
+        ServerSettingsPage { backend, account_id, server_id }
     }
 }
 

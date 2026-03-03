@@ -10,6 +10,24 @@
 use poly_client::*;
 use std::collections::HashMap;
 
+/// Source of the current HTML5 drag operation.
+///
+/// Distinguishes what kind of element started the drag so drop handlers
+/// can apply the correct reorder or add-to-favorites logic.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DragSource {
+    /// No drag in progress.
+    #[default]
+    None,
+    /// Dragging a favorite server icon in Bar 1 (reorder within favorites).
+    FavoriteServer,
+    /// Dragging an account icon in Bar 1 (reorder within accounts).
+    AccountIcon,
+    /// Dragging a server icon in Bar 2 AccountServerBar
+    /// (reorder within Bar 2, or drop onto Bar 1 to favorite).
+    AccountServer,
+}
+
 /// Reactive data store for the chat UI.
 ///
 /// Holds loaded data from all active backends. Updated by async tasks
@@ -62,6 +80,18 @@ pub struct ChatData {
     /// Used to pass drag state from Bar 2 (Account Server Bar) to Bar 1 (Favorites Bar)
     /// without needing browser DataTransfer API access.
     pub dragging_server_id: Option<String>,
+    /// Source of the current drag operation.
+    pub drag_source: DragSource,
+    /// ID of the element currently being hovered over as a drop target.
+    ///
+    /// Set on `ondragover` of individual items so the parent can determine
+    /// where to insert the dragged item on `ondrop`.
+    pub drag_over_id: Option<String>,
+    /// Custom server ordering per account (account_id → Vec<server_id>).
+    ///
+    /// Populated on first drag within the Account Server Bar. Servers not
+    /// listed here appear after the explicitly ordered ones.
+    pub account_server_order: HashMap<String, Vec<String>>,
     /// Users currently typing in the selected channel.
     ///
     /// Each entry is a display name string. Updated by the event stream
