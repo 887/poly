@@ -70,6 +70,36 @@ fn NavBar() -> Element {
 #[component]
 pub fn MainLayout() -> Element {
     let mut app_state: Signal<AppState> = use_context();
+
+    // WebKit2GTK (used by Wry/desktop) requires:
+    //   1. `dataTransfer.setData()` called **synchronously** in `dragstart` — or the entire
+    //      drag operation is silently cancelled before it begins.
+    //   2. `dragover.preventDefault()` called **synchronously** — Dioxus handlers fire via
+    //      IPC and always arrive too late for the browser to accept them.
+    //
+    // Inject capture-phase JS listeners at the document level once, before any drag starts.
+    // These run synchronously in the browser JS engine (before Dioxus IPC round-trips),
+    // satisfying the WebKit requirements. Dioxus's own ondragstart / ondragover / ondrop
+    // handlers still fire afterwards and update ChatData state correctly.
+    use_effect(move || {
+        let _ = document::eval(
+            "if (!window.__polyDragInit) {\
+                window.__polyDragInit = true;\
+                document.addEventListener('dragstart', function(e) {\
+                    if (e.dataTransfer) {\
+                        try { e.dataTransfer.setData('text/plain', 'poly-drag'); } catch(_) {}\
+                    }\
+                }, true);\
+                document.addEventListener('dragover', function(e) {\
+                    e.preventDefault();\
+                }, true);\
+                document.addEventListener('drop', function(e) {\
+                    e.preventDefault();\
+                }, true);\
+            }",
+        );
+    });
+
     rsx! {
         div {
             class: "main-layout",

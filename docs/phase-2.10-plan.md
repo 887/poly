@@ -197,3 +197,38 @@ and from favorites.
 - Per-server profile photo upload
 - Invite link generation
 - Privacy settings (stub only for now)
+
+---
+
+## Post-Phase Bug Fix — Drag & Drop WebKit2GTK (2026-03-03)
+
+**Problem:** Drag and drop was not working at all on desktop (Wry/WebKit2GTK). Server icons could
+not be reordered by dragging because:
+
+1. **WebKit2GTK silently cancels any drag where `dataTransfer.setData()` is not called during
+   `dragstart`.** Dioxus's `ondragstart` handler only updated `ChatData` state — it never called
+   `setData()`. Result: the drag started then immediately appeared to cancel.
+
+2. **`dragover.preventDefault()` must be called synchronously** within the browser JS event handler
+   to signal that a drop is allowed. Dioxus event handlers (on Wry desktop) run via IPC — by the
+   time Dioxus's Rust handler calls `evt.prevent_default()`, the browser event has long since
+   resolved. Result: the browser never accepted any drops.
+
+**Root cause:** All the `ChatData` state logic (reordering, `drag_over_id`, `dragging_server_id`,
+`account_server_order`) was correct. The bug was purely at the WebKit browser API level — Dioxus's
+async IPC architecture cannot satisfy the synchronous DOM API requirements of HTML5 DnD.
+
+**Fix:** Added a `use_effect` to `MainLayout` (`crates/core/src/ui/main_layout.rs`) that injects
+three synchronous capture-phase JavaScript listeners on `document`:
+
+```javascript
+// Runs synchronously before Dioxus's element-level handlers
+document.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', 'poly-drag'), true);
+document.addEventListener('dragover',  e => e.preventDefault(), true);
+document.addEventListener('drop',      e => e.preventDefault(), true);
+```
+
+These satisfy WebKit's synchronous requirements. Dioxus's own `ondragstart` / `ondragover` /
+`ondrop` handlers then fire and correctly update ChatData state to drive the reorder logic.
+
+**Verified:** `window.__polyDragInit === true` confirmed in running app via eval bridge.
