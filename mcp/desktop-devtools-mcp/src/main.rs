@@ -26,7 +26,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use poly_devtools_protocol::backend::{DevtoolsBackend, ScreenshotParams, ScreenshotResult};
 use poly_devtools_protocol::mcp::run_mcp_loop;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
 const BASE: &str = "http://127.0.0.1:9223";
@@ -333,6 +333,44 @@ impl DevtoolsBackend for DesktopHttpBackend {
                 "Data directory removed. Call launch_app or rebuild_app to restart at setup wizard."
                     .to_string(),
             )
+        }
+    }
+
+    fn extension_tools(&self) -> Vec<Value> {
+        vec![json!({
+            "name": "get_generation",
+            "description": "Returns the current generation counter and process PID of the running \
+                desktop app.\n\n\
+                **generation**: starts at 1 on launch, increments on each hot-patch (component remount).\n\
+                **pid**: OS process ID — changes on full process restart, stable across hot-patches.\n\n\
+                Use this to detect whether a hot-patch or a full rebuild happened:\n\
+                - generation changed, pid stable → hot-patch applied\n\
+                - pid changed (generation back to 1) → full rebuild / process restart",
+            "inputSchema": { "type": "object", "properties": {}, "required": [] }
+        })]
+    }
+
+    async fn handle_extension_tool(
+        &self,
+        name: &str,
+        _args: &Value,
+    ) -> Option<anyhow::Result<String>> {
+        if name == "get_generation" {
+            let result = async {
+                let resp = self
+                    .client
+                    .get(format!("{BASE}/generation"))
+                    .send()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("HTTP error: {e}"))?;
+                resp.text()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Read error: {e}"))
+            }
+            .await;
+            Some(result)
+        } else {
+            None
         }
     }
 

@@ -34,7 +34,7 @@ use dioxus::prelude::*;
 /// Shows DMs, notifications, all servers for this account, and account settings.
 #[component]
 pub fn AccountServerBar() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
 
     let nav = app_state.read().nav.clone();

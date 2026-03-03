@@ -20,7 +20,7 @@
 
 use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -77,6 +77,9 @@ struct ChromeCdpBackend {
     dx_serve_pid: Arc<Mutex<Option<u32>>>,
     /// Workspace path — set during `launch_app`, used by `rebuild_app`.
     workspace: Arc<Mutex<Option<String>>>,
+    /// Generation counter — increments on each successful `connect()` call.
+    /// Tracks how many CDP sessions have been opened (reloads, rebuilds, etc.).
+    generation: AtomicU64,
 }
 
 impl ChromeCdpBackend {
@@ -94,6 +97,7 @@ impl ChromeCdpBackend {
             dx_serve_stdin: Arc::new(Mutex::new(None)),
             dx_serve_pid: Arc::new(Mutex::new(None)),
             workspace: Arc::new(Mutex::new(None)),
+            generation: AtomicU64::new(0),
         }
     }
 
@@ -513,6 +517,11 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
         *self.ws.lock().await = Some(ws);
 
+        // Increment generation counter — each successful connect_cdp call
+        // means a new CDP session (fresh page, rebuild, or reconnect after reload).
+        let generation_num = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
+        tracing::info!("CDP connected: generation {generation_num}");
+
         // NOTE: We intentionally do NOT call Page.enable / Runtime.enable / DOM.enable
         // here. Those domains push unsolicited events into the WebSocket buffer which
         // can race with subsequent cdp_send reads. Individual commands (captureScreenshot,
@@ -832,6 +841,17 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     },
                     "required": ["width", "height"] }
             }),
+            json!({
+                "name": "get_generation",
+                "description": "Returns the current generation counter for this MCP session.\n\n\
+                    **generation**: increments on each successful connect_cdp call (each CDP session).\n\
+                    Starts at 0 before first connect, 1 after first connect, 2 after first reconnect, etc.\n\
+                    **dx_serve_pid**: PID of the managed dx serve process (null if not started by this MCP).\n\n\
+                    Use this to detect whether a rebuild/reload happened:\n\
+                    - generation incremented since last check → a reconnect occurred (rebuild or reload)\n\
+                    - dx_serve_pid changed → dx serve was restarted (full rebuild)",
+                "inputSchema": { "type": "object", "properties": {}, "required": [] }
+            }),
         ]
     }
 
@@ -868,6 +888,15 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     .await
                     .map(|_| format!("Viewport set to {width}×{height}")),
                 )
+            }
+            "get_generation" => {
+                let generation_num = self.generation.load(Ordering::Relaxed);
+                let pid = *self.dx_serve_pid.lock().await;
+                Some(Ok(serde_json::json!({
+                    "generation": generation_num,
+                    "dx_serve_pid": pid
+                })
+                .to_string()))
             }
             _ => None,
         }

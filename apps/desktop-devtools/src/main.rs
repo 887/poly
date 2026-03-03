@@ -24,7 +24,7 @@
 use dioxus::document::eval;
 use dioxus::prelude::*;
 use poly_core::ui::App;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::{mpsc, oneshot};
 
 // ─── Eval Bridge ──────────────────────────────────────────────────────────────
@@ -55,6 +55,13 @@ static SCREENSHOT_TX: std::sync::Mutex<Option<mpsc::Sender<ScreenshotRequest>>> 
 
 /// Guard: HTTP server binds to :9223 exactly once per process.
 static HTTP_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Generation counter — increments on each component mount (hot-patch cycle).
+///
+/// Starts at 0, becomes 1 on first mount, 2 on first hot-patch remount, etc.
+/// Resets to 0 on full process restart (full rebuild / kill + relaunch).
+/// Use it to answer "did a hot-patch or full rebuild just happen?".
+static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Evaluate JS in the webview from any tokio context.
 ///
@@ -229,7 +236,12 @@ async fn run_eval_coroutine() {
         Ok(mut guard) => *guard = Some(tx),
         Err(poisoned) => *poisoned.into_inner() = Some(tx),
     }
-    tracing::info!("Eval bridge coroutine started (channels recreated)");
+
+    // Increment the generation counter so callers can detect hot-patch cycles.
+    let generation_num = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    tracing::info!(
+        "Eval bridge coroutine started — generation {generation_num} (channels recreated)"
+    );
 
     while let Some(req) = rx.recv().await {
         let result: Result<serde_json::Value, _> = eval(&req.js).await;
@@ -361,6 +373,7 @@ async fn start_devtools_server() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/status", routing::get(http_status))
+        .route("/generation", routing::get(http_generation))
         .route("/eval", routing::post(http_eval))
         .route("/screenshot", routing::get(http_screenshot))
         .route("/dom", routing::get(http_dom))
@@ -374,6 +387,22 @@ async fn start_devtools_server() -> anyhow::Result<()> {
 
 async fn http_status() -> &'static str {
     "ok"
+}
+
+/// GET /generation — returns the current generation counter and process PID.
+///
+/// **generation**: increments each time `DevtoolsShell` mounts (i.e. each hot-patch
+/// cycle). Resets to 0 + starts at 1 on process restart (full rebuild / kill+relaunch).
+///
+/// **pid**: OS process ID. Changes on full restart; stable across hot-patches.
+///
+/// Use this to answer:
+/// - "Did a hot-patch just happen?" → generation changed, pid stable
+/// - "Did a full rebuild (process restart) happen?" → pid changed (generation back to 1)
+async fn http_generation() -> String {
+    let generation_num = GENERATION.load(Ordering::Relaxed);
+    let pid = std::process::id();
+    serde_json::json!({ "generation": generation_num, "pid": pid }).to_string()
 }
 
 /// POST /eval — body is plain JS; returns JSON {"result":"..."} or {"error":"..."}
