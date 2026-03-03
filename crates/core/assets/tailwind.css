@@ -3782,6 +3782,58 @@ select {
     justify-content: flex-end;
 }
 
+/* Remove from favorites inline confirm (in context menu) */
+.remove-favorites-confirm {
+    background: var(--modal-bg, #2b2d31);
+    border: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+    border-radius: 8px;
+    padding: 12px;
+    min-width: 200px;
+}
+
+.remove-favorites-confirm-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.remove-favorites-confirm-body {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.remove-favorites-confirm-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.remove-favorites-confirm-actions button {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.remove-favorites-confirm-actions button.btn-danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.remove-favorites-confirm-actions button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.remove-favorites-confirm-actions button.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
 /* Server settings profile */
 .settings-monospace {
     font-family: 'Courier New', Courier, monospace;

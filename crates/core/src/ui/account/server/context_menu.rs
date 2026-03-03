@@ -21,7 +21,7 @@
 
 use super::super::super::routes::Route;
 use super::super::backend_server_context_menu_extras;
-use crate::i18n::t;
+use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_client::BackendType;
@@ -33,14 +33,14 @@ use poly_client::BackendType;
 #[component]
 pub fn ServerContextMenu() -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
 
     let Some(menu) = app_state.read().context_menu.clone() else {
         return rsx! {};
     };
 
     let server_id = menu.server_id.clone();
-    let _server_name = menu.server_name.clone();
+    let server_name = menu.server_name.clone();
     let account_id = menu.account_id.clone();
     let backend_slug = menu.backend_slug.clone();
 
@@ -48,10 +48,24 @@ pub fn ServerContextMenu() -> Element {
     let mut hide_muted = use_signal(|| false);
     let mut show_all = use_signal(|| true);
     let mut muted = use_signal(|| false);
+    let mut show_remove_confirm = use_signal(|| false);
 
-    // Is this server in the user's view?
-    // TODO(phase-3): adapt menu items based on favorites state
-    let _is_favorited = chat_data.read().favorited_server_ids.contains(&server_id);
+    // Is this server in the user's favorites?
+    let is_favorited = chat_data.read().favorited_server_ids.contains(&server_id);
+
+    // Reset the inline-confirm flag anytime a different server menu is opened.
+    {
+        let menu_id = server_id.clone();
+        // capture a mutable copy of the signal so we can call .set() later
+        let mut show_remove_confirm = show_remove_confirm; // Signal is Copy, no clone needed
+        use_effect(move || {
+            // `menu_id` is captured so the effect re-runs when the menu target
+            // changes (including when a menu closes and reopens for a new server).
+            let _ = &menu_id;
+            show_remove_confirm.set(false);
+            // no cleanup needed
+        });
+    }
 
     let close = move || {
         app_state.write().context_menu = None;
@@ -143,6 +157,40 @@ pub fn ServerContextMenu() -> Element {
                 label: t("server-menu-show-all"),
                 checked: show_all(),
                 onclick: move |_| show_all.toggle(),
+            }
+
+            div { class: "context-menu-separator" }
+
+            // Add / Remove Favorites
+            if is_favorited {
+                // Show remove from favorites with inline confirm
+                if show_remove_confirm() {
+                    RemoveFavoritesConfirm {
+                        server_name: server_name.clone(),
+                        server_id: server_id.clone(),
+                        oncancel: move |_| show_remove_confirm.set(false),
+                    }
+                } else {
+                    ContextMenuItem {
+                        label: t("server-menu-remove-favorites"),
+                        onclick: move |_| show_remove_confirm.set(true),
+                    }
+                }
+            } else {
+                // Add to favorites (no dialog, just add directly)
+                ContextMenuItem {
+                    label: t("server-menu-add-favorites"),
+                    onclick: {
+                        let sid = server_id.clone();
+                        let mut close = close;
+                        move |_| {
+                            if !chat_data.read().favorited_server_ids.contains(&sid) {
+                                chat_data.write().favorited_server_ids.push(sid.clone());
+                            }
+                            close();
+                        }
+                    },
+                }
             }
 
             div { class: "context-menu-separator" }
@@ -281,6 +329,50 @@ fn ContextMenuToggle(label: String, checked: bool, onclick: EventHandler<MouseEv
                     "☑"
                 } else {
                     "☐"
+                }
+            }
+        }
+    }
+}
+
+/// Inline confirm widget for removing a server from favorites.
+///
+/// Replaces the normal "Remove from Favorites" menu item while showing
+/// a confirmation prompt inline. Does NOT use `window.confirm()`.
+#[component]
+fn RemoveFavoritesConfirm(
+    server_name: String,
+    server_id: String,
+    oncancel: EventHandler<MouseEvent>,
+) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
+
+    // Pre-compute the title using t_args so the Fluent {$name} placeholder is filled
+    let remove_title = t_args("remove-favorites-title", &[("name", server_name.as_str())]);
+
+    rsx! {
+        div { class: "remove-favorites-confirm",
+            h4 { class: "remove-favorites-confirm-title", "{remove_title}" }
+            p { class: "remove-favorites-confirm-body", "{t(\"remove-favorites-body\")}" }
+            div { class: "remove-favorites-confirm-actions",
+                button {
+                    class: "btn-secondary",
+                    onclick: move |evt| oncancel.call(evt),
+                    "{t(\"remove-favorites-cancel\")}"
+                }
+                button {
+                    class: "btn-danger",
+                    onclick: move |_evt| {
+                        let sid = server_id.clone();
+                        chat_data
+                            .write()
+                            .favorited_server_ids
+                            .retain(|id| id != &sid);
+                        // Close menu
+                        app_state.write().context_menu = None;
+                    },
+                    "{t(\"remove-favorites-confirm\")}"
                 }
             }
         }

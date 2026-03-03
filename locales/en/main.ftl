@@ -328,6 +328,27 @@ server-menu-edit-profile = Edit Per-server Profile
 server-menu-leave = Leave Server
 server-menu-copy-id = Copy Server ID
 
+# Server context menu
+server-menu-mark-read = Mark as Read
+server-menu-invite = Invite to Server
+server-menu-mute = Mute Server
+server-menu-unmute = Unmute Server
+server-menu-notif-settings = Notification Settings
+server-menu-hide-muted = Hide Muted Channels
+server-menu-show-all = Show All Channels
+server-menu-privacy = Privacy Settings
+server-menu-edit-profile = Edit Per-server Profile
+server-menu-leave = Leave Server
+server-menu-copy-id = Copy Server ID
+server-menu-add-favorites = Add to Favorites
+server-menu-remove-favorites = Remove from Favorites
+
+# Remove from favorites inline confirm
+remove-favorites-title = Remove "{ $name }" from Favorites?
+remove-favorites-body = You can add it back anytime by dragging it to the favorites bar or using this menu.
+remove-favorites-cancel = Cancel
+remove-favorites-confirm = Remove
+
 # Server settings page
 server-settings-title = Server Settings
 server-settings-notifications = Notifications
