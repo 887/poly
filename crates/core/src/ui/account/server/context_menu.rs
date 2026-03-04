@@ -195,6 +195,11 @@ pub fn ServerContextMenu() -> Element {
                             if !chat_data.read().favorited_server_ids.contains(&sid) {
                                 chat_data.write().favorited_server_ids.push(sid.clone());
                             }
+                            let new_favs = chat_data.read().favorited_server_ids.clone();
+                            spawn(async move {
+                                crate::ui::favorites_sidebar::persist_favorites(new_favs)
+                                    .await;
+                            });
                             close();
                         }
                     },
@@ -383,6 +388,12 @@ fn RemoveFavoritesConfirm(
                             .write()
                             .favorited_server_ids
                             .retain(|id| id != &sid);
+                        let new_favs =
+                            chat_data.read().favorited_server_ids.clone();
+                        spawn(async move {
+                            crate::ui::favorites_sidebar::persist_favorites(new_favs)
+                                .await;
+                        });
                         // Close menu
                         app_state.write().context_menu = None;
                     },

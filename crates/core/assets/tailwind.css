@@ -407,6 +407,98 @@ body {
     box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
+/* ===========================
+ * Account Status Dots
+ * =========================== */
+
+/* Base dot — position relative to the account icon (.server-icon). */
+.status-dot {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid var(--account-bar-bg, var(--sidebar-bg));
+    pointer-events: none;
+}
+
+/* Connection status dot — top-left corner of the icon. */
+.connection-dot {
+    bottom: -2px;
+    left: -2px;
+}
+
+/* Presence status dot — top-right corner of the icon. */
+.presence-dot {
+    top: -2px;
+    right: -2px;
+}
+
+/* ---- Connection status colours ---- */
+.connection-dot.connected {
+    background-color: #22c55e;
+}
+
+/* green-500  */
+.connection-dot.connecting {
+    background-color: #eab308;
+}
+
+/* yellow-500 */
+.connection-dot.disconnected {
+    background-color: #6b7280;
+}
+
+/* gray-500   */
+.connection-dot.error {
+    background-color: #ef4444;
+}
+
+/* red-500    */
+
+/* Pulsing animation for "connecting" state */
+.connection-dot.connecting {
+    animation: dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.35;
+    }
+}
+
+/* ---- Presence status colours ---- */
+.presence-dot.online {
+    background-color: #22c55e;
+}
+
+/* green-500  */
+.presence-dot.away {
+    background-color: #f97316;
+}
+
+/* orange-500 */
+.presence-dot.dnd {
+    background-color: #ef4444;
+}
+
+/* red-500    */
+.presence-dot.appear-offline {
+    background-color: #6b7280;
+}
+
+/* gray-500   */
+.presence-dot.offline {
+    display: none;
+}
+
+/* hidden when truly offline */
+
 .badge {
     position: absolute;
     bottom: -2px;
@@ -3976,4 +4068,127 @@ select {
     font-size: 0.75rem;
     color: #4ade80;
     margin-left: 8px;
+}
+
+/* ===========================
+ * Diagnostics Settings Page
+ * =========================== */
+
+.diagnostics-summary {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.diagnostics-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.diagnostics-row:last-child {
+    border-bottom: none;
+}
+
+.diagnostics-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.diagnostics-value {
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.diagnostics-value.value-ok {
+    color: #22c55e;
+}
+
+.diagnostics-value.value-off {
+    color: var(--text-muted);
+}
+
+.diagnostics-empty {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    padding: 12px 0;
+}
+
+/* Per-account table */
+.diagnostics-accounts-table {
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.diagnostics-table-header,
+.diagnostics-table-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 8px 12px;
+    gap: 8px;
+    align-items: center;
+}
+
+.diagnostics-table-header {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.diagnostics-table-row {
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-primary);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.diagnostics-account-id {
+    font-family: 'Courier New', Courier, monospace;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+.diagnostics-connection-status.connected {
+    color: #22c55e;
+}
+
+.diagnostics-connection-status.connecting {
+    color: #eab308;
+}
+
+.diagnostics-connection-status.disconnected {
+    color: var(--text-muted);
+}
+
+.diagnostics-connection-status.error {
+    color: #ef4444;
+}
+
+.diagnostics-presence-status.online {
+    color: #22c55e;
+}
+
+.diagnostics-presence-status.away {
+    color: #f97316;
+}
+
+.diagnostics-presence-status.dnd {
+    color: #ef4444;
+}
+
+.diagnostics-presence-status.appear-offline {
+    color: var(--text-muted);
+}
+
+.diagnostics-presence-status.offline {
+    color: var(--text-muted);
 }

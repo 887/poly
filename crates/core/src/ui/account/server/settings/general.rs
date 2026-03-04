@@ -99,6 +99,10 @@ fn LeaveServerConfirm(
                         let sid = sid_remove.clone();
                         chat_data.write().servers.retain(|s| s.id != sid);
                         chat_data.write().favorited_server_ids.retain(|id| id != &sid);
+                        let new_favs = chat_data.read().favorited_server_ids.clone();
+                        spawn(async move {
+                            crate::ui::favorites_sidebar::persist_favorites(new_favs).await;
+                        });
                         chat_data
                             .write()
                             .account_server_order

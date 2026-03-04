@@ -95,6 +95,8 @@ pub enum SettingsSection {
     Notifications,
     /// Voice & Video (audio device, noise suppression, etc.).
     VoiceVideo,
+    /// Diagnostics — connection stats, storage usage, account health.
+    Diagnostics,
 }
 
 /// State for the active right-click server context menu.

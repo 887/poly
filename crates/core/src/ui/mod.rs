@@ -91,7 +91,7 @@ async fn init_storage(
     mut app_state: Signal<AppState>,
     mut locale_sig: Signal<String>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    mut chat_data: Signal<ChatData>,
 ) {
     match crate::storage::Storage::init().await {
         Ok(storage) => {
@@ -110,6 +110,16 @@ async fn init_storage(
                     *locale_sig.write() = settings.locale.clone();
                     app_state.write().is_setup_complete = true;
                     app_state.write().nav.view = View::DmsFriends;
+                    // Restore favorited servers so Bar 1 repopulates immediately
+                    // on launch — before the server list is fetched from the network.
+                    if !settings.favorited_server_ids.is_empty() {
+                        chat_data.write().favorited_server_ids =
+                            settings.favorited_server_ids.clone();
+                        tracing::info!(
+                            "Restored {} favorited server(s) from storage",
+                            settings.favorited_server_ids.len()
+                        );
+                    }
                     // Restore the demo client if it was active when the app last closed.
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
@@ -143,6 +153,8 @@ async fn persist_setup_completion(account_id: String) {
         // demo_active remains false — setup wizard completion means a real account;
         // demo is managed separately by the 🧪 toggle.
         demo_active: false,
+        // New install has no favorites yet.
+        favorited_server_ids: Vec::new(),
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");

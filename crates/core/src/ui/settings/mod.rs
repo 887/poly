@@ -25,6 +25,7 @@
 mod accounts;
 mod backup;
 mod common;
+mod diagnostics;
 mod general;
 mod identity;
 mod language;
@@ -37,6 +38,7 @@ use dioxus::prelude::*;
 
 use accounts::AccountsSettings;
 use backup::BackupSettings;
+use diagnostics::DiagnosticsPage;
 use general::GeneralSettings;
 use identity::IdentitySettings;
 use language::LanguageSettings;
@@ -162,6 +164,15 @@ pub fn SettingsPage() -> Element {
                         },
                     }
                 }
+                if shows(&t("settings-diagnostics")) {
+                    SettingsNavItem {
+                        label: t("settings-diagnostics"),
+                        active: section == SettingsSection::Diagnostics,
+                        onclick: move |_| {
+                            app_state.write().settings_section = SettingsSection::Diagnostics;
+                        },
+                    }
+                }
             }
 
             // Settings content — each section in its own sub-module.
@@ -187,6 +198,9 @@ pub fn SettingsPage() -> Element {
                     },
                     SettingsSection::VoiceVideo => rsx! {
                         VoiceVideoSettings {}
+                    },
+                    SettingsSection::Diagnostics => rsx! {
+                        DiagnosticsPage {}
                     },
                 }
             }

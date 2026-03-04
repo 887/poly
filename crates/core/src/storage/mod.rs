@@ -86,6 +86,14 @@ pub struct AppSettings {
     /// to `false` for backwards compatibility with existing stored records.
     #[serde(default)]
     pub demo_active: bool,
+    /// Server IDs pinned to the Favorites Bar (Bar 1), in display order.
+    ///
+    /// Persisted so favorites survive page reloads, app restarts, and
+    /// temporary offline periods. Defaults to empty for new installs.
+    /// Restored into `ChatData.favorited_server_ids` at startup before
+    /// the event stream populates server data.
+    #[serde(default)]
+    pub favorited_server_ids: Vec<String>,
 }
 
 /// Global notification preferences — device-level settings only.

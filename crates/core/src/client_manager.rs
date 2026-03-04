@@ -7,7 +7,9 @@
 //! Provided as `Signal<ClientManager>` at the `App` level.
 // TODO(phase-2.5.1): Client Manager Module
 
-use poly_client::{AuthCredentials, BackendType, ClientBackend, Server, Session};
+use poly_client::{
+    AccountPresence, AuthCredentials, BackendType, ClientBackend, ConnectionStatus, Server, Session,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -32,6 +34,16 @@ pub struct ClientManager {
     /// Stored so the UI can retrieve per-account identity info (e.g. `icon_emoji`)
     /// without going through the async backend trait.
     pub sessions: HashMap<String, Session>,
+    /// Live connection state per account.
+    ///
+    /// Set to `Connecting` when a backend activates, updated to `Connected` or
+    /// `Error` by the event-stream consumer. Demo accounts start `Connected`.
+    pub connection_statuses: HashMap<String, ConnectionStatus>,
+    /// User-chosen presence/availability status per account.
+    ///
+    /// Persisted to local storage so the preference survives restarts.
+    /// Defaults to `Online` for new accounts.
+    pub presence_statuses: HashMap<String, AccountPresence>,
 }
 
 impl std::fmt::Debug for ClientManager {
@@ -58,6 +70,8 @@ impl ClientManager {
             demo_active: false,
             server_account_map: HashMap::new(),
             sessions: HashMap::new(),
+            connection_statuses: HashMap::new(),
+            presence_statuses: HashMap::new(),
         }
     }
 
@@ -102,6 +116,19 @@ impl ClientManager {
 
         self.demo_active = true;
 
+        // Demo backends are always "connected" — they are in-process and never fail.
+        self.connection_statuses
+            .insert("demo-cat".to_string(), ConnectionStatus::Connected);
+        self.connection_statuses
+            .insert("demo-dog".to_string(), ConnectionStatus::Connected);
+        // Default presence: Online.
+        self.presence_statuses
+            .entry("demo-cat".to_string())
+            .or_insert(AccountPresence::Online);
+        self.presence_statuses
+            .entry("demo-dog".to_string())
+            .or_insert(AccountPresence::Online);
+
         // Rebuild server-account map
         self.rebuild_server_map().await;
 
@@ -118,6 +145,10 @@ impl ClientManager {
         self.backends.remove("demo-dog");
         self.sessions.remove("demo-cat");
         self.sessions.remove("demo-dog");
+        self.connection_statuses.remove("demo-cat");
+        self.connection_statuses.remove("demo-dog");
+        self.presence_statuses.remove("demo-cat");
+        self.presence_statuses.remove("demo-dog");
         self.demo_active = false;
         // Remove demo entries from server map
         self.server_account_map

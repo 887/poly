@@ -65,6 +65,105 @@ impl BackendType {
     }
 }
 
+/// The live connection state of a backend account to its remote server.
+///
+/// Updated by the event-stream consumer in each backend. The `ClientManager`
+/// stores one entry per active account and exposes it for UI overlay dots.
+// DECISION(DX-2.12.1): Connection status stored in ClientManager, not inside
+// each ClientBackend, because the UI needs a synchronous non-async read path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConnectionStatus {
+    /// Successfully authenticated and event stream / WebSocket is live.
+    Connected,
+    /// Attempting initial connection or reconnecting after a drop.
+    Connecting,
+    /// Explicitly disconnected by the user (e.g. truly-offline / appear-offline mode).
+    Disconnected,
+    /// Authentication rejected (4xx) or network unreachable (5xx / timeout).
+    Error(String),
+}
+
+impl ConnectionStatus {
+    /// Short CSS class suffix for styling, e.g. `"status-dot--connected"`.
+    pub fn css_class(&self) -> &'static str {
+        match self {
+            Self::Connected => "connected",
+            Self::Connecting => "connecting",
+            Self::Disconnected => "disconnected",
+            Self::Error(_) => "error",
+        }
+    }
+
+    /// Small indicator emoji shown on the account icon top-left badge.
+    pub fn emoji(&self) -> &'static str {
+        match self {
+            Self::Connected => "●",
+            Self::Connecting => "◌",
+            Self::Disconnected => "○",
+            Self::Error(_) => "✕",
+        }
+    }
+}
+
+/// The user-chosen availability / presence status for an account.
+///
+/// Stored per-account in `ClientManager` and persisted to local storage
+/// so the preference survives restarts. This is a *user-chosen* setting
+/// (what the user wants to appear as), distinct from [`PresenceStatus`]
+/// which reflects what a remote backend reports about another user.
+// DECISION(DX-2.12.2): Presence is user-chosen, not inferred from network
+// state, because the user may want to appear online while actually being
+// away (e.g. monitoring notifications with DnD on).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum AccountPresence {
+    /// Fully online — accepting notifications, shown as available.
+    #[default]
+    Online,
+    /// Idle / away — typically auto-set after inactivity.
+    Away,
+    /// Do not disturb — suppresses notifications, still connected.
+    DoNotDisturb,
+    /// Appears offline to contacts but backend connection is live.
+    AppearOffline,
+    /// Truly offline — no backend connection is made; UI shows cached data.
+    Offline,
+}
+
+impl AccountPresence {
+    /// Short CSS class suffix, e.g. `"presence-dot--online"`.
+    pub fn css_class(self) -> &'static str {
+        match self {
+            Self::Online => "online",
+            Self::Away => "away",
+            Self::DoNotDisturb => "dnd",
+            Self::AppearOffline => "appear-offline",
+            Self::Offline => "offline",
+        }
+    }
+
+    /// Small indicator emoji shown on the account icon bottom-left badge.
+    pub fn emoji(self) -> &'static str {
+        match self {
+            Self::Online => "●",
+            Self::Away => "◑",
+            Self::DoNotDisturb => "⊗",
+            Self::AppearOffline => "○",
+            Self::Offline => "○",
+        }
+    }
+
+    /// Display name for UI labels.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Online => "Online",
+            Self::Away => "Away",
+            Self::DoNotDisturb => "Do Not Disturb",
+            Self::AppearOffline => "Appear Offline",
+            Self::Offline => "Offline",
+        }
+    }
+}
+
 /// Authentication credentials for logging in to a backend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthCredentials {

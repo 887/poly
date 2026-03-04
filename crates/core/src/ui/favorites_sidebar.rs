@@ -21,6 +21,7 @@ use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
 use dioxus::prelude::*;
+use poly_client::{AccountPresence, ConnectionStatus};
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
@@ -78,24 +79,28 @@ pub fn FavoritesBar() -> Element {
             ondrop: move |evt| {
                 evt.prevent_default();
                 drag_over.set(false);
-                let mut cd = chat_data.write();
-                let drag_id = cd.dragging_server_id.clone();
-                let drag_src = cd.drag_source.clone();
-                // Per-item ondrop handles positional drops via stop_propagation.
-                // This handler catches drops on the nav background (append to end).
-                if let Some(sid) = drag_id {
-                    match drag_src {
-                        DragSource::AccountServer | DragSource::FavoriteServer => {
-                            if !cd.favorited_server_ids.contains(&sid) {
-                                cd.favorited_server_ids.push(sid);
+                let new_favorites = {
+                    let mut cd = chat_data.write();
+                    let drag_id = cd.dragging_server_id.clone();
+                    let drag_src = cd.drag_source.clone();
+                    // Per-item ondrop handles positional drops via stop_propagation.
+                    // This handler catches drops on the nav background (append to end).
+                    if let Some(sid) = drag_id {
+                        match drag_src {
+                            DragSource::AccountServer | DragSource::FavoriteServer => {
+                                if !cd.favorited_server_ids.contains(&sid) {
+                                    cd.favorited_server_ids.push(sid);
+                                }
                             }
+                            DragSource::None | DragSource::AccountIcon => {}
                         }
-                        DragSource::None | DragSource::AccountIcon => {}
                     }
-                }
-                cd.dragging_server_id = None;
-                cd.drag_source = DragSource::None;
-                cd.drag_over_id = None;
+                    cd.dragging_server_id = None;
+                    cd.drag_source = DragSource::None;
+                    cd.drag_over_id = None;
+                    cd.favorited_server_ids.clone()
+                };
+                spawn(async move { persist_favorites(new_favorites).await; });
             },
             NavBarSpacer {}
 
@@ -200,6 +205,22 @@ pub fn FavoritesBar() -> Element {
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+
+    // Read connection and presence statuses for this account.
+    let conn_class: &'static str = client_manager
+        .read()
+        .connection_statuses
+        .get(&account_id)
+        .map(ConnectionStatus::css_class)
+        .unwrap_or("disconnected");
+    let presence_class: &'static str = client_manager
+        .read()
+        .presence_statuses
+        .get(&account_id)
+        .copied()
+        .unwrap_or(AccountPresence::Online)
+        .css_class();
 
     let color = user_color(&account_id);
 
@@ -298,6 +319,16 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             }
             if total_unreads > 0 {
                 span { class: "badge", "{total_unreads}" }
+            }
+            // Connection status dot (top-right) — shows connected/connecting/error
+            span {
+                class: "status-dot connection-dot {conn_class}",
+                title: "Connection: {conn_class}",
+            }
+            // Presence/availability dot (bottom-right) — shows online/away/dnd/etc.
+            span {
+                class: "status-dot presence-dot {presence_class}",
+                title: "Presence: {presence_class}",
             }
         }
     }
@@ -435,59 +466,63 @@ fn FavoriteServerIcon(
                     evt.prevent_default();
                     // Stop bubbling so the nav's ondrop doesn't double-handle
                     evt.stop_propagation();
-                    let mut cd = chat_data.write();
-                    let dragging = cd.dragging_server_id.clone();
-                    let src = cd.drag_source.clone();
-                    cd.drag_over_id = None;
-                    let Some(drag_id) = dragging else {
+                    let new_favorites = {
+                        let mut cd = chat_data.write();
+                        let dragging = cd.dragging_server_id.clone();
+                        let src = cd.drag_source.clone();
+                        cd.drag_over_id = None;
+                        let Some(drag_id) = dragging else {
+                            cd.dragging_server_id = None;
+                            cd.drag_source = DragSource::None;
+                            return;
+                        };
+                        let target_id = tid.clone();
+                        if drag_id == target_id {
+                            cd.dragging_server_id = None;
+                            cd.drag_source = DragSource::None;
+                            return;
+                        }
+                        match src {
+                            DragSource::FavoriteServer => {
+                                // Reorder within Bar 1: move drag_id before target_id
+                                if let Some(from) = cd
+                                    .favorited_server_ids
+                                    .iter()
+                                    .position(|x| *x == drag_id)
+                                {
+                                    cd.favorited_server_ids.remove(from);
+                                    if let Some(to) = cd
+                                        .favorited_server_ids
+                                        .iter()
+                                        .position(|x| *x == target_id)
+                                    {
+                                        cd.favorited_server_ids.insert(to, drag_id);
+                                    } else {
+                                        cd.favorited_server_ids.push(drag_id);
+                                    }
+                                }
+                            }
+                            DragSource::AccountServer => {
+                                // Insert from Bar 2 before target position
+                                if !cd.favorited_server_ids.contains(&drag_id) {
+                                    if let Some(to) = cd
+                                        .favorited_server_ids
+                                        .iter()
+                                        .position(|x| *x == target_id)
+                                    {
+                                        cd.favorited_server_ids.insert(to, drag_id);
+                                    } else {
+                                        cd.favorited_server_ids.push(drag_id);
+                                    }
+                                }
+                            }
+                            DragSource::None | DragSource::AccountIcon => {}
+                        }
                         cd.dragging_server_id = None;
                         cd.drag_source = DragSource::None;
-                        return;
+                        cd.favorited_server_ids.clone()
                     };
-                    let target_id = tid.clone();
-                    if drag_id == target_id {
-                        cd.dragging_server_id = None;
-                        cd.drag_source = DragSource::None;
-                        return;
-                    }
-                    match src {
-                        DragSource::FavoriteServer => {
-                            // Reorder within Bar 1: move drag_id before target_id
-                            if let Some(from) = cd
-                                .favorited_server_ids
-                                .iter()
-                                .position(|x| *x == drag_id)
-                            {
-                                cd.favorited_server_ids.remove(from);
-                                if let Some(to) = cd
-                                    .favorited_server_ids
-                                    .iter()
-                                    .position(|x| *x == target_id)
-                                {
-                                    cd.favorited_server_ids.insert(to, drag_id);
-                                } else {
-                                    cd.favorited_server_ids.push(drag_id);
-                                }
-                            }
-                        }
-                        DragSource::AccountServer => {
-                            // Insert from Bar 2 before target position
-                            if !cd.favorited_server_ids.contains(&drag_id) {
-                                if let Some(to) = cd
-                                    .favorited_server_ids
-                                    .iter()
-                                    .position(|x| *x == target_id)
-                                {
-                                    cd.favorited_server_ids.insert(to, drag_id);
-                                } else {
-                                    cd.favorited_server_ids.push(drag_id);
-                                }
-                            }
-                        }
-                        DragSource::None | DragSource::AccountIcon => {}
-                    }
-                    cd.dragging_server_id = None;
-                    cd.drag_source = DragSource::None;
+                    spawn(async move { persist_favorites(new_favorites).await; });
                 }
             },
             // Drag end — always clean up regardless of drop target
@@ -582,10 +617,11 @@ pub(crate) async fn toggle_demo(
                     .retain(|id| !demo_server_ids.contains(id));
             }
             chat_data.write().dragging_server_id = None;
-            // Persist demo_active=false so the next launch skips demo restore.
+            // Persist demo_active=false and updated favorites to storage.
             if let Some(s) = crate::STORAGE.get() {
                 let mut settings = s.get_app_settings().await.unwrap_or_default();
                 settings.demo_active = false;
+                settings.favorited_server_ids = chat_data.read().favorited_server_ids.clone();
                 if let Err(e) = s.set_app_settings(&settings).await {
                     tracing::warn!("Failed to persist demo_active=false: {e}");
                 }
@@ -676,6 +712,7 @@ pub(crate) async fn toggle_demo(
                 let mut settings = s.get_app_settings().await.unwrap_or_default();
                 settings.demo_active = true;
                 settings.setup_complete = true;
+                settings.favorited_server_ids = chat_data.read().favorited_server_ids.clone();
                 if let Err(e) = s.set_app_settings(&settings).await {
                     tracing::warn!("Failed to persist demo_active=true: {e}");
                 }
@@ -742,4 +779,24 @@ pub async fn load_server_data(
     }
 
     chat_data.write().loading = false;
+}
+
+/// Persist the current favorites list to storage.
+///
+/// Called after every mutation of `ChatData.favorited_server_ids` to survive
+/// page reloads, app restarts, and offline periods.
+/// No-ops silently if storage is not yet initialised.
+pub(crate) async fn persist_favorites(ids: Vec<String>) {
+    let Some(s) = crate::STORAGE.get() else {
+        return;
+    };
+    match s.get_app_settings().await {
+        Ok(mut settings) => {
+            settings.favorited_server_ids = ids;
+            if let Err(e) = s.set_app_settings(&settings).await {
+                tracing::warn!("Failed to persist favorites: {e}");
+            }
+        }
+        Err(e) => tracing::warn!("Failed to read app_settings for favorites persist: {e}"),
+    }
 }

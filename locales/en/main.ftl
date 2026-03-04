@@ -112,6 +112,18 @@ settings-reset-error-failed = Failed to reset app data
 settings-nuke-error-failed = Failed to nuke app state
 settings-reset-error-reload = Reset succeeded, but reload failed
 
+# Diagnostics Settings
+settings-diagnostics = Diagnostics
+settings-diagnostics-title = Diagnostics
+settings-diagnostics-description = Connection health, account status, and storage information.
+settings-diagnostics-demo-active = Demo mode active
+settings-diagnostics-active-accounts = Active accounts
+settings-diagnostics-accounts-title = Account Status
+settings-diagnostics-col-account = Account
+settings-diagnostics-col-connection = Connection
+settings-diagnostics-col-presence = Presence
+settings-diagnostics-no-accounts = No accounts are currently active.
+
 # Backup Server Settings
 settings-backup-add-server = Add Server
 settings-backup-url-placeholder = http://127.0.0.1:8080
