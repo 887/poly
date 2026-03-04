@@ -546,7 +546,6 @@ pub(crate) async fn toggle_demo(
             chat_data.write().current_channel = None;
             chat_data.write().voice_channel_participants.clear();
             chat_data.write().voice_connection = None;
-            chat_data.write().local_session = None;
             chat_data
                 .write()
                 .account_sessions
@@ -582,7 +581,6 @@ pub(crate) async fn toggle_demo(
                     return;
                 }
             };
-            chat_data.write().local_session = Some(session.clone());
             // Store the cat session keyed by "demo"
             chat_data
                 .write()

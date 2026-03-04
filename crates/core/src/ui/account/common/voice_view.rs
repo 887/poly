@@ -254,9 +254,8 @@ fn VoiceControls(
                 button {
                     class: "btn btn-voice-disconnect",
                     onclick: move |_| {
-                        // Use the voice connection's account_id to find the right session.
-                        // Avoid local_session which is always the last-activated account
-                        // (e.g. Cat/demo) regardless of which account owns this channel.
+                        // Use the voice connection's account_id to find the correct session
+                        // for this account when removing the user from the participant list.
                         let local_id = {
                             let reader = chat_data.read();
                             reader
@@ -336,10 +335,8 @@ async fn join_voice_channel(
             .unwrap_or_default()
     };
 
-    // Add the local (self) user to participants using the session for *this* account.
-    // We must not fall back to `local_session` because that is always the most-recently
-    // activated account (e.g. Cat/demo), whereas the voice channel may belong to a
-    // different account entirely (e.g. Dog/demo2).
+    // Add the local (self) user to participants using the session for this account.
+    // Use voice_account_id to look up the correct session from account_sessions.
     let self_session = chat_data
         .read()
         .account_sessions

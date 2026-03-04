@@ -24,7 +24,17 @@ pub fn AccountBar() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
-    let session = chat_data.read().local_session.clone();
+
+    // Get the session for the current server's account.
+    // In multi-account mode, the account bar shows the user for the account
+    // that owns the currently-selected server.
+    let session = {
+        let reader = chat_data.read();
+        reader
+            .current_server
+            .as_ref()
+            .and_then(|server| reader.account_sessions.get(&server.account_id).cloned())
+    };
 
     // Use session data if available, otherwise show fallback
     let (user_name, _user_id, status_text, color, first_char, avatar_url) =

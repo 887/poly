@@ -60,11 +60,6 @@ pub struct ChatData {
     pub voice_channel_participants: HashMap<String, Vec<VoiceParticipant>>,
     /// The local user's current voice connection (None if not in a call).
     pub voice_connection: Option<VoiceConnection>,
-    /// The authenticated session for the most recently activated account.
-    ///
-    /// Used to identify the local user (e.g. when joining a voice channel).
-    /// In a multi-account world this is the "primary" or last-activated session.
-    pub local_session: Option<Session>,
     /// Sessions keyed by account ID — one entry per active account.
     ///
     /// Used to look up `icon_emoji`, display name, and other per-account
