@@ -163,6 +163,9 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
         .next()
         .map(|c: char| c.to_string())
         .unwrap_or_default();
+
+    let avatar_url = user.avatar_url.clone();
+
     let tile_class = if participant.is_streaming {
         "voice-tile voice-tile-streaming"
     } else {
@@ -176,10 +179,20 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
     let name = user.display_name.clone();
     rsx! {
         div { class: "{tile_class}",
-            div {
-                class: "{speaking_class}",
-                style: "background-color: {color};",
-                "{first_char}"
+            div { class: "{speaking_class}",
+                if let Some(url) = &avatar_url {
+                    img {
+                        src: "{url}",
+                        alt: "{user.display_name}",
+                        class: "voice-avatar-image",
+                    }
+                } else {
+                    div {
+                        class: "voice-avatar-fallback",
+                        style: "background-color: {color};",
+                        "{first_char}"
+                    }
+                }
             }
             div { class: "voice-tile-name", "{name}" }
             div { class: "voice-tile-icons",

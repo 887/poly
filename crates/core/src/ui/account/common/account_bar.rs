@@ -15,11 +15,6 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, SettingsSection};
 use dioxus::prelude::*;
 
-/// Avatar image for the cat demo account.
-const CAT_AVATAR: Asset = asset!("assets/icons/cat.png");
-/// Avatar image for the dog demo account.
-const DOG_AVATAR: Asset = asset!("assets/icons/dog.png");
-
 /// Account bar component.
 ///
 /// Shows user avatar + name + status + quick controls at the
@@ -32,7 +27,7 @@ pub fn AccountBar() -> Element {
     let session = chat_data.read().local_session.clone();
 
     // Use session data if available, otherwise show fallback
-    let (user_name, _user_id, status_text, color, first_char, avatar_url, demo_avatar) =
+    let (user_name, _user_id, status_text, color, first_char, avatar_url) =
         if let Some(ref s) = session {
             let name = s.user.display_name.clone();
             let id = s.user.id.clone();
@@ -41,14 +36,6 @@ pub fn AccountBar() -> Element {
                 .next()
                 .map(|c| c.to_string())
                 .unwrap_or_default();
-            // Determine demo avatar or real avatar URL
-            let demo_av = if id == "demo" {
-                Some(CAT_AVATAR)
-            } else if id == "demo2" {
-                Some(DOG_AVATAR)
-            } else {
-                None
-            };
             (
                 name,
                 id.clone(),
@@ -56,7 +43,6 @@ pub fn AccountBar() -> Element {
                 user_color(&id),
                 fc,
                 s.user.avatar_url.clone(),
-                demo_av,
             )
         } else {
             (
@@ -65,7 +51,6 @@ pub fn AccountBar() -> Element {
                 t("user-offline"),
                 user_color("no-session"),
                 "?".to_string(),
-                None,
                 None,
             )
         };
@@ -81,12 +66,6 @@ pub fn AccountBar() -> Element {
                     if let Some(url) = &avatar_url {
                         img {
                             src: "{url}",
-                            alt: "{user_name}",
-                            class: "account-avatar-image",
-                        }
-                    } else if let Some(asset) = demo_avatar {
-                        img {
-                            src: asset,
                             alt: "{user_name}",
                             class: "account-avatar-image",
                         }

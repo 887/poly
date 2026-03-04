@@ -5163,6 +5163,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "dioxus",
  "futures",
  "poly-client",
  "rand 0.10.0",

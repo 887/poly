@@ -74,9 +74,20 @@ pub fn VoiceBanner() -> Element {
                     for participant in &display_participants {
                         div {
                             class: "voice-banner-avatar",
-                            style: "background-color: {user_color(&participant.user.id)};",
                             title: "{participant.user.display_name}",
-                            "{participant.user.display_name.chars().next().unwrap_or('?')}"
+                            if let Some(url) = &participant.user.avatar_url {
+                                img {
+                                    src: "{url}",
+                                    alt: "{participant.user.display_name}",
+                                    class: "voice-banner-avatar-image",
+                                }
+                            } else {
+                                div {
+                                    class: "voice-banner-avatar-fallback",
+                                    style: "background-color: {user_color(&participant.user.id)};",
+                                    "{participant.user.display_name.chars().next().unwrap_or('?')}"
+                                }
+                            }
                         }
                     }
                 }

@@ -22,11 +22,6 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
 use dioxus::prelude::*;
 
-/// Avatar image for the cat demo account.
-const CAT_AVATAR: Asset = asset!("assets/icons/cat.png");
-/// Avatar image for the dog demo account.
-const DOG_AVATAR: Asset = asset!("assets/icons/dog.png");
-
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
 #[component]
@@ -206,15 +201,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .get(&account_id)
         .and_then(|s| s.user.avatar_url.clone());
 
-    // Pick demo avatar asset based on known demo account IDs.
-    let demo_avatar: Option<Asset> = if account_id == "demo" {
-        Some(CAT_AVATAR)
-    } else if account_id == "demo2" {
-        Some(DOG_AVATAR)
-    } else {
-        None
-    };
-
     // Use icon_emoji from session if available, else fall back to first char
     let icon_label: String = chat_data
         .read()
@@ -284,17 +270,11 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     });
             },
             title: "{account_id}",
-            // Render image avatar if available (real avatar_url or demo asset),
-            // otherwise fall back to emoji / first-letter text.
+            // Render image avatar if available (avatar_url is set by the client;
+            // demo client sets it to the bundled cat/dog asset path).
             if let Some(url) = &avatar_url {
                 img {
                     src: "{url}",
-                    class: "server-icon-image",
-                    alt: "{account_id}",
-                }
-            } else if let Some(asset) = demo_avatar {
-                img {
-                    src: asset,
                     class: "server-icon-image",
                     alt: "{account_id}",
                 }
@@ -343,19 +323,12 @@ fn FavoriteServerIcon(
     let tooltip = format!("{server_name}\n{backend_name} — {account_display_name}");
     let icon_color = user_color(&server_id);
 
-    // Determine source badge: account's avatar URL or demo asset
+    // Determine source badge: account's avatar URL
     let account_avatar_url: Option<String> = chat_data
         .read()
         .account_sessions
         .get(&account_id)
         .and_then(|s| s.user.avatar_url.clone());
-    let demo_badge_asset: Option<Asset> = if account_id == "demo" {
-        Some(CAT_AVATAR)
-    } else if account_id == "demo2" {
-        Some(DOG_AVATAR)
-    } else {
-        None
-    };
 
     let item_class = match (is_selected, is_drag_over) {
         (true, true) => "server-icon active drag-over-target",
@@ -513,16 +486,10 @@ fn FavoriteServerIcon(
                 style: "background-color: {icon_color};",
                 "{first_letter}"
             }
-            // Source badge: show account avatar image (or fallback emoji)
+            // Source badge: show account avatar image (or fallback letter)
             if let Some(url) = &account_avatar_url {
                 img {
                     src: "{url}",
-                    class: "source-badge-image",
-                    alt: "{account_display_name}",
-                }
-            } else if let Some(asset) = demo_badge_asset {
-                img {
-                    src: asset,
                     class: "source-badge-image",
                     alt: "{account_display_name}",
                 }

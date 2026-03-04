@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 poly-client = { workspace = true }
+dioxus = { workspace = true }
 serde = { workspace = true }
 chrono = { workspace = true }
 # uuid removed: ID generation uses rand (already a dep), avoiding getrandom 0.2 on WASM

@@ -5,7 +5,7 @@
 //! directories (`demo/`, `stoat/`, etc.).
 //!
 //! Delegates to sub-components to stay under 150-line component size limit:
-//! - `ChannelListHeader`: displays server name or "Direct Messages"
+//! - `ServerBanner`: displays server name or "Direct Messages" title
 //! - `DMFriendsView`: DM + group + friends unified list with search
 //! - `ServerChannelView`: server categories and channels
 
@@ -27,7 +27,7 @@ pub fn ChannelList() -> Element {
 
     rsx! {
         aside { class: "channel-list",
-            ChannelListHeader { current_view, current_server: current_server.clone() }
+            ServerBanner { current_view, current_server: current_server.clone() }
 
             div { class: "channel-entries",
                 if current_view == View::DmsFriends {
@@ -44,11 +44,11 @@ pub fn ChannelList() -> Element {
     }
 }
 
-/// Header section — server name or "Direct Messages" title.
+/// Server banner — displays the current server name or the "Direct Messages" title.
 #[component]
-fn ChannelListHeader(current_view: View, current_server: Option<Server>) -> Element {
+fn ServerBanner(current_view: View, current_server: Option<Server>) -> Element {
     rsx! {
-        div { class: "channel-list-header",
+        div { class: "server-banner-sidebar",
             if current_view == View::DmsFriends {
                 h3 { "{t(\"nav-dms\")}" }
             } else if let Some(ref server) = current_server {
@@ -513,19 +513,31 @@ fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
     use crate::state::chat_data::user_color;
 
     let vp_name = participant.user.display_name.clone();
-    let vp_color = user_color(&participant.user.id);
+    let vp_id = participant.user.id.clone();
+    let vp_color = user_color(&vp_id);
     let vp_first: String = vp_name
         .chars()
         .next()
         .map(|c: char| c.to_string())
         .unwrap_or_default();
+    let vp_avatar_url = participant.user.avatar_url.clone();
 
     rsx! {
         div { class: "voice-user-entry",
-            div {
-                class: "voice-user-avatar",
-                style: "background-color: {vp_color};",
-                "{vp_first}"
+            div { class: "voice-user-avatar",
+                if let Some(url) = &vp_avatar_url {
+                    img {
+                        src: "{url}",
+                        alt: "{vp_name}",
+                        class: "voice-user-avatar-image",
+                    }
+                } else {
+                    div {
+                        style: "background-color: {vp_color};",
+                        class: "voice-user-avatar-fallback",
+                        "{vp_first}"
+                    }
+                }
             }
             span { class: "voice-user-name", "{vp_name}" }
             if participant.is_muted {

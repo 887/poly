@@ -14,8 +14,14 @@
 #![allow(clippy::indexing_slicing)]
 
 use chrono::{Duration, Utc};
+use dioxus::prelude::*;
 use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
+
+/// Bundled cat avatar image for the cat demo account.
+const DEMO_CAT_AVATAR: Asset = asset!("assets/cat.png");
+/// Bundled dog avatar image for the dog demo account.
+const DEMO_DOG_AVATAR: Asset = asset!("assets/dog.png");
 
 /// The demo account ID used for all demo data (cat account).
 pub const DEMO_ACCOUNT_ID: &str = "demo";
@@ -36,7 +42,10 @@ pub fn demo_session() -> Session {
         user: User {
             id: "demo-user-self".to_string(),
             display_name: "Demo User (Cat)".to_string(),
-            avatar_url: None,
+            // The bundled cat.png is served by the Dioxus asset system; storing
+            // the path in avatar_url means all UI components use the generic
+            // avatar_url path — no demo-specific logic needed in UI code.
+            avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
             presence: PresenceStatus::Online,
             backend: BackendType::Demo,
         },
@@ -53,7 +62,7 @@ pub fn demo2_session() -> Session {
         user: User {
             id: "demo2-user-self".to_string(),
             display_name: "Demo User (Dog)".to_string(),
-            avatar_url: None,
+            avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
             presence: PresenceStatus::Online,
             backend: BackendType::Demo,
         },

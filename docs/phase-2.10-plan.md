@@ -232,3 +232,38 @@ These satisfy WebKit's synchronous requirements. Dioxus's own `ondragstart` / `o
 `ondrop` handlers then fire and correctly update ChatData state to drive the reorder logic.
 
 **Verified:** `window.__polyDragInit === true` confirmed in running app via eval bridge.
+
+---
+
+## Post-Phase Bug Fix — Hot-Reload Routing Loss (2026-03-04)
+
+**Problem:** Hot-patching the app on desktop caused routing state to be lost. After any hot-reload,
+the app would often show the setup wizard (first page) instead of staying on the current route
+(e.g., a specific server/channel).
+
+**Root cause:** During hot-reload, the `App` component re-mounts with fresh signal state. The
+`app_state` signal was initialized as `use_signal(AppState::default)`, which always has
+`is_setup_complete: false`. This caused the app to render the setup wizard instead of the Router.
+By the time the async `init_storage` completed and set `is_setup_complete = true`, the Router had
+already been unmounted → all navigation state was lost.
+
+**Fix:** Added `read_setup_status_sync()` helper in `crates/core/src/ui/mod.rs` that reads the
+setup completion flag synchronously from persistent storage BEFORE the first render decision:
+
+- **Web (WASM):** Reads from browser `localStorage` using `gloo_storage` (always synchronous)
+- **Native (desktop/mobile):** Reads the SurrealKV storage file and searches for the string
+  `"setup_complete":true` via fast file I/O (avoids full async SurrealDB init)
+
+The `App` component now initializes `app_state` with:
+```rust
+let mut app_state = use_signal(|| AppState {
+    is_setup_complete: read_setup_status_sync(),
+    ..AppState::default()
+});
+```
+
+This ensures the Router stays mounted across hot-reloads, preserving all navigation state (server,
+channel, scroll position, etc.).
+
+**Verified:** Navigated to Gaming Lounge → #minecraft, triggered hot-reload via `touch
+main_layout.rs`, confirmed the app stayed on the exact same route with identical view state.

@@ -166,6 +166,24 @@ body {
     border: 2px solid var(--accent-primary);
     margin-right: -6px;
     cursor: default;
+    overflow: hidden;
+}
+
+.voice-banner-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.voice-banner-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #fff;
 }
 
 .voice-banner-count {
@@ -416,12 +434,12 @@ body {
     border-right: 1px solid var(--border-primary);
 }
 
-.channel-list-header {
+.server-banner-sidebar {
     padding: 16px;
     border-bottom: 1px solid var(--border-primary);
 }
 
-.channel-list-header h3 {
+.server-banner-sidebar h3 {
     font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
@@ -2038,6 +2056,44 @@ select {
    VOICE / VIDEO CHANNEL VIEW
    ═══════════════════════════════════════════════════════════════ */
 
+.server-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 20px;
+    background: var(--bg-tertiary, #2c2f33);
+    border-bottom: 1px solid var(--border-color, #202225);
+}
+
+.server-banner-breadcrumb {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary, #dcddde);
+}
+
+.server-banner-server-name {
+    font-weight: 700;
+}
+
+.server-banner-separator {
+    color: var(--text-secondary, #b9bbbe);
+}
+
+.server-banner-channel-name {
+    color: var(--text-secondary, #b9bbbe);
+}
+
+.server-banner-info {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-secondary, #b9bbbe);
+}
+
 .voice-view {
     flex: 1;
     display: flex;
@@ -2147,6 +2203,26 @@ select {
     font-weight: 700;
     color: #fff;
     transition: box-shadow 0.2s;
+    overflow: hidden;
+}
+
+.voice-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.voice-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 2rem;
+    color: #fff;
 }
 
 .voice-avatar.speaking {
@@ -2705,6 +2781,24 @@ select {
     font-weight: 700;
     color: #fff;
     flex-shrink: 0;
+    overflow: hidden;
+}
+
+.voice-user-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.voice-user-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #fff;
 }
 
 .voice-user-name {
@@ -3672,10 +3766,6 @@ select {
     color: #fff;
 }
 
-.context-menu-item.context-menu-toggle {
-    /* Toggle items have the checkbox on the right */
-}
-
 .context-menu-arrow {
     font-size: 1rem;
     color: var(--text-tertiary);
@@ -3886,5 +3976,4 @@ select {
     font-size: 0.75rem;
     color: #4ade80;
     margin-left: 8px;
-}
 }
