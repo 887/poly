@@ -1091,6 +1091,53 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: false,
             },
         ],
+        // Dog account (demo2) voice channels
+        "ch2-voice-book" => vec![
+            VoiceParticipant {
+                user: users[5].clone(), // Frank
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: true,
+            },
+            VoiceParticipant {
+                user: users[7].clone(), // Henry
+                is_muted: true,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            },
+        ],
+        "ch2-voice-oss" => vec![
+            VoiceParticipant {
+                user: users[0].clone(), // Alice
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: true,
+                is_video_on: false,
+                is_speaking: true,
+            },
+            VoiceParticipant {
+                user: users[2].clone(), // Charlie
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            },
+        ],
+        "ch2-voice-workout" => vec![
+            VoiceParticipant {
+                user: users[6].clone(), // Grace
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: true,
+            },
+        ],
         _ => vec![],
     }
 }

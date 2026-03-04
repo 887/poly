@@ -254,11 +254,17 @@ fn VoiceControls(
                 button {
                     class: "btn btn-voice-disconnect",
                     onclick: move |_| {
-                        let local_id = chat_data
-                            .read()
-                            .local_session
-                            .as_ref()
-                            .map(|s| s.user.id.clone());
+                        // Use the voice connection's account_id to find the right session.
+                        // Avoid local_session which is always the last-activated account
+                        // (e.g. Cat/demo) regardless of which account owns this channel.
+                        let local_id = {
+                            let reader = chat_data.read();
+                            reader
+                                .voice_connection
+                                .as_ref()
+                                .and_then(|vc| reader.account_sessions.get(&vc.account_id))
+                                .map(|s| s.user.id.clone())
+                        };
                         let mut writer = chat_data.write();
                         if let Some(ref vc) = writer.voice_connection.clone()
                             && let Some(ref uid) = local_id
@@ -330,8 +336,16 @@ async fn join_voice_channel(
             .unwrap_or_default()
     };
 
-    // Add the local (self) user to participants if we have a session
-    if let Some(ref session) = chat_data.read().local_session.clone() {
+    // Add the local (self) user to participants using the session for *this* account.
+    // We must not fall back to `local_session` because that is always the most-recently
+    // activated account (e.g. Cat/demo), whereas the voice channel may belong to a
+    // different account entirely (e.g. Dog/demo2).
+    let self_session = chat_data
+        .read()
+        .account_sessions
+        .get(&voice_account_id)
+        .cloned();
+    if let Some(ref session) = self_session {
         let already_in = participants.iter().any(|p| p.user.id == session.user.id);
         if !already_in {
             participants.push(poly_client::VoiceParticipant {
