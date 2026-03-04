@@ -1128,16 +1128,14 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: false,
             },
         ],
-        "ch2-voice-workout" => vec![
-            VoiceParticipant {
-                user: users[6].clone(), // Grace
-                is_muted: false,
-                is_deafened: false,
-                is_streaming: false,
-                is_video_on: false,
-                is_speaking: true,
-            },
-        ],
+        "ch2-voice-workout" => vec![VoiceParticipant {
+            user: users[6].clone(), // Grace
+            is_muted: false,
+            is_deafened: false,
+            is_streaming: false,
+            is_video_on: false,
+            is_speaking: true,
+        }],
         _ => vec![],
     }
 }
