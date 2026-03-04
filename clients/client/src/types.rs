@@ -112,6 +112,16 @@ pub struct Session {
     /// letter of the account ID. Useful for demo accounts and for backends
     /// that wish to show a distinctive icon per account.
     pub icon_emoji: Option<String>,
+    /// The federated instance/homeserver this account belongs to.
+    ///
+    /// Used as the `:instance_id` URL segment, enabling multiple accounts on
+    /// different homeservers of the same protocol (e.g. two Matrix accounts on
+    /// different homeservers) to coexist in routing.
+    ///
+    /// Examples: `"demo"` for demo accounts, `"matrix.org"` for a Matrix
+    /// homeserver, `"discord.com"` for Discord, `"my-poly.server.com"` for
+    /// a self-hosted Poly server.
+    pub instance_id: String,
 }
 
 /// A server/community/workspace.
@@ -386,6 +396,8 @@ pub struct VoiceConnection {
     pub backend: BackendType,
     /// Account ID that owns this voice connection (for routing).
     pub account_id: String,
+    /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
+    pub instance_id: String,
     /// Whether our microphone is muted.
     pub is_muted: bool,
     /// Whether we are deafened (all audio muted).

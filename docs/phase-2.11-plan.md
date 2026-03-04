@@ -82,7 +82,7 @@ src/ui/account/
 
 ### Key Principle: Dispatch by BackendType
 
-The routing already carries `:backend` in every account-scoped URL. The UI uses `BackendType` to select which backend-specific components to render. This is done through a **`BackendComponents`** trait:
+The routing already carries `:backend/:instance_id/:account_id` in every account-scoped URL. The UI uses `BackendType` to select which backend-specific components to render. This is done through a **`BackendComponents`** trait:
 
 ```rust
 /// Trait defining backend-specific UI element renderers.
@@ -180,4 +180,4 @@ Dioxus components are functions returning `Element`, not trait objects. The natu
 - This refactor must NOT break any existing functionality
 - The demo client's UI should continue to work identically after the move
 - Future phases (3.x) will flesh out per-backend components as real clients are implemented
-- The routing already carries `:backend` in URLs — no routing changes needed
+- The routing already carries `:backend/:instance_id/:account_id` in URLs — no extra backend-dispatch routing changes needed

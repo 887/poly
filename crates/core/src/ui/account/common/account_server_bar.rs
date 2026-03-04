@@ -40,6 +40,7 @@ pub fn AccountServerBar() -> Element {
     let nav = app_state.read().nav.clone();
     let active_account_id = nav.active_account_id.clone();
     let active_backend = nav.active_backend;
+    let active_instance_id = nav.active_instance_id.clone();
     let current_view = nav.view;
     let selected_server = nav.selected_server.clone();
 
@@ -51,6 +52,8 @@ pub fn AccountServerBar() -> Element {
     let backend_slug = active_backend
         .map(|b| b.slug().to_string())
         .unwrap_or_else(|| "demo".to_string());
+
+    let instance_id = active_instance_id.unwrap_or_else(|| "demo".to_string());
 
     // Get all servers for this account (not just favorites)
     let all_servers = chat_data.read().servers.clone();
@@ -96,6 +99,7 @@ pub fn AccountServerBar() -> Element {
             AccountBarDmsButton {
                 current_view,
                 backend_slug: backend_slug.clone(),
+                instance_id: instance_id.clone(),
                 account_id: account_id.clone(),
             }
 
@@ -113,6 +117,7 @@ pub fn AccountServerBar() -> Element {
                     server_id: server.id.clone(),
                     server_name: server.name.clone(),
                     backend_slug: server.backend.slug().to_string(),
+                    instance_id: instance_id.clone(),
                     account_id: server.account_id.clone(),
                     unread: server.unread_count,
                     is_selected: selected_server.as_deref() == Some(server.id.as_str()),
@@ -130,6 +135,7 @@ pub fn AccountServerBar() -> Element {
                     navigator()
                         .push(Route::AccountSettingsRoute {
                             backend: backend_slug.clone(),
+                            instance_id: instance_id.clone(),
                             account_id: account_id.clone(),
                         });
                 },
@@ -150,6 +156,8 @@ fn AccountServerIcon(
     server_id: String,
     server_name: String,
     backend_slug: String,
+    /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
+    instance_id: String,
     account_id: String,
     unread: u32,
     is_selected: bool,
@@ -183,6 +191,7 @@ fn AccountServerIcon(
                 let sid = server_id.clone();
                 let sname = server_name.clone();
                 let aid = account_id.clone();
+                let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
                 move |evt: Event<MouseData>| {
                     evt.prevent_default();
@@ -194,6 +203,7 @@ fn AccountServerIcon(
                         server_id: sid.clone(),
                         server_name: sname.clone(),
                         account_id: aid.clone(),
+                        instance_id: iid.clone(),
                         backend_slug: bslug.clone(),
                     });
                 }
@@ -308,6 +318,7 @@ fn AccountServerIcon(
                     navigator()
                         .push(Route::ServerHome {
                             backend: bslug.clone(),
+                            instance_id: instance_id.clone(),
                             account_id: aid.clone(),
                             server_id: sid.clone(),
                         });
@@ -328,7 +339,13 @@ fn AccountServerIcon(
 
 /// DMs/Friends button for the account server bar.
 #[component]
-fn AccountBarDmsButton(current_view: View, backend_slug: String, account_id: String) -> Element {
+fn AccountBarDmsButton(
+    current_view: View,
+    backend_slug: String,
+    /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
+    instance_id: String,
+    account_id: String,
+) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
 
     rsx! {
@@ -343,6 +360,7 @@ fn AccountBarDmsButton(current_view: View, backend_slug: String, account_id: Str
                 navigator()
                     .push(Route::DmsHome {
                         backend: backend_slug.clone(),
+                        instance_id: instance_id.clone(),
                         account_id: account_id.clone(),
                     });
             },

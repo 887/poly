@@ -42,6 +42,7 @@ pub fn ServerContextMenu() -> Element {
     let server_id = menu.server_id.clone();
     let server_name = menu.server_name.clone();
     let account_id = menu.account_id.clone();
+    let instance_id = menu.instance_id.clone();
     let backend_slug = menu.backend_slug.clone();
 
     // Per-menu local toggles (in-memory for now)
@@ -131,6 +132,7 @@ pub fn ServerContextMenu() -> Element {
             {
                 let sid = server_id.clone();
                 let aid = account_id.clone();
+                let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
                 let mut close = close;
                 rsx! {
@@ -142,6 +144,7 @@ pub fn ServerContextMenu() -> Element {
                             navigator()
                                 .push(Route::ServerSettingsRoute {
                                     backend: bslug.clone(),
+                                    instance_id: iid.clone(),
                                     account_id: aid.clone(),
                                     server_id: sid.clone(),
                                 });
@@ -204,6 +207,7 @@ pub fn ServerContextMenu() -> Element {
             {
                 let sid = server_id.clone();
                 let aid = account_id.clone();
+                let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
                 let mut close = close;
                 rsx! {
@@ -214,6 +218,7 @@ pub fn ServerContextMenu() -> Element {
                             navigator()
                                 .push(Route::ServerSettingsRoute {
                                     backend: bslug.clone(),
+                                    instance_id: iid.clone(),
                                     account_id: aid.clone(),
                                     server_id: sid.clone(),
                                 });
@@ -226,6 +231,7 @@ pub fn ServerContextMenu() -> Element {
             {
                 let sid = server_id.clone();
                 let aid = account_id.clone();
+                let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
                 let mut close = close;
                 rsx! {
@@ -236,6 +242,7 @@ pub fn ServerContextMenu() -> Element {
                             navigator()
                                 .push(Route::ServerSettingsRoute {
                                     backend: bslug.clone(),
+                                    instance_id: iid.clone(),
                                     account_id: aid.clone(),
                                     server_id: sid.clone(),
                                 });
@@ -250,6 +257,7 @@ pub fn ServerContextMenu() -> Element {
             {
                 let sid = server_id.clone();
                 let aid = account_id.clone();
+                let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
                 let mut close = close;
                 rsx! {
@@ -261,6 +269,7 @@ pub fn ServerContextMenu() -> Element {
                             navigator()
                                 .push(Route::ServerSettingsRoute {
                                     backend: bslug.clone(),
+                                    instance_id: iid.clone(),
                                     account_id: aid.clone(),
                                     server_id: sid.clone(),
                                 });

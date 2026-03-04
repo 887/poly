@@ -17,7 +17,7 @@ pub type BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>;
 
 /// Manages active messenger backend connections.
 ///
-/// Each backend is keyed by its account ID (e.g., `"demo"` for the demo client).
+/// Each backend is keyed by its account ID (e.g., `"demo-cat"` for the cat demo client).
 /// Multiple accounts from the same backend type can be active simultaneously
 /// (e.g., two Discord accounts, three Matrix accounts).
 pub struct ClientManager {
@@ -81,9 +81,12 @@ impl ClientManager {
             .authenticate(AuthCredentials::Token("demo-token".to_string()))
             .await
             .map_err(|e| format!("Demo auth failed: {e}"))?;
-        self.sessions.insert("demo".to_string(), session.clone());
-        self.backends
-            .insert("demo".to_string(), Arc::new(RwLock::new(Box::new(client))));
+        self.sessions
+            .insert("demo-cat".to_string(), session.clone());
+        self.backends.insert(
+            "demo-cat".to_string(),
+            Arc::new(RwLock::new(Box::new(client))),
+        );
 
         // Activate demo2 (dog) account
         let mut client2 = poly_demo::DemoClient2::new();
@@ -91,9 +94,9 @@ impl ClientManager {
             .authenticate(AuthCredentials::Token("demo2-token".to_string()))
             .await
             .map_err(|e| format!("Demo2 auth failed: {e}"))?;
-        self.sessions.insert("demo2".to_string(), session2);
+        self.sessions.insert("demo-dog".to_string(), session2);
         self.backends.insert(
-            "demo2".to_string(),
+            "demo-dog".to_string(),
             Arc::new(RwLock::new(Box::new(client2))),
         );
 
@@ -111,14 +114,14 @@ impl ClientManager {
     /// Removes both demo backends from the map and clears demo-related cache.
     #[cfg(feature = "demo")]
     pub fn deactivate_demo(&mut self) {
-        self.backends.remove("demo");
-        self.backends.remove("demo2");
-        self.sessions.remove("demo");
-        self.sessions.remove("demo2");
+        self.backends.remove("demo-cat");
+        self.backends.remove("demo-dog");
+        self.sessions.remove("demo-cat");
+        self.sessions.remove("demo-dog");
         self.demo_active = false;
         // Remove demo entries from server map
         self.server_account_map
-            .retain(|_, account_id| account_id != "demo" && account_id != "demo2");
+            .retain(|_, account_id| account_id != "demo-cat" && account_id != "demo-dog");
         tracing::info!("Demo clients deactivated");
     }
 

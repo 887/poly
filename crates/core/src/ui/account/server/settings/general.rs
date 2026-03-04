@@ -17,6 +17,8 @@ pub fn ServerGeneralSettings(
     server_name: String,
     backend_slug: String,
     account_id: String,
+    /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
+    instance_id: String,
 ) -> Element {
     let mut show_confirm = use_signal(|| false);
 
@@ -42,6 +44,7 @@ pub fn ServerGeneralSettings(
                     server_name: server_name.clone(),
                     server_id: server_id.clone(),
                     backend_slug: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
                     account_id: account_id.clone(),
                     oncancel: move |_| show_confirm.set(false),
                 }
@@ -64,6 +67,8 @@ fn LeaveServerConfirm(
     server_name: String,
     server_id: String,
     backend_slug: String,
+    /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
+    instance_id: String,
     account_id: String,
     oncancel: EventHandler<MouseEvent>,
 ) -> Element {
@@ -71,6 +76,7 @@ fn LeaveServerConfirm(
     let mut chat_data: Signal<ChatData> = use_context();
 
     let aid_nav = account_id.clone();
+    let iid_nav = instance_id.clone();
     let bslug_nav = backend_slug.clone();
     let sid_remove = server_id.clone();
     // Pre-compute the title using t_args so the Fluent {$name} placeholder is filled
@@ -106,6 +112,7 @@ fn LeaveServerConfirm(
                         navigator()
                             .replace(Route::DmsHome {
                                 backend: bslug_nav.clone(),
+                                instance_id: iid_nav.clone(),
                                 account_id: aid_nav.clone(),
                             });
                     },

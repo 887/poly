@@ -164,11 +164,18 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                             .active_account_id
                                             .clone()
                                             .unwrap_or_else(|| backend.slug().to_string());
+                                        let instance_id = app_state
+                                            .read()
+                                            .nav
+                                            .active_instance_id
+                                            .clone()
+                                            .unwrap_or_else(|| "demo".to_string());
                                         navigator()
                                             .push(Route::DmChat {
                                                 backend: backend.slug().to_string(),
+                                                instance_id,
                                                 account_id,
-                                                channel_id: fid.clone(),
+                                                dm_id: fid.clone(),
                                             });
                                     }
                                 },

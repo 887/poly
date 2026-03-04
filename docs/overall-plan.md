@@ -1,6 +1,6 @@
 # Poly — PolyGlot Messenger: Overall Plan
 
-> **Last Updated:** 2026-02-28  
+> **Last Updated:** 2026-03-04  
 > **Status:** Phase 1 — Planning & Research  
 > **License:** MIT / Apache-2.0 dual license  
 > **Repository:** `poly`
@@ -238,7 +238,7 @@ poly/
 - **Below**: ALL servers for this account (not just favorites)
 - **Bottom**: Account Settings (⚙) — settings for this specific account
 
-Clicking a favorited server in Bar 1 navigates to the server route, which sets `active_account_id`, causing Bar 2 to show that account's servers with the clicked server highlighted.
+Clicking a favorited server in Bar 1 navigates to the server route, which sets `active_backend` + `active_instance_id` + `active_account_id`, causing Bar 2 to show that account's servers with the clicked server highlighted.
 
 See [Phase 2.9 Plan](phase-2.9-plan.md) for full details.
 
@@ -525,7 +525,7 @@ See individual phase plan documents for detailed checklists:
 | D16 | Backup server admin UI | Tailwind+Alpine.js embedded SPA (`const &str` in `web/mod.rs`) | Originally planned as Dioxus fullstack admin. Changed to single-file HTML SPA embedded at compile time: no build step, no Dioxus dependency in backup-server crate, simpler to maintain.  | 2026-03-01 |
 | D17 | rand crate version | rand 0.10 (upgraded from 0.8) + uuid removed from WASM path | rand 0.10 API changes: `distributions`→`distr`, `DistString`→`SampleString`, `thread_rng()`→`rng()`. uuid crate removed from WASM entirely (Account.id is now `String`); IDs generated via `Alphanumeric.sample_string`. Three getrandom semver lines (0.2/0.3/0.4) managed via named workspace aliases. | 2026-03-01 |
 | D18 | Dual sidebar architecture | Favorites Bar + Account Server Bar (two 72px columns) | Single sidebar mixed account switching, favorites, and per-account nav. Dual bars clearly separate cross-account favorites from per-account server lists. Clicking favorited server auto-switches account context. Enables future drag-and-drop from account bar to favorites. | 2026-03-03 |
-| D19 | Multi-account URL routing | `/:backend/:account_id/...` URL structure | Every account-scoped URL encodes backend type and account ID. Enables deep-linking, per-backend rendering, and correct back/forward navigation across account switches. | 2026-03-03 |
+| D19 | Multi-account URL routing | `/:backend/:instance_id/:account_id/...` URL structure | Every account-scoped URL encodes backend type, federated instance ID, and account ID. Enables deep-linking across multiple accounts on the same backend (e.g. Matrix homeservers) and preserves correct back/forward navigation. | 2026-03-04 |
 | D20 | Per-backend UI directories | `ui/account/{demo,stoat,discord,matrix,teams,poly_native}/` | Each backend gets its own UI subdirectory under `account/`. Common components in `account/common/`. Dispatch by `BackendType` match. Feature-gated. Keeps backend-specific UI isolated and extensible. See `docs/multi-client-architecture.md`. | 2026-03-03 |
 
 ---

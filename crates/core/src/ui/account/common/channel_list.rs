@@ -140,22 +140,51 @@ fn DMFriendsView() -> Element {
         && filtered_groups.is_empty()
         && show_friends.is_empty();
 
+    // Pre-compute instance_ids for DMs and groups (cannot use let inside RSX for-loops)
+    let dm_instance_ids: Vec<String> = filtered_dms
+        .iter()
+        .map(|dm| {
+            chat_data
+                .read()
+                .account_sessions
+                .get(&dm.account_id)
+                .map(|s| s.instance_id.clone())
+                .unwrap_or_default()
+        })
+        .collect();
+    let group_instance_ids: Vec<String> = filtered_groups
+        .iter()
+        .map(|g| {
+            chat_data
+                .read()
+                .account_sessions
+                .get(&g.account_id)
+                .map(|s| s.instance_id.clone())
+                .unwrap_or_default()
+        })
+        .collect();
+
     rsx! {
         // Friends button
         button {
             class: "dm-friends-row-btn",
             onclick: move |_| {
                 // Navigate to Friends for the currently active account.
-                let (backend_slug, account_id) = {
+                let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
-                    match (nav.active_backend, nav.active_account_id.clone()) {
-                        (Some(b), Some(id)) => (b.slug().to_string(), id),
-                        _ => ("demo".to_string(), "demo".to_string()),
+                    match (
+                        nav.active_backend,
+                        nav.active_instance_id.clone(),
+                        nav.active_account_id.clone(),
+                    ) {
+                        (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
+                        _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
                     }
                 };
                 navigator()
                     .push(Route::FriendsRoute {
                         backend: backend_slug,
+                        instance_id,
                         account_id,
                     });
             },
@@ -183,7 +212,7 @@ fn DMFriendsView() -> Element {
 
         // Unified DM + Group list
         div { class: "dm-unified-list",
-            for dm in &filtered_dms {
+            for (dm , dm_iid) in filtered_dms.iter().zip(dm_instance_ids.iter()) {
                 DMChannelItem {
                     channel_id: dm.id.clone(),
                     display_name: dm.user.display_name.clone(),
@@ -193,10 +222,11 @@ fn DMFriendsView() -> Element {
                     is_active: selected_channel.as_deref() == Some(&dm.id),
                     account_id: dm.account_id.clone(),
                     backend_slug: dm.backend.slug().to_string(),
+                    instance_id: dm_iid.clone(),
                 }
             }
 
-            for group in &filtered_groups {
+            for (group , group_iid) in filtered_groups.iter().zip(group_instance_ids.iter()) {
                 GroupChannelItem {
                     group_id: group.id.clone(),
                     group_name: group.name.clone(),
@@ -205,6 +235,7 @@ fn DMFriendsView() -> Element {
                     is_active: selected_channel.as_deref() == Some(&group.id),
                     account_id: group.account_id.clone(),
                     backend_slug: group.backend.slug().to_string(),
+                    instance_id: group_iid.clone(),
                 }
             }
 
@@ -264,6 +295,8 @@ fn DMChannelItem(
     account_id: String,
     /// Backend slug for routing (e.g. `"demo"`, `"stoat"`).
     backend_slug: String,
+    /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
+    instance_id: String,
 ) -> Element {
     use crate::state::chat_data::user_color;
     let mut app_state: Signal<AppState> = use_context();
@@ -300,8 +333,9 @@ fn DMChannelItem(
                 navigator()
                     .push(Route::DmChat {
                         backend: backend_slug.clone(),
+                        instance_id: instance_id.clone(),
                         account_id: account_id.clone(),
-                        channel_id: channel_id.clone(),
+                        dm_id: channel_id.clone(),
                     });
             },
             div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
@@ -325,6 +359,8 @@ fn GroupChannelItem(
     account_id: String,
     /// Backend slug for routing (e.g. `"demo"`, `"stoat"`).
     backend_slug: String,
+    /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
+    instance_id: String,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
@@ -362,8 +398,9 @@ fn GroupChannelItem(
                 navigator()
                     .push(Route::DmChat {
                         backend: backend_slug.clone(),
+                        instance_id: instance_id.clone(),
                         account_id: account_id.clone(),
-                        channel_id: group_id.clone(),
+                        dm_id: group_id.clone(),
                     });
             },
             span { class: "channel-icon", "👥" }
@@ -476,16 +513,21 @@ fn ChannelItemRow(channel: Channel) -> Element {
                     load_channel_data(cid, client_manager, chat_data, app_state).await;
                 });
                 let server_id = app_state.read().nav.selected_server.clone().unwrap_or_default();
-                let (backend_slug, account_id) = {
+                let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
-                    match (nav.active_backend, nav.active_account_id.clone()) {
-                        (Some(b), Some(id)) => (b.slug().to_string(), id),
-                        _ => ("demo".to_string(), "demo".to_string()),
+                    match (
+                        nav.active_backend,
+                        nav.active_instance_id.clone(),
+                        nav.active_account_id.clone(),
+                    ) {
+                        (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
+                        _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
                     }
                 };
                 navigator()
                     .push(Route::ServerChat {
                         backend: backend_slug,
+                        instance_id,
                         account_id,
                         server_id,
                         channel_id: ch_id.clone(),

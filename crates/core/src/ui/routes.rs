@@ -1,33 +1,50 @@
-//! URL-based routing for Poly — multi-account, multi-backend URL structure.
+//! URL-based routing for Poly — multi-account, multi-backend, multi-instance URL structure.
 //!
-//! Every account-scoped view encodes two pieces of identity in its URL:
-//! - `:backend` — one of `demo | stoat | matrix | discord | teams`
-//! - `:account_id` — the account key used in `ClientManager`
+//! Every account-scoped view encodes three pieces of identity in its URL:
+//! - `:backend`     — one of `demo | stoat | matrix | discord | teams`
+//! - `:instance_id` — the federated homeserver / instance (e.g. `demo`, `matrix.org`, `my.poly.server`)
+//! - `:account_id`  — the account key used in `ClientManager` (unique within that instance)
 //!
-//! This lets Poly deep-link into any account and express per-backend visual
-//! variations. App-level views (`/notifications`, `/settings`) are not scoped
-//! to any account.
+//! This lets Poly deep-link into any account on any federated instance and express
+//! per-backend visual variations. App-level views (`/notifications`, `/settings`)
+//! are not scoped to any account.
 //!
 //! # URL scheme
 //! ```text
-//! /                                                   → root redirect
-//! /:backend/:account_id/dms                           → DM home
-//! /:backend/:account_id/dms/:channel_id               → DM conversation
-//! /:backend/:account_id/friends                       → Friends list
-//! /:backend/:account_id/channels/:server_id           → Server home
-//! /:backend/:account_id/channels/:server_id/:channel_id → Server channel
-//! /notifications                                      → Aggregated feed
-//! /settings                                           → App settings
+//! /                                                                                 → root redirect
+//! /:backend/:instance_id/:account_id/dms                                           → DM home
+//! /:backend/:instance_id/:account_id/dms/:dm_id                                    → DM conversation
+//! /:backend/:instance_id/:account_id/friends                                       → Friends list
+//! /:backend/:instance_id/:account_id/channels/:server_id                           → Server home
+//! /:backend/:instance_id/:account_id/channels/:server_id/:channel_id              → Server channel
+//! /notifications                                                                    → Aggregated feed
+//! /settings                                                                         → App settings
+//! /:backend/:instance_id/:account_id/settings                                      → Account settings
+//! /:backend/:instance_id/:account_id/servers/:server_id/settings                  → Server settings
+//! ```
+//!
+//! # URL example (demo accounts)
+//! ```text
+//! /demo/demo/demo-cat/dms                     → cat account DM home
+//! /demo/demo/demo-dog/channels/s789/ch456     → dog account server channel
+//! ```
+//!
+//! # URL example (federated real accounts)
+//! ```text
+//! /matrix/matrix.org/alice/channels/!room:matrix.org/!msg:matrix.org
+//! /matrix/my.homeserver.org/bob/dms/!dm:my.homeserver.org
+//! /stoat/stoat.chat/carol/channels/sid123/cid456
 //! ```
 //!
 //! # AppState bridge
 //! `on_update` syncs the current route into `AppState.nav` *before* any
 //! component re-renders so components reading from AppState continue to work.
 //!
-//! # Demo account
-//! The demo account always uses backend=`demo`, account_id=`demo`.
+//! # Demo accounts
+//! Cat demo: backend=`demo`, instance=`demo`, account=`demo-cat`
+//! Dog demo: backend=`demo`, instance=`demo`, account=`demo-dog`
 // DECISION(DX-ROUTER-2): Multi-account routing replaces Discord-style single-account URLs.
-// Backend slug + account_id in URL enables per-backend rendering and deep linking.
+// DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
 use super::account::{
     AccountBar, AccountSettingsPage, AccountSwitcher, ChannelList, ChatView, FriendsPanel,
@@ -63,34 +80,36 @@ pub enum Route {
 
         // ── Account-scoped: DMs ─────────────────────────────────────
         #[layout(DmsLayout)]
-            #[route("/:backend/:account_id/dms")]
-            DmsHome { backend: String, account_id: String },
+            #[route("/:backend/:instance_id/:account_id/dms")]
+            DmsHome { backend: String, instance_id: String, account_id: String },
 
-            #[route("/:backend/:account_id/dms/:channel_id")]
-            DmChat { backend: String, account_id: String, channel_id: String },
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id")]
+            DmChat { backend: String, instance_id: String, account_id: String, dm_id: String },
         #[end_layout]
 
         // ── Account-scoped: Server channels ─────────────────────────
         #[layout(ServerLayout)]
-            #[route("/:backend/:account_id/channels/:server_id/:channel_id")]
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id")]
             ServerChat {
                 backend: String,
+                instance_id: String,
                 account_id: String,
                 server_id: String,
                 channel_id: String,
             },
 
-            #[route("/:backend/:account_id/channels/:server_id")]
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id")]
             ServerHome {
                 backend: String,
+                instance_id: String,
                 account_id: String,
                 server_id: String,
             },
         #[end_layout]
 
         // ── Account-scoped: Friends ──────────────────────────────────
-        #[route("/:backend/:account_id/friends")]
-        FriendsRoute { backend: String, account_id: String },
+        #[route("/:backend/:instance_id/:account_id/friends")]
+        FriendsRoute { backend: String, instance_id: String, account_id: String },
 
         // ── App-level (not account-scoped) ───────────────────────────
         #[route("/notifications")]
@@ -100,13 +119,14 @@ pub enum Route {
         SettingsRoute,
 
         // ── Account-scoped settings ──────────────────────────────────
-        #[route("/:backend/:account_id/settings")]
-        AccountSettingsRoute { backend: String, account_id: String },
+        #[route("/:backend/:instance_id/:account_id/settings")]
+        AccountSettingsRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped: Server settings ─────────────────────────
-        #[route("/:backend/:account_id/servers/:server_id/settings")]
+        #[route("/:backend/:instance_id/:account_id/servers/:server_id/settings")]
         ServerSettingsRoute {
             backend: String,
+            instance_id: String,
             account_id: String,
             server_id: String,
         },
@@ -124,7 +144,8 @@ pub enum Route {
 /// (ChannelList, FavoritesBar, …) that read AppState continue to work.
 ///
 /// Also extracts the `:backend` slug into [`BackendType`] and writes it to
-/// `nav.active_backend`, and writes `:account_id` to `nav.active_account_id`.
+/// `nav.active_backend`, the `:instance_id` to `nav.active_instance_id`, and
+/// `:account_id` to `nav.active_account_id`.
 ///
 /// Called from [`RouterConfig::on_update`] *before* dependent components
 /// re-render.
@@ -133,54 +154,64 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
     match route {
         Route::DmsHome {
             backend,
+            instance_id,
             account_id,
         } => {
             s.nav.view = View::DmsFriends;
             s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
         }
         Route::DmChat {
             backend,
+            instance_id,
             account_id,
-            channel_id,
+            dm_id,
         } => {
             s.nav.view = View::DmsFriends;
             s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
-            s.nav.selected_channel = Some(channel_id.clone());
+            s.nav.selected_channel = Some(dm_id.clone());
         }
         Route::ServerHome {
             backend,
+            instance_id,
             account_id,
             server_id,
         } => {
             s.nav.view = View::Server;
             s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             // Don't clear selected_channel — load_server_data sets it
         }
         Route::ServerChat {
             backend,
+            instance_id,
             account_id,
             server_id,
             channel_id,
         } => {
             s.nav.view = View::Server;
             s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = Some(channel_id.clone());
         }
         Route::FriendsRoute {
             backend,
+            instance_id,
             account_id,
         } => {
             s.nav.view = View::Friends;
             s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
         }
         Route::NotificationsRoute => {
@@ -191,27 +222,32 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.view = View::Settings;
             // App-level — clear account context so Bar 2 hides and no server stays "open"
             s.nav.active_account_id = None;
+            s.nav.active_instance_id = None;
             s.nav.active_backend = None;
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
         }
         Route::AccountSettingsRoute {
             backend,
+            instance_id,
             account_id,
         } => {
             s.nav.view = View::Settings;
             s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
         }
         Route::ServerSettingsRoute {
             backend,
+            instance_id,
             account_id,
             server_id,
         } => {
             s.nav.view = View::Settings;
             s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = None;
@@ -275,7 +311,7 @@ fn ServerLayout() -> Element {
 
 /// DM home — placeholder when no conversation is selected.
 #[component]
-fn DmsHome(backend: String, account_id: String) -> Element {
+fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
         main { class: "chat-view",
             div { class: "chat-header",
@@ -296,7 +332,7 @@ fn DmsHome(backend: String, account_id: String) -> Element {
 
 /// DM chat — renders a conversation with an individual or group.
 #[component]
-fn DmChat(backend: String, account_id: String, channel_id: String) -> Element {
+fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     rsx! {
         ChatView {}
     }
@@ -304,7 +340,12 @@ fn DmChat(backend: String, account_id: String, channel_id: String) -> Element {
 
 /// Server home — auto-selects first channel, renders chat / voice view.
 #[component]
-fn ServerHome(backend: String, account_id: String, server_id: String) -> Element {
+fn ServerHome(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+) -> Element {
     let chat_data: Signal<ChatData> = use_context();
 
     let is_voice_channel = chat_data
@@ -326,6 +367,7 @@ fn ServerHome(backend: String, account_id: String, server_id: String) -> Element
 #[component]
 fn ServerChat(
     backend: String,
+    instance_id: String,
     account_id: String,
     server_id: String,
     channel_id: String,
@@ -349,7 +391,7 @@ fn ServerChat(
 
 /// Friends browser — tiled grid view.
 #[component]
-fn FriendsRoute(backend: String, account_id: String) -> Element {
+fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
         FriendsPanel {}
     }
@@ -377,7 +419,7 @@ fn SettingsRoute() -> Element {
 /// account-relevant settings (notifications). Global settings (theme,
 /// identity, backup) remain in the app-level SettingsRoute.
 #[component]
-fn AccountSettingsRoute(backend: String, account_id: String) -> Element {
+fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
         AccountSettingsPage { backend, account_id }
     }
@@ -388,9 +430,19 @@ fn AccountSettingsRoute(backend: String, account_id: String) -> Element {
 /// Routes to the server-scoped settings page which provides notification levels,
 /// per-server profile (nickname/avatar), and general options including leave server.
 #[component]
-fn ServerSettingsRoute(backend: String, account_id: String, server_id: String) -> Element {
+fn ServerSettingsRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+) -> Element {
     rsx! {
-        ServerSettingsPage { backend, account_id, server_id }
+        ServerSettingsPage {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+        }
     }
 }
 
@@ -407,7 +459,8 @@ fn Root() -> Element {
         if cm.demo_active {
             navigator().replace(Route::DmsHome {
                 backend: "demo".to_string(),
-                account_id: "demo".to_string(),
+                instance_id: "demo".to_string(),
+                account_id: "demo-cat".to_string(),
             });
         } else {
             navigator().replace(Route::SettingsRoute);

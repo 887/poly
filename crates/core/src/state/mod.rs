@@ -42,6 +42,11 @@ pub struct NavigationState {
     /// Set by the router's `on_update` callback and mirrors the `:backend` URL
     /// segment. `None` on app launch before any navigation occurs.
     pub active_backend: Option<BackendType>,
+    /// The federated instance/homeserver for the active account.
+    ///
+    /// Mirrors the `:instance_id` URL segment. Examples: `"demo"`, `"matrix.org"`.
+    /// `None` for app-level routes (`/notifications`, `/settings`).
+    pub active_instance_id: Option<String>,
     /// The account ID currently navigated to.
     ///
     /// Set by the router's `on_update` callback and mirrors the `:account_id`
@@ -60,6 +65,7 @@ impl Default for NavigationState {
         Self {
             view: View::DmsFriends,
             active_backend: None,
+            active_instance_id: None,
             active_account_id: None,
             selected_server: None,
             selected_channel: None,
@@ -107,6 +113,8 @@ pub struct ContextMenuState {
     pub server_name: String,
     /// Account ID that owns this server.
     pub account_id: String,
+    /// Federated instance ID for this account (mirrors `:instance_id` URL segment).
+    pub instance_id: String,
     /// Backend slug ("demo", "matrix", etc.)
     pub backend_slug: String,
 }

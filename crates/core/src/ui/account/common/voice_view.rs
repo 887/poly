@@ -362,6 +362,14 @@ async fn join_voice_channel(
         .voice_channel_participants
         .insert(channel_id.clone(), participants);
 
+    // Resolve instance_id for the voice account before mutating chat_data
+    let voice_instance_id = chat_data
+        .read()
+        .account_sessions
+        .get(&voice_account_id)
+        .map(|s| s.instance_id.clone())
+        .unwrap_or_default();
+
     chat_data.write().voice_connection = Some(poly_client::VoiceConnection {
         channel_id: channel_id.clone(),
         server_id: current_server
@@ -377,7 +385,8 @@ async fn join_voice_channel(
             .map(|s| s.name.clone())
             .unwrap_or_default(),
         backend: voice_backend,
-        account_id: voice_account_id,
+        account_id: voice_account_id.clone(),
+        instance_id: voice_instance_id,
         is_muted: false,
         is_deafened: false,
         is_streaming: false,

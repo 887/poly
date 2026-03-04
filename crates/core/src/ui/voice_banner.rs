@@ -52,6 +52,7 @@ pub fn VoiceBanner() -> Element {
     let server_name = conn.server_name.clone();
     let backend_slug = conn.backend.slug().to_string();
     let account_id = conn.account_id.clone();
+    let instance_id = conn.instance_id.clone();
     let is_muted = conn.is_muted;
     let is_deafened = conn.is_deafened;
 
@@ -111,6 +112,7 @@ pub fn VoiceBanner() -> Element {
                         navigator()
                             .push(Route::ServerChat {
                                 backend: backend_click.clone(),
+                                instance_id: instance_id.clone(),
                                 account_id: account_id_click.clone(),
                                 server_id: server_id.clone(),
                                 channel_id: channel_id.clone(),

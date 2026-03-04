@@ -114,14 +114,25 @@ pub fn FavoritesBar() -> Element {
 
             // ── Favorited servers (dragged in from Bar 2) ─────────────
             for server in &favorite_servers {
-                FavoriteServerIcon {
-                    server_id: server.id.clone(),
-                    server_name: server.name.clone(),
-                    backend_slug: server.backend.slug().to_string(),
-                    account_id: server.account_id.clone(),
-                    account_display_name: server.account_display_name.clone(),
-                    backend_name: server.backend.display_name().to_string(),
-                    unread: server.unread_count,
+                {
+                    let instance_id = chat_data
+                        .read()
+                        .account_sessions
+                        .get(&server.account_id)
+                        .map(|s| s.instance_id.clone())
+                        .unwrap_or_else(|| "demo".to_string());
+                    rsx! {
+                        FavoriteServerIcon {
+                            server_id: server.id.clone(),
+                            server_name: server.name.clone(),
+                            backend_slug: server.backend.slug().to_string(),
+                            instance_id,
+                            account_id: server.account_id.clone(),
+                            account_display_name: server.account_display_name.clone(),
+                            backend_name: server.backend.display_name().to_string(),
+                            unread: server.unread_count,
+                        }
+                    }
                 }
             }
 
@@ -188,7 +199,6 @@ pub fn FavoritesBar() -> Element {
 /// account's DMs home.
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
 
     let color = user_color(&account_id);
@@ -231,7 +241,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .count() as u32;
     let total_unreads = dm_unreads.saturating_add(notif_unreads);
 
-    // Resolve backend slug for routing
+    // Resolve backend slug and instance_id for routing — read from the session.
     let aid_for_click = account_id.clone();
 
     rsx! {
@@ -239,25 +249,25 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             class: if is_active { "server-icon account-icon active" } else { "server-icon account-icon" },
             onclick: move |_| {
                 let aid = aid_for_click.clone();
-                let cm = client_manager.read();
-                // Look up backend type for this account
-                let backend_slug = {
-                    // Check all servers to find backend type, or just use
-                    // a known mapping for demo
-                    if aid == "demo" {
-                        "demo".to_string()
-                    } else {
-                        // Try to find from servers
-                        chat_data
-                            .read()
-                            .servers
-                            .iter()
-                            .find(|s| s.account_id == aid)
-                            .map(|s| s.backend.slug().to_string())
-                            .unwrap_or_else(|| "demo".to_string())
-                    }
+                // Look up backend slug + instance_id from the stored session
+                let (backend_slug, instance_id) = {
+                    chat_data
+                        .read()
+                        .account_sessions
+                        .get(&aid)
+                        .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()))
+                        .unwrap_or_else(|| (
+                            // Fallback: try to find from servers
+                            chat_data
+                                .read()
+                                .servers
+                                .iter()
+                                .find(|s| s.account_id == aid)
+                                .map(|s| s.backend.slug().to_string())
+                                .unwrap_or_else(|| "demo".to_string()),
+                            "demo".to_string(),
+                        ))
                 };
-                drop(cm);
                 chat_data.write().current_server = None;
                 chat_data.write().current_channel = None;
                 chat_data.write().channels.clear();
@@ -266,6 +276,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 navigator()
                     .push(Route::DmsHome {
                         backend: backend_slug,
+                        instance_id,
                         account_id: aid,
                     });
             },
@@ -304,6 +315,8 @@ fn FavoriteServerIcon(
     server_id: String,
     server_name: String,
     backend_slug: String,
+    /// Federated homeserver instance ID (mirrors `:instance_id` URL segment).
+    instance_id: String,
     account_id: String,
     account_display_name: String,
     backend_name: String,
@@ -345,6 +358,7 @@ fn FavoriteServerIcon(
             onclick: {
                 let sid = server_id.clone();
                 let bslug = backend_slug.clone();
+                let iid = instance_id.clone();
                 let aid = account_id.clone();
                 move |_| {
                     app_state.write().nav.selected_server = Some(sid.clone());
@@ -356,6 +370,7 @@ fn FavoriteServerIcon(
                     navigator()
                         .push(Route::ServerHome {
                             backend: bslug.clone(),
+                            instance_id: iid.clone(),
                             account_id: aid.clone(),
                             server_id: sid.clone(),
                         });
@@ -366,6 +381,7 @@ fn FavoriteServerIcon(
                 let sid = server_id.clone();
                 let sname = server_name.clone();
                 let aid = account_id.clone();
+                let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
                 move |evt: Event<MouseData>| {
                     evt.prevent_default();
@@ -377,6 +393,7 @@ fn FavoriteServerIcon(
                         server_id: sid.clone(),
                         server_name: sname.clone(),
                         account_id: aid.clone(),
+                        instance_id: iid.clone(),
                         backend_slug: bslug.clone(),
                     });
                 }
@@ -549,7 +566,7 @@ pub(crate) async fn toggle_demo(
             chat_data
                 .write()
                 .account_sessions
-                .retain(|k, _| k != "demo" && k != "demo2");
+                .retain(|k, _| k != "demo-cat" && k != "demo-dog");
             // Remove demo server IDs from favorites (a real account's favorites are unaffected).
             {
                 let demo_server_ids: Vec<String> = chat_data
@@ -581,12 +598,12 @@ pub(crate) async fn toggle_demo(
                     return;
                 }
             };
-            // Store the cat session keyed by "demo"
+            // Store the cat session keyed by "demo-cat"
             chat_data
                 .write()
                 .account_sessions
-                .insert("demo".to_string(), session);
-            // Store all sessions from the client manager (includes demo2 🐶)
+                .insert("demo-cat".to_string(), session);
+            // Store all sessions from the client manager (includes demo-dog 🐶)
             for (account_id, sess) in &client_manager.read().sessions {
                 chat_data
                     .write()
@@ -606,7 +623,7 @@ pub(crate) async fn toggle_demo(
             chat_data.write().servers = servers;
 
             // Load DMs, groups, notifications, friends from ALL demo backends
-            for demo_account_id in &["demo", "demo2"] {
+            for demo_account_id in &["demo-cat", "demo-dog"] {
                 let backend = client_manager.read().get_backend(demo_account_id);
                 if let Some(backend_handle) = backend {
                     let guard = backend_handle.read().await;

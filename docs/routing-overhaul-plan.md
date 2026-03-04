@@ -28,11 +28,11 @@ The router was modelled on Discord's single-account URL scheme. Poly is a
 ```
 /                                                    → redirect (see Root Redirect below)
 
-/:backend/:account_id/dms                            → DM home for this account
-/:backend/:account_id/dms/:channel_id                → DM or group conversation
-/:backend/:account_id/friends                        → Friends list for this account
-/:backend/:account_id/channels/:server_id            → Server home (auto first channel)
-/:backend/:account_id/channels/:server_id/:channel_id → Specific server channel
+/:backend/:instance_id/:account_id/dms                            → DM home for this account
+/:backend/:instance_id/:account_id/dms/:dm_id                    → DM or group conversation
+/:backend/:instance_id/:account_id/friends                       → Friends list for this account
+/:backend/:instance_id/:account_id/channels/:server_id           → Server home (auto first channel)
+/:backend/:instance_id/:account_id/channels/:server_id/:channel_id → Specific server channel
 
 /notifications                                       → Aggregated cross-account feed
 /settings                                            → App-level settings (global)
@@ -48,24 +48,26 @@ The router was modelled on Discord's single-account URL scheme. Poly is a
 | `Discord` | `discord` |
 | `Teams`   | `teams` |
 
-### Account ID Convention
+### Account & Instance Convention
 
-| Account        | `account_id` in URL |
+| Field | Value in URL |
 |---|---|
-| Demo client    | `demo` |
-| Real accounts  | The exact string key used in `ClientManager.backends` |
+| `instance_id` (demo) | `demo` |
+| `account_id` (demo cat) | `demo-cat` |
+| `account_id` (demo dog) | `demo-dog` |
+| Real accounts | `instance_id` = homeserver/domain or service instance key; `account_id` = exact string key used in `ClientManager.backends` |
 
-Demo URLs: `/demo/demo/dms`, `/demo/demo/channels/server-gaming/chan-mc`, etc.
+Demo URLs: `/demo/demo/demo-cat/dms`, `/demo/demo/demo-dog/dms`, `/demo/demo/demo-cat/channels/server-gaming/chan-mc`, etc.
 
 ### Root Redirect Logic
 
 ```
-if demo_active && no_other_accounts → /demo/demo/dms
-if any_real_account   → /:backend/:last_account_id/dms
+if demo_active && no_other_accounts → /demo/demo/demo-cat/dms
+if any_real_account   → /:backend/:last_instance_id/:last_account_id/dms
 else (fresh install)  → /settings  (Accounts tab)
 ```
 
-Unknown `account_id` in a URL → redirect to `/` which re-evaluates above.
+Unknown `instance_id` or `account_id` in a URL → redirect to `/` which re-evaluates above.
 
 ---
 
@@ -76,6 +78,7 @@ Unknown `account_id` in a URL → redirect to `/` which re-evaluates above.
 **File**: `crates/core/src/state/mod.rs`
 
 - [ ] Add `active_account_id: Option<String>` to `NavigationState`
+- [ ] Add `active_instance_id: Option<String>` to `NavigationState`
 - [ ] Add `active_backend: Option<BackendType>` to `NavigationState`
 - [ ] Remove the now-dead `nav_history`, `nav_history_index`, `push_nav_history()`,
       `nav_back()`, `nav_forward()`, `can_go_back()`, `can_go_forward()` — the
@@ -85,6 +88,7 @@ Unknown `account_id` in a URL → redirect to `/` which re-evaluates above.
 pub struct NavigationState {
     pub view: View,
     pub active_account_id: Option<String>,   // NEW
+  pub active_instance_id: Option<String>,  // NEW
     pub active_backend: Option<BackendType>, // NEW
     pub selected_server: Option<String>,
     pub selected_channel: Option<String>,
@@ -109,21 +113,21 @@ pub enum Route {
 
         // ── Account-scoped views ──
         #[layout(DmsLayout)]
-            #[route("/:backend/:account_id/dms")]
-            DmsHome { backend: String, account_id: String },
-            #[route("/:backend/:account_id/dms/:channel_id")]
-            DmChat { backend: String, account_id: String, channel_id: String },
+            #[route("/:backend/:instance_id/:account_id/dms")]
+            DmsHome { backend: String, instance_id: String, account_id: String },
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id")]
+            DmChat { backend: String, instance_id: String, account_id: String, dm_id: String },
         #[end_layout]
 
         #[layout(ServerLayout)]
-            #[route("/:backend/:account_id/channels/:server_id")]
-            ServerHome { backend: String, account_id: String, server_id: String },
-            #[route("/:backend/:account_id/channels/:server_id/:channel_id")]
-            ServerChat { backend: String, account_id: String, server_id: String, channel_id: String },
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id")]
+            ServerHome { backend: String, instance_id: String, account_id: String, server_id: String },
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id")]
+            ServerChat { backend: String, instance_id: String, account_id: String, server_id: String, channel_id: String },
         #[end_layout]
 
-        #[route("/:backend/:account_id/friends")]
-        FriendsRoute { backend: String, account_id: String },
+        #[route("/:backend/:instance_id/:account_id/friends")]
+        FriendsRoute { backend: String, instance_id: String, account_id: String },
 
         // ── App-level (not account-scoped) ──
         #[route("/notifications")]
@@ -138,8 +142,9 @@ pub enum Route {
 }
 ```
 
-`sync_route_to_app_state` extracts `backend` → `BackendType`, `account_id` and
-writes them into `NavigationState.active_backend` / `active_account_id`.
+`sync_route_to_app_state` extracts `backend` → `BackendType`, `instance_id`, and
+`account_id`, then writes them into `NavigationState.active_backend` /
+`active_instance_id` / `active_account_id`.
 
 `on_update` catch-all redirect: tries to pick best first-active-account route,
 falls back to `/settings` if none.
@@ -149,11 +154,11 @@ falls back to `/settings` if none.
 **Files**: `server_sidebar.rs`, `channel_list.rs`, `friends_panel.rs`,
 `account_bar.rs`, `account_switcher.rs`, `voice_banner.rs`
 
-Every `navigator().push(Route::XYZ)` needs to supply `backend` + `account_id`.
+Every `navigator().push(Route::XYZ)` needs to supply `backend` + `instance_id` + `account_id`.
 These values come from:
 - The `Server` / `DmChannel` / `Group` struct which already carries `account_id`
   and `backend` fields.
-- Or from `AppState.nav.active_account_id` / `active_backend` for actions like
+- Or from `AppState.nav.active_account_id` / `active_instance_id` / `active_backend` for actions like
   "go to Friends" that stay within the same account.
 
 Helper to convert `BackendType → &'static str`:
@@ -257,7 +262,7 @@ Stored at key `notif:{account_id}` in SurrealKV.
 - [x] **Phase B**: Update `NavigationState`, remove dead nav history code
 - [x] **Phase A**: Rewrite `Route` enum + `sync_route_to_app_state`  
 - [x] **Phase A**: Update `on_update` root redirect logic  
-- [x] **Phase C**: Update all `navigator().push()` callsites with backend + account_id  
+- [x] **Phase C**: Update all `navigator().push()` callsites with backend + instance_id + account_id  
 - [x] **Phase E**: Add `AccountNotificationSettings` to storage  
 - [x] **Phase E**: Update notifications settings UI to per-account  
 - [x] **Phase F**: Update server sidebar navigator calls  
@@ -275,3 +280,17 @@ Stored at key `notif:{account_id}` in SurrealKV.
 - Per-server notification muting — deferred to a later phase
 - Separate per-backend layouts (Discord threads, Teams channels) — architecture
   is in place after this refactor; features added incrementally
+
+---
+
+## Post-Completion Update — Federated Instance Scope (2026-03-04)
+
+Routing was extended from backend+account to backend+instance+account to support
+federated backends (e.g. multiple Matrix homeservers) and multiple accounts per
+instance without URL ambiguity.
+
+Implementation notes from this update:
+- Added `active_instance_id` to `NavigationState`
+- Added `instance_id` to `Session`, `ContextMenuState`, and `VoiceConnection`
+- Renamed demo accounts to `demo-cat` and `demo-dog` (`instance_id = "demo"`)
+- Updated all account-scoped navigation callsites and route enums accordingly

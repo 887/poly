@@ -200,6 +200,7 @@ impl ClientBackend for PolyServerBackend {
                     token: auth.token,
                     backend: BackendType::Poly,
                     icon_emoji: Some("\u{1f536}".to_string()), // 🔶
+                    instance_id: self.base_url.clone(),
                 })
             }
             AuthCredentials::Token(token) => {
@@ -226,6 +227,7 @@ impl ClientBackend for PolyServerBackend {
                     token: auth.token,
                     backend: BackendType::Poly,
                     icon_emoji: Some("\u{1f536}".to_string()),
+                    instance_id: self.base_url.clone(),
                 })
             }
             _ => Err(ClientError::AuthFailed(

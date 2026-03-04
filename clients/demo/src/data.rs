@@ -24,18 +24,21 @@ const DEMO_CAT_AVATAR: Asset = asset!("assets/cat.png");
 const DEMO_DOG_AVATAR: Asset = asset!("assets/dog.png");
 
 /// The demo account ID used for all demo data (cat account).
-pub const DEMO_ACCOUNT_ID: &str = "demo";
+pub const DEMO_ACCOUNT_ID: &str = "demo-cat";
 
 /// The demo account display name.
 pub const DEMO_ACCOUNT_NAME: &str = "Cat Demo Account";
 
 /// The second demo account ID (dog account).
-pub const DEMO2_ACCOUNT_ID: &str = "demo2";
+pub const DEMO2_ACCOUNT_ID: &str = "demo-dog";
 
 /// The second demo account display name.
 pub const DEMO2_ACCOUNT_NAME: &str = "Dog Demo Account";
 
-/// Generate a demo session for the cat account (demo).
+/// The shared demo instance ID — both demo accounts live on this virtual instance.
+pub const DEMO_INSTANCE_ID: &str = "demo";
+
+/// Generate a demo session for the cat account (demo-cat).
 pub fn demo_session() -> Session {
     Session {
         id: "demo-session-1".to_string(),
@@ -52,10 +55,11 @@ pub fn demo_session() -> Session {
         token: "demo-token-not-real".to_string(),
         backend: BackendType::Demo,
         icon_emoji: Some("🐱".to_string()),
+        instance_id: DEMO_INSTANCE_ID.to_string(),
     }
 }
 
-/// Generate a demo session for the dog account (demo2).
+/// Generate a demo session for the dog account (demo-dog).
 pub fn demo2_session() -> Session {
     Session {
         id: "demo2-session-1".to_string(),
@@ -69,6 +73,7 @@ pub fn demo2_session() -> Session {
         token: "demo2-token-not-real".to_string(),
         backend: BackendType::Demo,
         icon_emoji: Some("🐶".to_string()),
+        instance_id: DEMO_INSTANCE_ID.to_string(),
     }
 }
 

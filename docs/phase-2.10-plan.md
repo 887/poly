@@ -77,7 +77,7 @@ Global `onclick` on the `MainLayout` root div dismisses the menu.
 
 ### C. Server Settings Page
 
-Route: `/:backend/:account_id/servers/:server_id/settings`
+Route: `/:backend/:instance_id/:account_id/servers/:server_id/settings`
 
 Module path: `crates/core/src/ui/account/server/settings/`
 
@@ -123,7 +123,7 @@ and from favorites.
 - [x] **S5**: Add `ContextMenuState` struct + `context_menu: Option<ContextMenuState>` to `AppState`
 
 ### Routes
-- [x] **R1**: Add `ServerSettingsRoute { backend, account_id, server_id }` to route enum
+- [x] **R1**: Add `ServerSettingsRoute { backend, instance_id, account_id, server_id }` to route enum
 - [x] **R2**: Add `sync_route_to_app_state` arm for `ServerSettingsRoute`
 - [x] **R3**: Add `fn ServerSettingsRoute(...)` component that renders `ServerSettingsPage`
 
@@ -177,7 +177,7 @@ and from favorites.
 - Bar 2 servers reorder within the bar using `account_server_order` in ChatData
 - Bar 2 → Bar 1 positional drops (insert before the hovered item, not just append to end)
 - `DragSource` enum to distinguish FavoriteServer vs AccountServer vs AccountIcon drags
-- New route: `/:backend/:account_id/servers/:server_id/settings` → `ServerSettingsPage`
+- New route: `/:backend/:instance_id/:account_id/servers/:server_id/settings` → `ServerSettingsPage`
 - `ServerSettingsPage`: 3-section layout (Notifications, Profile, General) with search bar
 - `ServerNotificationsSettings`: radio level selectors + 5 toggle rows
 - `ServerProfileSettings`: nickname field + save button (in-memory)
@@ -197,6 +197,15 @@ and from favorites.
 - Per-server profile photo upload
 - Invite link generation
 - Privacy settings (stub only for now)
+
+## Post-Phase Addendum — Federated Instance Routing (2026-03-04)
+
+Server settings and context-menu navigation were updated to carry instance scope
+in addition to backend/account.
+
+- `ServerSettingsRoute`, `ServerHome`, `ServerChat`, and DM routes now include `instance_id`
+- `ContextMenuState` now stores `instance_id` so right-click actions navigate correctly
+- Leave-server flow (`ServerGeneralSettings`) now returns to `DmsHome` with `instance_id`
 
 ---
 

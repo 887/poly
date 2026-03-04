@@ -4,7 +4,7 @@
 > **Target Start:** After Phase 1 completion  
 > **Parent:** [Overall Plan](overall-plan.md)  
 > **Depends On:** [Phase 1](phase-1-plan.md)  
-> **Last Updated:** 2026-03-01
+> **Last Updated:** 2026-03-04
 
 ---
 
@@ -366,3 +366,40 @@ All of these must be true before moving to Phase 3:
 - [x] Theme switching works: 5 presets + per-color customization + CSS editor ✓
 - [ ] Mobile layout responsive with swipeable panels
 - [x] All .vscode launch profiles work on Linux ✓
+
+---
+
+## Session Summary — 2026-03-04
+
+### Federated URL scope update completed
+
+- Upgraded account-scoped routing from backend+account to backend+instance+account:
+  - `/:backend/:instance_id/:account_id/dms`
+  - `/:backend/:instance_id/:account_id/dms/:dm_id`
+  - `/:backend/:instance_id/:account_id/friends`
+  - `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id`
+  - `/:backend/:instance_id/:account_id/settings`
+  - `/:backend/:instance_id/:account_id/servers/:server_id/settings`
+- Added `active_instance_id` in navigation state to keep UI context aligned with route state.
+- Updated route syncing and navigation callsites (favorites bar, account server bar, channel list, friends panel, server context menu, voice banner, server settings flows).
+
+### Data model updates captured
+
+- Added `instance_id` to session model so federated instance context is available across UI and navigation.
+- Added `instance_id` to server context menu state and voice connection state for consistent route generation from overlays/voice controls.
+
+### Demo identity cleanup
+
+- Renamed demo account IDs from `demo` / `demo2` to `demo-cat` / `demo-dog`.
+- Standardized demo instance scope to `instance_id = "demo"` for both demo accounts.
+- Updated demo activation/deactivation and demo route defaults accordingly.
+
+### Verification
+
+- Workspace compile check completed successfully after refactor (`cargo check --workspace`).
+- All relevant plan docs were updated to match this routing model:
+  - `docs/overall-plan.md` (Decision D19 and sidebar routing note)
+  - `docs/phase-2.9-plan.md`
+  - `docs/phase-2.10-plan.md`
+  - `docs/phase-2.11-plan.md`
+  - `docs/routing-overhaul-plan.md`

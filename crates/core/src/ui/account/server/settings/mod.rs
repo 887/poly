@@ -38,7 +38,12 @@ enum ServerSettingsSection {
 /// Shares the same two-column layout (nav sidebar + content) as `AccountSettingsPage`
 /// and `SettingsPage`. Server name shown in the content header.
 #[component]
-pub fn ServerSettingsPage(backend: String, account_id: String, server_id: String) -> Element {
+pub fn ServerSettingsPage(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+) -> Element {
     let mut section = use_signal(ServerSettingsSection::default);
     let _locale = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
@@ -122,22 +127,17 @@ pub fn ServerSettingsPage(backend: String, account_id: String, server_id: String
                 }
                 match section() {
                     ServerSettingsSection::Notifications => rsx! {
-                        ServerNotificationsSettings {
-                            server_id: server_id.clone(),
-                            server_name: server_name.clone(),
-                        }
+                        ServerNotificationsSettings { server_id: server_id.clone(), server_name: server_name.clone() }
                     },
                     ServerSettingsSection::Profile => rsx! {
-                        ServerProfileSettings {
-                            server_id: server_id.clone(),
-                            server_name: server_name.clone(),
-                        }
+                        ServerProfileSettings { server_id: server_id.clone(), server_name: server_name.clone() }
                     },
                     ServerSettingsSection::General => rsx! {
                         ServerGeneralSettings {
                             server_id: server_id.clone(),
                             server_name: server_name.clone(),
                             backend_slug: backend.clone(),
+                            instance_id: instance_id.clone(),
                             account_id: account_id.clone(),
                         }
                     },

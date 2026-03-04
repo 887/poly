@@ -52,12 +52,12 @@ A second narrow icon-only column showing everything for the *currently active ac
 ### Clicking a Favorited Server (Bar 1)
 
 When the user clicks a favorited server in Bar 1:
-1. The router navigates to `/:backend/:account_id/channels/:server_id`
-2. `sync_route_to_app_state` sets `active_backend` + `active_account_id`
+1. The router navigates to `/:backend/:instance_id/:account_id/channels/:server_id`
+2. `sync_route_to_app_state` sets `active_backend` + `active_instance_id` + `active_account_id`
 3. Bar 2 appears showing that account's servers, with this server highlighted
 4. The channel list shows server channels as normal
 
-This works perfectly with our routing since every URL is `/:backend/:account_id/...`.
+This works perfectly with our routing since every URL is `/:backend/:instance_id/:account_id/...`.
 
 ### Drag & Drop (Future)
 
@@ -142,7 +142,7 @@ Add new locale keys for:
 ### Session 2 Polish (2026-03-03)
 
 - [x] **H**: Fix `/settings` route clearing server/account context (app settings gear left server open)
-- [x] **I**: Add `Route::AccountSettingsRoute` at `/:backend/:account_id/settings` (account gear in Bar 2 navigates here)
+- [x] **I**: Add `Route::AccountSettingsRoute` at `/:backend/:instance_id/:account_id/settings` (account gear in Bar 2 navigates here)
 - [x] **J**: `Session.icon_emoji: Option<String>` field for per-account visual icon
 - [x] **K**: `DemoClient2` — second demo backend (🐶 dog account) with 4 servers (Open Source Hub, Book Club, Cooking Corner, Fitness Crew)
 - [x] **L**: `ClientManager.sessions: HashMap<String, Session>` — store sessions per account for UI lookup
@@ -163,11 +163,21 @@ Add new locale keys for:
 
 - [ ] **Drag & Drop**: Bar2 → Bar1 (favorite a server by dragging) — planned for Phase 2.10
 
+## Post-Phase Addendum — Federated Route Scope (2026-03-04)
+
+Routing moved from backend+account to backend+instance+account to support multiple
+accounts on the same backend across different federated instances.
+
+- Account-scoped routes are now `/:backend/:instance_id/:account_id/...`
+- Demo account IDs were renamed from `demo` / `demo2` to `demo-cat` / `demo-dog`
+- Demo uses `instance_id = "demo"` for both accounts
+- Sidebar/account context syncing now includes `active_instance_id`
+
 ---
 
 ## What Is NOT Changing
 
-- Route structure (`/:backend/:account_id/...`) — stays as-is
+- Route structure (`/:backend/:instance_id/:account_id/...`) — stays as-is
 - `ChannelList`, `ChatView`, `UserSidebar` — no changes
 - `AccountBar` / `AccountSwitcher` at bottom of channel list — stays
 - Storage / database — no schema changes

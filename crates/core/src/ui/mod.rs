@@ -292,7 +292,8 @@ pub fn App() -> Element {
                                         return Some( // No active accounts — land on Settings › Accounts so
                                             NavigationTarget::Internal(Route::DmsHome { // Signal<T>: Copy — shadow into a local mut binding
                                                 backend: "demo".to_string(),
-                                                account_id: "demo".to_string(),
+                                                instance_id: "demo".to_string(),
+                                                account_id: "demo-cat".to_string(),
                                             }),
                                         );
                                     }
