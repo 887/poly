@@ -100,7 +100,9 @@ pub fn FavoritesBar() -> Element {
                     cd.drag_over_id = None;
                     cd.favorited_server_ids.clone()
                 };
-                spawn(async move { persist_favorites(new_favorites).await; });
+                spawn(async move {
+                    persist_favorites(new_favorites).await;
+                });
             },
             NavBarSpacer {}
 
@@ -522,7 +524,9 @@ fn FavoriteServerIcon(
                         cd.drag_source = DragSource::None;
                         cd.favorited_server_ids.clone()
                     };
-                    spawn(async move { persist_favorites(new_favorites).await; });
+                    spawn(async move {
+                        persist_favorites(new_favorites).await;
+                    });
                 }
             },
             // Drag end — always clean up regardless of drop target

@@ -27,52 +27,43 @@ pub fn DiagnosticsPage() -> Element {
 
     rsx! {
         div { class: "settings-section-content",
-            h2 { class: "settings-section-title", { t("settings-diagnostics-title") } }
-            p { class: "settings-section-description",
-                { t("settings-diagnostics-description") }
-            }
+            h2 { class: "settings-section-title", {t("settings-diagnostics-title")} }
+            p { class: "settings-section-description", {t("settings-diagnostics-description")} }
 
             // Backend summary
             div { class: "diagnostics-summary",
                 div { class: "diagnostics-row",
-                    span { class: "diagnostics-label",
-                        { t("settings-diagnostics-demo-active") }
-                    }
-                    span {
-                        class: if demo_active { "diagnostics-value value-ok" } else { "diagnostics-value value-off" },
-                        if demo_active { "Yes" } else { "No" }
+                    span { class: "diagnostics-label", {t("settings-diagnostics-demo-active")} }
+                    span { class: if demo_active { "diagnostics-value value-ok" } else { "diagnostics-value value-off" },
+                        if demo_active {
+                            "Yes"
+                        } else {
+                            "No"
+                        }
                     }
                 }
                 div { class: "diagnostics-row",
-                    span { class: "diagnostics-label",
-                        { t("settings-diagnostics-active-accounts") }
-                    }
-                    span { class: "diagnostics-value",
-                        "{ account_ids.len() }"
-                    }
+                    span { class: "diagnostics-label", {t("settings-diagnostics-active-accounts")} }
+                    span { class: "diagnostics-value", "{ account_ids.len() }" }
                 }
             }
 
             // Per-account connection/presence table
             if !account_ids.is_empty() {
-                h3 { class: "settings-subsection-title",
-                    { t("settings-diagnostics-accounts-title") }
-                }
+                h3 { class: "settings-subsection-title", {t("settings-diagnostics-accounts-title")} }
                 div { class: "diagnostics-accounts-table",
                     // Header row
                     div { class: "diagnostics-table-header",
-                        span { { t("settings-diagnostics-col-account") } }
-                        span { { t("settings-diagnostics-col-connection") } }
-                        span { { t("settings-diagnostics-col-presence") } }
+                        span { {t("settings-diagnostics-col-account")} }
+                        span { {t("settings-diagnostics-col-connection")} }
+                        span { {t("settings-diagnostics-col-presence")} }
                     }
                     for account_id in &account_ids {
                         AccountDiagnosticsRow { account_id: account_id.clone() }
                     }
                 }
             } else {
-                p { class: "diagnostics-empty",
-                    { t("settings-diagnostics-no-accounts") }
-                }
+                p { class: "diagnostics-empty", {t("settings-diagnostics-no-accounts")} }
             }
         }
     }
@@ -111,12 +102,8 @@ fn AccountDiagnosticsRow(account_id: String) -> Element {
     rsx! {
         div { class: "diagnostics-table-row",
             span { class: "diagnostics-account-id", "{account_id}" }
-            span {
-                class: "diagnostics-connection-status {conn.css_class()}",
-                "{conn_label}"
-            }
-            span {
-                class: "diagnostics-presence-status {presence.css_class()}",
+            span { class: "diagnostics-connection-status {conn.css_class()}", "{conn_label}" }
+            span { class: "diagnostics-presence-status {presence.css_class()}",
                 "{presence.display_name()}"
             }
         }
