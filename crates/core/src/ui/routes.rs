@@ -208,12 +208,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         Route::ServerSettingsRoute {
             backend,
             account_id,
-            server_id: _,
+            server_id,
         } => {
             s.nav.view = View::Settings;
             s.nav.active_backend = BackendType::from_slug(backend);
             s.nav.active_account_id = Some(account_id.clone());
-            s.nav.selected_server = None;
+            s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = None;
         }
         Route::Root | Route::PageNotFound { .. } => {

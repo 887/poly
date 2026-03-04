@@ -239,6 +239,7 @@ pub fn App() -> Element {
                                     | Route::DmChat { account_id, .. }
                                     | Route::ServerHome { account_id, .. }
                                     | Route::ServerChat { account_id, .. }
+                                    | Route::ServerSettingsRoute { account_id, .. }
                                     | Route::FriendsRoute { account_id, .. }
                                     | Route::AccountSettingsRoute { account_id, .. } => {
                                         Some(account_id.as_str())
@@ -246,44 +247,56 @@ pub fn App() -> Element {
                                     _ => None,
                                 };
                                 if let Some(aid) = route_account_id {
-                                    let is_known = client_manager
-                                        .read()
-                                        .active_account_ids()
-                                        .iter()
-                                        .any(|id| id == aid);
-                                    if !is_known {
-                                        let mut as_ = app_state;
-                                        as_.write().settings_section =
-                                            SettingsSection::Accounts;
-                                        return Some(NavigationTarget::Internal(Route::SettingsRoute));
+                                    // Only redirect to Settings if accounts are actually loaded
+                                    // but the requested account is unknown.
+                                    //
+                                    // Guarding on `!ids.is_empty()` handles two race conditions
+                                    // on hard refresh (F5):
+                                    //   1. Router fires on_update before init_storage runs
+                                    //      → client_manager is empty → skip redirect.
+                                    //   2. init_storage sets is_setup_complete=true (Router
+                                    //      mounts early) and then yields into async toggle_demo
+                                    //      → client_manager still empty → skip redirect.
+                                    //
+                                    // Once toggle_demo completes and accounts populate,
+                                    // the signal change re-triggers on_update. At that point
+                                    // ids is non-empty and the "demo" account IS known →
+                                    // no redirect, AccountServerBar (Bar 2) stays visible.
+                                    let ids = client_manager.read().active_account_ids();
+                                    if !ids.is_empty() {
+                                        let is_known = ids.iter().any(|id| id == aid);
+                                        if !is_known {
+                                            let mut as_ = app_state;
+                                            as_.write().settings_section =
+                                                SettingsSection::Accounts;
+                                            return Some(
+                                                NavigationTarget::Internal(Route::SettingsRoute),
+                                            );
+                                        }
+
+                                        // Redirect root path and catch-all 404 to the best
+                                        // active account's DMs route.
+                                        //
+                                        // Priority:
+                                        //   1. Demo account (if active)     → /demo/demo/dms
+                                        //   2. First real account (future)  → /:backend/:id/dms
+                                        //   3. No accounts at all           → /settings (Accounts tab)
+                                        //
+                                        // TODO(phase-2.7): Read last-active account from AppSettings
+                                        // and prefer real accounts over demo when multiple exist.
                                     }
                                 }
-
-                                // Redirect root path and catch-all 404 to the best
-                                // active account's DMs route.
-                                //
-                                // Priority:
-                                //   1. Demo account (if active)     → /demo/demo/dms
-                                //   2. First real account (future)  → /:backend/:id/dms
-                                //   3. No accounts at all           → /settings (Accounts tab)
-                                //
-                                // TODO(phase-2.7): Read last-active account from AppSettings
-                                // and prefer real accounts over demo when multiple exist.
                                 if matches!(route, Route::PageNotFound { .. } | Route::Root) {
                                     let cm = client_manager.read();
                                     if cm.demo_active {
-                                        return Some(
-                                            NavigationTarget::Internal(Route::DmsHome {
+                                        return Some( // No active accounts — land on Settings › Accounts so
+                                            NavigationTarget::Internal(Route::DmsHome { // Signal<T>: Copy — shadow into a local mut binding
                                                 backend: "demo".to_string(),
                                                 account_id: "demo".to_string(),
                                             }),
                                         );
                                     }
-                                    // No active accounts — land on Settings › Accounts so
-                                    // the user can immediately add an account.
                                     drop(cm);
-                                    // Signal<T>: Copy — shadow into a local mut binding
-                                    // so we can call .write() inside this Fn closure.
                                     let mut as_ = app_state;
                                     as_.write().settings_section = SettingsSection::Accounts;
                                     return Some(NavigationTarget::Internal(Route::SettingsRoute));

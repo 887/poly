@@ -16,10 +16,11 @@
 
 use super::account::{AccountServerBar, ServerContextMenu};
 use super::favorites_sidebar::FavoritesBar;
-use super::routes::Route;
+use super::routes::{Route, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
 use crate::state::AppState;
 use dioxus::prelude::*;
+use dioxus_router::use_route;
 
 /// Navigation bar component — only renders on native platforms (desktop/mobile).
 /// On web, the browser's native back/forward buttons handle navigation.
@@ -70,6 +71,23 @@ fn NavBar() -> Element {
 #[component]
 pub fn MainLayout() -> Element {
     let mut app_state: Signal<AppState> = use_context();
+
+    // DECISION(DX-ROUTER-3): Dioxus 0.7 web router does not fire on_update for the
+    // initial browser URL when the Router component first mounts — only for subsequent
+    // navigation events. Without this call, active_account_id stays None after F5,
+    // causing AccountServerBar (Bar 2) to permanently vanish.
+    //
+    // Calling sync_route_to_app_state here (synchronously during render) via use_route()
+    // ensures AppState.nav is always in sync with the URL on every render, including the
+    // very first one. Children (AccountServerBar, ChannelList, etc.) see the correct
+    // nav state immediately without a flash.
+    //
+    // use_route() creates a reactive subscription: whenever the route changes, MainLayout
+    // re-renders, sync_route_to_app_state runs again, and all children update.
+    // NOTE: writing to a Signal during render is safe here because MainLayout does not
+    // read app_state via .read() in its own render body — only in event handlers.
+    let route = use_route::<Route>();
+    sync_route_to_app_state(&route, app_state);
 
     // WebKit2GTK (used by Wry/desktop) requires:
     //   1. `dataTransfer.setData()` called **synchronously** in `dragstart` — or the entire
