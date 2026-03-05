@@ -65,6 +65,19 @@ pub fn ChatView() -> Element {
         .unwrap_or_default()
         .starts_with("group-");
 
+    // Look up DM user avatar from dm_channels (Channel struct has no avatar_url)
+    let dm_user_avatar: Option<String> = if is_dm_channel {
+        let cid = channel_id.clone().unwrap_or_default();
+        chat_data
+            .read()
+            .dm_channels
+            .iter()
+            .find(|dm| dm.id == cid)
+            .and_then(|dm| dm.user.avatar_url.clone())
+    } else {
+        None
+    };
+
     // Scroll message list to bottom when messages change
     let msg_count = messages.len();
     use_effect(move || {
@@ -111,12 +124,20 @@ pub fn ChatView() -> Element {
             div { class: "chat-header",
                 if let Some(ref ch) = current_channel {
                     if is_dm_channel {
-                        // DM header: colored avatar + display name, no # prefix
+                        // DM header: avatar image or colored letter + display name
                         div { class: "dm-chat-header-info",
-                            div {
-                                class: "dm-chat-avatar",
-                                style: "background:{user_color(&ch.id)}",
-                                "{ch.name.chars().next().unwrap_or('?')}"
+                            if let Some(ref avatar) = dm_user_avatar {
+                                img {
+                                    class: "dm-chat-avatar",
+                                    src: "{avatar}",
+                                    alt: "{ch.name}",
+                                }
+                            } else {
+                                div {
+                                    class: "dm-chat-avatar",
+                                    style: "background:{user_color(&ch.id)}",
+                                    "{ch.name.chars().next().unwrap_or('?')}"
+                                }
                             }
                             div { class: "dm-chat-header-text",
                                 span { class: "chat-channel-name", "{ch.name}" }
@@ -181,10 +202,10 @@ pub fn ChatView() -> Element {
                     spawn(async move {
                         let mut eval = document::eval(
                             r#"
-                                                                            let el = document.getElementById('message-list-scroll');
-                                                                            if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                            else { dioxus.send(false); }
-                                                                            "#,
+                                                                                        let el = document.getElementById('message-list-scroll');
+                                                                                        if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                        else { dioxus.send(false); }
+                                                                                        "#,
                         );
                         if let Ok(near_top) = eval.recv::<bool>().await
                             && near_top
@@ -232,6 +253,7 @@ pub fn ChatView() -> Element {
                             let reactions = msg.reactions.clone();
                             let edited = msg.edited;
                             let color = user_color(&author.id);
+                            let author_avatar = author.avatar_url.clone();
                             let first_char: String = author
                                 .display_name
                                 .chars()
@@ -282,8 +304,16 @@ pub fn ChatView() -> Element {
                                     }
 
                                     if !is_grouped {
-                                        // Full message: avatar + header
-                                        div { class: "message-avatar", style: "background-color: {color};", "{first_char}" }
+                                        // Full message: avatar (image or fallback letter) + header
+                                        if let Some(ref avatar) = author_avatar {
+                                            img {
+                                                class: "message-avatar message-avatar-img",
+                                                src: "{avatar}",
+                                                alt: "{first_char}",
+                                            }
+                                        } else {
+                                            div { class: "message-avatar", style: "background-color: {color};", "{first_char}" }
+                                        }
                                         div { class: "message-body",
                                             div { class: "message-header",
                                                 span { class: "message-author", style: "color: {color};", "{author.display_name}" }
@@ -396,9 +426,9 @@ pub fn ChatView() -> Element {
                                     // Trigger hidden file input via JS
                                     document::eval(
                                         r#"
-                                                                                                                                                        let input = document.getElementById('poly-file-input');
-                                                                                                                                                        if (input) { input.click(); }
-                                                                                                                                                        "#,
+                                                                                                                                                                                    let input = document.getElementById('poly-file-input');
+                                                                                                                                                                                    if (input) { input.click(); }
+                                                                                                                                                                                    "#,
                                     );
                                 },
                                 "📎"

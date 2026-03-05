@@ -12,6 +12,7 @@
 pub mod data;
 
 use async_trait::async_trait;
+use chrono::{Duration, Utc};
 use futures::stream::Stream;
 use poly_client::*;
 use std::pin::Pin;
@@ -391,14 +392,49 @@ impl ClientBackend for DemoClient2 {
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
         // A subset of DMs from a different perspective
-        Ok(data::demo_dm_channels()
+        let mut dms: Vec<DmChannel> = data::demo_dm_channels()
             .into_iter()
             .take(3)
             .map(|mut dm| {
                 dm.account_id = data::DEMO2_ACCOUNT_ID.to_string();
                 dm
             })
-            .collect())
+            .collect();
+
+        // Add cross-account DM: dog sees cat
+        dms.push(DmChannel {
+            id: "dm-demo-cat".to_string(),
+            user: User {
+                id: "demo-cat-user".to_string(),
+                display_name: "🐱 Cat (demo)".to_string(),
+                avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
+                presence: PresenceStatus::Online,
+                backend: BackendType::Demo,
+            },
+            last_message: Some(Message {
+                id: "msg-dm-cat-latest".to_string(),
+                author: User {
+                    id: "demo-cat-user".to_string(),
+                    display_name: "🐱 Cat (demo)".to_string(),
+                    avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::Demo,
+                },
+                content: MessageContent::Text(
+                    "fair! 😹 but you have to admit the feature flag organization is *clean* even if it's stolen from my 2023 design"
+                        .to_string(),
+                ),
+                timestamp: Utc::now() - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            unread_count: 1,
+            backend: BackendType::Demo,
+            account_id: data::DEMO2_ACCOUNT_ID.to_string(),
+        });
+
+        Ok(dms)
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {

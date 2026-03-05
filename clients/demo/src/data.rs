@@ -19,9 +19,9 @@ use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
 
 /// Bundled cat avatar image for the cat demo account.
-const DEMO_CAT_AVATAR: Asset = asset!("assets/cat.png");
+pub const DEMO_CAT_AVATAR: Asset = asset!("assets/cat.png");
 /// Bundled dog avatar image for the dog demo account.
-const DEMO_DOG_AVATAR: Asset = asset!("assets/dog.png");
+pub const DEMO_DOG_AVATAR: Asset = asset!("assets/dog.png");
 
 /// The demo account ID used for all demo data (cat account).
 pub const DEMO_ACCOUNT_ID: &str = "demo-cat";
@@ -80,16 +80,16 @@ pub fn demo2_session() -> Session {
 /// Generate a list of demo users.
 pub fn demo_users() -> Vec<User> {
     let names = [
-        ("user-alice", "Alice"),
-        ("user-bob", "Bob"),
-        ("user-charlie", "Charlie"),
-        ("user-diana", "Diana"),
-        ("user-eve", "Eve"),
-        ("user-frank", "Frank"),
-        ("user-grace", "Grace"),
-        ("user-henry", "Henry"),
-        ("user-iris", "Iris"),
-        ("user-jack", "Jack"),
+        ("user-alice", "Alice", "📖"),
+        ("user-bob", "Bob", "🎮"),
+        ("user-charlie", "Charlie", "🦀"),
+        ("user-diana", "Diana", "🎨"),
+        ("user-eve", "Eve", "📞"),
+        ("user-frank", "Frank", "📚"),
+        ("user-grace", "Grace", "🎵"),
+        ("user-henry", "Henry", "🚤"),
+        ("user-iris", "Iris", "🌸"),
+        ("user-jack", "Jack", "🎯"),
     ];
 
     let presences = [
@@ -108,9 +108,9 @@ pub fn demo_users() -> Vec<User> {
     names
         .iter()
         .zip(presences.iter())
-        .map(|((id, name), presence)| User {
+        .map(|((id, name, emoji), presence)| User {
             id: id.to_string(),
-            display_name: name.to_string(),
+            display_name: format!("{} {}", emoji, name),
             avatar_url: None,
             presence: *presence,
             backend: BackendType::Demo,
@@ -963,30 +963,74 @@ pub fn demo_groups() -> Vec<Group> {
     ]
 }
 
-/// Generate demo DM channels.
+/// Generate demo DM channels for cat account.
 pub fn demo_dm_channels() -> Vec<DmChannel> {
     let users = demo_users();
-    users
+    let now = Utc::now();
+    let mut channels: Vec<DmChannel> = users
         .iter()
         .take(5)
         .enumerate()
-        .map(|(i, user)| DmChannel {
-            id: format!("dm-{}", user.id),
-            user: user.clone(),
-            last_message: Some(Message {
-                id: format!("msg-dm-{i}"),
-                author: user.clone(),
-                content: MessageContent::Text("Hey, how's it going?".to_string()),
-                timestamp: Utc::now() - Duration::hours(i as i64 * 2),
-                attachments: vec![],
-                reactions: vec![],
-                edited: false,
-            }),
-            unread_count: if i < 2 { 1 } else { 0 },
-            backend: BackendType::Demo,
-            account_id: DEMO_ACCOUNT_ID.to_string(),
+        .map(|(i, user)| {
+            let is_alice = user.id == "user-alice";
+            DmChannel {
+                id: format!("dm-{}", user.id),
+                user: user.clone(),
+                last_message: Some(Message {
+                    id: format!("msg-dm-{i}"),
+                    author: user.clone(),
+                    content: MessageContent::Text(
+                        if is_alice {
+                            "Just ran it — compiles clean! The hot-reload with subsecond patches is incredible.".to_string()
+                        } else {
+                            "Hey, how's it going?".to_string()
+                        }
+                    ),
+                    timestamp: now - Duration::hours(i as i64 * 2),
+                    attachments: vec![],
+                    reactions: vec![],
+                    edited: false,
+                }),
+                unread_count: if i < 2 { 1 } else { 0 },
+                backend: BackendType::Demo,
+                account_id: DEMO_ACCOUNT_ID.to_string(),
+            }
         })
-        .collect()
+        .collect();
+
+    // Add cross-account DM: cat sees dog
+    channels.push(DmChannel {
+        id: "dm-demo-dog".to_string(),
+        user: User {
+            id: "demo-dog-user".to_string(),
+            display_name: "🐶 Dog (demo)".to_string(),
+            avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
+            presence: PresenceStatus::Online,
+            backend: BackendType::Demo,
+        },
+        last_message: Some(Message {
+            id: "msg-dm-dog-latest".to_string(),
+            author: User {
+                id: "demo-dog-user".to_string(),
+                display_name: "🐶 Dog (demo)".to_string(),
+                avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
+                presence: PresenceStatus::Online,
+                backend: BackendType::Demo,
+            },
+            content: MessageContent::Text(
+                "bark bark! 🐕 haha, your pull request is almost as good as my naps 😼".to_string(),
+            ),
+            timestamp: now - Duration::hours(1),
+            attachments: vec![],
+            reactions: vec![],
+            edited: false,
+        }),
+        unread_count: 1,
+        backend: BackendType::Demo,
+        account_id: DEMO_ACCOUNT_ID.to_string(),
+    });
+
+    channels
 }
 
 /// Generate demo notifications.
@@ -1435,6 +1479,230 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 author: users[4].clone(),
                 content: MessageContent::Text("🙌 Perfect. See you then!".to_string()),
                 timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        // Cat ↔ Dog playful banter (unhinged cute chaos) 
+        "dm-demo-dog" => vec![
+            Message {
+                id: "dm-cat-dog-0".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Meow? I'm the BEST programmer here 🐱✨\n\nYour Rust code is pedestrian. Mine is *chef's kiss* 😼"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-cat-dog-1".to_string(),
+                author: User {
+                    id: "demo-dog-user".to_string(),
+                    display_name: "🐶 Dog (demo)".to_string(),
+                    avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::Demo,
+                },
+                content: MessageContent::Text(
+                    "bark bark!! 🐕 LOL pedestrian?? My PRs actually PASS CI cat!! unlike SOME libraries we know 😏"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(5) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-cat-dog-2".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "oh PLEASE 😹 remember that time your Tokio buffer overflowed? i was THERE, i saw it with my OWN EYES"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(5) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-cat-dog-3".to_string(),
+                author: User {
+                    id: "demo-dog-user".to_string(),
+                    display_name: "🐶 Dog (demo)".to_string(),
+                    avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::Demo,
+                },
+                content: MessageContent::Text(
+                    "that was ONE TIME and it was CLEARLY a testing artifact!! unlike your hot-reload that breaks EVERY TUESDAY 🙄"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-cat-dog-4".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "ok but seriously, your DioxusEVENTs are kinda sus. have you benchmarked them? 👀"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-cat-dog-5".to_string(),
+                author: User {
+                    id: "demo-dog-user".to_string(),
+                    display_name: "🐶 Dog (demo)".to_string(),
+                    avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::Demo,
+                },
+                content: MessageContent::Text(
+                    "not better than YOUR message queueing!! at least mine have RTFM docs 📚 you just have vibes and prayer 😼💀"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(3) - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "💀".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "dm-cat-dog-6".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "fair! 😹 but you have to admit the feature flag organization is *clean* even if it's stolen from my 2023 design"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-cat-dog-7".to_string(),
+                author: User {
+                    id: "demo-dog-user".to_string(),
+                    display_name: "🐶 Dog (demo)".to_string(),
+                    avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::Demo,
+                },
+                content: MessageContent::Text(
+                    "bark bark! 🐕 haha, your pull request is almost as good as my naps 😼"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(1),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        // Cat ↔ Dog from dog's perspective (demo2)
+        "dm-demo-cat" => vec![
+            Message {
+                id: "dm-dog-cat-0".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Meow? I'm the BEST programmer here 🐱✨\n\nYour Rust code is pedestrian. Mine is *chef's kiss* 😼"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-dog-cat-1".to_string(),
+                author: demo2_session().user,
+                content: MessageContent::Text(
+                    "bark bark!! 🐕 LOL pedestrian?? My PRs actually PASS CI cat!! unlike SOME libraries we know 😏"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(5) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-dog-cat-2".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "oh PLEASE 😹 remember that time your Tokio buffer overflowed? i was THERE, i saw it with my OWN EYES"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(5) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-dog-cat-3".to_string(),
+                author: demo2_session().user,
+                content: MessageContent::Text(
+                    "that was ONE TIME and it was CLEARLY a testing artifact!! unlike your hot-reload that breaks EVERY TUESDAY 🙄"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-dog-cat-4".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "ok but seriously, your DioxusEVENTs are kinda sus. have you benchmarked them? 👀"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-dog-cat-5".to_string(),
+                author: demo2_session().user,
+                content: MessageContent::Text(
+                    "not better than YOUR message queueing!! at least mine have RTFM docs 📚 you just have vibes and prayer 😼💀"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(3) - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "💀".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "dm-dog-cat-6".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "fair! 😹 but you have to admit the feature flag organization is *clean* even if it's stolen from my 2023 design"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-dog-cat-7".to_string(),
+                author: demo2_session().user,
+                content: MessageContent::Text(
+                    "bark bark! 🐕 haha, your pull request is almost as good as my naps 😼"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::hours(1),
                 attachments: vec![],
                 reactions: vec![],
                 edited: false,

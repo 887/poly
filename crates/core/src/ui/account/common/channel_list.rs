@@ -236,6 +236,7 @@ fn DMFriendsView() -> Element {
                     account_id: dm.account_id.clone(),
                     backend_slug: dm.backend.slug().to_string(),
                     instance_id: dm_iid.clone(),
+                    avatar_url: dm.user.avatar_url.clone(),
                 }
             }
 
@@ -307,6 +308,9 @@ fn DMChannelItem(
     backend_slug: String,
     /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
     instance_id: String,
+    /// Optional avatar URL for the DM user.
+    #[props(into)]
+    avatar_url: Option<String>,
 ) -> Element {
     use crate::state::chat_data::user_color;
     let mut app_state: Signal<AppState> = use_context();
@@ -351,7 +355,17 @@ fn DMChannelItem(
                         dm_id: channel_id.clone(),
                     });
             },
-            div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
+            div { class: "dm-avatar-small", style: "background-color: {color};",
+                if let Some(ref url) = avatar_url {
+                    img {
+                        class: "dm-avatar-img",
+                        src: "{url}",
+                        alt: "{first_char}",
+                    }
+                } else {
+                    "{first_char}"
+                }
+            }
             span { class: "channel-name", "{display_name}" }
             if unread > 0 {
                 span { class: "unread-badge", "{unread}" }

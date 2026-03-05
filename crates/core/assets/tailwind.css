@@ -667,6 +667,14 @@ body {
     flex-shrink: 0;
 }
 
+.message-avatar-img {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
 .message-content {
     flex: 1;
     min-width: 0;
@@ -937,6 +945,7 @@ body {
     font-weight: 700;
     font-size: 14px;
     flex-shrink: 0;
+    object-fit: cover;
 }
 
 .group-chat-icon {
@@ -1265,6 +1274,14 @@ body {
     font-weight: 600;
     color: white;
     flex-shrink: 0;
+    overflow: hidden;
+}
+
+.dm-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-full);
+    object-fit: cover;
 }
 
 .dm-member-count {
