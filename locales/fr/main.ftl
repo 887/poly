@@ -380,5 +380,13 @@ server-profile-save = Enregistrer les modifications
 server-general-info = Infos du serveur
 server-general-danger = Zone de danger
 
+# Group DMs
+group-members-title = Membres
+group-member-remove = Retirer
+group-member-remove-tooltip = Retirer { $name } de ce groupe
+
+# DM header
+dm-header-subtitle = Message direct
+
 # Demo backend
 demo-regenerate-data = Régénérer les données démo

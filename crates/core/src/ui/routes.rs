@@ -47,15 +47,16 @@
 // DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
 use super::account::{
-    AccountBar, AccountSettingsPage, AccountSwitcher, ChannelList, ChatView, FriendsPanel,
+    AccountBar, AccountSettingsPage, ChannelList, ChatView, DmUserSidebar, FriendsPanel,
     NotificationsView, ServerSettingsPage, UserSidebar, VoiceBar, VoiceChannelView,
 };
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
+use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
-use poly_client::{BackendType, ChannelType};
+use poly_client::{BackendType, Channel, ChannelType};
 
 // ── Route enum ──────────────────────────────────────────────────────────────
 
@@ -150,6 +151,9 @@ pub enum Route {
 /// Called from [`RouterConfig::on_update`] *before* dependent components
 /// re-render.
 pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
+    // Compute the URL string before borrowing app_state mutably.
+    // Routable derives Display, so format!("{route}") gives the URL path.
+    let route_url = format!("{route}");
     let mut s = app_state.write();
     match route {
         Route::DmsHome {
@@ -163,6 +167,9 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::DmChat {
             backend,
@@ -176,6 +183,9 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = Some(dm_id.clone());
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::ServerHome {
             backend,
@@ -189,6 +199,9 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             // Don't clear selected_channel — load_server_data sets it
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::ServerChat {
             backend,
@@ -203,6 +216,9 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = Some(channel_id.clone());
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::FriendsRoute {
             backend,
@@ -213,6 +229,9 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_backend = BackendType::from_slug(backend);
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::NotificationsRoute => {
             s.nav.view = View::Notifications;
@@ -238,6 +257,9 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::ServerSettingsRoute {
             backend,
@@ -251,6 +273,9 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::Root | Route::PageNotFound { .. } => {
             // on_update will redirect — nothing to sync here
@@ -266,13 +291,19 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
 /// DmsHome ↔ DmChat navigation since the layout stays mounted.
 #[component]
 fn DmsLayout() -> Element {
+    let app_state: Signal<AppState> = use_context();
+    let show_dm_right = app_state.read().nav.dm_right_sidebar_visible;
+
     rsx! {
         div { class: "channel-list-wrapper",
             ChannelList {}
             VoiceBar {}
-            AccountSwitcher {}
+            AccountBar {}
         }
         Outlet::<Route> {}
+        if show_dm_right {
+            DmUserSidebar {}
+        }
     }
 }
 
@@ -331,8 +362,101 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 }
 
 /// DM chat — renders a conversation with an individual or group.
+///
+/// Handles both click navigation (DMChannelItem sets up data before routing)
+/// and URL-restore navigation (account switch, page reload) by loading data
+/// in a `use_effect` when `current_channel` doesn't already match `dm_id`.
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
+    let mut chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+
+    // Load DM data on mount. Skip if DMChannelItem already set current_channel
+    // (click navigation) — only triggers the full load for URL-restore paths.
+    use_effect(move || {
+        let cid = dm_id.clone();
+        let aid = account_id.clone();
+
+        // If the click handler already prepared this channel, skip the load
+        // to avoid a double-fetch and unnecessary flicker.
+        let already_set = chat_data
+            .read()
+            .current_channel
+            .as_ref()
+            .is_some_and(|ch| ch.id == cid);
+        if already_set {
+            return;
+        }
+
+        // URL-restore path: synthesize current_channel from loaded dm_channels / groups.
+        let channel = {
+            let data = chat_data.read();
+            data.dm_channels
+                .iter()
+                .find(|dm| dm.id == cid && dm.account_id == aid)
+                .map(|dm| Channel {
+                    id: dm.id.clone(),
+                    name: dm.user.display_name.clone(),
+                    channel_type: ChannelType::Text,
+                    server_id: String::new(),
+                    unread_count: 0,
+                    last_message_id: None,
+                })
+                .or_else(|| {
+                    data.groups
+                        .iter()
+                        .find(|g| g.id == cid && g.account_id == aid)
+                        .map(|g| {
+                            let name = g.name.clone().unwrap_or_else(|| {
+                                g.members
+                                    .iter()
+                                    .map(|m| m.display_name.clone())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            });
+                            Channel {
+                                id: g.id.clone(),
+                                name,
+                                channel_type: ChannelType::Text,
+                                server_id: String::new(),
+                                unread_count: 0,
+                                last_message_id: None,
+                            }
+                        })
+                })
+        };
+
+        if let Some(ch) = channel {
+            chat_data.write().current_channel = Some(ch);
+            chat_data.write().current_server = None;
+        }
+
+        // Load messages and members asynchronously.
+        spawn(async move {
+            chat_data.write().loading = true;
+            chat_data.write().messages = Vec::new();
+            chat_data.write().members = Vec::new();
+
+            let backend_arc = client_manager.read().get_backend(&aid);
+            let Some(backend_arc) = backend_arc else {
+                chat_data.write().loading = false;
+                return;
+            };
+
+            let guard = backend_arc.read().await;
+            if let Ok(messages) = guard
+                .get_messages(&cid, poly_client::MessageQuery::default())
+                .await
+            {
+                chat_data.write().messages = messages;
+            }
+            if let Ok(members) = guard.get_channel_members(&cid).await {
+                chat_data.write().members = members;
+            }
+            chat_data.write().loading = false;
+        });
+    });
+
     rsx! {
         ChatView {}
     }

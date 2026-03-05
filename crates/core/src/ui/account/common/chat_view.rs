@@ -58,6 +58,12 @@ pub fn ChatView() -> Element {
     let members_count = chat_data.read().members.len();
     let loading = chat_data.read().loading;
     let reaction_picker_id = reaction_picker_msg.read().clone();
+    let group_members = chat_data.read().active_group_members.clone();
+    let is_dm_channel = channel_id.as_deref().unwrap_or_default().starts_with("dm-");
+    let is_group_channel = channel_id
+        .as_deref()
+        .unwrap_or_default()
+        .starts_with("group-");
 
     // Scroll message list to bottom when messages change
     let msg_count = messages.len();
@@ -104,25 +110,64 @@ pub fn ChatView() -> Element {
             // ── Channel header ───────────────────────────────────────────
             div { class: "chat-header",
                 if let Some(ref ch) = current_channel {
-                    span { class: "chat-channel-name", "# {ch.name}" }
-                    if let Some(ref server) = current_server {
-                        span { class: "chat-source-badge",
-                            "{backend_badge(&server.backend)} {server.backend.display_name()}"
+                    if is_dm_channel {
+                        // DM header: colored avatar + display name, no # prefix
+                        div { class: "dm-chat-header-info",
+                            div {
+                                class: "dm-chat-avatar",
+                                style: "background:{user_color(&ch.id)}",
+                                "{ch.name.chars().next().unwrap_or('?')}"
+                            }
+                            div { class: "dm-chat-header-text",
+                                span { class: "chat-channel-name", "{ch.name}" }
+                                span { class: "chat-header-subtitle", "{t(\"dm-header-subtitle\")}" }
+                            }
                         }
+                    } else if is_group_channel {
+                        // Group DM header: group name + member count
+                        div { class: "dm-chat-header-info",
+                            div { class: "group-chat-icon", "👥" }
+                            div { class: "dm-chat-header-text",
+                                span { class: "chat-channel-name", "{ch.name}" }
+                                span { class: "chat-header-subtitle",
+                                    "{group_members.len()} {t(\"group-members-title\")}"
+                                }
+                            }
+                        }
+                    } else {
+                        // Server channel header (unchanged)
+                        span { class: "chat-channel-name", "# {ch.name}" }
+                        if let Some(ref server) = current_server {
+                            span { class: "chat-source-badge",
+                                "{backend_badge(&server.backend)} {server.backend.display_name()}"
+                            }
+                        }
+                        span { class: "chat-member-count", "👥 {members_count}" }
                     }
-                    span { class: "chat-member-count", "👥 {members_count}" }
                 } else {
                     span { class: "chat-channel-name", "{t(\"chat-no-messages\")}" }
                 }
                 div { class: "chat-header-actions",
-                    button {
-                        class: "header-btn",
-                        title: "Toggle member list",
-                        onclick: move |_| {
-                            let current = app_state.read().nav.right_sidebar_visible;
-                            app_state.write().nav.right_sidebar_visible = !current;
-                        },
-                        "👥"
+                    if is_group_channel {
+                        button {
+                            class: "header-btn",
+                            title: "{t(\"group-member-remove-tooltip\")}",
+                            onclick: move |_| {
+                                let current = app_state.read().nav.dm_right_sidebar_visible;
+                                app_state.write().nav.dm_right_sidebar_visible = !current;
+                            },
+                            "👥"
+                        }
+                    } else if !is_dm_channel {
+                        button {
+                            class: "header-btn",
+                            title: "Toggle member list",
+                            onclick: move |_| {
+                                let current = app_state.read().nav.right_sidebar_visible;
+                                app_state.write().nav.right_sidebar_visible = !current;
+                            },
+                            "👥"
+                        }
                     }
                 }
             }
@@ -136,10 +181,10 @@ pub fn ChatView() -> Element {
                     spawn(async move {
                         let mut eval = document::eval(
                             r#"
-                                                                let el = document.getElementById('message-list-scroll');
-                                                                if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                else { dioxus.send(false); }
-                                                                "#,
+                                                                            let el = document.getElementById('message-list-scroll');
+                                                                            if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                            else { dioxus.send(false); }
+                                                                            "#,
                         );
                         if let Ok(near_top) = eval.recv::<bool>().await
                             && near_top
@@ -351,9 +396,9 @@ pub fn ChatView() -> Element {
                                     // Trigger hidden file input via JS
                                     document::eval(
                                         r#"
-                                                                                                                            let input = document.getElementById('poly-file-input');
-                                                                                                                            if (input) { input.click(); }
-                                                                                                                            "#,
+                                                                                                                                                        let input = document.getElementById('poly-file-input');
+                                                                                                                                                        if (input) { input.click(); }
+                                                                                                                                                        "#,
                                     );
                                 },
                                 "📎"

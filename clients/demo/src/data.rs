@@ -27,13 +27,13 @@ const DEMO_DOG_AVATAR: Asset = asset!("assets/dog.png");
 pub const DEMO_ACCOUNT_ID: &str = "demo-cat";
 
 /// The demo account display name.
-pub const DEMO_ACCOUNT_NAME: &str = "Cat Demo Account";
+pub const DEMO_ACCOUNT_NAME: &str = "Cat (demo)";
 
 /// The second demo account ID (dog account).
 pub const DEMO2_ACCOUNT_ID: &str = "demo-dog";
 
 /// The second demo account display name.
-pub const DEMO2_ACCOUNT_NAME: &str = "Dog Demo Account";
+pub const DEMO2_ACCOUNT_NAME: &str = "Dog (demo)";
 
 /// The shared demo instance ID — both demo accounts live on this virtual instance.
 pub const DEMO_INSTANCE_ID: &str = "demo";
@@ -44,7 +44,7 @@ pub fn demo_session() -> Session {
         id: "demo-session-1".to_string(),
         user: User {
             id: "demo-user-self".to_string(),
-            display_name: "Demo User (Cat)".to_string(),
+            display_name: "Cat (demo)".to_string(),
             // The bundled cat.png is served by the Dioxus asset system; storing
             // the path in avatar_url means all UI components use the generic
             // avatar_url path — no demo-specific logic needed in UI code.
@@ -65,7 +65,7 @@ pub fn demo2_session() -> Session {
         id: "demo2-session-1".to_string(),
         user: User {
             id: "demo2-user-self".to_string(),
-            display_name: "Demo User (Dog)".to_string(),
+            display_name: "Dog (demo)".to_string(),
             avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
             presence: PresenceStatus::Online,
             backend: BackendType::Demo,
@@ -1141,6 +1141,1310 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
             is_video_on: false,
             is_speaking: true,
         }],
+        _ => vec![],
+    }
+}
+
+// ── DM Messages ──────────────────────────────────────────────────────────────
+
+/// Generate unique DM conversation messages for a DM channel.
+///
+/// Each DM contact gets a personalised conversation thread instead of
+/// the generic "Hey, how's it going?" placeholder.
+pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
+    let users = demo_users();
+    let now = Utc::now();
+
+    match dm_channel_id {
+        // Alice — project excitement / code review
+        "dm-user-alice" => vec![
+            Message {
+                id: "dm-alice-0".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Hey! Just saw your PR for the SurrealDB integration — looks really solid 🎉"
+                        .to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👀".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "dm-alice-1".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Thanks! Took me a while to figure out the SurrealKV path handling on Linux. Did you get a chance to test it on your side?".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(4) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-alice-2".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Just ran it — compiles clean! The hot-reload with subsecond patches is incredible.\n\nOne small nit: the error messages for auth failure could be more descriptive.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(4) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-alice-3".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Good catch! I'll add proper error context in the next commit. Wrapping everything in `ClientError::AuthFailed` with the server message.".to_string(),
+                ),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👍".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "dm-alice-4".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text("Perfect. Merging once you push that 🚀".to_string()),
+                timestamp: now - Duration::hours(2),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        // Bob — casual / gaming weekend
+        "dm-user-bob" => vec![
+            Message {
+                id: "dm-bob-0".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "You playing anything this weekend? We're doing a Minecraft survival session Saturday night 🎮".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-bob-1".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Oh nice! What time? I might be free after 8pm.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(7) - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-bob-2".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "8pm EST works perfectly. Diana and Jack are also joining. We built a whole underground base last time 😄".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(7) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🙌".to_string(), count: 1, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "dm-bob-3".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text("I'm in! See you then 🏰".to_string()),
+                timestamp: now - Duration::days(2) - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-bob-4".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "Also — did you see the new Minecraft snapshot? The new biomes look wild.".to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        // Charlie — Rust help / lifetimes
+        "dm-user-charlie" => vec![
+            Message {
+                id: "dm-charlie-0".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Hey, quick Rust question — I'm hitting a lifetime error I don't understand 😅\n\n`error[E0502]: cannot borrow 'data' as mutable because it is also borrowed as immutable`".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-charlie-1".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Ah classic! Can you share the snippet? Usually it's because you're holding a `&data` reference while trying to call a `&mut` method.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(55),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-charlie-2".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "```rust\nlet view = data.iter().find(|x| x.id == id);\ndata.push(new_item); // ← borrow error here\n```\n\nI need both at the same time 😬".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(40),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-charlie-3".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "You need to clone the result from `find` before calling `push`:\n\n```rust\nlet view = data.iter().find(|x| x.id == id).cloned();\ndata.push(new_item); // ✓ now works\n```\n\nThe `find` returns a `&T` which keeps the borrow alive unless you clone it.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(20),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🙏".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "dm-charlie-4".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "That fixed it! Rust ownership never stops surprising me... but I'm getting there 💪".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🦀".to_string(), count: 2, me: true }],
+                edited: false,
+            },
+        ],
+
+        // Diana — design / theme feedback
+        "dm-user-diana" => vec![
+            Message {
+                id: "dm-diana-0".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "Hey! Wanted to get your opinion on the new purple theme variant. Does it feel too Discord-like?".to_string(),
+                ),
+                timestamp: now - Duration::hours(10),
+                attachments: vec![
+                    Attachment {
+                        id: "att-theme-preview".to_string(),
+                        filename: "purple-theme-preview.png".to_string(),
+                        content_type: "image/png".to_string(),
+                        url: "https://picsum.photos/seed/purple-theme/400/250".to_string(),
+                        size: 275_000,
+                    },
+                ],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-diana-1".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Honestly I like it! The saturation is a bit lower than Discord's so it feels distinct. Maybe bump up the contrast on the sidebar icons slightly?".to_string(),
+                ),
+                timestamp: now - Duration::hours(9) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-diana-2".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "Good idea. I'll also add a subtle gradient on the server sidebar. The flat single-color bg feels a bit stark in dark mode.".to_string(),
+                ),
+                timestamp: now - Duration::hours(9) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "✨".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "dm-diana-3".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Yeah, a subtle 5-10% gradient would help. Keep it as a CSS custom property in the theme file so users can override it.".to_string(),
+                ),
+                timestamp: now - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        // Eve — meeting reminder
+        "dm-user-eve" => vec![
+            Message {
+                id: "dm-eve-0".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text(
+                    "Just a reminder — we have the voice/video architecture call tomorrow at 2pm UTC 📅".to_string(),
+                ),
+                timestamp: now - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-eve-1".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text("Thanks! I've got it blocked. Agenda finalized?".to_string()),
+                timestamp: now - Duration::hours(5) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-eve-2".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text(
+                    "Yes — three items:\n1. WebRTC crate selection (webrtc-rs vs browser native)\n2. Mobile camera/mic bindings\n3. Voice UI component layout\n\nShould take ~45 min.".to_string(),
+                ),
+                timestamp: now - Duration::hours(5) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👌".to_string(), count: 1, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "dm-eve-3".to_string(),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Perfect. I'll have some notes on the `webrtc` crate ready — been reading through its ICE/DTLS setup.".to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "dm-eve-4".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text("🙌 Perfect. See you then!".to_string()),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        // Fallback for any other dm- ID
+        _ => vec![
+            Message {
+                id: format!("{dm_channel_id}-msg-0"),
+                author: demo_session().user,
+                content: MessageContent::Text("Hey there! How are you doing?".to_string()),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+    }
+}
+
+// ── Group Data ────────────────────────────────────────────────────────────────
+
+/// Generate themed group DMs for the cat (demo) account.
+///
+/// Returns 4 groups, each aligned to a community from the cat account's servers.
+pub fn demo_groups_v2() -> Vec<Group> {
+    let users = demo_users();
+    let now = Utc::now();
+
+    vec![
+        Group {
+            id: "group-rust-study".to_string(),
+            name: Some("Rust Study Group".to_string()),
+            members: vec![users[0].clone(), users[1].clone(), users[2].clone()],
+            last_message: Some(Message {
+                id: "group-rust-study-last".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Found a great blog post on async Rust patterns".to_string(),
+                ),
+                timestamp: now - Duration::hours(1),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            backend: BackendType::Demo,
+            account_id: DEMO_ACCOUNT_ID.to_string(),
+        },
+        Group {
+            id: "group-weekend-warriors".to_string(),
+            name: Some("Weekend Warriors".to_string()),
+            members: vec![users[3].clone(), users[4].clone(), users[5].clone()],
+            last_message: Some(Message {
+                id: "group-weekend-warriors-last".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text("Saturday 8pm — everyone good?".to_string()),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            backend: BackendType::Demo,
+            account_id: DEMO_ACCOUNT_ID.to_string(),
+        },
+        Group {
+            id: "group-midnight-jams".to_string(),
+            name: Some("Midnight Jams".to_string()),
+            members: vec![users[6].clone(), users[7].clone()],
+            last_message: Some(Message {
+                id: "group-midnight-jams-last".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text("New lo-fi playlist just dropped 🎵".to_string()),
+                timestamp: now - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            backend: BackendType::Demo,
+            account_id: DEMO_ACCOUNT_ID.to_string(),
+        },
+        Group {
+            id: "group-team-poly".to_string(),
+            name: Some("Poly Core Team".to_string()),
+            members: vec![
+                users[0].clone(),
+                users[1].clone(),
+                users[2].clone(),
+                users[3].clone(),
+            ],
+            last_message: Some(Message {
+                id: "group-team-poly-last".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text("Sprint planning tomorrow, 10am UTC".to_string()),
+                timestamp: now - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            backend: BackendType::Demo,
+            account_id: DEMO_ACCOUNT_ID.to_string(),
+        },
+    ]
+}
+
+/// Generate themed group DMs for the dog (demo2) account.
+pub fn demo2_groups() -> Vec<Group> {
+    let users = demo_users();
+    let now = Utc::now();
+
+    vec![
+        Group {
+            id: "group2-oss-contributors".to_string(),
+            name: Some("OSS Contributors".to_string()),
+            members: vec![users[0].clone(), users[1].clone(), users[2].clone()],
+            last_message: Some(Message {
+                id: "group2-oss-last".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text("PR #342 needs a second review 👀".to_string()),
+                timestamp: now - Duration::hours(2),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            backend: BackendType::Demo,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+        },
+        Group {
+            id: "group2-bookworms".to_string(),
+            name: Some("Bookworms".to_string()),
+            members: vec![users[3].clone(), users[4].clone()],
+            last_message: Some(Message {
+                id: "group2-bookworms-last".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "Finished it last night — what a twist! 📚".to_string(),
+                ),
+                timestamp: now - Duration::hours(7),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            backend: BackendType::Demo,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+        },
+        Group {
+            id: "group2-meal-prep".to_string(),
+            name: Some("Meal Prep Squad".to_string()),
+            members: vec![users[5].clone(), users[6].clone(), users[7].clone()],
+            last_message: Some(Message {
+                id: "group2-meal-prep-last".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text("Batch cooked 6 meals today 🍱".to_string()),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            }),
+            backend: BackendType::Demo,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+        },
+    ]
+}
+
+// ── Group Messages ────────────────────────────────────────────────────────────
+
+/// Generate conversation messages for a demo group DM.
+///
+/// Each group gets a personalised thread matching its theme.
+pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
+    let users = demo_users();
+    let now = Utc::now();
+
+    match group_id {
+        "group-rust-study" => vec![
+            Message {
+                id: "grp-rust-0".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Hey team! I started experimenting with `async-trait` 0.2 — the new built-in async trait syntax in Rust 1.85 is a game changer.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🦀".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "grp-rust-1".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "Yeah, no more `#[async_trait]` proc macro! The desugaring is so much cleaner now.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(3) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp-rust-2".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Found a great blog post on async Rust patterns — heavy read but worth it:\nhttps://blog.therust.cafe/async-patterns-2025".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(2),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "📖".to_string(), count: 2, me: false },
+                    Reaction { emoji: "🔖".to_string(), count: 1, me: true },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "grp-rust-3".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Also — should we start looking into `polonius` borrow checker? It handles some lifetime edge cases the current NLL misses.".to_string(),
+                ),
+                timestamp: now - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp-rust-4".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Found a great blog post on async Rust patterns".to_string(),
+                ),
+                timestamp: now - Duration::hours(1),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        "group-weekend-warriors" => vec![
+            Message {
+                id: "grp-ww-0".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "Who's up for a game night this Saturday? 🎮".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🙋".to_string(), count: 2, me: true },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "grp-ww-1".to_string(),
+                author: users[5].clone(),
+                content: MessageContent::Text("I'm in! Valorant or Minecraft?".to_string()),
+                timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp-ww-2".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text(
+                    "Minecraft survival — let's finish that castle we started. 🏰".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🙌".to_string(), count: 3, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "grp-ww-3".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text("Minecraft it is! 8pm EST?".to_string()),
+                timestamp: now - Duration::days(2) - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👍".to_string(), count: 2, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "grp-ww-4".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text("Saturday 8pm — everyone good?".to_string()),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        "group-midnight-jams" => vec![
+            Message {
+                id: "grp-mj-0".to_string(),
+                author: users[7].clone(),
+                content: MessageContent::Text(
+                    "Anyone else been listening to that new synthwave album? The \"Chromatic Bloom\" one?".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp-mj-1".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Yes!! Track 4 is pure nostalgia 🎧 Can't stop listening.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(2) - Duration::minutes(55),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🎶".to_string(), count: 2, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "grp-mj-2".to_string(),
+                author: users[7].clone(),
+                content: MessageContent::Text(
+                    "Made a lo-fi coding playlist that works really well for late night sessions. Want me to share it?".to_string(),
+                ),
+                timestamp: now - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp-mj-3".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text("New lo-fi playlist just dropped 🎵".to_string()),
+                timestamp: now - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🎵".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+        ],
+
+        "group-team-poly" => vec![
+            Message {
+                id: "grp-tp-0".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Phase 2.12 shipped! Status dots and diagnostics are live. 🎉".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🎉".to_string(), count: 4, me: true },
+                    Reaction { emoji: "🚀".to_string(), count: 2, me: false },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "grp-tp-1".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "Great work! The favorites persistence was a real pain point. Glad it's sorted.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(7) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp-tp-2".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "2.13 scope is clear — DMs/Groups + rich demo data. Anything we should prioritise?".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp-tp-3".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Group member management would be a big UX win. Even just the list panel with a remove button would go a long way.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👍".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "grp-tp-4".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Sprint planning tomorrow, 10am UTC".to_string(),
+                ),
+                timestamp: now - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+
+        // Dog account groups
+        "group2-oss-contributors" => vec![
+            Message {
+                id: "grp2-oss-0".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Just pushed new CI pipeline for the Open Source Hub project. Builds are 40% faster now 🚀".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🔥".to_string(), count: 3, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "grp2-oss-1".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Nice! I've been stuck on that weird flaky test in the integration suite. Any ideas?".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(4) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp2-oss-2".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "PR #342 needs a second review 👀\nIt's the async queue refactor — should be clean but needs eyes.".to_string(),
+                ),
+                timestamp: now - Duration::hours(2),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👀".to_string(), count: 1, me: true }],
+                edited: false,
+            },
+        ],
+
+        "group2-bookworms" => vec![
+            Message {
+                id: "grp2-bw-0".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text(
+                    "Okay I'm halfway through the book and I can already tell the ending is going to be devastating 😭".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "😭".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "grp2-bw-1".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "Oh no. I just finished it last night — what a twist! 📚\n\n(No spoilers but... chapter 23. That's all I'll say.)".to_string(),
+                ),
+                timestamp: now - Duration::hours(7),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👀".to_string(), count: 1, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "grp2-bw-2".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text(
+                    "Chapter 23?! I'm only on 18 aaaaah 😱".to_string(),
+                ),
+                timestamp: now - Duration::hours(6) - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "😱".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+        ],
+
+        "group2-meal-prep" => vec![
+            Message {
+                id: "grp2-mp-0".to_string(),
+                author: users[5].clone(),
+                content: MessageContent::Text(
+                    "Sunday meal prep done! Chicken tikka, roasted veg, overnight oats 🍱".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(12),
+                attachments: vec![
+                    Attachment {
+                        id: "att-meal-prep".to_string(),
+                        filename: "meal-prep-sunday.jpg".to_string(),
+                        content_type: "image/jpeg".to_string(),
+                        url: "https://picsum.photos/seed/mealprep/400/300".to_string(),
+                        size: 320_000,
+                    },
+                ],
+                reactions: vec![
+                    Reaction { emoji: "😍".to_string(), count: 2, me: true },
+                    Reaction { emoji: "🍱".to_string(), count: 1, me: false },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "grp2-mp-1".to_string(),
+                author: users[7].clone(),
+                content: MessageContent::Text(
+                    "Looks incredible! Can you share the tikka recipe? I've been trying to perfect it.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(11) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "grp2-mp-2".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Batch cooked 6 meals today 🍱\nHigh protein week — grilled salmon, lentil soup, quinoa salad.".to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "💪".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+        ],
+
+        // Fallback for any other group ID
+        _ => vec![
+            Message {
+                id: format!("{group_id}-msg-0"),
+                author: demo_session().user,
+                content: MessageContent::Text(
+                    "Hey everyone! Glad we have this group. 👋".to_string(),
+                ),
+                timestamp: now - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+    }
+}
+
+// ── Enriched demo2 channel messages ──────────────────────────────────────────
+
+/// Additional rich messages for dog account channels not covered by `demo2_messages`.
+///
+/// These supplement/override the sparse data in `demo2_messages` for channels that
+/// previously returned only minimal content.
+pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
+    let users = demo_users();
+    let now = Utc::now();
+
+    match channel_id {
+        "ch2-contributions" => vec![
+            Message {
+                id: "msg2-contrib-0".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Merged 3 PRs this week! The issue tracker is looking much cleaner.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🎉".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "msg2-contrib-1".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Working on the documentation overhaul. The README was last updated in 2023 😅".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg2-contrib-2".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "PR #342 is up! Async queue refactor — reduces memory usage by ~30%. Please review when you get a chance 🙏".to_string(),
+                ),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👀".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+        ],
+        "ch2-recommendations" => vec![
+            Message {
+                id: "msg2-rec-0".to_string(),
+                author: users[4].clone(),
+                content: MessageContent::Text(
+                    "Just finished \"The Midnight Library\" — absolutely recommend it if you like contemplative fiction. 📖".to_string(),
+                ),
+                timestamp: now - Duration::days(3) - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "📚".to_string(), count: 4, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "msg2-rec-1".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "I've been meaning to read that! Currently on \"Project Hail Mary\" — hard sci-fi that reads like a thriller.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🚀".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg2-rec-2".to_string(),
+                author: users[7].clone(),
+                content: MessageContent::Text(
+                    "For non-fiction people: \"Four Thousand Weeks\" by Oliver Burkeman is life-changing. Totally reframes time and productivity.".to_string(),
+                ),
+                timestamp: now - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "⏳".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+        ],
+        "ch2-recipes" => vec![
+            Message {
+                id: "msg2-recipes-0".to_string(),
+                author: users[5].clone(),
+                content: MessageContent::Text(
+                    "Made a 5-ingredient pasta last night and it turned out amazing!\n\n**Recipe:**\n- 400g spaghetti\n- 200g guanciale (or pancetta)\n- 4 egg yolks\n- 100g Pecorino Romano\n- Black pepper\n\nThe key is to use the pasta water to emulsify the sauce — no cream!".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(6),
+                attachments: vec![
+                    Attachment {
+                        id: "att-pasta".to_string(),
+                        filename: "carbonara.jpg".to_string(),
+                        content_type: "image/jpeg".to_string(),
+                        url: "https://picsum.photos/seed/pasta/500/350".to_string(),
+                        size: 450_000,
+                    },
+                ],
+                reactions: vec![
+                    Reaction { emoji: "😍".to_string(), count: 5, me: true },
+                    Reaction { emoji: "🍝".to_string(), count: 3, me: false },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "msg2-recipes-1".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Classic carbonara! The guanciale makes all the difference, I can't go back to using bacon anymore.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(5) - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg2-recipes-2".to_string(),
+                author: users[7].clone(),
+                content: MessageContent::Text(
+                    "Anyone have a good sourdough starter recipe? Mine keeps dying 😭 Third attempt this month...".to_string(),
+                ),
+                timestamp: now - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "😭".to_string(), count: 1, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg2-recipes-3".to_string(),
+                author: users[5].clone(),
+                content: MessageContent::Text(
+                    "The trick is room temperature water (never tap cold) and 12h between feedings. Also 50/50 bread flour + whole wheat feed works better than just white flour.".to_string(),
+                ),
+                timestamp: now - Duration::hours(4) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🙏".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+        ],
+        "ch2-techniques" => vec![
+            Message {
+                id: "msg2-tech-0".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Anyone else do the salt-baking technique for whole fish? Completely seals in moisture — game changer. 🐟".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🐟".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg2-tech-1".to_string(),
+                author: users[5].clone(),
+                content: MessageContent::Text(
+                    "Tried it with sea bass last weekend! The crust comes off perfectly and the fish stays so juicy.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(7) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg2-tech-2".to_string(),
+                author: users[7].clone(),
+                content: MessageContent::Text(
+                    "The maillard reaction discussion last week was eye-opening. I've been searing my steaks incorrectly my whole life 😅\n\nPatting dry + cast iron screaming hot = perfection".to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🥩".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+        ],
+        "ch2-nutrition" => vec![
+            Message {
+                id: "msg2-nutr-0".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Week 3 of tracking macros — 150g protein/day feels more achievable than I expected. Chicken + Greek yoghurt + cottage cheese gets you there pretty easily.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "💪".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg2-nutr-1".to_string(),
+                author: users[8].clone(),
+                content: MessageContent::Text(
+                    "Protein timing matters too — spreading it across 4+ meals seems to help muscle synthesis more than 2-3 large portions.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg2-nutr-2".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Post-workout meal today: 200g salmon, roasted sweet potato, broccoli. Clean and filling 🍽️".to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🍽️".to_string(), count: 1, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "msg2-nutr-3".to_string(),
+                author: users[8].clone(),
+                content: MessageContent::Text(
+                    "Meal logged: 3,200 kcal, 145g protein. Slightly over on carbs but had a hard leg day so it balances out.".to_string(),
+                ),
+                timestamp: now - Duration::hours(2) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+        "ch2-workouts" => vec![
+            Message {
+                id: "msg2-wk-0".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "5K run this morning! 💪 New personal best — 22:14. Beat my previous by 45 seconds.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(7),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🔥".to_string(), count: 6, me: false },
+                    Reaction { emoji: "🏃".to_string(), count: 3, me: true },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "msg2-wk-1".to_string(),
+                author: users[8].clone(),
+                content: MessageContent::Text("That's incredible progress! What's your training plan?".to_string()),
+                timestamp: now - Duration::days(1) - Duration::hours(6) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg2-wk-2".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "3 runs/week — one tempo, one long slow, one interval. Followed the 12-week Garmin plan. Surprisingly beginner-friendly.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(6) - Duration::minutes(30),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg2-wk-3".to_string(),
+                author: users[9].clone(),
+                content: MessageContent::Text(
+                    "Anyone else doing the 100-day push-up challenge? Day 34 — 200 push-ups today. My arms are cooked 🔥".to_string(),
+                ),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "💪".to_string(), count: 4, me: true },
+                    Reaction { emoji: "😤".to_string(), count: 2, me: false },
+                ],
+                edited: false,
+            },
+        ],
+        "ch-rust" => vec![
+            Message {
+                id: "msg-rust-0".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "I keep hitting E0502 when trying to use a slice and mutate the Vec at the same time. The borrow checker is not happy 😅".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg-rust-1".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "Classic borrow issue! You need to use `split_at_mut` or restructure to avoid overlapping borrows. Or collect the indices first, then mutate.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(55),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🦀".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg-rust-2".to_string(),
+                author: users[5].clone(),
+                content: MessageContent::Text(
+                    "The `polonius` borrow checker (now in nightly) handles some of these NLL limitations. Worth trying on nightly if you want to unblock.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg-rust-3".to_string(),
+                author: users[9].clone(),
+                content: MessageContent::Text(
+                    "How are people handling errors in large projects? `thiserror` for libraries + `anyhow` for binaries seems like the community standard.".to_string(),
+                ),
+                timestamp: now - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👍".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+            Message {
+                id: "msg-rust-4".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "That's exactly the pattern we use in Poly. `poly-client` uses `thiserror`, the apps use `anyhow` internally. Works great.".to_string(),
+                ),
+                timestamp: now - Duration::hours(5) - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
+        "ch-dioxus" => vec![
+            Message {
+                id: "msg-dioxus-0".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "Dioxus 0.7 hot-reload is genuinely magical. RSX changes reflect subsecond without losing any state. How is this even possible? 🤯".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(7),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🤯".to_string(), count: 4, me: true },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "msg-dioxus-1".to_string(),
+                author: users[0].clone(),
+                content: MessageContent::Text(
+                    "The `subsecond` hotpatch library. It relinks only the changed functions at runtime — similar to how Swift playgrounds work. Genuinely impressive engineering.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(6) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg-dioxus-2".to_string(),
+                author: users[5].clone(),
+                content: MessageContent::Text(
+                    "One thing I've learned: keep `#[component]` fns under ~150 lines or the RSX macro gets confused during hot-reload. Works great when you respect the limit.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "✏️".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg-dioxus-3".to_string(),
+                author: users[2].clone(),
+                content: MessageContent::Text(
+                    "Signal-based state is so much cleaner than React's useState cascade. Just `use_context()` anywhere and it Just Works™.".to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "💯".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+        ],
+        "ch-production" => vec![
+            Message {
+                id: "msg-prod-0".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Just got my first hardware synth! A Novation MiniNova. The learning curve is steep but the sound design possibilities are endless 🎹".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(6),
+                attachments: vec![
+                    Attachment {
+                        id: "att-synth".to_string(),
+                        filename: "mininova.jpg".to_string(),
+                        content_type: "image/jpeg".to_string(),
+                        url: "https://picsum.photos/seed/synth/400/280".to_string(),
+                        size: 380_000,
+                    },
+                ],
+                reactions: vec![
+                    Reaction { emoji: "🎹".to_string(), count: 4, me: true },
+                    Reaction { emoji: "🔥".to_string(), count: 2, me: false },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "msg-prod-1".to_string(),
+                author: users[7].clone(),
+                content: MessageContent::Text(
+                    "Beautiful! Are you going to run it through your DAW or use it standalone? I hook mine directly into Ableton and use MIDI automation heavily.".to_string(),
+                ),
+                timestamp: now - Duration::days(2) - Duration::hours(5) - Duration::minutes(50),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg-prod-2".to_string(),
+                author: users[6].clone(),
+                content: MessageContent::Text(
+                    "Planning to use it with FL Studio. Made a 32-bar loop last night and it sounds incredible with some saturation on the output.\n\nHere's a quick recording:".to_string(),
+                ),
+                timestamp: now - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "👀".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg-prod-3".to_string(),
+                author: users[9].clone(),
+                content: MessageContent::Text(
+                    "Anyone using the new Vital synth plugin? Free version is genuinely superb — wavetable synthesis with a ton of preset starting points.".to_string(),
+                ),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🎵".to_string(), count: 3, me: true }],
+                edited: false,
+            },
+        ],
+        "ch-valorant" => vec![
+            Message {
+                id: "msg-valorant-0".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text("Just hit Diamond! Finally 💎".to_string()),
+                timestamp: now - Duration::days(1) - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "💎".to_string(), count: 5, me: true },
+                    Reaction { emoji: "🎉".to_string(), count: 3, me: false },
+                ],
+                edited: false,
+            },
+            Message {
+                id: "msg-valorant-1".to_string(),
+                author: users[1].clone(),
+                content: MessageContent::Text(
+                    "Let's goooo!! What agent did you climb with?".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(55),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+            Message {
+                id: "msg-valorant-2".to_string(),
+                author: users[3].clone(),
+                content: MessageContent::Text(
+                    "Mostly Sage and Killjoy on defense. Sentinel playstyle + info gathering wins more rounds than fragging in my experience.".to_string(),
+                ),
+                timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(40),
+                attachments: vec![],
+                reactions: vec![Reaction { emoji: "🧠".to_string(), count: 2, me: false }],
+                edited: false,
+            },
+            Message {
+                id: "msg-valorant-3".to_string(),
+                author: users[9].clone(),
+                content: MessageContent::Text(
+                    "Killjoy is so broken right now — her turret damage got buffed and nobody's countering it properly. Expect nerfs soon.".to_string(),
+                ),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![],
+                edited: false,
+            },
+        ],
         _ => vec![],
     }
 }

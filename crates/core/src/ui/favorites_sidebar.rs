@@ -203,11 +203,12 @@ pub fn FavoritesBar() -> Element {
 ///
 /// Shows a colored circle with the account's emoji icon (if set in its session)
 /// or first character of the account ID as fallback. Clicking navigates to that
-/// account's DMs home.
+/// account's last visited page (or DMs home if no history exists).
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
+    let app_state: Signal<AppState> = use_context();
 
     // Read connection and presence statuses for this account.
     let conn_class: &'static str = client_manager
@@ -248,6 +249,14 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 .unwrap_or_default()
         });
 
+    // Display name shown in the tooltip when hovering the account icon.
+    let display_name: String = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .map(|s| s.user.display_name.clone())
+        .unwrap_or_else(|| account_id.clone());
+
     // Count unread DMs + notifications for this account
     let dm_unreads: u32 = chat_data
         .read()
@@ -272,6 +281,29 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             class: if is_active { "server-icon account-icon active" } else { "server-icon account-icon" },
             onclick: move |_| {
                 let aid = aid_for_click.clone();
+                // Clear server/channel state — the target route will reload what's needed.
+                chat_data.write().current_server = None;
+                chat_data.write().current_channel = None;
+                chat_data.write().channels.clear();
+                chat_data.write().messages.clear();
+                chat_data.write().members.clear();
+
+                // If we have a stored last route for this account, restore it.
+                // This makes account-switching feel like a true tab switch.
+                let last_route_url = app_state
+                    .read()
+                    .nav
+                    .account_last_routes
+                    .get(&aid)
+                    .cloned();
+                if let Some(url) = last_route_url
+                    && let Ok(route) = url.parse::<Route>()
+                {
+                    navigator().push(route);
+                    return;
+                }
+
+                // No stored route — fall back to the account's DMs home.
                 // Look up backend slug + instance_id from the stored session
                 let (backend_slug, instance_id) = {
                     chat_data
@@ -291,11 +323,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                             "demo".to_string(),
                         ))
                 };
-                chat_data.write().current_server = None;
-                chat_data.write().current_channel = None;
-                chat_data.write().channels.clear();
-                chat_data.write().messages.clear();
-                chat_data.write().members.clear();
                 navigator()
                     .push(Route::DmsHome {
                         backend: backend_slug,
@@ -303,7 +330,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         account_id: aid,
                     });
             },
-            title: "{account_id}",
+            title: "{display_name}",
             // Render image avatar if available (avatar_url is set by the client;
             // demo client sets it to the bundled cat/dog asset path).
             if let Some(url) = &avatar_url {

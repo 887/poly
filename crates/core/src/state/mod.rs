@@ -58,6 +58,17 @@ pub struct NavigationState {
     pub selected_channel: Option<String>,
     /// Whether right sidebar (user list) is visible.
     pub right_sidebar_visible: bool,
+    /// Whether the DM/group right member sidebar is visible.
+    ///
+    /// Toggled by the "Members" button in the group chat header.
+    /// Independent of `right_sidebar_visible` (which controls the server member list).
+    pub dm_right_sidebar_visible: bool,
+    /// Last-visited URL per account ID.
+    ///
+    /// Populated by `sync_route_to_app_state` on every account-scoped navigation.
+    /// Used by `FavoritesBar` to restore the account's previous page when switching.
+    /// Persisted to storage so it survives page reloads.
+    pub account_last_routes: std::collections::HashMap<String, String>,
 }
 
 impl Default for NavigationState {
@@ -70,6 +81,8 @@ impl Default for NavigationState {
             selected_server: None,
             selected_channel: None,
             right_sidebar_visible: true,
+            dm_right_sidebar_visible: false,
+            account_last_routes: std::collections::HashMap::new(),
         }
     }
 }

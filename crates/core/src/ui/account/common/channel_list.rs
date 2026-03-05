@@ -72,8 +72,22 @@ fn DMFriendsView() -> Element {
     let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
 
-    let dm_channels = chat_data.read().dm_channels.clone();
-    let groups = chat_data.read().groups.clone();
+    // Only show DMs and groups belonging to the currently active account.
+    let active_account_id = app_state.read().nav.active_account_id.clone();
+    let dm_channels: Vec<_> = chat_data
+        .read()
+        .dm_channels
+        .iter()
+        .filter(|dm| active_account_id.as_deref() == Some(&dm.account_id))
+        .cloned()
+        .collect();
+    let groups: Vec<_> = chat_data
+        .read()
+        .groups
+        .iter()
+        .filter(|g| active_account_id.as_deref() == Some(&g.account_id))
+        .cloned()
+        .collect();
     let friends = chat_data.read().friends.clone();
     let selected_channel = app_state.read().nav.selected_channel.clone();
     let mut dm_filter = use_signal(String::new);
@@ -217,7 +231,6 @@ fn DMFriendsView() -> Element {
                     channel_id: dm.id.clone(),
                     display_name: dm.user.display_name.clone(),
                     user_id: dm.user.id.clone(),
-                    badge: backend_badge(&dm.backend),
                     unread: dm.unread_count,
                     is_active: selected_channel.as_deref() == Some(&dm.id),
                     account_id: dm.account_id.clone(),
@@ -231,7 +244,6 @@ fn DMFriendsView() -> Element {
                     group_id: group.id.clone(),
                     group_name: group.name.clone(),
                     members: group.members.clone(),
-                    badge: backend_badge(&group.backend),
                     is_active: selected_channel.as_deref() == Some(&group.id),
                     account_id: group.account_id.clone(),
                     backend_slug: group.backend.slug().to_string(),
@@ -245,7 +257,6 @@ fn DMFriendsView() -> Element {
                     FriendItem {
                         display_name: friend.display_name.clone(),
                         user_id: friend.id.clone(),
-                        badge: backend_badge(&friend.backend),
                     }
                 }
             }
@@ -289,7 +300,6 @@ fn DMChannelItem(
     channel_id: String,
     display_name: String,
     user_id: String,
-    badge: String,
     unread: u32,
     is_active: bool,
     account_id: String,
@@ -315,6 +325,9 @@ fn DMChannelItem(
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
                 app_state.write().nav.selected_channel = Some(channel_id.clone());
+                // Clear group member list — this is an individual DM.
+                chat_data.write().active_group_members = Vec::new();
+                app_state.write().nav.dm_right_sidebar_visible = false;
                 // Synthesize a Channel so ChatView can display the DM header
                 chat_data.write().current_channel = Some(Channel {
                     id: channel_id.clone(),
@@ -340,7 +353,6 @@ fn DMChannelItem(
             },
             div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
             span { class: "channel-name", "{display_name}" }
-            span { class: "source-badge-inline", "{badge}" }
             if unread > 0 {
                 span { class: "unread-badge", "{unread}" }
             }
@@ -354,7 +366,6 @@ fn GroupChannelItem(
     group_id: String,
     group_name: Option<String>,
     members: Vec<User>,
-    badge: String,
     is_active: bool,
     account_id: String,
     /// Backend slug for routing (e.g. `"demo"`, `"stoat"`).
@@ -380,6 +391,8 @@ fn GroupChannelItem(
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
                 app_state.write().nav.selected_channel = Some(group_id.clone());
+                // Populate group members for the DM member sidebar.
+                chat_data.write().active_group_members = members.clone();
                 // Synthesize a Channel so ChatView can display the group header
                 chat_data.write().current_channel = Some(Channel {
                     id: group_id.clone(),
@@ -405,7 +418,6 @@ fn GroupChannelItem(
             },
             span { class: "channel-icon", "👥" }
             span { class: "channel-name", "{display_name}" }
-            span { class: "source-badge-inline", "{badge}" }
             span { class: "dm-member-count", "({member_count})" }
         }
     }
@@ -413,7 +425,7 @@ fn GroupChannelItem(
 
 /// Friend contact in search results.
 #[component]
-fn FriendItem(display_name: String, user_id: String, badge: String) -> Element {
+fn FriendItem(display_name: String, user_id: String) -> Element {
     use crate::state::chat_data::user_color;
 
     let color = user_color(&user_id);
@@ -427,7 +439,6 @@ fn FriendItem(display_name: String, user_id: String, badge: String) -> Element {
         div { class: "channel-item",
             div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
             span { class: "channel-name", "{display_name}" }
-            span { class: "source-badge-inline", "{badge}" }
         }
     }
 }

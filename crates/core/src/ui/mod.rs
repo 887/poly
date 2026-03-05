@@ -126,6 +126,16 @@ async fn init_storage(
                     if settings.demo_active {
                         favorites_sidebar::toggle_demo(client_manager, chat_data).await;
                     }
+                    // Restore per-account last-visited routes so account-switching
+                    // returns to the correct page even after a page reload.
+                    match storage.get_account_last_routes().await {
+                        Ok(stored_routes) if !stored_routes.is_empty() => {
+                            app_state.write().nav.account_last_routes = stored_routes;
+                            tracing::info!("Restored per-account last routes from storage");
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!("Failed to read account last routes: {e}"),
+                    }
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),

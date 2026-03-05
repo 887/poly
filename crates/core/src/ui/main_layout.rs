@@ -89,6 +89,24 @@ pub fn MainLayout() -> Element {
     let route = use_route::<Route>();
     sync_route_to_app_state(&route, app_state);
 
+    // Persist per-account last-visited routes to storage whenever they change.
+    // This fires after every route navigation (because sync_route_to_app_state
+    // updates account_last_routes inside AppState, which re-renders MainLayout).
+    // The spawn ensures the async storage write doesn't block the render.
+    use_effect(move || {
+        let routes_snapshot = app_state.read().nav.account_last_routes.clone();
+        if routes_snapshot.is_empty() {
+            return;
+        }
+        spawn(async move {
+            if let Some(storage) = crate::STORAGE.get()
+                && let Err(e) = storage.set_account_last_routes(&routes_snapshot).await
+            {
+                tracing::warn!("Failed to persist account last routes: {e}");
+            }
+        });
+    });
+
     // WebKit2GTK (used by Wry/desktop) requires:
     //   1. `dataTransfer.setData()` called **synchronously** in `dragstart` — or the entire
     //      drag operation is silently cancelled before it begins.

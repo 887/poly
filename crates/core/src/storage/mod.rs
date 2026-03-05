@@ -537,6 +537,32 @@ impl Storage {
             .await
     }
 
+    // ── Typed access — AccountLastRoutes ─────────────────────────────────────
+
+    /// Read the persisted per-account last-visited URL map.
+    ///
+    /// Storage key: `"account_last_routes"`. Returns empty map if not yet saved.
+    pub async fn get_account_last_routes(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, StorageError> {
+        Ok(self
+            .get("account_last_routes")
+            .await?
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Persist the per-account last-visited URL map.
+    ///
+    /// Storage key: `"account_last_routes"`.
+    pub async fn set_account_last_routes(
+        &self,
+        routes: &std::collections::HashMap<String, String>,
+    ) -> Result<(), StorageError> {
+        self.set("account_last_routes", serde_json::to_value(routes)?)
+            .await
+    }
+
     // ── Typed access — Identity ───────────────────────────────────────────────
 
     /// Retrieve the raw Ed25519 private key bytes (32 bytes) from storage.

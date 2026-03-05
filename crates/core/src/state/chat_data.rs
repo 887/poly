@@ -93,6 +93,12 @@ pub struct ChatData {
     /// consumer when `TypingStarted` events arrive, cleared after a
     /// few-second timeout.
     pub typing_users: Vec<String>,
+    /// Members of the currently open group DM.
+    ///
+    /// Populated from the `Group::members` list when a group conversation
+    /// is opened. Empty for individual DMs and server channels.
+    /// Used by `DmUserSidebar` to render the group member list.
+    pub active_group_members: Vec<User>,
 }
 
 /// Format a file size in human-readable form.

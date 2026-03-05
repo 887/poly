@@ -101,7 +101,19 @@ impl ClientBackend for DemoClient {
         channel_id: &str,
         _query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        Ok(data::demo_messages(channel_id))
+        if channel_id.starts_with("dm-") {
+            Ok(data::demo_dm_messages(channel_id))
+        } else if channel_id.starts_with("group-") {
+            Ok(data::demo_group_messages(channel_id))
+        } else {
+            // Try the rich supplement first (covers sparse channels); fall back to base.
+            let rich = data::demo2_messages_rich(channel_id);
+            if rich.is_empty() {
+                Ok(data::demo_messages(channel_id))
+            } else {
+                Ok(rich)
+            }
+        }
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
@@ -120,7 +132,12 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(data::demo_groups())
+        Ok(data::demo_groups_v2())
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        // Demo client: UI updates local state; no real backend call needed.
+        Ok(())
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
@@ -333,7 +350,19 @@ impl ClientBackend for DemoClient2 {
         channel_id: &str,
         _query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        Ok(data::demo2_messages(channel_id))
+        if channel_id.starts_with("dm-") {
+            Ok(data::demo_dm_messages(channel_id))
+        } else if channel_id.starts_with("group2-") {
+            Ok(data::demo_group_messages(channel_id))
+        } else {
+            // Try rich supplement first; fall back to demo2 base data.
+            let rich = data::demo2_messages_rich(channel_id);
+            if rich.is_empty() {
+                Ok(data::demo2_messages(channel_id))
+            } else {
+                Ok(rich)
+            }
+        }
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
@@ -353,8 +382,11 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        // No group DMs for demo2 for simplicity
-        Ok(vec![])
+        Ok(data::demo2_groups())
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Ok(())
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {

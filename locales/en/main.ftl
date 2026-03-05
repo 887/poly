@@ -392,5 +392,13 @@ server-profile-save = Save Changes
 server-general-info = Server Info
 server-general-danger = Danger Zone
 
+# Group DMs
+group-members-title = Members
+group-member-remove = Remove
+group-member-remove-tooltip = Remove { $name } from this group
+
+# DM header
+dm-header-subtitle = Direct Message
+
 # Demo backend
 demo-regenerate-data = Regenerate Demo Data

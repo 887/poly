@@ -45,6 +45,10 @@ pub enum ClientError {
     /// Internal or unexpected error.
     #[error("internal error: {0}")]
     Internal(String),
+
+    /// Operation not supported by this backend.
+    #[error("not supported: {0}")]
+    NotSupported(String),
 }
 
 /// Result type for client backend operations.
@@ -115,6 +119,15 @@ pub trait ClientBackend: Send + Sync {
 
     /// Get all group chats.
     async fn get_groups(&self) -> ClientResult<Vec<Group>>;
+
+    /// Remove a user from a group DM.
+    ///
+    /// Backends that do not support removing members should return the
+    /// default `Err(ClientError::NotSupported(...))` provided below.
+    async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        let _ = (group_id, user_id);
+        Err(ClientError::NotSupported("remove_group_member".to_string()))
+    }
 
     // --- Direct Messages ---
 
