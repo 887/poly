@@ -203,7 +203,7 @@ pub fn ChatView() -> Element {
                     if is_group_channel {
                         button {
                             class: "header-btn",
-                            title: "{t(\"group-member-remove-tooltip\")}",
+                            title: "{t(\"chat-toggle-members\")}",
                             onclick: move |_| {
                                 let current = app_state.read().nav.dm_right_sidebar_visible;
                                 app_state.write().nav.dm_right_sidebar_visible = !current;
@@ -213,7 +213,7 @@ pub fn ChatView() -> Element {
                     } else if !is_dm_channel {
                         button {
                             class: "header-btn",
-                            title: "Toggle member list",
+                            title: "{t(\"chat-toggle-members\")}",
                             onclick: move |_| {
                                 let current = app_state.read().nav.right_sidebar_visible;
                                 app_state.write().nav.right_sidebar_visible = !current;
@@ -233,10 +233,10 @@ pub fn ChatView() -> Element {
                     spawn(async move {
                         let mut eval = document::eval(
                             r#"
-                                                                                                    let el = document.getElementById('message-list-scroll');
-                                                                                                    if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                                                    else { dioxus.send(false); }
-                                                                                                    "#,
+                                                                                                                let el = document.getElementById('message-list-scroll');
+                                                                                                                if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                                                else { dioxus.send(false); }
+                                                                                                                "#,
                         );
                         if let Ok(near_top) = eval.recv::<bool>().await
                             && near_top
@@ -374,7 +374,7 @@ pub fn ChatView() -> Element {
                                                         }
                                                     },
                                                     "✏️"
-                                                } // Full message: avatar (image or fallback letter) + header
+                                                } // Full message: avatar (image or fallback letter) + header // Full message: avatar (image or fallback letter) + header
                                                 // Own message: Delete button
                                                 button {
                                                     class: "msg-action-btn msg-action-btn-danger",
@@ -397,7 +397,7 @@ pub fn ChatView() -> Element {
                                                     },
                                                     "↩️"
                                                 }
-                                                button { // Content (or inline edit UI)
+                                                button { // Content (or inline edit UI) // Content (or inline edit UI)
                                                     class: "msg-action-btn",
                                                     title: "{t(\"msg-forward\")}",
                                                     onclick: move |_| {
@@ -556,9 +556,9 @@ pub fn ChatView() -> Element {
                                     // Trigger hidden file input via JS
                                     document::eval(
                                         r#"
-                                                                                                                                                                                                                let input = document.getElementById('poly-file-input');
-                                                                                                                                                                                                                if (input) { input.click(); }
-                                                                                                                                                                                                                "#,
+                                                                                                                                                                                                                                            let input = document.getElementById('poly-file-input');
+                                                                                                                                                                                                                                            if (input) { input.click(); }
+                                                                                                                                                                                                                                            "#,
                                     );
                                 },
                                 "📎"
