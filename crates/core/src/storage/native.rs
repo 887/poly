@@ -107,7 +107,11 @@ impl StorageInner {
 
         // NOTE: We renamed the field to `payload` (from `value`) to avoid any potential
         // SurrealDB keyword collision with the `VALUE` keyword used in expressions.
-        let query = format!("UPSERT poly_kv:{key} SET payload = $payload");
+        // DECISION: Use `RETURN NONE` to suppress the upserted record—in SurrealDB 3.0,
+        // UPSERT without RETURN NONE returns a record type, which causes a type mismatch
+        // when the SDK expects `any`. RETURN NONE makes the query return nothing, so we
+        // can skip the result extraction entirely.
+        let query = format!("UPSERT poly_kv:{key} SET payload = $payload RETURN NONE");
         // Bind as a JSON object — serde_json::Value implements SurrealValue, and
         // Value::Object is treated as a variables map by IntoVariables.
         let mut resp = self
@@ -118,16 +122,13 @@ impl StorageInner {
             .map_err(|e| StorageError::Backend(format!("upsert({key}): {e}")))?;
 
         // Consume result index 0 to surface any SurrealQL-level errors.
-        // The UPSERT returns the upserted record, so we check it exists and discard it.
-        let result: Option<serde_json::Value> = resp
+        // With RETURN NONE, this will be empty, but we still need to call take()
+        // to properly consume the response and check for errors.
+        let _ = resp
             .take::<Option<serde_json::Value>>(0usize)
             .map_err(|e| StorageError::Backend(format!("upsert result ({key}): {e}")))?;
 
-        if result.is_none() {
-            tracing::warn!("storage::set({key}): UPSERT returned no record — possible issue");
-        } else {
-            tracing::info!("storage::set({key}) committed ✓");
-        }
+        tracing::debug!("storage::set({key}) committed ✓");
 
         Ok(())
     }
