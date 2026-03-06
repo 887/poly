@@ -32,6 +32,21 @@ use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_client::MessageContent;
 
+/// State for the message right-click context menu.
+#[derive(Debug, Clone)]
+struct MsgContextMenu {
+    /// X pixel coordinate (client-relative).
+    x: f64,
+    /// Y pixel coordinate (client-relative).
+    y: f64,
+    /// ID of the message that was right-clicked.
+    message_id: String,
+    /// Plain text content of the message (for clipboard actions).
+    message_text: String,
+    /// Whether the right-clicked message belongs to the currently signed-in user.
+    is_own: bool,
+}
+
 /// The maximum number of minutes between messages from the same author
 /// to be considered a "group" (compact layout).
 const GROUP_THRESHOLD_MINUTES: i64 = 7;
@@ -50,6 +65,9 @@ pub fn ChatView() -> Element {
     let mut reaction_picker_msg = use_signal(|| None::<String>);
     let mut drag_over = use_signal(|| false);
     let mut hovered_msg = use_signal(|| None::<String>);
+    let mut editing_msg_id = use_signal(|| None::<String>);
+    let mut edit_draft = use_signal(String::new);
+    let mut msg_context_menu = use_signal(|| None::<MsgContextMenu>);
 
     let channel_id = app_state.read().nav.selected_channel.clone();
     let messages = chat_data.read().messages.clone();
@@ -64,6 +82,19 @@ pub fn ChatView() -> Element {
         .as_deref()
         .unwrap_or_default()
         .starts_with("group-");
+
+    // Derive the signed-in user's ID for "is own message" checks.
+    let self_user_id: String = {
+        let state = app_state.read();
+        let cm = client_manager.read();
+        state
+            .nav
+            .active_account_id
+            .as_ref()
+            .and_then(|aid| cm.sessions.get(aid))
+            .map(|s| s.user.id.clone())
+            .unwrap_or_default()
+    };
 
     // Look up DM user avatar from dm_channels (Channel struct has no avatar_url)
     let dm_user_avatar: Option<String> = if is_dm_channel {
@@ -267,8 +298,18 @@ pub fn ChatView() -> Element {
                                 String::new()
                             };
                             let is_hovered = hovered_msg.read().as_deref() == Some(&msg_id);
+                            let is_own = author.id == self_user_id;
+                            let is_editing = editing_msg_id.read().as_deref() == Some(&msg_id);
                             let msg_id_hover = msg_id.clone();
                             let msg_id_reaction = msg_id.clone();
+                            let msg_id_edit = msg_id.clone();
+                            let msg_id_delete = msg_id.clone();
+                            let msg_id_ctx = msg_id.clone();
+                            let ctx_text = match &content {
+                                MessageContent::Text(t) => t.clone(),
+                                MessageContent::WithAttachments { text, .. } => text.clone(),
+                            };
+                            let edit_initial_text = ctx_text.clone();
                             rsx! {
                                 // Date separator
                                 if show_date_sep {
@@ -285,10 +326,26 @@ pub fn ChatView() -> Element {
                                         move |_| hovered_msg.set(Some(mid.clone()))
                                     },
                                     onmouseleave: move |_| hovered_msg.set(None),
+                                    oncontextmenu: {
+                                        let mid = msg_id_ctx.clone();
+                                        let txt = ctx_text.clone();
+                                        move |evt: MouseEvent| {
+                                            evt.prevent_default();
+                                            let coords = evt.client_coordinates();
+                                            msg_context_menu.set(Some(MsgContextMenu {
+                                                x: coords.x,
+                                                y: coords.y,
+                                                message_id: mid.clone(),
+                                                message_text: txt.clone(),
+                                                is_own,
+                                            }));
+                                        }
+                                    },
 
-                                    // Hover action bar
-                                    if is_hovered {
+                                    // Hover action bar (hidden while inline-editing)
+                                    if is_hovered && !is_editing {
                                         div { class: "message-actions",
+                                            // Reaction button — always shown
                                             button {
                                                 class: "msg-action-btn",
                                                 title: "{t(\"reaction-add\")}",
@@ -299,6 +356,52 @@ pub fn ChatView() -> Element {
                                                     }
                                                 },
                                                 "😀+"
+                                            }
+                                            if is_own {
+                                                // Own message: Edit button
+                                                button {
+                                                    class: "msg-action-btn",
+                                                    title: "{t(\"msg-edit\")}",
+                                                    onclick: {
+                                                        let mid = msg_id_edit.clone();
+                                                        let txt = edit_initial_text.clone();
+                                                        move |_| {
+                                                            edit_draft.set(txt.clone());
+                                                            editing_msg_id.set(Some(mid.clone()));
+                                                        }
+                                                    },
+                                                    "✏️"
+                                                }
+                                                // Own message: Delete button
+                                                button {
+                                                    class: "msg-action-btn msg-action-btn-danger",
+                                                    title: "{t(\"msg-delete\")}",
+                                                    onclick: {
+                                                        let mid = msg_id_delete.clone();
+                                                        move |_| {
+                                                            chat_data.write().messages.retain(|m| m.id != mid);
+                                                        }
+                                                    },
+                                                    "🗑️"
+                                                }
+                                            } else {
+                                                // Other's message: Reply + Forward
+                                                button {
+                                                    class: "msg-action-btn",
+                                                    title: "{t(\"msg-reply\")}",
+                                                    onclick: move |_| {
+                                                        tracing::debug!("Reply (stub)");
+                                                    },
+                                                    "↩️"
+                                                }
+                                                button {
+                                                    class: "msg-action-btn",
+                                                    title: "{t(\"msg-forward\")}",
+                                                    onclick: move |_| {
+                                                        tracing::debug!("Forward (stub)");
+                                                    },
+                                                    "➡️"
+                                                }
                                             }
                                         }
                                     }
@@ -319,8 +422,17 @@ pub fn ChatView() -> Element {
                                                 span { class: "message-author", style: "color: {color};", "{author.display_name}" }
                                                 span { class: "message-timestamp", "{time_str}" }
                                             }
-                                            // Content
-                                            MessageContentView { content: content.clone(), edited }
+                                            // Content (or inline edit UI)
+                                            if is_editing {
+                                                MessageInlineEdit {
+                                                    message_id: msg_id.clone(),
+                                                    editing_msg_id,
+                                                    edit_draft,
+                                                    chat_data,
+                                                }
+                                            } else {
+                                                MessageContentView { content: content.clone(), edited }
+                                            }
                                             // Attachments
                                             if !attachments.is_empty() {
                                                 AttachmentsView { attachments: attachments.clone() }
@@ -336,7 +448,17 @@ pub fn ChatView() -> Element {
                                             span { class: "message-hover-time", "{time_str}" }
                                         }
                                         div { class: "message-body",
-                                            MessageContentView { content: content.clone(), edited }
+                                            // Content (or inline edit UI)
+                                            if is_editing {
+                                                MessageInlineEdit {
+                                                    message_id: msg_id.clone(),
+                                                    editing_msg_id,
+                                                    edit_draft,
+                                                    chat_data,
+                                                }
+                                            } else {
+                                                MessageContentView { content: content.clone(), edited }
+                                            }
                                             if !attachments.is_empty() {
                                                 AttachmentsView { attachments: attachments.clone() }
                                             }
@@ -369,6 +491,11 @@ pub fn ChatView() -> Element {
                         reaction_picker_msg.set(None);
                     },
                 }
+            }
+
+            // ── Message right-click context menu ──────────────────────
+            if msg_context_menu.read().is_some() {
+                MsgContextMenuOverlay { msg_context_menu, chat_data }
             }
 
             // ── Message input with toolbar ───────────────────────────────
@@ -682,6 +809,293 @@ async fn send_message(
         }
         Err(e) => {
             tracing::error!("Failed to send message: {e}");
+        }
+    }
+}
+
+/// Apply an inline edit to a message in the chat data.
+///
+/// Sets `edited = true` on the message and replaces its content with the new text.
+fn apply_edit(chat_data: &mut Signal<ChatData>, message_id: &str, new_text: String) {
+    let mut cd = chat_data.write();
+    if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
+        msg.content = MessageContent::Text(new_text);
+        msg.edited = true;
+    }
+}
+
+/// Inline edit UI rendered in place of the message content while editing.
+///
+/// Shows a textarea pre-filled with the current message text, a Cancel button,
+/// and a Save button. Enter (without Shift) saves; Escape cancels.
+#[component]
+fn MessageInlineEdit(
+    message_id: String,
+    editing_msg_id: Signal<Option<String>>,
+    edit_draft: Signal<String>,
+    mut chat_data: Signal<ChatData>,
+) -> Element {
+    let mid_save = message_id.clone();
+    rsx! {
+        div { class: "message-inline-edit",
+            textarea {
+                class: "message-edit-input",
+                value: "{edit_draft}",
+                rows: "3",
+                oninput: move |evt| edit_draft.set(evt.value()),
+                onkeydown: {
+                    let mid = mid_save.clone();
+                    move |evt: KeyboardEvent| {
+                        if evt.key() == Key::Enter && !evt.modifiers().shift() {
+                            evt.prevent_default();
+                            let new_text = edit_draft.read().clone();
+                            apply_edit(&mut chat_data, &mid, new_text);
+                            editing_msg_id.set(None);
+                        } else if evt.key() == Key::Escape {
+                            editing_msg_id.set(None);
+                        }
+                    }
+                },
+            }
+            div { class: "message-edit-actions",
+                span { class: "message-edit-hint",
+                    "escape to "
+                    button {
+                        class: "message-edit-link-btn",
+                        onclick: move |_| editing_msg_id.set(None),
+                        "{t(\"msg-edit-cancel\")}"
+                    }
+                    " • enter to "
+                    button {
+                        class: "message-edit-link-btn message-edit-link-btn-save",
+                        onclick: {
+                            let mid = mid_save.clone();
+                            move |_| {
+                                let new_text = edit_draft.read().clone();
+                                apply_edit(&mut chat_data, &mid, new_text);
+                                editing_msg_id.set(None);
+                            }
+                        },
+                        "{t(\"msg-edit-save\")}"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Quick-reaction emoji row shown at top of the message context menu.
+const QUICK_REACTIONS: &[&str] = &["👍", "✅", "⚖️", "🔞"];
+
+/// Right-click context menu overlay for messages.
+///
+/// Renders a transparent backdrop (closes on click) and a fixed-position
+/// floating menu at the coordinates stored in `msg_context_menu`.
+#[component]
+fn MsgContextMenuOverlay(
+    msg_context_menu: Signal<Option<MsgContextMenu>>,
+    mut chat_data: Signal<ChatData>,
+) -> Element {
+    let Some(menu) = msg_context_menu.read().clone() else {
+        return rsx! {};
+    };
+
+    let x = menu.x;
+    let y = menu.y;
+    let is_own = menu.is_own;
+    let mid_delete = menu.message_id.clone();
+    let mid_copy_id = menu.message_id.clone();
+    let txt_copy = menu.message_text.clone();
+
+    rsx! {
+        // Transparent backdrop — closes menu on click
+        div {
+            class: "context-menu-backdrop",
+            onclick: move |_| msg_context_menu.set(None),
+            oncontextmenu: move |evt| {
+                evt.prevent_default();
+            },
+        }
+
+        // Floating context menu
+        div {
+            class: "context-menu msg-context-menu",
+            style: "left: {x}px; top: {y}px;",
+            onclick: move |evt| evt.stop_propagation(),
+
+            // Quick reactions row
+            div { class: "msg-context-quick-reactions",
+                for emoji in QUICK_REACTIONS {
+                    {
+                        let e = emoji.to_string();
+                        let mid = menu.message_id.clone();
+                        rsx! {
+                            button {
+                                class: "msg-context-quick-reaction-btn",
+                                onclick: move |_| {
+                                    toggle_reaction_on_message(&mut chat_data, &mid, &e);
+                                    msg_context_menu.set(None);
+                                },
+                                "{emoji}"
+                            }
+                        }
+                    }
+                }
+            }
+
+            div { class: "context-menu-separator" }
+
+            // Add Reaction
+            ContextMenuItemSimple {
+                label: t("reaction-add"),
+                has_arrow: true,
+                onclick: move |_| msg_context_menu.set(None),
+            }
+
+            // Reply
+            ContextMenuItemSimple {
+                label: t("msg-reply"),
+                icon: "↩",
+                onclick: move |_| {
+                    tracing::debug!("Reply (stub)");
+                    msg_context_menu.set(None);
+                },
+            }
+
+            // Forward
+            ContextMenuItemSimple {
+                label: t("msg-forward"),
+                icon: "➡",
+                onclick: move |_| {
+                    tracing::debug!("Forward (stub)");
+                    msg_context_menu.set(None);
+                },
+            }
+
+            // Copy Text
+            ContextMenuItemSimple {
+                label: t("msg-copy-text"),
+                onclick: {
+                    let txt = txt_copy.clone();
+                    move |_| {
+                        let js = format!(
+                            "navigator.clipboard.writeText({}).catch(()=>{{}})",
+                            serde_json::to_string(&txt).unwrap_or_default()
+                        );
+                        document::eval(&js);
+                        msg_context_menu.set(None);
+                    }
+                },
+            }
+
+            // Apps
+            ContextMenuItemSimple {
+                label: t("msg-apps"),
+                has_arrow: true,
+                onclick: move |_| msg_context_menu.set(None),
+            }
+
+            // Mark Unread
+            ContextMenuItemSimple {
+                label: t("msg-mark-unread"),
+                onclick: move |_| {
+                    tracing::debug!("Mark unread (stub)");
+                    msg_context_menu.set(None);
+                },
+            }
+
+            // Copy Message Link
+            ContextMenuItemSimple {
+                label: t("msg-copy-link"),
+                onclick: move |_| {
+                    tracing::debug!("Copy link (stub)");
+                    msg_context_menu.set(None);
+                },
+            }
+
+            // Speak Message
+            ContextMenuItemSimple {
+                label: t("msg-speak"),
+                onclick: move |_| {
+                    tracing::debug!("Speak (stub)");
+                    msg_context_menu.set(None);
+                },
+            }
+
+            div { class: "context-menu-separator" }
+
+            // Report Message — only for others' messages
+            if !is_own {
+                ContextMenuItemSimple {
+                    label: t("msg-report"),
+                    danger: true,
+                    onclick: move |_| {
+                        tracing::debug!("Report (stub)");
+                        msg_context_menu.set(None);
+                    },
+                }
+            }
+
+            // Delete — only for own messages
+            if is_own {
+                ContextMenuItemSimple {
+                    label: t("msg-delete"),
+                    danger: true,
+                    onclick: move |_| {
+                        let mid = mid_delete.clone();
+                        chat_data.write().messages.retain(|m| m.id != mid);
+                        msg_context_menu.set(None);
+                    },
+                }
+            }
+
+            // Copy Message ID
+            ContextMenuItemSimple {
+                label: t("msg-copy-id"),
+                onclick: {
+                    let mid = mid_copy_id.clone();
+                    move |_| {
+                        let js = format!(
+                            "navigator.clipboard.writeText({}).catch(()=>{{}})",
+                            serde_json::to_string(&mid).unwrap_or_default()
+                        );
+                        document::eval(&js);
+                        msg_context_menu.set(None);
+                    }
+                },
+            }
+        }
+    }
+}
+
+/// Simple context menu item button.
+///
+/// Renders a full-width button with optional right arrow, danger styling,
+/// and a leading icon glyph.
+#[component]
+fn ContextMenuItemSimple(
+    label: String,
+    #[props(default)] icon: String,
+    #[props(default)] has_arrow: bool,
+    #[props(default)] danger: bool,
+    onclick: EventHandler<MouseEvent>,
+) -> Element {
+    let class = if danger {
+        "context-menu-item danger"
+    } else {
+        "context-menu-item"
+    };
+    rsx! {
+        button {
+            class: "{class}",
+            onclick: move |evt| onclick.call(evt),
+            if !icon.is_empty() {
+                span { class: "context-menu-item-icon", "{icon}" }
+            }
+            span { class: "context-menu-item-label", "{label}" }
+            if has_arrow {
+                span { class: "context-menu-arrow", "›" }
+            }
         }
     }
 }

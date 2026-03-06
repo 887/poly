@@ -222,6 +222,22 @@ emoji-picker = Emoji
 emoji-search = Emoji suchen...
 gif-picker = GIF
 reaction-add = Reaktion hinzufügen
+
+# Nachrichten-Aktionsleiste / Kontextmenü
+msg-reply = Antworten
+msg-forward = Weiterleiten
+msg-edit = Bearbeiten
+msg-delete = Löschen
+msg-copy-text = Text kopieren
+msg-apps = Apps
+msg-mark-unread = Als ungelesen markieren
+msg-copy-link = Nachrichtenlink kopieren
+msg-speak = Nachricht vorlesen
+msg-report = Nachricht melden
+msg-copy-id = Nachrichten-ID kopieren
+msg-edit-save = Speichern
+msg-edit-cancel = Abbrechen
+
 chat-drop-files = Dateien zum Hochladen ablegen
 chat-attach-file = Datei anhängen
 

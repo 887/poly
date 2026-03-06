@@ -234,6 +234,22 @@ emoji-picker = Emoji
 emoji-search = Search emoji...
 gif-picker = GIF
 reaction-add = Add Reaction
+
+# Message action bar / context menu
+msg-reply = Reply
+msg-forward = Forward
+msg-edit = Edit
+msg-delete = Delete
+msg-copy-text = Copy Text
+msg-apps = Apps
+msg-mark-unread = Mark Unread
+msg-copy-link = Copy Message Link
+msg-speak = Speak Message
+msg-report = Report Message
+msg-copy-id = Copy Message ID
+msg-edit-save = Save
+msg-edit-cancel = Cancel
+
 chat-drop-files = Drop files to upload
 chat-attach-file = Attach File
 
