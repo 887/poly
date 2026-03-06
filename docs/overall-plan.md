@@ -1,6 +1,6 @@
 # Poly — PolyGlot Messenger: Overall Plan
 
-> **Last Updated:** 2026-03-04  
+> **Last Updated:** 2026-03-06  
 > **Status:** Phase 1 — Planning & Research  
 > **License:** MIT / Apache-2.0 dual license  
 > **Repository:** `poly`
@@ -58,6 +58,10 @@
 | `bip39` | latest | Mnemonic seed phrase for key recovery |
 | `webrtc` | 0.17.1 | Voice/video calling (pure Rust WebRTC) |
 | `fluent-bundle` | latest | i18n (Project Fluent .ftl files) |
+| `wasmtime` | 42.x | WASM plugin runtime (Component Model, native only) |
+| `wasmtime-wasi` | 42.x | WASI capabilities for WASM plugins (native only) |
+| `wit-bindgen` | 0.53.x | Guest-side WIT bindings for plugin crates |
+| `cargo-component` | 0.21.x | Build tool for WASM Component Model plugins |
 
 ### 2.4 Desktop Renderers (3 builds per OS)
 
@@ -186,7 +190,8 @@ poly/
 
 - **`core/` is THE library crate** (package: `poly-core`, folder: `crates/core/`). All shared UI, state, DB, crypto, i18n, theme logic lives here. This crate MUST support Dioxus subsecond hot-reload. All apps import it.
 - **`client/` defines the protocol** (package: `poly-client`, folder: `clients/client/`). The `ClientBackend` trait abstracts all messenger operations. Each backend crate (stoat, matrix, discord, teams, demo) in `clients/` implements this trait.
-- **Feature flags** control which backends are compiled: `stoat`, `matrix`, `discord`, `teams`, `demo`.
+- **WASM Plugin Architecture** (D21): All client crates except `poly-client` are compiled as self-contained WASM Component Model binaries (`.wasm`). They are loaded at runtime by the plugin host in `poly-core` using `wasmtime`. Clients depend ONLY on `poly-client` (for shared types) and `wit-bindgen` (for WIT guest bindings). The host provides syscall-like imports (HTTP, WebSocket, storage, logging). See `docs/wasm-plugin-architecture.md`.
+- **Feature flags** control which backend plugins are **embedded** in the binary (via `include_bytes!`): `embed-stoat`, `embed-matrix`, `embed-discord`, `embed-teams`, `embed-demo`. Additional plugins can be loaded from the filesystem at runtime.
 - **SurrealKV everywhere**. No RocksDB/SQLite divergence between platforms.
 - **Apps are thin wrappers** (in `apps/`). Each app is just a `main.rs` that initializes the platform-specific Dioxus renderer and pulls in `poly-core`.
 - **Folder names are stripped of `poly-` prefix** (e.g., `crates/core/`, `clients/stoat/`, `servers/backup-server/`, `mcp/devtools-protocol/`), but **package names in `Cargo.toml` retain the `poly-` prefix** (e.g., `name = "poly-core"`). This keeps the crate ecosystem consistent while keeping the workspace folder structure clean.
@@ -491,6 +496,7 @@ locales/
 | **Phase 2** | Project Structure + UI | Working monorepo, 90% UI, backup server, demo client, i18n, themes, CI/CD |
 | **Phase 2.9** | Dual Sidebar UI | Favorites Bar + Account Server Bar, per-account notification badges |
 | **Phase 2.11** | Per-Backend UI Abstraction | Backend-specific UI directories, common/ shared components, BackendType dispatch |
+| **Phase 2.14** | WASM Plugin System | All clients as WASM plugins, plugin host runtime, WIT interface, syscall-like host imports, zero direct client deps in poly-core |
 | **Phase 3.1** | Stoat Client + Voice/Video | Chat, voice, video with Stoat servers, WebRTC infrastructure |
 | **Phase 3.2** | Matrix Client | matrix-sdk integration, Spaces-as-servers, E2EE, federation |
 | **Phase 3.3** | Discord Client | TBD approach, server/channel/DM support |
@@ -499,7 +505,9 @@ locales/
 See individual phase plan documents for detailed checklists:
 - [Phase 1 Plan](phase-1-plan.md)
 - [Phase 2 Plan](phase-2-plan.md)
+- [Phase 2.14 Plan — WASM Plugin System](phase-2.14-plan.md)
 - [Phase 3 Plan](phase-3-plan.md)
+- [WASM Plugin Architecture](wasm-plugin-architecture.md)
 
 ---
 
@@ -527,6 +535,7 @@ See individual phase plan documents for detailed checklists:
 | D18 | Dual sidebar architecture | Favorites Bar + Account Server Bar (two 72px columns) | Single sidebar mixed account switching, favorites, and per-account nav. Dual bars clearly separate cross-account favorites from per-account server lists. Clicking favorited server auto-switches account context. Enables future drag-and-drop from account bar to favorites. | 2026-03-03 |
 | D19 | Multi-account URL routing | `/:backend/:instance_id/:account_id/...` URL structure | Every account-scoped URL encodes backend type, federated instance ID, and account ID. Enables deep-linking across multiple accounts on the same backend (e.g. Matrix homeservers) and preserves correct back/forward navigation. | 2026-03-04 |
 | D20 | Per-backend UI directories | `ui/account/{demo,stoat,discord,matrix,teams,poly_native}/` | Each backend gets its own UI subdirectory under `account/`. Common components in `account/common/`. Dispatch by `BackendType` match. Feature-gated. Keeps backend-specific UI isolated and extensible. See `docs/multi-client-architecture.md`. | 2026-03-03 |
+| D21 | WASM plugin backends | All clients except poly-client are WASM plugins loaded at runtime | Enables app store distribution (no protocol code compiled in), sandboxing (WASM isolation), hot-swappable backends, and community extensibility. Uses wasmtime + WIT Component Model. Plugins communicate through syscall-like host imports (HTTP, WebSocket, storage, logging). See `docs/wasm-plugin-architecture.md` and `docs/phase-2.14-plan.md`. | 2026-03-06 |
 
 ---
 
@@ -541,6 +550,9 @@ See individual phase plan documents for detailed checklists:
 | R5 | WebRTC mobile needs native bridges | Medium — camera/mic platform-specific | Research native bindings, platform-specific code in Phase 3.1 |
 | R6 | Subsecond hot-reload fails on library crate | **Critical** — stated failure condition | Test immediately in Phase 2 setup; adjust crate boundaries if needed |
 | R7 | Electron wrapper adds significant complexity | Low-Medium — extra build target | Can deprioritize if becomes too costly |
+| R8 | wasmtime doesn't compile on iOS/Android | High — breaks mobile plugin loading | Test early; fallback to AOT precompilation on iOS, interpreter mode, or ship precompiled .cwasm files |
+| R9 | WASM plugin overhead too high for real-time messaging | Medium — latency on each host↔guest call | wasmtime call overhead is ~1-5μs; batch events via poll_event; profile early |
+| R10 | WIT Component Model async not yet stable | Low — sync polling pattern works well | Use poll-event pattern now; migrate to WIT async when spec stabilizes |
 
 ---
 

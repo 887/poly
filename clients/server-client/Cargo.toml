@@ -1,39 +1,76 @@
 [package]
 name = "poly-server-client"
-description = "Poly-server ClientBackend implementation — HTTP + WebSocket client"
+description = "Poly-server ClientBackend implementation — HTTP + WebSocket client — builds as native lib or WASM plugin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["native"]
+native = [
+    "dep:reqwest",
+    "dep:tokio-tungstenite",
+    "dep:futures-util",
+    "dep:ed25519-dalek",
+    "dep:hex",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:tokio",
+    "dep:tokio-stream",
+    "dep:futures",
+    "dep:async-trait",
+    "dep:chrono",
+    "dep:thiserror",
+    "dep:tracing",
+]
 
 [dependencies]
 # The shared abstraction trait + types
 poly-client = { workspace = true }
 
+# Native-only dependencies (feature-gated)
 # HTTP client
-reqwest = { workspace = true, features = ["json", "multipart"] }
+reqwest = { workspace = true, features = [
+    "json",
+    "multipart",
+], optional = true }
 
 # WebSocket client
-tokio-tungstenite = { workspace = true, features = ["native-tls"] }
-futures-util = { workspace = true }
+tokio-tungstenite = { workspace = true, features = [
+    "native-tls",
+], optional = true }
+futures-util = { workspace = true, optional = true }
 
 # Cryptography (Ed25519 challenge-response auth)
-ed25519-dalek = { workspace = true }
-hex = { workspace = true }
+ed25519-dalek = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
 
 # Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 # Async
-tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
-tokio-stream = { workspace = true }
-futures = { workspace = true }
-async-trait = { workspace = true }
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "sync",
+    "time",
+], optional = true }
+tokio-stream = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
 
 # Utilities
-chrono = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
+chrono = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+# WASM plugin guest bindings (WASI targets only)
+[target.'cfg(target_os = "wasi")'.dependencies]
+wit-bindgen = { workspace = true }
 
 [dev-dependencies]
 # We spin up a real poly-server in-process for integration tests

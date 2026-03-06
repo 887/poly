@@ -57,10 +57,11 @@ base64 = { workspace = true }
 hex = { workspace = true }
 async-trait = { workspace = true }
 
-# Native-only: SurrealDB + poly-server client
+# Native-only: SurrealDB + poly-server client + WASM plugin host (dylib)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 surrealdb = { workspace = true, features = ["kv-surrealkv"] }
 poly-server-client = { workspace = true }
+poly-plugin-host = { workspace = true }
 
 # WASM-only: browser localStorage + getrandom JS backend forwarding.
 # rand_core 0.6 (aead, ed25519-dalek) and rand 0.10 each pull a different getrandom

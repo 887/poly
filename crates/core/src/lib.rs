@@ -21,6 +21,18 @@ pub mod crypto;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod db;
 pub mod i18n;
+/// WASM plugin host runtime (native-only — wasmtime cannot target wasm32).
+///
+/// Re-exports the `poly-plugin-host` dylib crate, which isolates the heavy
+/// `wasmtime` runtime behind a dynamic linking boundary. Changes to poly-core
+/// never trigger wasmtime recompilation.
+///
+/// Loads messenger backend plugins as Component Model WASM binaries and
+/// bridges them to the `ClientBackend` trait. See [`plugin_host::PluginRegistry`].
+/// DECISION(D21): WASM Plugin Backends.
+/// DECISION(D22): Dynamic linking boundary for wasmtime isolation.
+#[cfg(not(target_arch = "wasm32"))]
+pub use poly_plugin_host as plugin_host;
 pub mod state;
 pub mod storage;
 pub mod sync;

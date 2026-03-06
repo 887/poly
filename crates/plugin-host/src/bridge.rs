@@ -1,0 +1,416 @@
+//! Type bridge between WIT-generated types and `poly-client` types.
+//!
+//! The `wasmtime::component::bindgen!` macro generates its own Rust types
+//! from the WIT definitions. These are structurally identical to the
+//! `poly-client` types but are distinct Rust types. This module provides
+//! zero-cost (or near-zero-cost) conversion between the two.
+//!
+//! Convention: `from_wit_*` converts WIT→poly-client, `to_wit_*` converts
+//! poly-client→WIT.
+
+use super::engine::poly::messenger::types as wit;
+use poly_client::{self as pc};
+
+// ─── BackendType ───────────────────────────────────────────────────
+
+/// Convert WIT `BackendType` → poly-client `BackendType`.
+pub fn from_wit_backend_type(bt: wit::BackendType) -> pc::BackendType {
+    match bt {
+        wit::BackendType::Stoat => pc::BackendType::Stoat,
+        wit::BackendType::Matrix => pc::BackendType::Matrix,
+        wit::BackendType::Discord => pc::BackendType::Discord,
+        wit::BackendType::Teams => pc::BackendType::Teams,
+        wit::BackendType::Demo => pc::BackendType::Demo,
+        wit::BackendType::Poly => pc::BackendType::Poly,
+    }
+}
+
+/// Convert poly-client `BackendType` → WIT `BackendType`.
+pub fn to_wit_backend_type(bt: pc::BackendType) -> wit::BackendType {
+    match bt {
+        pc::BackendType::Stoat => wit::BackendType::Stoat,
+        pc::BackendType::Matrix => wit::BackendType::Matrix,
+        pc::BackendType::Discord => wit::BackendType::Discord,
+        pc::BackendType::Teams => wit::BackendType::Teams,
+        pc::BackendType::Demo => wit::BackendType::Demo,
+        pc::BackendType::Poly => wit::BackendType::Poly,
+    }
+}
+
+// ─── PresenceStatus ────────────────────────────────────────────────
+
+/// Convert WIT `PresenceStatus` → poly-client `PresenceStatus`.
+pub fn from_wit_presence(ps: wit::PresenceStatus) -> pc::PresenceStatus {
+    match ps {
+        wit::PresenceStatus::Online => pc::PresenceStatus::Online,
+        wit::PresenceStatus::Idle => pc::PresenceStatus::Idle,
+        wit::PresenceStatus::DoNotDisturb => pc::PresenceStatus::DoNotDisturb,
+        wit::PresenceStatus::Invisible => pc::PresenceStatus::Invisible,
+        wit::PresenceStatus::Offline => pc::PresenceStatus::Offline,
+    }
+}
+
+/// Convert poly-client `PresenceStatus` → WIT `PresenceStatus`.
+pub fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
+    match ps {
+        pc::PresenceStatus::Online => wit::PresenceStatus::Online,
+        pc::PresenceStatus::Idle => wit::PresenceStatus::Idle,
+        pc::PresenceStatus::DoNotDisturb => wit::PresenceStatus::DoNotDisturb,
+        pc::PresenceStatus::Invisible => wit::PresenceStatus::Invisible,
+        pc::PresenceStatus::Offline => wit::PresenceStatus::Offline,
+    }
+}
+
+// ─── ChannelType ───────────────────────────────────────────────────
+
+/// Convert WIT `ChannelType` → poly-client `ChannelType`.
+pub fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
+    match ct {
+        wit::ChannelType::Text => pc::ChannelType::Text,
+        wit::ChannelType::Voice => pc::ChannelType::Voice,
+        wit::ChannelType::Video => pc::ChannelType::Video,
+    }
+}
+
+// ─── User ──────────────────────────────────────────────────────────
+
+/// Convert WIT `User` → poly-client `User`.
+pub fn from_wit_user(u: wit::User) -> pc::User {
+    pc::User {
+        id: u.id,
+        display_name: u.display_name,
+        avatar_url: u.avatar_url,
+        presence: from_wit_presence(u.presence),
+        backend: from_wit_backend_type(u.backend),
+    }
+}
+
+/// Convert poly-client `User` → WIT `User`.
+pub fn to_wit_user(u: &pc::User) -> wit::User {
+    wit::User {
+        id: u.id.clone(),
+        display_name: u.display_name.clone(),
+        avatar_url: u.avatar_url.clone(),
+        presence: to_wit_presence(u.presence),
+        backend: to_wit_backend_type(u.backend),
+    }
+}
+
+// ─── Category ──────────────────────────────────────────────────────
+
+/// Convert WIT `Category` → poly-client `Category`.
+pub fn from_wit_category(c: wit::Category) -> pc::Category {
+    pc::Category {
+        id: c.id,
+        name: c.name,
+        channel_ids: c.channel_ids,
+    }
+}
+
+// ─── Server ────────────────────────────────────────────────────────
+
+/// Convert WIT `Server` → poly-client `Server`.
+pub fn from_wit_server(s: wit::Server) -> pc::Server {
+    pc::Server {
+        id: s.id,
+        name: s.name,
+        icon_url: s.icon_url,
+        categories: s.categories.into_iter().map(from_wit_category).collect(),
+        backend: from_wit_backend_type(s.backend),
+        unread_count: s.unread_count,
+        account_id: s.account_id,
+        account_display_name: s.account_display_name,
+    }
+}
+
+// ─── Channel ───────────────────────────────────────────────────────
+
+/// Convert WIT `Channel` → poly-client `Channel`.
+pub fn from_wit_channel(c: wit::Channel) -> pc::Channel {
+    pc::Channel {
+        id: c.id,
+        name: c.name,
+        channel_type: from_wit_channel_type(c.channel_type),
+        server_id: c.server_id,
+        unread_count: c.unread_count,
+        last_message_id: c.last_message_id,
+    }
+}
+
+// ─── Attachment ────────────────────────────────────────────────────
+
+/// Convert WIT `Attachment` → poly-client `Attachment`.
+pub fn from_wit_attachment(a: wit::Attachment) -> pc::Attachment {
+    pc::Attachment {
+        id: a.id,
+        filename: a.filename,
+        content_type: a.content_type,
+        url: a.url,
+        size: a.size,
+    }
+}
+
+// ─── Reaction ──────────────────────────────────────────────────────
+
+/// Convert WIT `Reaction` → poly-client `Reaction`.
+pub fn from_wit_reaction(r: wit::Reaction) -> pc::Reaction {
+    pc::Reaction {
+        emoji: r.emoji,
+        count: r.count,
+        me: r.me,
+    }
+}
+
+// ─── MessageContent ────────────────────────────────────────────────
+
+/// Convert WIT `MessageContent` → poly-client `MessageContent`.
+pub fn from_wit_message_content(mc: wit::MessageContent) -> pc::MessageContent {
+    match mc {
+        wit::MessageContent::Text(text) => pc::MessageContent::Text(text),
+        wit::MessageContent::WithAttachments(ta) => pc::MessageContent::WithAttachments {
+            text: ta.text,
+            attachments: ta
+                .attachments
+                .into_iter()
+                .map(from_wit_attachment)
+                .collect(),
+        },
+    }
+}
+
+/// Convert poly-client `MessageContent` → WIT `MessageContent`.
+pub fn to_wit_message_content(mc: pc::MessageContent) -> wit::MessageContent {
+    match mc {
+        pc::MessageContent::Text(text) => wit::MessageContent::Text(text),
+        pc::MessageContent::WithAttachments { text, attachments } => {
+            wit::MessageContent::WithAttachments(wit::TextWithAttachments {
+                text,
+                attachments: attachments
+                    .into_iter()
+                    .map(|a| wit::Attachment {
+                        id: a.id,
+                        filename: a.filename,
+                        content_type: a.content_type,
+                        url: a.url,
+                        size: a.size,
+                    })
+                    .collect(),
+            })
+        }
+    }
+}
+
+// ─── Message ───────────────────────────────────────────────────────
+
+/// Convert WIT `Message` → poly-client `Message`.
+pub fn from_wit_message(m: wit::Message) -> pc::Message {
+    pc::Message {
+        id: m.id,
+        author: from_wit_user(m.author),
+        content: from_wit_message_content(m.content),
+        timestamp: chrono::DateTime::parse_from_rfc3339(&m.timestamp)
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .unwrap_or_else(|_| chrono::Utc::now()),
+        attachments: m.attachments.into_iter().map(from_wit_attachment).collect(),
+        reactions: m.reactions.into_iter().map(from_wit_reaction).collect(),
+        edited: m.edited,
+    }
+}
+
+// ─── Session ───────────────────────────────────────────────────────
+
+/// Convert WIT `Session` → poly-client `Session`.
+pub fn from_wit_session(s: wit::Session) -> pc::Session {
+    pc::Session {
+        id: s.id,
+        user: from_wit_user(s.user),
+        token: s.token,
+        backend: from_wit_backend_type(s.backend),
+        icon_emoji: s.icon_emoji,
+        instance_id: s.instance_id,
+    }
+}
+
+// ─── AuthCredentials ───────────────────────────────────────────────
+
+/// Convert poly-client `AuthCredentials` → WIT `AuthCredentials`.
+pub fn to_wit_auth_credentials(creds: pc::AuthCredentials) -> wit::AuthCredentials {
+    match creds {
+        pc::AuthCredentials::Token(token) => wit::AuthCredentials::Token(token),
+        pc::AuthCredentials::EmailPassword { email, password } => {
+            wit::AuthCredentials::EmailPassword(wit::EmailPasswordCreds { email, password })
+        }
+        pc::AuthCredentials::OAuth { token } => wit::AuthCredentials::Oauth(token),
+        pc::AuthCredentials::DeviceCode { code } => wit::AuthCredentials::DeviceCode(code),
+        pc::AuthCredentials::PolyServer {
+            server_url,
+            private_key_bytes,
+            username,
+            display_name,
+            is_signup,
+        } => wit::AuthCredentials::PolyServer(wit::PolyServerCreds {
+            server_url,
+            private_key_bytes,
+            username,
+            display_name,
+            is_signup,
+        }),
+    }
+}
+
+// ─── MessageQuery ──────────────────────────────────────────────────
+
+/// Convert poly-client `MessageQuery` → WIT `MessageQuery`.
+pub fn to_wit_message_query(q: pc::MessageQuery) -> wit::MessageQuery {
+    wit::MessageQuery {
+        before: q.before,
+        after: q.after,
+        limit: q.limit,
+    }
+}
+
+// ─── ClientError ───────────────────────────────────────────────────
+
+/// Convert WIT `ClientError` → poly-client `ClientError`.
+pub fn from_wit_client_error(e: wit::ClientError) -> pc::ClientError {
+    match e {
+        wit::ClientError::AuthFailed(msg) => pc::ClientError::AuthFailed(msg),
+        wit::ClientError::Network(msg) => pc::ClientError::Network(msg),
+        wit::ClientError::NotFound(msg) => pc::ClientError::NotFound(msg),
+        wit::ClientError::RateLimited(ms) => pc::ClientError::RateLimited { retry_after_ms: ms },
+        wit::ClientError::PermissionDenied(msg) => pc::ClientError::PermissionDenied(msg),
+        wit::ClientError::Internal(msg) => pc::ClientError::Internal(msg),
+        wit::ClientError::NotSupported(msg) => pc::ClientError::NotSupported(msg),
+    }
+}
+
+// ─── Group ─────────────────────────────────────────────────────────
+
+/// Convert WIT `Group` → poly-client `Group`.
+pub fn from_wit_group(g: wit::Group) -> pc::Group {
+    pc::Group {
+        id: g.id,
+        members: g.members.into_iter().map(from_wit_user).collect(),
+        name: g.name,
+        last_message: g.last_message.map(from_wit_message),
+        backend: from_wit_backend_type(g.backend),
+        account_id: g.account_id,
+    }
+}
+
+// ─── DmChannel ─────────────────────────────────────────────────────
+
+/// Convert WIT `DmChannel` → poly-client `DmChannel`.
+pub fn from_wit_dm_channel(dm: wit::DmChannel) -> pc::DmChannel {
+    pc::DmChannel {
+        id: dm.id,
+        user: from_wit_user(dm.user),
+        last_message: dm.last_message.map(from_wit_message),
+        unread_count: dm.unread_count,
+        backend: from_wit_backend_type(dm.backend),
+        account_id: dm.account_id,
+    }
+}
+
+// ─── Notification ──────────────────────────────────────────────────
+
+/// Convert WIT `NotificationKind` → poly-client `NotificationKind`.
+pub fn from_wit_notification_kind(nk: wit::NotificationKind) -> pc::NotificationKind {
+    match nk {
+        wit::NotificationKind::Mention(info) => pc::NotificationKind::Mention {
+            channel_id: info.channel_id,
+            message_id: info.message_id,
+        },
+        wit::NotificationKind::FriendRequest(user_id) => pc::NotificationKind::FriendRequest {
+            from_user_id: user_id,
+        },
+        wit::NotificationKind::ServerInvite(server_id) => {
+            pc::NotificationKind::ServerInvite { server_id }
+        }
+        wit::NotificationKind::Other(desc) => pc::NotificationKind::Other(desc),
+    }
+}
+
+/// Convert WIT `Notification` → poly-client `Notification`.
+pub fn from_wit_notification(n: wit::Notification) -> pc::Notification {
+    pc::Notification {
+        id: n.id,
+        kind: from_wit_notification_kind(n.kind),
+        backend: from_wit_backend_type(n.backend),
+        account_id: n.account_id,
+        timestamp: chrono::DateTime::parse_from_rfc3339(&n.timestamp)
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .unwrap_or_else(|_| chrono::Utc::now()),
+        read: n.read,
+        preview: n.preview,
+    }
+}
+
+// ─── VoiceParticipant ──────────────────────────────────────────────
+
+/// Convert WIT `VoiceParticipant` → poly-client `VoiceParticipant`.
+pub fn from_wit_voice_participant(vp: wit::VoiceParticipant) -> pc::VoiceParticipant {
+    pc::VoiceParticipant {
+        user: from_wit_user(vp.user),
+        is_muted: vp.is_muted,
+        is_deafened: vp.is_deafened,
+        is_streaming: vp.is_streaming,
+        is_video_on: vp.is_video_on,
+        is_speaking: vp.is_speaking,
+    }
+}
+
+// ─── ClientEvent ───────────────────────────────────────────────────
+
+/// Convert WIT `ClientEvent` → poly-client `ClientEvent`.
+pub fn from_wit_client_event(ev: wit::ClientEvent) -> pc::ClientEvent {
+    match ev {
+        wit::ClientEvent::MessageReceived(e) => pc::ClientEvent::MessageReceived {
+            channel_id: e.channel_id,
+            message: from_wit_message(e.message),
+        },
+        wit::ClientEvent::MessageEdited(e) => pc::ClientEvent::MessageEdited {
+            channel_id: e.channel_id,
+            message: from_wit_message(e.message),
+        },
+        wit::ClientEvent::MessageDeleted(e) => pc::ClientEvent::MessageDeleted {
+            channel_id: e.channel_id,
+            message_id: e.message_id,
+        },
+        wit::ClientEvent::PresenceChanged(e) => pc::ClientEvent::PresenceChanged {
+            user_id: e.user_id,
+            status: from_wit_presence(e.status),
+        },
+        wit::ClientEvent::NotificationReceived(n) => {
+            pc::ClientEvent::NotificationReceived(from_wit_notification(n))
+        }
+        wit::ClientEvent::TypingStarted(e) => pc::ClientEvent::TypingStarted {
+            channel_id: e.channel_id,
+            user_id: e.user_id,
+            timestamp: chrono::DateTime::parse_from_rfc3339(&e.timestamp)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now()),
+        },
+        wit::ClientEvent::ChannelUpdated(c) => pc::ClientEvent::ChannelUpdated(from_wit_channel(c)),
+        wit::ClientEvent::ServerUpdated(s) => pc::ClientEvent::ServerUpdated(from_wit_server(s)),
+        wit::ClientEvent::FriendRequestReceived(u) => pc::ClientEvent::FriendRequestReceived {
+            from_user: from_wit_user(u),
+        },
+        wit::ClientEvent::ConnectionStateChanged(e) => pc::ClientEvent::ConnectionStateChanged {
+            backend: from_wit_backend_type(e.backend),
+            connected: e.connected,
+        },
+        wit::ClientEvent::VoiceUserJoined(e) => pc::ClientEvent::VoiceUserJoined {
+            channel_id: e.channel_id,
+            participant: from_wit_voice_participant(e.participant),
+        },
+        wit::ClientEvent::VoiceUserLeft(e) => pc::ClientEvent::VoiceUserLeft {
+            channel_id: e.channel_id,
+            user_id: e.user_id,
+        },
+        wit::ClientEvent::VoiceStateUpdated(e) => pc::ClientEvent::VoiceStateUpdated {
+            channel_id: e.channel_id,
+            participant: from_wit_voice_participant(e.participant),
+        },
+    }
+}

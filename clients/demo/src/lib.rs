@@ -6,15 +6,40 @@
 //! so the full UI can be developed and tested without connecting
 //! to any real messenger backend.
 //!
-//! This client implements [`poly_client::ClientBackend`].
+//! ## Build Modes
+//!
+//! - **Native** (`--features native`): Implements [`poly_client::ClientBackend`]
+//!   for direct linking into `poly-core`. This is the traditional path.
+//! - **WASM plugin** (`--no-default-features`, target `wasm32-wasip2`): Exports
+//!   the WIT `messenger-client` interface via `wit-bindgen`. Loaded at runtime
+//!   by the plugin host in `poly-core`.
+//!
+//! DECISION(D21): WASM Plugin Backends.
 
 /// Public data module — demo data generators for testing.
 pub mod data;
 
+/// WASM plugin guest implementation.
+///
+/// When compiled to `wasm32-wasip2`, this module exports the WIT
+/// `messenger-client` interface using `wit-bindgen`.
+/// Only on WASI targets (not `wasm32-unknown-unknown` used by the web frontend).
+#[cfg(target_os = "wasi")]
+mod guest;
+
+// ─── Native ClientBackend implementations ──────────────────────────
+// These are available when the `native` feature is enabled (default).
+// They implement the async `ClientBackend` trait from poly-client.
+
+#[cfg(feature = "native")]
 use async_trait::async_trait;
+#[cfg(feature = "native")]
 use chrono::{Duration, Utc};
+#[cfg(feature = "native")]
 use futures::stream::Stream;
+#[cfg(feature = "native")]
 use poly_client::*;
+#[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Demo messenger client for UI testing.
@@ -22,11 +47,13 @@ use std::pin::Pin;
 /// Generates randomized but realistic-looking data for all
 /// messenger operations. No network calls are made.
 // DECISION(D12): Demo client created in Phase 2 alongside UI.
+#[cfg(feature = "native")]
 pub struct DemoClient {
     authenticated: bool,
     session: Option<Session>,
 }
 
+#[cfg(feature = "native")]
 impl DemoClient {
     /// Create a new demo client.
     pub fn new() -> Self {
@@ -37,12 +64,14 @@ impl DemoClient {
     }
 }
 
+#[cfg(feature = "native")]
 impl Default for DemoClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "native")]
 #[async_trait]
 impl ClientBackend for DemoClient {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
@@ -272,11 +301,13 @@ impl ClientBackend for DemoClient {
 /// Provides a second set of demo data (4 different servers, separate
 /// notifications, different communities) so the multi-account UI can be
 /// tested realistically with two simultaneous demo accounts.
+#[cfg(feature = "native")]
 pub struct DemoClient2 {
     authenticated: bool,
     session: Option<Session>,
 }
 
+#[cfg(feature = "native")]
 impl DemoClient2 {
     /// Create a new demo2 client.
     pub fn new() -> Self {
@@ -287,12 +318,14 @@ impl DemoClient2 {
     }
 }
 
+#[cfg(feature = "native")]
 impl Default for DemoClient2 {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "native")]
 #[async_trait]
 impl ClientBackend for DemoClient2 {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {

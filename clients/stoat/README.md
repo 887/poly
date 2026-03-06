@@ -6,6 +6,21 @@ Stoat (formerly Revolt) messenger client for **Poly** (PolyGlot Messenger).
 
 Implements the `ClientBackend` trait for Stoat/Revolt messenger. Supports both the official server and self-hosted instances.
 
+## WASM Plugin Support (2026-03-06)
+
+Builds as **both** native and WASM Component Model plugin:
+
+```sh
+# Native (workspace default):
+cargo build -p poly-stoat
+
+# WASM plugin:
+cargo component build -p poly-stoat --target wasm32-wasip2
+# Output: target/wasm32-wasip1/debug/poly_stoat.wasm (4.3MB debug)
+```
+
+Feature-gated (`native` feature default). Currently a **stub** — WIT guest implementation in `src/guest.rs` returns errors for all operations. Full implementation coming in Phase 3.1.
+
 ## Features
 
 - Email/password authentication
@@ -25,6 +40,14 @@ Built from scratch using the Stoat REST API + WebSocket protocol. No existing Ru
 - REST API for CRUD operations
 - WebSocket (Bonfire) for real-time events
 - WebRTC (Vortex) for voice/video
+
+## Testing
+
+**10 E2E tests** verify stub behavior through the WASM plugin host:
+
+```sh
+cargo test -p poly-plugin-loader-tests --features test-stoat --test client_e2e -- --nocapture
+```
 
 ## License
 

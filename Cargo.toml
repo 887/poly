@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "crates/core",
+    "crates/plugin-host",
+    "crates/plugin-host-tests",
     "clients/client",
     "clients/demo",
     "clients/stoat",
@@ -68,7 +70,13 @@ unic-langid = "0.9"
 sys-locale = "0.3"
 
 # Web / API
-reqwest = { version = "0.13.2", features = ["json"] }
+# DECISION: Use native-tls instead of default rustls. In reqwest 0.13.2,
+# default-tls = rustls + aws-lc-rs. The aws-lc-sys native library causes
+# linker conflicts when poly-plugin-host (dylib) and poly-core (rlib) both
+# depend on it — cargo absorbs the -l flag into the dylib and doesn't re-emit
+# it for the final binary's rlib chain. native-tls (system OpenSSL/SChannel/
+# SecureTransport) avoids aws-lc entirely, eliminating the dylib boundary issue.
+reqwest = { version = "0.13.2", default-features = false, features = ["json", "native-tls", "charset", "http2", "system-proxy"] }
 axum = "0.8"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
@@ -106,11 +114,22 @@ tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 futures-util = "0.3"
 tempfile = "3"
 webkit2gtk = { version = "2.0", features = [] }
+
+# WASM plugin runtime (native-only — wasmtime cannot target wasm32)
+wasmtime = { version = "42", features = ["component-model", "cranelift"] }
+wasmtime-wasi = "42"
+
+# WASM plugin guest bindings (used by client plugin crates)
+wit-bindgen = { version = "0.53", default-features = false, features = [
+    "macros",
+    "realloc",
+] }
 cairo-rs = { version = "0.18", features = ["png"] }
 wry = "0.53"
 
 # Internal crates
 poly-core = { path = "crates/core" }
+poly-plugin-host = { path = "crates/plugin-host" }
 poly-client = { path = "clients/client" }
 poly-demo = { path = "clients/demo" }
 poly-stoat = { path = "clients/stoat" }

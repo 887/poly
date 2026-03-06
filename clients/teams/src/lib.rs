@@ -5,20 +5,35 @@
 //! Implements [`poly_client::ClientBackend`] using Microsoft Graph API.
 //! References the `ttyms` crate for authentication and message patterns.
 //!
-//! This crate is included in `poly-core` when the `teams` feature is enabled.
+//! ## Build Modes
+//!
+//! - **Native** (`--features native`): Implements `ClientBackend` directly.
+//! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
+//!
+//! DECISION(D21): WASM Plugin Backends.
 
 // TODO(phase-3.4): Implement Teams client with Microsoft Graph API
 
+/// WASM plugin guest implementation (WASI targets only).
+#[cfg(target_os = "wasi")]
+mod guest;
+
+#[cfg(feature = "native")]
 use async_trait::async_trait;
+#[cfg(feature = "native")]
 use futures::stream::{self, Stream};
+#[cfg(feature = "native")]
 use poly_client::*;
+#[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Microsoft Teams messenger client.
+#[cfg(feature = "native")]
 pub struct TeamsClient {
     // TODO(phase-3.4): Add Graph API client, auth state
 }
 
+#[cfg(feature = "native")]
 impl TeamsClient {
     /// Create a new Teams client.
     pub fn new() -> Self {
@@ -26,12 +41,14 @@ impl TeamsClient {
     }
 }
 
+#[cfg(feature = "native")]
 impl Default for TeamsClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "native")]
 #[async_trait]
 impl ClientBackend for TeamsClient {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {

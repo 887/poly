@@ -1,7 +1,7 @@
 # poly-core — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-01 (Phase 2.4)
+> **Last Updated:** 2026-03-06 (Phase 2.14 — WASM Plugin System + E2E Tests)
 
 ---
 
@@ -517,3 +517,34 @@ MainLayout, SetupWizard) stays at `src/ui/`.
 
 **Rule:** When adding new account-scoped components, put them in `src/ui/account/`.
 When adding app-level chrome, put it at `src/ui/`. Never mix the two.
+
+## WASM Plugin System — D21/D22 (2026-03-06)
+
+### D21: All Backends Are WASM Plugins
+
+All 6 messenger backends now build as WASM Component Model plugins. poly-core no longer contains
+the plugin implementation code directly — backends are loaded at runtime from `.wasm` files.
+
+### D22: Plugin Host Extraction (Dynamic Linking)
+
+The plugin host (wasmtime runtime + WIT bindings + host-api implementation) was extracted to
+`crates/plugin-host/` as a `crate-type = ["dylib"]`. poly-core re-exports it:
+
+```rust
+#[cfg(not(target_arch = "wasm32"))]
+pub use poly_plugin_host as plugin_host;
+```
+
+**Impact on poly-core development:**
+- Changes to poly-core **never recompile wasmtime** (saves ~2 minutes per iteration)
+- `crates/core/src/plugin_host/` directory was deleted — now lives in `crates/plugin-host/`
+- Web builds (wasm32-unknown-unknown) exclude the re-export via cfg gate
+
+### E2E Test Coverage
+
+**77 tests** in `crates/plugin-host-tests/` validate the full ClientBackend interface through
+the WASM plugin host:
+
+```sh
+cargo test -p poly-plugin-loader-tests --all-features -- --nocapture
+```

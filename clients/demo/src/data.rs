@@ -14,14 +14,26 @@
 #![allow(clippy::indexing_slicing)]
 
 use chrono::{Duration, Utc};
+#[cfg(feature = "native")]
 use dioxus::prelude::*;
 use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
 
 /// Bundled cat avatar image for the cat demo account.
+/// On native (Dioxus) builds, uses the asset system. On WASM plugin builds,
+/// falls back to a placeholder string.
+#[cfg(feature = "native")]
 pub const DEMO_CAT_AVATAR: Asset = asset!("assets/cat.png");
 /// Bundled dog avatar image for the dog demo account.
+#[cfg(feature = "native")]
 pub const DEMO_DOG_AVATAR: Asset = asset!("assets/dog.png");
+
+/// Cat avatar as a plain string for WASM plugin builds.
+#[cfg(not(feature = "native"))]
+pub const DEMO_CAT_AVATAR: &str = "/assets/cat.png";
+/// Dog avatar as a plain string for WASM plugin builds.
+#[cfg(not(feature = "native"))]
+pub const DEMO_DOG_AVATAR: &str = "/assets/dog.png";
 
 /// The demo account ID used for all demo data (cat account).
 pub const DEMO_ACCOUNT_ID: &str = "demo-cat";

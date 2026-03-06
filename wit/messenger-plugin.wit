@@ -1,0 +1,505 @@
+// Poly Messenger Plugin Interface
+//
+// This WIT file is the canonical interface definition for all messenger
+// backend plugins. It mirrors the ClientBackend trait in poly-client
+// and defines the contract between the host (poly-core) and guest (plugins).
+//
+// Package: poly:messenger@0.1.0
+// Decision: D21 — WASM Plugin Backends
+
+package poly:messenger@0.1.0;
+
+// ─── Shared Types Interface ────────────────────────────────────────
+
+/// All types shared between host and guest.
+interface types {
+    /// Identifies which messenger backend a resource belongs to.
+    enum backend-type {
+        stoat,
+        matrix,
+        discord,
+        teams,
+        demo,
+        poly,
+    }
+
+    /// Online presence status for a remote user.
+    enum presence-status {
+        online,
+        idle,
+        do-not-disturb,
+        invisible,
+        offline,
+    }
+
+    /// The type of a channel.
+    enum channel-type {
+        text,
+        voice,
+        video,
+    }
+
+    /// The user-chosen availability / presence status for an account.
+    enum account-presence {
+        online,
+        away,
+        do-not-disturb,
+        appear-offline,
+        offline,
+    }
+
+    /// Log level for host logging import.
+    enum log-level {
+        trace,
+        debug,
+        info,
+        warn,
+        error,
+    }
+
+    /// A user on a messaging platform.
+    record user {
+        id: string,
+        display-name: string,
+        avatar-url: option<string>,
+        presence: presence-status,
+        backend: backend-type,
+    }
+
+    /// A channel category / folder within a server.
+    record category {
+        id: string,
+        name: string,
+        channel-ids: list<string>,
+    }
+
+    /// A server / community / workspace.
+    record server {
+        id: string,
+        name: string,
+        icon-url: option<string>,
+        categories: list<category>,
+        backend: backend-type,
+        unread-count: u32,
+        account-id: string,
+        account-display-name: string,
+    }
+
+    /// A channel within a server.
+    record channel {
+        id: string,
+        name: string,
+        channel-type: channel-type,
+        server-id: string,
+        unread-count: u32,
+        last-message-id: option<string>,
+    }
+
+    /// A file attachment in a message.
+    record attachment {
+        id: string,
+        filename: string,
+        content-type: string,
+        url: string,
+        size: u64,
+    }
+
+    /// A reaction on a message.
+    record reaction {
+        emoji: string,
+        count: u32,
+        me: bool,
+    }
+
+    /// Content that can be sent in a message.
+    variant message-content {
+        text(string),
+        with-attachments(text-with-attachments),
+    }
+
+    /// Text message with attachments.
+    record text-with-attachments {
+        text: string,
+        attachments: list<attachment>,
+    }
+
+    /// A chat message.
+    record message {
+        id: string,
+        author: user,
+        content: message-content,
+        /// RFC3339 timestamp string.
+        timestamp: string,
+        attachments: list<attachment>,
+        reactions: list<reaction>,
+        edited: bool,
+    }
+
+    /// Query options for fetching messages.
+    record message-query {
+        before: option<string>,
+        after: option<string>,
+        limit: option<u32>,
+    }
+
+    /// An authenticated session with a backend.
+    record session {
+        id: string,
+        user: user,
+        token: string,
+        backend: backend-type,
+        icon-emoji: option<string>,
+        instance-id: string,
+    }
+
+    /// Authentication credentials for logging in.
+    variant auth-credentials {
+        token(string),
+        email-password(email-password-creds),
+        oauth(string),
+        device-code(string),
+        poly-server(poly-server-creds),
+    }
+
+    /// Email + password credentials.
+    record email-password-creds {
+        email: string,
+        password: string,
+    }
+
+    /// Poly server Ed25519 challenge-response credentials.
+    record poly-server-creds {
+        server-url: string,
+        private-key-bytes: list<u8>,
+        username: option<string>,
+        display-name: option<string>,
+        is-signup: bool,
+    }
+
+    /// A group chat (multi-user DM).
+    record group {
+        id: string,
+        members: list<user>,
+        name: option<string>,
+        last-message: option<message>,
+        backend: backend-type,
+        account-id: string,
+    }
+
+    /// A direct message channel.
+    record dm-channel {
+        id: string,
+        user: user,
+        last-message: option<message>,
+        unread-count: u32,
+        backend: backend-type,
+        account-id: string,
+    }
+
+    /// The kind of notification.
+    variant notification-kind {
+        mention(mention-info),
+        friend-request(string),
+        server-invite(string),
+        other(string),
+    }
+
+    /// Info for a mention notification.
+    record mention-info {
+        channel-id: string,
+        message-id: string,
+    }
+
+    /// A notification from a backend.
+    record notification {
+        id: string,
+        kind: notification-kind,
+        backend: backend-type,
+        account-id: string,
+        /// RFC3339 timestamp.
+        timestamp: string,
+        read: bool,
+        preview: string,
+    }
+
+    /// A user connected to a voice or video channel.
+    record voice-participant {
+        user: user,
+        is-muted: bool,
+        is-deafened: bool,
+        is-streaming: bool,
+        is-video-on: bool,
+        is-speaking: bool,
+    }
+
+    /// The local user's voice connection state.
+    record voice-connection {
+        channel-id: string,
+        server-id: string,
+        channel-name: string,
+        server-name: string,
+        backend: backend-type,
+        account-id: string,
+        instance-id: string,
+        is-muted: bool,
+        is-deafened: bool,
+        is-streaming: bool,
+        is-video-on: bool,
+    }
+
+    /// Identifies a configured account.
+    record account {
+        id: string,
+        backend: backend-type,
+        display-name: string,
+        connected: bool,
+    }
+
+    /// The live connection state of a backend account.
+    variant connection-status {
+        connected,
+        connecting,
+        disconnected,
+        error(string),
+    }
+
+    /// Errors from client operations.
+    variant client-error {
+        auth-failed(string),
+        network(string),
+        not-found(string),
+        rate-limited(u64),
+        permission-denied(string),
+        internal(string),
+        not-supported(string),
+    }
+
+    /// HTTP response from the host.
+    record http-response {
+        status: u16,
+        headers: list<tuple<string, string>>,
+        body: list<u8>,
+    }
+
+    // ─── Event Types ───────────────────────────────────────────
+
+    /// A real-time event from a messenger backend.
+    variant client-event {
+        message-received(message-received-event),
+        message-edited(message-edited-event),
+        message-deleted(message-deleted-event),
+        presence-changed(presence-changed-event),
+        notification-received(notification),
+        typing-started(typing-started-event),
+        channel-updated(channel),
+        server-updated(server),
+        friend-request-received(user),
+        connection-state-changed(connection-state-changed-event),
+        voice-user-joined(voice-channel-event),
+        voice-user-left(voice-user-left-event),
+        voice-state-updated(voice-channel-event),
+    }
+
+    record message-received-event {
+        channel-id: string,
+        message: message,
+    }
+
+    record message-edited-event {
+        channel-id: string,
+        message: message,
+    }
+
+    record message-deleted-event {
+        channel-id: string,
+        message-id: string,
+    }
+
+    record presence-changed-event {
+        user-id: string,
+        status: presence-status,
+    }
+
+    record typing-started-event {
+        channel-id: string,
+        user-id: string,
+        /// RFC3339 timestamp.
+        timestamp: string,
+    }
+
+    record connection-state-changed-event {
+        backend: backend-type,
+        connected: bool,
+    }
+
+    record voice-channel-event {
+        channel-id: string,
+        participant: voice-participant,
+    }
+
+    record voice-user-left-event {
+        channel-id: string,
+        user-id: string,
+    }
+}
+
+// ─── Host API (imports — host provides to plugin) ──────────────────
+
+/// Capabilities the host provides to plugins (syscall-like interface).
+///
+/// Plugins have ZERO direct network or filesystem access. All I/O goes
+/// through these host-mediated functions. The host can restrict, rate-limit,
+/// and sandbox each plugin's access.
+interface host-api {
+    use types.{log-level, http-response};
+
+    /// Make an HTTP request.
+    ///
+    /// Returns an HTTP response with status, headers, and body.
+    /// The host may restrict which URLs the plugin can access.
+    http-request: func(
+        method: string,
+        url: string,
+        headers: list<tuple<string, string>>,
+        body: option<list<u8>>,
+    ) -> result<http-response, string>;
+
+    /// Open a persistent WebSocket connection. Returns a handle ID.
+    websocket-connect: func(
+        url: string,
+        headers: list<tuple<string, string>>,
+    ) -> result<u64, string>;
+
+    /// Send data on a WebSocket.
+    websocket-send: func(handle: u64, data: list<u8>) -> result<_, string>;
+
+    /// Receive next message from a WebSocket.
+    /// Returns None if no data is currently available (non-blocking).
+    websocket-recv: func(handle: u64) -> result<option<list<u8>>, string>;
+
+    /// Close a WebSocket connection.
+    websocket-close: func(handle: u64) -> result<_, string>;
+
+    /// Read a value from plugin-scoped key-value storage.
+    storage-get: func(key: string) -> option<list<u8>>;
+
+    /// Write a value to plugin-scoped key-value storage.
+    storage-set: func(key: string, value: list<u8>) -> result<_, string>;
+
+    /// Delete a key from plugin-scoped key-value storage.
+    storage-delete: func(key: string) -> result<_, string>;
+
+    /// Log a message through the host's logging system.
+    log: func(level: log-level, message: string);
+
+    /// Get the current wall-clock time as an RFC3339 string.
+    get-current-time: func() -> string;
+}
+
+// ─── Messenger Client (exports — plugin provides to host) ──────────
+
+/// The messenger client interface that every plugin must implement.
+///
+/// Maps 1:1 to the ClientBackend trait in poly-client.
+interface messenger-client {
+    use types.{
+        auth-credentials,
+        session,
+        client-error,
+        server,
+        channel,
+        message-content,
+        message,
+        message-query,
+        user,
+        group,
+        dm-channel,
+        notification,
+        voice-participant,
+        presence-status,
+        client-event,
+        backend-type,
+    };
+
+    /// Authenticate with the backend.
+    authenticate: func(credentials: auth-credentials) -> result<session, client-error>;
+
+    /// Log out and invalidate the current session.
+    logout: func() -> result<_, client-error>;
+
+    /// Check if the client is currently authenticated.
+    is-authenticated: func() -> bool;
+
+    /// Get all servers/communities the user has joined.
+    get-servers: func() -> result<list<server>, client-error>;
+
+    /// Get a specific server by ID.
+    get-server: func(id: string) -> result<server, client-error>;
+
+    /// Get all channels in a server.
+    get-channels: func(server-id: string) -> result<list<channel>, client-error>;
+
+    /// Get a specific channel by ID.
+    get-channel: func(id: string) -> result<channel, client-error>;
+
+    /// Send a message to a channel.
+    send-message: func(channel-id: string, content: message-content) -> result<message, client-error>;
+
+    /// Get messages from a channel with query options.
+    get-messages: func(channel-id: string, query: message-query) -> result<list<message>, client-error>;
+
+    /// Get a user by ID.
+    get-user: func(user-id: string) -> result<user, client-error>;
+
+    /// Get the authenticated user's friend list.
+    get-friends: func() -> result<list<user>, client-error>;
+
+    /// Get members of a channel.
+    get-channel-members: func(channel-id: string) -> result<list<user>, client-error>;
+
+    /// Get all group chats.
+    get-groups: func() -> result<list<group>, client-error>;
+
+    /// Remove a user from a group DM.
+    remove-group-member: func(group-id: string, user-id: string) -> result<_, client-error>;
+
+    /// Get all DM channels.
+    get-dm-channels: func() -> result<list<dm-channel>, client-error>;
+
+    /// Get the user's notifications.
+    get-notifications: func() -> result<list<notification>, client-error>;
+
+    /// Get voice participants in a channel.
+    get-voice-participants: func(channel-id: string) -> result<list<voice-participant>, client-error>;
+
+    /// Get a user's online presence status.
+    get-presence: func(user-id: string) -> result<presence-status, client-error>;
+
+    /// Set the authenticated user's presence status.
+    set-presence: func(status: presence-status) -> result<_, client-error>;
+
+    /// Poll for the next real-time event. Returns None if no event is pending.
+    ///
+    /// The host calls this periodically from an async event loop. The plugin
+    /// should maintain an internal event queue populated by processing
+    /// WebSocket data received via host-api imports.
+    poll-event: func() -> option<client-event>;
+
+    /// The type of backend this plugin connects to.
+    get-backend-type: func() -> backend-type;
+
+    /// Human-readable name for this backend.
+    get-backend-name: func() -> string;
+}
+
+// ─── World Definition ──────────────────────────────────────────────
+
+/// The complete plugin world — what a messenger plugin must satisfy.
+///
+/// A valid plugin WASM component must:
+/// 1. Import (use) the host-api interface for all I/O
+/// 2. Export (implement) the messenger-client interface
+world messenger-plugin {
+    import host-api;
+    export messenger-client;
+}

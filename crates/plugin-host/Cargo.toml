@@ -1,0 +1,40 @@
+[package]
+name = "poly-plugin-host"
+description = "Dynamically-linked WASM Component Model plugin host for Poly messenger backends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# ── CRITICAL: Rust dylib ─────────────────────────────────────────────────────
+# This compiles to a shared library (.so on Linux, .dll on Windows, .dylib on macOS).
+# poly-core links against this dynamically, so editing poly-core NEVER recompiles
+# wasmtime. Only changes to THIS crate trigger wasmtime recompilation.
+# DECISION(D22): Dynamic linking boundary for wasmtime isolation.
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+# Shared client trait — types only, no heavy deps
+poly-client = { workspace = true }
+
+# WASM plugin runtime (the heavy stuff isolated here)
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+
+# Host-API implementation deps
+reqwest = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time", "io-util"] }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+tokio-stream = { workspace = true }
+
+# Bridge deps
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+# ClientBackend trait requirements
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+[lints]
+workspace = true

@@ -5,20 +5,35 @@
 //! Wraps `matrix-sdk` to implement [`poly_client::ClientBackend`].
 //! Maps Matrix Spaces to Poly servers, Matrix rooms to channels.
 //!
-//! This crate is included in `poly-core` when the `matrix` feature is enabled.
+//! ## Build Modes
+//!
+//! - **Native** (`--features native`): Implements `ClientBackend` directly.
+//! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
+//!
+//! DECISION(D21): WASM Plugin Backends.
 
 // TODO(phase-3.2): Implement Matrix client with matrix-sdk
 
+/// WASM plugin guest implementation (WASI targets only).
+#[cfg(target_os = "wasi")]
+mod guest;
+
+#[cfg(feature = "native")]
 use async_trait::async_trait;
+#[cfg(feature = "native")]
 use futures::stream::{self, Stream};
+#[cfg(feature = "native")]
 use poly_client::*;
+#[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Matrix messenger client.
+#[cfg(feature = "native")]
 pub struct MatrixClient {
     // TODO(phase-3.2): Add matrix-sdk client, session state
 }
 
+#[cfg(feature = "native")]
 impl MatrixClient {
     /// Create a new Matrix client.
     pub fn new() -> Self {
@@ -26,12 +41,14 @@ impl MatrixClient {
     }
 }
 
+#[cfg(feature = "native")]
 impl Default for MatrixClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "native")]
 #[async_trait]
 impl ClientBackend for MatrixClient {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {

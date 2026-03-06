@@ -1,0 +1,35 @@
+[package]
+name = "poly-plugin-loader-tests"
+description = "Integration tests for the poly-plugin-host WASM plugin runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# No lib — this is a test-only crate
+[lib]
+name = "poly_plugin_loader_tests"
+path = "src/lib.rs"
+
+[features]
+default = ["test-demo"]
+# Per-client E2E test flags — each enables that client's test module.
+# Build the WASM binaries BEFORE running: cargo component build --target wasm32-wasip2
+test-demo = []
+test-stoat = []
+test-matrix = []
+test-discord = []
+test-teams = []
+test-server = []
+
+[dependencies]
+# The crate under test
+poly-plugin-host = { workspace = true }
+
+# Shared client trait (for BackendType, ClientBackend, etc.)
+poly-client = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

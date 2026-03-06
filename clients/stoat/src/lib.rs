@@ -5,20 +5,35 @@
 //! Implements [`poly_client::ClientBackend`] using the Stoat REST and
 //! WebSocket APIs from `developers.stoat.chat`.
 //!
-//! This crate is included in `poly-core` when the `stoat` feature is enabled.
+//! ## Build Modes
+//!
+//! - **Native** (`--features native`): Implements `ClientBackend` directly.
+//! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
+//!
+//! DECISION(D21): WASM Plugin Backends.
 
 // TODO(phase-3.1): Implement Stoat client
 
+/// WASM plugin guest implementation (WASI targets only).
+#[cfg(target_os = "wasi")]
+mod guest;
+
+#[cfg(feature = "native")]
 use async_trait::async_trait;
+#[cfg(feature = "native")]
 use futures::stream::{self, Stream};
+#[cfg(feature = "native")]
 use poly_client::*;
+#[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Stoat (Revolt) messenger client.
+#[cfg(feature = "native")]
 pub struct StoatClient {
     // TODO(phase-3.1): Add REST client, WS connection, session state
 }
 
+#[cfg(feature = "native")]
 impl StoatClient {
     /// Create a new Stoat client.
     pub fn new() -> Self {
@@ -26,12 +41,14 @@ impl StoatClient {
     }
 }
 
+#[cfg(feature = "native")]
 impl Default for StoatClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "native")]
 #[async_trait]
 impl ClientBackend for StoatClient {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {

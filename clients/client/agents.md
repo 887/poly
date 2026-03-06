@@ -1,7 +1,7 @@
 # poly-client — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Last Updated:** 2026-03-06
 
 ---
 
@@ -9,17 +9,39 @@
 
 `poly-client` defines the **shared protocol** that all messenger backends implement. It contains:
 
-- The `ClientBackend` trait — the interface every backend (Stoat, Matrix, Discord, Teams, Demo) must implement
+- The `ClientBackend` trait — the interface every backend (Stoat, Matrix, Discord, Teams, Demo, Poly Server) must implement
 - Shared data types (`Server`, `Channel`, `Message`, `User`, etc.)
 - Shared event types (`ClientEvent` enum)
 - `BackendType` enum for identifying which backend a resource comes from
+- `ClientError` shared error type
+
+## WASM Plugin Role — CRITICAL
+
+This crate is the **only Rust dependency** that WASM plugin builds use. All backend client crates (demo, stoat, matrix, discord, teams, server-client) compile as WASM Component Model plugins targeting `wasm32-wasip2`. In that mode, they depend **only** on `poly-client` + `wit-bindgen`.
+
+The types in this crate are the **source of truth** for the WIT (WebAssembly Interface Types) definitions in `wit/messenger-plugin.wit`. Every type in `types.rs`, `events.rs`, and `error.rs` has a corresponding WIT type, and bridge code in `crates/plugin-host/src/bridge.rs` converts between them.
+
+**When modifying types here, you MUST also:**
+1. Update `wit/messenger-plugin.wit` to match
+2. Update `crates/plugin-host/src/bridge.rs` (host-side conversions)
+3. Update every client's `src/guest.rs` (guest-side conversions)
+4. Rebuild all WASM plugins: `cargo component build -p <crate> --target wasm32-wasip2`
+5. Run E2E tests: `cargo test -p poly-plugin-loader-tests --all-features` (77 tests validate the full interface)
+
+## E2E Test Validation
+
+The entire `ClientBackend` trait interface is validated by 77 E2E tests in `crates/plugin-host-tests/`:
+- 26 demo tests exercise the full lifecycle (authenticate → all data types → mutate → logout)
+- 50 stub tests (10 per client) verify each backend's error/empty behavior
+- Tests run through the actual WASM plugin host, not native Rust calls
 
 ## Key Design Principles
 
 1. **Backend-agnostic**: `poly-core` depends on this crate and uses the trait interface. It never imports concrete backend types.
-2. **Async**: All trait methods are async (using `async_trait` or Rust's native async in traits).
+2. **Async**: All trait methods are async (using `async_trait`).
 3. **Event-driven**: Backends emit events via a stream. The UI subscribes to this event stream.
 4. **Flat types**: Data types are simple and flat — backends map their complex internal types to these shared types.
+5. **WASM-safe**: Types must be serializable and not depend on platform-specific features (no `dioxus`, `tokio`, etc.).
 
 ## Trait Design
 
@@ -33,7 +55,7 @@ The `ClientBackend` trait covers:
 - **DMs**: direct message channels
 - **Notifications**: cross-account notification stream
 - **Events**: real-time event stream for all state changes
-- **Backend info**: type enum, display name, icon
+- **Backend info**: `backend_type()` → `BackendType` enum, `backend_name()` → display string
 
 ## Type Mapping Strategy
 
@@ -53,8 +75,9 @@ This crate should have MINIMAL dependencies:
 - `chrono` or `time` — timestamps
 - `url` — URLs for icons/avatars
 - `futures` — Stream trait for events
-- `async-trait` — if needed for trait async methods
-- **NO** dioxus, surrealdb, or UI dependencies here
+- `async-trait` — for trait async methods
+- **NO** dioxus, surrealdb, tokio, or UI dependencies here
+- This crate compiles for both native and `wasm32-unknown-unknown` (web) targets
 
 ## Files
 

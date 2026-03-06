@@ -1,0 +1,80 @@
+//! Integration tests for the WASM plugin loader.
+//!
+//! These tests load the compiled `.wasm` plugin binaries,
+//! instantiate them through `PluginRegistry`, and verify
+//! they correctly report backend types and names.
+
+use poly_client::{BackendType, ClientBackend};
+use poly_plugin_host::PluginRegistry;
+use poly_plugin_loader_tests::wasm_dir;
+
+/// Load all 6 WASM plugin files and verify they can be instantiated
+/// and return correct backend types and names.
+///
+/// ## Prerequisites
+///
+/// Build the plugin WASM binaries first:
+/// ```sh
+/// cargo component build -p poly-demo -p poly-stoat -p poly-matrix \
+///     -p poly-discord -p poly-teams -p poly-server-client \
+///     --target wasm32-wasip2
+/// ```
+#[allow(clippy::unwrap_used)]
+#[tokio::test]
+async fn load_all_wasm_plugins() {
+    let wasm_dir = wasm_dir();
+
+    let plugins = [
+        ("demo", "poly_demo.wasm", BackendType::Demo, "Demo"),
+        ("stoat", "poly_stoat.wasm", BackendType::Stoat, "Stoat"),
+        ("matrix", "poly_matrix.wasm", BackendType::Matrix, "Matrix"),
+        (
+            "discord",
+            "poly_discord.wasm",
+            BackendType::Discord,
+            "Discord",
+        ),
+        ("teams", "poly_teams.wasm", BackendType::Teams, "Teams"),
+        (
+            "server",
+            "poly_server_client.wasm",
+            BackendType::Poly,
+            "Poly Server",
+        ),
+    ];
+
+    let mut registry = PluginRegistry::new().unwrap();
+
+    // Load all plugins from disk
+    for (id, file, _, _) in &plugins {
+        let path = wasm_dir.join(file);
+        assert!(
+            path.exists(),
+            "WASM plugin file not found: {}\nBuild with: cargo component build -p <crate> --target wasm32-wasip2",
+            path.display()
+        );
+        registry.load_from_file(id, &path).unwrap();
+    }
+
+    assert_eq!(
+        registry.loaded_plugins().len(),
+        6,
+        "Expected 6 plugins loaded"
+    );
+
+    // Instantiate each and verify backend_type + backend_name
+    for (id, _, expected_type, expected_name) in &plugins {
+        let backend = registry.instantiate(id).await.unwrap();
+
+        assert_eq!(
+            backend.backend_type(),
+            *expected_type,
+            "Plugin '{id}' returned wrong backend_type"
+        );
+        assert_eq!(
+            backend.backend_name(),
+            *expected_name,
+            "Plugin '{id}' returned wrong backend_name"
+        );
+    }
+}

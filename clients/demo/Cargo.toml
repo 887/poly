@@ -1,20 +1,34 @@
 [package]
 name = "poly-demo"
-description = "Demo/mock messenger client for Poly UI testing"
+description = "Demo/mock messenger client for Poly UI testing — builds as native lib or WASM plugin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+# Both crate types: rlib for native workspace builds, cdylib for WASM plugin
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["native"]
+# Native: used when linked directly into poly-core (traditional path)
+native = ["dep:dioxus", "dep:futures", "dep:async-trait", "dep:tokio"]
+
 [dependencies]
 poly-client = { workspace = true }
-dioxus = { workspace = true }
 serde = { workspace = true }
 chrono = { workspace = true }
-# uuid removed: ID generation uses rand (already a dep), avoiding getrandom 0.2 on WASM
 rand = { workspace = true }
-futures = { workspace = true }
-async-trait = { workspace = true }
-tokio = { workspace = true }
+
+# Native-only dependencies (feature-gated)
+dioxus = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+# WASM plugin guest bindings (only needed on WASI targets, not wasm32-unknown-unknown)
+[target.'cfg(target_os = "wasi")'.dependencies]
+wit-bindgen = { workspace = true }
 
 [lints]
 workspace = true

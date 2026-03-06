@@ -8,23 +8,38 @@
 //! The approach for this crate is deferred to Phase 3.3.
 //! See Decision D3 in overall-plan.md.
 //!
-//! This crate is included in `poly-core` when the `discord` feature is enabled.
+//! ## Build Modes
+//!
+//! - **Native** (`--features native`): Implements `ClientBackend` directly.
+//! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
+//!
+//! DECISION(D21): WASM Plugin Backends.
 
 // TODO(phase-3.3): Decide Discord implementation approach (direct API, bridge, or webview)
 
+/// WASM plugin guest implementation (WASI targets only).
+#[cfg(target_os = "wasi")]
+mod guest;
+
+#[cfg(feature = "native")]
 use async_trait::async_trait;
+#[cfg(feature = "native")]
 use futures::stream::{self, Stream};
+#[cfg(feature = "native")]
 use poly_client::*;
+#[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Discord messenger client.
 ///
 /// Implementation approach TBD — see Decision D3.
 // DECISION(D3): Discord approach deferred to Phase 3.3 due to TOS risk.
+#[cfg(feature = "native")]
 pub struct DiscordClient {
     // TODO(phase-3.3): Add implementation
 }
 
+#[cfg(feature = "native")]
 impl DiscordClient {
     /// Create a new Discord client.
     pub fn new() -> Self {
@@ -32,12 +47,14 @@ impl DiscordClient {
     }
 }
 
+#[cfg(feature = "native")]
 impl Default for DiscordClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "native")]
 #[async_trait]
 impl ClientBackend for DiscordClient {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
