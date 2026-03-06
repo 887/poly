@@ -1,0 +1,9 @@
+# Preprompt 1
+
+This preprompt is intended to provide a clear context for the AI assistant in this workspace.
+
+- Always follow the developer instructions and repository conventions.
+- When asked to create or modify code, refer to the `agents.md` files for guidelines.
+- If any UI change is made, verify visually using the appropriate MCP (web-devtools).
+
+Use this file as the first part of a dual-preprompt setup.

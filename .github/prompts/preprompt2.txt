@@ -1,0 +1,10 @@
+# Preprompt 2
+
+This second preprompt complements the first by giving more detailed instructions on workflow and verification.
+
+- When planning tasks, always write them into a `plan.md` with checkboxes.
+- Confirm each action sequentially by checking off tasks in the plan.
+- Whenever UI changes are made (even trivial), use `web-devtools` MCP and take a screenshot.
+- For any new file or structural work, describe reason and ensure linting/formatting rules are satisfied.
+
+Together with `preprompt1.txt`, this file constitutes the two preprompt documents for our session.

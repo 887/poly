@@ -68,5 +68,6 @@
   "chat.tools.eligibleForAutoApproval": {
     "awaitTerminal": true,
     "editFiles": true
-  }
+  },
+  "github.copilot.chat.promptFileContextProvider.enabled": true,
 }
