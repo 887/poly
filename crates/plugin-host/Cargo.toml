@@ -23,7 +23,13 @@ wasmtime-wasi = { workspace = true }
 
 # Host-API implementation deps
 reqwest = { workspace = true }
-tokio = { workspace = true, features = ["rt", "macros", "sync", "time", "io-util"] }
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "sync",
+    "time",
+    "io-util",
+] }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 tokio-stream = { workspace = true }

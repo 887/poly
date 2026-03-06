@@ -76,7 +76,13 @@ sys-locale = "0.3"
 # depend on it — cargo absorbs the -l flag into the dylib and doesn't re-emit
 # it for the final binary's rlib chain. native-tls (system OpenSSL/SChannel/
 # SecureTransport) avoids aws-lc entirely, eliminating the dylib boundary issue.
-reqwest = { version = "0.13.2", default-features = false, features = ["json", "native-tls", "charset", "http2", "system-proxy"] }
+reqwest = { version = "0.13.2", default-features = false, features = [
+    "json",
+    "native-tls",
+    "charset",
+    "http2",
+    "system-proxy",
+] }
 axum = "0.8"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
