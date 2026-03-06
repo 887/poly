@@ -233,10 +233,10 @@ pub fn ChatView() -> Element {
                     spawn(async move {
                         let mut eval = document::eval(
                             r#"
-                                                                                        let el = document.getElementById('message-list-scroll');
-                                                                                        if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                                        else { dioxus.send(false); }
-                                                                                        "#,
+                                                                                                    let el = document.getElementById('message-list-scroll');
+                                                                                                    if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                                    else { dioxus.send(false); }
+                                                                                                    "#,
                         );
                         if let Ok(near_top) = eval.recv::<bool>().await
                             && near_top
@@ -332,19 +332,22 @@ pub fn ChatView() -> Element {
                                         move |evt: MouseEvent| {
                                             evt.prevent_default();
                                             let coords = evt.client_coordinates();
-                                            msg_context_menu.set(Some(MsgContextMenu {
-                                                x: coords.x,
-                                                y: coords.y,
-                                                message_id: mid.clone(),
-                                                message_text: txt.clone(),
-                                                is_own,
-                                            }));
+                                            msg_context_menu
+                                                .set(
+                                                    Some(MsgContextMenu {
+                                                        x: coords.x,
+                                                        y: coords.y,
+                                                        message_id: mid.clone(),
+                                                        message_text: txt.clone(),
+                                                        is_own,
+                                                    }),
+                                                );
                                         }
                                     },
 
                                     // Hover action bar (hidden while inline-editing)
                                     if is_hovered && !is_editing {
-                                        div { class: "message-actions",
+                                        div { class: "message-actions", // Own message: Edit button
                                             // Reaction button — always shown
                                             button {
                                                 class: "msg-action-btn",
@@ -371,7 +374,7 @@ pub fn ChatView() -> Element {
                                                         }
                                                     },
                                                     "✏️"
-                                                }
+                                                } // Full message: avatar (image or fallback letter) + header
                                                 // Own message: Delete button
                                                 button {
                                                     class: "msg-action-btn msg-action-btn-danger",
@@ -388,13 +391,13 @@ pub fn ChatView() -> Element {
                                                 // Other's message: Reply + Forward
                                                 button {
                                                     class: "msg-action-btn",
-                                                    title: "{t(\"msg-reply\")}",
+                                                    title: "{t(\"msg-reply\")}", // Reactions
                                                     onclick: move |_| {
                                                         tracing::debug!("Reply (stub)");
                                                     },
                                                     "↩️"
                                                 }
-                                                button {
+                                                button { // Content (or inline edit UI)
                                                     class: "msg-action-btn",
                                                     title: "{t(\"msg-forward\")}",
                                                     onclick: move |_| {
@@ -553,9 +556,9 @@ pub fn ChatView() -> Element {
                                     // Trigger hidden file input via JS
                                     document::eval(
                                         r#"
-                                                                                                                                                                                    let input = document.getElementById('poly-file-input');
-                                                                                                                                                                                    if (input) { input.click(); }
-                                                                                                                                                                                    "#,
+                                                                                                                                                                                                                let input = document.getElementById('poly-file-input');
+                                                                                                                                                                                                                if (input) { input.click(); }
+                                                                                                                                                                                                                "#,
                                     );
                                 },
                                 "📎"
@@ -980,7 +983,7 @@ fn MsgContextMenuOverlay(
                     move |_| {
                         let js = format!(
                             "navigator.clipboard.writeText({}).catch(()=>{{}})",
-                            serde_json::to_string(&txt).unwrap_or_default()
+                            serde_json::to_string(&txt).unwrap_or_default(),
                         );
                         document::eval(&js);
                         msg_context_menu.set(None);
@@ -1057,7 +1060,7 @@ fn MsgContextMenuOverlay(
                     move |_| {
                         let js = format!(
                             "navigator.clipboard.writeText({}).catch(()=>{{}})",
-                            serde_json::to_string(&mid).unwrap_or_default()
+                            serde_json::to_string(&mid).unwrap_or_default(),
                         );
                         document::eval(&js);
                         msg_context_menu.set(None);
@@ -1086,9 +1089,7 @@ fn ContextMenuItemSimple(
         "context-menu-item"
     };
     rsx! {
-        button {
-            class: "{class}",
-            onclick: move |evt| onclick.call(evt),
+        button { class: "{class}", onclick: move |evt| onclick.call(evt),
             if !icon.is_empty() {
                 span { class: "context-menu-item-icon", "{icon}" }
             }
