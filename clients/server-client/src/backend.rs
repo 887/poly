@@ -111,6 +111,7 @@ impl PolyServerBackend {
             id,
             name: srv.name.clone(),
             icon_url: srv.icon_url.clone(),
+            banner_url: None, // Poly server protocol does not yet supply banner images
             categories: cats,
             backend: BackendType::Poly,
             unread_count: 0,

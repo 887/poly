@@ -12,7 +12,6 @@
 use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::chat_data::backend_badge;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, Server, User, VoiceParticipant};
@@ -44,23 +43,160 @@ pub fn ChannelList() -> Element {
     }
 }
 
-/// Server banner — displays the current server name or the "Direct Messages" title.
+/// Discord-style server banner — top of the channel list sidebar.
+///
+/// Shows:
+/// - **DMs view:** simple "Direct Messages" heading.
+/// - **Server view:**
+///   - Optional full-width banner image (when `server.banner_url` is `Some`).
+///   - Header bar with a clickable server-name button (opens dropdown) and an
+///     inline invite-people button on the right.
+///   - Dropdown menu: Server Settings, ──, Invite People, Notification
+///     Settings, ──, Leave Server.
+///
+/// The dropdown is closed by clicking the transparent `.context-menu-backdrop`
+/// overlay that covers the full viewport beneath the panel.
+// DECISION(DX): reuses the context-menu-backdrop/context-menu CSS pattern
+// established in phase-2.10 so we don't need new z-index layers.
 #[component]
 fn ServerBanner(current_view: View, current_server: Option<Server>) -> Element {
+    let app_state: Signal<AppState> = use_context();
+    let mut dropdown_open = use_signal(|| false);
+
+    // Derive route-construction fields from AppState before entering RSX so
+    // that we don't hold a borrow of `app_state` inside closures that also
+    // mutate `dropdown_open`.
+    let instance_id = app_state
+        .read()
+        .nav
+        .active_instance_id
+        .clone()
+        .unwrap_or_default();
+    let account_id = app_state
+        .read()
+        .nav
+        .active_account_id
+        .clone()
+        .unwrap_or_default();
+    let server_id = app_state
+        .read()
+        .nav
+        .selected_server
+        .clone()
+        .unwrap_or_default();
+
+    // Backend slug comes from the Server struct itself (always consistent with
+    // what was used to navigate here).
+    let backend_slug = current_server
+        .as_ref()
+        .map(|s| s.backend.slug().to_string())
+        .unwrap_or_default();
+
     rsx! {
         div { class: "server-banner-sidebar",
+            // ── Transparent click-catcher to close the dropdown ──────────────
+            if *dropdown_open.read() {
+                div {
+                    class: "context-menu-backdrop",
+                    onclick: move |_| dropdown_open.set(false),
+                }
+            }
+
             if current_view == View::DmsFriends {
-                h3 { "{t(\"nav-dms\")}" }
+                // ── DMs / Friends view: plain heading ────────────────────────
+                div { class: "server-banner-header",
+                    h3 { "{t(\"nav-dms\")}" }
+                }
             } else if let Some(ref server) = current_server {
-                h3 { class: "server-name", "{server.name}" }
-                div { class: "server-source",
-                    span { class: "source-badge-inline", "{backend_badge(&server.backend)}" }
-                    span { class: "source-text",
-                        "{server.backend.display_name()} — {server.account_display_name}"
+                // ── Server view ──────────────────────────────────────────────
+
+                // Optional wide banner image at the very top.
+                if let Some(ref url) = server.banner_url {
+                    img {
+                        class: "server-banner-img",
+                        src: "{url}",
+                        alt: "",
+                        // Prevent the image drag from interfering with DnD.
+                        draggable: false,
+                    }
+                }
+
+                // Header bar: server-name trigger + invite button.
+                div { class: "server-banner-header",
+                    button {
+                        class: "server-name-trigger",
+                        onclick: move |_| {
+                            let open = *dropdown_open.read();
+                            dropdown_open.set(!open);
+                        },
+                        span { class: "server-name-text", "{server.name}" }
+                        if *dropdown_open.read() {
+                            span { class: "server-name-chevron", "▴" }
+                        } else {
+                            span { class: "server-name-chevron", "▾" }
+                        }
+                    }
+                    button {
+                        class: "server-invite-btn",
+                        title: t("server-banner-invite"),
+                        onclick: move |_| {
+                            // TODO(phase-3): open the Invite People modal when implemented.
+                            tracing::info!("Invite People clicked — placeholder");
+                        },
+                        "＋"
+                    }
+                }
+
+                // Dropdown panel (positioned absolutely over the sidebar).
+                if *dropdown_open.read() {
+                    nav { class: "server-dropdown-menu",
+                        Link {
+                            class: "server-dropdown-item",
+                            to: Route::ServerSettingsRoute {
+                                backend: backend_slug.clone(),
+                                instance_id: instance_id.clone(),
+                                account_id: account_id.clone(),
+                                server_id: server_id.clone(),
+                            },
+                            onclick: move |_| dropdown_open.set(false),
+                            "{t(\"server-banner-settings\")}"
+                        }
+                        div { class: "context-menu-separator" }
+                        button {
+                            class: "server-dropdown-item",
+                            onclick: move |_| {
+                                // TODO(phase-3): open Invite People modal.
+                                tracing::info!("Invite People clicked — placeholder");
+                                dropdown_open.set(false);
+                            },
+                            "{t(\"server-banner-invite\")}"
+                        }
+                        button {
+                            class: "server-dropdown-item",
+                            onclick: move |_| {
+                                // TODO(phase-3): open per-server notification settings.
+                                tracing::info!("Notification Settings clicked — placeholder");
+                                dropdown_open.set(false);
+                            },
+                            "{t(\"server-banner-notif-settings\")}"
+                        }
+                        div { class: "context-menu-separator" }
+                        button {
+                            class: "server-dropdown-item server-dropdown-item-danger",
+                            onclick: move |_| {
+                                // TODO(phase-3): hook to the leave-server confirmation flow.
+                                tracing::info!("Leave Server clicked — placeholder");
+                                dropdown_open.set(false);
+                            },
+                            "{t(\"server-banner-leave\")}"
+                        }
                     }
                 }
             } else {
-                h3 { "{t(\"nav-dms\")}" }
+                // ── Fallback (no server selected) ────────────────────────────
+                div { class: "server-banner-header",
+                    h3 { "{t(\"nav-dms\")}" }
+                }
             }
         }
     }

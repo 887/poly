@@ -232,6 +232,12 @@ pub struct Server {
     pub name: String,
     /// URL to the server icon/avatar.
     pub icon_url: Option<String>,
+    /// Optional URL for a server banner image displayed at the top of the
+    /// channel list sidebar. Wide-format image (e.g. 960×360) recommended.
+    /// Sourced via [`ClientBackend::get_server`]; `None` falls back to a
+    /// gradient derived from the server's color.
+    #[serde(default)]
+    pub banner_url: Option<String>,
     /// Channel categories within this server.
     pub categories: Vec<Category>,
     /// Which backend this server belongs to.

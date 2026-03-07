@@ -124,7 +124,7 @@ async fn init_storage(
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
                     if settings.demo_active {
-                        favorites_sidebar::toggle_demo(client_manager, chat_data).await;
+                        favorites_sidebar::toggle_demo(client_manager, chat_data, app_state).await;
                     }
                     // Restore per-account last-visited routes so account-switching
                     // returns to the correct page even after a page reload.

@@ -110,11 +110,16 @@ pub fn from_wit_category(c: wit::Category) -> pc::Category {
 // ─── Server ────────────────────────────────────────────────────────
 
 /// Convert WIT `Server` → poly-client `Server`.
+///
+/// `banner_url` is not part of the WIT interface (WASM plugins don't
+/// supply it); native backends that have banner images set the field
+/// directly when constructing `Server` values.
 pub fn from_wit_server(s: wit::Server) -> pc::Server {
     pc::Server {
         id: s.id,
         name: s.name,
         icon_url: s.icon_url,
+        banner_url: None,
         categories: s.categories.into_iter().map(from_wit_category).collect(),
         backend: from_wit_backend_type(s.backend),
         unread_count: s.unread_count,

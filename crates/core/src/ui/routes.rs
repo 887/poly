@@ -463,6 +463,10 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
 }
 
 /// Server home — auto-selects first channel, renders chat / voice view.
+///
+/// On URL-restore navigation (F5, deep link) the click handler that normally
+/// calls `load_server_data` never ran, so data is missing. The `use_effect`
+/// here detects that case and loads the server data before rendering.
 #[component]
 fn ServerHome(
     backend: String,
@@ -471,6 +475,25 @@ fn ServerHome(
     server_id: String,
 ) -> Element {
     let chat_data: Signal<ChatData> = use_context();
+    let app_state: Signal<AppState> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+
+    // URL-restore: server data is absent after a hard reload. Load it now.
+    use_effect(move || {
+        let sid = server_id.clone();
+        let server_already_loaded = chat_data
+            .read()
+            .current_server
+            .as_ref()
+            .is_some_and(|s| s.id == sid);
+        if server_already_loaded {
+            return;
+        }
+        spawn(async move {
+            super::favorites_sidebar::load_server_data(sid, app_state, client_manager, chat_data)
+                .await;
+        });
+    });
 
     let is_voice_channel = chat_data
         .read()
@@ -488,6 +511,11 @@ fn ServerHome(
 }
 
 /// Server channel — specific channel view within a server.
+///
+/// On URL-restore navigation (F5, deep link), the click handlers that
+/// normally set up `chat_data` never ran. The `use_effect` here detects
+/// missing data and calls `restore_server_channel` to reload it, preserving
+/// the exact channel from the URL rather than defaulting to the first one.
 #[component]
 fn ServerChat(
     backend: String,
@@ -497,6 +525,34 @@ fn ServerChat(
     channel_id: String,
 ) -> Element {
     let chat_data: Signal<ChatData> = use_context();
+    let app_state: Signal<AppState> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    use_effect(move || {
+        let cid = channel_id.clone();
+        let sid = server_id.clone();
+
+        // Skip if click-navigation already prepared this specific channel.
+        let already_loaded = chat_data
+            .read()
+            .current_channel
+            .as_ref()
+            .is_some_and(|ch| ch.id == cid)
+            && !chat_data.read().messages.is_empty();
+        if already_loaded {
+            return;
+        }
+
+        spawn(async move {
+            super::favorites_sidebar::restore_server_channel(
+                sid,
+                cid,
+                app_state,
+                client_manager,
+                chat_data,
+            )
+            .await;
+        });
+    });
 
     let is_voice_channel = chat_data
         .read()

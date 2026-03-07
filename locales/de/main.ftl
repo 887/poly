@@ -365,6 +365,13 @@ remove-favorites-body = Sie können es jederzeit erneut hinzufügen, indem Sie e
 remove-favorites-cancel = Abbrechen
 remove-favorites-confirm = Entfernen
 
+# Server-Banner-Dropdown-Menü
+server-banner-settings = Server-Einstellungen
+server-banner-invite = Personen einladen
+server-banner-notif-settings = Benachrichtigungseinstellungen
+server-banner-create-channel = Kanal erstellen
+server-banner-leave = Server verlassen
+
 # Server settings page
 server-settings-title = Server-Einstellungen
 server-settings-notifications = Benachrichtigungen

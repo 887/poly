@@ -535,8 +535,12 @@ body {
 }
 
 .server-banner-sidebar {
-    padding: 16px;
+    /* No padding here — header bar carries its own padding; banner image is flush. */
     border-bottom: 1px solid var(--border-primary);
+    position: relative;
+    /* Anchor for the dropdown menu */
+    overflow: visible;
+    /* Let the dropdown escape the sidebar clip */
 }
 
 .server-banner-sidebar h3 {
@@ -544,6 +548,170 @@ body {
     font-weight: 600;
     color: var(--text-primary);
 }
+
+/* ── Optional full-width server banner image ────────────────────────────── */
+
+.server-banner-img {
+    display: block;
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    object-position: center;
+    user-select: none;
+    pointer-events: none;
+    /* Don't interfere with clicks */
+}
+
+/* ── Server banner header bar ───────────────────────────────────────────── */
+/* Row containing the server-name trigger button and the invite icon button. */
+
+.server-banner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    gap: 8px;
+    min-height: 48px;
+}
+
+/* DMs view uses a plain h3 inside the header — keep it styled */
+.server-banner-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* ── Server name trigger button ─────────────────────────────────────────── */
+
+.server-name-trigger {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 700;
+    text-align: left;
+    transition: background-color var(--transition-fast, 60ms);
+    user-select: none;
+}
+
+.server-name-trigger:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.server-name-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.server-name-chevron {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+/* ── Invite people icon button ──────────────────────────────────────────── */
+
+.server-invite-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 500;
+    transition: background-color var(--transition-fast, 60ms), color var(--transition-fast, 60ms);
+}
+
+.server-invite-btn:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+    color: var(--text-primary);
+}
+
+/* ── Server dropdown menu ───────────────────────────────────────────────── */
+/* Positioned absolutely, anchored to the top of .server-banner-sidebar.   */
+/* Re-uses the same colour tokens as .context-menu for visual consistency.  */
+
+.server-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 8px;
+    right: 8px;
+    z-index: 100;
+    background: var(--modal-bg, #2b2d31);
+    border: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+    border-radius: 4px;
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    user-select: none;
+    /* Animate in */
+    animation: dropdown-appear 80ms ease-out;
+}
+
+@keyframes dropdown-appear {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Items re-use the .context-menu-item visual style via separate class */
+.server-dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 7px 12px;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    border-radius: 2px;
+    margin: 0 4px;
+    width: calc(100% - 8px);
+    transition: background 60ms;
+    background: none;
+    border: none;
+    text-align: left;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.server-dropdown-item:hover {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+}
+
+.server-dropdown-item-danger {
+    color: #f87171;
+}
+
+.server-dropdown-item-danger:hover {
+    background: #dc2626 !important;
+    color: #fff;
+}
+
 
 .channel-entries {
     flex: 1;

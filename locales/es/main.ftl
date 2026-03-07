@@ -363,6 +363,13 @@ remove-favorites-title = ¿Eliminar «{ $name }» de favoritos?
 remove-favorites-body = Puedes volver a agregarlo en cualquier momento arrastrándolo a la barra de favoritos o usando este menú.
 remove-favorites-cancel = Cancelar
 remove-favorites-confirm = Eliminar
+# Menú desplegable del banner del servidor
+server-banner-settings = Configuración del servidor
+server-banner-invite = Invitar personas
+server-banner-notif-settings = Configuración de notificaciones
+server-banner-create-channel = Crear canal
+server-banner-leave = Salir del servidor
+
 # Server settings page
 server-settings-title = Configuración del servidor
 server-settings-notifications = Notificaciones

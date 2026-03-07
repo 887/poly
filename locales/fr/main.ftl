@@ -365,6 +365,13 @@ remove-favorites-body = Vous pouvez le rajouter à tout moment en le faisant gli
 remove-favorites-cancel = Annuler
 remove-favorites-confirm = Supprimer
 
+# Menu déroulant de la bannière du serveur
+server-banner-settings = Paramètres du serveur
+server-banner-invite = Inviter des personnes
+server-banner-notif-settings = Paramètres de notification
+server-banner-create-channel = Créer un canal
+server-banner-leave = Quitter le serveur
+
 # Server settings page
 server-settings-title = Paramètres du serveur
 server-settings-notifications = Notifications

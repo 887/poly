@@ -109,14 +109,30 @@ pub fn ChatView() -> Element {
         None
     };
 
-    // Scroll message list to bottom when messages change
-    let msg_count = messages.len();
+    // Scroll message list to bottom whenever the message count changes.
+    //
+    // IMPORTANT: `chat_data` is read *inside* the closure so Dioxus tracks it
+    // as a reactive dependency — the effect re-runs every time a new message
+    // arrives (including streamed demo messages).
+    //
+    // `requestAnimationFrame` defers the scroll until after the browser has
+    // committed the new DOM nodes, which is critical on Wry/WebKit where a
+    // synchronous `scrollTop = scrollHeight` runs before the layout pass and
+    // therefore has no effect.
     use_effect(move || {
-        let _count = msg_count; // track dependency
+        // Reading inside the closure creates the signal dependency.
+        let count = chat_data.read().messages.len();
+        if count == 0 {
+            return;
+        }
         document::eval(
             r#"
             let el = document.getElementById('message-list-scroll');
-            if (el) { el.scrollTop = el.scrollHeight; }
+            if (el) {
+                requestAnimationFrame(function() {
+                    el.scrollTop = el.scrollHeight;
+                });
+            }
             "#,
         );
     });
@@ -233,10 +249,10 @@ pub fn ChatView() -> Element {
                     spawn(async move {
                         let mut eval = document::eval(
                             r#"
-                                                                                                                let el = document.getElementById('message-list-scroll');
-                                                                                                                if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                                                                else { dioxus.send(false); }
-                                                                                                                "#,
+                                                                                                                            let el = document.getElementById('message-list-scroll');
+                                                                                                                            if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                                                            else { dioxus.send(false); }
+                                                                                                                            "#,
                         );
                         if let Ok(near_top) = eval.recv::<bool>().await
                             && near_top
@@ -374,7 +390,7 @@ pub fn ChatView() -> Element {
                                                         }
                                                     },
                                                     "✏️"
-                                                } // Full message: avatar (image or fallback letter) + header // Full message: avatar (image or fallback letter) + header
+                                                } // Full message: avatar (image or fallback letter) + header // Full message: avatar (image or fallback letter) + header // Full message: avatar (image or fallback letter) + header  Full message: avatar (image or fallback letter) + header
                                                 // Own message: Delete button
                                                 button {
                                                     class: "msg-action-btn msg-action-btn-danger",
@@ -397,7 +413,7 @@ pub fn ChatView() -> Element {
                                                     },
                                                     "↩️"
                                                 }
-                                                button { // Content (or inline edit UI) // Content (or inline edit UI)
+                                                button { // Content (or inline edit UI) // Content (or inline edit UI) // Content (or inline edit UI)  Content (or inline edit UI)
                                                     class: "msg-action-btn",
                                                     title: "{t(\"msg-forward\")}",
                                                     onclick: move |_| {
@@ -556,9 +572,9 @@ pub fn ChatView() -> Element {
                                     // Trigger hidden file input via JS
                                     document::eval(
                                         r#"
-                                                                                                                                                                                                                                            let input = document.getElementById('poly-file-input');
-                                                                                                                                                                                                                                            if (input) { input.click(); }
-                                                                                                                                                                                                                                            "#,
+                                                                                                                                                                                                                                                                        let input = document.getElementById('poly-file-input');
+                                                                                                                                                                                                                                                                        if (input) { input.click(); }
+                                                                                                                                                                                                                                                                        "#,
                                     );
                                 },
                                 "📎"

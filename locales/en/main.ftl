@@ -377,6 +377,13 @@ remove-favorites-body = You can add it back anytime by dragging it to the favori
 remove-favorites-cancel = Cancel
 remove-favorites-confirm = Remove
 
+# Server banner dropdown menu
+server-banner-settings = Server Settings
+server-banner-invite = Invite People
+server-banner-notif-settings = Notification Settings
+server-banner-create-channel = Create Channel
+server-banner-leave = Leave Server
+
 # Server settings page
 server-settings-title = Server Settings
 server-settings-notifications = Notifications

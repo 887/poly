@@ -139,6 +139,7 @@ pub fn demo_servers() -> Vec<Server> {
             id: "server-poly-dev".to_string(),
             name: "Poly Development".to_string(),
             icon_url: None,
+            banner_url: None,
             categories: vec![
                 Category {
                     id: "cat-general".to_string(),
@@ -164,6 +165,7 @@ pub fn demo_servers() -> Vec<Server> {
             id: "server-gaming".to_string(),
             name: "Gaming Lounge".to_string(),
             icon_url: None,
+            banner_url: None,
             categories: vec![Category {
                 id: "cat-games".to_string(),
                 name: "Games".to_string(),
@@ -182,6 +184,7 @@ pub fn demo_servers() -> Vec<Server> {
             id: "server-music".to_string(),
             name: "Music Enthusiasts".to_string(),
             icon_url: None,
+            banner_url: None,
             categories: vec![Category {
                 id: "cat-music".to_string(),
                 name: "Music".to_string(),
@@ -209,6 +212,7 @@ pub fn demo2_servers() -> Vec<Server> {
             id: "server-opensource".to_string(),
             name: "Open Source Hub".to_string(),
             icon_url: None,
+            banner_url: None,
             categories: vec![
                 Category {
                     id: "cat-projects".to_string(),
@@ -233,6 +237,7 @@ pub fn demo2_servers() -> Vec<Server> {
             id: "server-bookclub".to_string(),
             name: "Book Club".to_string(),
             icon_url: None,
+            banner_url: None,
             categories: vec![Category {
                 id: "cat-books".to_string(),
                 name: "Books".to_string(),
@@ -251,6 +256,7 @@ pub fn demo2_servers() -> Vec<Server> {
             id: "server-cooking".to_string(),
             name: "Cooking Corner".to_string(),
             icon_url: None,
+            banner_url: None,
             categories: vec![Category {
                 id: "cat-food".to_string(),
                 name: "Food".to_string(),
@@ -269,6 +275,7 @@ pub fn demo2_servers() -> Vec<Server> {
             id: "server-fitness".to_string(),
             name: "Fitness Crew".to_string(),
             icon_url: None,
+            banner_url: None,
             categories: vec![Category {
                 id: "cat-health".to_string(),
                 name: "Health".to_string(),

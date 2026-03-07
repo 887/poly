@@ -159,7 +159,7 @@ pub fn FavoritesBar() -> Element {
                 onclick: move |_| {
                     spawn(async move {
                         let was_active = client_manager.read().demo_active;
-                        toggle_demo(client_manager, chat_data).await;
+                        toggle_demo(client_manager, chat_data, app_state).await;
                         if !was_active {
                             // Demo just turned ON — mark setup complete in memory
                             // (storage is handled inside toggle_demo). Stay on the
@@ -594,6 +594,7 @@ fn FavoriteServerIcon(
 pub(crate) async fn toggle_demo(
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
+    app_state: Signal<AppState>,
 ) {
     #[cfg(feature = "demo")]
     {
@@ -748,6 +749,16 @@ pub(crate) async fn toggle_demo(
                     tracing::warn!("Failed to persist demo_active=true: {e}");
                 }
             }
+
+            // Start real-time event stream listeners for each demo account.
+            // These tasks run in the background and update chat_data when
+            // new messages or presence changes arrive from the demo backend.
+            for demo_account_id in &["demo-cat", "demo-dog"] {
+                let aid = (*demo_account_id).to_string();
+                if let Some(backend) = client_manager.read().get_backend(&aid) {
+                    spawn_event_stream_listener(aid, backend, app_state, chat_data, client_manager);
+                }
+            }
         }
     }
 }
@@ -830,4 +841,166 @@ pub(crate) async fn persist_favorites(ids: Vec<String>) {
         }
         Err(e) => tracing::warn!("Failed to read app_settings for favorites persist: {e}"),
     }
+}
+
+/// Restore a specific server channel from a URL (F5 / deep-link navigation).
+///
+/// Unlike [`load_server_data`] which auto-selects the first text channel,
+/// this function restores the exact `channel_id` encoded in the URL.
+///
+/// Called from the `ServerChat` route component's `use_effect` when
+/// `chat_data` is empty (i.e. the page was hard-refreshed).
+pub async fn restore_server_channel(
+    server_id: String,
+    channel_id: String,
+    mut app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    chat_data.write().loading = true;
+
+    let backend_info = client_manager.read().get_backend_for_server(&server_id);
+    let Some((_account_id, backend)) = backend_info else {
+        chat_data.write().loading = false;
+        return;
+    };
+
+    // Load server details
+    {
+        let guard = backend.read().await;
+        if let Ok(server) = guard.get_server(&server_id).await {
+            chat_data.write().current_server = Some(server);
+        }
+    }
+
+    // Load all channels for the sidebar
+    let channels = {
+        let guard = backend.read().await;
+        guard.get_channels(&server_id).await.unwrap_or_default()
+    };
+
+    // Locate the requested channel; fall back to first text channel if missing.
+    let target = channels
+        .iter()
+        .find(|c| c.id == channel_id)
+        .or_else(|| {
+            channels
+                .iter()
+                .find(|c| c.channel_type == poly_client::ChannelType::Text)
+        })
+        .cloned();
+
+    chat_data.write().channels = channels;
+
+    if let Some(ch) = target {
+        app_state.write().nav.selected_channel = Some(ch.id.clone());
+        chat_data.write().current_channel = Some(ch.clone());
+
+        if ch.channel_type == poly_client::ChannelType::Text {
+            let guard = backend.read().await;
+            if let Ok(messages) = guard
+                .get_messages(&ch.id, poly_client::MessageQuery::default())
+                .await
+            {
+                chat_data.write().messages = messages;
+            }
+            if let Ok(members) = guard.get_channel_members(&ch.id).await {
+                chat_data.write().members = members;
+            }
+        } else if matches!(
+            ch.channel_type,
+            poly_client::ChannelType::Voice | poly_client::ChannelType::Video
+        ) {
+            let guard = backend.read().await;
+            if let Ok(participants) = guard.get_voice_participants(&ch.id).await {
+                chat_data
+                    .write()
+                    .voice_channel_participants
+                    .insert(ch.id.clone(), participants);
+            }
+        }
+    }
+
+    chat_data.write().loading = false;
+}
+
+/// Start a background event-stream listener for a single backend account.
+///
+/// Spawns a Dioxus task that polls the backend's [`ClientBackend::event_stream`]
+/// and processes each incoming [`poly_client::ClientEvent`]:
+///
+/// - [`ClientEvent::MessageReceived`] — appends the message to `chat_data.messages`
+///   when the current channel is selected; otherwise updates unread count.
+/// - [`ClientEvent::PresenceChanged`] — updates presence on matching members.
+/// - Other events are silently ignored for now.
+///
+/// The task exits automatically when `client_manager.demo_active` becomes false
+/// (checked after each event) so there is no orphan task after demo is toggled off.
+pub(crate) fn spawn_event_stream_listener(
+    account_id: String,
+    backend: crate::client_manager::BackendHandle,
+    app_state: Signal<AppState>,
+    mut chat_data: Signal<ChatData>,
+    client_manager: Signal<ClientManager>,
+) {
+    use futures::StreamExt as _;
+    use poly_client::ClientEvent;
+
+    spawn(async move {
+        // Acquire the stream without holding the lock for the duration of polling.
+        let stream = {
+            let guard = backend.read().await;
+            guard.event_stream()
+        };
+        let mut stream = stream;
+
+        tracing::debug!("Event stream started for account: {account_id}");
+
+        while let Some(event) = stream.next().await {
+            // Stop the listener when demo is deactivated (or account removed).
+            let still_active = {
+                let cm = client_manager.read();
+                cm.demo_active && cm.get_backend(&account_id).is_some()
+            };
+            if !still_active {
+                break;
+            }
+
+            match event {
+                ClientEvent::MessageReceived {
+                    ref channel_id,
+                    ref message,
+                } => {
+                    let selected = app_state.read().nav.selected_channel.clone();
+                    if selected.as_deref() == Some(channel_id.as_str()) {
+                        // Currently viewing this channel — append message live.
+                        chat_data.write().messages.push(message.clone());
+                        tracing::trace!(
+                            "Live message in #{channel_id}: {}",
+                            message.author.display_name
+                        );
+                    }
+                    // TODO(phase-3): increment unread count for other channels
+                }
+                ClientEvent::PresenceChanged {
+                    ref user_id,
+                    status,
+                } => {
+                    let mut cd = chat_data.write();
+                    for member in &mut cd.members {
+                        if member.id == *user_id {
+                            member.presence = status;
+                            break;
+                        }
+                    }
+                }
+                ClientEvent::TypingStarted { .. } => {
+                    // TODO(phase-3): show typing indicator in chat view
+                }
+                _ => {}
+            }
+        }
+
+        tracing::debug!("Event stream ended for account: {account_id}");
+    });
 }

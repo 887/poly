@@ -200,36 +200,57 @@ impl ClientBackend for DemoClient {
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         let users = data::demo_users();
-        let channels = vec![
+        // Server text channels that receive simulated messages.
+        let server_channels = vec![
             "ch-general",
             "ch-off-topic",
             "ch-rust",
             "ch-dioxus",
             "ch-minecraft",
+            "ch-valorant",
+            "ch-recommendations",
         ];
-        let typing_messages = vec![
+        // DM channels that receive simulated messages (dm-{user_id}).
+        let dm_channels = vec!["dm-user-alice", "dm-user-bob", "dm-user-charlie"];
+        let server_messages = vec![
             "That's a great point!",
-            "I'll look into it.",
+            "I'll look into it. \u{1f527}",
             "Has anyone else seen this?",
-            "Working on a fix now \u{1f527}",
+            "Working on a fix now...",
             "brb",
-            "lol nice",
+            "lol nice one",
             "Can confirm, same issue here.",
             "\u{1f44d}",
+            "Just pushed the fix!",
+            "Who's up for a game tonight?",
+            "This is so cool!",
+            "Let's sync tomorrow morning.",
+        ];
+        let dm_messages = vec![
+            "Hey, are you around?",
+            "Did you see the latest update?",
+            "Let's catch up soon!",
+            "Thanks for the help earlier \u{1f64f}",
+            "Check this out!",
+            "I'll send you the file in a bit.",
+            "Haha yeah exactly \u{1f61d}",
+            "Makes sense, let's do it!",
         ];
 
-        // Emit a fake event every 4–8 seconds (alternating cycle).
+        // Emit a simulated event every 4-8 seconds (staggered cycle).
         let stream = futures::stream::unfold(0u64, move |counter| {
             let users = users.clone();
-            let channels = channels.clone();
-            let typing_messages = typing_messages.clone();
+            let server_channels = server_channels.clone();
+            let dm_channels = dm_channels.clone();
+            let server_messages = server_messages.clone();
+            let dm_messages = dm_messages.clone();
             async move {
-                if users.is_empty() || channels.is_empty() || typing_messages.is_empty() {
+                if users.is_empty() || server_channels.is_empty() {
                     return None;
                 }
 
-                // Stagger timing: 4s, 6s, 8s, 5s, 7s cycle.
-                let delays = [4u64, 6, 8, 5, 7];
+                // Stagger timing: 4s, 6s, 8s, 5s, 7s, 3s cycle
+                let delays = [4u64, 6, 8, 5, 7, 3];
                 let delay_secs = delays
                     .get((counter as usize) % delays.len())
                     .copied()
@@ -237,19 +258,20 @@ impl ClientBackend for DemoClient {
                 tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
 
                 let user_idx = (counter as usize) % users.len();
-                let ch_idx = (counter as usize) % channels.len();
                 let user = users.get(user_idx)?;
-                let channel_id = (*channels.get(ch_idx)?).to_string();
 
-                let event = match counter % 4 {
-                    // Message event.
-                    0 | 2 => {
-                        let msg_idx = (counter as usize / 4) % typing_messages.len();
-                        let text = typing_messages.get(msg_idx).copied().unwrap_or("...");
+                // Rotate: server msg, typing, DM msg, server msg, presence
+                let event = match counter % 5 {
+                    // Server channel message
+                    0 | 3 => {
+                        let ch_idx = (counter as usize) % server_channels.len();
+                        let channel_id = (*server_channels.get(ch_idx)?).to_string();
+                        let msg_idx = (counter as usize / 5) % server_messages.len();
+                        let text = server_messages.get(msg_idx).copied().unwrap_or("...");
                         ClientEvent::MessageReceived {
                             channel_id,
                             message: Message {
-                                id: format!("msg-live-{counter}"),
+                                id: format!("msg-stream-{counter}"),
                                 author: user.clone(),
                                 content: MessageContent::Text(text.to_string()),
                                 timestamp: chrono::Utc::now(),
@@ -259,13 +281,38 @@ impl ClientBackend for DemoClient {
                             },
                         }
                     }
-                    // Typing event.
-                    1 => ClientEvent::TypingStarted {
-                        channel_id,
-                        user_id: user.id.clone(),
-                        timestamp: chrono::Utc::now(),
-                    },
-                    // Presence change.
+                    // Typing indicator in a server channel
+                    1 => {
+                        let ch_idx = (counter as usize) % server_channels.len();
+                        let channel_id = (*server_channels.get(ch_idx)?).to_string();
+                        ClientEvent::TypingStarted {
+                            channel_id,
+                            user_id: user.id.clone(),
+                            timestamp: chrono::Utc::now(),
+                        }
+                    }
+                    // DM channel message (simulates another user messaging you)
+                    2 => {
+                        let dm_idx = (counter as usize / 2) % dm_channels.len();
+                        let channel_id = (*dm_channels.get(dm_idx)?).to_string();
+                        let dm_user_idx = (counter as usize + 1) % users.len();
+                        let dm_user = users.get(dm_user_idx)?;
+                        let msg_idx = (counter as usize / 3) % dm_messages.len();
+                        let text = dm_messages.get(msg_idx).copied().unwrap_or("hey!");
+                        ClientEvent::MessageReceived {
+                            channel_id,
+                            message: Message {
+                                id: format!("msg-stream-dm-{counter}"),
+                                author: dm_user.clone(),
+                                content: MessageContent::Text(text.to_string()),
+                                timestamp: chrono::Utc::now(),
+                                attachments: vec![],
+                                reactions: vec![],
+                                edited: false,
+                            },
+                        }
+                    }
+                    // Presence change
                     _ => {
                         let statuses = [
                             PresenceStatus::Online,

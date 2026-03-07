@@ -548,3 +548,38 @@ the WASM plugin host:
 ```sh
 cargo test -p poly-plugin-loader-tests --all-features -- --nocapture
 ```
+
+## Session Notes — 2026-03-07
+
+### ServerBanner Rewrite (Phase 2 — UI polish)
+
+Rewrote `ServerBanner` in `channel_list.rs` to Discord-style:
+- Optional `banner_url` image at top (full-width)
+- Clickable server name button with ▾/▴ chevron toggling a dropdown  
+- Dropdown includes: Server Settings (navigates to `Route::ServerSettingsRoute`), Invite People (placeholder), Notification Settings (placeholder), Leave Server (placeholder)
+- Invite `+` icon button on the right of the header bar (placeholder)
+- Uses `.context-menu-backdrop` pattern from phase-2.10 for click-outside-close
+- CSS classes: `.server-banner-header`, `.server-name-trigger`, `.server-name-chevron`, `.server-invite-btn`, `.server-dropdown-menu`, `.server-dropdown-item`, `.server-dropdown-item-danger`
+
+### F5 URL Restoration Fix
+
+`ServerChat` and `ServerHome` components in `routes.rs` now have `use_effect` that:
+- Detects when `chat_data.current_channel/server` doesn't match the URL (F5/deep-link scenario)
+- Calls `restore_server_channel()` / `load_server_data()` from `favorites_sidebar.rs`
+- These async fns load server info, channels, messages, and members from the backend
+
+### Chat Scroll Fix
+
+`ChatView` scroll-to-bottom effect now:
+1. Reads `chat_data` signal INSIDE the closure (creates reactive dependency)
+2. Wraps scroll in `requestAnimationFrame` to ensure DOM is painted first
+
+### Demo Event Streaming
+
+- `toggle_demo` now accepts `app_state: Signal<AppState>` parameter (updated call sites in `favorites_sidebar.rs` and `mod.rs`)
+- `spawn_event_stream_listener` launched for both demo-cat and demo-dog after demo activation
+- Live presence updates and messages appear in real-time (~4-8s intervals)
+
+### Server.banner_url Field
+
+Added `banner_url: Option<String>` with `#[serde(default)]` to `Server` struct in `poly-client`. Updated bridge.rs, server-client/backend.rs, and all 7 demo Server constructors with `banner_url: None`.
