@@ -120,11 +120,18 @@ impl ChromeCdpBackend {
             // info bar under the address bar — same behaviour as Puppeteer/
             // ChromeDriver so the user always knows this window is MCP-managed.
             "--enable-automation".to_string(),
-            format!("http://127.0.0.1:{WEB_SERVER_PORT}"),
         ];
+
         if self.headless {
+            // Headless mode: no visible window
             args.insert(0, "--headless=new".to_string());
+            args.push(format!("http://127.0.0.1:{WEB_SERVER_PORT}"));
+        } else {
+            // Visible mode: ensure window is created and visible
+            args.push("--no-sandbox".to_string()); // Help with window creation
+            args.push(format!("http://127.0.0.1:{WEB_SERVER_PORT}"));
         }
+
         args
     }
 
@@ -465,12 +472,16 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
         if self.headless {
             messages.push(format!(
-                "Launched Chrome (headless) with CDP on port {CDP_PORT}"
+                "Launched Chrome (HEADLESS mode — no visible window) with CDP on port {CDP_PORT}"
             ));
         } else {
             messages.push(format!(
-                "Launched Chrome (visible window) with CDP on port {CDP_PORT}"
+                "🖥️  Launched Chromium (VISIBLE window, maximized) with CDP on port {CDP_PORT}"
             ));
+            messages.push(
+                "📍 Watch the Chromium window — you can see exactly what the MCP is doing!"
+                    .to_string(),
+            );
         }
         messages.push("Wait ~3 seconds then call connect_cdp.".to_string());
 
@@ -990,9 +1001,12 @@ async fn main() {
     let config = CliConfig::parse();
 
     if config.headless {
-        tracing::info!("Starting poly-web-devtools-mcp (headless Chrome mode)");
+        tracing::info!("🔍 Starting poly-web-devtools-mcp in HEADLESS mode (no visible window)");
+        tracing::info!("   To see a visible Chromium window: remove the --headless flag");
     } else {
-        tracing::info!("Starting poly-web-devtools-mcp (visible Chrome window)");
+        tracing::info!("🖥️  Starting poly-web-devtools-mcp with VISIBLE Chromium window");
+        tracing::info!("   → A Chromium window will launch automatically when you call launch_app");
+        tracing::info!("   → Watch it to see exactly what the MCP is doing!");
     }
 
     let backend = ChromeCdpBackend::new(config.headless);
