@@ -17,6 +17,11 @@
 
 // TODO(phase-3.3): Decide Discord implementation approach (direct API, bridge, or webview)
 
+/// WIT bindings for the WASM plugin (WASI targets only).
+/// This module isolates the `wit-bindgen` macros for FFI.
+#[cfg(target_os = "wasi")]
+mod wit_bindings;
+
 /// WASM plugin guest implementation (WASI targets only).
 #[cfg(target_os = "wasi")]
 mod guest;

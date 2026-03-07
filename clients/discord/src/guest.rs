@@ -3,15 +3,7 @@
 //! Stub implementation — all methods return "not yet implemented" errors.
 //! DECISION(D21): WASM Plugin Backends.
 
-#![allow(unsafe_code)]
-
-wit_bindgen::generate!({
-    world: "messenger-plugin",
-    path: "../../wit",
-});
-
-use exports::poly::messenger::messenger_client::Guest;
-use poly::messenger::types as wit;
+use crate::wit_bindings::{wit, Guest};
 
 struct DiscordPlugin;
 
@@ -119,4 +111,7 @@ impl Guest for DiscordPlugin {
     }
 }
 
+// EXCEPTION: unsafe_code is allowed here only because the export!() macro
+// produces unsafe FFI stubs. This is unavoidable for WIT component registration.
+#[allow(unsafe_code)]
 export!(DiscordPlugin);

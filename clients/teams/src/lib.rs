@@ -14,6 +14,11 @@
 
 // TODO(phase-3.4): Implement Teams client with Microsoft Graph API
 
+/// WIT bindings for the WASM plugin (WASI targets only).
+/// This module isolates the `wit-bindgen` macros for FFI.
+#[cfg(target_os = "wasi")]
+mod wit_bindings;
+
 /// WASM plugin guest implementation (WASI targets only).
 #[cfg(target_os = "wasi")]
 mod guest;

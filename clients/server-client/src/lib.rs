@@ -26,6 +26,11 @@
 //!
 //! The JWT is automatically included in all subsequent API requests.
 
+/// WIT bindings for the WASM plugin (WASI targets only).
+/// This module isolates the `wit-bindgen` macros for FFI.
+#[cfg(target_os = "wasi")]
+mod wit_bindings;
+
 /// WASM plugin guest implementation (WASI targets only).
 #[cfg(target_os = "wasi")]
 mod guest;

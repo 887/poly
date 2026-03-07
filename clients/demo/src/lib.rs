@@ -22,6 +22,11 @@ pub mod data;
 /// WASM plugin guest implementation.
 ///
 /// When compiled to `wasm32-wasip2`, this module exports the WIT
+/// WIT bindings for the WASM plugin (WASI targets only).
+/// This module isolates the `wit-bindgen` macros for FFI.
+#[cfg(target_os = "wasi")]
+mod wit_bindings;
+
 /// `messenger-client` interface using `wit-bindgen`.
 /// Only on WASI targets (not `wasm32-unknown-unknown` used by the web frontend).
 #[cfg(target_os = "wasi")]

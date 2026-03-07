@@ -1,34 +1,16 @@
 //! WASM Component Model guest implementation for the demo messenger plugin.
 //!
 //! This module is only compiled when targeting `wasm32` (gated in `lib.rs`).
-//! It generates WIT bindings via `wit-bindgen` and implements the
-//! `messenger-client` export interface, delegating to the `data` module
-//! for all demo content and converting `poly-client` types → WIT types.
+//! It implements the `messenger-client` export interface, delegating to the `data`
+//! module for all demo content and converting `poly-client` types → WIT types.
 //!
 //! DECISION(D21): WASM Plugin Backends.
-
-// EXCEPTION: unsafe_code is required here because wit-bindgen's generate!()
-// and export!() macros produce FFI stubs with #[export_name], unsafe fn,
-// and unsafe blocks. This is generated code for the WASM Component Model
-// ABI — there is no safe alternative. This module is only compiled on
-// wasm32-wasip2 targets (cfg-gated in lib.rs).
-#![allow(unsafe_code)]
-
-// Generate guest-side bindings from the WIT definition.
-wit_bindgen::generate!({
-    world: "messenger-plugin",
-    path: "../../wit",
-});
 
 use std::cell::RefCell;
 
 use poly_client as pc;
 
-/// Alias for the WIT-generated types in the `poly:messenger/types` interface.
-use poly::messenger::types as wit;
-
-/// Re-export the Guest trait from the messenger-client export interface.
-use exports::poly::messenger::messenger_client::Guest;
+use crate::wit_bindings::{wit, Guest};
 
 // ─── State Management ──────────────────────────────────────────────
 // WASM components are single-threaded; use thread_local + RefCell.
@@ -456,4 +438,7 @@ impl Guest for DemoPlugin {
 }
 
 // Register the component export.
+// EXCEPTION: unsafe_code is allowed here only because the export!() macro
+// produces unsafe FFI stubs. This is unavoidable for WIT component registration.
+#[allow(unsafe_code)]
 export!(DemoPlugin);
