@@ -60,10 +60,12 @@ Chrome is managed by a background watchdog task:
 launch_app { workspace: "/home/laragana/workspcacemsg" }
 ```
 
-This:
-1. Starts `dx serve --platform web --port 3000` (if not already running)
-2. Launches Chrome with `--remote-debugging-port=9222`
-3. Starts the auto-restart watchdog
+The MCP now automatically:
+- **Kills any stale `dx serve`** on port 8080 (wrong port)
+- **Kills any `dx serve --hotpatch`** (breaks WASM)
+- **Starts the correct `dx serve --platform web --port 3000`**
+- **Launches Chrome with CDP**
+- **Starts the auto-restart watchdog**
 
 Wait ~3 seconds, then:
 
@@ -251,3 +253,14 @@ attribute to source code. When `cargo cranky` reports a violation, **fix the cod
 and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
 
 See root `agents.md` § 7a for the full rationale.
+
+---
+
+## Troubleshooting
+
+See **`docs/web-devtools-setup.md`** for:
+- Common issues and fixes
+- Port reference
+- Port conflict resolution
+- When to use MCP vs manual `dx serve`
+- Full cleanup scripts

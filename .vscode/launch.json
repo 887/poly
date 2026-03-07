@@ -66,7 +66,7 @@
       "request": "launch",
       "name": "Web",
       "program": "/home/laragana/.cargo/bin/dx",
-      "args": ["serve", "--hotpatch"],
+      "args": ["serve", "--platform", "web", "--port", "3000"],
       "env": {
         "RUST_LOG": "info,poly_core=debug"
       },

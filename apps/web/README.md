@@ -15,9 +15,28 @@ Delivers `poly-core`'s UI as a WASM web application. Can be served as a static s
 
 ## Building & Serving
 
+### ⚠️ CRITICAL: Use the Web MCP for Devtools
+
+**For testing with Copilot/devtools**, use the web MCP (`poly-web-devtools-mcp`), not manual `dx serve`:
+
 ```bash
-# Development server with hot-reload
-dx serve --platform web
+# In VS Code: Run task "Serve: web (MCP)"
+# Or terminate any manual dx serve first, then:
+cargo run --bin poly-web-devtools-mcp
+```
+
+The MCP automatically manages:
+- `dx serve --platform web --port 3000` (no `--hotpatch`)
+- Chromium with remote debugging
+- Auto-restart on crash
+
+**Do NOT use `--hotpatch` for web/WASM** on Dioxus 0.7.3 — it can leave the browser stuck in a rebuild loop.
+
+### Manual Development (Optional)
+
+```bash
+# Standard hot-reload (without hotpatch, on port 3000)
+dx serve --platform web --port 3000
 
 # Production WASM bundle
 dx build --release --platform web

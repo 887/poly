@@ -602,7 +602,6 @@ pub fn ChatView() -> Element {
     let search_effect_channel = current_channel.clone();
     let search_effect_server = current_server.clone();
     let search_effect_self_user_id = self_user_id.clone();
-    let pinned_effect_channel_id = channel_id.clone();
     let search_hit_channel_id = channel_id.clone();
     let pinned_hit_channel_id = channel_id.clone();
     let search_hit_server = current_server.clone();
@@ -610,10 +609,12 @@ pub fn ChatView() -> Element {
     let pinned_hit_channel = current_channel.clone();
     let nav_for_search = nav;
     let nav_for_pinned = nav;
-    let member_effect_channel_id = channel_id.clone();
 
+    // Member list effect — reads app_state INSIDE the closure so Dioxus tracks
+    // nav.selected_channel as a reactive dependency and re-runs on every channel switch.
     use_effect(move || {
-        let Some(active_channel_id) = member_effect_channel_id.clone() else {
+        let active_channel_id = app_state.read().nav.selected_channel.clone();
+        let Some(active_channel_id) = active_channel_id else {
             chat_data.write().members = Vec::new();
             chat_data.write().active_group_members = Vec::new();
             return;
@@ -706,7 +707,9 @@ pub fn ChatView() -> Element {
         if *utility_panel.read() != Some(ChatUtilityPanel::Pinned) {
             return;
         }
-        let Some(target_channel_id) = pinned_effect_channel_id.clone() else {
+        // Read selected_channel from app_state inside the closure so that this effect
+        // re-runs whenever the channel changes (Dioxus tracks signal reads inside effects).
+        let Some(target_channel_id) = app_state.read().nav.selected_channel.clone() else {
             pinned_messages.set(Vec::new());
             return;
         };
@@ -1016,10 +1019,10 @@ pub fn ChatView() -> Element {
                             spawn(async move {
                                 let mut eval = document::eval(
                                     r#"
-                                                                                                    let el = document.getElementById('message-list-scroll');
-                                                                                                    if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                                                    else { dioxus.send(false); }
-                                                                                                "#,
+                                                                                                                        let el = document.getElementById('message-list-scroll');
+                                                                                                                        if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                                                        else { dioxus.send(false); }
+                                                                                                                    "#,
                                 );
                                 if let Ok(near_top) = eval.recv::<bool>().await && near_top {
                                     tracing::trace!("Scroll near top — would load more messages");
@@ -1321,9 +1324,9 @@ pub fn ChatView() -> Element {
                                         onclick: move |_| {
                                             document::eval(
                                                 r#"
-                                                                                                                                                                let input = document.getElementById('poly-file-input');
-                                                                                                                                                                if (input) { input.click(); }
-                                                                                                                                                            "#,
+                                                                                                                                                                                                    let input = document.getElementById('poly-file-input');
+                                                                                                                                                                                                    if (input) { input.click(); }
+                                                                                                                                                                                                "#,
                                             );
                                         },
                                         "➕"

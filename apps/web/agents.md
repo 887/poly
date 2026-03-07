@@ -1,31 +1,56 @@
 # Web — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Last Updated:** 2026-03-07
 
 ## Purpose
 
-Web entry point for Poly. Uses **Dioxus fullstack** — WASM frontend + Axum backend, all in one binary.
+Web entry point for Poly. Uses **Dioxus** compiled to WebAssembly (WASM).
 
 ## How It Works
 
-- `main.rs` initializes Dioxus fullstack and mounts `poly_core::App`
-- Frontend compiles to WASM, served by Axum
-- Can use Dioxus server functions for any server-side operations
+- `main.rs` initializes Dioxus web and mounts `poly_core::App`
+- Frontend compiles to WASM via `wasm-bindgen`, served by Axum dev server
 - All shared logic lives in `poly-core`
-- SurrealDB in web target: may need `kv-mem` or IndexedDB adapter instead of SurrealKV (investigate)
+- SurrealDB uses SurrealKV with IndexedDB backend for browser-side persistence
 
-## Development
+## Development & Testing
 
-```bash
-dx serve --platform web  # Run fullstack with hot-reload
-```
-
-## Build
+### ✅ Recommended: Use the Web MCP
 
 ```bash
-dx build --release --platform web  # Production build (WASM + server binary)
+# VS Code: Run task "Serve: web (MCP + Chromium)"
+# Or:
+cargo run --bin poly-web-devtools-mcp
 ```
+
+The MCP automatically manages:
+- `dx serve --platform web --port 3000` (no `--hotpatch`)
+- Chromium with remote debugging (CDP port 9222)
+- Auto-restart on crash
+- Stale process cleanup
+
+### ⚠️ Manual Development (If Needed)
+
+**Do NOT use `--hotpatch`** — Dioxus 0.7.3 WASM support is incomplete.
+
+```bash
+# Standard hot-reload (correct)
+dx serve --platform web --port 3000
+
+# Wrong — breaks the rebuild system
+dx serve --hotpatch  # DO NOT USE FOR WEB
+```
+
+## Troubleshooting
+
+Common issues?  See `docs/web-devtools-setup.md` for:
+- Browser stuck on "Your app is being rebuilt" → kill hotpatch
+- Chrome CDP connection failures
+- Port conflicts (3000, 8080, 9222)
+- Stale process cleanup
+
+Run: `./scripts/web-cleanup.sh` if stuck
 
 ## Configuration
 

@@ -154,10 +154,18 @@
       }
     },
     {
-      "label": "Serve: web (hot-reload)",
+      "label": "Serve: web (MCP + Chromium)",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--manifest-path", "${workspaceFolder}/Cargo.toml"],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Serve: web (manual - NOT recommended)",
       "type": "shell",
       "command": "dx",
-      "args": ["serve", "--hotpatch"],
+      "args": ["serve", "--platform", "web", "--port", "3000"],
       "options": { "cwd": "${workspaceFolder}/apps/web" },
       "isBackground": true,
       "problemMatcher": {

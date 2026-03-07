@@ -864,10 +864,14 @@ body {
 .chat-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     padding: 12px 16px;
+    gap: 12px;
     border-bottom: 1px solid var(--border-primary);
     background-color: var(--bg-primary);
+    position: relative;
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 
 .chat-channel-name {
@@ -1228,12 +1232,11 @@ body {
     line-height: 1;
 }
 
-/* DM User / Group Member sidebar */
+/* DM User / Group Member sidebar — now lives inside .chat-side-column (320px), fills it */
 .dm-user-sidebar {
-    width: 240px;
-    flex-shrink: 0;
+    flex: 1;
+    min-height: 0;
     background-color: var(--bg-secondary);
-    border-left: 1px solid var(--border-primary);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1552,8 +1555,8 @@ body {
  * =========================== */
 
 .user-sidebar {
-    width: 100%;
-    min-width: 0;
+    flex: 1;
+    min-height: 0;
     background-color: var(--bg-secondary);
     padding: 16px;
     overflow-y: auto;
@@ -1561,8 +1564,8 @@ body {
 
 /* DM contact info panel (right rail for 1:1 DMs) */
 .dm-contact-panel {
-    width: 100%;
-    min-width: 0;
+    flex: 1;
+    min-height: 0;
     background-color: var(--bg-secondary);
     padding: 16px;
     overflow-y: auto;
@@ -5288,20 +5291,16 @@ select {
     background: color-mix(in srgb, var(--bg-secondary) 96%, black);
     min-height: 0;
     display: flex;
-}
-
-.chat-header {
-    position: relative;
-    gap: 12px;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .chat-header-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     margin-left: auto;
-    justify-content: flex-end;
-    min-width: 0;
+    flex-shrink: 0;
 }
 
 .chat-header-actions {
@@ -5309,10 +5308,6 @@ select {
     gap: 4px;
     align-items: center;
     flex-shrink: 0;
-    padding-right: 0;
-    margin-right: 0;
-    position: relative;
-    z-index: 5;
 }
 
 .header-btn.active {
@@ -5323,8 +5318,7 @@ select {
 .chat-header-search-inline {
     position: relative;
     width: min(280px, 32vw);
-    min-width: 220px;
-    margin-left: auto;
+    min-width: 160px;
     height: 34px;
     display: flex;
     align-items: center;
@@ -5333,7 +5327,6 @@ select {
     border-radius: 8px;
     background: color-mix(in srgb, var(--bg-secondary) 92%, black);
     border: 1px solid var(--border-primary);
-    z-index: 4;
 }
 
 .chat-header-search-icon {
@@ -5394,15 +5387,12 @@ select {
 }
 
 .chat-utility-rail {
-    position: static;
-    inset: auto;
-    width: 100%;
+    flex: 1;
+    min-height: 0;
     background: color-mix(in srgb, var(--bg-secondary) 97%, black);
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    z-index: 9;
-    box-shadow: none;
+    overflow: hidden;
 }
 
 .chat-utility-header {

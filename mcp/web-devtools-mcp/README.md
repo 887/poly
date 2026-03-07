@@ -18,8 +18,13 @@ poly-web-devtools-mcp  ← this crate
 Chromium (--remote-debugging-port=9222)
         │  loads
         ▼
-Poly web app  (dx serve, localhost:8080)
+Poly web app  (dx serve, localhost:3000)
 ```
+
+> **Important:** the web dev server must run on **port 3000** with
+> `dx serve --platform web --port 3000`.
+> Do **not** use `--hotpatch` for web/WASM on Dioxus 0.7.3 — it can leave the
+> browser stuck showing the rebuild toast.
 
 ## MCP Tools Exposed
 
@@ -54,7 +59,7 @@ Configured in `.vscode/mcp.json` so Copilot loads it automatically when the work
 
 - Uses `tokio-tungstenite` for the CDP WebSocket connection
 - Chrome crashes / exits are detected and automatically restart + reconnect
-- Both `dx serve` (port 8080) and Chromium (CDP port 9222) must be running for tools to work
+- Both `dx serve` (port 3000) and Chromium (CDP port 9222) must be running for tools to work
 
 ## License
 

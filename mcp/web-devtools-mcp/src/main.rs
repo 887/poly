@@ -389,7 +389,21 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // Brief wait for Chrome to fully exit and release the CDP port
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
 
-        // ── Step 1: Start dx serve (if not already running) ──
+        // ── Step 1: Clean up any stale dx serve (wrong port or hotpatch mode) ──
+        // Kill any dx serve on port 8080 (wrong port) — we need 3000
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", "dx serve.*port.*8080"])
+            .status()
+            .await;
+        // Kill any dx serve with hotpatch (wrong mode) — breaks WASM
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", "dx serve.*hotpatch"])
+            .status()
+            .await;
+
+        messages.push("Ensuring no stale/broken dx serve is running...".to_string());
+
+        // ── Step 2: Start dx serve (if not already running) ──
         // NOTE: --hotpatch is intentionally NOT used for web/WASM — it is
         // experimental and causes WASM to get stuck in an infinite rebuild
         // loop (initial build finishes, then dx serve triggers a second
@@ -445,7 +459,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
             ));
         }
 
-        // ── Step 2: Spawn one fresh Chrome ──
+        // ── Step 3: Spawn one fresh Chrome ──
         self.shutting_down.store(false, Ordering::Relaxed);
         self.spawn_chrome_with_watchdog().await?;
 
