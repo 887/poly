@@ -10,7 +10,7 @@
  * The build output lands in apps/desktop-electron/dist/index.html.
  */
 
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
@@ -24,11 +24,15 @@ const WINDOW_OPTIONS = {
   minWidth: 800,
   minHeight: 600,
   title: 'Poly',
+  frame: false,
+  titleBarStyle: 'hidden',
+  titleBarOverlay: false,
+  autoHideMenuBar: true,
   webPreferences: {
     preload: path.join(__dirname, 'preload.js'),
     contextIsolation: true,
     nodeIntegration: false,
-    sandbox: true,
+    sandbox: false,
   },
   // Use system default background to avoid white flash on first paint.
   backgroundColor: '#1a1a1a',
@@ -37,6 +41,17 @@ const WINDOW_OPTIONS = {
 
 /** @type {http.Server | null} */
 let assetServer = null;
+
+function sendWindowState(win) {
+  if (win.isDestroyed()) {
+    return;
+  }
+
+  win.webContents.send('poly-window-state', {
+    isMaximized: win.isMaximized(),
+    isFullScreen: win.isFullScreen(),
+  });
+}
 
 function contentTypeFor(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -124,7 +139,14 @@ async function createWindow() {
   const win = new BrowserWindow(WINDOW_OPTIONS);
 
   // Show only after the first paint — avoids white-flash on cold start.
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.show();
+    sendWindowState(win);
+  });
+  win.on('maximize', () => sendWindowState(win));
+  win.on('unmaximize', () => sendWindowState(win));
+  win.on('enter-full-screen', () => sendWindowState(win));
+  win.on('leave-full-screen', () => sendWindowState(win));
 
   // Load the local WASM web-app bundle. Path relative to THIS file (electron/).
   let webRoot;
@@ -162,7 +184,47 @@ async function createWindow() {
   });
 }
 
+ipcMain.on('poly-window-minimize', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize();
+});
+
+ipcMain.on('poly-window-toggle-maximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) {
+    return;
+  }
+
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+});
+
+ipcMain.on('poly-window-close', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.close();
+});
+
+ipcMain.handle('poly-window-state', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) {
+    return { isMaximized: false, isFullScreen: false };
+  }
+
+  return {
+    isMaximized: win.isMaximized(),
+    isFullScreen: win.isFullScreen(),
+  };
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
+
+if (process.env.POLY_ELECTRON_REMOTE_DEBUGGING_PORT) {
+  app.commandLine.appendSwitch(
+    'remote-debugging-port',
+    process.env.POLY_ELECTRON_REMOTE_DEBUGGING_PORT,
+  );
+}
 
 app.whenReady().then(() => {
   // Remove the default menu for a cleaner UI.  Platform-specific menus

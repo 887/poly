@@ -118,6 +118,41 @@ fn to_wit_reaction(r: &pc::Reaction) -> wit::Reaction {
     }
 }
 
+fn to_wit_message_reply_preview(r: &pc::MessageReplyPreview) -> wit::MessageReplyPreview {
+    wit::MessageReplyPreview {
+        message_id: r.message_id.clone(),
+        author_id: r.author_id.clone(),
+        author_display_name: r.author_display_name.clone(),
+        author_avatar_url: r.author_avatar_url.clone(),
+        snippet: r.snippet.clone(),
+    }
+}
+
+fn to_wit_custom_emoji(e: pc::CustomEmoji) -> wit::CustomEmoji {
+    wit::CustomEmoji {
+        id: e.id,
+        shortcode: e.shortcode,
+        image_url: e.image_url,
+        unicode_fallback: e.unicode_fallback,
+        animated: e.animated,
+        server_id: e.server_id,
+        source_name: e.source_name,
+    }
+}
+
+fn to_wit_sticker_item(s: pc::StickerItem) -> wit::StickerItem {
+    wit::StickerItem {
+        id: s.id,
+        name: s.name,
+        image_url: s.image_url,
+        pack_name: s.pack_name,
+        description: s.description,
+        server_id: s.server_id,
+        source_name: s.source_name,
+        format: s.format,
+    }
+}
+
 fn to_wit_message_content(mc: pc::MessageContent) -> wit::MessageContent {
     match mc {
         pc::MessageContent::Text(text) => wit::MessageContent::Text(text),
@@ -138,6 +173,7 @@ fn to_wit_message(m: pc::Message) -> wit::Message {
         timestamp: m.timestamp.to_rfc3339(),
         attachments: m.attachments.iter().map(to_wit_attachment).collect(),
         reactions: m.reactions.iter().map(to_wit_reaction).collect(),
+        reply_to: m.reply_to.as_ref().map(to_wit_message_reply_preview),
         edited: m.edited,
     }
 }
@@ -364,6 +400,17 @@ impl Guest for DemoPlugin {
         Ok(to_wit_message(msg))
     }
 
+    fn send_reply_message(
+        channel_id: String,
+        reply_to_message_id: String,
+        content: wit::MessageContent,
+    ) -> Result<wit::Message, wit::ClientError> {
+        let pc_content = from_wit_message_content(content);
+        let msg =
+            crate::data::demo_sent_reply_message(&channel_id, &reply_to_message_id, pc_content);
+        Ok(to_wit_message(msg))
+    }
+
     fn get_messages(
         channel_id: String,
         query: wit::MessageQuery,
@@ -384,6 +431,22 @@ impl Guest for DemoPlugin {
         Ok(crate::data::demo_pinned_messages(&channel_id)
             .into_iter()
             .map(to_wit_message)
+            .collect())
+    }
+
+    fn get_available_emojis(channel_id: String) -> Result<Vec<wit::CustomEmoji>, wit::ClientError> {
+        Ok(crate::data::demo_available_emojis(&channel_id)
+            .into_iter()
+            .map(to_wit_custom_emoji)
+            .collect())
+    }
+
+    fn get_available_stickers(
+        channel_id: String,
+    ) -> Result<Vec<wit::StickerItem>, wit::ClientError> {
+        Ok(crate::data::demo_available_stickers(&channel_id)
+            .into_iter()
+            .map(to_wit_sticker_item)
             .collect())
     }
 

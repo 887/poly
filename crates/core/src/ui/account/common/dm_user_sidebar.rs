@@ -40,7 +40,11 @@ pub fn DmUserSidebar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
-    let members = chat_data.read().active_group_members.clone();
+    let members = if chat_data.read().members.is_empty() {
+        chat_data.read().active_group_members.clone()
+    } else {
+        chat_data.read().members.clone()
+    };
     let group_id = app_state.read().nav.selected_channel.clone();
     let active_account_id = app_state.read().nav.active_account_id.clone();
     let member_count = members.len();
@@ -156,5 +160,6 @@ async fn remove_member(
             .write()
             .active_group_members
             .retain(|m| m.id != user_id);
+        chat_data.write().members.retain(|m| m.id != user_id);
     }
 }

@@ -3,6 +3,9 @@
 
 # Application
 app-title = Poly
+electron-window-minimize = Minimize
+electron-window-maximize = Maximize or restore
+electron-window-close = Close window
 app-description = Multi-platform messenger client
 
 # Navigation
@@ -84,6 +87,16 @@ settings-your-id = Your Account ID
 settings-export-recovery = Export Recovery Phrase
 settings-theme = Theme
 settings-theme-description = Customize colors, themes, and appearance
+settings-media = Media
+settings-media-description = Configure GIF providers and future rich media integrations
+settings-media-active-provider = Active GIF Provider
+settings-media-api-key = API Key
+settings-media-api-key-placeholder = Paste provider API key
+settings-media-provider-klippy = Klippy
+settings-media-provider-giphy = Giphy
+settings-media-provider-imgur = Imgur
+settings-media-status-configured = Configured
+settings-media-status-not-setup = Not setup
 settings-theme-preset = Theme Preset
 settings-theme-custom-css = Custom CSS
 settings-theme-import = Import Theme
@@ -191,6 +204,7 @@ action-cancel = Cancel
 action-delete = Delete
 action-edit = Edit
 action-close = Close
+chat-replying-to = Replying to { $name }
 action-search = Search
 action-copy = Copy
 action-back = Back

@@ -543,6 +543,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
                     "Welcome to the Open Source Hub! 🎉 Check out our pinned projects.".to_string(),
                 ),
                 timestamp: now - Duration::hours(3),
+                reply_to: None,
                 edited: false,
                 reactions: vec![],
                 attachments: vec![],
@@ -555,6 +556,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
                         .to_string(),
                 ),
                 timestamp: now - Duration::hours(1),
+                reply_to: None,
                 edited: false,
                 reactions: vec![],
                 attachments: vec![],
@@ -567,6 +569,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
                 "Finished chapter 12 — what does everyone think about the plot twist?".to_string(),
             ),
             timestamp: now - Duration::hours(5),
+            reply_to: None,
             edited: false,
             reactions: vec![Reaction {
                 emoji: "📚".to_string(),
@@ -580,6 +583,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
             author: users[6].clone(),
             content: MessageContent::Text("5K run this morning! 💪 New personal best.".to_string()),
             timestamp: now - Duration::hours(2),
+            reply_to: None,
             edited: false,
             reactions: vec![Reaction {
                 emoji: "🔥".to_string(),
@@ -740,7 +744,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "👋".to_string(), count: 5, me: true },
                     Reaction { emoji: "🎉".to_string(), count: 3, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-general-1".to_string(),
@@ -752,7 +757,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(2) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "❤️".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-general-2".to_string(),
@@ -764,7 +770,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(2) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🔥".to_string(), count: 4, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             // Same author within 7 minutes — should be grouped
             Message {
@@ -777,7 +784,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(2) - Duration::minutes(42),
                 attachments: vec![],
                 reactions: vec![],
-                edited: true,
+                reply_to: None,
+        edited: true,
             },
             // — Day 2: Yesterday —
             Message {
@@ -801,7 +809,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "😍".to_string(), count: 3, me: false },
                     Reaction { emoji: "👍".to_string(), count: 2, me: true },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-general-5".to_string(),
@@ -821,7 +830,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     },
                 ],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-general-6".to_string(),
@@ -833,7 +843,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(2),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-general-7".to_string(),
@@ -845,7 +856,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(1) - Duration::minutes(55),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             // — Today —
             Message {
@@ -858,7 +870,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(2),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-general-9".to_string(),
@@ -870,7 +883,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(1) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙏".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             // Same author, within 7 min — grouped
             Message {
@@ -890,7 +904,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     },
                 ],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch-off-topic" => vec![
@@ -914,7 +929,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "😍".to_string(), count: 4, me: true },
                     Reaction { emoji: "📸".to_string(), count: 2, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-off-topic-1".to_string(),
@@ -926,7 +942,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(7) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-off-topic-2".to_string(),
@@ -938,7 +955,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(7) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🇩🇪".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch-minecraft" => vec![
@@ -951,7 +969,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙋".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-minecraft-1".to_string(),
@@ -960,7 +979,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-minecraft-2".to_string(),
@@ -969,7 +989,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(40),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-minecraft-3".to_string(),
@@ -992,7 +1013,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "🤯".to_string(), count: 5, me: true },
                     Reaction { emoji: "❤️".to_string(), count: 2, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-ch-minecraft-4".to_string(),
@@ -1004,7 +1026,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         _ => vec![
@@ -1017,7 +1040,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: format!("msg-{channel_id}-1"),
@@ -1028,7 +1052,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: format!("msg-{channel_id}-2"),
@@ -1039,7 +1064,8 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(1),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "😊".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
     }
@@ -1062,8 +1088,44 @@ pub fn demo_sent_message(_channel_id: &str, content: MessageContent) -> Message 
         timestamp: Utc::now(),
         attachments,
         reactions: vec![],
+        reply_to: None,
         edited: false,
     }
+}
+
+/// Generate a demo sent reply message.
+pub fn demo_sent_reply_message(
+    channel_id: &str,
+    reply_to_message_id: &str,
+    content: MessageContent,
+) -> Message {
+    let mut sent = demo_sent_message(channel_id, content);
+    let preview = demo_messages_query(
+        channel_id,
+        &MessageQuery {
+            before: None,
+            after: None,
+            around: None,
+            limit: Some(100),
+        },
+    )
+    .into_iter()
+    .find(|m| m.id == reply_to_message_id)
+    .map(|msg| MessageReplyPreview {
+        message_id: msg.id,
+        author_id: msg.author.id,
+        author_display_name: msg.author.display_name,
+        author_avatar_url: msg.author.avatar_url,
+        snippet: match msg.content {
+            MessageContent::Text(text) => text,
+            MessageContent::WithAttachments { text, .. } => text,
+        }
+        .chars()
+        .take(80)
+        .collect(),
+    });
+    sent.reply_to = preview;
+    sent
 }
 
 /// Generate demo group chats.
@@ -1081,6 +1143,7 @@ pub fn demo_groups() -> Vec<Group> {
                 timestamp: Utc::now() - Duration::hours(1),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -1097,6 +1160,7 @@ pub fn demo_groups() -> Vec<Group> {
                 timestamp: Utc::now() - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -1131,7 +1195,8 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
                     timestamp: now - Duration::hours(i as i64 * 2),
                     attachments: vec![],
                     reactions: vec![],
-                    edited: false,
+                    reply_to: None,
+        edited: false,
                 }),
                 unread_count: if i < 2 { 1 } else { 0 },
                 backend: BackendType::Demo,
@@ -1165,6 +1230,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             timestamp: now - Duration::hours(1),
             attachments: vec![],
             reactions: vec![],
+            reply_to: None,
             edited: false,
         }),
         unread_count: 1,
@@ -1354,7 +1420,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👀".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-alice-1".to_string(),
@@ -1365,7 +1432,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(4) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-alice-2".to_string(),
@@ -1376,7 +1444,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(4) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-alice-3".to_string(),
@@ -1387,7 +1456,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-alice-4".to_string(),
@@ -1396,7 +1466,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(2),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -1411,7 +1482,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(8),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-bob-1".to_string(),
@@ -1422,7 +1494,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(7) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-bob-2".to_string(),
@@ -1433,7 +1506,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(7) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙌".to_string(), count: 1, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-bob-3".to_string(),
@@ -1442,7 +1516,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-bob-4".to_string(),
@@ -1453,7 +1528,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -1468,7 +1544,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-charlie-1".to_string(),
@@ -1479,7 +1556,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(55),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-charlie-2".to_string(),
@@ -1490,7 +1568,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(40),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-charlie-3".to_string(),
@@ -1501,7 +1580,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(20),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙏".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-charlie-4".to_string(),
@@ -1512,7 +1592,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🦀".to_string(), count: 2, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -1535,7 +1616,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     },
                 ],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-diana-1".to_string(),
@@ -1546,7 +1628,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(9) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-diana-2".to_string(),
@@ -1557,7 +1640,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(9) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "✨".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-diana-3".to_string(),
@@ -1568,7 +1652,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(8),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -1583,7 +1668,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-eve-1".to_string(),
@@ -1592,7 +1678,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-eve-2".to_string(),
@@ -1603,7 +1690,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👌".to_string(), count: 1, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-eve-3".to_string(),
@@ -1614,7 +1702,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-eve-4".to_string(),
@@ -1623,7 +1712,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -1639,7 +1729,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-cat-dog-1".to_string(),
@@ -1657,7 +1748,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-cat-dog-2".to_string(),
@@ -1669,7 +1761,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-cat-dog-3".to_string(),
@@ -1687,7 +1780,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-cat-dog-4".to_string(),
@@ -1699,7 +1793,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-cat-dog-5".to_string(),
@@ -1717,7 +1812,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💀".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-cat-dog-6".to_string(),
@@ -1729,7 +1825,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-cat-dog-7".to_string(),
@@ -1747,7 +1844,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(1),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -1763,7 +1861,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-dog-cat-1".to_string(),
@@ -1775,7 +1874,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-dog-cat-2".to_string(),
@@ -1787,7 +1887,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-dog-cat-3".to_string(),
@@ -1799,7 +1900,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-dog-cat-4".to_string(),
@@ -1811,7 +1913,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-dog-cat-5".to_string(),
@@ -1823,7 +1926,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💀".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-dog-cat-6".to_string(),
@@ -1835,7 +1939,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "dm-dog-cat-7".to_string(),
@@ -1847,7 +1952,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(1),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -1860,7 +1966,8 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
     }
@@ -1889,6 +1996,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 timestamp: now - Duration::hours(1),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -1905,6 +2013,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -1921,6 +2030,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -1942,6 +2052,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 timestamp: now - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -1967,6 +2078,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 timestamp: now - Duration::hours(2),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -1985,6 +2097,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 timestamp: now - Duration::hours(7),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -2001,6 +2114,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             backend: BackendType::Demo,
@@ -2029,7 +2143,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🦀".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-rust-1".to_string(),
@@ -2040,7 +2155,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(3) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-rust-2".to_string(),
@@ -2054,7 +2170,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                     Reaction { emoji: "📖".to_string(), count: 2, me: false },
                     Reaction { emoji: "🔖".to_string(), count: 1, me: true },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-rust-3".to_string(),
@@ -2065,7 +2182,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-rust-4".to_string(),
@@ -2076,7 +2194,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(1),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -2092,7 +2211,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reactions: vec![
                     Reaction { emoji: "🙋".to_string(), count: 2, me: true },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-ww-1".to_string(),
@@ -2101,7 +2221,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-ww-2".to_string(),
@@ -2112,7 +2233,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙌".to_string(), count: 3, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-ww-3".to_string(),
@@ -2121,7 +2243,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 2, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-ww-4".to_string(),
@@ -2130,7 +2253,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -2144,7 +2268,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-mj-1".to_string(),
@@ -2155,7 +2280,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(2) - Duration::minutes(55),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🎶".to_string(), count: 2, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-mj-2".to_string(),
@@ -2166,7 +2292,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(8),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-mj-3".to_string(),
@@ -2175,7 +2302,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🎵".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -2192,7 +2320,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                     Reaction { emoji: "🎉".to_string(), count: 4, me: true },
                     Reaction { emoji: "🚀".to_string(), count: 2, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-tp-1".to_string(),
@@ -2203,7 +2332,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(7) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-tp-2".to_string(),
@@ -2214,7 +2344,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-tp-3".to_string(),
@@ -2225,7 +2356,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp-tp-4".to_string(),
@@ -2236,7 +2368,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -2251,7 +2384,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🔥".to_string(), count: 3, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp2-oss-1".to_string(),
@@ -2262,7 +2396,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(4) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp2-oss-2".to_string(),
@@ -2273,7 +2408,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(2),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👀".to_string(), count: 1, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -2287,7 +2423,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "😭".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp2-bw-1".to_string(),
@@ -2298,7 +2435,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(7),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👀".to_string(), count: 1, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp2-bw-2".to_string(),
@@ -2309,7 +2447,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "😱".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -2334,7 +2473,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                     Reaction { emoji: "😍".to_string(), count: 2, me: true },
                     Reaction { emoji: "🍱".to_string(), count: 1, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp2-mp-1".to_string(),
@@ -2345,7 +2485,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(11) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "grp2-mp-2".to_string(),
@@ -2356,7 +2497,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💪".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
 
@@ -2371,7 +2513,8 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
     }
@@ -2398,7 +2541,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🎉".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-contrib-1".to_string(),
@@ -2409,7 +2553,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-contrib-2".to_string(),
@@ -2420,7 +2565,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👀".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch2-recommendations" => vec![
@@ -2433,7 +2579,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(3) - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "📚".to_string(), count: 4, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-rec-1".to_string(),
@@ -2444,7 +2591,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🚀".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-rec-2".to_string(),
@@ -2455,7 +2603,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(8),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "⏳".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch2-recipes" => vec![
@@ -2479,7 +2628,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "😍".to_string(), count: 5, me: true },
                     Reaction { emoji: "🍝".to_string(), count: 3, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-recipes-1".to_string(),
@@ -2490,7 +2640,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(5) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-recipes-2".to_string(),
@@ -2501,7 +2652,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "😭".to_string(), count: 1, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-recipes-3".to_string(),
@@ -2512,7 +2664,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙏".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch2-techniques" => vec![
@@ -2525,7 +2678,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(8),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🐟".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-tech-1".to_string(),
@@ -2536,7 +2690,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(7) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-tech-2".to_string(),
@@ -2547,7 +2702,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🥩".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch2-nutrition" => vec![
@@ -2560,7 +2716,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💪".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-nutr-1".to_string(),
@@ -2571,7 +2728,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-nutr-2".to_string(),
@@ -2582,7 +2740,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🍽️".to_string(), count: 1, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-nutr-3".to_string(),
@@ -2593,7 +2752,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(2) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch2-workouts" => vec![
@@ -2609,7 +2769,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "🔥".to_string(), count: 6, me: false },
                     Reaction { emoji: "🏃".to_string(), count: 3, me: true },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-wk-1".to_string(),
@@ -2618,7 +2779,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(6) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-wk-2".to_string(),
@@ -2629,7 +2791,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(6) - Duration::minutes(30),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg2-wk-3".to_string(),
@@ -2643,7 +2806,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "💪".to_string(), count: 4, me: true },
                     Reaction { emoji: "😤".to_string(), count: 2, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch-rust" => vec![
@@ -2656,7 +2820,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-rust-1".to_string(),
@@ -2667,7 +2832,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(55),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🦀".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-rust-2".to_string(),
@@ -2678,7 +2844,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-rust-3".to_string(),
@@ -2689,7 +2856,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(6),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-rust-4".to_string(),
@@ -2700,7 +2868,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(5) - Duration::minutes(45),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch-dioxus" => vec![
@@ -2715,7 +2884,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reactions: vec![
                     Reaction { emoji: "🤯".to_string(), count: 4, me: true },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-dioxus-1".to_string(),
@@ -2726,7 +2896,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(6) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-dioxus-2".to_string(),
@@ -2737,7 +2908,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "✏️".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-dioxus-3".to_string(),
@@ -2748,7 +2920,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💯".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch-production" => vec![
@@ -2772,7 +2945,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "🎹".to_string(), count: 4, me: true },
                     Reaction { emoji: "🔥".to_string(), count: 2, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-prod-1".to_string(),
@@ -2783,7 +2957,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(2) - Duration::hours(5) - Duration::minutes(50),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-prod-2".to_string(),
@@ -2794,7 +2969,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(8),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👀".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-prod-3".to_string(),
@@ -2805,7 +2981,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🎵".to_string(), count: 3, me: true }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         "ch-valorant" => vec![
@@ -2819,7 +2996,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                     Reaction { emoji: "💎".to_string(), count: 5, me: true },
                     Reaction { emoji: "🎉".to_string(), count: 3, me: false },
                 ],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-valorant-1".to_string(),
@@ -2830,7 +3008,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(55),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-valorant-2".to_string(),
@@ -2841,7 +3020,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(40),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🧠".to_string(), count: 2, me: false }],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
             Message {
                 id: "msg-valorant-3".to_string(),
@@ -2852,7 +3032,8 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
                 reactions: vec![],
-                edited: false,
+                reply_to: None,
+        edited: false,
             },
         ],
         _ => vec![],
@@ -3228,6 +3409,83 @@ pub fn demo_channel_commands(channel_id: &str) -> Vec<ChatCommand> {
             is_builtin: false,
             usage: Some("<search terms>".to_string()),
             scope: CommandScope::Global,
+        },
+    ]
+}
+
+/// Demo custom emoji catalog for a channel.
+pub fn demo_available_emojis(channel_id: &str) -> Vec<CustomEmoji> {
+    let source_name = if channel_id.starts_with("ch-") {
+        Some("Poly Dev".to_string())
+    } else {
+        Some("Shared".to_string())
+    };
+
+    vec![
+        CustomEmoji {
+            id: "emoji-poly-wave".to_string(),
+            shortcode: "poly_wave".to_string(),
+            image_url: Some(
+                "https://dummyimage.com/64x64/7c5cff/ffffff.png&text=%F0%9F%91%8B".to_string(),
+            ),
+            unicode_fallback: Some("👋".to_string()),
+            animated: false,
+            server_id: Some("srv-poly-dev".to_string()),
+            source_name: source_name.clone(),
+        },
+        CustomEmoji {
+            id: "emoji-rustacean-hype".to_string(),
+            shortcode: "rust_hype".to_string(),
+            image_url: Some(
+                "https://dummyimage.com/64x64/f97316/ffffff.png&text=%F0%9F%A6%80".to_string(),
+            ),
+            unicode_fallback: Some("🦀".to_string()),
+            animated: false,
+            server_id: Some("srv-poly-dev".to_string()),
+            source_name: Some("Poly Dev".to_string()),
+        },
+        CustomEmoji {
+            id: "emoji-catjam".to_string(),
+            shortcode: "catjam".to_string(),
+            image_url: Some(
+                "https://dummyimage.com/64x64/ec4899/ffffff.gif&text=%F0%9F%90%B1".to_string(),
+            ),
+            unicode_fallback: Some("🐱".to_string()),
+            animated: true,
+            server_id: Some("srv-gaming-lounge".to_string()),
+            source_name: Some("Gaming Lounge".to_string()),
+        },
+    ]
+}
+
+/// Demo sticker catalog for a channel.
+pub fn demo_available_stickers(channel_id: &str) -> Vec<StickerItem> {
+    let source_name = if channel_id.starts_with("ch-") {
+        Some("Poly Dev".to_string())
+    } else {
+        Some("Shared".to_string())
+    };
+
+    vec![
+        StickerItem {
+            id: "sticker-hype-cat".to_string(),
+            name: "Hype Cat".to_string(),
+            image_url: "https://dummyimage.com/320x320/111827/ffffff.png&text=Hype+Cat".to_string(),
+            pack_name: Some("Larar Pack".to_string()),
+            description: Some("Party sticker for celebrating wins".to_string()),
+            server_id: Some("srv-poly-dev".to_string()),
+            source_name: source_name.clone(),
+            format: "png".to_string(),
+        },
+        StickerItem {
+            id: "sticker-sup-dog".to_string(),
+            name: "Sup?".to_string(),
+            image_url: "https://dummyimage.com/320x320/1f2937/ffffff.png&text=Sup%3F".to_string(),
+            pack_name: Some("Dog Pack".to_string()),
+            description: Some("Casual hello sticker".to_string()),
+            server_id: Some("srv-gaming-lounge".to_string()),
+            source_name: Some("Gaming Lounge".to_string()),
+            format: "png".to_string(),
         },
     ]
 }

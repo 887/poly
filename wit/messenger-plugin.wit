@@ -104,11 +104,43 @@ interface types {
         size: u64,
     }
 
+    /// Lightweight preview metadata for a replied-to message.
+    record message-reply-preview {
+        message-id: string,
+        author-id: string,
+        author-display-name: string,
+        author-avatar-url: option<string>,
+        snippet: string,
+    }
+
     /// A reaction on a message.
     record reaction {
         emoji: string,
         count: u32,
         me: bool,
+    }
+
+    /// A custom emoji available to the active channel/account.
+    record custom-emoji {
+        id: string,
+        shortcode: string,
+        image-url: option<string>,
+        unicode-fallback: option<string>,
+        animated: bool,
+        server-id: option<string>,
+        source-name: option<string>,
+    }
+
+    /// A sticker available to the active channel/account.
+    record sticker-item {
+        id: string,
+        name: string,
+        image-url: string,
+        pack-name: option<string>,
+        description: option<string>,
+        server-id: option<string>,
+        source-name: option<string>,
+        format: string,
     }
 
     /// Content that can be sent in a message.
@@ -132,6 +164,7 @@ interface types {
         timestamp: string,
         attachments: list<attachment>,
         reactions: list<reaction>,
+        reply-to: option<message-reply-preview>,
         edited: bool,
     }
 
@@ -433,6 +466,8 @@ interface messenger-client {
         message-query,
         message-search-query,
         message-search-hit,
+        custom-emoji,
+        sticker-item,
         user,
         group,
         dm-channel,
@@ -467,6 +502,9 @@ interface messenger-client {
     /// Send a message to a channel.
     send-message: func(channel-id: string, content: message-content) -> result<message, client-error>;
 
+    /// Send a reply to an existing message.
+    send-reply-message: func(channel-id: string, reply-to-message-id: string, content: message-content) -> result<message, client-error>;
+
     /// Get messages from a channel with query options.
     get-messages: func(channel-id: string, query: message-query) -> result<list<message>, client-error>;
 
@@ -475,6 +513,12 @@ interface messenger-client {
 
     /// Get pinned messages for a channel.
     get-pinned-messages: func(channel-id: string) -> result<list<message>, client-error>;
+
+    /// Get the custom emoji usable in a channel.
+    get-available-emojis: func(channel-id: string) -> result<list<custom-emoji>, client-error>;
+
+    /// Get the stickers usable in a channel.
+    get-available-stickers: func(channel-id: string) -> result<list<sticker-item>, client-error>;
 
     /// Pin or unpin a message in a channel.
     set-message-pinned: func(channel-id: string, message-id: string, pinned: bool) -> result<_, client-error>;

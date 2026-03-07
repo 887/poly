@@ -81,7 +81,7 @@ impl Default for NavigationState {
             selected_server: None,
             selected_channel: None,
             right_sidebar_visible: true,
-            dm_right_sidebar_visible: false,
+            dm_right_sidebar_visible: true,
             account_last_routes: std::collections::HashMap::new(),
         }
     }
@@ -104,6 +104,8 @@ pub enum SettingsSection {
     Appearance,
     /// General preferences.
     General,
+    /// External media integrations (GIF providers, future rich media sources).
+    Media,
     /// Notification settings.
     Notifications,
     /// Voice & Video (audio device, noise suppression, etc.).

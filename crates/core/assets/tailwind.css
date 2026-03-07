@@ -124,6 +124,67 @@ body {
     /* for nav-bar-top absolute positioning */
 }
 
+.electron-titlebar {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    min-height: 34px;
+    height: 34px;
+    background: color-mix(in srgb, var(--sidebar-bg) 86%, #000);
+    border-bottom: 1px solid var(--border-primary);
+    box-shadow: var(--shadow-sm);
+    user-select: none;
+    z-index: 350;
+}
+
+.electron-titlebar-drag-region {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    padding: 0 12px;
+    -webkit-app-region: drag;
+}
+
+.electron-titlebar-title {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.electron-window-controls {
+    display: flex;
+    align-items: stretch;
+    -webkit-app-region: no-drag;
+}
+
+.electron-window-btn {
+    width: 46px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.electron-window-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.electron-window-btn.close:hover {
+    background: var(--accent-danger);
+    color: #fff;
+}
+
 /* ===========================
  * Voice Connection Banner
  * =========================== */
@@ -1463,20 +1524,18 @@ body {
  * =========================== */
 
 .user-sidebar {
-    width: 240px;
-    min-width: 240px;
+    width: 100%;
+    min-width: 0;
     background-color: var(--bg-secondary);
-    border-left: 1px solid var(--border-primary);
     padding: 16px;
     overflow-y: auto;
 }
 
 /* DM contact info panel (right rail for 1:1 DMs) */
 .dm-contact-panel {
-    width: 240px;
-    min-width: 240px;
+    width: 100%;
+    min-width: 0;
     background-color: var(--bg-secondary);
-    border-left: 1px solid var(--border-primary);
     padding: 16px;
     overflow-y: auto;
     display: flex;
@@ -1992,6 +2051,151 @@ select {
     color: var(--text-secondary);
     margin-bottom: 6px;
     font-weight: 500;
+}
+
+.settings-text-input {
+    width: 100%;
+    padding: 10px 12px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.settings-text-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.media-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.media-settings-active-provider {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.media-provider-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+}
+
+.media-provider-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+}
+
+.media-provider-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.media-provider-status {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* ===========================
+ * Reply UI
+ * =========================== */
+
+.message-reply-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    margin-bottom: 2px;
+    border-left: 2px solid var(--accent-primary, #7289da);
+    background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.message-reply-arrow {
+    color: var(--text-tertiary, #72767d);
+    font-size: 11px;
+}
+
+.message-reply-author {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.message-reply-snippet {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+    color: var(--text-secondary);
+}
+
+/* Reply composer banner (shown above the input when replying) */
+.reply-composer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: var(--bg-secondary, #2f3136);
+    border-radius: 4px 4px 0 0;
+    border-top: 1px solid var(--border-primary, #40444b);
+    border-left: 1px solid var(--border-primary, #40444b);
+    border-right: 1px solid var(--border-primary, #40444b);
+    border-left: 2px solid var(--accent-primary, #7289da);
+    font-size: 13px;
+}
+
+.reply-composer-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.reply-composer-title {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.reply-composer-snippet {
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+    font-size: 12px;
+}
+
+.reply-composer-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.reply-composer-close:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
 }
 
 /* ===========================
@@ -5067,6 +5271,8 @@ select {
     display: flex;
     align-items: center;
     gap: 10px;
+    margin-left: auto;
+    justify-content: flex-end;
     min-width: 0;
 }
 
@@ -5074,6 +5280,7 @@ select {
     display: flex;
     gap: 4px;
     align-items: center;
+    flex-shrink: 0;
     padding-right: 0;
     margin-right: 0;
     position: relative;
@@ -5089,6 +5296,7 @@ select {
     position: relative;
     width: min(280px, 32vw);
     min-width: 220px;
+    margin-left: auto;
     height: 34px;
     display: flex;
     align-items: center;
@@ -5507,14 +5715,15 @@ select {
     flex: 1;
     min-width: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 8px;
 }
 
 .composer-upload-btn {
     flex-shrink: 0;
-    align-self: flex-end;
-    margin-bottom: 2px;
+    align-self: center;
+    margin-bottom: 0;
 }
 
 .message-input-row .message-input {
@@ -5522,8 +5731,8 @@ select {
     border: none;
     padding: 0;
     min-height: 24px;
-    max-height: 50vh;
-    resize: vertical;
+    height: 24px;
+    line-height: 24px;
 }
 
 .message-input-row .message-input:focus {
@@ -5531,12 +5740,13 @@ select {
 }
 
 .input-toolbar-inline {
+    flex-shrink: 0;
     padding-bottom: 0;
     justify-content: flex-end;
 }
 
 .chat-send-inline {
-    align-self: flex-end;
+    align-self: center;
     white-space: nowrap;
 }
 

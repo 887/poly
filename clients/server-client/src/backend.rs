@@ -151,6 +151,7 @@ impl PolyServerBackend {
             timestamp: msg.created_at,
             attachments: Vec::new(),
             reactions: Vec::new(),
+            reply_to: None,
             edited: msg.edited_at.is_some(),
         }
     }
@@ -494,6 +495,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 timestamp: payload.created_at,
                 attachments: Vec::new(),
                 reactions: Vec::new(),
+                reply_to: None,
                 edited: payload.edited_at.is_some(),
             },
         }),
@@ -512,6 +514,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 timestamp: payload.created_at,
                 attachments: Vec::new(),
                 reactions: Vec::new(),
+                reply_to: None,
                 edited: true,
             },
         }),

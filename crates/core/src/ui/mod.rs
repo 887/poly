@@ -57,6 +57,7 @@
 //! through the `ClientBackend` trait via `ClientManager`.
 
 pub mod account;
+mod electron_titlebar;
 mod favorites_sidebar;
 mod main_layout;
 pub mod routes;
@@ -65,6 +66,7 @@ mod setup_wizard;
 mod voice_banner;
 
 pub use account::{AccountSwitcher, FriendsPanel};
+pub use electron_titlebar::ElectronTitleBar;
 pub use main_layout::MainLayout;
 pub use routes::Route;
 pub use setup_wizard::SetupWizard;
@@ -171,6 +173,7 @@ async fn persist_setup_completion(account_id: String) {
         server_banner_overrides: std::collections::HashMap::new(),
         server_member_list_open: true,
         dm_member_list_open: false,
+        media: crate::storage::MediaProviderSettings::default(),
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");
@@ -236,6 +239,7 @@ pub fn App() -> Element {
         document::Link { rel: "stylesheet", href: CSS }
         style { id: "poly-theme", "{theme_css}" }
         div { class: "poly-app",
+            ElectronTitleBar {}
             if !*storage_ready.read() {
                 div { class: "storage-loading" }
             } else if !app_state.read().is_setup_complete {

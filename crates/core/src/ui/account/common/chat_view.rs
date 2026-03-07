@@ -24,7 +24,7 @@ use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 use poly_client::{
     Attachment, BackendType, ChatCommand, CommandScope, DmChannel, Message, MessageContent,
-    MessageQuery, MessageSearchHit, MessageSearchQuery, PresenceStatus,
+    MessageQuery, MessageReplyPreview, MessageSearchHit, MessageSearchQuery, PresenceStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -110,6 +110,15 @@ fn apply_builtin_command(text: &str) -> Option<String> {
         return Some(format!("||{spoiled}||"));
     }
     None
+}
+
+/// Build a short snippet suitable for reply previews.
+fn reply_preview_snippet(content: &MessageContent) -> String {
+    let raw = match content {
+        MessageContent::Text(text) => text.clone(),
+        MessageContent::WithAttachments { text, .. } => text.clone(),
+    };
+    raw.chars().take(80).collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -539,6 +548,7 @@ pub fn ChatView() -> Element {
     let mut command_suggestions = use_signal(Vec::<ChatCommand>::new);
     let mut active_command_idx = use_signal(|| 0_usize);
     let mut show_command_popup = use_signal(|| false);
+    let mut reply_target = use_signal(|| None::<MessageReplyPreview>);
 
     let channel_id = app_state.read().nav.selected_channel.clone();
     let messages = chat_data.read().messages.clone();
@@ -547,7 +557,8 @@ pub fn ChatView() -> Element {
     let loading = chat_data.read().loading;
     let reaction_picker_id = reaction_picker_msg.read().clone();
     let group_members = chat_data.read().active_group_members.clone();
-    let search_query_value = search_query.read().trim().to_string();
+    let search_query_input_value = search_query.read().clone();
+    let search_query_value = search_query_input_value.trim().to_string();
     let is_dm_channel = channel_id.as_deref().unwrap_or_default().starts_with("dm-");
     let is_group_channel = channel_id
         .as_deref()
@@ -599,6 +610,59 @@ pub fn ChatView() -> Element {
     let pinned_hit_channel = current_channel.clone();
     let nav_for_search = nav;
     let nav_for_pinned = nav;
+    let member_effect_channel_id = channel_id.clone();
+
+    use_effect(move || {
+        let Some(active_channel_id) = member_effect_channel_id.clone() else {
+            chat_data.write().members = Vec::new();
+            chat_data.write().active_group_members = Vec::new();
+            return;
+        };
+
+        let selected_server = app_state.read().nav.selected_server.clone();
+        let active_account_id = app_state.read().nav.active_account_id.clone();
+        let is_group = active_channel_id.starts_with("group-");
+
+        spawn(async move {
+            let backend = if let Some(server_id) = selected_server {
+                client_manager
+                    .read()
+                    .get_backend_for_server(&server_id)
+                    .map(|(_, handle)| handle)
+            } else if let Some(account_id) = active_account_id {
+                client_manager.read().get_backend(&account_id)
+            } else {
+                None
+            };
+
+            let Some(backend) = backend else {
+                chat_data.write().members = Vec::new();
+                chat_data.write().active_group_members = Vec::new();
+                return;
+            };
+
+            let guard = backend.read().await;
+            match guard.get_channel_members(&active_channel_id).await {
+                Ok(members) => {
+                    chat_data.write().members = members.clone();
+                    if is_group {
+                        chat_data.write().active_group_members = members;
+                    } else {
+                        chat_data.write().active_group_members = Vec::new();
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "get_channel_members failed for channel {}: {}",
+                        active_channel_id,
+                        err
+                    );
+                    chat_data.write().members = Vec::new();
+                    chat_data.write().active_group_members = Vec::new();
+                }
+            }
+        });
+    });
 
     use_effect(move || {
         if *utility_panel.read() != Some(ChatUtilityPanel::Search) {
@@ -686,19 +750,6 @@ pub fn ChatView() -> Element {
                 requestAnimationFrame(function() {
                     el.scrollTop = el.scrollHeight;
                 });
-            }
-            "#,
-        );
-    });
-
-    use_effect(move || {
-        let _text = message_input.read().clone();
-        document::eval(
-            r#"
-            let el = document.getElementById('poly-message-composer');
-            if (el) {
-                el.style.height = '0px';
-                el.style.height = Math.min(el.scrollHeight, window.innerHeight * 0.5) + 'px';
             }
             "#,
         );
@@ -821,64 +872,6 @@ pub fn ChatView() -> Element {
                         }
 
                         div { class: "chat-header-right",
-                            div { class: "chat-header-search-inline",
-                                span { class: "chat-header-search-icon", "🔎" }
-                                input {
-                                    class: "chat-header-search-input",
-                                    r#type: "text",
-                                    placeholder: "{search_placeholder}",
-                                    value: "{search_query_value}",
-                                    onfocus: move |_| {
-                                        let empty = search_query.read().trim().is_empty();
-                                        show_search_filters.set(empty);
-                                        if !empty {
-                                            utility_panel.set(Some(ChatUtilityPanel::Search));
-                                        }
-                                    },
-                                    oninput: move |evt| {
-                                        let next_value = evt.value();
-                                        let is_empty = next_value.trim().is_empty();
-                                        search_query.set(next_value);
-                                        show_search_filters.set(is_empty);
-                                        if is_empty {
-                                            utility_panel.set(None);
-                                            search_hits.set(Vec::new());
-                                        } else {
-                                            utility_panel.set(Some(ChatUtilityPanel::Search));
-                                        }
-                                    },
-                                }
-                                if !search_query_value.is_empty() {
-                                    button {
-                                        class: "chat-header-search-clear",
-                                        title: t("action-close"),
-                                        onclick: move |_| {
-                                            search_query.set(String::new());
-                                            search_hits.set(Vec::new());
-                                            utility_panel.set(None);
-                                            show_search_filters.set(true);
-                                        },
-                                        "✕"
-                                    }
-                                }
-                                if *show_search_filters.read() {
-                                    SearchFilterPopup {
-                                        current_channel_name: current_channel.as_ref().map(|channel| channel.name.clone()).unwrap_or_default(),
-                                        on_append_filter: move |token: String| {
-                                            let existing = search_query.read().trim().to_string();
-                                            if existing.is_empty() {
-                                                search_query.set(token);
-                                            } else {
-                                                search_query.set(format!("{existing} {token}"));
-                                            }
-                                            show_search_filters.set(false);
-                                            utility_panel.set(Some(ChatUtilityPanel::Search));
-                                        },
-                                        on_close: move |_| show_search_filters.set(false),
-                                    }
-                                }
-                            }
-
                             div { class: "chat-header-actions",
                                 button {
                                     class: if *utility_panel.read() == Some(ChatUtilityPanel::Threads) { "header-btn active" } else { "header-btn" },
@@ -955,6 +948,64 @@ pub fn ChatView() -> Element {
                                     }
                                 }
                             }
+
+                            div { class: "chat-header-search-inline",
+                                span { class: "chat-header-search-icon", "🔎" }
+                                input {
+                                    class: "chat-header-search-input",
+                                    r#type: "text",
+                                    placeholder: "{search_placeholder}",
+                                    value: "{search_query_input_value}",
+                                    onfocus: move |_| {
+                                        let empty = search_query.read().trim().is_empty();
+                                        show_search_filters.set(empty);
+                                        if !empty {
+                                            utility_panel.set(Some(ChatUtilityPanel::Search));
+                                        }
+                                    },
+                                    oninput: move |evt| {
+                                        let next_value = evt.value();
+                                        let is_empty = next_value.trim().is_empty();
+                                        search_query.set(next_value);
+                                        show_search_filters.set(is_empty);
+                                        if is_empty {
+                                            utility_panel.set(None);
+                                            search_hits.set(Vec::new());
+                                        } else {
+                                            utility_panel.set(Some(ChatUtilityPanel::Search));
+                                        }
+                                    },
+                                }
+                                if !search_query_value.is_empty() {
+                                    button {
+                                        class: "chat-header-search-clear",
+                                        title: t("action-close"),
+                                        onclick: move |_| {
+                                            search_query.set(String::new());
+                                            search_hits.set(Vec::new());
+                                            utility_panel.set(None);
+                                            show_search_filters.set(true);
+                                        },
+                                        "✕"
+                                    }
+                                }
+                                if *show_search_filters.read() {
+                                    SearchFilterPopup {
+                                        current_channel_name: current_channel.as_ref().map(|channel| channel.name.clone()).unwrap_or_default(),
+                                        on_append_filter: move |token: String| {
+                                            let existing = search_query.read().trim().to_string();
+                                            if existing.is_empty() {
+                                                search_query.set(token);
+                                            } else {
+                                                search_query.set(format!("{existing} {token}"));
+                                            }
+                                            show_search_filters.set(false);
+                                            utility_panel.set(Some(ChatUtilityPanel::Search));
+                                        },
+                                        on_close: move |_| show_search_filters.set(false),
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -965,10 +1016,10 @@ pub fn ChatView() -> Element {
                             spawn(async move {
                                 let mut eval = document::eval(
                                     r#"
-                                                            let el = document.getElementById('message-list-scroll');
-                                                            if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                            else { dioxus.send(false); }
-                                                        "#,
+                                                                                                    let el = document.getElementById('message-list-scroll');
+                                                                                                    if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                                    else { dioxus.send(false); }
+                                                                                                "#,
                                 );
                                 if let Ok(near_top) = eval.recv::<bool>().await && near_top {
                                     tracing::trace!("Scroll near top — would load more messages");
@@ -1004,6 +1055,7 @@ pub fn ChatView() -> Element {
                                     let timestamp = msg.timestamp;
                                     let attachments = msg.attachments.clone();
                                     let reactions = msg.reactions.clone();
+                                    let reply_to = msg.reply_to.clone();
                                     let edited = msg.edited;
                                     let color = user_color(&author.id);
                                     let author_avatar = author.avatar_url.clone();
@@ -1018,8 +1070,7 @@ pub fn ChatView() -> Element {
                                         timestamp.format("%B %d, %Y").to_string()
                                     } else {
                                         String::new()
-                                    }
-                                    },
+                                    };
                                     let is_hovered = hovered_msg.read().as_deref() == Some(&msg_id);
                                     let is_own = author.id == self_user_id;
                                     let is_editing = editing_msg_id.read().as_deref() == Some(&msg_id);
@@ -1101,7 +1152,16 @@ pub fn ChatView() -> Element {
                                                         button {
                                                             class: "msg-action-btn",
                                                             title: t("msg-reply"),
-                                                            onclick: move |_| tracing::debug!("Reply (stub)"),
+                                                            onclick: {
+                                                                let preview = MessageReplyPreview {
+                                                                    message_id: msg_id.clone(),
+                                                                    author_id: author.id.clone(),
+                                                                    author_display_name: author.display_name.clone(),
+                                                                    author_avatar_url: author.avatar_url.clone(),
+                                                                    snippet: reply_preview_snippet(&content),
+                                                                };
+                                                                move |_| reply_target.set(Some(preview.clone()))
+                                                            },
                                                             "↩️"
                                                         }
                                                         button {
@@ -1129,6 +1189,9 @@ pub fn ChatView() -> Element {
                                                         span { class: "message-author", style: "color: {color};", "{author.display_name}" }
                                                         span { class: "message-timestamp", "{time_str}" }
                                                     }
+                                                    if let Some(reply) = reply_to.clone() {
+                                                        MessageReplyPreviewLine { reply }
+                                                    }
                                                     if is_editing {
                                                         MessageInlineEdit {
                                                             message_id: msg_id.clone(),
@@ -1151,6 +1214,9 @@ pub fn ChatView() -> Element {
                                                     span { class: "message-hover-time", "{time_str}" }
                                                 }
                                                 div { class: "message-body",
+                                                    if let Some(reply) = reply_to.clone() {
+                                                        MessageReplyPreviewLine { reply }
+                                                    }
                                                     if is_editing {
                                                         MessageInlineEdit {
                                                             message_id: msg_id.clone(),
@@ -1180,6 +1246,12 @@ pub fn ChatView() -> Element {
 
                     div { class: "message-input-area",
                         if channel_id.is_some() {
+                            if let Some(reply) = reply_target.read().clone() {
+                                ReplyComposerBar {
+                                    reply,
+                                    on_cancel: move |_| reply_target.set(None),
+                                }
+                            }
                             if !pending_attachments.read().is_empty() {
                                 div { class: "attachment-preview-strip",
                                     for preview in pending_attachments.read().iter() {
@@ -1249,27 +1321,26 @@ pub fn ChatView() -> Element {
                                         onclick: move |_| {
                                             document::eval(
                                                 r#"
-                                                                                        let input = document.getElementById('poly-file-input');
-                                                                                        if (input) { input.click(); }
-                                                                                    "#,
+                                                                                                                                                                let input = document.getElementById('poly-file-input');
+                                                                                                                                                                if (input) { input.click(); }
+                                                                                                                                                            "#,
                                             );
                                         },
                                         "➕"
                                     }
                                     div { class: "message-input-text-area",
-                                        textarea {
+                                        input {
                                             class: "message-input",
                                             id: "poly-message-composer",
+                                            r#type: "text",
                                             placeholder: "{compose_placeholder}",
                                             value: "{message_input}",
-                                            rows: "1",
                                             oninput: move |evt| {
                                                 let value = evt.value();
                                                 message_input.set(value.clone());
                                                 // Show slash command popup when user types /command (no space yet)
                                                 let trimmed = value.trim_start();
-                                                if trimmed.starts_with('/') && !trimmed.contains('\n')
-                                                    && !trimmed[1..].contains(' ')
+                                                if trimmed.starts_with('/') && !trimmed[1..].contains(' ')
                                                 {
                                                     let query = &trimmed[1..];
                                                     let all_cmds = command_suggestions.read().clone();
@@ -1351,9 +1422,14 @@ pub fn ChatView() -> Element {
                                                         let text = apply_builtin_command(raw_text.trim())
                                                             .unwrap_or(raw_text);
                                                         let attachments = pending_attachments.read().clone();
+                                                        let reply_to_message_id = reply_target
+                                                            .read()
+                                                            .as_ref()
+                                                            .map(|reply| reply.message_id.clone());
                                                         if !text.is_empty() || !attachments.is_empty() {
                                                             message_input.set(String::new());
                                                             pending_attachments.set(Vec::new());
+                                                            reply_target.set(None);
                                                             if let Some(ref cid) = channel_id_send {
                                                                 let cid = cid.clone();
                                                                 let attachments = attachments
@@ -1361,14 +1437,15 @@ pub fn ChatView() -> Element {
                                                                     .map(pending_attachment_to_attachment)
                                                                     .collect::<Vec<_>>();
                                                                 spawn(async move {
-                                                                    send_message(
-                                                                            cid,
+                                                                    send_message(SendMessageCtx {
+                                                                            channel_id: cid,
                                                                             text,
                                                                             attachments,
+                                                                            reply_to_message_id,
                                                                             client_manager,
                                                                             chat_data,
                                                                             app_state,
-                                                                        )
+                                                                        })
                                                                         .await;
                                                                 });
                                                             }
@@ -1408,9 +1485,14 @@ pub fn ChatView() -> Element {
                                         move |_| {
                                             let text = message_input.read().clone();
                                             let attachments = pending_attachments.read().clone();
+                                            let reply_to_message_id = reply_target
+                                                .read()
+                                                .as_ref()
+                                                .map(|reply| reply.message_id.clone());
                                             if !text.is_empty() || !attachments.is_empty() {
                                                 message_input.set(String::new());
                                                 pending_attachments.set(Vec::new());
+                                                reply_target.set(None);
                                                 if let Some(ref cid) = channel_id_btn {
                                                     let cid = cid.clone();
                                                     let text = text.clone();
@@ -1419,14 +1501,15 @@ pub fn ChatView() -> Element {
                                                         .map(pending_attachment_to_attachment)
                                                         .collect::<Vec<_>>();
                                                     spawn(async move {
-                                                        send_message(
-                                                                cid,
+                                                        send_message(SendMessageCtx {
+                                                                channel_id: cid,
                                                                 text,
                                                                 attachments,
+                                                                reply_to_message_id,
                                                                 client_manager,
                                                                 chat_data,
                                                                 app_state,
-                                                            )
+                                                            })
                                                             .await;
                                                     });
                                                 }
@@ -2039,15 +2122,28 @@ fn toggle_reaction_on_message(chat_data: &mut Signal<ChatData>, message_id: &str
     }
 }
 
-/// Send a message via the backend and prepend it to the message list.
-async fn send_message(
+/// Bundled parameters for [`send_message`] to avoid the too-many-arguments lint.
+struct SendMessageCtx {
     channel_id: String,
     text: String,
     attachments: Vec<Attachment>,
+    reply_to_message_id: Option<String>,
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: Signal<ChatData>,
     app_state: Signal<AppState>,
-) {
+}
+
+/// Send a message via the backend and prepend it to the message list.
+async fn send_message(ctx: SendMessageCtx) {
+    let SendMessageCtx {
+        channel_id,
+        text,
+        attachments,
+        reply_to_message_id,
+        client_manager,
+        mut chat_data,
+        app_state,
+    } = ctx;
     // Resolve the backend: server channels use server_id lookup; DM channels fall back to
     // active_account_id so messages still send when no server is selected.
     let backend = {
@@ -2075,7 +2171,14 @@ async fn send_message(
     } else {
         MessageContent::WithAttachments { text, attachments }
     };
-    match guard.send_message(&channel_id, content).await {
+    let result = if let Some(reply_id) = reply_to_message_id {
+        guard
+            .send_reply_message(&channel_id, &reply_id, content)
+            .await
+    } else {
+        guard.send_message(&channel_id, content).await
+    };
+    match result {
         Ok(msg) => {
             chat_data.write().messages.push(msg);
         }
@@ -2365,6 +2468,39 @@ fn ContextMenuItemSimple(
             span { class: "context-menu-item-label", "{label}" }
             if has_arrow {
                 span { class: "context-menu-arrow", "›" }
+            }
+        }
+    }
+}
+
+/// Small inline reply preview shown above a replied message.
+#[component]
+fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
+    rsx! {
+        div { class: "message-reply-preview",
+            span { class: "message-reply-arrow", "↪" }
+            span { class: "message-reply-author", "{reply.author_display_name}" }
+            span { class: "message-reply-snippet", "{reply.snippet}" }
+        }
+    }
+}
+
+/// Composer banner shown while replying to a message.
+#[component]
+fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEvent>) -> Element {
+    rsx! {
+        div { class: "reply-composer-bar",
+            div { class: "reply-composer-main",
+                div { class: "reply-composer-title",
+                    {t_args("chat-replying-to", &[("name", reply.author_display_name.as_str())])}
+                }
+                div { class: "reply-composer-snippet", "{reply.snippet}" }
+            }
+            button {
+                class: "reply-composer-close",
+                title: t("action-close"),
+                onclick: move |evt| on_cancel.call(evt),
+                "✕"
             }
         }
     }

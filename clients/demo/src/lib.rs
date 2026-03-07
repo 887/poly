@@ -131,6 +131,19 @@ impl ClientBackend for DemoClient {
         Ok(data::demo_sent_message(channel_id, content))
     }
 
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        Ok(data::demo_sent_reply_message(
+            channel_id,
+            reply_to_message_id,
+            content,
+        ))
+    }
+
     async fn get_messages(
         &self,
         channel_id: &str,
@@ -152,6 +165,14 @@ impl ClientBackend for DemoClient {
 
     async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
         Ok(data::demo_channel_commands(channel_id))
+    }
+
+    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(data::demo_available_emojis(channel_id))
+    }
+
+    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(data::demo_available_stickers(channel_id))
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
@@ -290,6 +311,7 @@ impl ClientBackend for DemoClient {
                                     timestamp: chrono::Utc::now(),
                                     attachments: vec![],
                                     reactions: vec![],
+                                    reply_to: None,
                                     edited: false,
                                 },
                             }
@@ -321,6 +343,7 @@ impl ClientBackend for DemoClient {
                                     timestamp: chrono::Utc::now(),
                                     attachments: vec![],
                                     reactions: vec![],
+                                    reply_to: None,
                                     edited: false,
                                 },
                             }
@@ -445,6 +468,19 @@ impl ClientBackend for DemoClient2 {
         Ok(data::demo_sent_message(channel_id, content))
     }
 
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        Ok(data::demo_sent_reply_message(
+            channel_id,
+            reply_to_message_id,
+            content,
+        ))
+    }
+
     async fn get_messages(
         &self,
         channel_id: &str,
@@ -466,6 +502,14 @@ impl ClientBackend for DemoClient2 {
 
     async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
         Ok(data::demo_channel_commands(channel_id))
+    }
+
+    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(data::demo_available_emojis(channel_id))
+    }
+
+    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(data::demo_available_stickers(channel_id))
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
@@ -529,6 +573,7 @@ impl ClientBackend for DemoClient2 {
                 timestamp: Utc::now() - Duration::hours(3),
                 attachments: vec![],
                 reactions: vec![],
+                reply_to: None,
                 edited: false,
             }),
             unread_count: 1,

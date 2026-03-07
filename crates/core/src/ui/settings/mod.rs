@@ -29,6 +29,7 @@ mod diagnostics;
 mod general;
 mod identity;
 mod language;
+mod media;
 mod theme;
 mod voice_video;
 
@@ -42,6 +43,7 @@ use diagnostics::DiagnosticsPage;
 use general::GeneralSettings;
 use identity::IdentitySettings;
 use language::LanguageSettings;
+use media::MediaSettings;
 use theme::ThemeSettings;
 use voice_video::VoiceVideoSettings;
 
@@ -146,6 +148,15 @@ pub fn SettingsPage() -> Element {
                         },
                     }
                 }
+                if shows(&t("settings-media")) {
+                    SettingsNavItem {
+                        label: t("settings-media"),
+                        active: section == SettingsSection::Media,
+                        onclick: move |_| {
+                            app_state.write().settings_section = SettingsSection::Media;
+                        },
+                    }
+                }
                 if shows(&t("settings-language")) {
                     SettingsNavItem {
                         label: t("settings-language"),
@@ -189,6 +200,9 @@ pub fn SettingsPage() -> Element {
                     },
                     SettingsSection::Theme | SettingsSection::Appearance => rsx! {
                         ThemeSettings {}
+                    },
+                    SettingsSection::Media => rsx! {
+                        MediaSettings {}
                     },
                     SettingsSection::Language => rsx! {
                         LanguageSettings {}

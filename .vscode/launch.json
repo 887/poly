@@ -24,15 +24,20 @@
       "cwd": "${workspaceFolder}/apps/desktop-blitz"
     },
     {
-      "type": "lldb",
+      "type": "node",
       "request": "launch",
       "name": "Desktop Electron",
-      "program": "/home/laragana/.cargo/bin/dx",
-      "args": ["serve", "--hotpatch"],
+      "runtimeExecutable": "${workspaceFolder}/apps/desktop-electron/electron/node_modules/electron/dist/electron",
+      "program": "${workspaceFolder}/apps/desktop-electron/electron/main.js",
+      "cwd": "${workspaceFolder}/apps/desktop-electron/electron",
       "env": {
+        "POLY_DEV": "1",
         "RUST_LOG": "info,poly_core=debug"
       },
-      "cwd": "${workspaceFolder}/apps/desktop-electron"
+      "preLaunchTask": "Prepare: desktop-electron",
+      "console": "integratedTerminal",
+      "outputCapture": "std",
+      "skipFiles": ["<node_internals>/**"]
     },
     {
       "type": "lldb",

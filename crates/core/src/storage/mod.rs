@@ -36,6 +36,10 @@ const fn default_server_member_list_open() -> bool {
     true
 }
 
+const fn default_gif_provider() -> GifProviderKind {
+    GifProviderKind::Klippy
+}
+
 // ── Platform backends ─────────────────────────────────────────────────────────
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -66,6 +70,66 @@ impl From<serde_json::Error> for StorageError {
     fn from(e: serde_json::Error) -> Self {
         Self::Serde(e.to_string())
     }
+}
+
+/// Supported external GIF search providers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum GifProviderKind {
+    /// Klippy / Tenor-like provider configured by API key.
+    #[default]
+    Klippy,
+    /// Giphy API integration.
+    Giphy,
+    /// Imgur gallery/search integration.
+    Imgur,
+}
+
+impl GifProviderKind {
+    /// Stable lowercase value for storage/UI selects.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Klippy => "klippy",
+            Self::Giphy => "giphy",
+            Self::Imgur => "imgur",
+        }
+    }
+
+    /// Parse a stored/provider select value (slug form).
+    pub fn from_slug(value: &str) -> Option<Self> {
+        match value {
+            "klippy" => Some(Self::Klippy),
+            "giphy" => Some(Self::Giphy),
+            "imgur" => Some(Self::Imgur),
+            _ => None,
+        }
+    }
+}
+
+/// User-configurable state for one GIF provider.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GifProviderConfig {
+    /// Whether the provider is enabled in the UI.
+    pub enabled: bool,
+    /// API key/token entered by the user.
+    #[serde(default)]
+    pub api_key: String,
+}
+
+/// App-level media integration settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MediaProviderSettings {
+    /// Active provider selected in the GIF picker dropdown.
+    #[serde(default = "default_gif_provider")]
+    pub active_gif_provider: GifProviderKind,
+    /// Klippy integration settings.
+    #[serde(default)]
+    pub klippy: GifProviderConfig,
+    /// Giphy integration settings.
+    #[serde(default)]
+    pub giphy: GifProviderConfig,
+    /// Imgur integration settings.
+    #[serde(default)]
+    pub imgur: GifProviderConfig,
 }
 
 // ── Typed data models ─────────────────────────────────────────────────────────
@@ -119,6 +183,9 @@ pub struct AppSettings {
     /// Whether the integrated group-DM member list is open.
     #[serde(default)]
     pub dm_member_list_open: bool,
+    /// External media provider configuration (GIF search, etc.).
+    #[serde(default)]
+    pub media: MediaProviderSettings,
 }
 
 /// Global notification preferences — device-level settings only.

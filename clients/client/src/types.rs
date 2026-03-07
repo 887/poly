@@ -316,6 +316,24 @@ pub struct Attachment {
     pub size: u64,
 }
 
+/// Lightweight preview metadata for a replied-to message.
+///
+/// Loaded from the backend with each message so the UI can render a Discord-like
+/// reply header without fetching the original message separately.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageReplyPreview {
+    /// Backend-specific ID of the original message.
+    pub message_id: String,
+    /// Author ID of the original message.
+    pub author_id: String,
+    /// Display name of the original message author.
+    pub author_display_name: String,
+    /// Optional avatar URL of the original message author.
+    pub author_avatar_url: Option<String>,
+    /// Short text snippet shown in the reply preview line.
+    pub snippet: String,
+}
+
 /// A chat message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
@@ -331,6 +349,9 @@ pub struct Message {
     pub attachments: Vec<Attachment>,
     /// Reactions on this message.
     pub reactions: Vec<Reaction>,
+    /// Preview of the replied-to message, if this message is a reply.
+    #[serde(default)]
+    pub reply_to: Option<MessageReplyPreview>,
     /// Whether the message has been edited.
     pub edited: bool,
 }
@@ -344,6 +365,46 @@ pub struct Reaction {
     pub count: u32,
     /// Whether the authenticated user has reacted.
     pub me: bool,
+}
+
+/// A custom emoji available to the current channel/account.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomEmoji {
+    /// Backend-specific emoji ID.
+    pub id: String,
+    /// Shortcode without surrounding colons (e.g. `"party_parrot"`).
+    pub shortcode: String,
+    /// Optional image URL for custom emoji.
+    pub image_url: Option<String>,
+    /// Optional Unicode fallback glyph when available.
+    pub unicode_fallback: Option<String>,
+    /// Whether the emoji is animated.
+    pub animated: bool,
+    /// Optional server/community that owns this emoji.
+    pub server_id: Option<String>,
+    /// Human-readable source label shown in search results.
+    pub source_name: Option<String>,
+}
+
+/// A sticker available to the current channel/account.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StickerItem {
+    /// Backend-specific sticker ID.
+    pub id: String,
+    /// Sticker display name.
+    pub name: String,
+    /// URL to the sticker preview/full asset.
+    pub image_url: String,
+    /// Optional pack or collection name.
+    pub pack_name: Option<String>,
+    /// Optional descriptive text.
+    pub description: Option<String>,
+    /// Optional server/community that owns this sticker.
+    pub server_id: Option<String>,
+    /// Human-readable source label shown in search results.
+    pub source_name: Option<String>,
+    /// Asset format (e.g. `"png"`, `"apng"`, `"json"`, `"lottie"`).
+    pub format: String,
 }
 
 /// Query options for fetching messages.

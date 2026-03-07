@@ -25,8 +25,9 @@ use wasmtime::{Engine, Store};
 
 use poly_client::{
     AuthCredentials, BackendType, Channel, ClientBackend, ClientError, ClientEvent, ClientResult,
-    DmChannel, Group, Message, MessageContent, MessageQuery, MessageSearchHit, MessageSearchQuery,
-    Notification, PresenceStatus, Server, Session, User, VoiceParticipant,
+    CustomEmoji, DmChannel, Group, Message, MessageContent, MessageQuery, MessageSearchHit,
+    MessageSearchQuery, Notification, PresenceStatus, Server, Session, StickerItem, User,
+    VoiceParticipant,
 };
 
 use super::bridge;
@@ -335,6 +336,27 @@ impl ClientBackend for PluginBackend {
         }
     }
 
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        refuel(&self.store).await;
+        let wit_content = bridge::to_wit_message_content(content);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_send_reply_message(&mut *store, channel_id, reply_to_message_id, &wit_content)
+            .await;
+        match result {
+            Ok(Ok(msg)) => Ok(bridge::from_wit_message(msg)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
     async fn get_messages(
         &self,
         channel_id: &str,
@@ -387,6 +409,42 @@ impl ClientBackend for PluginBackend {
             .await;
         match result {
             Ok(Ok(messages)) => Ok(messages.into_iter().map(bridge::from_wit_message).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_available_emojis(&mut *store, channel_id)
+            .await;
+        match result {
+            Ok(Ok(items)) => Ok(items
+                .into_iter()
+                .map(bridge::from_wit_custom_emoji)
+                .collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_available_stickers(&mut *store, channel_id)
+            .await;
+        match result {
+            Ok(Ok(items)) => Ok(items
+                .into_iter()
+                .map(bridge::from_wit_sticker_item)
+                .collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }

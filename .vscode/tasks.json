@@ -256,5 +256,55 @@
         "panel": "shared"
       }
     }
+    ,
+    {
+      "label": "Install: desktop-electron npm",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": { "cwd": "${workspaceFolder}/apps/desktop-electron/electron" },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build: desktop-electron (web bundle)",
+      "type": "shell",
+      "command": "dx",
+      "args": ["build", "--platform", "web"],
+      "options": { "cwd": "${workspaceFolder}/apps/desktop-electron" },
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Prepare: desktop-electron",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Install: desktop-electron npm",
+        "Build: desktop-electron (web bundle)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run: desktop-electron (frameless)",
+      "type": "shell",
+      "command": "${workspaceFolder}/apps/desktop-electron/electron/node_modules/electron/dist/electron",
+      "args": ["."],
+      "isBackground": true,
+      "options": {
+        "cwd": "${workspaceFolder}/apps/desktop-electron/electron",
+        "env": {
+          "POLY_DEV": "1",
+          "RUST_LOG": "info,poly_core=debug"
+        }
+      },
+      "dependsOn": "Prepare: desktop-electron",
+      "presentation": {
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    }
   ]
 }

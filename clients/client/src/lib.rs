@@ -97,6 +97,20 @@ pub trait ClientBackend: Send + Sync {
         content: MessageContent,
     ) -> ClientResult<Message>;
 
+    /// Send a reply to an existing message.
+    ///
+    /// Default implementation falls back to [`ClientBackend::send_message`]
+    /// for backends that do not yet expose reply semantics natively.
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let _ = reply_to_message_id;
+        self.send_message(channel_id, content).await
+    }
+
     /// Get messages from a channel with query options.
     async fn get_messages(
         &self,
@@ -133,6 +147,18 @@ pub trait ClientBackend: Send + Sync {
     ///
     /// Backends that do not support slash commands should return an empty list.
     async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        let _ = channel_id;
+        Ok(Vec::new())
+    }
+
+    /// Get the custom emoji usable in a channel.
+    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        let _ = channel_id;
+        Ok(Vec::new())
+    }
+
+    /// Get the stickers usable in a channel.
+    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
         let _ = channel_id;
         Ok(Vec::new())
     }

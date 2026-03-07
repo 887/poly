@@ -155,6 +155,44 @@ pub fn from_wit_attachment(a: wit::Attachment) -> pc::Attachment {
     }
 }
 
+/// Convert WIT `MessageReplyPreview` → poly-client `MessageReplyPreview`.
+pub fn from_wit_message_reply_preview(r: wit::MessageReplyPreview) -> pc::MessageReplyPreview {
+    pc::MessageReplyPreview {
+        message_id: r.message_id,
+        author_id: r.author_id,
+        author_display_name: r.author_display_name,
+        author_avatar_url: r.author_avatar_url,
+        snippet: r.snippet,
+    }
+}
+
+/// Convert WIT `CustomEmoji` → poly-client `CustomEmoji`.
+pub fn from_wit_custom_emoji(e: wit::CustomEmoji) -> pc::CustomEmoji {
+    pc::CustomEmoji {
+        id: e.id,
+        shortcode: e.shortcode,
+        image_url: e.image_url,
+        unicode_fallback: e.unicode_fallback,
+        animated: e.animated,
+        server_id: e.server_id,
+        source_name: e.source_name,
+    }
+}
+
+/// Convert WIT `StickerItem` → poly-client `StickerItem`.
+pub fn from_wit_sticker_item(s: wit::StickerItem) -> pc::StickerItem {
+    pc::StickerItem {
+        id: s.id,
+        name: s.name,
+        image_url: s.image_url,
+        pack_name: s.pack_name,
+        description: s.description,
+        server_id: s.server_id,
+        source_name: s.source_name,
+        format: s.format,
+    }
+}
+
 // ─── Reaction ──────────────────────────────────────────────────────
 
 /// Convert WIT `Reaction` → poly-client `Reaction`.
@@ -218,6 +256,7 @@ pub fn from_wit_message(m: wit::Message) -> pc::Message {
             .unwrap_or_else(|_| chrono::Utc::now()),
         attachments: m.attachments.into_iter().map(from_wit_attachment).collect(),
         reactions: m.reactions.into_iter().map(from_wit_reaction).collect(),
+        reply_to: m.reply_to.map(from_wit_message_reply_preview),
         edited: m.edited,
     }
 }

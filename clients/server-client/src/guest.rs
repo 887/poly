@@ -50,6 +50,16 @@ impl Guest for PolyServerPlugin {
         ))
     }
 
+    fn send_reply_message(
+        _channel_id: String,
+        _reply_to_message_id: String,
+        _content: wit::MessageContent,
+    ) -> Result<wit::Message, wit::ClientError> {
+        Err(wit::ClientError::Internal(
+            "Poly Server reply sending not yet implemented".into(),
+        ))
+    }
+
     fn get_messages(
         _channel_id: String,
         _query: wit::MessageQuery,
@@ -64,6 +74,18 @@ impl Guest for PolyServerPlugin {
     }
 
     fn get_pinned_messages(_channel_id: String) -> Result<Vec<wit::Message>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_available_emojis(
+        _channel_id: String,
+    ) -> Result<Vec<wit::CustomEmoji>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_available_stickers(
+        _channel_id: String,
+    ) -> Result<Vec<wit::StickerItem>, wit::ClientError> {
         Ok(vec![])
     }
 
