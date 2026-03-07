@@ -10,7 +10,7 @@ use std::cell::RefCell;
 
 use poly_client as pc;
 
-use crate::wit_bindings::{wit, Guest};
+use crate::wit_bindings::{Guest, wit};
 
 // ─── State Management ──────────────────────────────────────────────
 // WASM components are single-threaded; use thread_local + RefCell.

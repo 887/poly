@@ -4,7 +4,7 @@
 //! calls through host-api imports. For now, returns "not yet implemented".
 //! DECISION(D21): WASM Plugin Backends.
 
-use crate::wit_bindings::{wit, Guest};
+use crate::wit_bindings::{Guest, wit};
 
 struct PolyServerPlugin;
 
