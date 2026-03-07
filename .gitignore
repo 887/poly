@@ -59,3 +59,5 @@ temp/
 
 # MCP devtools screenshots (saved locally, not committed)
 devtools-screenshots/
+# Local devtools app log created by the devtools launcher
+.devtools-app.log

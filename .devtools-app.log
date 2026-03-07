@@ -1,2 +1,0 @@
-nohup: ignoring input
-./poly-desktop-devtools: error while loading shared libraries: libpoly_plugin_host.so: cannot open shared object file: No such file or directory
