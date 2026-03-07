@@ -29,6 +29,7 @@ first end-to-end markdown/search experience:
 - [x] Remove redundant header metadata that competes with search/actions
 - [x] Preserve per-channel member switching behavior
 - [x] Persist remembered open/closed member-list state in app settings
+- [x] Keep the header/search row full-width while the right rail opens only below it (Discord-style)
 
 ## 2.15.2 — Search UX Completion
 
@@ -75,3 +76,7 @@ first end-to-end markdown/search experience:
   demo search/pinned coverage to DM and group conversations, and added pre-send attachment preview
   cards in the upgraded composer. Desktop DevTools verification confirmed the inline search popup,
   DM search hits with marked matches, DM pinned messages, and markdown rendering in demo chats.
+- 2026-03-07: Adjusted the chat shell so the right member/thread/pinned/contact rail now opens
+  beneath the shared header instead of shrinking the entire chat column. Verified on web and
+  desktop-devtools that the search field remains pinned to the far right while the rail occupies
+  only the body area.

@@ -915,7 +915,7 @@ pub fn ChatView() -> Element {
                                 }
                                 if is_group_channel {
                                     button {
-                                        class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn active" } else { "header-btn" },
+                                        class: "header-btn",
                                         title: t("chat-toggle-members"),
                                         onclick: move |_| {
                                             let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -927,7 +927,7 @@ pub fn ChatView() -> Element {
                                     }
                                 } else if is_dm_channel {
                                     button {
-                                        class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn active" } else { "header-btn" },
+                                        class: "header-btn",
                                         title: t("chat-toggle-contact"),
                                         onclick: move |_| {
                                             let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -1012,619 +1012,622 @@ pub fn ChatView() -> Element {
                         }
                     }
 
-                    div {
-                        class: "message-list",
-                        id: "message-list-scroll",
-                        onscroll: move |_| {
-                            spawn(async move {
-                                let mut eval = document::eval(
-                                    r#"
-                                                                                                                        let el = document.getElementById('message-list-scroll');
-                                                                                                                        if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                                                                        else { dioxus.send(false); }
-                                                                                                                    "#,
-                                );
-                                if let Ok(near_top) = eval.recv::<bool>().await && near_top {
-                                    tracing::trace!("Scroll near top — would load more messages");
-                                }
-                            });
-                        },
-                        if loading {
-                            div { class: "message-loading", "{t(\"chat-loading\")}" }
-                        } else if messages.is_empty() {
-                            div { class: "message-empty",
-                                div { class: "empty-wave", "👋" }
-                                h3 { "{t(\"chat-no-messages\")}" }
-                            }
-                        } else {
-                            for (idx , msg) in messages.iter().enumerate() {
-                                {
-                                    let prev_msg = if idx > 0 { messages.get(idx - 1) } else { None };
-                                    let show_date_sep = match prev_msg {
-                                        Some(prev) => msg.timestamp.date_naive() != prev.timestamp.date_naive(),
-                                        None => true,
-                                    };
-                                    let is_grouped = match prev_msg {
-                                        Some(prev) => {
-                                            prev.author.id == msg.author.id && !show_date_sep
-                                                && (msg.timestamp - prev.timestamp).num_minutes()
-                                                    < GROUP_THRESHOLD_MINUTES
+                    // Keep the header spanning the full chat width (Discord-style).
+                    // The contextual member/threads/pinned/contact rail belongs in the body split
+                    // below this header so opening it never pulls the search box left.
+                    div { class: "chat-body-shell",
+                        div { class: "chat-content-column",
+                            div {
+                                class: "message-list",
+                                id: "message-list-scroll",
+                                onscroll: move |_| {
+                                    spawn(async move {
+                                        let mut eval = document::eval(
+                                            r#"
+                                                                                                                                                        let el = document.getElementById('message-list-scroll');
+                                                                                                                                                        if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                                                                                        else { dioxus.send(false); }
+                                                                                                                                                    "#,
+                                        );
+                                        if let Ok(near_top) = eval.recv::<bool>().await && near_top {
+                                            tracing::trace!("Scroll near top — would load more messages");
                                         }
-                                        None => false,
-                                    };
-                                    let msg_id = msg.id.clone();
-                                    let author = msg.author.clone();
-                                    let content = msg.content.clone();
-                                    let timestamp = msg.timestamp;
-                                    let attachments = msg.attachments.clone();
-                                    let reactions = msg.reactions.clone();
-                                    let reply_to = msg.reply_to.clone();
-                                    let edited = msg.edited;
-                                    let color = user_color(&author.id);
-                                    let author_avatar = author.avatar_url.clone();
-                                    let first_char: String = author
-                                        .display_name
-                                        .chars()
-                                        .next()
-                                        .map(|c| c.to_string())
-                                        .unwrap_or_default();
-                                    let time_str = format_timestamp(timestamp);
-                                    let date_str = if show_date_sep {
-                                        timestamp.format("%B %d, %Y").to_string()
-                                    } else {
-                                        String::new()
-                                    };
-                                    let is_hovered = hovered_msg.read().as_deref() == Some(&msg_id);
-                                    let is_own = author.id == self_user_id;
-                                    let is_editing = editing_msg_id.read().as_deref() == Some(&msg_id);
-                                    let msg_id_hover = msg_id.clone();
-                                    let msg_id_reaction = msg_id.clone();
-                                    let msg_id_edit = msg_id.clone();
-                                    let msg_id_delete = msg_id.clone();
-                                    let msg_id_ctx = msg_id.clone();
-                                    let ctx_text = message_plain_text(&content);
-                                    let edit_initial_text = ctx_text.clone();
-                                    rsx! {
-                                        if show_date_sep {
-                                            div { class: "date-separator",
-                                                span { class: "date-separator-text", "{date_str}" }
-                                            }
-                                        }
-                                        div {
-                                            id: "message-{msg_id}",
-                                            class: if is_grouped { "message message-grouped" } else { "message message-full" },
-                                            onmouseenter: {
-                                                let mid = msg_id_hover.clone();
-                                                move |_| hovered_msg.set(Some(mid.clone()))
-                                            },
-                                            onmouseleave: move |_| hovered_msg.set(None),
-                                            oncontextmenu: {
-                                                let mid = msg_id_ctx.clone();
-                                                let txt = ctx_text.clone();
-                                                move |evt: MouseEvent| {
-                                                    evt.prevent_default();
-                                                    let coords = evt.client_coordinates();
-                                                    msg_context_menu
-                                                        .set(
-                                                            Some(MsgContextMenu {
-                                                                x: coords.x,
-                                                                y: coords.y,
-                                                                message_id: mid.clone(),
-                                                                message_text: txt.clone(),
-                                                                is_own,
-                                                            }),
-                                                        );
-                                                }
-                                            },
-
-                                            if is_hovered && !is_editing {
-                                                div { class: "message-actions",
-                                                    button {
-                                                        class: "msg-action-btn",
-                                                        title: t("reaction-add"),
-                                                        onclick: {
-                                                            let mid = msg_id_reaction.clone();
-                                                            move |_| reaction_picker_msg.set(Some(mid.clone()))
-                                                        },
-                                                        "😀+"
-                                                    }
-                                                    if is_own {
-                                                        button {
-                                                            class: "msg-action-btn",
-                                                            title: t("msg-edit"),
-                                                            onclick: {
-                                                                let mid = msg_id_edit.clone();
-                                                                let txt = edit_initial_text.clone();
-                                                                move |_| {
-                                                                    edit_draft.set(txt.clone());
-                                                                    editing_msg_id.set(Some(mid.clone()));
-                                                                }
-                                                            },
-                                                            "✏️"
-                                                        }
-                                                        button {
-                                                            class: "msg-action-btn msg-action-btn-danger",
-                                                            title: t("msg-delete"),
-                                                            onclick: {
-                                                                let mid = msg_id_delete.clone();
-                                                                move |_| chat_data.write().messages.retain(|m| m.id != mid)
-                                                            },
-                                                            "🗑️"
-                                                        }
-                                                    } else {
-                                                        button {
-                                                            class: "msg-action-btn",
-                                                            title: t("msg-reply"),
-                                                            onclick: {
-                                                                let preview = MessageReplyPreview {
-                                                                    message_id: msg_id.clone(),
-                                                                    author_id: author.id.clone(),
-                                                                    author_display_name: author.display_name.clone(),
-                                                                    author_avatar_url: author.avatar_url.clone(),
-                                                                    snippet: reply_preview_snippet(&content),
-                                                                };
-                                                                move |_| reply_target.set(Some(preview.clone()))
-                                                            },
-                                                            "↩️"
-                                                        }
-                                                        button {
-                                                            class: "msg-action-btn",
-                                                            title: t("msg-forward"),
-                                                            onclick: move |_| tracing::debug!("Forward (stub)"),
-                                                            "➡️"
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            if !is_grouped {
-                                                if let Some(ref avatar) = author_avatar {
-                                                    img {
-                                                        class: "message-avatar message-avatar-img",
-                                                        src: "{avatar}",
-                                                        alt: "{first_char}",
-                                                    }
-                                                } else {
-                                                    div { class: "message-avatar", style: "background-color: {color};", "{first_char}" }
-                                                }
-                                                div { class: "message-body",
-                                                    div { class: "message-header",
-                                                        span { class: "message-author", style: "color: {color};", "{author.display_name}" }
-                                                        span { class: "message-timestamp", "{time_str}" }
-                                                    }
-                                                    if let Some(reply) = reply_to.clone() {
-                                                        MessageReplyPreviewLine { reply }
-                                                    }
-                                                    if is_editing {
-                                                        MessageInlineEdit {
-                                                            message_id: msg_id.clone(),
-                                                            editing_msg_id,
-                                                            edit_draft,
-                                                            chat_data,
-                                                        }
-                                                    } else {
-                                                        MessageContentView { content: content.clone(), edited }
-                                                    }
-                                                    if !attachments.is_empty() {
-                                                        AttachmentsView { attachments: attachments.clone() }
-                                                    }
-                                                    if !reactions.is_empty() {
-                                                        ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
-                                                    }
-                                                }
-                                            } else {
-                                                div { class: "message-gutter",
-                                                    span { class: "message-hover-time", "{time_str}" }
-                                                }
-                                                div { class: "message-body",
-                                                    if let Some(reply) = reply_to.clone() {
-                                                        MessageReplyPreviewLine { reply }
-                                                    }
-                                                    if is_editing {
-                                                        MessageInlineEdit {
-                                                            message_id: msg_id.clone(),
-                                                            editing_msg_id,
-                                                            edit_draft,
-                                                            chat_data,
-                                                        }
-                                                    } else {
-                                                        MessageContentView { content: content.clone(), edited }
-                                                    }
-                                                    if !attachments.is_empty() {
-                                                        AttachmentsView { attachments: attachments.clone() }
-                                                    }
-                                                    if !reactions.is_empty() {
-                                                        ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
-                                                    }
-                                                }
-                                            }
-                                        }
+                                    });
+                                },
+                                if loading {
+                                    div { class: "message-loading", "{t(\"chat-loading\")}" }
+                                } else if messages.is_empty() {
+                                    div { class: "message-empty",
+                                        div { class: "empty-wave", "👋" }
+                                        h3 { "{t(\"chat-no-messages\")}" }
                                     }
-                                }
-                            }
-                        }
-                    }
-
-                    TypingIndicator {}
-
-                    div { class: "message-input-area",
-                        if channel_id.is_some() {
-                            if let Some(reply) = reply_target.read().clone() {
-                                ReplyComposerBar {
-                                    reply,
-                                    on_cancel: move |_| reply_target.set(None),
-                                }
-                            }
-                            if !pending_attachments.read().is_empty() {
-                                div { class: "attachment-preview-strip",
-                                    for preview in pending_attachments.read().iter() {
-                                        div { class: "attachment-preview-card",
-                                            if let Some(ref preview_url) = preview.preview_url {
-                                                img {
-                                                    class: "attachment-preview-image",
-                                                    src: "{preview_url}",
-                                                    alt: "{preview.filename}",
-                                                }
-                                            } else {
-                                                div { class: "attachment-preview-icon",
-                                                    "📎"
-                                                }
-                                            }
-                                            div { class: "attachment-preview-meta",
-                                                span { class: "attachment-preview-name",
-                                                    "{preview.filename}"
-                                                }
-                                                span { class: "attachment-preview-size",
-                                                    "{format_file_size(preview.size)}"
-                                                }
-                                            }
-                                            button {
-                                                class: "attachment-preview-remove",
-                                                title: t("action-close"),
-                                                onclick: {
-                                                    let preview_id = preview.id.clone();
-                                                    move |_| {
-                                                        pending_attachments.write().retain(|item| item.id != preview_id);
-                                                    }
-                                                },
-                                                "✕"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            {
-                                let all_cmds = command_suggestions.read().clone();
-                                let text = message_input.read().clone();
-                                let query = slash_command_query(&text);
-                                let matches = if *show_command_popup.read() {
-                                    filtered_slash_commands(query, &all_cmds)
                                 } else {
-                                    Vec::new()
-                                };
-                                let active_idx = *active_command_idx.read();
-                                rsx! {
-                                    if !matches.is_empty() {
-                                        SlashCommandPopup {
-                                            commands: matches,
-                                            active_idx,
-                                            on_select: move |filled: String| {
-                                                message_input.set(filled);
-                                                show_command_popup.set(false);
-                                            },
-                                        }
-                                    }
-                                }
-                            }
-                            div { class: "message-input-row",
-                                div { class: "message-input-shell",
-                                    button {
-                                        class: "toolbar-btn composer-upload-btn",
-                                        title: t("chat-attach-file"),
-                                        onclick: move |_| {
-                                            document::eval(
-                                                r#"
-                                                                                                                                                                                                    let input = document.getElementById('poly-file-input');
-                                                                                                                                                                                                    if (input) { input.click(); }
-                                                                                                                                                                                                "#,
-                                            );
-                                        },
-                                        "➕"
-                                    }
-                                    div { class: "message-input-text-area",
-                                        input {
-                                            class: "message-input",
-                                            id: "poly-message-composer",
-                                            r#type: "text",
-                                            placeholder: "{compose_placeholder}",
-                                            value: "{message_input}",
-                                            oninput: move |evt| {
-                                                let value = evt.value();
-                                                message_input.set(value.clone());
-                                                // Show slash command popup when user types /command (no space yet)
-                                                let trimmed = value.trim_start();
-                                                if trimmed.starts_with('/') && !trimmed[1..].contains(' ')
-                                                {
-                                                    let query = &trimmed[1..];
-                                                    let all_cmds = command_suggestions.read().clone();
-                                                    let matches = filtered_slash_commands(query, &all_cmds);
-                                                    if !matches.is_empty() {
-                                                        show_command_popup.set(true);
-                                                    } else {
-                                                        show_command_popup.set(false);
-                                                    }
-                                                    active_command_idx.set(0);
-                                                } else {
-                                                    show_command_popup.set(false);
+                                    for (idx , msg) in messages.iter().enumerate() {
+                                        {
+                                            let prev_msg = if idx > 0 { messages.get(idx - 1) } else { None };
+                                            let show_date_sep = match prev_msg {
+                                                Some(prev) => msg.timestamp.date_naive() != prev.timestamp.date_naive(),
+                                                None => true,
+                                            };
+                                            let is_grouped = match prev_msg {
+                                                Some(prev) => {
+                                                    prev.author.id == msg.author.id && !show_date_sep
+                                                        && (msg.timestamp - prev.timestamp).num_minutes()
+                                                            < GROUP_THRESHOLD_MINUTES
                                                 }
-                                            },
-                                            onkeydown: {
-                                                let channel_id_send = channel_id.clone();
-                                                move |evt: KeyboardEvent| {
-                                                    // Slash command popup navigation
-                                                    if *show_command_popup.read() {
-                                                        match evt.key() {
-                                                            Key::ArrowUp => {
-                                                                evt.prevent_default();
-                                                                let cur = *active_command_idx.read();
-                                                                if cur > 0 {
-                                                                    active_command_idx.set(cur - 1);
-                                                                }
-                                                                return;
-                                                            }
-                                                            Key::ArrowDown => {
-                                                                evt.prevent_default();
-                                                                let all_cmds = command_suggestions.read().clone();
-                                                                let text = message_input.read().clone();
-                                                                let query = slash_command_query(&text);
-                                                                let matches = filtered_slash_commands(query, &all_cmds);
-                                                                let cur = *active_command_idx.read();
-                                                                if cur + 1 < matches.len() {
-                                                                    active_command_idx.set(cur + 1);
-                                                                }
-                                                                return;
-                                                            }
-                                                            Key::Escape => {
-                                                                evt.prevent_default();
-                                                                show_command_popup.set(false);
-                                                                return;
-                                                            }
-                                                            Key::Tab => {
-                                                                evt.prevent_default();
-                                                                let all_cmds = command_suggestions.read().clone();
-                                                                let text = message_input.read().clone();
-                                                                let query = slash_command_query(&text);
-                                                                let matches = filtered_slash_commands(query, &all_cmds);
-                                                                let idx = *active_command_idx.read();
-                                                                if let Some(cmd) = matches.get(idx) {
-                                                                    message_input.set(format!("/{} ", cmd.name));
-                                                                    show_command_popup.set(false);
-                                                                }
-                                                                return;
-                                                            }
-                                                            Key::Enter if !evt.modifiers().shift() => {
-                                                                evt.prevent_default();
-                                                                let all_cmds = command_suggestions.read().clone();
-                                                                let text = message_input.read().clone();
-                                                                let query = slash_command_query(&text);
-                                                                let matches = filtered_slash_commands(query, &all_cmds);
-                                                                let idx = *active_command_idx.read();
-                                                                if let Some(cmd) = matches.get(idx) {
-                                                                    message_input.set(format!("/{} ", cmd.name));
-                                                                    show_command_popup.set(false);
-                                                                }
-                                                                return;
-                                                            }
-                                                            _ => {}
+                                                None => false,
+                                            };
+                                            let msg_id = msg.id.clone();
+                                            let author = msg.author.clone();
+                                            let content = msg.content.clone();
+                                            let timestamp = msg.timestamp;
+                                            let attachments = msg.attachments.clone();
+                                            let reactions = msg.reactions.clone();
+                                            let reply_to = msg.reply_to.clone();
+                                            let edited = msg.edited;
+                                            let color = user_color(&author.id);
+                                            let author_avatar = author.avatar_url.clone();
+                                            let first_char: String = author
+                                                .display_name
+                                                .chars()
+                                                .next()
+                                                .map(|c| c.to_string())
+                                                .unwrap_or_default();
+                                            let time_str = format_timestamp(timestamp);
+                                            let date_str = if show_date_sep {
+                                                timestamp.format("%B %d, %Y").to_string()
+                                            } else {
+                                                String::new()
+                                            };
+                                            let is_hovered = hovered_msg.read().as_deref() == Some(&msg_id);
+                                            let is_own = author.id == self_user_id;
+                                            let is_editing = editing_msg_id.read().as_deref() == Some(&msg_id);
+                                            let msg_id_hover = msg_id.clone();
+                                            let msg_id_reaction = msg_id.clone();
+                                            let msg_id_edit = msg_id.clone();
+                                            let msg_id_delete = msg_id.clone();
+                                            let msg_id_ctx = msg_id.clone();
+                                            let ctx_text = message_plain_text(&content);
+                                            let edit_initial_text = ctx_text.clone();
+                                            rsx! {
+                                                if show_date_sep {
+                                                    div { class: "date-separator",
+                                                        span { class: "date-separator-text", "{date_str}" }
+                                                    }
+                                                }
+                                                div {
+                                                    id: "message-{msg_id}",
+                                                    class: if is_grouped { "message message-grouped" } else { "message message-full" },
+                                                    onmouseenter: {
+                                                        let mid = msg_id_hover.clone();
+                                                        move |_| hovered_msg.set(Some(mid.clone()))
+                                                    },
+                                                    onmouseleave: move |_| hovered_msg.set(None),
+                                                    oncontextmenu: {
+                                                        let mid = msg_id_ctx.clone();
+                                                        let txt = ctx_text.clone();
+                                                        move |evt: MouseEvent| {
+                                                            evt.prevent_default();
+                                                            let coords = evt.client_coordinates();
+                                                            msg_context_menu
+                                                                .set(
+                                                                    Some(MsgContextMenu {
+                                                                        x: coords.x,
+                                                                        y: coords.y,
+                                                                        message_id: mid.clone(),
+                                                                        message_text: txt.clone(),
+                                                                        is_own,
+                                                                    }),
+                                                                );
                                                         }
-                                                    }
-                                                    // Normal Enter: send message
-                                                    if evt.key() == Key::Enter && !evt.modifiers().shift() {
-                                                        evt.prevent_default();
-                                                        let raw_text = message_input.read().clone();
-                                                        let text = apply_builtin_command(raw_text.trim())
-                                                            .unwrap_or(raw_text);
-                                                        let attachments = pending_attachments.read().clone();
-                                                        let reply_to_message_id = reply_target
-                                                            .read()
-                                                            .as_ref()
-                                                            .map(|reply| reply.message_id.clone());
-                                                        if !text.is_empty() || !attachments.is_empty() {
-                                                            message_input.set(String::new());
-                                                            pending_attachments.set(Vec::new());
-                                                            reply_target.set(None);
-                                                            if let Some(ref cid) = channel_id_send {
-                                                                let cid = cid.clone();
-                                                                let attachments = attachments
-                                                                    .iter()
-                                                                    .map(pending_attachment_to_attachment)
-                                                                    .collect::<Vec<_>>();
-                                                                spawn(async move {
-                                                                    send_message(SendMessageCtx {
-                                                                            channel_id: cid,
-                                                                            text,
-                                                                            attachments,
-                                                                            reply_to_message_id,
-                                                                            client_manager,
-                                                                            chat_data,
-                                                                            app_state,
-                                                                        })
-                                                                        .await;
-                                                                });
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                        }
-                                        div { class: "input-toolbar input-toolbar-inline",
-                                            button {
-                                                class: "toolbar-btn",
-                                                title: t("emoji-picker"),
-                                                onclick: move |_| {
-                                                    let current = *show_input_emoji.read();
-                                                    show_input_emoji.set(!current);
-                                                },
-                                                "😀"
-                                            }
-                                            button {
-                                                class: "toolbar-btn gif-btn",
-                                                title: t("gif-picker"),
-                                                "GIF"
-                                            }
-                                            button {
-                                                class: "toolbar-btn",
-                                                title: t("chat-markdown-formatting"),
-                                                "⌘"
-                                            }
-                                        }
-                                    }
-                                }
-                                button {
-                                    class: "btn btn-send chat-send-inline",
-                                    disabled: message_input.read().is_empty() && pending_attachments.read().is_empty(),
-                                    onclick: {
-                                        let channel_id_btn = channel_id.clone();
-                                        move |_| {
-                                            let text = message_input.read().clone();
-                                            let attachments = pending_attachments.read().clone();
-                                            let reply_to_message_id = reply_target
-                                                .read()
-                                                .as_ref()
-                                                .map(|reply| reply.message_id.clone());
-                                            if !text.is_empty() || !attachments.is_empty() {
-                                                message_input.set(String::new());
-                                                pending_attachments.set(Vec::new());
-                                                reply_target.set(None);
-                                                if let Some(ref cid) = channel_id_btn {
-                                                    let cid = cid.clone();
-                                                    let text = text.clone();
-                                                    let attachments = attachments
-                                                        .iter()
-                                                        .map(pending_attachment_to_attachment)
-                                                        .collect::<Vec<_>>();
-                                                    spawn(async move {
-                                                        send_message(SendMessageCtx {
-                                                                channel_id: cid,
-                                                                text,
-                                                                attachments,
-                                                                reply_to_message_id,
-                                                                client_manager,
-                                                                chat_data,
-                                                                app_state,
-                                                            })
-                                                            .await;
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {t("chat-send")}
-                                }
-                            }
-                            input {
-                                r#type: "file",
-                                id: "poly-file-input",
-                                multiple: true,
-                                style: "display:none;",
-                                onchange: move |_evt| {
-                                    let files = _evt.files();
-                                    if !files.is_empty() {
-                                        spawn(async move {
-                                            append_attachment_previews(pending_attachments, files).await;
-                                        });
-                                    }
-                                },
-                            }
-                            if *show_input_emoji.read() {
-                                EmojiPicker {
-                                    on_select: move |emoji: String| {
-                                        let current = message_input.read().clone();
-                                        message_input.set(format!("{current}{emoji}"));
-                                        show_input_emoji.set(false);
-                                    },
-                                    on_close: move |_| show_input_emoji.set(false),
-                                }
-                            }
-                        } else {
-                            div { class: "message-input-disabled", {t("chat-select-channel")} }
-                        }
-                    }
-                }
+                                                    },
 
-                if utility_panel.read().is_some() || member_list_visible {
-                    div { class: "chat-side-column",
-                        if let Some(panel) = *utility_panel.read() {
-                            ChatUtilityRail {
-                                panel,
-                                search_query: search_query_value.clone(),
-                                search_hits: search_hits.read().clone(),
-                                search_terms: search_terms.clone(),
-                                pinned_messages: pinned_messages.read().clone(),
-                                current_channel_name: current_channel.as_ref().map(|c| c.name.clone()).unwrap_or_default(),
-                                on_open_search_hit: move |hit: MessageSearchHit| {
-                                    let current_channel_id = search_hit_channel_id.clone();
-                                    let current_server_id = search_hit_server
-                                        .as_ref()
-                                        .map(|server| server.id.clone());
-                                    let nav = nav_for_search;
-                                    spawn(async move {
-                                        if let Some((route, message_id)) = open_message_hit(
-                                                hit,
-                                                current_channel_id,
-                                                current_server_id,
-                                                client_manager,
-                                                chat_data,
-                                                app_state,
-                                            )
-                                            .await
-                                        {
-                                            nav.push(route);
-                                            highlight_message(&message_id);
+                                                    if is_hovered && !is_editing {
+                                                        div { class: "message-actions",
+                                                            button {
+                                                                class: "msg-action-btn",
+                                                                title: t("reaction-add"),
+                                                                onclick: {
+                                                                    let mid = msg_id_reaction.clone();
+                                                                    move |_| reaction_picker_msg.set(Some(mid.clone()))
+                                                                },
+                                                                "😀+"
+                                                            }
+                                                            if is_own {
+                                                                button {
+                                                                    class: "msg-action-btn",
+                                                                    title: t("msg-edit"),
+                                                                    onclick: {
+                                                                        let mid = msg_id_edit.clone();
+                                                                        let txt = edit_initial_text.clone();
+                                                                        move |_| {
+                                                                            edit_draft.set(txt.clone());
+                                                                            editing_msg_id.set(Some(mid.clone()));
+                                                                        }
+                                                                    },
+                                                                    "✏️"
+                                                                }
+                                                                button {
+                                                                    class: "msg-action-btn msg-action-btn-danger",
+                                                                    title: t("msg-delete"),
+                                                                    onclick: {
+                                                                        let mid = msg_id_delete.clone();
+                                                                        move |_| chat_data.write().messages.retain(|m| m.id != mid)
+                                                                    },
+                                                                    "🗑️"
+                                                                }
+                                                            } else {
+                                                                button {
+                                                                    class: "msg-action-btn",
+                                                                    title: t("msg-reply"),
+                                                                    onclick: {
+                                                                        let preview = MessageReplyPreview {
+                                                                            message_id: msg_id.clone(),
+                                                                            author_id: author.id.clone(),
+                                                                            author_display_name: author.display_name.clone(),
+                                                                            author_avatar_url: author.avatar_url.clone(),
+                                                                            snippet: reply_preview_snippet(&content),
+                                                                        };
+                                                                        move |_| reply_target.set(Some(preview.clone()))
+                                                                    },
+                                                                    "↩️"
+                                                                }
+                                                                button {
+                                                                    class: "msg-action-btn",
+                                                                    title: t("msg-forward"),
+                                                                    onclick: move |_| tracing::debug!("Forward (stub)"),
+                                                                    "➡️"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if !is_grouped {
+                                                        if let Some(ref avatar) = author_avatar {
+                                                            img {
+                                                                class: "message-avatar message-avatar-img",
+                                                                src: "{avatar}",
+                                                                alt: "{first_char}",
+                                                            }
+                                                        } else {
+                                                            div { class: "message-avatar", style: "background-color: {color};", "{first_char}" }
+                                                        }
+                                                        div { class: "message-body",
+                                                            div { class: "message-header",
+                                                                span { class: "message-author", style: "color: {color};", "{author.display_name}" }
+                                                                span { class: "message-timestamp", "{time_str}" }
+                                                            }
+                                                            if let Some(reply) = reply_to.clone() {
+                                                                MessageReplyPreviewLine { reply }
+                                                            }
+                                                            if is_editing {
+                                                                MessageInlineEdit {
+                                                                    message_id: msg_id.clone(),
+                                                                    editing_msg_id,
+                                                                    edit_draft,
+                                                                    chat_data,
+                                                                }
+                                                            } else {
+                                                                MessageContentView { content: content.clone(), edited }
+                                                            }
+                                                            if !attachments.is_empty() {
+                                                                AttachmentsView { attachments: attachments.clone() }
+                                                            }
+                                                            if !reactions.is_empty() {
+                                                                ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
+                                                            }
+                                                        }
+                                                    } else {
+                                                        div { class: "message-gutter",
+                                                            span { class: "message-hover-time", "{time_str}" }
+                                                        }
+                                                        div { class: "message-body",
+                                                            if let Some(reply) = reply_to.clone() {
+                                                                MessageReplyPreviewLine { reply }
+                                                            }
+                                                            if is_editing {
+                                                                MessageInlineEdit {
+                                                                    message_id: msg_id.clone(),
+                                                                    editing_msg_id,
+                                                                    edit_draft,
+                                                                    chat_data,
+                                                                }
+                                                            } else {
+                                                                MessageContentView { content: content.clone(), edited }
+                                                            }
+                                                            if !attachments.is_empty() {
+                                                                AttachmentsView { attachments: attachments.clone() }
+                                                            }
+                                                            if !reactions.is_empty() {
+                                                                ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
-                                    });
-                                },
-                                on_open_pinned: move |message: Message| {
-                                    let Some(active_channel_id) = pinned_hit_channel_id.clone() else {
-                                        return;
-                                    };
-                                    let server_id = pinned_hit_server.as_ref().map(|server| server.id.clone());
-                                    let hit = MessageSearchHit {
-                                        channel_id: active_channel_id.clone(),
-                                        channel_name: pinned_hit_channel
-                                            .as_ref()
-                                            .map(|channel| channel.name.clone()),
-                                        server_id,
-                                        message,
-                                    };
-                                    let current_server_id = pinned_hit_server
-                                        .as_ref()
-                                        .map(|server| server.id.clone());
-                                    let nav = nav_for_pinned;
-                                    spawn(async move {
-                                        if let Some((route, message_id)) = open_message_hit(
-                                                hit,
-                                                Some(active_channel_id),
-                                                current_server_id,
-                                                client_manager,
-                                                chat_data,
-                                                app_state,
-                                            )
-                                            .await
-                                        {
-                                            nav.push(route);
-                                            highlight_message(&message_id);
-                                        }
-                                    });
-                                },
-                                on_close: move |_| utility_panel.set(None),
+                                    }
+                                }
                             }
-                        } else if is_dm_channel {
-                            DmContactPanel { channel_id: channel_id.clone().unwrap_or_default() }
-                        } else if is_group_channel {
-                            DmUserSidebar {}
-                        } else {
-                            UserSidebar {}
+
+                            TypingIndicator {}
+
+                            div { class: "message-input-area",
+                                if channel_id.is_some() {
+                                    if let Some(reply) = reply_target.read().clone() {
+                                        ReplyComposerBar {
+                                            reply,
+                                            on_cancel: move |_| reply_target.set(None),
+                                        }
+                                    }
+                                    if !pending_attachments.read().is_empty() {
+                                        div { class: "attachment-preview-strip",
+                                            for preview in pending_attachments.read().iter() {
+                                                div { class: "attachment-preview-card",
+                                                    if let Some(ref preview_url) = preview.preview_url {
+                                                        img {
+                                                            class: "attachment-preview-image",
+                                                            src: "{preview_url}",
+                                                            alt: "{preview.filename}",
+                                                        }
+                                                    } else {
+                                                        div { class: "attachment-preview-icon",
+                                                            "📎"
+                                                        }
+                                                    }
+                                                    div { class: "attachment-preview-meta",
+                                                        span { class: "attachment-preview-name",
+                                                            "{preview.filename}"
+                                                        }
+                                                        span { class: "attachment-preview-size",
+                                                            "{format_file_size(preview.size)}"
+                                                        }
+                                                    }
+                                                    button {
+                                                        class: "attachment-preview-remove",
+                                                        title: t("action-close"),
+                                                        onclick: {
+                                                            let preview_id = preview.id.clone();
+                                                            move |_| {
+                                                                pending_attachments.write().retain(|item| item.id != preview_id);
+                                                            }
+                                                        },
+                                                        "✕"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    {
+                                        let all_cmds = command_suggestions.read().clone();
+                                        let text = message_input.read().clone();
+                                        let query = slash_command_query(&text);
+                                        let matches = if *show_command_popup.read() {
+                                            filtered_slash_commands(query, &all_cmds)
+                                        } else {
+                                            Vec::new()
+                                        };
+                                        let active_idx = *active_command_idx.read();
+                                        rsx! {
+                                            if !matches.is_empty() {
+                                                SlashCommandPopup {
+                                                    commands: matches,
+                                                    active_idx,
+                                                    on_select: move |filled: String| {
+                                                        message_input.set(filled);
+                                                        show_command_popup.set(false);
+                                                    },
+                                                }
+                                            }
+                                        }
+                                    }
+                                    div { class: "message-input-row",
+                                        div { class: "message-input-shell",
+                                            button {
+                                                class: "toolbar-btn composer-upload-btn",
+                                                title: t("chat-attach-file"),
+                                                onclick: move |_| {
+                                                    document::eval(
+                                                        r#"
+                                                                                                                                                                                                                                                    let input = document.getElementById('poly-file-input');
+                                                                                                                                                                                                                                                    if (input) { input.click(); }
+                                                                                                                                                                                                                                                "#,
+                                                    );
+                                                },
+                                                "➕"
+                                            }
+                                            div { class: "message-input-text-area",
+                                                input {
+                                                    class: "message-input",
+                                                    id: "poly-message-composer",
+                                                    r#type: "text",
+                                                    placeholder: "{compose_placeholder}",
+                                                    value: "{message_input}",
+                                                    oninput: move |evt| {
+                                                        let value = evt.value();
+                                                        message_input.set(value.clone());
+                                                        if value.trim_start().starts_with('/') && !value.trim_start()[1..].contains(' ')
+                                                        {
+                                                            let query = &value.trim_start()[1..];
+                                                            let all_cmds = command_suggestions.read().clone();
+                                                            let matches = filtered_slash_commands(query, &all_cmds);
+                                                            if !matches.is_empty() {
+                                                                show_command_popup.set(true);
+                                                            }
+                                                                show_command_popup.set(false);
+                                                            }
+                                                            active_command_idx.set(0);
+                                                        } else {
+                                                            show_command_popup.set(false);
+                                                        }
+                                                    },
+                                                    onkeydown: {
+                                                        let channel_id_send = channel_id.clone();
+                                                        move |evt: KeyboardEvent| {
+                                                            if *show_command_popup.read() {
+                                                                match evt.key() {
+                                                                    Key::ArrowUp => {
+                                                                        evt.prevent_default();
+                                                                        let cur = *active_command_idx.read();
+                                                                        if cur > 0 {
+                                                                            active_command_idx.set(cur - 1);
+                                                                        }
+                                                                        return;
+                                                                    }
+                                                                    Key::ArrowDown => {
+                                                                        evt.prevent_default();
+                                                                        let all_cmds = command_suggestions.read().clone();
+                                                                        let text = message_input.read().clone();
+                                                                        let query = slash_command_query(&text);
+                                                                        let matches = filtered_slash_commands(query, &all_cmds);
+                                                                        let cur = *active_command_idx.read();
+                                                                        if cur + 1 < matches.len() {
+                                                                            active_command_idx.set(cur + 1);
+                                                                        }
+                                                                        return;
+                                                                    }
+                                                                    Key::Escape => {
+                                                                        evt.prevent_default();
+                                                                        show_command_popup.set(false);
+                                                                        return;
+                                                                    }
+                                                                    Key::Tab => {
+                                                                        evt.prevent_default();
+                                                                        let all_cmds = command_suggestions.read().clone();
+                                                                        let text = message_input.read().clone();
+                                                                        let query = slash_command_query(&text);
+                                                                        let matches = filtered_slash_commands(query, &all_cmds);
+                                                                        let idx = *active_command_idx.read();
+                                                                        if let Some(cmd) = matches.get(idx) {
+                                                                            message_input.set(format!("/{} ", cmd.name));
+                                                                            show_command_popup.set(false);
+                                                                        }
+                                                                        return;
+                                                                    }
+                                                                    Key::Enter if !evt.modifiers().shift() => {
+                                                                        evt.prevent_default();
+                                                                        let all_cmds = command_suggestions.read().clone();
+                                                                        let text = message_input.read().clone();
+                                                                        let query = slash_command_query(&text);
+                                                                        let matches = filtered_slash_commands(query, &all_cmds);
+                                                                        let idx = *active_command_idx.read();
+                                                                        if let Some(cmd) = matches.get(idx) {
+                                                                            message_input.set(format!("/{} ", cmd.name));
+                                                                            show_command_popup.set(false);
+                                                                        }
+                                                                        return;
+                                                                    }
+                                                                    _ => {}
+                                                                }
+                                                            }
+                                                            if evt.key() == Key::Enter && !evt.modifiers().shift() {
+                                                                evt.prevent_default();
+                                                                let raw_text = message_input.read().clone();
+                                                                let text = apply_builtin_command(raw_text.trim())
+                                                                    .unwrap_or(raw_text);
+                                                                let attachments = pending_attachments.read().clone();
+                                                                let reply_to_message_id = reply_target
+                                                                    .read()
+                                                                    .as_ref()
+                                                                    .map(|reply| reply.message_id.clone());
+                                                                if !text.is_empty() || !attachments.is_empty() {
+                                                                    message_input.set(String::new());
+                                                                    pending_attachments.set(Vec::new());
+                                                                    reply_target.set(None);
+                                                                    if let Some(ref cid) = channel_id_send {
+                                                                        let cid = cid.clone();
+                                                                        let attachments = attachments
+                                                                            .iter()
+                                                                            .map(pending_attachment_to_attachment)
+                                                                            .collect::<Vec<_>>();
+                                                                        spawn(async move {
+                                                                            send_message(SendMessageCtx {
+                                                                                    channel_id: cid,
+                                                                                    text,
+                                                                                    attachments,
+                                                                                    reply_to_message_id,
+                                                                                    client_manager,
+                                                                                    chat_data,
+                                                                                    app_state,
+                                                                                })
+                                                                                .await;
+                                                                        });
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                }
+                                                div { class: "input-toolbar input-toolbar-inline",
+                                                    button {
+                                                        class: "toolbar-btn",
+                                                        title: t("emoji-picker"),
+                                                        onclick: move |_| {
+                                                            let current = *show_input_emoji.read();
+                                                            show_input_emoji.set(!current);
+                                                        },
+                                                        "😀"
+                                                    }
+                                                    button {
+                                                        class: "toolbar-btn gif-btn",
+                                                        title: t("gif-picker"),
+                                                        "GIF"
+                                                    }
+                                                    button {
+                                                        class: "toolbar-btn",
+                                                        title: t("chat-markdown-formatting"),
+                                                        "⌘"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        button {
+                                            class: "btn btn-send chat-send-inline",
+                                            disabled: message_input.read().is_empty() && pending_attachments.read().is_empty(),
+                                            onclick: {
+                                                let channel_id_btn = channel_id.clone();
+                                                move |_| {
+                                                    let text = message_input.read().clone();
+                                                    let attachments = pending_attachments.read().clone();
+                                                    let reply_to_message_id = reply_target
+                                                        .read()
+                                                        .as_ref()
+                                                        .map(|reply| reply.message_id.clone());
+                                                    if !text.is_empty() || !attachments.is_empty() {
+                                                        message_input.set(String::new());
+                                                        pending_attachments.set(Vec::new());
+                                                        reply_target.set(None);
+                                                        if let Some(ref cid) = channel_id_btn {
+                                                            let cid = cid.clone();
+                                                            let text = text.clone();
+                                                            let attachments = attachments
+                                                                .iter()
+                                                                .map(pending_attachment_to_attachment)
+                                                                .collect::<Vec<_>>();
+                                                            spawn(async move {
+                                                                send_message(SendMessageCtx {
+                                                                        channel_id: cid,
+                                                                        text,
+                                                                        attachments,
+                                                                        reply_to_message_id,
+                                                                        client_manager,
+                                                                        chat_data,
+                                                                        app_state,
+                                                                    })
+                                                                    .await;
+                                                            });
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            {t("chat-send")}
+                                        }
+                                    }
+                                    input {
+                                        r#type: "file",
+                                        id: "poly-file-input",
+                                        multiple: true,
+                                        style: "display:none;",
+                                        onchange: move |_evt| {
+                                            let files = _evt.files();
+                                            if !files.is_empty() {
+                                                spawn(async move {
+                                                    append_attachment_previews(pending_attachments, files).await;
+                                                });
+                                            }
+                                        },
+                                    }
+                                    if *show_input_emoji.read() {
+                                        EmojiPicker {
+                                            on_select: move |emoji: String| {
+                                                let current = message_input.read().clone();
+                                                message_input.set(format!("{current}{emoji}"));
+                                                show_input_emoji.set(false);
+                                            },
+                                            on_close: move |_| show_input_emoji.set(false),
+                                        }
+                                    }
+                                } else {
+                                    div { class: "message-input-disabled", {t("chat-select-channel")} }
+                                }
+                            }
+                        }
+
+                        if utility_panel.read().is_some() || member_list_visible {
+                            div { class: "chat-side-column",
+                                if let Some(panel) = *utility_panel.read() {
+                                    ChatUtilityRail {
+                                        panel,
+                                        search_query: search_query_value.clone(),
+                                        search_hits: search_hits.read().clone(),
+                                        search_terms: search_terms.clone(),
+                                        pinned_messages: pinned_messages.read().clone(),
+                                        current_channel_name: current_channel.as_ref().map(|c| c.name.clone()).unwrap_or_default(),
+                                        on_open_search_hit: move |hit: MessageSearchHit| {
+                                            let current_channel_id = search_hit_channel_id.clone();
+                                            let current_server_id = search_hit_server
+                                                .as_ref()
+                                                .map(|server| server.id.clone());
+                                            let nav = nav_for_search;
+                                            spawn(async move {
+                                                if let Some((route, message_id)) = open_message_hit(
+                                                        hit,
+                                                        current_channel_id,
+                                                        current_server_id,
+                                                        client_manager,
+                                                        chat_data,
+                                                        app_state,
+                                                    )
+                                                    .await
+                                                {
+                                                    nav.push(route);
+                                                    highlight_message(&message_id);
+                                                }
+                                            });
+                                        },
+                                        on_open_pinned: move |message: Message| {
+                                            let Some(active_channel_id) = pinned_hit_channel_id.clone() else {
+                                                return;
+                                            };
+                                            let server_id = pinned_hit_server.as_ref().map(|server| server.id.clone());
+                                            let hit = MessageSearchHit {
+                                                channel_id: active_channel_id.clone(),
+                                                channel_name: pinned_hit_channel
+                                                    .as_ref()
+                                                    .map(|channel| channel.name.clone()),
+                                                server_id,
+                                                message,
+                                            };
+                                            let current_server_id = pinned_hit_server
+                                                .as_ref()
+                                                .map(|server| server.id.clone());
+                                            let nav = nav_for_pinned;
+                                            spawn(async move {
+                                                if let Some((route, message_id)) = open_message_hit(
+                                                        hit,
+                                                        Some(active_channel_id),
+                                                        current_server_id,
+                                                        client_manager,
+                                                        chat_data,
+                                                        app_state,
+                                                    )
+                                                    .await
+                                                {
+                                                    nav.push(route);
+                                                    highlight_message(&message_id);
+                                                }
+                                            });
+                                        },
+                                        on_close: move |_| utility_panel.set(None),
+                                    }
+                                } else if is_dm_channel {
+                                    DmContactPanel { channel_id: channel_id.clone().unwrap_or_default() }
+                                } else if is_group_channel {
+                                    DmUserSidebar {}
+                                } else {
+                                    UserSidebar {}
+                                }
+                            }
                         }
                     }
                 }

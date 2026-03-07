@@ -259,6 +259,16 @@ fn ServerRow(record: ServerRecord) -> Element {
 - Integration tests with demo client for UI state flows
 - Hot-reload smoke test: modify a component, verify it updates
 
+## Chat Shell Layout Rule (2026-03-07)
+
+- The chat header must span the full width of the chat shell, including when the right-side
+  member/thread/pinned/contact rail is open.
+- Implement this by keeping the header above a dedicated `.chat-body-shell` split. The right rail
+  (`.chat-side-column`) must be a sibling of the message/content column inside the body, **not** a
+  sibling of the entire `.chat-main-column`.
+- Reason: if the rail is attached to the outer shell, opening it shrinks the header and pulls the
+  inline search box left, which diverges from the Discord-style layout Poly is matching.
+
 ## MANDATORY: Visual Testing with MCP desktop-devtools
 
 **After every change that touches `rsx!` blocks** (UI layout, component structure, new
