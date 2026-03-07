@@ -49,6 +49,17 @@ cd electron && npm run build  # Uses electron-builder or electron-packager
 - `electron/main.js` — window size, title, menu, native integrations
 - `Dioxus.toml` — web target (builds WASM bundle)
 
+## Shared Shell JS (2026-03-07)
+
+- Shared Electron shell logic lives in `electron/shared/`
+	- `main_process.js` — asset server, window-state sync, window control IPC
+	- `preload_bridge.js` — `window.polyElectron` preload bridge
+- `apps/desktop-electron-devtools/electron/` imports these shared helpers instead
+	of maintaining a second copy
+- When changing Electron window controls, preload bridge shape, or bundle-serving
+	logic, update the shared helpers first so the production and devtools shells
+	stay behaviorally aligned
+
 ## Notes
 
 - This is the heaviest desktop option (ships Chromium)

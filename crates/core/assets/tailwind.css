@@ -135,18 +135,42 @@ body {
     box-shadow: var(--shadow-sm);
     user-select: none;
     z-index: 350;
+    /* position: relative lets .electron-titlebar-title use absolute centering
+       over the full bar width, independent of left/right section widths. */
+    position: relative;
 }
 
+/* ── Left: back / forward navigation buttons ────────────────────────────── */
+.electron-nav-buttons {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    gap: 2px;
+    /* no -webkit-app-region here — inherits none, so buttons are clickable */
+}
+
+.electron-nav-btn {
+    width: 32px;
+    font-size: 1.05rem;
+}
+
+/* ── Center: drag region with absolutely-centered title ─────────────────── */
 .electron-titlebar-drag-region {
     display: flex;
     align-items: center;
     flex: 1;
     min-width: 0;
-    padding: 0 12px;
     -webkit-app-region: drag;
 }
 
 .electron-titlebar-title {
+    /* Absolute centering relative to .electron-titlebar (position: relative).
+       This keeps the title perfectly centered over the whole bar regardless of
+       the nav buttons and window controls being different widths. */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     color: var(--text-secondary);
     font-size: 0.8125rem;
     font-weight: 600;
@@ -154,6 +178,10 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* Cap width so title never overlaps nav buttons or window controls */
+    max-width: 45%;
+    /* Pass pointer events through to the drag region beneath */
+    pointer-events: none;
 }
 
 .electron-window-controls {

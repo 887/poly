@@ -16,10 +16,14 @@
  * DO NOT use this for packaging or distribution.
  */
 
-const { app, BrowserWindow, Menu } = require('electron');
-const fs = require('node:fs');
-const http = require('node:http');
+const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('node:path');
+const {
+  attachWindowStateListeners,
+  registerWindowControlsIpc,
+  resolveWebRoot,
+  startAssetServer,
+} = require('../../desktop-electron/electron/shared/main_process');
 
 // Enable Chrome DevTools Protocol on a fixed port so the MCP can always find it.
 // appendSwitch() must be called before app.whenReady() to take effect.
@@ -46,11 +50,18 @@ const WINDOW_OPTIONS = {
   height: 900,
   minWidth: 800,
   minHeight: 600,
-  title: 'Poly — Electron DevTools Build',
+  title: 'Poly',
+  frame: false,
+  titleBarStyle: 'hidden',
+  titleBarOverlay: false,
+  autoHideMenuBar: true,
   webPreferences: {
-    // DevTools variant: relax isolation so CDP has full access.
-    contextIsolation: false,
+    preload: path.join(__dirname, 'preload.js'),
+    // Keep the same preload contract as production so the custom title bar
+    // renders in the devtools shell too. CDP still has full renderer access.
+    contextIsolation: true,
     nodeIntegration: false,
+    sandbox: false,
     devTools: true,
   },
   backgroundColor: '#1a1a1a',
@@ -61,91 +72,9 @@ const WINDOW_OPTIONS = {
 /** @type {http.Server | null} */
 let assetServer = null;
 
-function contentTypeFor(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  switch (ext) {
-    case '.html': return 'text/html; charset=utf-8';
-    case '.js': return 'text/javascript; charset=utf-8';
-    case '.css': return 'text/css; charset=utf-8';
-    case '.wasm': return 'application/wasm';
-    case '.json': return 'application/json; charset=utf-8';
-    case '.svg': return 'image/svg+xml';
-    case '.png': return 'image/png';
-    case '.jpg':
-    case '.jpeg': return 'image/jpeg';
-    case '.webp': return 'image/webp';
-    case '.ico': return 'image/x-icon';
-    default: return 'application/octet-stream';
-  }
-}
-
-function resolveWebRoot() {
-  const candidates = [
-    path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'debug', 'web', 'public'),
-    path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'release', 'web', 'public'),
-    path.join(__dirname, '..', '..', 'desktop-electron', 'dist'),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(candidate, 'index.html'))) {
-      return candidate;
-    }
-  }
-
-  throw new Error(
-    `Could not find a built Poly Electron web bundle. Tried: ${candidates.join(', ')}`,
-  );
-}
-
-async function startAssetServer(rootDir) {
-  return await new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const requestUrl = new URL(req.url || '/', 'http://127.0.0.1');
-      let relativePath = decodeURIComponent(requestUrl.pathname);
-      if (relativePath === '/') {
-        relativePath = '/index.html';
-      }
-
-      const normalizedPath = path.normalize(relativePath).replace(/^([.][.][/\\])+/, '');
-      let filePath = path.join(rootDir, normalizedPath);
-      if (!filePath.startsWith(rootDir)) {
-        res.writeHead(403);
-        res.end('Forbidden');
-        return;
-      }
-
-      if (!fs.existsSync(filePath)) {
-        const extension = path.extname(filePath);
-        if (!extension) {
-          filePath = path.join(rootDir, 'index.html');
-        }
-      }
-
-      fs.readFile(filePath, (err, data) => {
-        if (err) {
-          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-          res.end(`Not found: ${requestUrl.pathname}`);
-          return;
-        }
-
-        res.writeHead(200, {
-          'Content-Type': contentTypeFor(filePath),
-          'Cache-Control': 'no-store',
-        });
-        res.end(data);
-      });
-    });
-
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      resolve(server);
-    });
-  });
-}
-
 async function createWindow() {
   const win = new BrowserWindow(WINDOW_OPTIONS);
-  win.once('ready-to-show', () => win.show());
+  attachWindowStateListeners(win);
   win.on('closed', () => {
     console.error('[Poly Electron DevTools] BrowserWindow closed');
   });
@@ -186,7 +115,11 @@ async function createWindow() {
   // Relative path from electron/ dir: ../../../target/dx/...
   let webRoot;
   try {
-    webRoot = resolveWebRoot();
+    webRoot = resolveWebRoot([
+      path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'debug', 'web', 'public'),
+      path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'release', 'web', 'public'),
+      path.join(__dirname, '..', '..', 'desktop-electron', 'dist'),
+    ]);
     assetServer = await startAssetServer(webRoot);
   } catch (err) {
     console.error(
@@ -223,6 +156,8 @@ async function createWindow() {
     return { action: 'deny' };
   });
 }
+
+registerWindowControlsIpc(ipcMain, BrowserWindow);
 
 app.whenReady().then(() => {
   // Remove the default application menu for a cleaner debugging workspace.

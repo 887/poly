@@ -1,0 +1,15 @@
+nohup: ignoring input
+
+DevTools listening on ws://127.0.0.1:9224/devtools/browser/54a9fc49-0c0d-478b-ba61-04b386b97dec
+[Poly Electron DevTools][console:2] node:electron/js2c/renderer_init:2 %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+[Poly Electron DevTools][console:1] http://127.0.0.1:44395/wasm/snippets/dioxus-interpreter-js-c0f0333193e32f17/src/js/patch_console.js:1 %cINFO%c crates/core/src/storage/mod.rs:707%c Storage schema: current v0, target v1 color: whitesmoke; background: #444 color: gray; font-style: italic color: inherit
+[Poly Electron DevTools][console:1] http://127.0.0.1:44395/wasm/snippets/dioxus-interpreter-js-c0f0333193e32f17/src/js/patch_console.js:1 %cINFO%c crates/core/src/storage/mod.rs:714%c Applying storage migration: v0 → v1 (initial stamp) color: whitesmoke; background: #444 color: gray; font-style: italic color: inherit
+[Poly Electron DevTools][console:1] http://127.0.0.1:44395/wasm/snippets/dioxus-interpreter-js-c0f0333193e32f17/src/js/patch_console.js:1 %cINFO%c crates/core/src/ui/mod.rs:144%c Storage: no setup found, showing wizard color: whitesmoke; background: #444 color: gray; font-style: italic color: inherit
+[Poly Electron DevTools] BrowserWindow closed

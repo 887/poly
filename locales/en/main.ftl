@@ -399,19 +399,6 @@ server-menu-privacy = Privacy Settings
 server-menu-edit-profile = Edit Per-server Profile
 server-menu-leave = Leave Server
 server-menu-copy-id = Copy Server ID
-
-# Server context menu
-server-menu-mark-read = Mark as Read
-server-menu-invite = Invite to Server
-server-menu-mute = Mute Server
-server-menu-unmute = Unmute Server
-server-menu-notif-settings = Notification Settings
-server-menu-hide-muted = Hide Muted Channels
-server-menu-show-all = Show All Channels
-server-menu-privacy = Privacy Settings
-server-menu-edit-profile = Edit Per-server Profile
-server-menu-leave = Leave Server
-server-menu-copy-id = Copy Server ID
 server-menu-add-favorites = Add to Favorites
 server-menu-remove-favorites = Remove from Favorites
 

@@ -321,8 +321,21 @@ pub fn App() -> Element {
                                 if matches!(route, Route::PageNotFound { .. } | Route::Root) {
                                     let cm = client_manager.read();
                                     if cm.demo_active {
-                                        return Some( // No active accounts — land on Settings › Accounts so
-                                            NavigationTarget::Internal(Route::DmsHome { // Signal<T>: Copy — shadow into a local mut binding
+                                        // Restore the last-visited route for the demo account,
+                                        // if one was persisted from a previous session.
+                                        // This makes the app feel like it "remembers" where
+                                        // you were instead of always landing on DmsHome.
+                                        let last_route = app_state
+                                            .read()
+                                            .nav
+                                            .account_last_routes
+                                            .values()
+                                            .find_map(|url| url.parse::<Route>().ok());
+                                        if let Some(stored_route) = last_route {
+                                            return Some(NavigationTarget::Internal(stored_route));
+                                        }
+                                        return Some(
+                                            NavigationTarget::Internal(Route::DmsHome {
                                                 backend: "demo".to_string(),
                                                 instance_id: "demo".to_string(),
                                                 account_id: "demo-cat".to_string(),

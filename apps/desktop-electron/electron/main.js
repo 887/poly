@@ -11,9 +11,13 @@
  */
 
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
-const fs = require('node:fs');
-const http = require('node:http');
 const path = require('node:path');
+const {
+  attachWindowStateListeners,
+  registerWindowControlsIpc,
+  resolveWebRoot,
+  startAssetServer,
+} = require('./shared/main_process');
 
 // ── Security: keep remote content from running Node.js ───────────────────────
 // contextIsolation and nodeIntegration=false prevent any loaded page from
@@ -42,116 +46,20 @@ const WINDOW_OPTIONS = {
 /** @type {http.Server | null} */
 let assetServer = null;
 
-function sendWindowState(win) {
-  if (win.isDestroyed()) {
-    return;
-  }
-
-  win.webContents.send('poly-window-state', {
-    isMaximized: win.isMaximized(),
-    isFullScreen: win.isFullScreen(),
-  });
-}
-
-function contentTypeFor(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  switch (ext) {
-    case '.html': return 'text/html; charset=utf-8';
-    case '.js': return 'text/javascript; charset=utf-8';
-    case '.css': return 'text/css; charset=utf-8';
-    case '.wasm': return 'application/wasm';
-    case '.json': return 'application/json; charset=utf-8';
-    case '.svg': return 'image/svg+xml';
-    case '.png': return 'image/png';
-    case '.jpg':
-    case '.jpeg': return 'image/jpeg';
-    case '.webp': return 'image/webp';
-    case '.ico': return 'image/x-icon';
-    default: return 'application/octet-stream';
-  }
-}
-
-function resolveWebRoot() {
-  const candidates = [
-    path.join(__dirname, '..', 'dist'),
-    path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'debug', 'web', 'public'),
-    path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'release', 'web', 'public'),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(candidate, 'index.html'))) {
-      return candidate;
-    }
-  }
-
-  throw new Error(
-    `Could not find a built Poly Electron web bundle. Tried: ${candidates.join(', ')}`,
-  );
-}
-
-async function startAssetServer(rootDir) {
-  return await new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const requestUrl = new URL(req.url || '/', 'http://127.0.0.1');
-      let relativePath = decodeURIComponent(requestUrl.pathname);
-      if (relativePath === '/') {
-        relativePath = '/index.html';
-      }
-
-      const normalizedPath = path.normalize(relativePath).replace(/^([.][.][/\\])+/, '');
-      let filePath = path.join(rootDir, normalizedPath);
-      if (!filePath.startsWith(rootDir)) {
-        res.writeHead(403);
-        res.end('Forbidden');
-        return;
-      }
-
-      if (!fs.existsSync(filePath)) {
-        const extension = path.extname(filePath);
-        if (!extension) {
-          filePath = path.join(rootDir, 'index.html');
-        }
-      }
-
-      fs.readFile(filePath, (err, data) => {
-        if (err) {
-          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-          res.end(`Not found: ${requestUrl.pathname}`);
-          return;
-        }
-
-        res.writeHead(200, {
-          'Content-Type': contentTypeFor(filePath),
-          'Cache-Control': 'no-store',
-        });
-        res.end(data);
-      });
-    });
-
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      resolve(server);
-    });
-  });
-}
-
 async function createWindow() {
   const win = new BrowserWindow(WINDOW_OPTIONS);
 
   // Show only after the first paint — avoids white-flash on cold start.
-  win.once('ready-to-show', () => {
-    win.show();
-    sendWindowState(win);
-  });
-  win.on('maximize', () => sendWindowState(win));
-  win.on('unmaximize', () => sendWindowState(win));
-  win.on('enter-full-screen', () => sendWindowState(win));
-  win.on('leave-full-screen', () => sendWindowState(win));
+  attachWindowStateListeners(win);
 
   // Load the local WASM web-app bundle. Path relative to THIS file (electron/).
   let webRoot;
   try {
-    webRoot = resolveWebRoot();
+    webRoot = resolveWebRoot([
+      path.join(__dirname, '..', 'dist'),
+      path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'debug', 'web', 'public'),
+      path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'release', 'web', 'public'),
+    ]);
     assetServer = await startAssetServer(webRoot);
   } catch (err) {
     // Friendly message if the WASM build hasn't been run yet.
@@ -172,8 +80,10 @@ async function createWindow() {
     );
   });
 
-  // Open DevTools in development (NODE_ENV=development or POLY_DEV=1).
-  if (process.env.NODE_ENV === 'development' || process.env.POLY_DEV === '1') {
+  // Open DevTools only when POLY_DEVTOOLS=1 is explicitly set.
+  // POLY_DEV=1 (used by VS Code launch tasks for CDP debug port) no longer
+  // triggers auto-open — set POLY_DEVTOOLS=1 separately if you want it.
+  if (process.env.POLY_DEVTOOLS === '1') {
     win.webContents.openDevTools({ mode: 'detach' });
   }
 
@@ -184,38 +94,7 @@ async function createWindow() {
   });
 }
 
-ipcMain.on('poly-window-minimize', (event) => {
-  BrowserWindow.fromWebContents(event.sender)?.minimize();
-});
-
-ipcMain.on('poly-window-toggle-maximize', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win) {
-    return;
-  }
-
-  if (win.isMaximized()) {
-    win.unmaximize();
-  } else {
-    win.maximize();
-  }
-});
-
-ipcMain.on('poly-window-close', (event) => {
-  BrowserWindow.fromWebContents(event.sender)?.close();
-});
-
-ipcMain.handle('poly-window-state', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win) {
-    return { isMaximized: false, isFullScreen: false };
-  }
-
-  return {
-    isMaximized: win.isMaximized(),
-    isFullScreen: win.isFullScreen(),
-  };
-});
+registerWindowControlsIpc(ipcMain, BrowserWindow);
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 

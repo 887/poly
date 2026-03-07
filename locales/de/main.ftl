@@ -385,19 +385,6 @@ server-menu-privacy = Datenschutzeinstellungen
 server-menu-edit-profile = Serverprofil bearbeiten
 server-menu-leave = Server verlassen
 server-menu-copy-id = Server-ID kopieren
-
-# Server context menu
-server-menu-mark-read = Als gelesen markieren
-server-menu-invite = Zum Server einladen
-server-menu-mute = Server stummschalten
-server-menu-unmute = Server-Stummschaltung aufheben
-server-menu-notif-settings = Benachrichtigungseinstellungen
-server-menu-hide-muted = Stummgeschaltete Kanäle ausblenden
-server-menu-show-all = Alle Kanäle anzeigen
-server-menu-privacy = Datenschutzeinstellungen
-server-menu-edit-profile = Pro-Server-Profil bearbeiten
-server-menu-leave = Server verlassen
-server-menu-copy-id = Server-ID kopieren
 server-menu-add-favorites = Zu Favoriten hinzufügen
 server-menu-remove-favorites = Aus Favoriten entfernen
 
