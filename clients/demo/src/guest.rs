@@ -142,6 +142,15 @@ fn to_wit_message(m: pc::Message) -> wit::Message {
     }
 }
 
+fn to_wit_message_search_hit(hit: pc::MessageSearchHit) -> wit::MessageSearchHit {
+    wit::MessageSearchHit {
+        channel_id: hit.channel_id,
+        channel_name: hit.channel_name,
+        server_id: hit.server_id,
+        message: to_wit_message(hit.message),
+    }
+}
+
 fn to_wit_session(s: pc::Session) -> wit::Session {
     wit::Session {
         id: s.id,
@@ -253,6 +262,27 @@ fn from_wit_message_content(mc: wit::MessageContent) -> pc::MessageContent {
     }
 }
 
+fn from_wit_message_query(query: wit::MessageQuery) -> pc::MessageQuery {
+    pc::MessageQuery {
+        before: query.before,
+        after: query.after,
+        around: query.around,
+        limit: query.limit,
+    }
+}
+
+fn from_wit_message_search_query(query: wit::MessageSearchQuery) -> pc::MessageSearchQuery {
+    pc::MessageSearchQuery {
+        text: query.text,
+        channel_id: query.channel_id,
+        server_id: query.server_id,
+        author_id: query.author_id,
+        has_link: query.has_link,
+        mentions_user_id: query.mentions_user_id,
+        limit: query.limit,
+    }
+}
+
 // ─── Helper: convert ClientResult<T> → Result<WitT, WitError> ────
 
 /// Wrap a `poly_client::ClientResult<T>` into the WIT error type using
@@ -336,21 +366,35 @@ impl Guest for DemoPlugin {
 
     fn get_messages(
         channel_id: String,
-        _query: wit::MessageQuery,
+        query: wit::MessageQuery,
     ) -> Result<Vec<wit::Message>, wit::ClientError> {
-        let messages = if channel_id.starts_with("dm-") {
-            crate::data::demo_dm_messages(&channel_id)
-        } else if channel_id.starts_with("group-") {
-            crate::data::demo_group_messages(&channel_id)
-        } else {
-            let rich = crate::data::demo2_messages_rich(&channel_id);
-            if rich.is_empty() {
-                crate::data::demo_messages(&channel_id)
-            } else {
-                rich
-            }
-        };
+        let messages =
+            crate::data::demo_messages_query(&channel_id, &from_wit_message_query(query));
         Ok(messages.into_iter().map(to_wit_message).collect())
+    }
+
+    fn search_messages(
+        query: wit::MessageSearchQuery,
+    ) -> Result<Vec<wit::MessageSearchHit>, wit::ClientError> {
+        let hits = crate::data::demo_search_messages(&from_wit_message_search_query(query));
+        Ok(hits.into_iter().map(to_wit_message_search_hit).collect())
+    }
+
+    fn get_pinned_messages(channel_id: String) -> Result<Vec<wit::Message>, wit::ClientError> {
+        Ok(crate::data::demo_pinned_messages(&channel_id)
+            .into_iter()
+            .map(to_wit_message)
+            .collect())
+    }
+
+    fn set_message_pinned(
+        _channel_id: String,
+        _message_id: String,
+        _pinned: bool,
+    ) -> Result<(), wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "demo pin mutation not yet implemented".to_string(),
+        ))
     }
 
     fn get_user(user_id: String) -> Result<wit::User, wit::ClientError> {

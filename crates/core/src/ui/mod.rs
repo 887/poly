@@ -126,6 +126,8 @@ async fn init_storage(
                     if settings.demo_active {
                         favorites_sidebar::toggle_demo(client_manager, chat_data, app_state).await;
                     }
+                    app_state.write().nav.right_sidebar_visible = settings.server_member_list_open;
+                    app_state.write().nav.dm_right_sidebar_visible = settings.dm_member_list_open;
                     // Restore per-account last-visited routes so account-switching
                     // returns to the correct page even after a page reload.
                     match storage.get_account_last_routes().await {
@@ -165,6 +167,10 @@ async fn persist_setup_completion(account_id: String) {
         demo_active: false,
         // New install has no favorites yet.
         favorited_server_ids: Vec::new(),
+        server_icon_overrides: std::collections::HashMap::new(),
+        server_banner_overrides: std::collections::HashMap::new(),
+        server_member_list_open: true,
+        dm_member_list_open: false,
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");

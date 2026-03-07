@@ -177,6 +177,7 @@ pub async fn get_messages(backend: &PluginBackend, channel_id: &str) -> Vec<poly
     let query = MessageQuery {
         before: None,
         after: None,
+        around: None,
         limit: Some(50),
     };
     backend

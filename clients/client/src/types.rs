@@ -353,8 +353,49 @@ pub struct MessageQuery {
     pub before: Option<String>,
     /// Fetch messages after this message ID.
     pub after: Option<String>,
+    /// Fetch a window of messages centered around this message ID.
+    ///
+    /// Used for jump-to-message flows (search results, pinned messages,
+    /// notifications) where the UI needs surrounding history even if the
+    /// target message is far outside the currently loaded window.
+    pub around: Option<String>,
     /// Maximum number of messages to return.
     pub limit: Option<u32>,
+}
+
+/// Query options for backend-native message search.
+///
+/// Models Discord-like search primitives while remaining generic enough for
+/// backends that expose different server-side search APIs.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageSearchQuery {
+    /// Free-text search string.
+    pub text: String,
+    /// Restrict search to a specific channel, if supported.
+    pub channel_id: Option<String>,
+    /// Restrict search to a specific server/community, if supported.
+    pub server_id: Option<String>,
+    /// Restrict search to a specific author, if supported.
+    pub author_id: Option<String>,
+    /// Restrict search to messages containing a link.
+    pub has_link: bool,
+    /// Restrict search to messages mentioning a specific user.
+    pub mentions_user_id: Option<String>,
+    /// Maximum number of hits to return.
+    pub limit: Option<u32>,
+}
+
+/// A backend search result hit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageSearchHit {
+    /// Channel containing the hit.
+    pub channel_id: String,
+    /// Optional display name for the channel containing the hit.
+    pub channel_name: Option<String>,
+    /// Optional server/community containing the hit.
+    pub server_id: Option<String>,
+    /// The matched message.
+    pub message: Message,
 }
 
 /// A user on a messaging platform.
@@ -511,4 +552,37 @@ pub struct VoiceConnection {
     pub is_streaming: bool,
     /// Whether our camera is on.
     pub is_video_on: bool,
+}
+
+/// The scope in which a slash command is valid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CommandScope {
+    /// Available everywhere — any channel, DM, and group DM.
+    Global,
+    /// Available in server text channels only (not DMs).
+    Channel,
+    /// Available in DMs and group DMs only.
+    DirectMessage,
+}
+
+/// A slash command available in a channel.
+///
+/// Returned by [`ClientBackend::get_channel_commands`] to populate the `/`
+/// autocomplete popup in the composer. Built-in Poly commands are added by the
+/// UI layer; backend- or bot-provided commands are injected by each client.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatCommand {
+    /// Command name without the leading `/` (e.g. `"shrug"`).
+    pub name: String,
+    /// Short description shown in the autocomplete popup.
+    pub description: String,
+    /// Display name of the app or bot providing this command
+    /// (e.g. `"Built-in"`, `"MusicCat"`, `"ModBot"`).
+    pub provider: String,
+    /// Whether this is a Poly built-in command (shown in a separate section).
+    pub is_builtin: bool,
+    /// Optional usage hint shown after the command name (e.g. `"<song URL>"`).
+    pub usage: Option<String>,
+    /// Scope in which this command is available.
+    pub scope: CommandScope,
 }

@@ -25,8 +25,8 @@ use wasmtime::{Engine, Store};
 
 use poly_client::{
     AuthCredentials, BackendType, Channel, ClientBackend, ClientError, ClientEvent, ClientResult,
-    DmChannel, Group, Message, MessageContent, MessageQuery, Notification, PresenceStatus, Server,
-    Session, User, VoiceParticipant,
+    DmChannel, Group, Message, MessageContent, MessageQuery, MessageSearchHit, MessageSearchQuery,
+    Notification, PresenceStatus, Server, Session, User, VoiceParticipant,
 };
 
 use super::bridge;
@@ -350,6 +350,63 @@ impl ClientBackend for PluginBackend {
             .await;
         match result {
             Ok(Ok(msgs)) => Ok(msgs.into_iter().map(bridge::from_wit_message).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn search_messages(
+        &self,
+        query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        refuel(&self.store).await;
+        let wit_query = bridge::to_wit_message_search_query(query);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_search_messages(&mut *store, &wit_query)
+            .await;
+        match result {
+            Ok(Ok(hits)) => Ok(hits
+                .into_iter()
+                .map(bridge::from_wit_message_search_hit)
+                .collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_pinned_messages(&mut *store, channel_id)
+            .await;
+        match result {
+            Ok(Ok(messages)) => Ok(messages.into_iter().map(bridge::from_wit_message).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn set_message_pinned(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+        pinned: bool,
+    ) -> ClientResult<()> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_set_message_pinned(&mut *store, channel_id, message_id, pinned)
+            .await;
+        match result {
+            Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }

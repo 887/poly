@@ -104,6 +104,53 @@ pub trait ClientBackend: Send + Sync {
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>>;
 
+    /// Search messages using the backend's native search implementation.
+    ///
+    /// Backends that do not support search should return the default
+    /// `Err(ClientError::NotSupported(...))` provided below.
+    async fn search_messages(
+        &self,
+        query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        let _ = query;
+        Err(ClientError::NotSupported("search_messages".to_string()))
+    }
+
+    /// Get pinned messages for a channel.
+    ///
+    /// Backends that do not support pins should return an empty list or the
+    /// default implementation below.
+    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
+        let _ = channel_id;
+        Ok(Vec::new())
+    }
+
+    /// Get slash commands available in a channel.
+    ///
+    /// Returns app/bot-provided commands valid for `channel_id`. The UI layer
+    /// prepends built-in Poly commands (shrug, me, tableflip, …) before showing
+    /// the autocomplete popup, so backends do not need to include those.
+    ///
+    /// Backends that do not support slash commands should return an empty list.
+    async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        let _ = channel_id;
+        Ok(Vec::new())
+    }
+
+    /// Pin or unpin a message in a channel.
+    ///
+    /// Backends that do not support pin mutation should return the default
+    /// `Err(ClientError::NotSupported(...))` provided below.
+    async fn set_message_pinned(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+        pinned: bool,
+    ) -> ClientResult<()> {
+        let _ = (channel_id, message_id, pinned);
+        Err(ClientError::NotSupported("set_message_pinned".to_string()))
+    }
+
     // --- Users ---
 
     /// Get a user by ID.

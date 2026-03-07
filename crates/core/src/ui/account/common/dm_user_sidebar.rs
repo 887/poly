@@ -97,6 +97,7 @@ fn DmMemberRow(
     let dot_class = presence_dot_class(&member.presence);
     let member_id = member.id.clone();
     let member_name = member.display_name.clone();
+    let avatar_url = member.avatar_url.clone();
     let remove_tooltip = format!("Remove {} from this group", member.display_name);
 
     rsx! {
@@ -106,7 +107,15 @@ fn DmMemberRow(
                 div {
                     class: "dm-avatar-small",
                     style: "background-color: {color};",
-                    "{first_char}"
+                    if let Some(ref url) = avatar_url {
+                        img {
+                            class: "dm-avatar-img",
+                            src: "{url}",
+                            alt: "{member_name}",
+                        }
+                    } else {
+                        "{first_char}"
+                    }
                 }
                 span { class: "{dot_class}" }
             }

@@ -138,6 +138,7 @@ pub fn FavoritesBar() -> Element {
                             account_display_name: server.account_display_name.clone(),
                             backend_name: server.backend.display_name().to_string(),
                             unread: server.unread_count,
+                            icon_url: server.icon_url.clone(),
                         }
                     }
                 }
@@ -381,6 +382,9 @@ fn FavoriteServerIcon(
     account_display_name: String,
     backend_name: String,
     unread: u32,
+    /// Optional server icon URL. When `Some`, rendered as an `<img>`; when
+    /// `None`, falls back to a colored first-letter placeholder.
+    icon_url: Option<String>,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
@@ -564,10 +568,18 @@ fn FavoriteServerIcon(
                 cd.drag_over_id = None;
             },
             title: "{tooltip}",
-            div {
-                class: "server-icon-letter",
-                style: "background-color: {icon_color};",
-                "{first_letter}"
+            if let Some(ref url) = icon_url {
+                img {
+                    class: "server-icon-image",
+                    src: "{url}",
+                    alt: "{server_name}",
+                }
+            } else {
+                div {
+                    class: "server-icon-letter",
+                    style: "background-color: {icon_color};",
+                    "{first_letter}"
+                }
             }
             // Source badge: show account avatar image (or fallback letter)
             if let Some(url) = &account_avatar_url {
@@ -821,9 +833,46 @@ pub async fn load_server_data(
     }
 
     chat_data.write().loading = false;
+    // Apply any user-defined icon/banner overrides from storage.
+    apply_server_icon_overrides(&mut chat_data).await;
 }
 
-/// Persist the current favorites list to storage.
+/// Apply user icon and banner overrides from `AppSettings` to all servers in
+/// `chat_data`.
+///
+/// Called after every `load_server_data` and `restore_server_channel` so that
+/// overrides entered in the server settings Overview panel survive across page
+/// navigations and app restarts.
+///
+/// No-ops silently if storage is not yet initialised.
+async fn apply_server_icon_overrides(chat_data: &mut Signal<crate::state::ChatData>) {
+    let Some(storage) = crate::STORAGE.get() else {
+        return;
+    };
+    let Ok(settings) = storage.get_app_settings().await else {
+        return;
+    };
+    if settings.server_icon_overrides.is_empty() && settings.server_banner_overrides.is_empty() {
+        return;
+    }
+    let mut cd = chat_data.write();
+    for server in &mut cd.servers {
+        if let Some(url) = settings.server_icon_overrides.get(&server.id) {
+            server.icon_url = Some(url.clone());
+        }
+        if let Some(url) = settings.server_banner_overrides.get(&server.id) {
+            server.banner_url = Some(url.clone());
+        }
+    }
+    if let Some(ref mut current) = cd.current_server {
+        if let Some(url) = settings.server_icon_overrides.get(&current.id) {
+            current.icon_url = Some(url.clone());
+        }
+        if let Some(url) = settings.server_banner_overrides.get(&current.id) {
+            current.banner_url = Some(url.clone());
+        }
+    }
+}
 ///
 /// Called after every mutation of `ChatData.favorited_server_ids` to survive
 /// page reloads, app restarts, and offline periods.
@@ -922,6 +971,8 @@ pub async fn restore_server_channel(
     }
 
     chat_data.write().loading = false;
+    // Apply any user-defined icon/banner overrides from storage.
+    apply_server_icon_overrides(&mut chat_data).await;
 }
 
 /// Start a background event-stream listener for a single backend account.

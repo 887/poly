@@ -11,6 +11,12 @@
       "command": "cargo",
       "args": ["run", "--bin", "poly-web-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
       "env": {}
+    },
+    "poly-electron": {
+      "type": "stdio",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "env": {}
     }
   }
 }

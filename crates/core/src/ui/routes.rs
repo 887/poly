@@ -47,8 +47,8 @@
 // DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
 use super::account::{
-    AccountBar, AccountSettingsPage, ChannelList, ChatView, DmUserSidebar, FriendsPanel,
-    NotificationsView, ServerSettingsPage, UserSidebar, VoiceBar, VoiceChannelView,
+    AccountBar, AccountSettingsPage, ChannelList, ChatView, FriendsPanel, NotificationsView,
+    ServerSettingsPage, VoiceBar, VoiceChannelView,
 };
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
@@ -291,9 +291,6 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
 /// DmsHome ↔ DmChat navigation since the layout stays mounted.
 #[component]
 fn DmsLayout() -> Element {
-    let app_state: Signal<AppState> = use_context();
-    let show_dm_right = app_state.read().nav.dm_right_sidebar_visible;
-
     rsx! {
         div { class: "channel-list-wrapper",
             ChannelList {}
@@ -301,9 +298,6 @@ fn DmsLayout() -> Element {
             AccountBar {}
         }
         Outlet::<Route> {}
-        if show_dm_right {
-            DmUserSidebar {}
-        }
     }
 }
 
@@ -315,10 +309,7 @@ fn DmsLayout() -> Element {
 /// Persists ChannelList across channel-switching within the same server.
 #[component]
 fn ServerLayout() -> Element {
-    let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
-
-    let show_right = app_state.read().nav.right_sidebar_visible;
     let is_voice_channel = chat_data
         .read()
         .current_channel
@@ -332,8 +323,8 @@ fn ServerLayout() -> Element {
             AccountBar {}
         }
         Outlet::<Route> {}
-        if show_right && !is_voice_channel {
-            UserSidebar {}
+        if is_voice_channel {
+            div { class: "voice-view-right-spacer" }
         }
     }
 }

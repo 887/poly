@@ -10,7 +10,8 @@ Desktop entry point wrapping the Dioxus web (WASM) build inside an **Electron** 
 ## How It Works
 
 1. Build the Dioxus web target (WASM + HTML + JS + CSS)
-2. Electron `main.js` creates a `BrowserWindow` and loads the built web app
+2. Electron `main.js` creates a `BrowserWindow`, serves the built web app over
+	loopback HTTP, and loads that local URL
 3. All Poly logic runs as WASM inside Electron's Chromium webview
 
 ## Structure
@@ -54,6 +55,15 @@ cd electron && npm run build  # Uses electron-builder or electron-packager
 - Dioxus desktop with Wry is lighter and recommended as primary
 - Electron wrapper exists for compatibility / user preference
 - May have access to Node.js APIs via preload script for platform-specific features
+
+## IMPORTANT — Bundle Loading
+
+Do **not** load the generated Dioxus bundle with `loadFile(index.html)`.
+The generated HTML references absolute `/wasm/...` and `/assets/...` URLs, which
+break under `file://` and produce a blank/gray window.
+
+Serve the built bundle directory over `http://127.0.0.1:<port>/` inside the
+Electron main process and use `loadURL` instead.
 
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 

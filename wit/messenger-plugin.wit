@@ -139,7 +139,27 @@ interface types {
     record message-query {
         before: option<string>,
         after: option<string>,
+        around: option<string>,
         limit: option<u32>,
+    }
+
+    /// Query options for backend-native message search.
+    record message-search-query {
+        text: string,
+        channel-id: option<string>,
+        server-id: option<string>,
+        author-id: option<string>,
+        has-link: bool,
+        mentions-user-id: option<string>,
+        limit: option<u32>,
+    }
+
+    /// A search hit returned by a backend.
+    record message-search-hit {
+        channel-id: string,
+        channel-name: option<string>,
+        server-id: option<string>,
+        message: message,
     }
 
     /// An authenticated session with a backend.
@@ -411,6 +431,8 @@ interface messenger-client {
         message-content,
         message,
         message-query,
+        message-search-query,
+        message-search-hit,
         user,
         group,
         dm-channel,
@@ -447,6 +469,15 @@ interface messenger-client {
 
     /// Get messages from a channel with query options.
     get-messages: func(channel-id: string, query: message-query) -> result<list<message>, client-error>;
+
+    /// Search messages using the backend's native search implementation.
+    search-messages: func(query: message-search-query) -> result<list<message-search-hit>, client-error>;
+
+    /// Get pinned messages for a channel.
+    get-pinned-messages: func(channel-id: string) -> result<list<message>, client-error>;
+
+    /// Pin or unpin a message in a channel.
+    set-message-pinned: func(channel-id: string, message-id: string, pinned: bool) -> result<_, client-error>;
 
     /// Get a user by ID.
     get-user: func(user-id: string) -> result<user, client-error>;

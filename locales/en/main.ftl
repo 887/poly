@@ -317,8 +317,38 @@ time-days-ago = { $count } days ago
 
 # Chat extras
 chat-toggle-members = Toggle member list
+chat-toggle-contact = Toggle contact info
 chat-select-channel = Select a channel to start chatting
 chat-timestamp-yesterday = Yesterday { $time }
+search-messages = Search messages
+search-placeholder = Search in this channel...
+search-placeholder-channel = Search #{ $channel }
+search-placeholder-user = Search { $user }
+search-placeholder-group = Search { $group }
+search-results = Results
+search-no-results = No messages matched that search
+search-filter-from-user = From a specific user
+search-filter-from-user-subtitle = from: user
+search-filter-in-channel = Sent in a specific channel
+search-filter-in-channel-subtitle = in: channel
+search-filter-has-link = Includes a specific type of data
+search-filter-has-link-subtitle = has: link, embed or file
+search-filter-mentions = Mentions a specific user
+search-filter-mentions-subtitle = mentions: user
+search-filter-more = More filters
+search-filter-more-subtitle = dates, author type and more
+pinned-messages = Pinned messages
+no-pinned-messages = No pinned messages
+threads = Threads
+no-threads = No threads yet
+chat-notifications = Notifications
+chat-no-notifications = No notifications here
+mute-notifications = Mute notifications
+unmute-notifications = Unmute notifications
+chat-type-message-channel = Message #{ $channel }
+chat-type-message-user = Message { $user }
+chat-type-message-group = Message { $group }
+chat-markdown-formatting = Markdown formatting
 
 # Users extras
 user-no-members = No members to show
@@ -382,13 +412,29 @@ server-banner-settings = Server Settings
 server-banner-invite = Invite People
 server-banner-notif-settings = Notification Settings
 server-banner-create-channel = Create Channel
+server-banner-channels-roles = Channels & Roles
+server-banner-browse-channels = Browse channels and opt into this server's categories.
+server-banner-channel-count = channels
 server-banner-leave = Leave Server
 
 # Server settings page
 server-settings-title = Server Settings
+server-settings-overview = Overview
 server-settings-notifications = Notifications
 server-settings-profile = Profile
 server-settings-general = General
+
+# Server overview (icon + banner)
+server-overview-icon = Server Icon
+server-overview-icon-url = Icon URL
+server-overview-icon-hint = URL of the icon image. SVG or PNG with square aspect ratio recommended.
+server-overview-banner = Server Banner
+server-overview-banner-url = Banner URL
+server-overview-banner-hint = URL of the wide banner image shown above the channel list. Landscape format (e.g. 960×240) recommended.
+server-overview-save = Save
+server-overview-saved = Saved
+server-overview-local-override = Override icon locally
+server-overview-local-override-hint = This backend doesn't support user-owned server icons. Any icon set here is stored only on this device.
 
 # Leave server inline confirm
 leave-server-title = Leave "{ $name }"?
@@ -422,6 +468,16 @@ group-member-remove-tooltip = Remove { $name } from this group
 
 # DM header
 dm-header-subtitle = Direct Message
+
+# Presence status labels
+presence-online = Online
+presence-away = Away
+presence-dnd = Do Not Disturb
+presence-offline = Offline
+
+# DM contact panel
+dm-contact-panel-title = Contact Info
+dm-contact-not-found = Contact not found
 
 # Demo backend
 demo-regenerate-data = Regenerate Demo Data

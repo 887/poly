@@ -270,7 +270,31 @@ pub fn to_wit_message_query(q: pc::MessageQuery) -> wit::MessageQuery {
     wit::MessageQuery {
         before: q.before,
         after: q.after,
+        around: q.around,
         limit: q.limit,
+    }
+}
+
+/// Convert poly-client `MessageSearchQuery` → WIT `MessageSearchQuery`.
+pub fn to_wit_message_search_query(q: pc::MessageSearchQuery) -> wit::MessageSearchQuery {
+    wit::MessageSearchQuery {
+        text: q.text,
+        channel_id: q.channel_id,
+        server_id: q.server_id,
+        author_id: q.author_id,
+        has_link: q.has_link,
+        mentions_user_id: q.mentions_user_id,
+        limit: q.limit,
+    }
+}
+
+/// Convert WIT `MessageSearchHit` → poly-client `MessageSearchHit`.
+pub fn from_wit_message_search_hit(hit: wit::MessageSearchHit) -> pc::MessageSearchHit {
+    pc::MessageSearchHit {
+        channel_id: hit.channel_id,
+        channel_name: hit.channel_name,
+        server_id: hit.server_id,
+        message: from_wit_message(hit.message),
     }
 }
 

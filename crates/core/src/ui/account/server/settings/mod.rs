@@ -15,6 +15,7 @@
 
 mod general;
 mod notifications;
+mod overview;
 mod profile;
 
 use crate::i18n::t;
@@ -22,12 +23,14 @@ use crate::state::AppState;
 use dioxus::prelude::*;
 use general::ServerGeneralSettings;
 use notifications::ServerNotificationsSettings;
+use overview::ServerOverviewSettings;
 use profile::ServerProfileSettings;
 
 /// Which section of server settings is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum ServerSettingsSection {
     #[default]
+    Overview,
     Notifications,
     Profile,
     General,
@@ -63,6 +66,7 @@ pub fn ServerSettingsPage(
     let sf = sf_raw.to_lowercase();
     let shows = move |label: &str| -> bool { sf.is_empty() || label.to_lowercase().contains(&sf) };
 
+    let overview_label = t("server-settings-overview");
     let notif_label = t("server-settings-notifications");
     let profile_label = t("server-settings-profile");
     let general_label = t("server-settings-general");
@@ -97,6 +101,13 @@ pub fn ServerSettingsPage(
                     }
                 }
                 // Navigation items
+                if shows(&overview_label) {
+                    ServerSettingsNavItem {
+                        label: overview_label.clone(),
+                        active: section() == ServerSettingsSection::Overview,
+                        onclick: move |_| section.set(ServerSettingsSection::Overview),
+                    }
+                }
                 if shows(&notif_label) {
                     ServerSettingsNavItem {
                         label: notif_label.clone(),
@@ -126,6 +137,13 @@ pub fn ServerSettingsPage(
                     h2 { "{t(\"server-settings-title\")} — {server_name}" }
                 }
                 match section() {
+                    ServerSettingsSection::Overview => rsx! {
+                        ServerOverviewSettings {
+                            server_id: server_id.clone(),
+                            server_name: server_name.clone(),
+                            backend_slug: backend.clone(),
+                        }
+                    },
                     ServerSettingsSection::Notifications => rsx! {
                         ServerNotificationsSettings { server_id: server_id.clone(), server_name: server_name.clone() }
                     },

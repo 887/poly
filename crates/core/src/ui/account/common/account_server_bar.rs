@@ -121,6 +121,7 @@ pub fn AccountServerBar() -> Element {
                     account_id: server.account_id.clone(),
                     unread: server.unread_count,
                     is_selected: selected_server.as_deref() == Some(server.id.as_str()),
+                    icon_url: server.icon_url.clone(),
                 }
             }
 
@@ -161,6 +162,9 @@ fn AccountServerIcon(
     account_id: String,
     unread: u32,
     is_selected: bool,
+    /// Optional server icon URL. When `Some`, rendered as an `<img>`; when
+    /// `None`, falls back to a colored first-letter placeholder.
+    icon_url: Option<String>,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
@@ -325,10 +329,18 @@ fn AccountServerIcon(
                 }
             },
 
-            div {
-                class: "server-icon-letter",
-                style: "background-color: {icon_color};",
-                "{first_letter}"
+            if let Some(ref url) = icon_url {
+                img {
+                    class: "server-icon-image",
+                    src: "{url}",
+                    alt: "{server_name}",
+                }
+            } else {
+                div {
+                    class: "server-icon-letter",
+                    style: "background-color: {icon_color};",
+                    "{first_letter}"
+                }
             }
             if unread > 0 {
                 span { class: "badge", "{unread}" }

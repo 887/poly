@@ -19,6 +19,87 @@ use dioxus::prelude::*;
 use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
 
+/// Encode SVG markup as a data URI so demo artwork is self-contained.
+fn svg_data_uri(svg: String) -> String {
+    let encoded = svg
+        .replace('%', "%25")
+        .replace('#', "%23")
+        .replace('<', "%3C")
+        .replace('>', "%3E")
+        .replace('"', "%22")
+        .replace('\'', "%27")
+        .replace('{', "%7B")
+        .replace('}', "%7D")
+        .replace('|', "%7C")
+        .replace('\\', "%5C")
+        .replace('^', "%5E")
+        .replace('`', "%60")
+        .replace("\n", "")
+        .replace("\r", "")
+        .replace(' ', "%20");
+    format!("data:image/svg+xml;utf8,{encoded}")
+}
+
+/// Animal-style demo avatar.
+fn animal_avatar(emoji: &str, primary: &str, secondary: &str) -> String {
+    svg_data_uri(format!(
+        r#"
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>
+    <defs>
+        <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='{primary}'/>
+            <stop offset='100%' stop-color='{secondary}'/>
+        </linearGradient>
+    </defs>
+    <circle cx='48' cy='48' r='46' fill='url(#g)'/>
+    <circle cx='48' cy='48' r='32' fill='rgba(10,12,24,0.14)'/>
+    <text x='48' y='58' text-anchor='middle' font-size='34'>{emoji}</text>
+</svg>
+                "#
+    ))
+}
+
+/// Server icon matched to the server name/theme.
+fn themed_server_icon(symbol: &str, primary: &str, secondary: &str) -> String {
+    svg_data_uri(format!(
+        r#"
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>
+    <defs>
+        <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='{primary}'/>
+            <stop offset='100%' stop-color='{secondary}'/>
+        </linearGradient>
+    </defs>
+    <rect x='4' y='4' width='88' height='88' rx='26' fill='url(#g)'/>
+    <rect x='10' y='10' width='76' height='76' rx='22' fill='rgba(255,255,255,0.10)'/>
+    <text x='48' y='58' text-anchor='middle' font-size='32'>{symbol}</text>
+</svg>
+                "#
+    ))
+}
+
+/// Wide banner artwork matched to the server theme.
+fn themed_banner(primary: &str, secondary: &str, accent: &str, symbol: &str) -> String {
+    svg_data_uri(format!(
+        r#"
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 240'>
+    <defs>
+        <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='{primary}'/>
+            <stop offset='100%' stop-color='{secondary}'/>
+        </linearGradient>
+    </defs>
+    <rect width='960' height='240' fill='url(#bg)'/>
+    <circle cx='132' cy='70' r='130' fill='rgba(255,255,255,0.08)'/>
+    <circle cx='836' cy='42' r='110' fill='rgba(255,255,255,0.06)'/>
+    <path d='M0 188 C170 134 312 226 468 170 S764 92 960 150' stroke='{accent}' stroke-opacity='0.55' stroke-width='14' fill='none' stroke-linecap='round'/>
+    <rect x='0' y='170' width='960' height='70' fill='rgba(8,10,22,0.24)'/>
+    <text x='812' y='148' text-anchor='middle' font-size='86' fill='rgba(255,255,255,0.18)'>{symbol}</text>
+</svg>
+                "#
+    ))
+}
+
 /// Bundled cat avatar image for the cat demo account.
 /// On native (Dioxus) builds, uses the asset system. On WASM plugin builds,
 /// falls back to a placeholder string.
@@ -90,18 +171,55 @@ pub fn demo2_session() -> Session {
 }
 
 /// Generate a list of demo users.
+///
+/// Users are assigned deterministic avatar images via the DiceBear API so the
+/// UI shows illustrated portraits rather than colored-letter placeholders.
+/// Emoji prefixes have been removed from display names — the avatars convey
+/// identity visually.
 pub fn demo_users() -> Vec<User> {
     let names = [
-        ("user-alice", "Alice", "📖"),
-        ("user-bob", "Bob", "🎮"),
-        ("user-charlie", "Charlie", "🦀"),
-        ("user-diana", "Diana", "🎨"),
-        ("user-eve", "Eve", "📞"),
-        ("user-frank", "Frank", "📚"),
-        ("user-grace", "Grace", "🎵"),
-        ("user-henry", "Henry", "🚤"),
-        ("user-iris", "Iris", "🌸"),
-        ("user-jack", "Jack", "🎯"),
+        (
+            "user-alice",
+            "Alice",
+            animal_avatar("🐱", "#ff7eb6", "#8f5bff"),
+        ),
+        ("user-bob", "Bob", animal_avatar("🐶", "#f6c453", "#f58b54")),
+        (
+            "user-charlie",
+            "Charlie",
+            animal_avatar("🦊", "#ff8c5a", "#ff4f81"),
+        ),
+        (
+            "user-diana",
+            "Diana",
+            animal_avatar("🐰", "#f7a8ff", "#7d7cff"),
+        ),
+        ("user-eve", "Eve", animal_avatar("🦦", "#50d2c2", "#2274a5")),
+        (
+            "user-frank",
+            "Frank",
+            animal_avatar("🐻", "#b67f52", "#6d4c41"),
+        ),
+        (
+            "user-grace",
+            "Grace",
+            animal_avatar("🦌", "#55d6be", "#3478f6"),
+        ),
+        (
+            "user-henry",
+            "Henry",
+            animal_avatar("🐺", "#94a3b8", "#475569"),
+        ),
+        (
+            "user-iris",
+            "Iris",
+            animal_avatar("🐼", "#e5e7eb", "#7c3aed"),
+        ),
+        (
+            "user-jack",
+            "Jack",
+            animal_avatar("🐯", "#fb923c", "#ef4444"),
+        ),
     ];
 
     let presences = [
@@ -120,10 +238,10 @@ pub fn demo_users() -> Vec<User> {
     names
         .iter()
         .zip(presences.iter())
-        .map(|((id, name, emoji), presence)| User {
+        .map(|((id, name, avatar_url), presence)| User {
             id: id.to_string(),
-            display_name: format!("{} {}", emoji, name),
-            avatar_url: None,
+            display_name: name.to_string(),
+            avatar_url: Some(avatar_url.clone()),
             presence: *presence,
             backend: BackendType::Demo,
         })
@@ -138,8 +256,8 @@ pub fn demo_servers() -> Vec<Server> {
         Server {
             id: "server-poly-dev".to_string(),
             name: "Poly Development".to_string(),
-            icon_url: None,
-            banner_url: None,
+            icon_url: Some(themed_server_icon("⌘", "#6d5efc", "#2ac3ff")),
+            banner_url: Some(themed_banner("#0f1f52", "#182f7a", "#5eead4", "⌘")),
             categories: vec![
                 Category {
                     id: "cat-general".to_string(),
@@ -164,8 +282,8 @@ pub fn demo_servers() -> Vec<Server> {
         Server {
             id: "server-gaming".to_string(),
             name: "Gaming Lounge".to_string(),
-            icon_url: None,
-            banner_url: None,
+            icon_url: Some(themed_server_icon("🎮", "#6d28d9", "#ec4899")),
+            banner_url: Some(themed_banner("#2f174d", "#601a7f", "#f472b6", "🎮")),
             categories: vec![Category {
                 id: "cat-games".to_string(),
                 name: "Games".to_string(),
@@ -183,8 +301,8 @@ pub fn demo_servers() -> Vec<Server> {
         Server {
             id: "server-music".to_string(),
             name: "Music Enthusiasts".to_string(),
-            icon_url: None,
-            banner_url: None,
+            icon_url: Some(themed_server_icon("♪", "#0ea5e9", "#14b8a6")),
+            banner_url: Some(themed_banner("#0f3150", "#125f73", "#f8fafc", "♪")),
             categories: vec![Category {
                 id: "cat-music".to_string(),
                 name: "Music".to_string(),
@@ -211,8 +329,8 @@ pub fn demo2_servers() -> Vec<Server> {
         Server {
             id: "server-opensource".to_string(),
             name: "Open Source Hub".to_string(),
-            icon_url: None,
-            banner_url: None,
+            icon_url: Some(themed_server_icon("⎇", "#22c55e", "#0ea5e9")),
+            banner_url: Some(themed_banner("#113a24", "#0f4c64", "#86efac", "⎇")),
             categories: vec![
                 Category {
                     id: "cat-projects".to_string(),
@@ -236,8 +354,8 @@ pub fn demo2_servers() -> Vec<Server> {
         Server {
             id: "server-bookclub".to_string(),
             name: "Book Club".to_string(),
-            icon_url: None,
-            banner_url: None,
+            icon_url: Some(themed_server_icon("📚", "#f59e0b", "#f97316")),
+            banner_url: Some(themed_banner("#5b3213", "#8a4d18", "#fde68a", "📚")),
             categories: vec![Category {
                 id: "cat-books".to_string(),
                 name: "Books".to_string(),
@@ -255,8 +373,8 @@ pub fn demo2_servers() -> Vec<Server> {
         Server {
             id: "server-cooking".to_string(),
             name: "Cooking Corner".to_string(),
-            icon_url: None,
-            banner_url: None,
+            icon_url: Some(themed_server_icon("🍳", "#f97316", "#ef4444")),
+            banner_url: Some(themed_banner("#5f2213", "#8b2d2d", "#fdba74", "🍳")),
             categories: vec![Category {
                 id: "cat-food".to_string(),
                 name: "Food".to_string(),
@@ -274,8 +392,8 @@ pub fn demo2_servers() -> Vec<Server> {
         Server {
             id: "server-fitness".to_string(),
             name: "Fitness Crew".to_string(),
-            icon_url: None,
-            banner_url: None,
+            icon_url: Some(themed_server_icon("💪", "#10b981", "#0f766e")),
+            banner_url: Some(themed_banner("#0f3d31", "#105248", "#6ee7b7", "💪")),
             categories: vec![Category {
                 id: "cat-health".to_string(),
                 name: "Health".to_string(),
@@ -640,7 +758,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 id: "msg-ch-general-2".to_string(),
                 author: users[2].clone(),
                 content: MessageContent::Text(
-                    "Has anyone tried the new Dioxus 0.7 hot-reload? It's blazing fast!"
+                    "Has anyone tried the new **Dioxus 0.7** hot-reload? It's blazing fast!\n\n- hot patches in seconds\n- keeps router state alive\n- makes UI iteration way less painful"
                         .to_string(),
                 ),
                 timestamp: now - Duration::days(2) - Duration::hours(2) - Duration::minutes(45),
@@ -746,7 +864,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 id: "msg-ch-general-9".to_string(),
                 author: users[9].clone(),
                 content: MessageContent::Text(
-                    "We should test that early. It's flagged as a risk in the plan.\n\nI can try spinning up the Android emulator this afternoon to test. 📱"
+                    "We should test that early. It's flagged as a risk in the plan.\n\n| Target | Status | Note |\n| --- | --- | --- |\n| Android | ⚠️ Pending | Need emulator pass |\n| iOS | ⚠️ Pending | Need device build |\n| Web | ✅ Green | WASM check already passes |\n\nI can try spinning up the Android emulator this afternoon to test. 📱"
                         .to_string(),
                 ),
                 timestamp: now - Duration::hours(1) - Duration::minutes(30),
@@ -929,6 +1047,11 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
 
 /// Generate a demo sent message.
 pub fn demo_sent_message(_channel_id: &str, content: MessageContent) -> Message {
+    let attachments = match &content {
+        MessageContent::Text(_) => Vec::new(),
+        MessageContent::WithAttachments { attachments, .. } => attachments.clone(),
+    };
+
     Message {
         id: format!(
             "msg-sent-{}",
@@ -937,7 +1060,7 @@ pub fn demo_sent_message(_channel_id: &str, content: MessageContent) -> Message 
         author: demo_session().user,
         content,
         timestamp: Utc::now(),
-        attachments: vec![],
+        attachments,
         reactions: vec![],
         edited: false,
     }
@@ -1248,7 +1371,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 id: "dm-alice-2".to_string(),
                 author: users[0].clone(),
                 content: MessageContent::Text(
-                    "Just ran it — compiles clean! The hot-reload with subsecond patches is incredible.\n\nOne small nit: the error messages for auth failure could be more descriptive.".to_string(),
+                    "Just ran it — compiles clean! The hot-reload with subsecond patches is incredible.\n\n> One small nit: the error messages for auth failure could be more descriptive.\n\n```rust\nErr(ClientError::AuthFailed(message.to_string()))\n```".to_string(),
                 ),
                 timestamp: now - Duration::days(1) - Duration::hours(4) - Duration::minutes(30),
                 attachments: vec![],
@@ -2734,4 +2857,377 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         ],
         _ => vec![],
     }
+}
+
+/// Extract plain searchable text from a demo message.
+fn demo_message_text(message: &Message) -> String {
+    match &message.content {
+        MessageContent::Text(text) => text.clone(),
+        MessageContent::WithAttachments { text, .. } => text.clone(),
+    }
+}
+
+/// Get the full message history for a demo account channel.
+fn demo_account_messages(channel_id: &str, demo2: bool) -> Vec<Message> {
+    if channel_id.starts_with("dm-") {
+        return demo_dm_messages(channel_id);
+    }
+    if channel_id.starts_with("group-") || channel_id.starts_with("group2-") {
+        return demo_group_messages(channel_id);
+    }
+
+    if demo2 {
+        let rich = demo2_messages_rich(channel_id);
+        if rich.is_empty() {
+            demo2_messages(channel_id)
+        } else {
+            rich
+        }
+    } else {
+        let rich = demo2_messages_rich(channel_id);
+        if rich.is_empty() {
+            demo_messages(channel_id)
+        } else {
+            rich
+        }
+    }
+}
+
+/// Apply a message history query to a full ordered message list.
+fn apply_message_query(mut messages: Vec<Message>, query: &MessageQuery) -> Vec<Message> {
+    messages.sort_by_key(|message| message.timestamp);
+
+    if let Some(ref around_id) = query.around
+        && let Some(index) = messages.iter().position(|message| &message.id == around_id)
+    {
+        let limit = usize::try_from(query.limit.unwrap_or(48)).unwrap_or(48);
+        let before = limit / 2;
+        let start = index.saturating_sub(before);
+        let end = (start + limit).min(messages.len());
+        return messages[start..end].to_vec();
+    }
+
+    if let Some(ref before_id) = query.before
+        && let Some(index) = messages.iter().position(|message| &message.id == before_id)
+    {
+        let limit = usize::try_from(query.limit.unwrap_or(50)).unwrap_or(50);
+        let start = index.saturating_sub(limit);
+        return messages[start..index].to_vec();
+    }
+
+    if let Some(ref after_id) = query.after
+        && let Some(index) = messages.iter().position(|message| &message.id == after_id)
+    {
+        let limit = usize::try_from(query.limit.unwrap_or(50)).unwrap_or(50);
+        let start = index.saturating_add(1);
+        let end = (start + limit).min(messages.len());
+        return messages[start..end].to_vec();
+    }
+
+    if let Some(limit) = query.limit {
+        let limit = usize::try_from(limit).unwrap_or(messages.len());
+        if limit < messages.len() {
+            return messages[messages.len() - limit..].to_vec();
+        }
+    }
+
+    messages
+}
+
+/// Get queried messages for the cat demo account.
+pub fn demo_messages_query(channel_id: &str, query: &MessageQuery) -> Vec<Message> {
+    apply_message_query(demo_account_messages(channel_id, false), query)
+}
+
+/// Get queried messages for the dog demo account.
+pub fn demo2_messages_query(channel_id: &str, query: &MessageQuery) -> Vec<Message> {
+    apply_message_query(demo_account_messages(channel_id, true), query)
+}
+
+/// Return message IDs pinned in a given channel for the cat demo account.
+fn demo_pinned_ids(channel_id: &str) -> &'static [&'static str] {
+    match channel_id {
+        "ch-general" => &["msg-ch-general-5", "msg-ch-general-8"],
+        "ch-rust" => &["msg-rust-1"],
+        "ch-dioxus" => &["msg-dioxus-2"],
+        "dm-user-diana" => &["dm-diana-2"],
+        "group-rust-study" => &["grp-rust-2"],
+        _ => &[],
+    }
+}
+
+/// Return message IDs pinned in a given channel for the dog demo account.
+fn demo2_pinned_ids(channel_id: &str) -> &'static [&'static str] {
+    match channel_id {
+        "ch2-announcements" => &["msg2-1"],
+        "ch2-workouts" => &["msg2-wk-0"],
+        "ch2-recipes" => &["msg2-recipes-0"],
+        "dm-demo-cat" => &["dm-cat-dog-2"],
+        "group2-oss-contributors" => &["grp2-oss-2"],
+        _ => &[],
+    }
+}
+
+/// Get pinned messages for the cat demo account.
+pub fn demo_pinned_messages(channel_id: &str) -> Vec<Message> {
+    let ids = demo_pinned_ids(channel_id);
+    demo_account_messages(channel_id, false)
+        .into_iter()
+        .filter(|message| ids.contains(&message.id.as_str()))
+        .collect()
+}
+
+/// Get pinned messages for the dog demo account.
+pub fn demo2_pinned_messages(channel_id: &str) -> Vec<Message> {
+    let ids = demo2_pinned_ids(channel_id);
+    demo_account_messages(channel_id, true)
+        .into_iter()
+        .filter(|message| ids.contains(&message.id.as_str()))
+        .collect()
+}
+
+/// Search messages for the cat demo account.
+pub fn demo_search_messages(query: &MessageSearchQuery) -> Vec<MessageSearchHit> {
+    search_demo_messages(query, false)
+}
+
+/// Search messages for the dog demo account.
+pub fn demo2_search_messages(query: &MessageSearchQuery) -> Vec<MessageSearchHit> {
+    search_demo_messages(query, true)
+}
+
+/// Search messages for either demo account.
+fn search_demo_messages(query: &MessageSearchQuery, demo2: bool) -> Vec<MessageSearchHit> {
+    #[derive(Clone)]
+    struct SearchChannelMeta {
+        id: String,
+        name: String,
+        server_id: Option<String>,
+        is_text_like: bool,
+    }
+
+    let server_channels = if demo2 {
+        demo2_servers()
+            .into_iter()
+            .flat_map(|server| demo2_channels(&server.id))
+            .map(|channel| SearchChannelMeta {
+                id: channel.id,
+                name: channel.name,
+                server_id: Some(channel.server_id),
+                is_text_like: channel.channel_type == ChannelType::Text,
+            })
+            .collect::<Vec<_>>()
+    } else {
+        demo_servers()
+            .into_iter()
+            .flat_map(|server| demo_channels(&server.id))
+            .map(|channel| SearchChannelMeta {
+                id: channel.id,
+                name: channel.name,
+                server_id: Some(channel.server_id),
+                is_text_like: channel.channel_type == ChannelType::Text,
+            })
+            .collect::<Vec<_>>()
+    };
+    let dm_channels = if demo2 {
+        let mut channels = demo_dm_channels().into_iter().take(3).collect::<Vec<_>>();
+        channels.push(DmChannel {
+            id: "dm-demo-cat".to_string(),
+            user: User {
+                id: "demo-cat-user".to_string(),
+                display_name: "🐱 Cat (demo)".to_string(),
+                avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
+                presence: PresenceStatus::Online,
+                backend: BackendType::Demo,
+            },
+            last_message: None,
+            unread_count: 0,
+            backend: BackendType::Demo,
+            account_id: DEMO2_ACCOUNT_ID.to_string(),
+        });
+        channels
+            .into_iter()
+            .map(|channel| SearchChannelMeta {
+                id: channel.id,
+                name: channel.user.display_name,
+                server_id: None,
+                is_text_like: true,
+            })
+            .collect::<Vec<_>>()
+    } else {
+        demo_dm_channels()
+            .into_iter()
+            .map(|channel| SearchChannelMeta {
+                id: channel.id,
+                name: channel.user.display_name,
+                server_id: None,
+                is_text_like: true,
+            })
+            .collect::<Vec<_>>()
+    };
+    let group_channels = if demo2 {
+        demo2_groups()
+            .into_iter()
+            .map(|group| SearchChannelMeta {
+                id: group.id,
+                name: group.name.unwrap_or_else(|| "Group DM".to_string()),
+                server_id: None,
+                is_text_like: true,
+            })
+            .collect::<Vec<_>>()
+    } else {
+        demo_groups_v2()
+            .into_iter()
+            .map(|group| SearchChannelMeta {
+                id: group.id,
+                name: group.name.unwrap_or_else(|| "Group DM".to_string()),
+                server_id: None,
+                is_text_like: true,
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let channels = server_channels
+        .into_iter()
+        .chain(dm_channels)
+        .chain(group_channels)
+        .filter(|channel| {
+            if let Some(ref channel_id) = query.channel_id {
+                &channel.id == channel_id
+            } else if let Some(ref server_id) = query.server_id {
+                channel.server_id.as_deref() == Some(server_id.as_str())
+            } else {
+                false
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let text_lower = query.text.to_lowercase();
+    let mut hits = channels
+        .into_iter()
+        .filter(|channel| channel.is_text_like)
+        .flat_map(|channel| {
+            let channel_name = channel.name.clone();
+            let channel_id = channel.id.clone();
+            let server_id = channel.server_id.clone();
+            let text_lower = text_lower.clone();
+            demo_account_messages(&channel.id, demo2)
+                .into_iter()
+                .filter(move |message| {
+                    let plain_text = demo_message_text(message);
+                    let plain_lower = plain_text.to_lowercase();
+                    let author_matches = query.author_id.as_ref().is_none_or(|author_id| {
+                        let author_lower = author_id.to_lowercase();
+                        message.author.id.eq_ignore_ascii_case(author_id)
+                            || message
+                                .author
+                                .display_name
+                                .to_lowercase()
+                                .contains(&author_lower)
+                    });
+                    let link_matches = !query.has_link
+                        || plain_text.contains("http://")
+                        || plain_text.contains("https://")
+                        || message
+                            .attachments
+                            .iter()
+                            .any(|attachment| attachment.url.starts_with("http"));
+                    let mention_matches = query
+                        .mentions_user_id
+                        .as_ref()
+                        .is_none_or(|mentioned| plain_lower.contains(&mentioned.to_lowercase()));
+                    let text_matches = text_lower.is_empty() || plain_lower.contains(&text_lower);
+                    author_matches && link_matches && mention_matches && text_matches
+                })
+                .map(move |message| MessageSearchHit {
+                    channel_id: channel_id.clone(),
+                    channel_name: Some(channel_name.clone()),
+                    server_id: server_id.clone(),
+                    message,
+                })
+        })
+        .collect::<Vec<_>>();
+
+    hits.sort_by(|left, right| right.message.timestamp.cmp(&left.message.timestamp));
+
+    let limit = usize::try_from(query.limit.unwrap_or(25)).unwrap_or(25);
+    hits.truncate(limit);
+    hits
+}
+
+/// Demo slash commands available for server channels.
+///
+/// Returns bot and app commands for server text channels. Returns empty for DMs and group channels.
+pub fn demo_channel_commands(channel_id: &str) -> Vec<ChatCommand> {
+    // No slash commands in DMs or group channels in the demo
+    if channel_id.starts_with("dm-") || channel_id.starts_with("group-") {
+        return Vec::new();
+    }
+
+    vec![
+        ChatCommand {
+            name: "play".to_string(),
+            description: "Play a song or URL in the voice channel".to_string(),
+            provider: "MusicCat".to_string(),
+            is_builtin: false,
+            usage: Some("<song name or URL>".to_string()),
+            scope: CommandScope::Channel,
+        },
+        ChatCommand {
+            name: "skip".to_string(),
+            description: "Skip to the next song in the queue".to_string(),
+            provider: "MusicCat".to_string(),
+            is_builtin: false,
+            usage: None,
+            scope: CommandScope::Channel,
+        },
+        ChatCommand {
+            name: "queue".to_string(),
+            description: "Show the current music queue".to_string(),
+            provider: "MusicCat".to_string(),
+            is_builtin: false,
+            usage: None,
+            scope: CommandScope::Channel,
+        },
+        ChatCommand {
+            name: "ban".to_string(),
+            description: "Ban a user from the server".to_string(),
+            provider: "ModBot".to_string(),
+            is_builtin: false,
+            usage: Some("<@user> [reason]".to_string()),
+            scope: CommandScope::Channel,
+        },
+        ChatCommand {
+            name: "kick".to_string(),
+            description: "Kick a user from the server".to_string(),
+            provider: "ModBot".to_string(),
+            is_builtin: false,
+            usage: Some("<@user> [reason]".to_string()),
+            scope: CommandScope::Channel,
+        },
+        ChatCommand {
+            name: "timeout".to_string(),
+            description: "Temporarily mute a user".to_string(),
+            provider: "ModBot".to_string(),
+            is_builtin: false,
+            usage: Some("<@user> <duration>".to_string()),
+            scope: CommandScope::Channel,
+        },
+        ChatCommand {
+            name: "changelog".to_string(),
+            description: "Show the bot's recent updates and changes".to_string(),
+            provider: "AI Bot".to_string(),
+            is_builtin: false,
+            usage: None,
+            scope: CommandScope::Global,
+        },
+        ChatCommand {
+            name: "gif".to_string(),
+            description: "Search and post an animated GIF".to_string(),
+            provider: "AI Bot".to_string(),
+            is_builtin: false,
+            usage: Some("<search terms>".to_string()),
+            scope: CommandScope::Global,
+        },
+    ]
 }

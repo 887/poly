@@ -32,6 +32,10 @@
 
 use serde::{Deserialize, Serialize};
 
+const fn default_server_member_list_open() -> bool {
+    true
+}
+
 // ── Platform backends ─────────────────────────────────────────────────────────
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -94,6 +98,27 @@ pub struct AppSettings {
     /// the event stream populates server data.
     #[serde(default)]
     pub favorited_server_ids: Vec<String>,
+    /// User-defined server icon URL overrides, keyed by server ID.
+    ///
+    /// Applied on top of the backend-reported `icon_url` after each
+    /// `load_server_data` / `restore_server_channel` call.
+    /// Supports backends that don't expose a programmatic icon API
+    /// (e.g. Matrix, Teams) as well as user customisation for all backends.
+    /// Uses `#[serde(default)]` for backwards compatibility with existing records.
+    #[serde(default)]
+    pub server_icon_overrides: std::collections::HashMap<String, String>,
+    /// User-defined server banner URL overrides, keyed by server ID.
+    ///
+    /// Same semantics as `server_icon_overrides` but for the wide banner
+    /// shown at the top of the channel list.
+    #[serde(default)]
+    pub server_banner_overrides: std::collections::HashMap<String, String>,
+    /// Whether the integrated server member list is open.
+    #[serde(default = "default_server_member_list_open")]
+    pub server_member_list_open: bool,
+    /// Whether the integrated group-DM member list is open.
+    #[serde(default)]
+    pub dm_member_list_open: bool,
 }
 
 /// Global notification preferences — device-level settings only.

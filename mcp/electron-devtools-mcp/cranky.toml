@@ -1,0 +1,20 @@
+# Cranky lint configuration for electron-devtools-mcp.
+# `cargo cranky` respects this file (equivalent to cargo clippy but config-file driven).
+# These are IN ADDITION to the workspace-level lints in the root Cargo.toml.
+
+[deny]
+warnings = true
+# Safety
+unsafe_code = true
+
+# Fallible short-circuits
+"clippy::unwrap_used" = true
+"clippy::expect_used" = true
+"clippy::panic" = true
+"clippy::indexing_slicing" = true
+
+# Code hygiene
+"clippy::todo" = true
+"clippy::unimplemented" = true
+"clippy::dbg_macro" = true
+"clippy::print_stdout" = true  # use tracing, not println!

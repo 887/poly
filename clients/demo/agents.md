@@ -72,6 +72,18 @@ The demo data module (`data.rs`) was modified to work without Dioxus:
 - `async-trait` — ClientBackend trait
 - `tokio` — async runtime
 
+## Electron/Web Note (2026-03-07)
+
+When `poly-demo` is linked into the `wasm32-unknown-unknown` web/Electron app,
+the cat demo client's live `event_stream()` must stay wasm-safe.
+
+- `tokio::time::sleep` inside the demo event stream caused a runtime panic in
+	Electron/web (`time not implemented on this platform`)
+- For `target_arch = "wasm32"`, `DemoClient::event_stream()` now returns an
+	empty stream instead of starting the timed fake-event loop
+- This keeps demo data loading functional in Electron/web; the preloaded demo
+	dataset is enough for UI verification even without live fake events
+
 ### WASM (target_os = "wasi" only)
 - `poly-client` — type definitions only
 - `wit-bindgen` — WIT code generation (workspace dep with `macros` + `realloc` features)

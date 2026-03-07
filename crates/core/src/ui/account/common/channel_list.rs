@@ -14,7 +14,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
-use poly_client::{Channel, ChannelType, Server, User, VoiceParticipant};
+use poly_client::{BackendType, Channel, ChannelType, Server, User, VoiceParticipant};
 
 /// Main channel list component — delegates to sub-views based on current view.
 #[component]
@@ -23,16 +23,21 @@ pub fn ChannelList() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let current_view = app_state.read().nav.view;
     let current_server = chat_data.read().current_server.clone();
+    let visible_category_ids = use_signal(Vec::<String>::new);
 
     rsx! {
         aside { class: "channel-list",
-            ServerBanner { current_view, current_server: current_server.clone() }
+            ServerBanner {
+                current_view,
+                current_server: current_server.clone(),
+                visible_category_ids,
+            }
 
             div { class: "channel-entries",
                 if current_view == View::DmsFriends {
                     DMFriendsView {}
                 } else if current_server.is_some() {
-                    ServerChannelView {}
+                    ServerChannelView { visible_category_ids }
                 } else {
                     div { class: "channel-empty",
                         p { "{t(\"chat-no-messages\")}" }
@@ -59,9 +64,14 @@ pub fn ChannelList() -> Element {
 // DECISION(DX): reuses the context-menu-backdrop/context-menu CSS pattern
 // established in phase-2.10 so we don't need new z-index layers.
 #[component]
-fn ServerBanner(current_view: View, current_server: Option<Server>) -> Element {
+fn ServerBanner(
+    current_view: View,
+    current_server: Option<Server>,
+    visible_category_ids: Signal<Vec<String>>,
+) -> Element {
     let app_state: Signal<AppState> = use_context();
     let mut dropdown_open = use_signal(|| false);
+    let mut channels_roles_open = use_signal(|| false);
 
     // Derive route-construction fields from AppState before entering RSX so
     // that we don't hold a borrow of `app_state` inside closures that also
@@ -91,6 +101,9 @@ fn ServerBanner(current_view: View, current_server: Option<Server>) -> Element {
         .as_ref()
         .map(|s| s.backend.slug().to_string())
         .unwrap_or_default();
+    let supports_channels_roles = current_server
+        .as_ref()
+        .is_some_and(|server| server.backend == BackendType::Demo);
 
     rsx! {
         div { class: "server-banner-sidebar",
@@ -109,41 +122,71 @@ fn ServerBanner(current_view: View, current_server: Option<Server>) -> Element {
                 }
             } else if let Some(ref server) = current_server {
                 // ── Server view ──────────────────────────────────────────────
-
-                // Optional wide banner image at the very top.
                 if let Some(ref url) = server.banner_url {
-                    img {
-                        class: "server-banner-img",
-                        src: "{url}",
-                        alt: "",
-                        // Prevent the image drag from interfering with DnD.
-                        draggable: false,
-                    }
-                }
-
-                // Header bar: server-name trigger + invite button.
-                div { class: "server-banner-header",
-                    button {
-                        class: "server-name-trigger",
-                        onclick: move |_| {
-                            let open = *dropdown_open.read();
-                            dropdown_open.set(!open);
-                        },
-                        span { class: "server-name-text", "{server.name}" }
-                        if *dropdown_open.read() {
-                            span { class: "server-name-chevron", "▴" }
-                        } else {
-                            span { class: "server-name-chevron", "▾" }
+                    div { class: "server-banner-hero",
+                        img {
+                            class: "server-banner-img",
+                            src: "{url}",
+                            alt: "",
+                            draggable: false,
+                        }
+                        div { class: "server-banner-overlay",
+                            div { class: "server-banner-header server-banner-header-overlay",
+                                button {
+                                    class: "server-name-trigger",
+                                    onclick: move |_| {
+                                        let open = *dropdown_open.read();
+                                        dropdown_open.set(!open);
+                                    },
+                                    span { class: "server-name-text", "{server.name}" }
+                                    if *dropdown_open.read() {
+                                        span { class: "server-name-chevron", "▴" }
+                                    } else {
+                                        span { class: "server-name-chevron", "▾" }
+                                    }
+                                }
+                            }
+                            if supports_channels_roles {
+                                button {
+                                    class: "server-channels-roles-btn",
+                                    onclick: move |_| {
+                                        let open = *channels_roles_open.read();
+                                        channels_roles_open.set(!open);
+                                    },
+                                    span { class: "server-channels-roles-icon", "☰" }
+                                    span { "{t(\"server-banner-channels-roles\")}" }
+                                }
+                            }
                         }
                     }
-                    button {
-                        class: "server-invite-btn",
-                        title: t("server-banner-invite"),
-                        onclick: move |_| {
-                            // TODO(phase-3): open the Invite People modal when implemented.
-                            tracing::info!("Invite People clicked — placeholder");
-                        },
-                        "＋"
+                } else {
+                    div { class: "server-banner-header",
+                        button {
+                            class: "server-name-trigger",
+                            onclick: move |_| {
+                                let open = *dropdown_open.read();
+                                dropdown_open.set(!open);
+                            },
+                            span { class: "server-name-text", "{server.name}" }
+                            if *dropdown_open.read() {
+                                span { class: "server-name-chevron", "▴" }
+                            } else {
+                                span { class: "server-name-chevron", "▾" }
+                            }
+                        }
+                    }
+                    if supports_channels_roles {
+                        div { class: "server-banner-secondary-action",
+                            button {
+                                class: "server-channels-roles-btn server-channels-roles-btn-flat",
+                                onclick: move |_| {
+                                    let open = *channels_roles_open.read();
+                                    channels_roles_open.set(!open);
+                                },
+                                span { class: "server-channels-roles-icon", "☰" }
+                                span { "{t(\"server-banner-channels-roles\")}" }
+                            }
+                        }
                     }
                 }
 
@@ -191,6 +234,10 @@ fn ServerBanner(current_view: View, current_server: Option<Server>) -> Element {
                             "{t(\"server-banner-leave\")}"
                         }
                     }
+                }
+
+                if supports_channels_roles && *channels_roles_open.read() {
+                    ChannelsRolesPanel { server: server.clone(), visible_category_ids }
                 }
             } else {
                 // ── Fallback (no server selected) ────────────────────────────
@@ -407,7 +454,7 @@ fn DMFriendsView() -> Element {
 
 /// Server channel view — categories and channels.
 #[component]
-fn ServerChannelView() -> Element {
+fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let app_state: Signal<AppState> = use_context();
     let _client_manager: Signal<ClientManager> = use_context();
     let chat_data: Signal<ChatData> = use_context();
@@ -419,15 +466,74 @@ fn ServerChannelView() -> Element {
     if let Some(ref server) = current_server {
         rsx! {
             for category in &server.categories {
-                CategorySection {
-                    cat_name: category.name.clone(),
-                    cat_channel_ids: category.channel_ids.clone(),
-                    channels: channels.clone(),
+                if visible_category_ids.read().is_empty()
+                    || visible_category_ids.read().contains(&category.id)
+                {
+                    CategorySection {
+                        cat_name: category.name.clone(),
+                        cat_channel_ids: category.channel_ids.clone(),
+                        channels: channels.clone(),
+                    }
                 }
             }
         }
     } else {
         rsx! {}
+    }
+}
+
+/// Demo-only panel to opt into category visibility, inspired by Discord's
+/// Channels & Roles onboarding surface.
+#[component]
+fn ChannelsRolesPanel(server: Server, mut visible_category_ids: Signal<Vec<String>>) -> Element {
+    let all_ids: Vec<String> = server.categories.iter().map(|c| c.id.clone()).collect();
+
+    rsx! {
+        div { class: "server-channels-roles-panel",
+            div { class: "server-channels-roles-panel-header",
+                h4 { "{t(\"server-banner-channels-roles\")}" }
+                span { class: "server-channels-roles-subtitle", "{t(\"server-banner-browse-channels\")}" }
+            }
+            div { class: "server-channels-roles-list",
+                for category in &server.categories {
+                    {
+                        let checked = visible_category_ids.read().is_empty()
+                            || visible_category_ids.read().contains(&category.id);
+                        let category_id = category.id.clone();
+                        let all_ids_for_toggle = all_ids.clone();
+                        rsx! {
+                            label { class: "server-channels-role-row",
+                                input {
+                                    r#type: "checkbox",
+                                    checked,
+                                    onchange: move |evt| {
+                                        let mut next = if visible_category_ids.read().is_empty() {
+                                            all_ids_for_toggle.clone()
+                                        } else {
+                                            visible_category_ids.read().clone()
+                                        };
+                                        if evt.checked() {
+                                            if !next.contains(&category_id) {
+                                                next.push(category_id.clone());
+                                            }
+                                        } else {
+                                            next.retain(|id| id != &category_id);
+                                        }
+                                        visible_category_ids.set(next);
+                                    },
+                                }
+                                div { class: "server-channels-role-copy",
+                                    span { class: "server-channels-role-name", "{category.name}" }
+                                    span { class: "server-channels-role-meta",
+                                        "{category.channel_ids.len()} {t(\"server-banner-channel-count\")}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

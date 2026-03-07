@@ -305,8 +305,36 @@ time-days-ago = hace { $count } días
 
 # Chat extras
 chat-toggle-members = Mostrar/ocultar lista de miembros
+chat-toggle-contact = Mostrar/ocultar información del contacto
 chat-select-channel = Selecciona un canal para empezar a chatear
 chat-timestamp-yesterday = Ayer { $time }
+search-messages = Buscar mensajes
+search-placeholder = Buscar en este canal...
+search-placeholder-channel = Buscar en #{ $channel }
+search-placeholder-user = Buscar { $user }
+search-placeholder-group = Buscar { $group }
+search-results = Resultados
+search-no-results = Ningún mensaje coincide con esa búsqueda
+search-filter-from-user = De una persona específica
+search-filter-from-user-subtitle = de: usuario
+search-filter-in-channel = Enviado en un canal específico
+search-filter-in-channel-subtitle = en: canal
+search-filter-has-link = Incluye un tipo de dato específico
+search-filter-has-link-subtitle = tiene: enlace, incrustación o archivo
+search-filter-mentions = Menciona a una persona específica
+search-filter-mentions-subtitle = menciones: usuario
+search-filter-more = Más filtros
+search-filter-more-subtitle = fechas, tipo de autor y más
+pinned-messages = Mensajes fijados
+no-pinned-messages = No hay mensajes fijados
+threads = Hilos
+no-threads = Todavía no hay hilos
+chat-notifications = Notificaciones
+chat-no-notifications = No hay notificaciones aquí
+chat-type-message-channel = Escribe en #{ $channel }
+chat-type-message-user = Escribe a { $user }
+chat-type-message-group = Escribe en { $group }
+chat-markdown-formatting = Formato Markdown
 
 # Usuarios extras
 user-no-members = No hay miembros que mostrar
@@ -368,13 +396,30 @@ server-banner-settings = Configuración del servidor
 server-banner-invite = Invitar personas
 server-banner-notif-settings = Configuración de notificaciones
 server-banner-create-channel = Crear canal
+server-banner-channels-roles = Canales y roles
+server-banner-browse-channels = Explora canales y activa las categorías de este servidor.
+server-banner-channel-count = canales
 server-banner-leave = Salir del servidor
 
 # Server settings page
+# Configuración del servidor
 server-settings-title = Configuración del servidor
+server-settings-overview = Descripción general
 server-settings-notifications = Notificaciones
 server-settings-profile = Perfil
 server-settings-general = General
+
+# Descripción general del servidor (icono + banner)
+server-overview-icon = Icono del servidor
+server-overview-icon-url = URL del icono
+server-overview-icon-hint = URL de la imagen del icono. Se recomienda SVG o PNG en formato cuadrado.
+server-overview-banner = Banner del servidor
+server-overview-banner-url = URL del banner
+server-overview-banner-hint = URL de la imagen del banner ancho que aparece sobre la lista de canales. Se recomienda formato horizontal (p. ej. 960×240).
+server-overview-save = Guardar
+server-overview-saved = Guardado
+server-overview-local-override = Reemplazar icono localmente
+server-overview-local-override-hint = Este backend no admite iconos de servidor personalizados. El icono definido aquí se almacena solo en este dispositivo.
 
 # Leave server inline confirm
 leave-server-title = ¿Salir de «{ $name }»?
@@ -408,6 +453,16 @@ group-member-remove-tooltip = Eliminar a { $name } de este grupo
 
 # DM header
 dm-header-subtitle = Mensaje directo
+
+# Presence status labels
+presence-online = En línea
+presence-away = Ausente
+presence-dnd = No molestar
+presence-offline = Desconectado
+
+# DM contact panel
+dm-contact-panel-title = Info del contacto
+dm-contact-not-found = Contacto no encontrado
 
 # Demo backend
 demo-regenerate-data = Regenerar datos de demostración

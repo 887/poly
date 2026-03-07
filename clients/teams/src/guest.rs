@@ -56,6 +56,26 @@ impl Guest for TeamsPlugin {
         Ok(vec![])
     }
 
+    fn search_messages(
+        _query: wit::MessageSearchQuery,
+    ) -> Result<Vec<wit::MessageSearchHit>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_pinned_messages(_channel_id: String) -> Result<Vec<wit::Message>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn set_message_pinned(
+        _channel_id: String,
+        _message_id: String,
+        _pinned: bool,
+    ) -> Result<(), wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "Teams pin mutation not yet implemented".to_string(),
+        ))
+    }
+
     fn get_user(id: String) -> Result<wit::User, wit::ClientError> {
         Err(wit::ClientError::NotFound(format!("User {id}")))
     }

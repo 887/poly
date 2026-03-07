@@ -11,6 +11,7 @@
 //!   - Zero setup — no schema migrations, no object-store definitions.
 //!   - Synchronous underlying API wraps trivially into async signatures.
 //!   - Our storage payload (settings, account tokens) is well under 1 MB.
+//!
 //! Full IndexedDB support (for caching messages, etc.) is planned for Phase 3.
 
 use super::StorageError;

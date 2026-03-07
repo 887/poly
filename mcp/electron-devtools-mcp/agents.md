@@ -1,0 +1,87 @@
+# poly-electron-devtools-mcp — Agent Instructions
+
+> **Read root `agents.md` FIRST**, then this file.  
+> **Last Updated:** 2026-03-07
+
+## Purpose
+
+MCP server for debugging the Poly Desktop Electron (WASM/Electron) build.
+
+Implements `DevtoolsBackend` via **Chrome DevTools Protocol (CDP)** over
+WebSocket — architecturally similar to `poly-web-devtools-mcp` (which targets
+Chrome) but adapted for the Electron runtime.
+
+## Architecture
+
+- **CDP port:** `9224` (distinct from web-devtools `9222` and desktop HTTP `9223`)
+- **Rebuild counter file:** `/tmp/poly-devtools-electron-rebuild-counter`
+- **Backend struct:** `ElectronCdpBackend`
+- **No watchdog:** Electron is a single stable process; user closing it is intentional
+- **No `dx serve`:** uses `dx build --platform web` (one-shot builds, not watch mode)
+- **MCP name:** `"poly-electron"`
+
+## Launch Sequence
+
+`launch_app(workspace)` performs these steps *in order*:
+
+1. Kill any existing Electron devtools process and stale CDP listeners via `pkill`
+2. Run `dx build --platform web` in `apps/desktop-electron/` — **waits until done**
+   (cold build: 2+ min; warm cache: 30–90 s)
+3. Run `npm install --prefer-offline` in `apps/desktop-electron-devtools/electron/`
+4. Launch `node_modules/.bin/electron .` (or `npx electron .` as fallback)
+5. Electron auto-configures CDP on port 9224 via `app.commandLine.appendSwitch` in `main.js`
+6. Store the Electron PID for later `kill_app` / `hard_kill`
+
+Then wait ~5 seconds and call `connect_cdp`.
+
+## Reliability Notes
+
+- The Electron launcher uses Chromium flags `disable-dev-shm-usage` and
+   `no-zygote` to keep renderer startup stable on Linux systems where CDP can
+   appear before the renderer is fully usable.
+- `take_screenshot` now retries transient `Page.captureScreenshot` failures and
+   brings the page to the foreground before capturing.
+- `launch_app` performs both graceful and SIGKILL cleanup for stale Electron
+   devtools processes before building and launching a fresh instance.
+
+## Rebuild Flow
+
+`rebuild_app(workspace)`:
+1. Increment `/tmp/poly-devtools-electron-rebuild-counter`
+2. Run `dx build --platform web` again — **waits until done**
+3. Send `Page.reload` via CDP
+4. Clear WebSocket (reload invalidates the debugger session)
+
+Caller must call `connect_cdp` afterwards to re-establish CDP.
+
+## get_generation Fields
+
+| Field | Type | Meaning |
+|---|---|---|
+| `generation` | u64 | Increments on each `connect_cdp` call |
+| `build_id` | u64 | Reads `/tmp/poly-devtools-electron-rebuild-counter` |
+| `electron_pid` | u32? | PID of the managed Electron process (`null` if not launched by us) |
+
+## Key Differences from `web-devtools-mcp`
+
+| Feature | `web-devtools-mcp` | `electron-devtools-mcp` |
+|---|---|---|
+| CDP port | `9222` | `9224` |
+| Build command | `dx serve` (hot-watching) | `dx build` (one-shot) |
+| Browser | Chrome / Chromium | Electron |
+| URL type | `http://localhost:3000` | `file://…/dist/index.html` |
+| Watchdog (restart on crash) | Yes | No |
+| Hot-patch | No | No |
+| Counter file | `…web-rebuild-counter` | `…electron-rebuild-counter` |
+
+## Discovery Strategy
+
+`discover_ws_url()` queries `http://127.0.0.1:9224/json`:
+
+1. **1st preference:** page targets whose URL starts with `file://` or `app://` (our WASM app)
+2. **2nd preference:** any `page`-type target (handles `about:blank` while loading)
+
+## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
+
+NEVER add lint suppression attributes. Fix the code instead.  
+**Exception:** `#[allow(clippy::unwrap_used)]` / `expect_used` inside `#[cfg(test)]` only.

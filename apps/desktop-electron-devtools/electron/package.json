@@ -1,0 +1,16 @@
+{
+  "name": "poly-desktop-electron-devtools",
+  "version": "0.1.0",
+  "description": "Poly Desktop Electron — DevTools debugging build with CDP on port 9224",
+  "main": "main.js",
+  "author": "Poly Contributors",
+  "license": "MIT OR Apache-2.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "debug": "electron . --inspect=5858"
+  },
+  "dependencies": {
+    "electron": "^33.0.0"
+  }
+}

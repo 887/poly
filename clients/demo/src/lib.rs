@@ -134,21 +134,24 @@ impl ClientBackend for DemoClient {
     async fn get_messages(
         &self,
         channel_id: &str,
-        _query: MessageQuery,
+        query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        if channel_id.starts_with("dm-") {
-            Ok(data::demo_dm_messages(channel_id))
-        } else if channel_id.starts_with("group-") {
-            Ok(data::demo_group_messages(channel_id))
-        } else {
-            // Try the rich supplement first (covers sparse channels); fall back to base.
-            let rich = data::demo2_messages_rich(channel_id);
-            if rich.is_empty() {
-                Ok(data::demo_messages(channel_id))
-            } else {
-                Ok(rich)
-            }
-        }
+        Ok(data::demo_messages_query(channel_id, &query))
+    }
+
+    async fn search_messages(
+        &self,
+        query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Ok(data::demo_search_messages(&query))
+    }
+
+    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
+        Ok(data::demo_pinned_messages(channel_id))
+    }
+
+    async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(data::demo_channel_commands(channel_id))
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
@@ -199,144 +202,155 @@ impl ClientBackend for DemoClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        let users = data::demo_users();
-        // Server text channels that receive simulated messages.
-        let server_channels = vec![
-            "ch-general",
-            "ch-off-topic",
-            "ch-rust",
-            "ch-dioxus",
-            "ch-minecraft",
-            "ch-valorant",
-            "ch-recommendations",
-        ];
-        // DM channels that receive simulated messages (dm-{user_id}).
-        let dm_channels = vec!["dm-user-alice", "dm-user-bob", "dm-user-charlie"];
-        let server_messages = vec![
-            "That's a great point!",
-            "I'll look into it. \u{1f527}",
-            "Has anyone else seen this?",
-            "Working on a fix now...",
-            "brb",
-            "lol nice one",
-            "Can confirm, same issue here.",
-            "\u{1f44d}",
-            "Just pushed the fix!",
-            "Who's up for a game tonight?",
-            "This is so cool!",
-            "Let's sync tomorrow morning.",
-        ];
-        let dm_messages = vec![
-            "Hey, are you around?",
-            "Did you see the latest update?",
-            "Let's catch up soon!",
-            "Thanks for the help earlier \u{1f64f}",
-            "Check this out!",
-            "I'll send you the file in a bit.",
-            "Haha yeah exactly \u{1f61d}",
-            "Makes sense, let's do it!",
-        ];
+        #[cfg(target_arch = "wasm32")]
+        {
+            // The demo dataset is already preloaded in web/Electron builds.
+            // Returning an empty live stream keeps demo mode functional there
+            // without relying on unsupported/native timer behavior.
+            Box::pin(futures::stream::empty())
+        }
 
-        // Emit a simulated event every 4-8 seconds (staggered cycle).
-        let stream = futures::stream::unfold(0u64, move |counter| {
-            let users = users.clone();
-            let server_channels = server_channels.clone();
-            let dm_channels = dm_channels.clone();
-            let server_messages = server_messages.clone();
-            let dm_messages = dm_messages.clone();
-            async move {
-                if users.is_empty() || server_channels.is_empty() {
-                    return None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let users = data::demo_users();
+            // Server text channels that receive simulated messages.
+            let server_channels = vec![
+                "ch-general",
+                "ch-off-topic",
+                "ch-rust",
+                "ch-dioxus",
+                "ch-minecraft",
+                "ch-valorant",
+                "ch-recommendations",
+            ];
+            // DM channels that receive simulated messages (dm-{user_id}).
+            let dm_channels = vec!["dm-user-alice", "dm-user-bob", "dm-user-charlie"];
+            let server_messages = vec![
+                "That's a great point!",
+                "I'll look into it. \u{1f527}",
+                "Has anyone else seen this?",
+                "Working on a fix now...",
+                "brb",
+                "lol nice one",
+                "Can confirm, same issue here.",
+                "\u{1f44d}",
+                "Just pushed the fix!",
+                "Who's up for a game tonight?",
+                "This is so cool!",
+                "Let's sync tomorrow morning.",
+            ];
+            let dm_messages = vec![
+                "Hey, are you around?",
+                "Did you see the latest update?",
+                "Let's catch up soon!",
+                "Thanks for the help earlier \u{1f64f}",
+                "Check this out!",
+                "I'll send you the file in a bit.",
+                "Haha yeah exactly \u{1f61d}",
+                "Makes sense, let's do it!",
+            ];
+
+            // Emit a simulated event every 4-8 seconds (staggered cycle).
+            let stream = futures::stream::unfold(0u64, move |counter| {
+                let users = users.clone();
+                let server_channels = server_channels.clone();
+                let dm_channels = dm_channels.clone();
+                let server_messages = server_messages.clone();
+                let dm_messages = dm_messages.clone();
+                async move {
+                    if users.is_empty() || server_channels.is_empty() {
+                        return None;
+                    }
+
+                    // Stagger timing: 4s, 6s, 8s, 5s, 7s, 3s cycle
+                    let delays = [4u64, 6, 8, 5, 7, 3];
+                    let delay_secs = delays
+                        .get((counter as usize) % delays.len())
+                        .copied()
+                        .unwrap_or(5);
+                    tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
+
+                    let user_idx = (counter as usize) % users.len();
+                    let user = users.get(user_idx)?;
+
+                    // Rotate: server msg, typing, DM msg, server msg, presence
+                    let event = match counter % 5 {
+                        // Server channel message
+                        0 | 3 => {
+                            let ch_idx = (counter as usize) % server_channels.len();
+                            let channel_id = (*server_channels.get(ch_idx)?).to_string();
+                            let msg_idx = (counter as usize / 5) % server_messages.len();
+                            let text = server_messages.get(msg_idx).copied().unwrap_or("...");
+                            ClientEvent::MessageReceived {
+                                channel_id,
+                                message: Message {
+                                    id: format!("msg-stream-{counter}"),
+                                    author: user.clone(),
+                                    content: MessageContent::Text(text.to_string()),
+                                    timestamp: chrono::Utc::now(),
+                                    attachments: vec![],
+                                    reactions: vec![],
+                                    edited: false,
+                                },
+                            }
+                        }
+                        // Typing indicator in a server channel
+                        1 => {
+                            let ch_idx = (counter as usize) % server_channels.len();
+                            let channel_id = (*server_channels.get(ch_idx)?).to_string();
+                            ClientEvent::TypingStarted {
+                                channel_id,
+                                user_id: user.id.clone(),
+                                timestamp: chrono::Utc::now(),
+                            }
+                        }
+                        // DM channel message (simulates another user messaging you)
+                        2 => {
+                            let dm_idx = (counter as usize / 2) % dm_channels.len();
+                            let channel_id = (*dm_channels.get(dm_idx)?).to_string();
+                            let dm_user_idx = (counter as usize + 1) % users.len();
+                            let dm_user = users.get(dm_user_idx)?;
+                            let msg_idx = (counter as usize / 3) % dm_messages.len();
+                            let text = dm_messages.get(msg_idx).copied().unwrap_or("hey!");
+                            ClientEvent::MessageReceived {
+                                channel_id,
+                                message: Message {
+                                    id: format!("msg-stream-dm-{counter}"),
+                                    author: dm_user.clone(),
+                                    content: MessageContent::Text(text.to_string()),
+                                    timestamp: chrono::Utc::now(),
+                                    attachments: vec![],
+                                    reactions: vec![],
+                                    edited: false,
+                                },
+                            }
+                        }
+                        // Presence change
+                        _ => {
+                            let statuses = [
+                                PresenceStatus::Online,
+                                PresenceStatus::Idle,
+                                PresenceStatus::DoNotDisturb,
+                                PresenceStatus::Online,
+                            ];
+                            let s_idx = (counter as usize / 3) % statuses.len();
+                            let status = statuses
+                                .get(s_idx)
+                                .cloned()
+                                .unwrap_or(PresenceStatus::Online);
+                            ClientEvent::PresenceChanged {
+                                user_id: user.id.clone(),
+                                status,
+                            }
+                        }
+                    };
+
+                    Some((event, counter + 1))
                 }
+            });
 
-                // Stagger timing: 4s, 6s, 8s, 5s, 7s, 3s cycle
-                let delays = [4u64, 6, 8, 5, 7, 3];
-                let delay_secs = delays
-                    .get((counter as usize) % delays.len())
-                    .copied()
-                    .unwrap_or(5);
-                tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
-
-                let user_idx = (counter as usize) % users.len();
-                let user = users.get(user_idx)?;
-
-                // Rotate: server msg, typing, DM msg, server msg, presence
-                let event = match counter % 5 {
-                    // Server channel message
-                    0 | 3 => {
-                        let ch_idx = (counter as usize) % server_channels.len();
-                        let channel_id = (*server_channels.get(ch_idx)?).to_string();
-                        let msg_idx = (counter as usize / 5) % server_messages.len();
-                        let text = server_messages.get(msg_idx).copied().unwrap_or("...");
-                        ClientEvent::MessageReceived {
-                            channel_id,
-                            message: Message {
-                                id: format!("msg-stream-{counter}"),
-                                author: user.clone(),
-                                content: MessageContent::Text(text.to_string()),
-                                timestamp: chrono::Utc::now(),
-                                attachments: vec![],
-                                reactions: vec![],
-                                edited: false,
-                            },
-                        }
-                    }
-                    // Typing indicator in a server channel
-                    1 => {
-                        let ch_idx = (counter as usize) % server_channels.len();
-                        let channel_id = (*server_channels.get(ch_idx)?).to_string();
-                        ClientEvent::TypingStarted {
-                            channel_id,
-                            user_id: user.id.clone(),
-                            timestamp: chrono::Utc::now(),
-                        }
-                    }
-                    // DM channel message (simulates another user messaging you)
-                    2 => {
-                        let dm_idx = (counter as usize / 2) % dm_channels.len();
-                        let channel_id = (*dm_channels.get(dm_idx)?).to_string();
-                        let dm_user_idx = (counter as usize + 1) % users.len();
-                        let dm_user = users.get(dm_user_idx)?;
-                        let msg_idx = (counter as usize / 3) % dm_messages.len();
-                        let text = dm_messages.get(msg_idx).copied().unwrap_or("hey!");
-                        ClientEvent::MessageReceived {
-                            channel_id,
-                            message: Message {
-                                id: format!("msg-stream-dm-{counter}"),
-                                author: dm_user.clone(),
-                                content: MessageContent::Text(text.to_string()),
-                                timestamp: chrono::Utc::now(),
-                                attachments: vec![],
-                                reactions: vec![],
-                                edited: false,
-                            },
-                        }
-                    }
-                    // Presence change
-                    _ => {
-                        let statuses = [
-                            PresenceStatus::Online,
-                            PresenceStatus::Idle,
-                            PresenceStatus::DoNotDisturb,
-                            PresenceStatus::Online,
-                        ];
-                        let s_idx = (counter as usize / 3) % statuses.len();
-                        let status = statuses
-                            .get(s_idx)
-                            .cloned()
-                            .unwrap_or(PresenceStatus::Online);
-                        ClientEvent::PresenceChanged {
-                            user_id: user.id.clone(),
-                            status,
-                        }
-                    }
-                };
-
-                Some((event, counter + 1))
-            }
-        });
-
-        Box::pin(stream)
+            Box::pin(stream)
+        }
     }
 
     fn backend_type(&self) -> BackendType {
@@ -434,21 +448,24 @@ impl ClientBackend for DemoClient2 {
     async fn get_messages(
         &self,
         channel_id: &str,
-        _query: MessageQuery,
+        query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        if channel_id.starts_with("dm-") {
-            Ok(data::demo_dm_messages(channel_id))
-        } else if channel_id.starts_with("group2-") {
-            Ok(data::demo_group_messages(channel_id))
-        } else {
-            // Try rich supplement first; fall back to demo2 base data.
-            let rich = data::demo2_messages_rich(channel_id);
-            if rich.is_empty() {
-                Ok(data::demo2_messages(channel_id))
-            } else {
-                Ok(rich)
-            }
-        }
+        Ok(data::demo2_messages_query(channel_id, &query))
+    }
+
+    async fn search_messages(
+        &self,
+        query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Ok(data::demo2_search_messages(&query))
+    }
+
+    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
+        Ok(data::demo2_pinned_messages(channel_id))
+    }
+
+    async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(data::demo_channel_commands(channel_id))
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {

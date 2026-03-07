@@ -126,6 +126,7 @@ fn UserGroup(
                         .unwrap_or_default();
                     let name = user.display_name.clone();
                     let u = user.clone();
+                    let avatar_url = user.avatar_url.clone();
                     let entry_class = if presence_class == "offline" {
                         "user-entry offline"
                     } else {
@@ -133,10 +134,16 @@ fn UserGroup(
                     };
                     rsx! {
                         div { class: "{entry_class}", onclick: move |_| on_click.call(u.clone()),
-                            div {
-                                class: "user-avatar {presence_class}",
-                                style: "background-color: {color};",
-                                "{first_char}"
+                            div { class: "user-avatar {presence_class}",
+                                if let Some(ref url) = avatar_url {
+                                    img { class: "user-avatar-image", src: "{url}", alt: "{name}" }
+                                } else {
+                                    div {
+                                        class: "user-avatar-fallback",
+                                        style: "background-color: {color};",
+                                        "{first_char}"
+                                    }
+                                }
                             }
                             span { class: "user-name", "{name}" }
                         // TODO(phase-3): display roles when backend provides them (2.6.3.2)
@@ -172,10 +179,20 @@ fn UserProfilePopup(user: User, on_close: EventHandler<()>) -> Element {
                 class: "user-popup",
                 onclick: move |evt| evt.stop_propagation(),
                 div { class: "user-popup-banner" }
-                div {
-                    class: "user-popup-avatar",
-                    style: "background-color: {color};",
-                    "{first_char}"
+                div { class: "user-popup-avatar",
+                    if let Some(ref url) = user.avatar_url {
+                        img {
+                            class: "user-popup-avatar-image",
+                            src: "{url}",
+                            alt: "{user.display_name}",
+                        }
+                    } else {
+                        div {
+                            class: "user-popup-avatar-fallback",
+                            style: "background-color: {color};",
+                            "{first_char}"
+                        }
+                    }
                 }
                 div { class: "user-popup-info",
                     h3 { class: "user-popup-name", "{user.display_name}" }

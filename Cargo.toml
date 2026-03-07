@@ -16,9 +16,10 @@ members = [
     "mcp/devtools-protocol",
     "mcp/desktop-devtools-mcp",
     "mcp/web-devtools-mcp",
+    "mcp/electron-devtools-mcp",
     "apps/desktop",
     "apps/desktop-blitz",
-    "apps/desktop-electron",    # Electron wrapper (WASM → Electron shell)
+    "apps/desktop-electron",     # Electron wrapper (WASM → Electron shell)
     "apps/android",
     "apps/ios",
     "apps/web",
@@ -102,6 +103,8 @@ subtle = "2"
 dashmap = "6"
 argon2 = "0.5"
 utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
+pulldown-cmark = "0.13"
+ammonia = "4"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 # WASM feature-forcing aliases: these are never imported directly in our code.
 # They exist solely so Cargo enables the right JS backend for each getrandom
@@ -147,6 +150,7 @@ poly-server = { path = "servers/server" }
 poly-server-client = { path = "clients/server-client" }
 poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools-mcp" }
 poly-web-devtools-mcp = { path = "mcp/web-devtools-mcp" }
+poly-electron-devtools-mcp = { path = "mcp/electron-devtools-mcp" }
 poly-devtools-protocol = { path = "mcp/devtools-protocol" }
 
 # ── Workspace-wide lint policy ───────────────────────────────────────────────
