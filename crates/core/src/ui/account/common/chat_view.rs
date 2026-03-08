@@ -12,6 +12,10 @@
 //! - Message reactions, editing, and context menu
 
 use super::super::super::routes::Route;
+use super::chat_history::{
+    ChatHistoryUiState, OLDER_MESSAGES_PAGE_SIZE, read_message_list_scroll_metrics,
+    request_preserve_scroll_position, unread_marker_message_id,
+};
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
 use super::user_sidebar::UserSidebar;
@@ -23,8 +27,9 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 use poly_client::{
-    Attachment, BackendType, ChatCommand, CommandScope, DmChannel, Message, MessageContent,
-    MessageQuery, MessageReplyPreview, MessageSearchHit, MessageSearchQuery, PresenceStatus,
+    Attachment, BackendType, Channel, ChatCommand, CommandScope, DmChannel, Message,
+    MessageContent, MessageQuery, MessageReplyPreview, MessageSearchHit, MessageSearchQuery,
+    PresenceStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -476,6 +481,112 @@ fn highlight_message(message_id: &str) {
     ));
 }
 
+fn current_channel_unread_count(
+    channel_id: Option<&str>,
+    current_channel: Option<&Channel>,
+    dm_channels: &[DmChannel],
+) -> u32 {
+    let Some(channel_id) = channel_id else {
+        return 0;
+    };
+
+    if let Some(dm) = dm_channels.iter().find(|dm| dm.id == channel_id) {
+        return dm.unread_count;
+    }
+
+    current_channel
+        .filter(|channel| channel.id == channel_id)
+        .map_or(0, |channel| channel.unread_count)
+}
+
+fn unread_banner_timestamp<'a>(
+    messages: &'a [Message],
+    marker_message_id: Option<&str>,
+) -> Option<&'a chrono::DateTime<chrono::Utc>> {
+    let marker_message_id = marker_message_id?;
+    messages
+        .iter()
+        .find(|message| message.id == marker_message_id)
+        .map(|message| &message.timestamp)
+}
+
+fn display_unread_count(unread_count: u32) -> String {
+    if unread_count > 9 {
+        return format!("{unread_count}+");
+    }
+
+    unread_count.to_string()
+}
+
+fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id: &str) -> u32 {
+    let (unread_count, current_server_id) = {
+        let data = chat_data.read();
+        let unread_count = data
+            .dm_channels
+            .iter()
+            .find(|dm| dm.id == channel_id)
+            .map(|dm| dm.unread_count)
+            .or_else(|| {
+                data.channels
+                    .iter()
+                    .find(|channel| channel.id == channel_id)
+                    .map(|channel| channel.unread_count)
+            })
+            .or_else(|| {
+                data.current_channel
+                    .as_ref()
+                    .filter(|channel| channel.id == channel_id)
+                    .map(|channel| channel.unread_count)
+            })
+            .unwrap_or(0);
+        let current_server_id = data.current_server.as_ref().map(|server| server.id.clone());
+        (unread_count, current_server_id)
+    };
+
+    if unread_count == 0 {
+        return 0;
+    }
+
+    let mut data = chat_data.write();
+
+    if let Some(current_channel) = data.current_channel.as_mut()
+        && current_channel.id == channel_id
+    {
+        current_channel.unread_count = 0;
+    }
+
+    for channel in &mut data.channels {
+        if channel.id == channel_id {
+            channel.unread_count = 0;
+            break;
+        }
+    }
+
+    for dm in &mut data.dm_channels {
+        if dm.id == channel_id {
+            dm.unread_count = 0;
+            break;
+        }
+    }
+
+    if let Some(server_id) = current_server_id {
+        if let Some(current_server) = data.current_server.as_mut()
+            && current_server.id == server_id
+        {
+            current_server.unread_count = current_server.unread_count.saturating_sub(unread_count);
+        }
+
+        for server in &mut data.servers {
+            if server.id == server_id {
+                server.unread_count = server.unread_count.saturating_sub(unread_count);
+                break;
+            }
+        }
+    }
+
+    unread_count
+}
+
 async fn open_message_hit(
     hit: MessageSearchHit,
     current_channel_id: Option<String>,
@@ -487,13 +598,12 @@ async fn open_message_hit(
     let target_message_id = hit.message.id.clone();
     let target_channel_id = hit.channel_id.clone();
 
-    let already_rendered = current_channel_id.as_deref() == Some(&target_channel_id)
-        && chat_data
-            .read()
-            .messages
-            .iter()
-            .any(|message| message.id == target_message_id);
-    if already_rendered {
+    if message_hit_already_rendered(
+        &chat_data,
+        current_channel_id.as_deref(),
+        &target_channel_id,
+        &target_message_id,
+    ) {
         highlight_message(&target_message_id);
         return None;
     }
@@ -559,6 +669,58 @@ async fn open_message_hit(
     chat_data.write().current_server = target_server.clone();
     app_state.write().nav.selected_channel = Some(target_channel_id.clone());
 
+    Some(build_message_hit_route(
+        &mut app_state,
+        MessageHitRouteCtx {
+            client_manager,
+            active_instance_id,
+            account_id,
+            target_server_id,
+            target_channel_id,
+            backend_type,
+            target_message_id,
+        },
+    ))
+}
+
+fn message_hit_already_rendered(
+    chat_data: &Signal<ChatData>,
+    current_channel_id: Option<&str>,
+    target_channel_id: &str,
+    target_message_id: &str,
+) -> bool {
+    current_channel_id == Some(target_channel_id)
+        && chat_data
+            .read()
+            .messages
+            .iter()
+            .any(|message| message.id == target_message_id)
+}
+
+struct MessageHitRouteCtx {
+    client_manager: Signal<ClientManager>,
+    active_instance_id: Option<String>,
+    account_id: String,
+    target_server_id: Option<String>,
+    target_channel_id: String,
+    backend_type: BackendType,
+    target_message_id: String,
+}
+
+fn build_message_hit_route(
+    app_state: &mut Signal<AppState>,
+    ctx: MessageHitRouteCtx,
+) -> (Route, String) {
+    let MessageHitRouteCtx {
+        client_manager,
+        active_instance_id,
+        account_id,
+        target_server_id,
+        target_channel_id,
+        backend_type,
+        target_message_id,
+    } = ctx;
+
     let instance_id = active_instance_id.unwrap_or_else(|| {
         client_manager
             .read()
@@ -570,7 +732,7 @@ async fn open_message_hit(
 
     if let Some(server_id) = target_server_id {
         app_state.write().nav.selected_server = Some(server_id.clone());
-        Some((
+        (
             Route::ServerChat {
                 backend: backend_type.slug().to_string(),
                 instance_id,
@@ -579,10 +741,10 @@ async fn open_message_hit(
                 channel_id: target_channel_id,
             },
             target_message_id,
-        ))
+        )
     } else {
         app_state.write().nav.selected_server = None;
-        Some((
+        (
             Route::DmChat {
                 backend: backend_type.slug().to_string(),
                 instance_id,
@@ -590,7 +752,7 @@ async fn open_message_hit(
                 dm_id: target_channel_id,
             },
             target_message_id,
-        ))
+        )
     }
 }
 
@@ -615,40 +777,85 @@ async fn persist_member_list_preferences(server_member_list_open: bool, dm_membe
 
 #[component]
 pub fn ChatView() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
-    let nav = navigator();
-    let mut message_input = use_signal(String::new);
-    let mut show_input_emoji = use_signal(|| false);
-    let mut reaction_picker_msg = use_signal(|| None::<String>);
-    let mut drag_over = use_signal(|| false);
-    let mut hovered_msg = use_signal(|| None::<String>);
-    let mut editing_msg_id = use_signal(|| None::<String>);
-    let mut edit_draft = use_signal(String::new);
-    let mut msg_context_menu = use_signal(|| None::<MsgContextMenu>);
-    let mut utility_panel = use_signal(|| None::<ChatUtilityPanel>);
-    let mut search_query = use_signal(String::new);
-    let mut search_hits = use_signal(Vec::<MessageSearchHit>::new);
-    let mut pinned_messages = use_signal(Vec::<Message>::new);
-    let mut notifications_muted = use_signal(|| false);
-    let mut show_search_filters = use_signal(|| false);
-    let mut active_search_filter_idx = use_signal(|| 0_usize);
-    let mut pending_attachments = use_signal(Vec::<PendingAttachmentPreview>::new);
-    // Slash command popup state
-    let mut command_suggestions = use_signal(Vec::<ChatCommand>::new);
-    let mut active_command_idx = use_signal(|| 0_usize);
-    let mut show_command_popup = use_signal(|| false);
-    let mut reply_target = use_signal(|| None::<MessageReplyPreview>);
+    render_chat_view()
+}
 
+fn render_chat_view() -> Element {
+    let signals = use_chat_view_signals();
+    let ctx = build_chat_view_markup_ctx(&signals);
+    use_chat_view_effects(&signals, &ctx);
+    render_chat_view_markup(ctx)
+}
+
+struct ChatViewSignals {
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+    message_input: Signal<String>,
+    show_input_emoji: Signal<bool>,
+    reaction_picker_msg: Signal<Option<String>>,
+    drag_over: Signal<bool>,
+    hovered_msg: Signal<Option<String>>,
+    editing_msg_id: Signal<Option<String>>,
+    edit_draft: Signal<String>,
+    msg_context_menu: Signal<Option<MsgContextMenu>>,
+    utility_panel: Signal<Option<ChatUtilityPanel>>,
+    search_query: Signal<String>,
+    search_hits: Signal<Vec<MessageSearchHit>>,
+    pinned_messages: Signal<Vec<Message>>,
+    notifications_muted: Signal<bool>,
+    show_search_filters: Signal<bool>,
+    active_search_filter_idx: Signal<usize>,
+    pending_attachments: Signal<Vec<PendingAttachmentPreview>>,
+    command_suggestions: Signal<Vec<ChatCommand>>,
+    active_command_idx: Signal<usize>,
+    show_command_popup: Signal<bool>,
+    reply_target: Signal<Option<MessageReplyPreview>>,
+    history_state: Signal<ChatHistoryUiState>,
+}
+
+fn use_chat_view_signals() -> ChatViewSignals {
+    ChatViewSignals {
+        app_state: use_context(),
+        client_manager: use_context(),
+        chat_data: use_context(),
+        message_input: use_signal(String::new),
+        show_input_emoji: use_signal(|| false),
+        reaction_picker_msg: use_signal(|| None::<String>),
+        drag_over: use_signal(|| false),
+        hovered_msg: use_signal(|| None::<String>),
+        editing_msg_id: use_signal(|| None::<String>),
+        edit_draft: use_signal(String::new),
+        msg_context_menu: use_signal(|| None::<MsgContextMenu>),
+        utility_panel: use_signal(|| None::<ChatUtilityPanel>),
+        search_query: use_signal(String::new),
+        search_hits: use_signal(Vec::<MessageSearchHit>::new),
+        pinned_messages: use_signal(Vec::<Message>::new),
+        notifications_muted: use_signal(|| false),
+        show_search_filters: use_signal(|| false),
+        active_search_filter_idx: use_signal(|| 0_usize),
+        pending_attachments: use_signal(Vec::<PendingAttachmentPreview>::new),
+        command_suggestions: use_signal(Vec::<ChatCommand>::new),
+        active_command_idx: use_signal(|| 0_usize),
+        show_command_popup: use_signal(|| false),
+        reply_target: use_signal(|| None::<MessageReplyPreview>),
+        history_state: use_signal(ChatHistoryUiState::default),
+    }
+}
+
+fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
+    let app_state = signals.app_state;
+    let client_manager = signals.client_manager;
+    let chat_data = signals.chat_data;
+    let nav = navigator();
     let channel_id = app_state.read().nav.selected_channel.clone();
     let messages = chat_data.read().messages.clone();
     let current_channel = chat_data.read().current_channel.clone();
     let current_server = chat_data.read().current_server.clone();
     let loading = chat_data.read().loading;
-    let reaction_picker_id = reaction_picker_msg.read().clone();
+    let reaction_picker_id = signals.reaction_picker_msg.read().clone();
     let group_members = chat_data.read().active_group_members.clone();
-    let search_query_input_value = search_query.read().clone();
+    let search_query_input_value = signals.search_query.read().clone();
     let search_query_value = search_query_input_value.trim().to_string();
     let current_channel_name = current_channel
         .as_ref()
@@ -667,51 +874,152 @@ pub fn ChatView() -> Element {
     } else {
         app_state.read().nav.right_sidebar_visible
     };
-    let search_terms = message_search_terms(&search_query_value);
-    let search_placeholder =
-        contextual_search_placeholder(current_channel.as_ref(), is_dm_channel, is_group_channel);
-    let compose_placeholder =
-        contextual_compose_placeholder(current_channel.as_ref(), is_dm_channel, is_group_channel);
-    let search_filter_channel_name_onfocus = current_channel_name.clone();
-    let search_filter_channel_name_oninput = current_channel_name.clone();
+    let (
+        unread_marker_id,
+        unread_banner_visible,
+        unread_banner_count,
+        unread_banner_time,
+        unread_banner_date,
+    ) = build_unread_banner_fields(signals.history_state, &messages);
 
-    let self_user_id: String = {
-        let state = app_state.read();
-        let cm = client_manager.read();
-        state
-            .nav
-            .active_account_id
-            .as_ref()
-            .and_then(|aid| cm.sessions.get(aid))
-            .map(|s| s.user.id.clone())
-            .unwrap_or_default()
-    };
+    ChatViewMarkupCtx {
+        app_state,
+        client_manager,
+        chat_data,
+        channel_id: channel_id.clone(),
+        messages,
+        current_channel: current_channel.clone(),
+        current_server: current_server.clone(),
+        loading,
+        reaction_picker_id,
+        group_members,
+        search_query_input_value,
+        search_query_value: search_query_value.clone(),
+        is_dm_channel,
+        is_group_channel,
+        member_list_visible,
+        search_terms: message_search_terms(&search_query_value),
+        search_placeholder: contextual_search_placeholder(
+            current_channel.as_ref(),
+            is_dm_channel,
+            is_group_channel,
+        ),
+        compose_placeholder: contextual_compose_placeholder(
+            current_channel.as_ref(),
+            is_dm_channel,
+            is_group_channel,
+        ),
+        search_filter_channel_name_onfocus: current_channel_name.clone(),
+        search_filter_channel_name_oninput: current_channel_name,
+        filtered_search_filter_options,
+        unread_marker_id,
+        unread_banner_visible,
+        unread_banner_count,
+        unread_banner_time,
+        unread_banner_date,
+        unread_banner_channel_id: channel_id.clone(),
+        self_user_id: current_self_user_id(app_state, client_manager),
+        dm_user_avatar: current_dm_user_avatar(chat_data, &channel_id, is_dm_channel),
+        search_hit_channel_id: channel_id.clone(),
+        pinned_hit_channel_id: channel_id,
+        search_hit_server: current_server.clone(),
+        pinned_hit_server: current_server.clone(),
+        pinned_hit_channel: current_channel,
+        nav_for_search: nav,
+        nav_for_pinned: nav,
+        message_input: signals.message_input,
+        show_input_emoji: signals.show_input_emoji,
+        reaction_picker_msg: signals.reaction_picker_msg,
+        drag_over: signals.drag_over,
+        hovered_msg: signals.hovered_msg,
+        editing_msg_id: signals.editing_msg_id,
+        edit_draft: signals.edit_draft,
+        msg_context_menu: signals.msg_context_menu,
+        utility_panel: signals.utility_panel,
+        search_query: signals.search_query,
+        search_hits: signals.search_hits,
+        pinned_messages: signals.pinned_messages,
+        notifications_muted: signals.notifications_muted,
+        show_search_filters: signals.show_search_filters,
+        active_search_filter_idx: signals.active_search_filter_idx,
+        pending_attachments: signals.pending_attachments,
+        command_suggestions: signals.command_suggestions,
+        active_command_idx: signals.active_command_idx,
+        show_command_popup: signals.show_command_popup,
+        reply_target: signals.reply_target,
+        history_state: signals.history_state,
+    }
+}
 
-    let dm_user_avatar: Option<String> = if is_dm_channel {
-        let cid = channel_id.clone().unwrap_or_default();
-        chat_data
-            .read()
-            .dm_channels
-            .iter()
-            .find(|dm| dm.id == cid)
-            .and_then(|dm| dm.user.avatar_url.clone())
-    } else {
-        None
-    };
+fn build_unread_banner_fields(
+    history_state: Signal<ChatHistoryUiState>,
+    messages: &[Message],
+) -> (Option<String>, bool, String, String, String) {
+    let unread_marker_id = history_state.read().unread_marker_message_id.clone();
+    let unread_count = history_state.read().unread_count;
+    let unread_banner_time = unread_banner_timestamp(messages, unread_marker_id.as_deref())
+        .map(|timestamp| timestamp.format("%H:%M").to_string())
+        .unwrap_or_default();
+    let unread_banner_date = unread_banner_timestamp(messages, unread_marker_id.as_deref())
+        .map(|timestamp| timestamp.format("%-d %B %Y").to_string())
+        .unwrap_or_default();
 
-    let search_effect_channel = current_channel.clone();
-    let search_effect_server = current_server.clone();
-    let search_effect_self_user_id = self_user_id.clone();
-    let search_hit_channel_id = channel_id.clone();
-    let pinned_hit_channel_id = channel_id.clone();
-    let search_hit_server = current_server.clone();
-    let pinned_hit_server = current_server.clone();
-    let pinned_hit_channel = current_channel.clone();
-    let nav_for_search = nav;
-    let nav_for_pinned = nav;
+    (
+        unread_marker_id,
+        unread_count > 0,
+        display_unread_count(unread_count),
+        unread_banner_time,
+        unread_banner_date,
+    )
+}
 
-    // Member list effect — reads app_state INSIDE the closure so Dioxus tracks
-    // nav.selected_channel as a reactive dependency and re-runs on every channel switch.
+fn current_self_user_id(
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+) -> String {
+    let state = app_state.read();
+    let cm = client_manager.read();
+    state
+        .nav
+        .active_account_id
+        .as_ref()
+        .and_then(|aid| cm.sessions.get(aid))
+        .map(|session| session.user.id.clone())
+        .unwrap_or_default()
+}
+
+fn current_dm_user_avatar(
+    chat_data: Signal<ChatData>,
+    channel_id: &Option<String>,
+    is_dm_channel: bool,
+) -> Option<String> {
+    if !is_dm_channel {
+        return None;
+    }
+
+    let cid = channel_id.clone().unwrap_or_default();
+    chat_data
+        .read()
+        .dm_channels
+        .iter()
+        .find(|dm| dm.id == cid)
+        .and_then(|dm| dm.user.avatar_url.clone())
+}
+
+fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
+    use_member_list_effect(signals);
+    use_search_messages_effect(signals, ctx);
+    use_pinned_messages_effect(signals);
+    use_history_state_effect(signals);
+    use_member_list_preferences_effect(signals.app_state);
+    use_command_preload_effect(signals, &ctx.channel_id);
+}
+
+fn use_member_list_effect(signals: &ChatViewSignals) {
+    let app_state = signals.app_state;
+    let client_manager = signals.client_manager;
+    let mut chat_data = signals.chat_data;
+
     use_effect(move || {
         let active_channel_id = app_state.read().nav.selected_channel.clone();
         let Some(active_channel_id) = active_channel_id else {
@@ -723,7 +1031,6 @@ pub fn ChatView() -> Element {
         let selected_server = app_state.read().nav.selected_server.clone();
         let active_account_id = app_state.read().nav.active_account_id.clone();
         let is_group = active_channel_id.starts_with("group-");
-
         spawn(async move {
             let backend = if let Some(server_id) = selected_server {
                 client_manager
@@ -735,22 +1042,17 @@ pub fn ChatView() -> Element {
             } else {
                 None
             };
-
             let Some(backend) = backend else {
                 chat_data.write().members = Vec::new();
                 chat_data.write().active_group_members = Vec::new();
                 return;
             };
-
             let guard = backend.read().await;
             match guard.get_channel_members(&active_channel_id).await {
                 Ok(members) => {
                     chat_data.write().members = members.clone();
-                    if is_group {
-                        chat_data.write().active_group_members = members;
-                    } else {
-                        chat_data.write().active_group_members = Vec::new();
-                    }
+                    chat_data.write().active_group_members =
+                        if is_group { members } else { Vec::new() };
                 }
                 Err(err) => {
                     tracing::warn!(
@@ -764,6 +1066,19 @@ pub fn ChatView() -> Element {
             }
         });
     });
+}
+
+fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
+    let app_state = signals.app_state;
+    let client_manager = signals.client_manager;
+    let mut search_hits = signals.search_hits;
+    let utility_panel = signals.utility_panel;
+    let search_query = signals.search_query;
+    let current_channel = ctx.current_channel.clone();
+    let current_server = ctx.current_server.clone();
+    let self_user_id = ctx.self_user_id.clone();
+    let is_dm_channel = ctx.is_dm_channel;
+    let is_group_channel = ctx.is_group_channel;
 
     use_effect(move || {
         if *utility_panel.read() != Some(ChatUtilityPanel::Search) {
@@ -781,9 +1096,9 @@ pub fn ChatView() -> Element {
         };
         let parsed_query = build_search_query(
             raw_query,
-            search_effect_channel.clone(),
-            search_effect_server.clone(),
-            search_effect_self_user_id.clone(),
+            current_channel.clone(),
+            current_server.clone(),
+            self_user_id.clone(),
             is_dm_channel,
             is_group_channel,
         );
@@ -802,13 +1117,18 @@ pub fn ChatView() -> Element {
             }
         });
     });
+}
+
+fn use_pinned_messages_effect(signals: &ChatViewSignals) {
+    let app_state = signals.app_state;
+    let client_manager = signals.client_manager;
+    let mut pinned_messages = signals.pinned_messages;
+    let utility_panel = signals.utility_panel;
 
     use_effect(move || {
         if *utility_panel.read() != Some(ChatUtilityPanel::Pinned) {
             return;
         }
-        // Read selected_channel from app_state inside the closure so that this effect
-        // re-runs whenever the channel changes (Dioxus tracks signal reads inside effects).
         let Some(target_channel_id) = app_state.read().nav.selected_channel.clone() else {
             pinned_messages.set(Vec::new());
             return;
@@ -840,24 +1160,42 @@ pub fn ChatView() -> Element {
             }
         });
     });
+}
+
+fn use_history_state_effect(signals: &ChatViewSignals) {
+    let app_state = signals.app_state;
+    let chat_data = signals.chat_data;
+    let mut history_state = signals.history_state;
 
     use_effect(move || {
-        let count = chat_data.read().messages.len();
-        if count == 0 {
+        let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
+            history_state.set(ChatHistoryUiState::default());
+            return;
+        };
+        let chat_snapshot = chat_data.read().clone();
+        if chat_snapshot.loading {
             return;
         }
-        document::eval(
-            r#"
-            let el = document.getElementById('message-list-scroll');
-            if (el) {
-                requestAnimationFrame(function() {
-                    el.scrollTop = el.scrollHeight;
-                });
-            }
-            "#,
+        if history_state.read().channel_id.as_deref() == Some(&active_channel_id) {
+            return;
+        }
+        let messages = chat_snapshot.messages.clone();
+        let unread_count = current_channel_unread_count(
+            Some(&active_channel_id),
+            chat_snapshot.current_channel.as_ref(),
+            &chat_snapshot.dm_channels,
         );
+        history_state.set(ChatHistoryUiState {
+            channel_id: Some(active_channel_id),
+            has_more_before: !messages.is_empty(),
+            loading_before: false,
+            unread_count,
+            unread_marker_message_id: unread_marker_message_id(&messages, unread_count),
+        });
     });
+}
 
+fn use_member_list_preferences_effect(app_state: Signal<AppState>) {
     use_effect(move || {
         let server_member_list_open = app_state.read().nav.right_sidebar_visible;
         let dm_member_list_open = app_state.read().nav.dm_right_sidebar_visible;
@@ -865,9 +1203,15 @@ pub fn ChatView() -> Element {
             persist_member_list_preferences(server_member_list_open, dm_member_list_open).await;
         });
     });
+}
 
-    // Pre-load slash commands whenever the channel changes so the popup can display instantly.
+fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<String>) {
+    let app_state = signals.app_state;
+    let client_manager = signals.client_manager;
+    let mut command_suggestions = signals.command_suggestions;
+    let mut show_command_popup = signals.show_command_popup;
     let cmd_channel_id = channel_id.clone();
+
     use_effect(move || {
         let Some(cid) = cmd_channel_id.clone() else {
             command_suggestions.set(Vec::new());
@@ -881,24 +1225,93 @@ pub fn ChatView() -> Element {
                 client_manager
                     .read()
                     .get_backend_for_server(&server_id)
-                    .map(|(_, h)| h)
+                    .map(|(_, handle)| handle)
             } else if let Some(account_id) = active_account_id {
                 client_manager.read().get_backend(&account_id)
             } else {
                 None
             };
-            let Some(backend) = backend else { return };
+            let Some(backend) = backend else {
+                return;
+            };
             let guard = backend.read().await;
             match guard.get_channel_commands(&cid).await {
                 Ok(cmds) => command_suggestions.set(cmds),
-                Err(e) => tracing::warn!("get_channel_commands failed: {e}"),
+                Err(err) => tracing::warn!("get_channel_commands failed: {err}"),
             }
         });
     });
+}
+
+#[derive(Clone)]
+struct ChatViewMarkupCtx {
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+    channel_id: Option<String>,
+    messages: Vec<Message>,
+    current_channel: Option<Channel>,
+    current_server: Option<poly_client::Server>,
+    loading: bool,
+    reaction_picker_id: Option<String>,
+    group_members: Vec<poly_client::User>,
+    search_query_input_value: String,
+    search_query_value: String,
+    is_dm_channel: bool,
+    is_group_channel: bool,
+    member_list_visible: bool,
+    search_terms: Vec<String>,
+    search_placeholder: String,
+    compose_placeholder: String,
+    search_filter_channel_name_onfocus: String,
+    search_filter_channel_name_oninput: String,
+    filtered_search_filter_options: Vec<SearchFilterOption>,
+    unread_marker_id: Option<String>,
+    unread_banner_visible: bool,
+    unread_banner_count: String,
+    unread_banner_time: String,
+    unread_banner_date: String,
+    unread_banner_channel_id: Option<String>,
+    self_user_id: String,
+    dm_user_avatar: Option<String>,
+    search_hit_channel_id: Option<String>,
+    pinned_hit_channel_id: Option<String>,
+    search_hit_server: Option<poly_client::Server>,
+    pinned_hit_server: Option<poly_client::Server>,
+    pinned_hit_channel: Option<Channel>,
+    nav_for_search: crate::ui::dioxus_router::Navigator,
+    nav_for_pinned: crate::ui::dioxus_router::Navigator,
+    message_input: Signal<String>,
+    show_input_emoji: Signal<bool>,
+    reaction_picker_msg: Signal<Option<String>>,
+    drag_over: Signal<bool>,
+    hovered_msg: Signal<Option<String>>,
+    editing_msg_id: Signal<Option<String>>,
+    edit_draft: Signal<String>,
+    msg_context_menu: Signal<Option<MsgContextMenu>>,
+    utility_panel: Signal<Option<ChatUtilityPanel>>,
+    search_query: Signal<String>,
+    search_hits: Signal<Vec<MessageSearchHit>>,
+    pinned_messages: Signal<Vec<Message>>,
+    notifications_muted: Signal<bool>,
+    show_search_filters: Signal<bool>,
+    active_search_filter_idx: Signal<usize>,
+    pending_attachments: Signal<Vec<PendingAttachmentPreview>>,
+    command_suggestions: Signal<Vec<ChatCommand>>,
+    active_command_idx: Signal<usize>,
+    show_command_popup: Signal<bool>,
+    reply_target: Signal<Option<MessageReplyPreview>>,
+    history_state: Signal<ChatHistoryUiState>,
+}
+
+fn render_chat_view_markup(ctx: ChatViewMarkupCtx) -> Element {
+    let mut drag_over = ctx.drag_over;
+    let pending_attachments = ctx.pending_attachments;
+    let is_drag_over = *drag_over.read();
 
     rsx! {
         main {
-            class: if *drag_over.read() { "chat-view drag-over" } else { "chat-view" },
+            class: if is_drag_over { "chat-view drag-over" } else { "chat-view" },
             ondragover: move |evt| {
                 evt.prevent_default();
                 drag_over.set(true);
@@ -915,894 +1328,1404 @@ pub fn ChatView() -> Element {
                 }
             },
 
-            if *drag_over.read() {
-                div { class: "drag-overlay",
-                    div { class: "drag-overlay-content",
-                        span { class: "drag-icon", "📎" }
-                        p { "{t(\"chat-drop-files\")}" }
+            {render_drag_overlay(is_drag_over)}
+            {render_chat_layout_shell(ctx.clone())}
+            {render_chat_overlays(ctx)}
+        }
+    }
+}
+
+fn render_drag_overlay(is_drag_over: bool) -> Element {
+    if !is_drag_over {
+        return rsx! {};
+    }
+
+    rsx! {
+        div { class: "drag-overlay",
+            div { class: "drag-overlay-content",
+                span { class: "drag-icon", "📎" }
+                p { "{t(\"chat-drop-files\")}" }
+            }
+        }
+    }
+}
+
+fn render_chat_layout_shell(ctx: ChatViewMarkupCtx) -> Element {
+    rsx! {
+        div { class: "chat-layout-shell", {render_chat_main_column(ctx)} }
+    }
+}
+
+fn render_chat_main_column(ctx: ChatViewMarkupCtx) -> Element {
+    rsx! {
+        div { class: "chat-main-column",
+            {render_chat_header(ctx.clone())}
+            {render_chat_body_shell(ctx)}
+        }
+    }
+}
+
+fn render_chat_header(ctx: ChatViewMarkupCtx) -> Element {
+    rsx! {
+        div { class: "chat-header",
+            {render_chat_header_info(ctx.clone())}
+            {render_chat_header_right(ctx)}
+        }
+    }
+}
+
+fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
+    let current_channel = ctx.current_channel.clone();
+    let current_server = ctx.current_server.clone();
+    let dm_user_avatar = ctx.dm_user_avatar.clone();
+    let is_dm_channel = ctx.is_dm_channel;
+    let is_group_channel = ctx.is_group_channel;
+    let group_count = ctx.group_members.len();
+
+    rsx! {
+        if let Some(ref ch) = current_channel {
+            if is_dm_channel {
+                div { class: "dm-chat-header-info",
+                    if let Some(ref avatar) = dm_user_avatar {
+                        img {
+                            class: "dm-chat-avatar",
+                            src: "{avatar}",
+                            alt: "{ch.name}",
+                        }
+                    } else {
+                        div {
+                            class: "dm-chat-avatar",
+                            style: "background:{user_color(&ch.id)}",
+                            "{ch.name.chars().next().unwrap_or('?')}"
+                        }
+                    }
+                    div { class: "dm-chat-header-text",
+                        span { class: "chat-channel-name", "{ch.name}" }
+                        span { class: "chat-header-subtitle", {t("dm-header-subtitle")} }
                     }
                 }
-            }
-
-            div { class: "chat-layout-shell",
-                div { class: "chat-main-column",
-                    div { class: "chat-header",
-                        if let Some(ref ch) = current_channel {
-                            if is_dm_channel {
-                                div { class: "dm-chat-header-info",
-                                    if let Some(ref avatar) = dm_user_avatar {
-                                        img {
-                                            class: "dm-chat-avatar",
-                                            src: "{avatar}",
-                                            alt: "{ch.name}",
-                                        }
-                                    } else {
-                                        div {
-                                            class: "dm-chat-avatar",
-                                            style: "background:{user_color(&ch.id)}",
-                                            "{ch.name.chars().next().unwrap_or('?')}"
-                                        }
-                                    }
-                                    div { class: "dm-chat-header-text",
-                                        span { class: "chat-channel-name", "{ch.name}" }
-                                        span { class: "chat-header-subtitle",
-                                            {t("dm-header-subtitle")}
-                                        }
-                                    }
-                                }
-                            } else if is_group_channel {
-                                div { class: "dm-chat-header-info",
-                                    div { class: "group-chat-icon", "👥" }
-                                    div { class: "dm-chat-header-text",
-                                        span { class: "chat-channel-name", "{ch.name}" }
-                                        span { class: "chat-header-subtitle",
-                                            {format!("{} {}", group_members.len(), t("group-members-title"))}
-                                        }
-                                    }
-                                }
-                            } else {
-                                div { class: "server-chat-header-info",
-                                    span { class: "chat-channel-name", "# {ch.name}" }
-                                    if let Some(ref server) = current_server {
-                                        span { class: "chat-source-badge",
-                                            "{backend_badge(&server.backend)} {server.backend.display_name()}"
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            span { class: "chat-channel-name", {t("chat-no-messages")} }
-                        }
-
-                        div { class: "chat-header-right",
-                            div { class: "chat-header-actions",
-                                button {
-                                    class: if *utility_panel.read() == Some(ChatUtilityPanel::Threads) { "header-btn active" } else { "header-btn" },
-                                    title: t("threads"),
-                                    onclick: move |_| {
-                                        show_search_filters.set(false);
-                                        let next = if *utility_panel.read() == Some(ChatUtilityPanel::Threads) {
-                                            None
-                                        } else {
-                                            Some(ChatUtilityPanel::Threads)
-                                        };
-                                        utility_panel.set(next);
-                                    },
-                                    "🧵"
-                                }
-                                button {
-                                    class: if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) { "header-btn active" } else { "header-btn" },
-                                    title: t("pinned-messages"),
-                                    onclick: move |_| {
-                                        show_search_filters.set(false);
-                                        let next = if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) {
-                                            None
-                                        } else {
-                                            Some(ChatUtilityPanel::Pinned)
-                                        };
-                                        utility_panel.set(next);
-                                    },
-                                    "📌"
-                                }
-                                button {
-                                    class: if *notifications_muted.read() { "header-btn active" } else { "header-btn" },
-                                    title: if *notifications_muted.read() { t("unmute-notifications") } else { t("mute-notifications") },
-                                    onclick: move |_| {
-                                        let current = *notifications_muted.read();
-                                        notifications_muted.set(!current);
-                                    },
-                                    "🔔"
-                                }
-                                if is_group_channel {
-                                    button {
-                                        class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
-                                        title: t("chat-toggle-members"),
-                                        onclick: move |_| {
-                                            let current = app_state.read().nav.dm_right_sidebar_visible;
-                                            app_state.write().nav.dm_right_sidebar_visible = !current;
-                                            utility_panel.set(None);
-                                            show_search_filters.set(false);
-                                        },
-                                        "👥"
-                                    }
-                                } else if is_dm_channel {
-                                    button {
-                                        class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
-                                        title: t("chat-toggle-contact"),
-                                        onclick: move |_| {
-                                            let current = app_state.read().nav.dm_right_sidebar_visible;
-                                            app_state.write().nav.dm_right_sidebar_visible = !current;
-                                            utility_panel.set(None);
-                                            show_search_filters.set(false);
-                                        },
-                                        "👤"
-                                    }
-                                } else {
-                                    button {
-                                        class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
-                                        title: t("chat-toggle-members"),
-                                        onclick: move |_| {
-                                            let current = app_state.read().nav.right_sidebar_visible;
-                                            app_state.write().nav.right_sidebar_visible = !current;
-                                            utility_panel.set(None);
-                                            show_search_filters.set(false);
-                                        },
-                                        "👥"
-                                    }
-                                }
-                            }
-
-                            div { class: "chat-header-search-inline",
-                                span { class: "chat-header-search-icon", "🔎" }
-                                input {
-                                    class: "chat-header-search-input",
-                                    r#type: "text",
-                                    placeholder: "{search_placeholder}",
-                                    value: "{search_query_input_value}",
-                                    onfocus: move |_| {
-                                        let raw = search_query.read().clone();
-                                        let has_matches = !filter_search_filter_options(
-                                                &build_search_filter_options(&search_filter_channel_name_onfocus),
-                                                &raw,
-                                            )
-                                            .is_empty();
-                                        active_search_filter_idx.set(0);
-                                        show_search_filters.set(has_matches);
-                                        if !raw.trim().is_empty() {
-                                            utility_panel.set(Some(ChatUtilityPanel::Search));
-                                        }
-                                    },
-                                    oninput: move |evt| {
-                                        let next_value = evt.value();
-                                        let is_empty = next_value.trim().is_empty();
-                                        let has_matches = !filter_search_filter_options(
-                                                &build_search_filter_options(&search_filter_channel_name_oninput),
-                                                &next_value,
-                                            )
-                                            .is_empty();
-                                        search_query.set(next_value);
-                                        active_search_filter_idx.set(0);
-                                        show_search_filters.set(has_matches);
-                                        if is_empty {
-                                            utility_panel.set(None);
-                                            search_hits.set(Vec::new());
-                                        } else {
-                                            utility_panel.set(Some(ChatUtilityPanel::Search));
-                                        }
-                                    },
-                                    onkeydown: move |evt: KeyboardEvent| {
-                                        if filtered_search_filter_options.is_empty() || !*show_search_filters.read() {
-                                            if evt.key() == Key::Escape {
-                                                show_search_filters.set(false);
-                                            }
-                                            return;
-                                        }
-
-                                        let item_count = filtered_search_filter_options.len();
-                                        match evt.key() {
-                                            Key::ArrowDown => {
-                                                evt.prevent_default();
-                                                let next = (*active_search_filter_idx.read() + 1) % item_count;
-                                                active_search_filter_idx.set(next);
-                                            }
-                                            Key::ArrowUp => {
-                                                evt.prevent_default();
-                                                let current = *active_search_filter_idx.read();
-                                                let next = if current == 0 { item_count - 1 } else { current - 1 };
-                                                active_search_filter_idx.set(next);
-                                            }
-                                            Key::Enter | Key::Tab => {
-                                                evt.prevent_default();
-                                                let current = (*active_search_filter_idx.read()).min(item_count - 1);
-                                                if let Some(option) = filtered_search_filter_options.get(current) {
-                                                    let existing_query = search_query.read().clone();
-                                                    let next_query = apply_search_filter_completion(
-                                                        &existing_query,
-                                                        &option.completion_token,
-                                                    );
-                                                    search_query.set(next_query);
-                                                    active_search_filter_idx.set(0);
-                                                    show_search_filters.set(false);
-                                                    utility_panel.set(Some(ChatUtilityPanel::Search));
-                                                }
-                                            }
-                                            Key::Escape => {
-                                                evt.prevent_default();
-                                                show_search_filters.set(false);
-                                            }
-                                            _ => {}
-                                        }
-                                    },
-                                }
-                                if !search_query_value.is_empty() {
-                                    button {
-                                        class: "chat-header-search-clear",
-                                        title: t("action-close"),
-                                        onclick: move |_| {
-                                            search_query.set(String::new());
-                                            search_hits.set(Vec::new());
-                                            active_search_filter_idx.set(0);
-                                            utility_panel.set(None);
-                                            show_search_filters.set(true);
-                                        },
-                                        "✕"
-                                    }
-                                }
-                                if *show_search_filters.read() && !filtered_search_filter_options.is_empty() {
-                                    SearchFilterPopup {
-                                        suggestions: filtered_search_filter_options.clone(),
-                                        active_index: *active_search_filter_idx.read(),
-                                        on_append_filter: move |token: String| {
-                                            let next_value = apply_search_filter_completion(&search_query.read(), &token);
-                                            search_query.set(next_value);
-                                            active_search_filter_idx.set(0);
-                                            show_search_filters.set(false);
-                                            utility_panel.set(Some(ChatUtilityPanel::Search));
-                                        },
-                                        on_close: move |_| show_search_filters.set(false),
-                                    }
-                                }
-                            }
+            } else if is_group_channel {
+                div { class: "dm-chat-header-info",
+                    div { class: "group-chat-icon", "👥" }
+                    div { class: "dm-chat-header-text",
+                        span { class: "chat-channel-name", "{ch.name}" }
+                        span { class: "chat-header-subtitle",
+                            {format!("{} {}", group_count, t("group-members-title"))}
                         }
                     }
-
-                    // Keep the header spanning the full chat width (Discord-style).
-                    // The contextual member/threads/pinned/contact rail belongs in the body split
-                    // below this header so opening it never pulls the search box left.
-                    div { class: "chat-body-shell",
-                        div { class: "chat-content-column",
-                            div {
-                                class: "message-list",
-                                id: "message-list-scroll",
-                                onscroll: move |_| {
-                                    spawn(async move {
-                                        let mut eval = document::eval(
-                                            r#"
-                                                                                                                                                                                                                let el = document.getElementById('message-list-scroll');
-                                                                                                                                                                                                                if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                                                                                                                                                                else { dioxus.send(false); }
-                                                                                                                                                                                                            "#,
-                                        );
-                                        if let Ok(near_top) = eval.recv::<bool>().await && near_top {
-                                            tracing::trace!("Scroll near top — would load more messages");
-                                        }
-                                    });
-                                },
-                                if loading {
-                                    div { class: "message-loading", "{t(\"chat-loading\")}" }
-                                } else if messages.is_empty() {
-                                    div { class: "message-empty",
-                                        div { class: "empty-wave", "👋" }
-                                        h3 { "{t(\"chat-no-messages\")}" }
-                                    }
-                                } else {
-                                    for (idx , msg) in messages.iter().enumerate() {
-                                        {
-                                            let prev_msg = if idx > 0 { messages.get(idx - 1) } else { None };
-                                            let show_date_sep = match prev_msg {
-                                                Some(prev) => msg.timestamp.date_naive() != prev.timestamp.date_naive(),
-                                                None => true,
-                                            };
-                                            let is_grouped = match prev_msg {
-                                                Some(prev) => {
-                                                    prev.author.id == msg.author.id && !show_date_sep
-                                                        && (msg.timestamp - prev.timestamp).num_minutes()
-                                                            < GROUP_THRESHOLD_MINUTES
-                                                }
-                                                None => false,
-                                            };
-                                            let msg_id = msg.id.clone();
-                                            let author = msg.author.clone();
-                                            let content = msg.content.clone();
-                                            let timestamp = msg.timestamp;
-                                            let attachments = msg.attachments.clone();
-                                            let reactions = msg.reactions.clone();
-                                            let reply_to = msg.reply_to.clone();
-                                            let edited = msg.edited;
-                                            let color = user_color(&author.id);
-                                            let author_avatar = author.avatar_url.clone();
-                                            let first_char: String = author
-                                                .display_name
-                                                .chars()
-                                                .next()
-                                                .map(|c| c.to_string())
-                                                .unwrap_or_default();
-                                            let time_str = format_timestamp(timestamp);
-                                            let date_str = if show_date_sep {
-                                                timestamp.format("%B %d, %Y").to_string()
-                                            } else {
-                                                String::new()
-                                            };
-                                            let is_hovered = hovered_msg.read().as_deref() == Some(&msg_id);
-                                            let is_own = author.id == self_user_id;
-                                            let is_editing = editing_msg_id.read().as_deref() == Some(&msg_id);
-                                            let msg_id_hover = msg_id.clone();
-                                            let msg_id_reaction = msg_id.clone();
-                                            let msg_id_edit = msg_id.clone();
-                                            let msg_id_delete = msg_id.clone();
-                                            let msg_id_ctx = msg_id.clone();
-                                            let ctx_text = message_plain_text(&content);
-                                            let edit_initial_text = ctx_text.clone();
-                                            rsx! {
-                                                if show_date_sep {
-                                                    div { class: "date-separator",
-                                                        span { class: "date-separator-text", "{date_str}" }
-                                                    }
-                                                }
-                                                div {
-                                                    id: "message-{msg_id}",
-                                                    class: if is_grouped { "message message-grouped" } else { "message message-full" },
-                                                    onmouseenter: {
-                                                        let mid = msg_id_hover.clone();
-                                                        move |_| hovered_msg.set(Some(mid.clone()))
-                                                    },
-                                                    onmouseleave: move |_| hovered_msg.set(None),
-                                                    oncontextmenu: {
-                                                        let mid = msg_id_ctx.clone();
-                                                        let txt = ctx_text.clone();
-                                                        move |evt: MouseEvent| {
-                                                            evt.prevent_default();
-                                                            let coords = evt.client_coordinates();
-                                                            msg_context_menu
-                                                                .set(
-                                                                    Some(MsgContextMenu {
-                                                                        x: coords.x,
-                                                                        y: coords.y,
-                                                                        message_id: mid.clone(),
-                                                                        message_text: txt.clone(),
-                                                                        is_own,
-                                                                    }),
-                                                                );
-                                                        }
-                                                    },
-
-                                                    if is_hovered && !is_editing {
-                                                        div { class: "message-actions",
-                                                            button {
-                                                                class: "msg-action-btn",
-                                                                title: t("reaction-add"),
-                                                                onclick: {
-                                                                    let mid = msg_id_reaction.clone();
-                                                                    move |_| reaction_picker_msg.set(Some(mid.clone()))
-                                                                },
-                                                                "😀+"
-                                                            }
-                                                            if is_own {
-                                                                button {
-                                                                    class: "msg-action-btn",
-                                                                    title: t("msg-edit"),
-                                                                    onclick: {
-                                                                        let mid = msg_id_edit.clone();
-                                                                        let txt = edit_initial_text.clone();
-                                                                        move |_| {
-                                                                            edit_draft.set(txt.clone());
-                                                                            editing_msg_id.set(Some(mid.clone()));
-                                                                        }
-                                                                    },
-                                                                    "✏️"
-                                                                }
-                                                                button {
-                                                                    class: "msg-action-btn msg-action-btn-danger",
-                                                                    title: t("msg-delete"),
-                                                                    onclick: {
-                                                                        let mid = msg_id_delete.clone();
-                                                                        move |_| chat_data.write().messages.retain(|m| m.id != mid)
-                                                                    },
-                                                                    "🗑️"
-                                                                }
-                                                            } else {
-                                                                button {
-                                                                    class: "msg-action-btn",
-                                                                    title: t("msg-reply"),
-                                                                    onclick: {
-                                                                        let preview = MessageReplyPreview {
-                                                                            message_id: msg_id.clone(),
-                                                                            author_id: author.id.clone(),
-                                                                            author_display_name: author.display_name.clone(),
-                                                                            author_avatar_url: author.avatar_url.clone(),
-                                                                            snippet: reply_preview_snippet(&content),
-                                                                        };
-                                                                        move |_| reply_target.set(Some(preview.clone()))
-                                                                    },
-                                                                    "↩️"
-                                                                }
-                                                                button {
-                                                                    class: "msg-action-btn",
-                                                                    title: t("msg-forward"),
-                                                                    onclick: move |_| tracing::debug!("Forward (stub)"),
-                                                                    "➡️"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-
-                                                    if !is_grouped {
-                                                        if let Some(ref avatar) = author_avatar {
-                                                            img {
-                                                                class: "message-avatar message-avatar-img",
-                                                                src: "{avatar}",
-                                                                alt: "{first_char}",
-                                                            }
-                                                        } else {
-                                                            div { class: "message-avatar", style: "background-color: {color};", "{first_char}" }
-                                                        }
-                                                        div { class: "message-body",
-                                                            div { class: "message-header",
-                                                                span { class: "message-author", style: "color: {color};", "{author.display_name}" }
-                                                                span { class: "message-timestamp", "{time_str}" }
-                                                            }
-                                                            if let Some(reply) = reply_to.clone() {
-                                                                MessageReplyPreviewLine { reply }
-                                                            }
-                                                            if is_editing {
-                                                                MessageInlineEdit {
-                                                                    message_id: msg_id.clone(),
-                                                                    editing_msg_id,
-                                                                    edit_draft,
-                                                                    chat_data,
-                                                                }
-                                                            } else {
-                                                                MessageContentView { content: content.clone(), edited }
-                                                            }
-                                                            if !attachments.is_empty() {
-                                                                AttachmentsView { attachments: attachments.clone() }
-                                                            }
-                                                            if !reactions.is_empty() {
-                                                                ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
-                                                            }
-                                                        }
-                                                    } else {
-                                                        div { class: "message-gutter",
-                                                            span { class: "message-hover-time", "{time_str}" }
-                                                        }
-                                                        div { class: "message-body",
-                                                            if let Some(reply) = reply_to.clone() {
-                                                                MessageReplyPreviewLine { reply }
-                                                            }
-                                                            if is_editing {
-                                                                MessageInlineEdit {
-                                                                    message_id: msg_id.clone(),
-                                                                    editing_msg_id,
-                                                                    edit_draft,
-                                                                    chat_data,
-                                                                }
-                                                            } else {
-                                                                MessageContentView { content: content.clone(), edited }
-                                                            }
-                                                            if !attachments.is_empty() {
-                                                                AttachmentsView { attachments: attachments.clone() }
-                                                            }
-                                                            if !reactions.is_empty() {
-                                                                ReactionsView { reactions: reactions.clone(), message_id: msg_id.clone() }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            TypingIndicator {}
-
-                            div { class: "message-input-area",
-                                if channel_id.is_some() {
-                                    if let Some(reply) = reply_target.read().clone() {
-                                        ReplyComposerBar {
-                                            reply,
-                                            on_cancel: move |_| reply_target.set(None),
-                                        }
-                                    }
-                                    if !pending_attachments.read().is_empty() {
-                                        div { class: "attachment-preview-strip",
-                                            for preview in pending_attachments.read().iter() {
-                                                div { class: "attachment-preview-card",
-                                                    if let Some(ref preview_url) = preview.preview_url {
-                                                        img {
-                                                            class: "attachment-preview-image",
-                                                            src: "{preview_url}",
-                                                            alt: "{preview.filename}",
-                                                        }
-                                                    } else {
-                                                        div { class: "attachment-preview-icon",
-                                                            "📎"
-                                                        }
-                                                    }
-                                                    div { class: "attachment-preview-meta",
-                                                        span { class: "attachment-preview-name",
-                                                            "{preview.filename}"
-                                                        }
-                                                        span { class: "attachment-preview-size",
-                                                            "{format_file_size(preview.size)}"
-                                                        }
-                                                    }
-                                                    button {
-                                                        class: "attachment-preview-remove",
-                                                        title: t("action-close"),
-                                                        onclick: {
-                                                            let preview_id = preview.id.clone();
-                                                            move |_| {
-                                                                pending_attachments.write().retain(|item| item.id != preview_id);
-                                                            }
-                                                        },
-                                                        "✕"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    {
-                                        let all_cmds = command_suggestions.read().clone();
-                                        let text = message_input.read().clone();
-                                        let query = slash_command_query(&text);
-                                        let matches = if *show_command_popup.read() {
-                                            filtered_slash_commands(query, &all_cmds)
-                                        } else {
-                                            Vec::new()
-                                        };
-                                        let active_idx = *active_command_idx.read();
-                                        rsx! {
-                                            if !matches.is_empty() {
-                                                SlashCommandPopup {
-                                                    commands: matches,
-                                                    active_idx,
-                                                    on_select: move |filled: String| {
-                                                        message_input.set(filled);
-                                                        show_command_popup.set(false);
-                                                    },
-                                                }
-                                            }
-                                        }
-                                    }
-                                    div { class: "message-input-row",
-                                        div { class: "message-input-shell",
-                                            button {
-                                                class: "toolbar-btn composer-upload-btn",
-                                                title: t("chat-attach-file"),
-                                                onclick: move |_| {
-                                                    document::eval(
-                                                        r#"
-                                                                                                                                                                                                                                                                                                                                            let input = document.getElementById('poly-file-input');
-                                                                                                                                                                                                                                                                                                                                            if (input) { input.click(); }
-                                                                                                                                                                                                                                                                                                                                        "#,
-                                                    );
-                                                },
-                                                "➕"
-                                            }
-                                            div { class: "message-input-text-area",
-                                                input {
-                                                    class: "message-input",
-                                                    id: "poly-message-composer",
-                                                    r#type: "text",
-                                                    placeholder: "{compose_placeholder}",
-                                                    value: "{message_input}",
-                                                    oninput: move |evt| {
-                                                        let value = evt.value();
-                                                        message_input.set(value.clone());
-                                                        if value.trim_start().starts_with('/') && !value.trim_start()[1..].contains(' ')
-                                                        {
-                                                            let query = &value.trim_start()[1..];
-                                                            let all_cmds = command_suggestions.read().clone();
-                                                            let matches = filtered_slash_commands(query, &all_cmds);
-                                                            if !matches.is_empty() {
-                                                                show_command_popup.set(true);
-                                                            } else {
-                                                                show_command_popup.set(false);
-                                                            }
-                                                            active_command_idx.set(0);
-                                                        } else {
-                                                            show_command_popup.set(false);
-                                                        }
-                                                    },
-                                                    onkeydown: {
-                                                        let channel_id_send = channel_id.clone();
-                                                        move |evt: KeyboardEvent| {
-                                                            if *show_command_popup.read() {
-                                                                match evt.key() {
-                                                                    Key::ArrowUp => {
-                                                                        evt.prevent_default();
-                                                                        let cur = *active_command_idx.read();
-                                                                        if cur > 0 {
-                                                                            active_command_idx.set(cur - 1);
-                                                                        }
-                                                                        return;
-                                                                    }
-                                                                    Key::ArrowDown => {
-                                                                        evt.prevent_default();
-                                                                        let all_cmds = command_suggestions.read().clone();
-                                                                        let text = message_input.read().clone();
-                                                                        let query = slash_command_query(&text);
-                                                                        let matches = filtered_slash_commands(query, &all_cmds);
-                                                                        let cur = *active_command_idx.read();
-                                                                        if cur + 1 < matches.len() {
-                                                                            active_command_idx.set(cur + 1);
-                                                                        }
-                                                                        return;
-                                                                    }
-                                                                    Key::Escape => {
-                                                                        evt.prevent_default();
-                                                                        show_command_popup.set(false);
-                                                                        return;
-                                                                    }
-                                                                    Key::Tab => {
-                                                                        evt.prevent_default();
-                                                                        let all_cmds = command_suggestions.read().clone();
-                                                                        let text = message_input.read().clone();
-                                                                        let query = slash_command_query(&text);
-                                                                        let matches = filtered_slash_commands(query, &all_cmds);
-                                                                        let idx = *active_command_idx.read();
-                                                                        if let Some(cmd) = matches.get(idx) {
-                                                                            message_input.set(format!("/{} ", cmd.name));
-                                                                            show_command_popup.set(false);
-                                                                        }
-                                                                        return;
-                                                                    }
-                                                                    Key::Enter if !evt.modifiers().shift() => {
-                                                                        evt.prevent_default();
-                                                                        let all_cmds = command_suggestions.read().clone();
-                                                                        let text = message_input.read().clone();
-                                                                        let query = slash_command_query(&text);
-                                                                        let matches = filtered_slash_commands(query, &all_cmds);
-                                                                        let idx = *active_command_idx.read();
-                                                                        if let Some(cmd) = matches.get(idx) {
-                                                                            message_input.set(format!("/{} ", cmd.name));
-                                                                            show_command_popup.set(false);
-                                                                        }
-                                                                        return;
-                                                                    }
-                                                                    _ => {}
-                                                                }
-                                                            }
-                                                            if evt.key() == Key::Enter && !evt.modifiers().shift() {
-                                                                evt.prevent_default();
-                                                                let raw_text = message_input.read().clone();
-                                                                let text = apply_builtin_command(raw_text.trim())
-                                                                    .unwrap_or(raw_text);
-                                                                let attachments = pending_attachments.read().clone();
-                                                                let reply_to_message_id = reply_target
-                                                                    .read()
-                                                                    .as_ref()
-                                                                    .map(|reply| reply.message_id.clone());
-                                                                if !text.is_empty() || !attachments.is_empty() {
-                                                                    message_input.set(String::new());
-                                                                    pending_attachments.set(Vec::new());
-                                                                    reply_target.set(None);
-                                                                    if let Some(ref cid) = channel_id_send {
-                                                                        let cid = cid.clone();
-                                                                        let attachments = attachments
-                                                                            .iter()
-                                                                            .map(pending_attachment_to_attachment)
-                                                                            .collect::<Vec<_>>();
-                                                                        spawn(async move {
-                                                                            send_message(SendMessageCtx {
-                                                                                    channel_id: cid,
-                                                                                    text,
-                                                                                    attachments,
-                                                                                    reply_to_message_id,
-                                                                                    client_manager,
-                                                                                    chat_data,
-                                                                                    app_state,
-                                                                                })
-                                                                                .await;
-                                                                        });
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                }
-                                                div { class: "input-toolbar input-toolbar-inline",
-                                                    button {
-                                                        class: "toolbar-btn",
-                                                        title: t("emoji-picker"),
-                                                        onclick: move |_| {
-                                                            let current = *show_input_emoji.read();
-                                                            show_input_emoji.set(!current);
-                                                        },
-                                                        "😀"
-                                                    }
-                                                    button {
-                                                        class: "toolbar-btn gif-btn",
-                                                        title: t("gif-picker"),
-                                                        "GIF"
-                                                    }
-                                                    button {
-                                                        class: "toolbar-btn",
-                                                        title: t("chat-markdown-formatting"),
-                                                        "⌘"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        button {
-                                            class: "btn btn-send chat-send-inline",
-                                            disabled: message_input.read().is_empty() && pending_attachments.read().is_empty(),
-                                            onclick: {
-                                                let channel_id_btn = channel_id.clone();
-                                                move |_| {
-                                                    let text = message_input.read().clone();
-                                                    let attachments = pending_attachments.read().clone();
-                                                    let reply_to_message_id = reply_target
-                                                        .read()
-                                                        .as_ref()
-                                                        .map(|reply| reply.message_id.clone());
-                                                    if !text.is_empty() || !attachments.is_empty() {
-                                                        message_input.set(String::new());
-                                                        pending_attachments.set(Vec::new());
-                                                        reply_target.set(None);
-                                                        if let Some(ref cid) = channel_id_btn {
-                                                            let cid = cid.clone();
-                                                            let text = text.clone();
-                                                            let attachments = attachments
-                                                                .iter()
-                                                                .map(pending_attachment_to_attachment)
-                                                                .collect::<Vec<_>>();
-                                                            spawn(async move {
-                                                                send_message(SendMessageCtx {
-                                                                        channel_id: cid,
-                                                                        text,
-                                                                        attachments,
-                                                                        reply_to_message_id,
-                                                                        client_manager,
-                                                                        chat_data,
-                                                                        app_state,
-                                                                    })
-                                                                    .await;
-                                                            });
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            {t("chat-send")}
-                                        }
-                                    }
-                                    input {
-                                        r#type: "file",
-                                        id: "poly-file-input",
-                                        multiple: true,
-                                        style: "display:none;",
-                                        onchange: move |_evt| {
-                                            let files = _evt.files();
-                                            if !files.is_empty() {
-                                                spawn(async move {
-                                                    append_attachment_previews(pending_attachments, files).await;
-                                                });
-                                            }
-                                        },
-                                    }
-                                    if *show_input_emoji.read() {
-                                        EmojiPicker {
-                                            on_select: move |emoji: String| {
-                                                let current = message_input.read().clone();
-                                                message_input.set(format!("{current}{emoji}"));
-                                                show_input_emoji.set(false);
-                                            },
-                                            on_close: move |_| show_input_emoji.set(false),
-                                        }
-                                    }
-                                } else {
-                                    div { class: "message-input-disabled", {t("chat-select-channel")} }
-                                }
-                            }
-                        }
-
-                        if utility_panel.read().is_some() || member_list_visible {
-                            div { class: "chat-side-column",
-                                if let Some(panel) = *utility_panel.read() {
-                                    ChatUtilityRail {
-                                        panel,
-                                        search_query: search_query_value.clone(),
-                                        search_hits: search_hits.read().clone(),
-                                        search_terms: search_terms.clone(),
-                                        pinned_messages: pinned_messages.read().clone(),
-                                        current_channel_name: current_channel.as_ref().map(|c| c.name.clone()).unwrap_or_default(),
-                                        on_open_search_hit: move |hit: MessageSearchHit| {
-                                            let current_channel_id = search_hit_channel_id.clone();
-                                            let current_server_id = search_hit_server
-                                                .as_ref()
-                                                .map(|server| server.id.clone());
-                                            let nav = nav_for_search;
-                                            spawn(async move {
-                                                if let Some((route, message_id)) = open_message_hit(
-                                                        hit,
-                                                        current_channel_id,
-                                                        current_server_id,
-                                                        client_manager,
-                                                        chat_data,
-                                                        app_state,
-                                                    )
-                                                    .await
-                                                {
-                                                    nav.push(route);
-                                                    highlight_message(&message_id);
-                                                }
-                                            });
-                                        },
-                                        on_open_pinned: move |message: Message| {
-                                            let Some(active_channel_id) = pinned_hit_channel_id.clone() else {
-                                                return;
-                                            };
-                                            let server_id = pinned_hit_server.as_ref().map(|server| server.id.clone());
-                                            let hit = MessageSearchHit {
-                                                channel_id: active_channel_id.clone(),
-                                                channel_name: pinned_hit_channel
-                                                    .as_ref()
-                                                    .map(|channel| channel.name.clone()),
-                                                server_id,
-                                                message,
-                                            };
-                                            let current_server_id = pinned_hit_server
-                                                .as_ref()
-                                                .map(|server| server.id.clone());
-                                            let nav = nav_for_pinned;
-                                            spawn(async move {
-                                                if let Some((route, message_id)) = open_message_hit(
-                                                        hit,
-                                                        Some(active_channel_id),
-                                                        current_server_id,
-                                                        client_manager,
-                                                        chat_data,
-                                                        app_state,
-                                                    )
-                                                    .await
-                                                {
-                                                    nav.push(route);
-                                                    highlight_message(&message_id);
-                                                }
-                                            });
-                                        },
-                                        on_close: move |_| utility_panel.set(None),
-                                    }
-                                } else if is_dm_channel {
-                                    DmContactPanel { channel_id: channel_id.clone().unwrap_or_default() }
-                                } else if is_group_channel {
-                                    DmUserSidebar {}
-                                } else {
-                                    UserSidebar {}
-                                }
-                            }
+                }
+            } else {
+                div { class: "server-chat-header-info",
+                    span { class: "chat-channel-name", "# {ch.name}" }
+                    if let Some(ref server) = current_server {
+                        span { class: "chat-source-badge",
+                            "{backend_badge(&server.backend)} {server.backend.display_name()}"
                         }
                     }
                 }
             }
+        } else {
+            span { class: "chat-channel-name", {t("chat-no-messages")} }
+        }
+    }
+}
 
-            if let Some(ref picker_msg_id) = reaction_picker_id {
-                EmojiPicker {
-                    on_select: {
-                        let msg_id = picker_msg_id.clone();
-                        move |emoji: String| {
-                            toggle_reaction_on_message(&mut chat_data, &msg_id, &emoji);
-                            reaction_picker_msg.set(None);
+fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
+    rsx! {
+        div { class: "chat-header-right",
+            {render_chat_header_actions(ctx.clone())}
+            {render_chat_header_search(ctx)}
+        }
+    }
+}
+
+fn render_chat_header_actions(ctx: ChatViewMarkupCtx) -> Element {
+    let app_state = ctx.app_state;
+    let mut utility_panel = ctx.utility_panel;
+    let mut notifications_muted = ctx.notifications_muted;
+    let mut show_search_filters = ctx.show_search_filters;
+    let is_group_channel = ctx.is_group_channel;
+    let is_dm_channel = ctx.is_dm_channel;
+
+    rsx! {
+        div { class: "chat-header-actions",
+            button {
+                class: if *utility_panel.read() == Some(ChatUtilityPanel::Threads) { "header-btn active" } else { "header-btn" },
+                title: t("threads"),
+                onclick: move |_| {
+                    show_search_filters.set(false);
+                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Threads) {
+                        None
+                    } else {
+                        Some(ChatUtilityPanel::Threads)
+                    };
+                    utility_panel.set(next);
+                },
+                "🧵"
+            }
+            button {
+                class: if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) { "header-btn active" } else { "header-btn" },
+                title: t("pinned-messages"),
+                onclick: move |_| {
+                    show_search_filters.set(false);
+                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) {
+                        None
+                    } else {
+                        Some(ChatUtilityPanel::Pinned)
+                    };
+                    utility_panel.set(next);
+                },
+                "📌"
+            }
+            button {
+                class: if *notifications_muted.read() { "header-btn active" } else { "header-btn" },
+                title: if *notifications_muted.read() { t("unmute-notifications") } else { t("mute-notifications") },
+                onclick: move |_| {
+                    let current = *notifications_muted.read();
+                    notifications_muted.set(!current);
+                },
+                "🔔"
+            }
+            {
+                render_member_toggle_button(
+                    app_state,
+                    utility_panel,
+                    show_search_filters,
+                    is_group_channel,
+                    is_dm_channel,
+                )
+            }
+        }
+    }
+}
+
+fn render_member_toggle_button(
+    mut app_state: Signal<AppState>,
+    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
+    mut show_search_filters: Signal<bool>,
+    is_group_channel: bool,
+    is_dm_channel: bool,
+) -> Element {
+    if is_group_channel {
+        return rsx! {
+            button {
+                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
+                title: t("chat-toggle-members"),
+                onclick: move |_| {
+                    let current = app_state.read().nav.dm_right_sidebar_visible;
+                    app_state.write().nav.dm_right_sidebar_visible = !current;
+                    utility_panel.set(None);
+                    show_search_filters.set(false);
+                },
+                "👥"
+            }
+        };
+    }
+
+    if is_dm_channel {
+        return rsx! {
+            button {
+                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
+                title: t("chat-toggle-contact"),
+                onclick: move |_| {
+                    let current = app_state.read().nav.dm_right_sidebar_visible;
+                    app_state.write().nav.dm_right_sidebar_visible = !current;
+                    utility_panel.set(None);
+                    show_search_filters.set(false);
+                },
+                "👤"
+            }
+        };
+    }
+
+    rsx! {
+        button {
+            class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
+            title: t("chat-toggle-members"),
+            onclick: move |_| {
+                let current = app_state.read().nav.right_sidebar_visible;
+                app_state.write().nav.right_sidebar_visible = !current;
+                utility_panel.set(None);
+                show_search_filters.set(false);
+            },
+            "👥"
+        }
+    }
+}
+
+fn render_chat_header_search(ctx: ChatViewMarkupCtx) -> Element {
+    let search_placeholder = ctx.search_placeholder.clone();
+    let search_query_input_value = ctx.search_query_input_value.clone();
+    let search_query_value = ctx.search_query_value.clone();
+    let filtered_search_filter_options = ctx.filtered_search_filter_options.clone();
+    let search_filter_channel_name_onfocus = ctx.search_filter_channel_name_onfocus.clone();
+    let search_filter_channel_name_oninput = ctx.search_filter_channel_name_oninput.clone();
+    let mut search_query = ctx.search_query;
+    let mut search_hits = ctx.search_hits;
+    let mut active_search_filter_idx = ctx.active_search_filter_idx;
+    let mut show_search_filters = ctx.show_search_filters;
+    let mut utility_panel = ctx.utility_panel;
+
+    rsx! {
+        div { class: "chat-header-search-inline",
+            span { class: "chat-header-search-icon", "🔎" }
+            input {
+                class: "chat-header-search-input",
+                r#type: "text",
+                placeholder: "{search_placeholder}",
+                value: "{search_query_input_value}",
+                onfocus: move |_| {
+                    let raw = search_query.read().clone();
+                    let has_matches = !filter_search_filter_options(
+                            &build_search_filter_options(&search_filter_channel_name_onfocus),
+                            &raw,
+                        )
+                        .is_empty();
+                    active_search_filter_idx.set(0);
+                    show_search_filters.set(has_matches);
+                    if !raw.trim().is_empty() {
+                        utility_panel.set(Some(ChatUtilityPanel::Search));
+                    }
+                },
+                oninput: move |evt| {
+                    let next_value = evt.value();
+                    let is_empty = next_value.trim().is_empty();
+                    let has_matches = !filter_search_filter_options(
+                            &build_search_filter_options(&search_filter_channel_name_oninput),
+                            &next_value,
+                        )
+                        .is_empty();
+                    search_query.set(next_value);
+                    active_search_filter_idx.set(0);
+                    show_search_filters.set(has_matches);
+                    if is_empty {
+                        utility_panel.set(None);
+                        search_hits.set(Vec::new());
+                    } else {
+                        utility_panel.set(Some(ChatUtilityPanel::Search));
+                    }
+                },
+                onkeydown: move |evt: KeyboardEvent| {
+                    handle_search_filter_keydown(
+                        evt,
+                        filtered_search_filter_options.clone(),
+                        search_query,
+                        active_search_filter_idx,
+                        show_search_filters,
+                        utility_panel,
+                    );
+                },
+            }
+            {
+                render_search_clear_button(
+                    search_query_value,
+                    search_query,
+                    search_hits,
+                    active_search_filter_idx,
+                    utility_panel,
+                    show_search_filters,
+                )
+            }
+            if *show_search_filters.read() && !filtered_search_filter_options.is_empty() {
+                SearchFilterPopup {
+                    suggestions: filtered_search_filter_options.clone(),
+                    active_index: *active_search_filter_idx.read(),
+                    on_append_filter: move |token: String| {
+                        let next_value = apply_search_filter_completion(&search_query.read(), &token);
+                        search_query.set(next_value);
+                        active_search_filter_idx.set(0);
+                        show_search_filters.set(false);
+                        utility_panel.set(Some(ChatUtilityPanel::Search));
+                    },
+                    on_close: move |_| show_search_filters.set(false),
+                }
+            }
+        }
+    }
+}
+
+fn handle_search_filter_keydown(
+    evt: KeyboardEvent,
+    filtered_search_filter_options: Vec<SearchFilterOption>,
+    mut search_query: Signal<String>,
+    mut active_search_filter_idx: Signal<usize>,
+    mut show_search_filters: Signal<bool>,
+    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
+) {
+    if filtered_search_filter_options.is_empty() || !*show_search_filters.read() {
+        if evt.key() == Key::Escape {
+            show_search_filters.set(false);
+        }
+        return;
+    }
+
+    let item_count = filtered_search_filter_options.len();
+    match evt.key() {
+        Key::ArrowDown => {
+            evt.prevent_default();
+            let next = (*active_search_filter_idx.read() + 1) % item_count;
+            active_search_filter_idx.set(next);
+        }
+        Key::ArrowUp => {
+            evt.prevent_default();
+            let current = *active_search_filter_idx.read();
+            let next = if current == 0 {
+                item_count - 1
+            } else {
+                current - 1
+            };
+            active_search_filter_idx.set(next);
+        }
+        Key::Enter | Key::Tab => {
+            evt.prevent_default();
+            let current = (*active_search_filter_idx.read()).min(item_count - 1);
+            if let Some(option) = filtered_search_filter_options.get(current) {
+                let existing_query = search_query.read().clone();
+                let next_query =
+                    apply_search_filter_completion(&existing_query, &option.completion_token);
+                search_query.set(next_query);
+                active_search_filter_idx.set(0);
+                show_search_filters.set(false);
+                utility_panel.set(Some(ChatUtilityPanel::Search));
+            }
+        }
+        Key::Escape => {
+            evt.prevent_default();
+            show_search_filters.set(false);
+        }
+        _ => {}
+    }
+}
+
+fn render_search_clear_button(
+    search_query_value: String,
+    mut search_query: Signal<String>,
+    mut search_hits: Signal<Vec<MessageSearchHit>>,
+    mut active_search_filter_idx: Signal<usize>,
+    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
+    mut show_search_filters: Signal<bool>,
+) -> Element {
+    if search_query_value.is_empty() {
+        return rsx! {};
+    }
+
+    rsx! {
+        button {
+            class: "chat-header-search-clear",
+            title: t("action-close"),
+            onclick: move |_| {
+                search_query.set(String::new());
+                search_hits.set(Vec::new());
+                active_search_filter_idx.set(0);
+                utility_panel.set(None);
+                show_search_filters.set(true);
+            },
+            "✕"
+        }
+    }
+}
+
+fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
+    let show_side_column = ctx.utility_panel.read().is_some() || ctx.member_list_visible;
+
+    rsx! {
+        div { class: "chat-body-shell",
+            {render_chat_content_column(ctx.clone())}
+            if show_side_column {
+                {render_chat_side_column(ctx)}
+            }
+        }
+    }
+}
+
+fn render_chat_content_column(ctx: ChatViewMarkupCtx) -> Element {
+    rsx! {
+        div { class: "chat-content-column",
+            {render_message_list(ctx.clone())}
+            TypingIndicator {}
+            {render_message_input_area(ctx)}
+        }
+    }
+}
+
+fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
+    let loading = ctx.loading;
+    let app_state = ctx.app_state;
+    let client_manager = ctx.client_manager;
+    let chat_data = ctx.chat_data;
+    let mut history_state = ctx.history_state;
+
+    rsx! {
+        div {
+            class: "message-list",
+            id: "message-list-scroll",
+            onscroll: move |_| {
+                if loading || !history_state.read().has_more_before
+                    || history_state.read().loading_before
+                {
+                    return;
+                }
+                history_state.write().loading_before = true;
+                spawn(async move {
+                    load_older_messages(app_state, client_manager, chat_data, history_state)
+                        .await;
+                });
+            },
+            {render_message_list_content(ctx)}
+        }
+    }
+}
+
+async fn load_older_messages(
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+    mut history_state: Signal<ChatHistoryUiState>,
+) {
+    let mut eval = document::eval(
+        r#"
+            let el = document.getElementById('message-list-scroll');
+            if (el && el.scrollTop < 100) { dioxus.send(true); }
+            else { dioxus.send(false); }
+        "#,
+    );
+    let Ok(near_top) = eval.recv::<bool>().await else {
+        history_state.write().loading_before = false;
+        return;
+    };
+    if !near_top {
+        history_state.write().loading_before = false;
+        return;
+    }
+
+    let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
+        history_state.write().loading_before = false;
+        return;
+    };
+    let Some(before_message_id) = chat_data
+        .read()
+        .messages
+        .first()
+        .map(|message| message.id.clone())
+    else {
+        history_state.write().loading_before = false;
+        history_state.write().has_more_before = false;
+        return;
+    };
+    let Some((previous_scroll_top, previous_scroll_height)) =
+        read_message_list_scroll_metrics().await
+    else {
+        history_state.write().loading_before = false;
+        return;
+    };
+    let backend = if let Some(server_id) = app_state.read().nav.selected_server.clone() {
+        client_manager
+            .read()
+            .get_backend_for_server(&server_id)
+            .map(|(_, handle)| handle)
+    } else if let Some(account_id) = app_state.read().nav.active_account_id.clone() {
+        client_manager.read().get_backend(&account_id)
+    } else {
+        None
+    };
+    let Some(backend) = backend else {
+        history_state.write().loading_before = false;
+        return;
+    };
+
+    let older_messages = {
+        let guard = backend.read().await;
+        guard
+            .get_messages(
+                &active_channel_id,
+                MessageQuery {
+                    before: Some(before_message_id),
+                    limit: Some(OLDER_MESSAGES_PAGE_SIZE),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap_or_default()
+    };
+    if older_messages.is_empty() {
+        history_state.write().loading_before = false;
+        history_state.write().has_more_before = false;
+        return;
+    }
+
+    let mut merged_messages = older_messages.clone();
+    merged_messages.extend(chat_data.read().messages.clone());
+    chat_data.write().messages = merged_messages;
+    request_preserve_scroll_position(previous_scroll_top, previous_scroll_height);
+    history_state.write().loading_before = false;
+    history_state.write().has_more_before =
+        u32::try_from(older_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
+}
+
+fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
+    if ctx.loading {
+        return rsx! {
+            div { class: "message-loading", "{t(\"chat-loading\")}" }
+        };
+    }
+
+    if ctx.messages.is_empty() {
+        return rsx! {
+            div { class: "message-empty",
+                div { class: "empty-wave", "👋" }
+                h3 { "{t(\"chat-no-messages\")}" }
+            }
+        };
+    }
+
+    rsx! {
+        if ctx.history_state.read().loading_before {
+            div { class: "message-history-loader", "{t(\"chat-loading-earlier\")}" }
+        }
+        {render_unread_banner(ctx.clone())}
+        for (idx , msg) in ctx.messages.iter().enumerate() {
+            {
+                let prev_msg = if idx > 0 { ctx.messages.get(idx - 1).cloned() } else { None };
+                render_message_row(ctx.clone(), msg.clone(), prev_msg)
+            }
+        }
+    }
+}
+
+fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
+    if !ctx.unread_banner_visible {
+        return rsx! {};
+    }
+
+    let mut chat_data = ctx.chat_data;
+    let mut history_state = ctx.history_state;
+    let unread_banner_channel_id = ctx.unread_banner_channel_id.clone();
+    let unread_banner_count = ctx.unread_banner_count.clone();
+    let unread_banner_time = ctx.unread_banner_time.clone();
+    let unread_banner_date = ctx.unread_banner_date.clone();
+
+    rsx! {
+        div { class: "chat-unread-banner",
+            div { class: "chat-unread-banner-text",
+                "{t_args(\"chat-unread-banner\", &[(\"count\", unread_banner_count.as_str()), (\"time\", unread_banner_time.as_str()), (\"date\", unread_banner_date.as_str())])}"
+            }
+            button {
+                class: "chat-unread-banner-action",
+                onclick: move |_| {
+                    if let Some(active_channel_id) = unread_banner_channel_id.clone() {
+                        let _ = mark_channel_as_read(&mut chat_data, &active_channel_id);
+                        history_state.write().unread_count = 0;
+                        history_state.write().unread_marker_message_id = None;
+                    }
+                },
+                "{t(\"notifications-mark-read\")}"
+            }
+        }
+    }
+}
+
+fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Message>) -> Element {
+    let show_date_sep = match prev_msg.as_ref() {
+        Some(prev) => msg.timestamp.date_naive() != prev.timestamp.date_naive(),
+        None => true,
+    };
+    let is_grouped = match prev_msg.as_ref() {
+        Some(prev) => {
+            prev.author.id == msg.author.id
+                && !show_date_sep
+                && (msg.timestamp - prev.timestamp).num_minutes() < GROUP_THRESHOLD_MINUTES
+        }
+        None => false,
+    };
+
+    let msg_id = msg.id.clone();
+    let time_str = format_timestamp(msg.timestamp);
+    let date_str = if show_date_sep {
+        msg.timestamp.format("%B %d, %Y").to_string()
+    } else {
+        String::new()
+    };
+    let unread_count = ctx.history_state.read().unread_count;
+    let unread_marker_id = ctx.unread_marker_id.clone();
+    let hovered_msg_signal = ctx.hovered_msg;
+    let hovered_msg_signal_leave = ctx.hovered_msg;
+    let msg_context_menu_signal = ctx.msg_context_menu;
+    let is_hovered = ctx.hovered_msg.read().as_deref() == Some(&msg_id);
+    let is_own = msg.author.id == ctx.self_user_id;
+    let is_editing = ctx.editing_msg_id.read().as_deref() == Some(&msg_id);
+    let context_menu_text = message_plain_text(&msg.content);
+    let msg_for_actions = msg.clone();
+    let msg_for_grouped = msg.clone();
+
+    rsx! {
+        if show_date_sep {
+            div { class: "date-separator",
+                span { class: "date-separator-text", "{date_str}" }
+            }
+        }
+        if unread_marker_id.as_deref() == Some(msg_id.as_str()) && unread_count > 0 {
+            div { class: "message-unread-divider",
+                div { class: "message-unread-divider-line" }
+                span { class: "message-unread-divider-label", "{t(\"chat-unread-divider\")}" }
+            }
+        }
+        div {
+            id: "message-{msg_id}",
+            class: if is_grouped { "message message-grouped" } else { "message message-full" },
+            onmouseenter: {
+                let mut hovered_msg = hovered_msg_signal;
+                let mid = msg_id.clone();
+                move |_| hovered_msg.set(Some(mid.clone()))
+            },
+            onmouseleave: {
+                let mut hovered_msg = hovered_msg_signal_leave;
+                move |_| hovered_msg.set(None)
+            },
+            oncontextmenu: {
+                let mut msg_context_menu = msg_context_menu_signal;
+                let mid = msg_id.clone();
+                let txt = context_menu_text.clone();
+                move |evt: MouseEvent| {
+                    evt.prevent_default();
+                    let coords = evt.client_coordinates();
+                    msg_context_menu
+                        .set(
+                            Some(MsgContextMenu {
+                                x: coords.x,
+                                y: coords.y,
+                                message_id: mid.clone(),
+                                message_text: txt.clone(),
+                                is_own,
+                            }),
+                        );
+                }
+            },
+
+            {
+                render_message_actions(
+                    ctx.clone(),
+                    msg_for_actions,
+                    is_hovered,
+                    is_editing,
+                    is_own,
+                )
+            }
+            if is_grouped {
+                {render_grouped_message_body(ctx, msg_for_grouped, time_str, is_editing)}
+            } else {
+                {render_full_message_body(ctx, msg, time_str, is_editing)}
+            }
+        }
+    }
+}
+
+fn render_message_actions(
+    ctx: ChatViewMarkupCtx,
+    msg: Message,
+    is_hovered: bool,
+    is_editing: bool,
+    is_own: bool,
+) -> Element {
+    if !is_hovered || is_editing {
+        return rsx! {};
+    }
+
+    let mut reaction_picker_msg = ctx.reaction_picker_msg;
+    let mut edit_draft = ctx.edit_draft;
+    let mut editing_msg_id = ctx.editing_msg_id;
+    let mut reply_target = ctx.reply_target;
+    let mut chat_data = ctx.chat_data;
+    let msg_id = msg.id.clone();
+    let ctx_text = message_plain_text(&msg.content);
+
+    rsx! {
+        div { class: "message-actions",
+            button {
+                class: "msg-action-btn",
+                title: t("reaction-add"),
+                onclick: {
+                    let mid = msg_id.clone();
+                    move |_| reaction_picker_msg.set(Some(mid.clone()))
+                },
+                "😀+"
+            }
+            if is_own {
+                button {
+                    class: "msg-action-btn",
+                    title: t("msg-edit"),
+                    onclick: {
+                        let mid = msg_id.clone();
+                        let txt = ctx_text.clone();
+                        move |_| {
+                            edit_draft.set(txt.clone());
+                            editing_msg_id.set(Some(mid.clone()));
                         }
                     },
-                    on_close: move |_| reaction_picker_msg.set(None),
+                    "✏️"
+                }
+                button {
+                    class: "msg-action-btn msg-action-btn-danger",
+                    title: t("msg-delete"),
+                    onclick: {
+                        let mid = msg_id.clone();
+                        move |_| chat_data.write().messages.retain(|m| m.id != mid)
+                    },
+                    "🗑️"
                 }
             }
-
-            if msg_context_menu.read().is_some() {
-                MsgContextMenuOverlay { msg_context_menu, chat_data }
+            button {
+                class: "msg-action-btn",
+                title: t("msg-reply"),
+                onclick: {
+                    let preview = MessageReplyPreview {
+                        message_id: msg.id.clone(),
+                        author_id: msg.author.id.clone(),
+                        author_display_name: msg.author.display_name.clone(),
+                        author_avatar_url: msg.author.avatar_url.clone(),
+                        snippet: reply_preview_snippet(&msg.content),
+                    };
+                    move |_| reply_target.set(Some(preview.clone()))
+                },
+                "↩️"
             }
+            button {
+                class: "msg-action-btn",
+                title: t("msg-forward"),
+                onclick: move |_| tracing::debug!("Forward (stub)"),
+                "➡️"
+            }
+        }
+    }
+}
+
+fn render_full_message_body(
+    ctx: ChatViewMarkupCtx,
+    msg: Message,
+    time_str: String,
+    is_editing: bool,
+) -> Element {
+    let color = user_color(&msg.author.id);
+    let author_avatar = msg.author.avatar_url.clone();
+    let first_char = msg
+        .author
+        .display_name
+        .chars()
+        .next()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
+
+    rsx! {
+        if let Some(ref avatar) = author_avatar {
+            img {
+                class: "message-avatar message-avatar-img",
+                src: "{avatar}",
+                alt: "{first_char}",
+            }
+        } else {
+            div { class: "message-avatar", style: "background-color: {color};", "{first_char}" }
+        }
+        div { class: "message-body",
+            div { class: "message-header",
+                span { class: "message-author", style: "color: {color};", "{msg.author.display_name}" }
+                span { class: "message-timestamp", "{time_str}" }
+            }
+            {render_message_content_stack(ctx, msg, is_editing)}
+        }
+    }
+}
+
+fn render_grouped_message_body(
+    ctx: ChatViewMarkupCtx,
+    msg: Message,
+    time_str: String,
+    is_editing: bool,
+) -> Element {
+    rsx! {
+        div { class: "message-gutter",
+            span { class: "message-hover-time", "{time_str}" }
+        }
+        div { class: "message-body", {render_message_content_stack(ctx, msg, is_editing)} }
+    }
+}
+
+fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing: bool) -> Element {
+    rsx! {
+        if let Some(reply) = msg.reply_to.clone() {
+            MessageReplyPreviewLine { reply }
+        }
+        if is_editing {
+            MessageInlineEdit {
+                message_id: msg.id.clone(),
+                editing_msg_id: ctx.editing_msg_id,
+                edit_draft: ctx.edit_draft,
+                chat_data: ctx.chat_data,
+            }
+        } else {
+            MessageContentView { content: msg.content.clone(), edited: msg.edited }
+        }
+        if !msg.attachments.is_empty() {
+            AttachmentsView { attachments: msg.attachments.clone() }
+        }
+        if !msg.reactions.is_empty() {
+            ReactionsView { reactions: msg.reactions.clone(), message_id: msg.id.clone() }
+        }
+    }
+}
+
+fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
+    rsx! {
+        div { class: "message-input-area",
+            if ctx.channel_id.is_some() {
+                {render_message_input_enabled(ctx)}
+            } else {
+                div { class: "message-input-disabled", {t("chat-select-channel")} }
+            }
+        }
+    }
+}
+
+fn render_message_input_enabled(ctx: ChatViewMarkupCtx) -> Element {
+    rsx! {
+        if let Some(reply) = ctx.reply_target.read().clone() {
+            ReplyComposerBar {
+                reply,
+                on_cancel: {
+                    let mut reply_target = ctx.reply_target;
+                    move |_| reply_target.set(None)
+                },
+            }
+        }
+        {render_attachment_preview_strip(ctx.clone())}
+        {render_slash_command_popup(ctx.clone())}
+        {render_message_input_row(ctx.clone())}
+        {render_hidden_file_input(ctx.clone())}
+        {render_input_emoji_picker(ctx)}
+    }
+}
+
+fn render_attachment_preview_strip(ctx: ChatViewMarkupCtx) -> Element {
+    let previews = ctx.pending_attachments.read().clone();
+    if previews.is_empty() {
+        return rsx! {};
+    }
+
+    let mut pending_attachments = ctx.pending_attachments;
+    rsx! {
+        div { class: "attachment-preview-strip",
+            for preview in previews {
+                div { class: "attachment-preview-card",
+                    if let Some(ref preview_url) = preview.preview_url {
+                        img {
+                            class: "attachment-preview-image",
+                            src: "{preview_url}",
+                            alt: "{preview.filename}",
+                        }
+                    } else {
+                        div { class: "attachment-preview-icon", "📎" }
+                    }
+                    div { class: "attachment-preview-meta",
+                        span { class: "attachment-preview-name", "{preview.filename}" }
+                        span { class: "attachment-preview-size", "{format_file_size(preview.size)}" }
+                    }
+                    button {
+                        class: "attachment-preview-remove",
+                        title: t("action-close"),
+                        onclick: {
+                            let preview_id = preview.id.clone();
+                            move |_| pending_attachments.write().retain(|item| item.id != preview_id)
+                        },
+                        "✕"
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn render_slash_command_popup(ctx: ChatViewMarkupCtx) -> Element {
+    let all_cmds = ctx.command_suggestions.read().clone();
+    let text = ctx.message_input.read().clone();
+    let query = slash_command_query(&text);
+    let matches = if *ctx.show_command_popup.read() {
+        filtered_slash_commands(query, &all_cmds)
+    } else {
+        Vec::new()
+    };
+    if matches.is_empty() {
+        return rsx! {};
+    }
+
+    let mut message_input = ctx.message_input;
+    let mut show_command_popup = ctx.show_command_popup;
+    rsx! {
+        SlashCommandPopup {
+            commands: matches,
+            active_idx: *ctx.active_command_idx.read(),
+            on_select: move |filled: String| {
+                message_input.set(filled);
+                show_command_popup.set(false);
+            },
+        }
+    }
+}
+
+fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
+    let compose_placeholder = ctx.compose_placeholder.clone();
+    let message_input = ctx.message_input;
+    let show_input_emoji = ctx.show_input_emoji;
+    let active_command_idx = ctx.active_command_idx;
+    let show_command_popup = ctx.show_command_popup;
+    let command_suggestions = ctx.command_suggestions;
+    let pending_attachments = ctx.pending_attachments;
+    let reply_target = ctx.reply_target;
+    let channel_id = ctx.channel_id.clone();
+    let client_manager = ctx.client_manager;
+    let chat_data = ctx.chat_data;
+    let app_state = ctx.app_state;
+    let composer_runtime = ComposerRuntimeCtx {
+        message_input,
+        command_suggestions,
+        active_command_idx,
+        show_command_popup,
+        pending_attachments,
+        reply_target,
+        client_manager,
+        chat_data,
+        app_state,
+    };
+
+    rsx! {
+        div { class: "message-input-row",
+            div { class: "message-input-shell",
+                button {
+                    class: "toolbar-btn composer-upload-btn",
+                    title: t("chat-attach-file"),
+                    onclick: move |_| open_composer_file_picker(),
+                    "➕"
+                }
+                div { class: "message-input-text-area",
+                    input {
+                        class: "message-input",
+                        id: "poly-message-composer",
+                        r#type: "text",
+                        placeholder: "{compose_placeholder}",
+                        value: "{message_input}",
+                        oninput: move |evt| {
+                            handle_composer_input(
+                                evt.value(),
+                                message_input,
+                                command_suggestions,
+                                show_command_popup,
+                                active_command_idx,
+                            );
+                        },
+                        onkeydown: {
+                            let channel_id_send = channel_id.clone();
+                            move |evt: KeyboardEvent| {
+                                handle_composer_keydown(evt, channel_id_send.clone(), composer_runtime);
+                            }
+                        },
+                    }
+                    {render_composer_toolbar(show_input_emoji)}
+                }
+            }
+            {render_send_button(ctx)}
+        }
+    }
+}
+
+fn render_composer_toolbar(mut show_input_emoji: Signal<bool>) -> Element {
+    rsx! {
+        div { class: "input-toolbar input-toolbar-inline",
+            button {
+                class: "toolbar-btn",
+                title: t("emoji-picker"),
+                onclick: move |_| {
+                    let current = *show_input_emoji.read();
+                    show_input_emoji.set(!current);
+                },
+                "😀"
+            }
+            button { class: "toolbar-btn gif-btn", title: t("gif-picker"), "GIF" }
+            button { class: "toolbar-btn", title: t("chat-markdown-formatting"), "⌘" }
+        }
+    }
+}
+
+fn open_composer_file_picker() {
+    document::eval(
+        r#"
+            let input = document.getElementById('poly-file-input');
+            if (input) { input.click(); }
+        "#,
+    );
+}
+
+fn handle_composer_input(
+    value: String,
+    mut message_input: Signal<String>,
+    command_suggestions: Signal<Vec<ChatCommand>>,
+    mut show_command_popup: Signal<bool>,
+    mut active_command_idx: Signal<usize>,
+) {
+    message_input.set(value.clone());
+    if value.trim_start().starts_with('/') && !value.trim_start()[1..].contains(' ') {
+        let query = &value.trim_start()[1..];
+        let all_cmds = command_suggestions.read().clone();
+        let matches = filtered_slash_commands(query, &all_cmds);
+        show_command_popup.set(!matches.is_empty());
+        active_command_idx.set(0);
+    } else {
+        show_command_popup.set(false);
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ComposerRuntimeCtx {
+    message_input: Signal<String>,
+    command_suggestions: Signal<Vec<ChatCommand>>,
+    active_command_idx: Signal<usize>,
+    show_command_popup: Signal<bool>,
+    pending_attachments: Signal<Vec<PendingAttachmentPreview>>,
+    reply_target: Signal<Option<MessageReplyPreview>>,
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+    app_state: Signal<AppState>,
+}
+
+fn handle_composer_keydown(
+    evt: KeyboardEvent,
+    channel_id_send: Option<String>,
+    ctx: ComposerRuntimeCtx,
+) {
+    let mut message_input = ctx.message_input;
+    let mut pending_attachments = ctx.pending_attachments;
+    let mut reply_target = ctx.reply_target;
+    let show_command_popup = ctx.show_command_popup;
+
+    if *show_command_popup.read() && handle_slash_popup_navigation(&evt, ctx) {
+        return;
+    }
+
+    if evt.key() != Key::Enter || evt.modifiers().shift() {
+        return;
+    }
+    evt.prevent_default();
+
+    let raw_text = message_input.read().clone();
+    let text = apply_builtin_command(raw_text.trim()).unwrap_or(raw_text);
+    let attachments = pending_attachments.read().clone();
+    let reply_to_message_id = reply_target
+        .read()
+        .as_ref()
+        .map(|reply| reply.message_id.clone());
+    if text.is_empty() && attachments.is_empty() {
+        return;
+    }
+
+    message_input.set(String::new());
+    pending_attachments.set(Vec::new());
+    reply_target.set(None);
+    if let Some(cid) = channel_id_send {
+        spawn(async move {
+            send_message(SendMessageCtx {
+                channel_id: cid,
+                text,
+                attachments: attachments
+                    .iter()
+                    .map(pending_attachment_to_attachment)
+                    .collect::<Vec<_>>(),
+                reply_to_message_id,
+                client_manager: ctx.client_manager,
+                chat_data: ctx.chat_data,
+                app_state: ctx.app_state,
+            })
+            .await;
+        });
+    }
+}
+
+fn handle_slash_popup_navigation(evt: &KeyboardEvent, ctx: ComposerRuntimeCtx) -> bool {
+    let message_input = ctx.message_input;
+    let command_suggestions = ctx.command_suggestions;
+    let mut active_command_idx = ctx.active_command_idx;
+    let mut show_command_popup = ctx.show_command_popup;
+
+    match evt.key() {
+        Key::ArrowUp => {
+            evt.prevent_default();
+            let cur = *active_command_idx.read();
+            if cur > 0 {
+                active_command_idx.set(cur - 1);
+            }
+            true
+        }
+        Key::ArrowDown => {
+            evt.prevent_default();
+            let all_cmds = command_suggestions.read().clone();
+            let text = message_input.read().clone();
+            let query = slash_command_query(&text);
+            let matches = filtered_slash_commands(query, &all_cmds);
+            let cur = *active_command_idx.read();
+            if cur + 1 < matches.len() {
+                active_command_idx.set(cur + 1);
+            }
+            true
+        }
+        Key::Escape => {
+            evt.prevent_default();
+            show_command_popup.set(false);
+            true
+        }
+        Key::Tab | Key::Enter if !evt.modifiers().shift() => {
+            evt.prevent_default();
+            apply_selected_slash_command(ctx);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn apply_selected_slash_command(ctx: ComposerRuntimeCtx) {
+    let mut message_input = ctx.message_input;
+    let command_suggestions = ctx.command_suggestions;
+    let active_command_idx = ctx.active_command_idx;
+    let mut show_command_popup = ctx.show_command_popup;
+    let all_cmds = command_suggestions.read().clone();
+    let text = message_input.read().clone();
+    let query = slash_command_query(&text);
+    let matches = filtered_slash_commands(query, &all_cmds);
+    let idx = *active_command_idx.read();
+    if let Some(cmd) = matches.get(idx) {
+        message_input.set(format!("/{} ", cmd.name));
+        show_command_popup.set(false);
+    }
+}
+
+fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
+    let channel_id = ctx.channel_id.clone();
+    let mut message_input = ctx.message_input;
+    let mut pending_attachments = ctx.pending_attachments;
+    let mut reply_target = ctx.reply_target;
+    let client_manager = ctx.client_manager;
+    let chat_data = ctx.chat_data;
+    let app_state = ctx.app_state;
+
+    rsx! {
+        button {
+            class: "btn btn-send chat-send-inline",
+            disabled: message_input.read().is_empty() && pending_attachments.read().is_empty(),
+            onclick: move |_| {
+                let text = message_input.read().clone();
+                let attachments = pending_attachments.read().clone();
+                let reply_to_message_id = reply_target
+                    .read()
+                    .as_ref()
+                    .map(|reply| reply.message_id.clone());
+                if text.is_empty() && attachments.is_empty() {
+                    return;
+                }
+                message_input.set(String::new());
+                pending_attachments.set(Vec::new());
+                reply_target.set(None);
+                if let Some(ref cid) = channel_id {
+                    let cid = cid.clone();
+                    let text = text.clone();
+                    let attachments = attachments
+                        .iter()
+                        .map(pending_attachment_to_attachment)
+                        .collect::<Vec<_>>();
+                    spawn(async move {
+                        send_message(SendMessageCtx {
+                                channel_id: cid,
+                                text,
+                                attachments,
+                                reply_to_message_id,
+                                client_manager,
+                                chat_data,
+                                app_state,
+                            })
+                            .await;
+                    });
+                }
+            },
+            {t("chat-send")}
+        }
+    }
+}
+
+fn render_hidden_file_input(ctx: ChatViewMarkupCtx) -> Element {
+    let pending_attachments = ctx.pending_attachments;
+    rsx! {
+        input {
+            r#type: "file",
+            id: "poly-file-input",
+            multiple: true,
+            style: "display:none;",
+            onchange: move |_evt| {
+                let files = _evt.files();
+                if !files.is_empty() {
+                    spawn(async move {
+                        append_attachment_previews(pending_attachments, files).await;
+                    });
+                }
+            },
+        }
+    }
+}
+
+fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
+    if !*ctx.show_input_emoji.read() {
+        return rsx! {};
+    }
+
+    let mut message_input = ctx.message_input;
+    let mut show_input_emoji = ctx.show_input_emoji;
+    rsx! {
+        EmojiPicker {
+            on_select: move |emoji: String| {
+                let current = message_input.read().clone();
+                message_input.set(format!("{current}{emoji}"));
+                show_input_emoji.set(false);
+            },
+            on_close: move |_| show_input_emoji.set(false),
+        }
+    }
+}
+
+fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
+    let current_channel_name = ctx
+        .current_channel
+        .as_ref()
+        .map(|channel| channel.name.clone())
+        .unwrap_or_default();
+    let panel = *ctx.utility_panel.read();
+
+    rsx! {
+        div { class: "chat-side-column",
+            if let Some(panel) = panel {
+                {render_chat_utility_rail(ctx, panel, current_channel_name)}
+            } else if ctx.is_dm_channel {
+                DmContactPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
+            } else if ctx.is_group_channel {
+                DmUserSidebar {}
+            } else {
+                UserSidebar {}
+            }
+        }
+    }
+}
+
+fn render_chat_utility_rail(
+    ctx: ChatViewMarkupCtx,
+    panel: ChatUtilityPanel,
+    current_channel_name: String,
+) -> Element {
+    let mut utility_panel = ctx.utility_panel;
+    let search_query = ctx.search_query_value.clone();
+    let search_terms = ctx.search_terms.clone();
+    let search_hits = ctx.search_hits.read().clone();
+    let pinned_messages = ctx.pinned_messages.read().clone();
+    let search_hit_channel_id = ctx.search_hit_channel_id.clone();
+    let search_hit_server = ctx.search_hit_server.clone();
+    let pinned_hit_channel_id = ctx.pinned_hit_channel_id.clone();
+    let pinned_hit_server = ctx.pinned_hit_server.clone();
+    let pinned_hit_channel = ctx.pinned_hit_channel.clone();
+    let nav_for_search = ctx.nav_for_search;
+    let nav_for_pinned = ctx.nav_for_pinned;
+    let client_manager = ctx.client_manager;
+    let chat_data = ctx.chat_data;
+    let app_state = ctx.app_state;
+
+    rsx! {
+        ChatUtilityRail {
+            panel,
+            search_query,
+            search_hits,
+            search_terms,
+            pinned_messages,
+            current_channel_name,
+            on_open_search_hit: move |hit: MessageSearchHit| {
+                let current_channel_id = search_hit_channel_id.clone();
+                let current_server_id = search_hit_server
+                    .as_ref()
+                    .map(|server| server.id.clone());
+                let nav = nav_for_search;
+                spawn(async move {
+                    if let Some((route, message_id)) = open_message_hit(
+                            hit,
+                            current_channel_id,
+                            current_server_id,
+                            client_manager,
+                            chat_data,
+                            app_state,
+                        )
+                        .await
+                    {
+                        nav.push(route);
+                        highlight_message(&message_id);
+                    }
+                });
+            },
+            on_open_pinned: move |message: Message| {
+                let Some(active_channel_id) = pinned_hit_channel_id.clone() else {
+                    return;
+                };
+                let server_id = pinned_hit_server.as_ref().map(|server| server.id.clone());
+                let hit = MessageSearchHit {
+                    channel_id: active_channel_id.clone(),
+                    channel_name: pinned_hit_channel
+                        .as_ref()
+                        .map(|channel| channel.name.clone()),
+                    server_id,
+                    message,
+                };
+                let current_server_id = pinned_hit_server
+                    .as_ref()
+                    .map(|server| server.id.clone());
+                let nav = nav_for_pinned;
+                spawn(async move {
+                    if let Some((route, message_id)) = open_message_hit(
+                            hit,
+                            Some(active_channel_id),
+                            current_server_id,
+                            client_manager,
+                            chat_data,
+                            app_state,
+                        )
+                        .await
+                    {
+                        nav.push(route);
+                        highlight_message(&message_id);
+                    }
+                });
+            },
+            on_close: move |_| utility_panel.set(None),
+        }
+    }
+}
+
+fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
+    let reaction_picker_id = ctx.reaction_picker_id.clone();
+    let mut reaction_picker_msg = ctx.reaction_picker_msg;
+    let msg_context_menu = ctx.msg_context_menu;
+    let mut chat_data = ctx.chat_data;
+
+    rsx! {
+        if let Some(ref picker_msg_id) = reaction_picker_id {
+            EmojiPicker {
+                on_select: {
+                    let msg_id = picker_msg_id.clone();
+                    move |emoji: String| {
+                        toggle_reaction_on_message(&mut chat_data, &msg_id, &emoji);
+                        reaction_picker_msg.set(None);
+                    }
+                },
+                on_close: move |_| reaction_picker_msg.set(None),
+            }
+        }
+        if msg_context_menu.read().is_some() {
+            MsgContextMenuOverlay { msg_context_menu, chat_data }
         }
     }
 }
@@ -2446,16 +3369,6 @@ fn MsgContextMenuOverlay(
     let mid_copy_id = menu.message_id.clone();
     let txt_copy = menu.message_text.clone();
 
-    // Data-driven menu items (label, icon)
-    let stub_items: &[(&str, &str)] = &[
-        ("msg-reply", "↩"),
-        ("msg-forward", "➡"),
-        ("msg-apps", ""),
-        ("msg-mark-unread", ""),
-        ("msg-copy-link", ""),
-        ("msg-speak", ""),
-    ];
-
     rsx! {
         div {
             class: "context-menu-backdrop",
@@ -2468,26 +3381,13 @@ fn MsgContextMenuOverlay(
             style: "left: {x}px; top: {y}px;",
             onclick: move |evt| evt.stop_propagation(),
 
-            // Quick reactions
-            div { class: "msg-context-quick-reactions",
-                for emoji in QUICK_REACTIONS {
-                    {
-                        let e = emoji.to_string();
-                        let mid = menu.message_id.clone();
-                        rsx! {
-                            button {
-                                class: "msg-context-quick-reaction-btn",
-                                onclick: move |_| {
-                                    toggle_reaction_on_message(&mut chat_data, &mid, &e);
-                                    msg_context_menu.set(None);
-                                },
-                                "{emoji}"
-                            }
-                        }
-                    }
-                }
+            {
+                render_context_menu_quick_reactions(
+                    menu.message_id.clone(),
+                    msg_context_menu,
+                    chat_data,
+                )
             }
-
             div { class: "context-menu-separator" }
             ContextMenuItemSimple {
                 label: t("reaction-add"),
@@ -2495,79 +3395,138 @@ fn MsgContextMenuOverlay(
                 onclick: move |_| msg_context_menu.set(None),
             }
 
-            // Stub items
-            for (key , icon) in stub_items {
+            {render_context_menu_stub_items(msg_context_menu)}
+            {render_context_menu_copy_text_item(msg_context_menu, txt_copy)}
+            div { class: "context-menu-separator" }
+
+            {render_context_menu_danger_item(is_own, msg_context_menu, chat_data, mid_delete)}
+            {render_context_menu_copy_id_item(msg_context_menu, mid_copy_id)}
+        }
+    }
+}
+
+fn render_context_menu_quick_reactions(
+    message_id: String,
+    mut msg_context_menu: Signal<Option<MsgContextMenu>>,
+    mut chat_data: Signal<ChatData>,
+) -> Element {
+    rsx! {
+        div { class: "msg-context-quick-reactions",
+            for emoji in QUICK_REACTIONS {
                 {
-                    let key = key.to_string();
-                    let icon_str = icon.to_string();
+                    let e = emoji.to_string();
+                    let mid = message_id.clone();
                     rsx! {
-                        ContextMenuItemSimple {
-                            label: t(&key),
-                            icon: icon_str,
+                        button {
+                            class: "msg-context-quick-reaction-btn",
                             onclick: move |_| {
-                                tracing::debug!("{} (stub)", key);
+                                toggle_reaction_on_message(&mut chat_data, &mid, &e);
                                 msg_context_menu.set(None);
                             },
+                            "{emoji}"
                         }
                     }
                 }
             }
+        }
+    }
+}
 
-            // Copy Text
-            ContextMenuItemSimple {
-                label: t("msg-copy-text"),
-                onclick: {
-                    let txt = txt_copy.clone();
-                    move |_| {
-                        let js = format!(
-                            "navigator.clipboard.writeText({}).catch(()=>{{}})",
-                            serde_json::to_string(&txt).unwrap_or_default(),
-                        );
-                        document::eval(&js);
-                        msg_context_menu.set(None);
+fn render_context_menu_stub_items(mut msg_context_menu: Signal<Option<MsgContextMenu>>) -> Element {
+    const STUB_ITEMS: &[(&str, &str)] = &[
+        ("msg-reply", "↩"),
+        ("msg-forward", "➡"),
+        ("msg-apps", ""),
+        ("msg-mark-unread", ""),
+        ("msg-copy-link", ""),
+        ("msg-speak", ""),
+    ];
+
+    rsx! {
+        for (key , icon) in STUB_ITEMS {
+            {
+                let key = key.to_string();
+                let icon_str = icon.to_string();
+                rsx! {
+                    ContextMenuItemSimple {
+                        label: t(&key),
+                        icon: icon_str,
+                        onclick: move |_| {
+                            tracing::debug!("{} (stub)", key);
+                            msg_context_menu.set(None);
+                        },
                     }
-                },
-            }
-
-            div { class: "context-menu-separator" }
-
-            if !is_own {
-                ContextMenuItemSimple {
-                    label: t("msg-report"),
-                    danger: true,
-                    onclick: move |_| {
-                        tracing::debug!("Report (stub)");
-                        msg_context_menu.set(None);
-                    },
                 }
             }
+        }
+    }
+}
 
-            if is_own {
-                ContextMenuItemSimple {
-                    label: t("msg-delete"),
-                    danger: true,
-                    onclick: move |_| {
-                        let mid = mid_delete.clone();
-                        chat_data.write().messages.retain(|m| m.id != mid);
-                        msg_context_menu.set(None);
-                    },
-                }
-            }
+fn render_context_menu_copy_text_item(
+    mut msg_context_menu: Signal<Option<MsgContextMenu>>,
+    txt_copy: String,
+) -> Element {
+    rsx! {
+        ContextMenuItemSimple {
+            label: t("msg-copy-text"),
+            onclick: move |_| {
+                let js = format!(
+                    "navigator.clipboard.writeText({}).catch(()=>{{}})",
+                    serde_json::to_string(&txt_copy).unwrap_or_default(),
+                );
+                document::eval(&js);
+                msg_context_menu.set(None);
+            },
+        }
+    }
+}
 
+fn render_context_menu_danger_item(
+    is_own: bool,
+    mut msg_context_menu: Signal<Option<MsgContextMenu>>,
+    mut chat_data: Signal<ChatData>,
+    mid_delete: String,
+) -> Element {
+    if !is_own {
+        return rsx! {
             ContextMenuItemSimple {
-                label: t("msg-copy-id"),
-                onclick: {
-                    let mid = mid_copy_id.clone();
-                    move |_| {
-                        let js = format!(
-                            "navigator.clipboard.writeText({}).catch(()=>{{}})",
-                            serde_json::to_string(&mid).unwrap_or_default(),
-                        );
-                        document::eval(&js);
-                        msg_context_menu.set(None);
-                    }
+                label: t("msg-report"),
+                danger: true,
+                onclick: move |_| {
+                    tracing::debug!("Report (stub)");
+                    msg_context_menu.set(None);
                 },
             }
+        };
+    }
+
+    rsx! {
+        ContextMenuItemSimple {
+            label: t("msg-delete"),
+            danger: true,
+            onclick: move |_| {
+                chat_data.write().messages.retain(|message| message.id != mid_delete);
+                msg_context_menu.set(None);
+            },
+        }
+    }
+}
+
+fn render_context_menu_copy_id_item(
+    mut msg_context_menu: Signal<Option<MsgContextMenu>>,
+    mid_copy_id: String,
+) -> Element {
+    rsx! {
+        ContextMenuItemSimple {
+            label: t("msg-copy-id"),
+            onclick: move |_| {
+                let js = format!(
+                    "navigator.clipboard.writeText({}).catch(()=>{{}})",
+                    serde_json::to_string(&mid_copy_id).unwrap_or_default(),
+                );
+                document::eval(&js);
+                msg_context_menu.set(None);
+            },
         }
     }
 }

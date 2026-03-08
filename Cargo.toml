@@ -124,6 +124,12 @@ futures-util = "0.3"
 tempfile = "3"
 webkit2gtk = { version = "2.0", features = [] }
 
+# Audio / Noise
+# nnnoiseless: pure-Rust port of Mozilla RNNoise for real-time noise cancellation.
+# Compiles to wasm32; Phase 3 wires it to a WebAudio AudioWorklet.
+# See docs/phase-voice-plan.md DECISION(V-4).
+nnnoiseless = "0.5"
+
 # WASM plugin runtime (native-only — wasmtime cannot target wasm32)
 wasmtime = { version = "42", features = ["component-model", "cranelift"] }
 wasmtime-wasi = "42"

@@ -336,6 +336,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     id: "cat-projects".to_string(),
                     name: "Projects".to_string(),
                     channel_ids: vec![
+                        "ch2-general".to_string(),
                         "ch2-announcements".to_string(),
                         "ch2-contributions".to_string(),
                     ],
@@ -347,7 +348,7 @@ pub fn demo2_servers() -> Vec<Server> {
                 },
             ],
             backend: BackendType::Demo,
-            unread_count: 3,
+            unread_count: 14,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
         },
@@ -415,6 +416,14 @@ pub fn demo2_servers() -> Vec<Server> {
 pub fn demo2_channels(server_id: &str) -> Vec<Channel> {
     match server_id {
         "server-opensource" => vec![
+            Channel {
+                id: "ch2-general".to_string(),
+                name: "general".to_string(),
+                channel_type: ChannelType::Text,
+                server_id: server_id.to_string(),
+                unread_count: 11,
+                last_message_id: Some("msg2-general-559".to_string()),
+            },
             Channel {
                 id: "ch2-announcements".to_string(),
                 name: "announcements".to_string(),
@@ -2526,11 +2535,124 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
 ///
 /// These supplement/override the sparse data in `demo2_messages` for channels that
 /// previously returned only minimal content.
+fn demo2_general_attachment(index: usize) -> Attachment {
+    Attachment {
+        id: format!("att-general-{index}"),
+        filename: format!("screenshot-{index}.jpg"),
+        content_type: "image/jpeg".to_string(),
+        url: format!("https://picsum.photos/seed/poly-general-{index}/640/420"),
+        size: 320_000 + (index as u64 * 37),
+    }
+}
+
+fn demo2_opensource_general_messages() -> Vec<Message> {
+    let users = demo_users();
+    let authors = [
+        users[0].clone(),
+        users[1].clone(),
+        users[2].clone(),
+        users[3].clone(),
+        users[4].clone(),
+        users[6].clone(),
+        users[7].clone(),
+        users[9].clone(),
+    ];
+    let topics = [
+        "Dioxus hot-reload",
+        "release automation",
+        "CI flakes",
+        "accessibility review",
+        "message pagination",
+        "plugin sandboxing",
+        "design polish",
+        "onboarding docs",
+    ];
+    let actions = [
+        "needs another pass before merge",
+        "looks solid after the last review",
+        "probably wants a follow-up issue",
+        "is blocked on one missing screenshot",
+        "got much simpler after refactoring",
+        "should land behind a flag first",
+        "feels ready for beta testing",
+        "still needs cross-platform verification",
+    ];
+    let details = [
+        "I tested it on Linux and the behavior is finally stable.",
+        "The latest build shaved a surprising amount of time off the workflow.",
+        "We should document the sharp edges before more people try it.",
+        "I love how much easier it is to reason about after the cleanup.",
+        "This would make a great dogfooding target for the desktop build.",
+        "We should mirror the behavior more closely to Discord here.",
+        "The current branch already feels much more production-like.",
+        "Let's save a screenshot once this is visually locked in.",
+    ];
+
+    (0..560)
+        .map(|index| {
+            let topic = topics[index % topics.len()];
+            let action = actions[(index / 3) % actions.len()];
+            let detail = details[(index / 7) % details.len()];
+            let author = authors[index % authors.len()].clone();
+            let timestamp = Utc::now() - Duration::minutes(24_000)
+                + Duration::minutes(i64::try_from(index).unwrap_or(0) * 43);
+            let mut text = format!("Daily check-in #{index}: {topic} {action}. {detail}",);
+
+            if index % 17 == 0 {
+                text.push_str(&format!(
+                    "\nhttps://github.com/polyglot-messenger/poly/issues/{}",
+                    400 + index
+                ));
+            }
+
+            if index % 29 == 0 {
+                text.push_str(
+                    "\nCan someone validate the scroll position after loading older messages?",
+                );
+            }
+
+            let attachments = if index % 37 == 0 || index % 53 == 0 {
+                vec![demo2_general_attachment(index)]
+            } else {
+                Vec::new()
+            };
+
+            let reactions = if index % 19 == 0 {
+                vec![Reaction {
+                    emoji: "🔥".to_string(),
+                    count: 1 + u32::try_from(index % 5).unwrap_or(0),
+                    me: index % 2 == 0,
+                }]
+            } else if index % 23 == 0 {
+                vec![Reaction {
+                    emoji: "✅".to_string(),
+                    count: 1 + u32::try_from(index % 3).unwrap_or(0),
+                    me: false,
+                }]
+            } else {
+                Vec::new()
+            };
+
+            Message {
+                id: format!("msg2-general-{index}"),
+                author,
+                content: MessageContent::Text(text),
+                timestamp,
+                attachments,
+                reactions,
+                reply_to: None,
+                edited: index % 41 == 0,
+            }
+        })
+        .collect()
+}
+
 pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
     let users = demo_users();
     let now = Utc::now();
 
     match channel_id {
+        "ch2-general" => demo2_opensource_general_messages(),
         "ch2-contributions" => vec![
             Message {
                 id: "msg2-contrib-0".to_string(),
@@ -3140,6 +3262,7 @@ fn demo_pinned_ids(channel_id: &str) -> &'static [&'static str] {
 /// Return message IDs pinned in a given channel for the dog demo account.
 fn demo2_pinned_ids(channel_id: &str) -> &'static [&'static str] {
     match channel_id {
+        "ch2-general" => &["msg2-general-144", "msg2-general-418"],
         "ch2-announcements" => &["msg2-1"],
         "ch2-workouts" => &["msg2-wk-0"],
         "ch2-recipes" => &["msg2-recipes-0"],

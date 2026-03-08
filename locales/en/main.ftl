@@ -46,6 +46,9 @@ chat-load-more = Load more messages
 chat-edited = (edited)
 chat-loading = Loading messages...
 chat-select-conversation = Select a conversation
+chat-loading-earlier = Loading older messages...
+chat-unread-banner = { $count } new messages since { $time } on { $date }
+chat-unread-divider = New
 
 # Channels
 channel-text = Text Channel
@@ -242,6 +245,17 @@ voice-screen-share = Share Screen
 voice-activity = Share Activity
 voice-voiceboard = Voiceboard
 voice-signal-quality = Signal Quality
+voice-stop-camera = Stop Camera
+voice-stop-share = Stop Sharing
+voice-camera-preview = Camera Preview
+voice-screen-sharing = Screen Share Preview
+voice-audio-settings = Voice & Audio Settings
+voice-mic-device = Input Device (Microphone)
+voice-speaker-device = Output Device (Speaker)
+voice-default-device = Default
+voice-noise-cancel = Noise Cancellation
+voice-noise-cancel-desc = Remove background noise from your microphone using AI noise reduction (RNNoise).
+voice-test-mic = Test Microphone (3 sec)
 
 # Emoji / GIF / Reactions
 emoji-picker = Emoji

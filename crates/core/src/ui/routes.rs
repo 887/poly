@@ -55,6 +55,7 @@ use super::settings::SettingsPage;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
+use crate::ui::account::common::chat_history::{initial_message_query, request_scroll_to_bottom};
 use dioxus::prelude::*;
 use poly_client::{BackendType, Channel, ChannelType};
 
@@ -308,7 +309,7 @@ fn restore_dm_chat(
                 name: dm.user.display_name.clone(),
                 channel_type: ChannelType::Text,
                 server_id: String::new(),
-                unread_count: 0,
+                unread_count: dm.unread_count,
                 last_message_id: None,
             })
             .or_else(|| {
@@ -345,6 +346,13 @@ fn restore_dm_chat(
         chat_data.write().messages = Vec::new();
         chat_data.write().members = Vec::new();
 
+        let unread_count = chat_data
+            .read()
+            .current_channel
+            .as_ref()
+            .filter(|channel| channel.id == dm_id)
+            .map_or(0, |channel| channel.unread_count);
+
         let backend_arc = client_manager.read().get_backend(&account_id);
         let Some(backend_arc) = backend_arc else {
             chat_data.write().loading = false;
@@ -353,10 +361,11 @@ fn restore_dm_chat(
 
         let guard = backend_arc.read().await;
         if let Ok(messages) = guard
-            .get_messages(&dm_id, poly_client::MessageQuery::default())
+            .get_messages(&dm_id, initial_message_query(unread_count))
             .await
         {
             chat_data.write().messages = messages;
+            request_scroll_to_bottom();
         }
         if let Ok(members) = guard.get_channel_members(&dm_id).await {
             chat_data.write().members = members;
@@ -371,13 +380,20 @@ fn restore_dm_chat(
 ///
 /// Persists ChannelList state (search filter, scroll position) across
 /// DmsHome ↔ DmChat navigation since the layout stays mounted.
+///
+/// VoiceBar and AccountBar share a `voice-account-footer` wrapper that inherits
+/// the same `margin-left: -72px` trick as the old account-bar standalone, so
+/// both panels extend to cover the favourites sidebar column.
+// DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
 #[component]
 fn DmsLayout() -> Element {
     rsx! {
         div { class: "channel-list-wrapper",
             ChannelList {}
-            VoiceBar {}
-            AccountBar {}
+            div { class: "voice-account-footer",
+                VoiceBar {}
+                AccountBar {}
+            }
         }
         Outlet::<Route> {}
     }
@@ -389,25 +405,22 @@ fn DmsLayout() -> Element {
 ///
 /// Reads `selected_server` from AppState (set by `on_update` before render).
 /// Persists ChannelList across channel-switching within the same server.
+///
+/// VoiceBar and AccountBar share a `voice-account-footer` wrapper that inherits
+/// the same `margin-left: -72px` trick as the old account-bar standalone, so
+/// both panels extend to cover the favourites sidebar column.
+// DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
 #[component]
 fn ServerLayout() -> Element {
-    let chat_data: Signal<ChatData> = use_context();
-    let is_voice_channel = chat_data
-        .read()
-        .current_channel
-        .as_ref()
-        .is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
-
     rsx! {
         div { class: "channel-list-wrapper",
             ChannelList {}
-            VoiceBar {}
-            AccountBar {}
+            div { class: "voice-account-footer",
+                VoiceBar {}
+                AccountBar {}
+            }
         }
         Outlet::<Route> {}
-        if is_voice_channel {
-            div { class: "voice-view-right-spacer" }
-        }
     }
 }
 

@@ -20,6 +20,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
+use crate::ui::account::common::chat_history::{initial_message_query, request_scroll_to_bottom};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 
@@ -821,10 +822,11 @@ pub async fn load_server_data(
         // Load messages for first channel
         let guard = backend.read().await;
         if let Ok(messages) = guard
-            .get_messages(&ch.id, poly_client::MessageQuery::default())
+            .get_messages(&ch.id, initial_message_query(ch.unread_count))
             .await
         {
             chat_data.write().messages = messages;
+            request_scroll_to_bottom();
         }
         // Load members
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
@@ -948,10 +950,11 @@ pub async fn restore_server_channel(
         if ch.channel_type == poly_client::ChannelType::Text {
             let guard = backend.read().await;
             if let Ok(messages) = guard
-                .get_messages(&ch.id, poly_client::MessageQuery::default())
+                .get_messages(&ch.id, initial_message_query(ch.unread_count))
                 .await
             {
                 chat_data.write().messages = messages;
+                request_scroll_to_bottom();
             }
             if let Ok(members) = guard.get_channel_members(&ch.id).await {
                 chat_data.write().members = members;

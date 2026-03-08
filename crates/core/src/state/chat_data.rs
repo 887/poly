@@ -6,9 +6,30 @@
 //!
 //! Provided as `Signal<ChatData>` at the `App` level.
 // TODO(phase-2.5.2): Reactive Data Stores
+// DECISION(V-4): VoiceMediaSettings lives in ChatData (runtime state);
+// persistence across sessions can be added later via storage.
 
 use poly_client::*;
 use std::collections::HashMap;
+
+/// Runtime voice & audio settings (device selection, noise cancellation).
+///
+/// Held in ChatData so all voice UI components can read/write without
+/// plumbing extra props. Reset on app restart (no persistence yet).
+#[derive(Debug, Clone, Default)]
+pub struct VoiceMediaSettings {
+    /// Whether RNNoise-based noise cancellation is enabled.
+    ///
+    /// When true, the mic audio pipeline routes through `nnnoiseless`
+    /// before reaching the WebRTC send track (Phase 3 implementation).
+    /// The toggle is functional in the UI; the actual audio worklet
+    /// integration is TODO(phase-voice-3).
+    pub noise_cancel_enabled: bool,
+    /// Selected microphone input device ID (`None` = system default).
+    pub mic_device_id: Option<String>,
+    /// Selected speaker / output device ID (`None` = system default).
+    pub speaker_device_id: Option<String>,
+}
 
 /// Source of the current HTML5 drag operation.
 ///
@@ -60,6 +81,8 @@ pub struct ChatData {
     pub voice_channel_participants: HashMap<String, Vec<VoiceParticipant>>,
     /// The local user's current voice connection (None if not in a call).
     pub voice_connection: Option<VoiceConnection>,
+    /// Voice and audio device settings (noise cancel, mic/speaker selection).
+    pub voice_media_settings: VoiceMediaSettings,
     /// Sessions keyed by account ID — one entry per active account.
     ///
     /// Used to look up `icon_emoji`, display name, and other per-account

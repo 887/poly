@@ -10,6 +10,7 @@
 //! - `ServerChannelView`: server categories and channels
 
 use super::super::super::routes::Route;
+use super::chat_history::{initial_message_query, request_scroll_to_bottom};
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
@@ -25,6 +26,13 @@ async fn load_channel_data(
     app_state: Signal<AppState>,
 ) {
     chat_data.write().loading = true;
+
+    let unread_count = chat_data
+        .read()
+        .current_channel
+        .as_ref()
+        .filter(|channel| channel.id == channel_id)
+        .map_or(0, |channel| channel.unread_count);
 
     // Get selected server to find the right backend
     let server_id = app_state.read().nav.selected_server.clone();
@@ -60,10 +68,11 @@ async fn load_channel_data(
         _ => {
             // Text channel — load messages and members
             if let Ok(messages) = guard
-                .get_messages(&channel_id, poly_client::MessageQuery::default())
+                .get_messages(&channel_id, initial_message_query(unread_count))
                 .await
             {
                 chat_data.write().messages = messages;
+                request_scroll_to_bottom();
             }
             if let Ok(members) = guard.get_channel_members(&channel_id).await {
                 chat_data.write().members = members;
@@ -85,6 +94,13 @@ async fn load_dm_messages(
     chat_data.write().messages = Vec::new();
     chat_data.write().members = Vec::new();
 
+    let unread_count = chat_data
+        .read()
+        .current_channel
+        .as_ref()
+        .filter(|channel| channel.id == channel_id)
+        .map_or(0, |channel| channel.unread_count);
+
     let Some(backend) = client_manager.read().get_backend(&account_id) else {
         chat_data.write().loading = false;
         return;
@@ -92,10 +108,11 @@ async fn load_dm_messages(
 
     let guard = backend.read().await;
     if let Ok(messages) = guard
-        .get_messages(&channel_id, poly_client::MessageQuery::default())
+        .get_messages(&channel_id, initial_message_query(unread_count))
         .await
     {
         chat_data.write().messages = messages;
+        request_scroll_to_bottom();
     }
     if let Ok(members) = guard.get_channel_members(&channel_id).await {
         chat_data.write().members = members;
@@ -668,7 +685,7 @@ fn DMChannelItem(
                     name: display_name.clone(),
                     channel_type: ChannelType::Text,
                     server_id: String::new(),
-                    unread_count: 0,
+                    unread_count: unread,
                     last_message_id: None,
                 });
                 chat_data.write().current_server = None;

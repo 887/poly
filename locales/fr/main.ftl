@@ -46,6 +46,9 @@ chat-load-more = Charger plus
 chat-edited = (modifié)
 chat-loading = Chargement des messages...
 chat-select-conversation = Sélectionnez une conversation
+chat-loading-earlier = Chargement des anciens messages...
+chat-unread-banner = { $count } nouveaux messages depuis { $time } le { $date }
+chat-unread-divider = Nouveau
 
 # Salons
 channel-text = Salon textuel
@@ -230,6 +233,17 @@ voice-screen-share = Partager l'écran
 voice-activity = Partager une activité
 voice-voiceboard = Tableau vocal
 voice-signal-quality = Qualité du signal
+voice-stop-camera = Arrêter la caméra
+voice-stop-share = Arrêter le partage
+voice-camera-preview = Aperçu caméra
+voice-screen-sharing = Aperçu du partage d'écran
+voice-audio-settings = Paramètres voix & audio
+voice-mic-device = Périphérique d'entrée (Microphone)
+voice-speaker-device = Périphérique de sortie (Haut-parleur)
+voice-default-device = Défaut
+voice-noise-cancel = Réduction du bruit
+voice-noise-cancel-desc = Supprimez les bruits de fond via réduction IA (RNNoise).
+voice-test-mic = Tester le microphone (3 sec)
 
 # Emoji / GIF / Réactions
 emoji-picker = Emoji

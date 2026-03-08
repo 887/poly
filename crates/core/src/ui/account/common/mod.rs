@@ -37,6 +37,7 @@ pub mod account_bar;
 pub mod account_server_bar;
 pub mod account_switcher;
 pub mod channel_list;
+pub mod chat_history;
 pub mod chat_view;
 pub mod dm_user_sidebar;
 pub mod emoji_picker;

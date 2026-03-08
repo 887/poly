@@ -269,6 +269,20 @@ fn ServerRow(record: ServerRecord) -> Element {
 - Reason: if the rail is attached to the outer shell, opening it shrinks the header and pulls the
   inline search box left, which diverges from the Discord-style layout Poly is matching.
 
+## Chat History Loading Rule (2026-03-08)
+
+- Text chats must open on a **bounded recent window**, not the full history.
+- Use `MessageQuery { limit: Some(...) }` for initial loads, scaling the limit high enough to
+  include unread context (`unread_count + small buffer`) but still keeping the window recent.
+- Scrolling near the top of `.message-list` must fetch older history with `before: first_loaded_id`
+  and prepend it while preserving the user's viewport offset.
+- The unread UX for server/DM text chats should mirror Discord closely:
+  - sticky top unread banner
+  - inline unread divider at the first unread message
+  - initial open lands at the bottom of the recent window
+- `chat_history.rs` is the shared helper module for these rules; do not reintroduce raw
+  `MessageQuery::default()` initial loads for chat entry points.
+
 ## MANDATORY: Visual Testing with MCP desktop-devtools
 
 **After every change that touches `rsx!` blocks** (UI layout, component structure, new

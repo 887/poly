@@ -92,6 +92,7 @@ Phase 2.13 builds out the DM and Group DM features to a production-quality basel
 
 ### 2.13.7 — Rich Demo Server Messages (Remaining Servers)
 - [x] Dog account servers are sparse — add richer messages:
+  - `ch2-general` (Open Source Hub): 500+ messages, links/images/reactions, explicit scroll-up pagination load-test channel
   - `ch2-announcements` (Open Source Hub): 6+ messages, code review discussion
   - `ch2-contributions` (Open Source Hub): 4+ messages, PR links
   - `ch2-recommendations` (Book Club): 6+ messages, book opinions
@@ -116,7 +117,8 @@ Phase 2.13 builds out the DM and Group DM features to a production-quality basel
   - Click "Remove" on a member → member disappears
   - Click "Weekend Warriors", "Midnight Jams", "Poly Core Team" → each has unique messages
 - [x] Navigate dog account's servers:
-  - Open Source Hub: click both text channels → rich messages
+  - Open Source Hub: click `#general`, `#announcements`, `#contributions` → rich messages
+  - `#general`: confirm initial open lands at the bottom of the recent window, unread banner + unread divider render, and scrolling to the top prepends older history
   - Book Club: current-read, recommendations → rich discussion
   - Cooking Corner: recipes, techniques → rich content
   - Fitness Crew: workouts, nutrition → rich content
@@ -187,3 +189,16 @@ dm-header-subtitle = Direct Message
 - Added CSS for all new classes: `dm-user-sidebar`, `dm-chat-header-info`, `dm-chat-avatar`, `group-chat-icon`, `dm-member-row`, `dm-member-remove-btn`, etc.
 - Verified via web-devtools MCP: DM headers render correctly (Alice → colored A avatar + "Direct Message"), group headers render correctly ("Rust Study Group" + "3 Members" + toggle button opens member sidebar), server channels unchanged (`# announcements`).
 - `cargo cranky --workspace` → zero warnings. WASM check clean. `cargo fmt` applied.
+
+### Session 2 (2026-03-08)
+- Added Dog account `Open Source Hub / #general` as a heavy load-test channel with 560 deterministic demo messages, mixed links, images, reactions, and a latest-message ID of `msg2-general-559`.
+- Raised the server/channel unread metadata so `#general` opens with an 11+ unread state and a realistic unread banner/divider.
+- Replaced default full-history loads for server channels and DMs with bounded recent-page queries (`limit` based on unread context) so chats now open on the recent tail instead of loading the entire history.
+- Wired the existing near-top scroll hook in `chat_view.rs` to real `before`-cursor pagination, including scroll-offset preservation after prepending older messages.
+- Added a shared `chat_history.rs` helper module for initial message queries, unread-divider placement, scroll metrics, and scroll restoration.
+- Added Discord-style unread UI inside the message list: sticky blue unread banner + red unread divider + Mark as Read action.
+- Verified live in the running web build:
+  - fresh open of `#general` rendered 36 recent messages (`524..559`) with `distanceFromBottom ≈ 0.22`
+  - unread banner + unread divider both present
+  - top-scroll fetch prepended older history (`count 36 → 132`, first message `524 → 428`) while preserving viewport offset
+- Desktop-devtools MCP bridge did not become reachable in this environment even after restart/manual launch attempts, so visual verification was completed on the web devtools build as a best-effort fallback.

@@ -59,6 +59,11 @@ async-trait = { workspace = true }
 pulldown-cmark = { workspace = true }
 ammonia = { workspace = true }
 
+# Audio processing — RNNoise noise cancellation (pure Rust, wasm32-compatible).
+# Phase 1: toggle in UI; Phase 3: wire to WebAudio AudioWorklet.
+# See docs/phase-voice-plan.md DECISION(V-4).
+nnnoiseless = { workspace = true }
+
 # Native-only: SurrealDB + poly-server client + WASM plugin host (dylib)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 surrealdb = { workspace = true, features = ["kv-surrealkv"] }

@@ -63,6 +63,15 @@ The demo data module (`data.rs`) was modified to work without Dioxus:
 - **Demo groups**: Multi-user group chats
 - **Demo notifications**: Friend requests, mentions, DM notifications
 
+## Rich History Load-Test Channel (2026-03-08)
+
+- Dog account / Open Source Hub now includes `#general` (`ch2-general`) as the primary
+	scroll-pagination test channel.
+- It contains **560 deterministic messages** with mixed links, images, and reactions so UI work
+	can validate bottom-first loading, unread banners/dividers, and repeated `before` pagination.
+- Keep this channel large and realistic; do not collapse it back to a tiny handcrafted sample,
+	because it is now the main history-loading regression test surface.
+
 ## Dependencies
 
 ### Native (default feature)
