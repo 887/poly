@@ -255,6 +255,10 @@ voice-speaker-device = Output Device (Speaker)
 voice-default-device = Default
 voice-noise-cancel = Noise Cancellation
 voice-noise-cancel-desc = Remove background noise from your microphone using AI noise reduction (RNNoise).
+voice-noise-cancel-on = Noise Cancellation: On
+voice-noise-cancel-off = Noise Cancellation: Off
+voice-server-location = Server Location
+voice-testing-mic = Testing... (3s)
 voice-test-mic = Test Microphone (3 sec)
 
 # Emoji / GIF / Reactions

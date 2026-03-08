@@ -10,12 +10,13 @@
 //! ├──────────────────────────────────────┤
 //! │ 👤  👤  👤  …                        │  ← VoiceDockParticipants (avatars)
 //! ├──────────────────────────────────────┤
-//! │ 🎤  🔔  📹  🖥  ⚙  📵               │  ← VoiceDockControls (media + hang)
+//! │ 📹  🖥  [NC]  ▌▌▌▌  📵              │  ← VoiceDockControls
 //! └──────────────────────────────────────┘
 //! ```
 //!
-//! Participant tiles show avatar circles only (names as tooltip) so they fit
-//! within the 240 px sidebar column.
+//! Mute and deafen controls live in the `AccountBar` — they are NOT
+//! duplicated here.  The sidebar bar only shows: camera, screen share (SVG
+//! icon), noise-cancel toggle, CSS latency bar, and disconnect.
 //!
 //! The video preview panel is always rendered in the DOM (CSS-hidden when no
 //! active streams) so that `getUserMedia`/`getDisplayMedia` JS can find the
@@ -88,33 +89,6 @@ const JS_STOP_ALL_STREAMS: &str = r#"
 });
 "#;
 
-const JS_ENUMERATE_DEVICES: &str = r#"
-(async () => {
-    try { await navigator.mediaDevices.getUserMedia({audio: true}); } catch(_) {}
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const inputs = devices
-        .filter(d => d.kind === 'audioinput')
-        .map(d => ({ id: d.deviceId, label: d.label || 'Microphone' }));
-    const outputs = devices
-        .filter(d => d.kind === 'audiooutput')
-        .map(d => ({ id: d.deviceId, label: d.label || 'Speaker' }));
-    await dioxus.send(JSON.stringify({ inputs, outputs }));
-})();
-"#;
-
-const JS_TEST_MIC: &str = r#"
-(async () => {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-        const ctx = new AudioContext();
-        const src = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        src.connect(analyser);
-        setTimeout(() => { stream.getTracks().forEach(t => t.stop()); ctx.close(); }, 3000);
-    } catch(_) {}
-})();
-"#;
-
 // ─── Root component ──────────────────────────────────────────────────────────
 
 /// Compact sidebar voice panel.
@@ -127,6 +101,7 @@ const JS_TEST_MIC: &str = r#"
 ///
 /// Placed INSIDE `.channel-list-wrapper` between `ChannelList` and `AccountBar`.
 // DECISION(V-1): VoiceBar stays in sidebar; compact 3-row layout with avatars + buttons.
+// DECISION(V-mute): Mute/deafen buttons live only in AccountBar — not duplicated here.
 #[component]
 pub fn VoiceBar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -146,17 +121,12 @@ pub fn VoiceBar() -> Element {
         .cloned()
         .unwrap_or_default();
 
-    let mut show_settings = use_signal(|| false);
-
     rsx! {
         VoicePreviewPanel { conn: conn.clone() }
         div { class: "voice-bar",
             VoiceDockInfo { conn: conn.clone() }
             VoiceDockParticipants { participants }
-            VoiceDockControls { conn: conn.clone(), chat_data, show_settings }
-        }
-        if *show_settings.read() {
-            VoiceSettingsPopup { on_close: move |_| show_settings.set(false) }
+            VoiceDockControls { conn: conn.clone(), chat_data }
         }
     }
 }
@@ -232,49 +202,23 @@ fn VoiceDockTile(participant: poly_client::VoiceParticipant) -> Element {
     }
 }
 
-/// Right section: mute, deafen, camera, screen-share, settings, disconnect.
+/// Controls: camera, screen-share (SVG icon), noise-cancel toggle, latency bar, disconnect.
+///
+/// Mute and deafen are intentionally NOT here — they live in `AccountBar`.
 // DECISION(V-2): JS eval used for getUserMedia/getDisplayMedia.
+// DECISION(V-mute): Mute/deafen in AccountBar only to avoid duplication.
 #[component]
 fn VoiceDockControls(
     conn: poly_client::VoiceConnection,
     mut chat_data: Signal<ChatData>,
-    mut show_settings: Signal<bool>,
 ) -> Element {
-    let is_muted = conn.is_muted;
-    let is_deafened = conn.is_deafened;
     let is_video_on = conn.is_video_on;
     let is_streaming = conn.is_streaming;
+    let noise_cancel = chat_data.read().voice_media_settings.noise_cancel_enabled;
 
     rsx! {
         div { class: "voice-dock-controls",
-            button {
-                class: if is_muted { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
-                title: if is_muted { t("voice-unmute-mic") } else { t("voice-mute-mic") },
-                onclick: move |_| {
-                    if let Some(ref mut vc) = chat_data.write().voice_connection {
-                        vc.is_muted = !vc.is_muted;
-                    }
-                },
-                if is_muted {
-                    "🔇"
-                } else {
-                    "🎤"
-                }
-            }
-            button {
-                class: if is_deafened { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
-                title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
-                onclick: move |_| {
-                    if let Some(ref mut vc) = chat_data.write().voice_connection {
-                        vc.is_deafened = !vc.is_deafened;
-                    }
-                },
-                if is_deafened {
-                    "🔕"
-                } else {
-                    "🔔"
-                }
-            }
+            // Camera toggle
             button {
                 class: if is_video_on { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
                 title: if is_video_on { t("voice-stop-camera") } else { t("voice-camera") },
@@ -297,6 +241,7 @@ fn VoiceDockControls(
                 },
                 "📹"
             }
+            // Screen share — SVG monitor icon
             button {
                 class: if is_streaming { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
                 title: if is_streaming { t("voice-stop-share") } else { t("voice-screen-share") },
@@ -317,22 +262,73 @@ fn VoiceDockControls(
                         });
                     }
                 },
-                "🖥"
+                svg {
+                    class: "voice-icon-svg",
+                    xmlns: "http://www.w3.org/2000/svg",
+                    view_box: "0 0 24 24",
+                    fill: "none",
+                    stroke: "currentColor",
+                    stroke_width: "2",
+                    stroke_linecap: "round",
+                    stroke_linejoin: "round",
+                    rect {
+                        x: "2",
+                        y: "3",
+                        width: "20",
+                        height: "14",
+                        rx: "2",
+                    }
+                    line {
+                        x1: "8",
+                        y1: "21",
+                        x2: "16",
+                        y2: "21",
+                    }
+                    line {
+                        x1: "12",
+                        y1: "17",
+                        x2: "12",
+                        y2: "21",
+                    }
+                }
             }
+            // Noise cancellation toggle — default ON
+            // DECISION(V-noise): NC toggle lives in sidebar bar (not settings popup).
             button {
-                class: if *show_settings.read() { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
-                title: "{t(\"voice-audio-settings\")}",
+                class: if noise_cancel { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
+                title: if noise_cancel { t("voice-noise-cancel-on") } else { t("voice-noise-cancel-off") },
                 onclick: move |_| {
-                    let cur = *show_settings.read();
-                    show_settings.set(!cur);
+                    let cur = chat_data.read().voice_media_settings.noise_cancel_enabled;
+                    chat_data.write().voice_media_settings.noise_cancel_enabled = !cur;
                 },
-                "⚙"
+                svg {
+                    class: "voice-icon-svg",
+                    xmlns: "http://www.w3.org/2000/svg",
+                    view_box: "0 0 24 24",
+                    fill: "none",
+                    stroke: "currentColor",
+                    stroke_width: "2",
+                    stroke_linecap: "round",
+                    stroke_linejoin: "round",
+                    path { d: "M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" }
+                    path { d: "M19 10v2a7 7 0 0 1-14 0v-2" }
+                    line {
+                        x1: "12",
+                        y1: "19",
+                        x2: "12",
+                        y2: "23",
+                    }
+                    line {
+                        x1: "8",
+                        y1: "23",
+                        x2: "16",
+                        y2: "23",
+                    }
+                }
             }
-            span {
-                class: "voice-bar-signal",
-                title: "{t(\"voice-signal-quality\")}",
-                "📶"
-            }
+            // CSS latency / signal quality bar with hover popup
+            VoiceLatencyBar {}
+            // Disconnect
             button {
                 class: "voice-bar-quick-btn voice-bar-hangup",
                 title: "{t(\"voice-disconnect\")}",
@@ -346,6 +342,49 @@ fn VoiceDockControls(
     }
 }
 
+/// CSS-based latency bar with hover popup showing connection quality details.
+///
+/// Four vertical stripes grow in height left-to-right. All four lit = excellent.
+/// Demo hardcodes 42 ms excellent signal at EU-West.
+// DECISION(V-5): CSS bars for signal quality; hardcoded demo latency.
+#[component]
+fn VoiceLatencyBar() -> Element {
+    let latency_ms: u32 = 42;
+    let server_loc = "EU-West (demo)";
+    rsx! {
+        div { class: "voice-latency-container",
+            div { class: "voice-latency-bar",
+                div {
+                    class: "voice-latency-stripe active",
+                    style: "height:9px;",
+                }
+                div {
+                    class: "voice-latency-stripe active",
+                    style: "height:13px;",
+                }
+                div {
+                    class: "voice-latency-stripe active",
+                    style: "height:17px;",
+                }
+                div {
+                    class: "voice-latency-stripe active",
+                    style: "height:21px;",
+                }
+            }
+            div { class: "voice-latency-popup",
+                div { class: "voice-latency-popup-row",
+                    span { class: "voice-latency-popup-label", "{t(\"voice-signal-quality\")}" }
+                    span { class: "voice-latency-popup-value voice-latency-good", "{latency_ms} ms" }
+                }
+                div { class: "voice-latency-popup-row",
+                    span { class: "voice-latency-popup-label", "{t(\"voice-server-location\")}" }
+                    span { class: "voice-latency-popup-value", "{server_loc}" }
+                }
+            }
+        }
+    }
+}
+
 // ─── Video preview panel ─────────────────────────────────────────────────────
 
 /// Local video preview for camera and screen-share feeds.
@@ -353,9 +392,6 @@ fn VoiceDockControls(
 /// Always present in the DOM regardless of stream state so JS can find
 /// `#poly-local-camera` and `#poly-local-screen` by ID immediately on
 /// `getUserMedia`/`getDisplayMedia` resolution — before Rust re-renders.
-///
-/// CSS class `visible` on `.voice-preview-panel` and absence of `hidden` on
-/// `.voice-preview-item` control visibility without DOM removal.
 // DECISION(V-3): Always-rendered video elements with CSS visibility control.
 #[component]
 fn VoicePreviewPanel(conn: poly_client::VoiceConnection) -> Element {
@@ -377,156 +413,44 @@ fn VoicePreviewPanel(conn: poly_client::VoiceConnection) -> Element {
                 }
             }
             div { class: if conn.is_streaming { "voice-preview-item" } else { "voice-preview-item hidden" },
-                p { class: "voice-preview-label", "🖥 {t(\"voice-screen-sharing\")}" }
+                p { class: "voice-preview-label",
+                    svg {
+                        class: "voice-icon-svg voice-icon-svg--label",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        view_box: "0 0 24 24",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        rect {
+                            x: "2",
+                            y: "3",
+                            width: "20",
+                            height: "14",
+                            rx: "2",
+                        }
+                        line {
+                            x1: "8",
+                            y1: "21",
+                            x2: "16",
+                            y2: "21",
+                        }
+                        line {
+                            x1: "12",
+                            y1: "17",
+                            x2: "12",
+                            y2: "21",
+                        }
+                    }
+                    " {t(\"voice-screen-sharing\")}"
+                }
                 video {
                     id: "poly-local-screen",
                     class: "voice-preview-video",
                     autoplay: true,
                     muted: true,
                 }
-            }
-        }
-    }
-}
-
-// ─── Audio settings popup ────────────────────────────────────────────────────
-
-/// Audio settings popup — opened by the ⚙ button in VoiceDockControls.
-///
-/// Enumerates audio devices via JS and renders mic/speaker pickers,
-/// a noise-cancellation toggle, and a microphone test button.
-// DECISION(V-4): nnnoiseless toggle wired to UI; actual audio worklet is Phase 3.
-#[component]
-fn VoiceSettingsPopup(on_close: EventHandler<()>) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
-    let noise_cancel = chat_data.read().voice_media_settings.noise_cancel_enabled;
-
-    let mut mic_devices = use_signal::<Vec<(String, String)>>(Vec::new);
-    let mut spk_devices = use_signal::<Vec<(String, String)>>(Vec::new);
-
-    use_effect(move || {
-        spawn(async move {
-            let mut eval = document::eval(JS_ENUMERATE_DEVICES);
-            if let Ok(json) = eval.recv::<serde_json::Value>().await {
-                if let Some(arr) = json.get("inputs").and_then(|v| v.as_array()) {
-                    mic_devices.set(
-                        arr.iter()
-                            .filter_map(|d| {
-                                let id = d.get("id")?.as_str()?.to_string();
-                                let label = d.get("label")?.as_str()?.to_string();
-                                Some((id, label))
-                            })
-                            .collect(),
-                    );
-                }
-                if let Some(arr) = json.get("outputs").and_then(|v| v.as_array()) {
-                    spk_devices.set(
-                        arr.iter()
-                            .filter_map(|d| {
-                                let id = d.get("id")?.as_str()?.to_string();
-                                let label = d.get("label")?.as_str()?.to_string();
-                                Some((id, label))
-                            })
-                            .collect(),
-                    );
-                }
-            }
-        });
-    });
-
-    rsx! {
-        div { class: "voice-settings-popup",
-            div { class: "voice-settings-header",
-                h3 { class: "voice-settings-title", "{t(\"voice-audio-settings\")}" }
-                button {
-                    class: "voice-settings-close",
-                    onclick: move |_| on_close.call(()),
-                    "✕"
-                }
-            }
-
-            // Microphone selection
-            div { class: "voice-settings-section",
-                label { class: "voice-settings-label", "{t(\"voice-mic-device\")}" }
-                select {
-                    class: "voice-settings-select",
-                    onchange: move |e: Event<FormData>| {
-                        let val = e.value();
-                        chat_data.write().voice_media_settings.mic_device_id =
-                            if val.is_empty() { None } else { Some(val) };
-                    },
-                    option { value: "", "{t(\"voice-default-device\")}" }
-                    for (id , label) in mic_devices.read().iter() {
-                        option {
-                            value: "{id}",
-                            selected: chat_data
-                                                                                                                    .read()
-                                                                                                                    .voice_media_settings
-                                                                                                                    .mic_device_id
-                                                                                                                    .as_deref()
-                                                                                                                    == Some(id.as_str()),
-                            "{label}"
-                        }
-                    }
-                }
-            }
-
-            // Speaker selection
-            div { class: "voice-settings-section",
-                label { class: "voice-settings-label", "{t(\"voice-speaker-device\")}" }
-                select {
-                    class: "voice-settings-select",
-                    onchange: move |e: Event<FormData>| {
-                        let val = e.value();
-                        chat_data.write().voice_media_settings.speaker_device_id =
-                            if val.is_empty() { None } else { Some(val) };
-                    },
-                    option { value: "", "{t(\"voice-default-device\")}" }
-                    for (id , label) in spk_devices.read().iter() {
-                        option {
-                            value: "{id}",
-                            selected: chat_data
-                                                                                                                    .read()
-                                                                                                                    .voice_media_settings
-                                                                                                                    .speaker_device_id
-                                                                                                                    .as_deref()
-                                == Some(id.as_str()),
-                            "{label}"
-                        }
-                    }
-                }
-            }
-
-            // Noise cancellation toggle
-            div { class: "voice-settings-section",
-                div { class: "voice-settings-row",
-                    label { class: "voice-settings-label", "{t(\"voice-noise-cancel\")}" }
-                    label { class: "toggle-switch",
-                        input {
-                            r#type: "checkbox",
-                            checked: noise_cancel,
-                            onchange: move |_| {
-                                let cur = chat_data
-                                    .read()
-                                    .voice_media_settings
-                                    .noise_cancel_enabled;
-                                chat_data.write().voice_media_settings.noise_cancel_enabled =
-                                    !cur;
-                            },
-                        }
-                        span { class: "toggle-slider" }
-                    }
-                }
-                p { class: "voice-settings-desc", "{t(\"voice-noise-cancel-desc\")}" }
-            }
-
-            // Microphone test
-            button {
-                class: "btn btn-secondary voice-settings-test-btn",
-                onclick: move |_| {
-                    let _ = document::eval(JS_TEST_MIC);
-                },
-                "{t(\"voice-test-mic\")}"
             }
         }
     }

@@ -243,6 +243,10 @@ voice-speaker-device = Périphérique de sortie (Haut-parleur)
 voice-default-device = Défaut
 voice-noise-cancel = Réduction du bruit
 voice-noise-cancel-desc = Supprimez les bruits de fond via réduction IA (RNNoise).
+voice-noise-cancel-on = Réduction du bruit : Activée
+voice-noise-cancel-off = Réduction du bruit : Désactivée
+voice-server-location = Emplacement du serveur
+voice-testing-mic = Test en cours... (3s)
 voice-test-mic = Tester le microphone (3 sec)
 
 # Emoji / GIF / Réactions

@@ -70,9 +70,10 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ServerSettingsRoute { account_id, .. }
         | Route::FriendsRoute { account_id, .. }
         | Route::AccountSettingsRoute { account_id, .. } => Some(account_id.as_str()),
-        Route::Root | Route::SettingsRoute | Route::NotificationsRoute | Route::PageNotFound { .. } => {
-            None
-        }
+        Route::Root
+        | Route::SettingsRoute
+        | Route::NotificationsRoute
+        | Route::PageNotFound { .. } => None,
     }
 }
 

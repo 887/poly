@@ -16,7 +16,8 @@ use std::collections::HashMap;
 ///
 /// Held in ChatData so all voice UI components can read/write without
 /// plumbing extra props. Reset on app restart (no persistence yet).
-#[derive(Debug, Clone, Default)]
+// DECISION(V-noise): noise_cancel_enabled defaults to true — AI noise reduction is on by default.
+#[derive(Debug, Clone)]
 pub struct VoiceMediaSettings {
     /// Whether RNNoise-based noise cancellation is enabled.
     ///
@@ -24,11 +25,22 @@ pub struct VoiceMediaSettings {
     /// before reaching the WebRTC send track (Phase 3 implementation).
     /// The toggle is functional in the UI; the actual audio worklet
     /// integration is TODO(phase-voice-3).
+    /// Defaults to `true` — noise cancellation is on by default.
     pub noise_cancel_enabled: bool,
     /// Selected microphone input device ID (`None` = system default).
     pub mic_device_id: Option<String>,
     /// Selected speaker / output device ID (`None` = system default).
     pub speaker_device_id: Option<String>,
+}
+
+impl Default for VoiceMediaSettings {
+    fn default() -> Self {
+        Self {
+            noise_cancel_enabled: true,
+            mic_device_id: None,
+            speaker_device_id: None,
+        }
+    }
 }
 
 /// Source of the current HTML5 drag operation.

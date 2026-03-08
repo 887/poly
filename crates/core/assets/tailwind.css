@@ -2934,6 +2934,8 @@ select {
     flex-direction: column;
     min-width: 0;
     background: var(--bg-primary);
+    position: relative;
+    /* anchor for VoiceChatBar absolute positioning */
 }
 
 .voice-header {
@@ -3576,6 +3578,270 @@ select {
 
 .voice-settings-test-btn {
     width: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE SETTINGS PAGE — account settings section for audio devices
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-settings-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+
+/* Re-use .voice-settings-section, .voice-settings-label, .voice-settings-select,
+   .voice-settings-row, .voice-settings-desc, .voice-settings-test-btn above */
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE ICON SVG HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-icon-svg {
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.voice-icon-svg--label {
+    width: 14px;
+    height: 14px;
+}
+
+.voice-icon-svg--screenshare-label {
+    width: 16px;
+    height: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE LATENCY BAR — CSS signal-quality stripes with hover popup
+   DECISION(V-5): Four vertical bars growing in height; good = all lit.
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-latency-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    cursor: default;
+}
+
+.voice-latency-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 22px;
+    padding: 2px 0;
+}
+
+.voice-latency-stripe {
+    width: 4px;
+    border-radius: 1px;
+    background: var(--text-muted, #72767d);
+    opacity: 0.3;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+.voice-latency-stripe.active {
+    background: #43b581;
+    opacity: 1;
+}
+
+/* Popup — shown on hover */
+.voice-latency-popup {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-floating, #18191c);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-width: 180px;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+}
+
+.voice-latency-container:hover .voice-latency-popup {
+    display: block;
+}
+
+.voice-latency-popup-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.78rem;
+    padding: 2px 0;
+}
+
+.voice-latency-popup-label {
+    color: var(--text-secondary, #b9bbbe);
+    white-space: nowrap;
+}
+
+.voice-latency-popup-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.voice-latency-good {
+    color: #43b581 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE SCREENSHARE AREA — full-width screen share in the voice view
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-screenshare-area {
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.voice-screenshare-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-secondary, #2c2f33);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary, #b9bbbe);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.voice-screenshare-video {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    background: #000;
+    display: block;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE CHAT BAR — floating control bar (Discord-style bottom center)
+   DECISION(V-6): Absolute-positioned bar; parent .voice-view is relative.
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-chat-bar {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-floating, #18191c);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 8px 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    pointer-events: all;
+    white-space: nowrap;
+}
+
+.voice-chat-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: var(--bg-secondary, #2c2f33);
+    color: var(--text-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+    flex-shrink: 0;
+}
+
+.voice-chat-btn:hover {
+    background: var(--bg-hover, #36393f);
+    transform: scale(1.08);
+}
+
+.voice-chat-btn.active {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+}
+
+.voice-chat-btn.active:hover {
+    background: var(--accent-primary-hover, #4752c4);
+}
+
+.voice-chat-btn-hangup {
+    background: #ed4245 !important;
+    color: #fff !important;
+}
+
+.voice-chat-btn-hangup:hover {
+    background: #c0392b !important;
+    transform: scale(1.1);
+}
+
+.voice-chat-bar-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border-color);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOGGLE SWITCH — used for noise cancel in voice settings page
+   ═══════════════════════════════════════════════════════════════ */
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--bg-secondary, #2c2f33);
+    border-radius: 22px;
+    transition: background 0.2s;
+}
+
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.toggle-switch input:checked+.toggle-slider {
+    background: var(--accent-primary, #5865f2);
+}
+
+.toggle-switch input:checked+.toggle-slider::before {
+    transform: translateX(18px);
 }
 
 /* ═══════════════════════════════════════════════════════════════

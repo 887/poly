@@ -243,6 +243,10 @@ voice-speaker-device = Ausgabegerät (Lautsprecher)
 voice-default-device = Standard
 voice-noise-cancel = Geräuschunterdrückung
 voice-noise-cancel-desc = Hintergrundgeräusche per KI-Rauschunterdrückung (RNNoise) entfernen.
+voice-noise-cancel-on = Geräuschunterdrückung: An
+voice-noise-cancel-off = Geräuschunterdrückung: Aus
+voice-server-location = Serverstandort
+voice-testing-mic = Testen... (3s)
 voice-test-mic = Mikrofon testen (3 Sek.)
 
 # Emoji / GIF / Reaktionen
