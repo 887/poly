@@ -13,6 +13,7 @@ nav-dms = Messages directs
 nav-friends = Amis
 nav-notifications = Notifications
 nav-settings = Paramètres
+nav-search = Recherche
 nav-servers = Serveurs
 nav-demo = Basculer le client de démo
 nav-demo-active = Client de démo actif
@@ -127,6 +128,11 @@ settings-reset-error-no-storage = Le stockage n'est pas encore prêt
 settings-reset-error-failed = Échec de la réinitialisation des données de l’app
 settings-nuke-error-failed = Échec du NUKING de l’état de l’app
 settings-reset-error-reload = Réinitialisation réussie, mais rechargement échoué
+
+# Paramètres Démo
+settings-demo = Démo
+settings-demo-description = Gérer le client de données démo intégré. Lorsqu’il est activé, Poly charge des comptes d’exemple avec des serveurs, des canaux et des conversations pour explorer l’application.
+settings-demo-toggle = Activer les données démo
 
 # Backup Server Settings
 settings-backup-add-server = Ajouter un serveur

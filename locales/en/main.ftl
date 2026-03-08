@@ -13,6 +13,7 @@ nav-dms = Direct Messages
 nav-friends = Friends
 nav-notifications = Notifications
 nav-settings = Settings
+nav-search = Search
 nav-servers = Servers
 nav-demo = Toggle Demo Client
 nav-demo-active = Demo Client Active
@@ -139,6 +140,11 @@ settings-diagnostics-col-account = Account
 settings-diagnostics-col-connection = Connection
 settings-diagnostics-col-presence = Presence
 settings-diagnostics-no-accounts = No accounts are currently active.
+
+# Demo Settings
+settings-demo = Demo
+settings-demo-description = Manage the built-in demo data client. When enabled, Poly loads sample accounts with servers, channels, and conversations so you can explore the app.
+settings-demo-toggle = Enable Demo Data
 
 # Backup Server Settings
 settings-backup-add-server = Add Server

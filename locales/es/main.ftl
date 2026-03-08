@@ -13,6 +13,7 @@ nav-dms = Mensajes directos
 nav-friends = Amigos
 nav-notifications = Notificaciones
 nav-settings = Configuración
+nav-search = Buscar
 nav-servers = Servidores
 nav-demo = Alternar cliente de demostración
 nav-demo-active = Cliente de demostración activo
@@ -127,6 +128,11 @@ settings-reset-error-no-storage = El almacenamiento aún no está listo
 settings-reset-error-failed = Error al restablecer los datos de la app
 settings-nuke-error-failed = Error al NUKear el estado de la app
 settings-reset-error-reload = Restablecimiento exitoso, pero falló la recarga
+
+# Configuración de Demo
+settings-demo = Demo
+settings-demo-description = Administra el cliente de datos demo integrado. Cuando está habilitado, Poly carga cuentas de ejemplo con servidores, canales y conversaciones para explorar la aplicación.
+settings-demo-toggle = Activar datos demo
 
 # Backup Server Settings
 settings-backup-add-server = Agregar servidor

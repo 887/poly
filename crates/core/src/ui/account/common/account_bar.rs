@@ -142,7 +142,7 @@ fn AccountBarControls(
             button {
                 class: "account-btn",
                 disabled: settings_target.is_none(),
-                title: "{t(\"nav-settings\")}",
+                title: "{t(\"account-settings\")}",
                 onclick: move |_| {
                     if let Some(route) = settings_target.clone() {
                         navigator().push(route);
