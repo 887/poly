@@ -522,13 +522,19 @@ fn ServerChat(
         let cid = channel_id.clone();
         let sid = server_id.clone();
 
-        // Skip if click-navigation already prepared this specific channel.
-        let already_loaded = chat_data
-            .read()
-            .current_channel
+        // Skip if click-navigation already prepared this specific server +
+        // channel. An empty text channel is still a valid loaded state, so we
+        // must not use `messages.is_empty()` as the readiness check here.
+        let snapshot = chat_data.read();
+        let already_loaded = snapshot
+            .current_server
             .as_ref()
-            .is_some_and(|ch| ch.id == cid)
-            && !chat_data.read().messages.is_empty();
+            .is_some_and(|server| server.id == sid)
+            && snapshot
+                .current_channel
+                .as_ref()
+                .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
+            && snapshot.channels.iter().any(|ch| ch.id == cid);
         if already_loaded {
             return;
         }
