@@ -34,6 +34,7 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 ///
 /// Reads `ChatData::active_group_members` and `NavState::dm_right_sidebar_visible`.
 /// Renders nothing when there are no active group members.
+#[rustfmt::skip]
 #[component]
 pub fn DmUserSidebar() -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -83,6 +84,7 @@ pub fn DmUserSidebar() -> Element {
 }
 
 /// A single member row in the DM group member sidebar.
+#[rustfmt::skip]
 #[component]
 fn DmMemberRow(
     member: User,

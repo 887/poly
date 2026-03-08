@@ -125,6 +125,7 @@ async fn load_dm_messages(
 }
 
 /// Single connected voice participant entry.
+#[rustfmt::skip]
 #[component]
 pub fn ChannelList() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -171,6 +172,7 @@ pub fn ChannelList() -> Element {
 /// overlay that covers the full viewport beneath the panel.
 // DECISION(DX): reuses the context-menu-backdrop/context-menu CSS pattern
 // established in phase-2.10 so we don't need new z-index layers.
+#[rustfmt::skip]
 #[component]
 fn ServerBanner(
     current_view: View,
@@ -358,6 +360,7 @@ fn ServerBanner(
 }
 
 /// DMs and Friends view — search, unified list of DMs + groups + friend contacts.
+#[rustfmt::skip]
 #[component]
 fn DMFriendsView() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -561,6 +564,7 @@ fn DMFriendsView() -> Element {
 }
 
 /// Server channel view — categories and channels.
+#[rustfmt::skip]
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -592,6 +596,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
 /// Demo-only panel to opt into category visibility, inspired by Discord's
 /// Channels & Roles onboarding surface.
+#[rustfmt::skip]
 #[component]
 fn ChannelsRolesPanel(server: Server, mut visible_category_ids: Signal<Vec<String>>) -> Element {
     let all_ids: Vec<String> = server.categories.iter().map(|c| c.id.clone()).collect();
@@ -646,6 +651,7 @@ fn ChannelsRolesPanel(server: Server, mut visible_category_ids: Signal<Vec<Strin
 }
 
 /// Single DM channel item.
+#[rustfmt::skip]
 #[component]
 fn DMChannelItem(
     channel_id: String,
@@ -727,6 +733,7 @@ fn DMChannelItem(
 }
 
 /// Single group channel item.
+#[rustfmt::skip]
 #[component]
 fn GroupChannelItem(
     group_id: String,
@@ -792,6 +799,7 @@ fn GroupChannelItem(
 }
 
 /// Friend contact in search results.
+#[rustfmt::skip]
 #[component]
 fn FriendItem(display_name: String, user_id: String) -> Element {
     use crate::state::chat_data::user_color;
@@ -814,6 +822,7 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
 /// Category header + channels within the category.
 ///
 /// Clicking the category header toggles collapse/expand of its channel list.
+#[rustfmt::skip]
 #[component]
 fn CategorySection(
     cat_name: String,
@@ -851,6 +860,7 @@ fn CategorySection(
 }
 
 /// Single server channel row (with voice participants if applicable).
+#[rustfmt::skip]
 #[component]
 fn ChannelItemRow(channel: Channel) -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -932,6 +942,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
     use crate::state::chat_data::user_color;

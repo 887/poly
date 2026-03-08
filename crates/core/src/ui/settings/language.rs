@@ -13,6 +13,7 @@ use dioxus::prelude::*;
 /// The dropdown pre-selects the OS/browser-detected language (set during
 /// [`crate::i18n::init`]) and switches the entire app's strings reactively
 /// on change. Works identically on desktop (Wry) and web (WASM).
+#[rustfmt::skip]
 #[component]
 pub(super) fn LanguageSettings() -> Element {
     // Reads the locale Signal from context — subscribes to changes so the

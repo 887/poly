@@ -229,6 +229,7 @@ async fn join_voice_channel(
 ///
 /// Renders the full voice/video call experience including the floating
 /// `VoiceChatBar` when connected and the local screen share area when streaming.
+#[rustfmt::skip]
 #[component]
 pub fn VoiceChannelView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -309,6 +310,7 @@ pub fn VoiceChannelView() -> Element {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 /// Header bar showing channel name, backend badge, and participant count.
+#[rustfmt::skip]
 #[component]
 fn VoiceHeader(
     current_channel: Option<poly_client::Channel>,
@@ -341,6 +343,7 @@ fn VoiceHeader(
 /// preview also feeds this element.
 // DECISION(V-screenshare-main): Reuse __polyScreenStream for the big view
 // video element so no extra capture is needed.
+#[rustfmt::skip]
 #[component]
 fn VoiceScreenShareArea() -> Element {
     rsx! {
@@ -392,6 +395,7 @@ fn VoiceScreenShareArea() -> Element {
 }
 
 /// Grid of voice participant tiles.
+#[rustfmt::skip]
 #[component]
 fn VoiceParticipantGrid(
     participants: Vec<VoiceParticipant>,
@@ -424,6 +428,7 @@ fn VoiceParticipantGrid(
 }
 
 /// Single participant tile in the voice grid.
+#[rustfmt::skip]
 #[component]
 fn VoiceTile(participant: VoiceParticipant) -> Element {
     let user = &participant.user;
@@ -504,6 +509,7 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
 }
 
 /// Join button — rendered when user is NOT connected.
+#[rustfmt::skip]
 #[component]
 fn VoiceJoinButton(
     channel_id: Option<String>,
@@ -545,6 +551,7 @@ fn VoiceJoinButton(
 /// Mirrors the sidebar `VoiceBar` controls but styled as a floating panel.
 // DECISION(V-6): VoiceChatBar duplicates sidebar controls in a larger, more
 // accessible floating bar so users don't need to look at the sidebar mid-call.
+#[rustfmt::skip]
 #[component]
 fn VoiceChatBar(mut chat_data: Signal<ChatData>) -> Element {
     let voice_conn = chat_data.read().voice_connection.clone();

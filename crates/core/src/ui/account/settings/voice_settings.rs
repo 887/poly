@@ -54,6 +54,7 @@ const JS_TEST_MIC: &str = r#"
 ///
 /// Composed of: mic picker, speaker picker, noise cancel toggle, test mic button.
 // DECISION(V-4): Audio settings live in AccountSettingsPage, not a popup.
+#[rustfmt::skip]
 #[component]
 pub fn VoiceSettings() -> Element {
     let mut mic_devices = use_signal::<Vec<(String, String)>>(Vec::new);
@@ -101,6 +102,7 @@ pub fn VoiceSettings() -> Element {
 }
 
 /// Microphone device selector.
+#[rustfmt::skip]
 #[component]
 fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -133,6 +135,7 @@ fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
 }
 
 /// Speaker device selector.
+#[rustfmt::skip]
 #[component]
 fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -165,6 +168,7 @@ fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
 }
 
 /// Noise cancellation toggle.
+#[rustfmt::skip]
 #[component]
 fn NoiseCancelToggle() -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -195,6 +199,7 @@ fn NoiseCancelToggle() -> Element {
 }
 
 /// Test microphone button.
+#[rustfmt::skip]
 #[component]
 fn TestMicButton() -> Element {
     let mut test_running = use_signal(|| false);

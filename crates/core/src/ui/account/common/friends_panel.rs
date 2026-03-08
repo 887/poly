@@ -19,6 +19,7 @@ use crate::ui::account::common::chat_history::remember_message_list_scroll_posit
 use dioxus::prelude::*;
 
 /// Friends browser panel with tiled grid display and filtering options.
+#[rustfmt::skip]
 #[component]
 pub fn FriendsPanel() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -90,6 +91,7 @@ pub fn FriendsPanel() -> Element {
 }
 
 /// Filter bar for the friends panel: search, account, and server dropdowns.
+#[rustfmt::skip]
 #[component]
 fn FriendsFilterBar(
     search_filter: Signal<String>,
@@ -142,6 +144,7 @@ fn FriendsFilterBar(
 }
 
 /// Grid of friend cards.
+#[rustfmt::skip]
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
     let mut app_state: Signal<AppState> = use_context();

@@ -72,6 +72,7 @@ async fn run_reset_flow(
 }
 
 /// Reset button component.
+#[rustfmt::skip]
 #[component]
 fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -111,6 +112,7 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
 }
 
 /// Error display component.
+#[rustfmt::skip]
 #[component]
 fn ResetError(error: Signal<String>) -> Element {
     rsx! {
@@ -121,6 +123,7 @@ fn ResetError(error: Signal<String>) -> Element {
 }
 
 /// Reset actions section with buttons and error handling.
+#[rustfmt::skip]
 #[component]
 fn ResetSection() -> Element {
     let mut error = use_signal(String::new);
@@ -154,6 +157,7 @@ fn ResetSection() -> Element {
 ///
 /// Contains the app-reset and nuke-all-data danger zone.
 // TODO(phase-2.7.9.10): Notification preferences, startup behavior
+#[rustfmt::skip]
 #[component]
 pub(super) fn GeneralSettings() -> Element {
     rsx! {

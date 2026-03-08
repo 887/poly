@@ -51,6 +51,7 @@ fn initial_editor_css(config: &ThemeConfig) -> String {
 }
 
 /// Visual preset picker — colored buttons for each built-in theme.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -95,6 +96,7 @@ pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
 }
 
 /// Dark / Light / Follow Device toggle.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -142,6 +144,7 @@ pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Eleme
 /// When disabled (default), the color pickers are greyed out and no
 /// color overrides are applied. When enabled, users can customize
 /// individual colors which then override the preset.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -191,6 +194,7 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ColorOverridesToggleRow(colors_enabled: bool, on_toggle: EventHandler<bool>) -> Element {
     rsx! {
@@ -208,6 +212,7 @@ fn ColorOverridesToggleRow(colors_enabled: bool, on_toggle: EventHandler<bool>) 
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ColorOverridesGrid(
     entries: Vec<(String, String, String)>,
@@ -249,6 +254,7 @@ fn ColorOverridesGrid(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ResetColorsButton(on_reset: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -268,6 +274,7 @@ fn ResetColorsButton(on_reset: EventHandler<MouseEvent>) -> Element {
 /// When disabled (default), the editor is visible but greyed out and
 /// the CSS is not injected. The template lists every CSS variable
 /// (commented out) so users can see what is available.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -290,6 +297,7 @@ pub(super) fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Element {
     rsx! {
@@ -307,6 +315,7 @@ fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Eleme
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn CssEditorArea(
     css_enabled: bool,
@@ -327,6 +336,7 @@ fn CssEditorArea(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>) -> Element {
     rsx! {
@@ -386,6 +396,7 @@ fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>
 ///
 /// Replaces the separate Appearance page: everything color/theme related
 /// is now in one place.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ThemeSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

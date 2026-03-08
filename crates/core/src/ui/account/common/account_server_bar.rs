@@ -97,6 +97,7 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
 ///
 /// Only rendered when `active_account_id` is `Some(...)`.
 /// Shows DMs, notifications, and all servers for this account.
+#[rustfmt::skip]
 #[component]
 pub fn AccountServerBar() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -186,6 +187,7 @@ pub fn AccountServerBar() -> Element {
 /// Handles all drag-and-drop events, right-click context menu, and click navigation.
 /// Extracted from the `AccountServerBar` for-loop to keep RSX macros small and
 /// avoid Dioxus macro complexity limits inside `for` iterator blocks.
+#[rustfmt::skip]
 #[component]
 fn AccountServerIcon(
     server_id: String,
@@ -333,6 +335,7 @@ fn AccountServerIcon(
 }
 
 /// Renders the visual content of a server icon: image (or letter fallback) plus unread badge.
+#[rustfmt::skip]
 #[component]
 fn ServerIconDisplay(
     icon_url: Option<String>,
@@ -367,6 +370,7 @@ fn ServerIconDisplay(
 }
 
 /// DMs/Friends button for the account server bar.
+#[rustfmt::skip]
 #[component]
 fn AccountBarDmsButton(
     current_view: View,
@@ -400,6 +404,7 @@ fn AccountBarDmsButton(
 }
 
 /// Notifications button for the account server bar.
+#[rustfmt::skip]
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
     let mut app_state: Signal<AppState> = use_context();

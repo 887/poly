@@ -21,6 +21,7 @@ use poly_client::{PresenceStatus, User};
 /// User sidebar component.
 ///
 /// Shows channel members grouped by presence status.
+#[rustfmt::skip]
 #[component]
 pub fn UserSidebar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -105,6 +106,7 @@ pub fn UserSidebar() -> Element {
 }
 
 /// A group of users under a presence header.
+#[rustfmt::skip]
 #[component]
 fn UserGroup(
     label: String,
@@ -156,6 +158,7 @@ fn UserGroup(
 }
 
 /// Profile popup shown when clicking a user in the sidebar.
+#[rustfmt::skip]
 #[component]
 fn UserProfilePopup(user: User, on_close: EventHandler<()>) -> Element {
     let color = user_color(&user.id);

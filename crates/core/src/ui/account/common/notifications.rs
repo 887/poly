@@ -21,6 +21,7 @@ use poly_client::{BackendType, NotificationKind};
 ///
 /// Shows aggregated notifications from all connected accounts/backends,
 /// with filtering by backend and mark-read actions.
+#[rustfmt::skip]
 #[component]
 pub fn NotificationsView() -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -77,6 +78,7 @@ pub fn NotificationsView() -> Element {
 }
 
 /// Backend filter dropdown for notifications.
+#[rustfmt::skip]
 #[component]
 fn NotificationFilter(
     backends: Vec<BackendType>,
@@ -112,6 +114,7 @@ fn NotificationFilter(
 }
 
 /// Rendered list of notification items.
+#[rustfmt::skip]
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();

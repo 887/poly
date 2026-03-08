@@ -20,6 +20,7 @@ use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use dioxus::prelude::*;
 
+#[rustfmt::skip]
 #[component]
 fn VoiceBannerParticipants(participants: Vec<poly_client::VoiceParticipant>) -> Element {
     let participant_count = participants.len();
@@ -55,6 +56,7 @@ fn VoiceBannerParticipants(participants: Vec<poly_client::VoiceParticipant>) -> 
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn VoiceBannerChannelLink(
     channel_id: String,
@@ -93,6 +95,7 @@ fn VoiceBannerChannelLink(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn VoiceBannerControls(
     is_muted: bool,
@@ -156,6 +159,7 @@ fn VoiceBannerControls(
 ///
 /// Spans all columns (server sidebar, channel list, chat area) and sits
 /// at the top of the layout. Hidden when not in a voice channel.
+#[rustfmt::skip]
 #[component]
 pub fn VoiceBanner() -> Element {
     let app_state: Signal<AppState> = use_context();

@@ -37,6 +37,7 @@ fn save_voice(
     });
 }
 
+#[rustfmt::skip]
 #[component]
 fn DeviceSelectRow(label_key: &'static str, option_key: &'static str) -> Element {
     rsx! {
@@ -49,6 +50,7 @@ fn DeviceSelectRow(label_key: &'static str, option_key: &'static str) -> Element
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn MicTestRow(mic_testing: Signal<bool>) -> Element {
     rsx! {
@@ -71,6 +73,7 @@ fn MicTestRow(mic_testing: Signal<bool>) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn VoiceModeRow(selected: String, on_change: EventHandler<String>) -> Element {
     rsx! {
@@ -97,6 +100,7 @@ fn VoiceModeRow(selected: String, on_change: EventHandler<String>) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element {
     rsx! {
@@ -119,6 +123,7 @@ fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element 
 /// Lets the user configure audio/video input/output devices, volume levels,
 /// voice activity detection mode, noise suppression and echo cancellation.
 /// Settings are loaded from and persisted to storage.
+#[rustfmt::skip]
 #[component]
 pub(super) fn VoiceVideoSettings() -> Element {
     let mut input_vol = use_signal(|| 80_u32);
@@ -200,6 +205,7 @@ pub(super) fn VoiceVideoSettings() -> Element {
 }
 
 /// Volume slider with label showing percentage.
+#[rustfmt::skip]
 #[component]
 fn VolumeSlider(label: String, value: u32, on_change: EventHandler<u32>) -> Element {
     rsx! {
@@ -222,6 +228,7 @@ fn VolumeSlider(label: String, value: u32, on_change: EventHandler<u32>) -> Elem
 }
 
 /// Noise suppression radio group.
+#[rustfmt::skip]
 #[component]
 fn NoiseSuppressionRow(selected: String, on_change: EventHandler<String>) -> Element {
     rsx! {

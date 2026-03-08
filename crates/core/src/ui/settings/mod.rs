@@ -63,6 +63,7 @@ fn matches_settings_search(filter: &str, label: &str) -> bool {
     filter.is_empty() || label.to_lowercase().contains(filter)
 }
 
+#[rustfmt::skip]
 #[component]
 fn SettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
@@ -87,6 +88,7 @@ fn SettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn SettingsNavigation(
     current: SettingsSection,
@@ -118,6 +120,7 @@ fn SettingsNavigation(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn SettingsContent(section: SettingsSection) -> Element {
     rsx! {
@@ -157,6 +160,7 @@ fn SettingsContent(section: SettingsSection) -> Element {
 
 // Re-export SettingsNavItem as a private helper so it stays in this file.
 /// Navigation item in the settings sidebar.
+#[rustfmt::skip]
 #[component]
 fn SettingsNavItem(label: String, active: bool, onclick: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -175,6 +179,7 @@ fn SettingsNavItem(label: String, active: bool, onclick: EventHandler<MouseEvent
 ///
 /// Account-specific settings (notifications) are handled by
 /// [`crate::ui::account::settings::AccountSettingsPage`] instead.
+#[rustfmt::skip]
 #[component]
 pub fn SettingsPage() -> Element {
     let mut app_state: Signal<AppState> = use_context();

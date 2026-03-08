@@ -109,6 +109,48 @@ When `cargo cranky` reports a lint violation, **FIX THE CODE**. Never suppress i
 Rationale: these rules exist to prevent real bugs. Suppressing them hides the problem. Smaller models
 try to `#[allow(...)]` their way out of lint errors — this is explicitly prohibited in this project.
 
+### 7b. CRITICAL — RSX Macros + `cargo fmt` Incompatibility (DECISION, 2026-03-08)
+
+**THE PROBLEM:** `cargo fmt` corrupts Dioxus RSX macros when closures span multiple lines.
+It generates invalid Rust syntax like duplicated if/else branches or malformed field assignments.
+Example breakage:
+```rust
+// Before fmt: correct
+onchange: move |e: Event<FormData>| {
+    let val = e.value();
+    chat_data.write().voice_media_settings.mic_device_id = if val.is_empty() { None } else { Some(val) };
+},
+
+// After fmt: BROKEN — duplicated conditional logic
+onchange: move |e: Event<FormData>| {
+    let val = e.value();
+    chat_data.write().voice_media_settings.mic_device_id =
+        if val.is_empty() { None } else { Some(val) };
+        None    // <-- CORRUPTED: duplicated/unreachable
+    } else {
+        Some(val)
+    };  // <-- Syntax error: unmatched brace
+},
+```
+
+**THE SOLUTION:** Add `#[rustfmt::skip]` immediately before **every** `#[component]` attribute.
+
+```rust
+#[rustfmt::skip]  // <- REQUIRED: prevents fmt from mangling RSX
+#[component]      // <- Always pair with rustfmt::skip
+fn MyComponent() -> Element {
+    rsx! { /* ... */ }
+}
+```
+
+**REQUIREMENT:** When you write a new `#[component]` function OR encounter an existing one without the attribute:
+1. Add `#[rustfmt::skip]` on the line immediately **before** `#[component]`
+2. Save the file — fmt MUST NOT corrupt it
+3. If fmt still corrupts it, the component RSX is too complex and needs to be refactored into smaller subcomponents
+
+**STATUS:** ⚠️ **IN PROGRESS** — As of 2026-03-08, not all existing components have this attribute yet.
+This is the source of recurring "saving breaks the code" incidents.
+
 ### 8. Documentation Protocol
 
 When making architectural decisions:

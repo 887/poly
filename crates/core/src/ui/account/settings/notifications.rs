@@ -107,6 +107,7 @@ pub fn NotificationsSettings(account_id: String) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Element {
     let make_settings = move || current_notif_settings(signals);

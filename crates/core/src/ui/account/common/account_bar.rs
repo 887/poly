@@ -56,6 +56,7 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
     rsx! {
@@ -86,6 +87,7 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn AccountBarControls(
     is_muted: bool,
@@ -156,6 +158,7 @@ fn AccountBarControls(
 ///
 /// Shows user avatar + name + status + quick controls at the
 /// bottom of the channel list panel.
+#[rustfmt::skip]
 #[component]
 pub fn AccountBar() -> Element {
     let app_state: Signal<AppState> = use_context();

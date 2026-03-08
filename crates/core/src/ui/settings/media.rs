@@ -62,6 +62,7 @@ fn load_media_settings(mut media: Signal<MediaProviderSettings>) {
     });
 }
 
+#[rustfmt::skip]
 #[component]
 fn ProviderCard(
     title: String,
@@ -107,6 +108,7 @@ fn ProviderCard(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ActiveProviderSelector(active_value: String, on_change: EventHandler<String>) -> Element {
     rsx! {

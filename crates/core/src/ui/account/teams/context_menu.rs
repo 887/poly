@@ -10,6 +10,7 @@ use dioxus::prelude::*;
 /// These items appear below the common context menu items when
 /// right-clicking a server icon that belongs to the Teams backend.
 /// In Teams, "servers" are Teams.
+#[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
     // TODO(phase-3.4): Add Teams-specific context menu items

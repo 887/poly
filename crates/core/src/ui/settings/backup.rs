@@ -286,6 +286,7 @@ pub(super) async fn wizard_authenticate(
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 /// Renders the probe connection result box for Step 1 of the add-server wizard.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ProbeStatusBox(status: ProbeStatus) -> Element {
     match status {
@@ -324,6 +325,7 @@ pub(super) fn ProbeStatusBox(status: ProbeStatus) -> Element {
 }
 
 /// Renders the authentication status box for Step 2 of the add-server wizard.
+#[rustfmt::skip]
 #[component]
 pub(super) fn WizardAuthStatusBox(status: WizardAuthStatus) -> Element {
     match status {
@@ -345,6 +347,7 @@ pub(super) fn WizardAuthStatusBox(status: WizardAuthStatus) -> Element {
 /// Inline re-authentication form embedded in a [`ServerCard`].
 ///
 /// Manages its own passphrase input and error state. Closes on success or cancel.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ReauthForm(
     url: String,
@@ -401,6 +404,7 @@ pub(super) fn ReauthForm(
 ///
 /// Shows status, last-sync time, and Sync Now / Re-auth / Remove actions.
 /// The re-auth passphrase form is shown inline when "Re-authenticate" is clicked.
+#[rustfmt::skip]
 #[component]
 pub(super) fn ServerCard(
     record: crate::storage::BackupServerRecord,
@@ -489,6 +493,7 @@ pub(super) fn ServerCard(
 }
 
 /// Step 1 of the add-server wizard: URL entry and server probe.
+#[rustfmt::skip]
 #[component]
 pub(super) fn WizardStep1(
     wizard_url: Signal<String>,
@@ -581,6 +586,7 @@ pub(super) fn WizardStep1(
 }
 
 /// Step 2 of the add-server wizard: name, optional passphrase, and authenticate.
+#[rustfmt::skip]
 #[component]
 pub(super) fn WizardStep2(
     wizard_step: Signal<u8>,
@@ -666,6 +672,7 @@ pub(super) fn WizardStep2(
 /// Step 1: URL entry and server probe.
 /// Step 2: name / passphrase and authenticate.
 // DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
+#[rustfmt::skip]
 #[component]
 pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRecord>>) -> Element {
     let mut wizard_step = use_signal(|| 0u8);
@@ -737,6 +744,7 @@ pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRe
 /// Loads the server list on mount and pulls remote changes in the background,
 /// then delegates rendering to [`ServerCard`] (per server) and [`AddServerWizard`].
 // DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
+#[rustfmt::skip]
 #[component]
 pub(super) fn BackupSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

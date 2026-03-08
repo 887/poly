@@ -10,6 +10,7 @@ use dioxus::prelude::*;
 // ── Step sub-components ───────────────────────────────────────────────────────
 
 /// Step 1: Welcome + generate keypair.
+#[rustfmt::skip]
 #[component]
 fn WelcomeStep(
     step: Signal<u8>,
@@ -44,6 +45,7 @@ fn WelcomeStep(
 }
 
 /// Step 2: Display the generated Account ID with a copy button.
+#[rustfmt::skip]
 #[component]
 fn AccountIdStep(step: Signal<u8>, account_id: Signal<String>) -> Element {
     rsx! {
@@ -77,6 +79,7 @@ fn AccountIdStep(step: Signal<u8>, account_id: Signal<String>) -> Element {
 }
 
 /// Step 3: Display the 24-word recovery phrase with a copy button.
+#[rustfmt::skip]
 #[component]
 fn RecoveryPhraseStep(step: Signal<u8>, recovery_phrase: Signal<String>) -> Element {
     rsx! {
@@ -131,6 +134,7 @@ fn RecoveryPhraseStep(step: Signal<u8>, recovery_phrase: Signal<String>) -> Elem
 }
 
 /// Step 4: Completion — persists the identity key and calls `on_complete`.
+#[rustfmt::skip]
 #[component]
 fn CompleteStep(
     account_id: Signal<String>,
@@ -175,6 +179,7 @@ fn CompleteStep(
 ///
 /// `on_complete` receives the hex account ID so the parent ([`crate::ui::App`])
 /// can persist it to `AppSettings`.
+#[rustfmt::skip]
 #[component]
 pub fn SetupWizard(on_complete: EventHandler<String>) -> Element {
     let step = use_signal(|| 0u8);

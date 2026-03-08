@@ -13,6 +13,7 @@ use poly_client::{AccountPresence, ConnectionStatus};
 
 /// Diagnostics page — shows health and status information for all accounts.
 #[allow(clippy::module_name_repetitions)]
+#[rustfmt::skip]
 #[component]
 pub fn DiagnosticsPage() -> Element {
     let client_manager: Signal<ClientManager> = use_context();
@@ -70,6 +71,7 @@ pub fn DiagnosticsPage() -> Element {
 }
 
 /// A single row in the diagnostics account table.
+#[rustfmt::skip]
 #[component]
 fn AccountDiagnosticsRow(account_id: String) -> Element {
     let client_manager: Signal<ClientManager> = use_context();

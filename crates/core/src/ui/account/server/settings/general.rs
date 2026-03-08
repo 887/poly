@@ -11,6 +11,7 @@ use dioxus::prelude::*;
 /// General settings panel for a server.
 ///
 /// Shows server info and a leave-server action with an inline confirm.
+#[rustfmt::skip]
 #[component]
 pub fn ServerGeneralSettings(
     server_id: String,
@@ -62,6 +63,7 @@ pub fn ServerGeneralSettings(
 /// Inline confirm widget for leaving a server.
 ///
 /// Does NOT use `window.confirm()`. The confirm dialog is rendered in-DOM.
+#[rustfmt::skip]
 #[component]
 fn LeaveServerConfirm(
     server_name: String,

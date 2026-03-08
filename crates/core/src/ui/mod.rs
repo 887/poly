@@ -232,6 +232,7 @@ fn router_config(
     )
 }
 
+#[rustfmt::skip]
 #[component]
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
     rsx! {
@@ -264,6 +265,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
 /// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
 /// - `Signal<ClientManager>` — client manager for active backends
 /// - `Signal<ChatData>` — reactive chat data store
+#[rustfmt::skip]
 #[component]
 pub fn App() -> Element {
     let app_state = use_signal(AppState::default);

@@ -29,6 +29,7 @@ use poly_client::{AccountPresence, ConnectionStatus};
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
+#[rustfmt::skip]
 #[component]
 #[allow(non_snake_case)]
 fn NavBarSpacer() -> Element {
@@ -44,6 +45,7 @@ fn NavBarSpacer() -> Element {
 ///
 /// Shows: Account icons, separator, favorited server icons with
 /// source badge, spacer, Demo toggle, App Settings.
+#[rustfmt::skip]
 #[component]
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
@@ -209,6 +211,7 @@ pub fn FavoritesBar() -> Element {
 /// Shows a colored circle with the account's emoji icon (if set in its session)
 /// or first character of the account ID as fallback. Clicking navigates to that
 /// account's last visited page (or DMs home if no history exists).
+#[rustfmt::skip]
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -375,6 +378,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 /// - Right-click to open the server context menu
 /// - Drag to reorder within Bar 1 or move back (drag is tracked via `DragSource::FavoriteServer`)
 /// - Accept drops from Bar 2 (`DragSource::AccountServer`) for positional insertion
+#[rustfmt::skip]
 #[component]
 fn FavoriteServerIcon(
     server_id: String,

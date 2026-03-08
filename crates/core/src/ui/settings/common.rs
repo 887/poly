@@ -16,6 +16,7 @@ pub(super) struct SelectOption {
 ///
 /// The native OS select popup ignores CSS custom properties; this component
 /// renders entirely in the webview so it respects the active theme.
+#[rustfmt::skip]
 #[component]
 pub(super) fn PolySelect(
     options: Vec<SelectOption>,

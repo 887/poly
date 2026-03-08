@@ -102,6 +102,7 @@ const JS_STOP_ALL_STREAMS: &str = r#"
 /// Placed INSIDE `.channel-list-wrapper` between `ChannelList` and `AccountBar`.
 // DECISION(V-1): VoiceBar stays in sidebar; compact 3-row layout with avatars + buttons.
 // DECISION(V-mute): Mute/deafen buttons live only in AccountBar — not duplicated here.
+#[rustfmt::skip]
 #[component]
 pub fn VoiceBar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -134,6 +135,7 @@ pub fn VoiceBar() -> Element {
 // ─── Dock sections ───────────────────────────────────────────────────────────
 
 /// Left section: animated dot + "Voice Connected" + channel/server name.
+#[rustfmt::skip]
 #[component]
 fn VoiceDockInfo(conn: poly_client::VoiceConnection) -> Element {
     rsx! {
@@ -148,6 +150,7 @@ fn VoiceDockInfo(conn: poly_client::VoiceConnection) -> Element {
 }
 
 /// Center section: horizontally scrollable row of participant mini-tiles.
+#[rustfmt::skip]
 #[component]
 fn VoiceDockParticipants(participants: Vec<poly_client::VoiceParticipant>) -> Element {
     rsx! {
@@ -160,6 +163,7 @@ fn VoiceDockParticipants(participants: Vec<poly_client::VoiceParticipant>) -> El
 }
 
 /// Single participant mini-tile: avatar + truncated name + status icons.
+#[rustfmt::skip]
 #[component]
 fn VoiceDockTile(participant: poly_client::VoiceParticipant) -> Element {
     let color = user_color(&participant.user.id);
@@ -207,6 +211,7 @@ fn VoiceDockTile(participant: poly_client::VoiceParticipant) -> Element {
 /// Mute and deafen are intentionally NOT here — they live in `AccountBar`.
 // DECISION(V-2): JS eval used for getUserMedia/getDisplayMedia.
 // DECISION(V-mute): Mute/deafen in AccountBar only to avoid duplication.
+#[rustfmt::skip]
 #[component]
 fn VoiceDockControls(
     conn: poly_client::VoiceConnection,
@@ -347,6 +352,7 @@ fn VoiceDockControls(
 /// Four vertical stripes grow in height left-to-right. All four lit = excellent.
 /// Demo hardcodes 42 ms excellent signal at EU-West.
 // DECISION(V-5): CSS bars for signal quality; hardcoded demo latency.
+#[rustfmt::skip]
 #[component]
 fn VoiceLatencyBar() -> Element {
     let latency_ms: u32 = 42;
@@ -393,6 +399,7 @@ fn VoiceLatencyBar() -> Element {
 /// `#poly-local-camera` and `#poly-local-screen` by ID immediately on
 /// `getUserMedia`/`getDisplayMedia` resolution — before Rust re-renders.
 // DECISION(V-3): Always-rendered video elements with CSS visibility control.
+#[rustfmt::skip]
 #[component]
 fn VoicePreviewPanel(conn: poly_client::VoiceConnection) -> Element {
     let panel_class = if conn.is_video_on || conn.is_streaming {

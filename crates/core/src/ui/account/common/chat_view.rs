@@ -782,6 +782,7 @@ async fn persist_member_list_preferences(server_member_list_open: bool, dm_membe
     }
 }
 
+#[rustfmt::skip]
 #[component]
 pub fn ChatView() -> Element {
     render_chat_view()
@@ -2737,6 +2738,7 @@ fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ChatUtilityRail(
     panel: ChatUtilityPanel,
@@ -2819,6 +2821,7 @@ fn ChatUtilityRail(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn SearchFilterPopup(
     suggestions: Vec<SearchFilterOption>,
@@ -2848,6 +2851,7 @@ fn SearchFilterPopup(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn SearchFilterRow(
     icon: &'static str,
@@ -2871,6 +2875,7 @@ fn SearchFilterRow(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn SearchResultCard(
     hit: MessageSearchHit,
@@ -2923,6 +2928,7 @@ fn SearchResultCard(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn PinnedMessageCard(
     message: Message,
@@ -2969,6 +2975,7 @@ fn PinnedMessageCard(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
     let lowercase_text = text.to_lowercase();
@@ -3046,6 +3053,7 @@ fn render_markdown_html(text: &str) -> String {
     builder.clean(&html_output).to_string()
 }
 /// Render message text content, handling multi-line and edited indicator.
+#[rustfmt::skip]
 #[component]
 fn MessageContentView(content: MessageContent, edited: bool) -> Element {
     let text = match &content {
@@ -3075,6 +3083,7 @@ fn MessageContentView(content: MessageContent, edited: bool) -> Element {
 }
 
 /// Render attachments (images inline, non-images as links).
+#[rustfmt::skip]
 #[component]
 fn AttachmentsView(attachments: Vec<poly_client::Attachment>) -> Element {
     rsx! {
@@ -3112,6 +3121,7 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>) -> Element {
 }
 
 /// Render reaction pills (clickable to toggle).
+#[rustfmt::skip]
 #[component]
 fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -3159,6 +3169,7 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 /// Typing indicator shown above the message input when users are typing.
+#[rustfmt::skip]
 #[component]
 fn TypingIndicator() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -3297,6 +3308,7 @@ fn apply_edit(chat_data: &mut Signal<ChatData>, message_id: &str, new_text: Stri
 ///
 /// Shows a textarea pre-filled with the current message text, a Cancel button,
 /// and a Save button. Enter (without Shift) saves; Escape cancels.
+#[rustfmt::skip]
 #[component]
 fn MessageInlineEdit(
     message_id: String,
@@ -3360,6 +3372,7 @@ const QUICK_REACTIONS: &[&str] = &["👍", "✅", "⚖️", "🔞"];
 ///
 /// Renders a transparent backdrop (closes on click) and a fixed-position
 /// floating menu at the coordinates stored in `msg_context_menu`.
+#[rustfmt::skip]
 #[component]
 fn MsgContextMenuOverlay(
     msg_context_menu: Signal<Option<MsgContextMenu>>,
@@ -3542,6 +3555,7 @@ fn render_context_menu_copy_id_item(
 ///
 /// Renders a full-width button with optional right arrow, danger styling,
 /// and a leading icon glyph.
+#[rustfmt::skip]
 #[component]
 fn ContextMenuItemSimple(
     label: String,
@@ -3569,6 +3583,7 @@ fn ContextMenuItemSimple(
 }
 
 /// Small inline reply preview shown above a replied message.
+#[rustfmt::skip]
 #[component]
 fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
     rsx! {
@@ -3581,6 +3596,7 @@ fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
 }
 
 /// Composer banner shown while replying to a message.
+#[rustfmt::skip]
 #[component]
 fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -3605,6 +3621,7 @@ fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEve
 ///
 /// Shows filtered commands with provider badges. Highlighted item is driven by `active_idx`.
 /// Clicking a command calls `on_select` with the filled command text (e.g. `"/play "`).
+#[rustfmt::skip]
 #[component]
 fn SlashCommandPopup(
     commands: Vec<ChatCommand>,
@@ -3658,6 +3675,7 @@ fn SlashCommandPopup(
 /// presses the 👤 header button.
 ///
 /// Displays the remote user's avatar, display name, presence status, and backend badge.
+#[rustfmt::skip]
 #[component]
 fn DmContactPanel(channel_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();

@@ -253,6 +253,49 @@ fn ServerRow(record: ServerRecord) -> Element {
 }
 ```
 
+## CRITICAL: `#[rustfmt::skip]` on ALL `#[component]` Functions
+
+⚠️ **EVERY `#[component]` function MUST have `#[rustfmt::skip]` on the line immediately before it.**
+
+```rust
+#[rustfmt::skip]  // <- REQUIRED: prevents fmt from mangling RSX macros
+#[component]
+fn MyComponent() -> Element {
+    rsx! { /* ... */ }
+}
+```
+
+**Why:** `cargo fmt` corrupts Dioxus RSX macros by mangling multi-line closures in event handlers.
+It creates invalid Rust syntax with duplicated conditional branches and unmatched braces. Example:
+
+```rust
+// BEFORE fmt (correct):
+onchange: move |e: Event<FormData>| {
+    let val = e.value();
+    chat_data.write().item = if val.is_empty() { None } else { Some(val) };
+},
+
+// AFTER fmt (BROKEN):
+onchange: move |e: Event<FormData>| {
+    let val = e.value();
+    chat_data.write().item =
+        if val.is_empty() { None } else { Some(val) };
+        None          // <- CORRUPTED: duplicated if/else logic
+    } else {
+        Some(val)
+    };  // <- Syntax error: unmatched closing brace
+},
+```
+
+**What to do:**
+1. Always write `#[rustfmt::skip]` before `#[component]`
+2. Save the file — fmt will leave RSX alone
+3. If you forget and fmt corrupts a component, fix it by: (a) restoring from git, (b) adding `#[rustfmt::skip]`, (c) re-making your changes
+4. If a component's RSX is too complex for fmt to handle even with `#[rustfmt::skip]`, it's a sign the component is > 150 lines and needs refactoring
+
+**Status:** As of 2026-03-08, this is being rolled out across all poly-core components.
+**Enforcement:** `cargo cranky` already enforces 100-line limits per component.
+
 ## Testing
 
 - Unit tests for crypto, db, i18n modules

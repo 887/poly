@@ -43,6 +43,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ElectronNavButtons() -> Element {
     rsx! {

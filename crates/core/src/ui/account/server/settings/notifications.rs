@@ -15,6 +15,7 @@ use dioxus::prelude::*;
 ///
 /// Notification preferences are currently in-memory only (no storage
 /// persistence yet — that is planned for Phase 2.11).
+#[rustfmt::skip]
 #[component]
 pub fn ServerNotificationsSettings(server_id: String, server_name: String) -> Element {
     let mut notif_level = use_signal(|| NotifLevel::Mentions);
@@ -80,6 +81,7 @@ pub fn ServerNotificationsSettings(server_id: String, server_name: String) -> El
 }
 
 /// Notification level option (radio-button style).
+#[rustfmt::skip]
 #[component]
 fn NotifLevelOption(label: String, selected: bool, onclick: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -93,6 +95,7 @@ fn NotifLevelOption(label: String, selected: bool, onclick: EventHandler<MouseEv
 }
 
 /// Toggle row for a notification suppression option.
+#[rustfmt::skip]
 #[component]
 fn NotifToggleRow(label: String, checked: bool, onchange: EventHandler<bool>) -> Element {
     rsx! {

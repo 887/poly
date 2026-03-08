@@ -10,6 +10,7 @@ use dioxus::prelude::*;
 /// These items appear below the common context menu items when
 /// right-clicking a server icon that belongs to the Matrix backend.
 /// In Matrix, "servers" are Spaces.
+#[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
     // TODO(phase-3.2): Add Matrix-specific context menu items

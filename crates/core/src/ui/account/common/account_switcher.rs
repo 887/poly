@@ -18,6 +18,7 @@ use dioxus::prelude::*;
 ///
 /// Shows account switching and settings buttons in a bar at the bottom
 /// of the channel list (same style/position as AccountBar for servers).
+#[rustfmt::skip]
 #[component]
 pub fn AccountSwitcher() -> Element {
     let mut app_state: Signal<AppState> = use_context();

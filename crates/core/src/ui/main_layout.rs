@@ -27,6 +27,7 @@ use dioxus_router::use_route;
 /// On web, the browser's native back/forward buttons handle navigation.
 // DECISION(DX-ROUTER-1): NavBar uses navigator().go_back()/go_forward()
 // instead of custom AppState history stack.
+#[rustfmt::skip]
 #[component]
 fn NavBar() -> Element {
     #[cfg(feature = "native-nav")]
@@ -69,6 +70,7 @@ fn NavBar() -> Element {
 ///
 /// Desktop: voice banner + (nav bar | server sidebar | outlet)
 /// Mobile: TBD
+#[rustfmt::skip]
 #[component]
 pub fn MainLayout() -> Element {
     let mut app_state: Signal<AppState> = use_context();

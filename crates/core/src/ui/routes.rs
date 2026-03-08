@@ -415,6 +415,7 @@ fn restore_dm_chat(
 /// the same `margin-left: -72px` trick as the old account-bar standalone, so
 /// both panels extend to cover the favourites sidebar column.
 // DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
+#[rustfmt::skip]
 #[component]
 fn DmsLayout() -> Element {
     rsx! {
@@ -440,6 +441,7 @@ fn DmsLayout() -> Element {
 /// the same `margin-left: -72px` trick as the old account-bar standalone, so
 /// both panels extend to cover the favourites sidebar column.
 // DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
+#[rustfmt::skip]
 #[component]
 fn ServerLayout() -> Element {
     rsx! {
@@ -457,6 +459,7 @@ fn ServerLayout() -> Element {
 // ── Route pages ─────────────────────────────────────────────────────────────
 
 /// DM home — placeholder when no conversation is selected.
+#[rustfmt::skip]
 #[component]
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -482,6 +485,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 /// Handles both click navigation (DMChannelItem sets up data before routing)
 /// and URL-restore navigation (account switch, page reload) by loading data
 /// in a `use_effect` when `current_channel` doesn't already match `dm_id`.
+#[rustfmt::skip]
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -501,6 +505,7 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
 /// On URL-restore navigation (F5, deep link) the click handler that normally
 /// calls `load_server_data` never ran, so data is missing. The `use_effect`
 /// here detects that case and loads the server data before rendering.
+#[rustfmt::skip]
 #[component]
 fn ServerHome(
     backend: String,
@@ -550,6 +555,7 @@ fn ServerHome(
 /// normally set up `chat_data` never ran. The `use_effect` here detects
 /// missing data and calls `restore_server_channel` to reload it, preserving
 /// the exact channel from the URL rather than defaulting to the first one.
+#[rustfmt::skip]
 #[component]
 fn ServerChat(
     backend: String,
@@ -610,6 +616,7 @@ fn ServerChat(
 }
 
 /// Friends browser — tiled grid view.
+#[rustfmt::skip]
 #[component]
 fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -618,6 +625,7 @@ fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Ele
 }
 
 /// Notifications feed — aggregated across all accounts.
+#[rustfmt::skip]
 #[component]
 fn NotificationsRoute() -> Element {
     rsx! {
@@ -626,6 +634,7 @@ fn NotificationsRoute() -> Element {
 }
 
 /// Settings page — app-level, not account-scoped.
+#[rustfmt::skip]
 #[component]
 fn SettingsRoute() -> Element {
     rsx! {
@@ -641,6 +650,7 @@ fn SettingsRoute() -> Element {
 ///
 /// AccountSettingsPage renders its own channel-list-wrapper (with settings nav
 /// + AccountBar) and settings-content sibling, matching the normal layout.
+#[rustfmt::skip]
 #[component]
 fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -655,6 +665,7 @@ fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String
 ///
 /// ServerSettingsPage renders its own channel-list-wrapper (with settings nav
 /// + AccountBar) and settings-content sibling, matching the normal layout.
+#[rustfmt::skip]
 #[component]
 fn ServerSettingsRoute(
     backend: String,
@@ -677,6 +688,7 @@ fn ServerSettingsRoute(
 /// Uses `use_effect` to navigate away on mount since the `on_update`
 /// callback may not process its redirect return value on the very first
 /// render in Dioxus memory-history mode.
+#[rustfmt::skip]
 #[component]
 fn Root() -> Element {
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
@@ -696,6 +708,7 @@ fn Root() -> Element {
 }
 
 /// Catch-all 404 — redirected by on_update before being seen.
+#[rustfmt::skip]
 #[component]
 fn PageNotFound(segments: Vec<String>) -> Element {
     rsx! {}

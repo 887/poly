@@ -50,6 +50,7 @@ fn is_local_only(backend: Option<BackendType>) -> bool {
 /// Icon URL input, live preview, and save button.
 ///
 /// Used by [`ServerOverviewSettings`] for both full and local-only modes.
+#[rustfmt::skip]
 #[component]
 fn IconPanel(
     server_id: String,
@@ -147,6 +148,7 @@ fn IconPanel(
 /// Banner URL input, live preview, and save button.
 ///
 /// Shown only for backends that support banner images (Demo, Stoat, Discord, Poly).
+#[rustfmt::skip]
 #[component]
 fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();

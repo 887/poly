@@ -12,6 +12,7 @@ use dioxus::prelude::*;
 /// Lists active messenger accounts grouped by backend and provides
 /// an "Add Account" entry point.
 // TODO(phase-2.7.9.2): Account list grouped by backend
+#[rustfmt::skip]
 #[component]
 pub(super) fn AccountsSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

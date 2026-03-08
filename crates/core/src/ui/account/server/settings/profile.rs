@@ -7,6 +7,7 @@ use crate::i18n::t;
 use dioxus::prelude::*;
 
 /// Per-server profile settings panel.
+#[rustfmt::skip]
 #[component]
 pub fn ServerProfileSettings(server_id: String, server_name: String) -> Element {
     let mut nickname = use_signal(String::new);

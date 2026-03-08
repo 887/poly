@@ -9,6 +9,7 @@ use dioxus::prelude::*;
 ///
 /// These items appear below the common context menu items when
 /// right-clicking a server icon that belongs to the Poly native backend.
+#[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
     // TODO(phase-3+): Add Poly-native-specific context menu items

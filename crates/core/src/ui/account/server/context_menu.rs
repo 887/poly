@@ -316,6 +316,7 @@ pub fn ServerContextMenu() -> Element {
 }
 
 /// A single clickable item inside the context menu.
+#[rustfmt::skip]
 #[component]
 fn ContextMenuItem(
     label: String,

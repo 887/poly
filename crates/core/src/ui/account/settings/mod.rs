@@ -29,6 +29,7 @@ use voice_settings::VoiceSettings;
 /// Shows only account-relevant preferences: notification toggles and
 /// voice/audio device settings. Global settings (theme, language,
 /// voice/video, identity, backup) are handled by the app-level `SettingsPage`.
+#[rustfmt::skip]
 #[component]
 pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     // Subscribe to locale so labels re-render on language change.

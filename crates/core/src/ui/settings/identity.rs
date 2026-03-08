@@ -23,6 +23,7 @@ async fn load_mnemonic_words() -> Result<Vec<String>, String> {
 }
 
 /// Modal overlay that displays and allows copying the 24-word recovery phrase.
+#[rustfmt::skip]
 #[component]
 pub(super) fn MnemonicModal(mnemonic_words: Signal<Vec<String>>, show: Signal<bool>) -> Element {
     let mut visible = show;
@@ -77,6 +78,7 @@ pub(super) fn MnemonicModal(mnemonic_words: Signal<Vec<String>>, show: Signal<bo
 ///
 /// Displays the user's Ed25519 public key (Account ID) and provides a
 /// "Show Recovery Phrase" button that opens a [`MnemonicModal`].
+#[rustfmt::skip]
 #[component]
 pub(super) fn IdentitySettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

@@ -138,6 +138,7 @@ const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
 ];
 
 /// Emoji picker component.
+#[rustfmt::skip]
 ///
 /// Renders a category-tabbed grid of emoji. Clicking one fires `on_select`.
 #[component]

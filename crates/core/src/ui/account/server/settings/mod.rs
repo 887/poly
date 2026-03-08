@@ -41,6 +41,7 @@ fn matches_server_settings_search(filter: &str, label: &str) -> bool {
     filter.is_empty() || label.to_lowercase().contains(filter)
 }
 
+#[rustfmt::skip]
 #[component]
 fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
@@ -65,6 +66,7 @@ fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ServerSettingsNavigation(
     active_section: ServerSettingsSection,
@@ -96,6 +98,7 @@ fn ServerSettingsNavigation(
     }
 }
 
+#[rustfmt::skip]
 #[component]
 fn ServerSettingsContent(
     section: ServerSettingsSection,
@@ -152,6 +155,7 @@ enum ServerSettingsSection {
 ///
 /// Shares the same two-column layout (nav sidebar + content) as `AccountSettingsPage`
 /// and `SettingsPage`. Server name shown in the content header.
+#[rustfmt::skip]
 #[component]
 pub fn ServerSettingsPage(
     backend: String,
@@ -204,6 +208,7 @@ pub fn ServerSettingsPage(
 }
 
 /// Navigation item for the server settings sidebar.
+#[rustfmt::skip]
 #[component]
 fn ServerSettingsNavItem(
     label: String,
