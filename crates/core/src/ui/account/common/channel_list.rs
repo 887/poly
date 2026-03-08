@@ -17,6 +17,94 @@ use dioxus::prelude::*;
 use poly_client::{BackendType, Channel, ChannelType, Server, User, VoiceParticipant};
 
 /// Main channel list component — delegates to sub-views based on current view.
+/// Load messages, members, and voice participants for a channel.
+async fn load_channel_data(
+    channel_id: String,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+    app_state: Signal<AppState>,
+) {
+    chat_data.write().loading = true;
+
+    // Get selected server to find the right backend
+    let server_id = app_state.read().nav.selected_server.clone();
+    let Some(server_id) = server_id else {
+        chat_data.write().loading = false;
+        return;
+    };
+
+    let backend_info = client_manager.read().get_backend_for_server(&server_id);
+    let Some((_account_id, backend)) = backend_info else {
+        chat_data.write().loading = false;
+        return;
+    };
+
+    let channel_type = chat_data
+        .read()
+        .current_channel
+        .as_ref()
+        .map(|ch| ch.channel_type);
+
+    let guard = backend.read().await;
+
+    match channel_type {
+        Some(poly_client::ChannelType::Voice) | Some(poly_client::ChannelType::Video) => {
+            // Voice/video channel — load participant list from backend
+            if let Ok(participants) = guard.get_voice_participants(&channel_id).await {
+                chat_data
+                    .write()
+                    .voice_channel_participants
+                    .insert(channel_id.clone(), participants);
+            }
+        }
+        _ => {
+            // Text channel — load messages and members
+            if let Ok(messages) = guard
+                .get_messages(&channel_id, poly_client::MessageQuery::default())
+                .await
+            {
+                chat_data.write().messages = messages;
+            }
+            if let Ok(members) = guard.get_channel_members(&channel_id).await {
+                chat_data.write().members = members;
+            }
+        }
+    }
+
+    chat_data.write().loading = false;
+}
+/// Load messages for a DM or group channel using the account backend directly
+/// (does not require a selected server).
+async fn load_dm_messages(
+    channel_id: String,
+    account_id: String,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    chat_data.write().loading = true;
+    chat_data.write().messages = Vec::new();
+    chat_data.write().members = Vec::new();
+
+    let Some(backend) = client_manager.read().get_backend(&account_id) else {
+        chat_data.write().loading = false;
+        return;
+    };
+
+    let guard = backend.read().await;
+    if let Ok(messages) = guard
+        .get_messages(&channel_id, poly_client::MessageQuery::default())
+        .await
+    {
+        chat_data.write().messages = messages;
+    }
+    if let Ok(members) = guard.get_channel_members(&channel_id).await {
+        chat_data.write().members = members;
+    }
+
+    chat_data.write().loading = false;
+}
+
+/// Single connected voice participant entry.
 #[component]
 pub fn ChannelList() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -816,7 +904,6 @@ fn ChannelItemRow(channel: Channel) -> Element {
     }
 }
 
-/// Single connected voice participant entry.
 #[component]
 fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
     use crate::state::chat_data::user_color;
@@ -863,91 +950,4 @@ fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
             }
         }
     }
-}
-
-/// Load messages, members, and voice participants for a channel.
-async fn load_channel_data(
-    channel_id: String,
-    client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
-    app_state: Signal<AppState>,
-) {
-    chat_data.write().loading = true;
-
-    // Get selected server to find the right backend
-    let server_id = app_state.read().nav.selected_server.clone();
-    let Some(server_id) = server_id else {
-        chat_data.write().loading = false;
-        return;
-    };
-
-    let backend_info = client_manager.read().get_backend_for_server(&server_id);
-    let Some((_account_id, backend)) = backend_info else {
-        chat_data.write().loading = false;
-        return;
-    };
-
-    let channel_type = chat_data
-        .read()
-        .current_channel
-        .as_ref()
-        .map(|ch| ch.channel_type);
-
-    let guard = backend.read().await;
-
-    match channel_type {
-        Some(poly_client::ChannelType::Voice) | Some(poly_client::ChannelType::Video) => {
-            // Voice/video channel — load participant list from backend
-            if let Ok(participants) = guard.get_voice_participants(&channel_id).await {
-                chat_data
-                    .write()
-                    .voice_channel_participants
-                    .insert(channel_id.clone(), participants);
-            }
-        }
-        _ => {
-            // Text channel — load messages and members
-            if let Ok(messages) = guard
-                .get_messages(&channel_id, poly_client::MessageQuery::default())
-                .await
-            {
-                chat_data.write().messages = messages;
-            }
-            if let Ok(members) = guard.get_channel_members(&channel_id).await {
-                chat_data.write().members = members;
-            }
-        }
-    }
-
-    chat_data.write().loading = false;
-}
-/// Load messages for a DM or group channel using the account backend directly
-/// (does not require a selected server).
-async fn load_dm_messages(
-    channel_id: String,
-    account_id: String,
-    client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
-) {
-    chat_data.write().loading = true;
-    chat_data.write().messages = Vec::new();
-    chat_data.write().members = Vec::new();
-
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        chat_data.write().loading = false;
-        return;
-    };
-
-    let guard = backend.read().await;
-    if let Ok(messages) = guard
-        .get_messages(&channel_id, poly_client::MessageQuery::default())
-        .await
-    {
-        chat_data.write().messages = messages;
-    }
-    if let Ok(members) = guard.get_channel_members(&channel_id).await {
-        chat_data.write().members = members;
-    }
-
-    chat_data.write().loading = false;
 }

@@ -19,6 +19,17 @@ use crate::i18n::t;
 use crate::storage::AccountNotificationSettings;
 use dioxus::prelude::*;
 
+#[derive(Clone, Copy, PartialEq)]
+struct NotifSignals {
+    notif_streams: Signal<bool>,
+    notif_friends_voice: Signal<bool>,
+    notif_reactions: Signal<bool>,
+    sound_new_msg: Signal<bool>,
+    sound_dm: Signal<bool>,
+    sound_ring: Signal<bool>,
+    badge_unread: Signal<bool>,
+}
+
 /// Persist per-account notification settings to storage.
 fn save_account_notif(account_id: String, settings: AccountNotificationSettings) {
     spawn(async move {
@@ -32,104 +43,130 @@ fn save_account_notif(account_id: String, settings: AccountNotificationSettings)
     });
 }
 
+fn current_notif_settings(signals: NotifSignals) -> AccountNotificationSettings {
+    AccountNotificationSettings {
+        notify_streams: *signals.notif_streams.read(),
+        notify_friends_voice: *signals.notif_friends_voice.read(),
+        notify_reactions: *signals.notif_reactions.read(),
+        sound_new_message: *signals.sound_new_msg.read(),
+        sound_dm: *signals.sound_dm.read(),
+        sound_ring: *signals.sound_ring.read(),
+        badge_unread: *signals.badge_unread.read(),
+    }
+}
+
+fn load_account_notif_settings(account_id: String, mut signals: NotifSignals) {
+    spawn(async move {
+        if let Some(storage) = crate::STORAGE.get()
+            && let Ok(s) = storage.get_account_notification_settings(&account_id).await
+        {
+            signals.notif_streams.set(s.notify_streams);
+            signals.notif_friends_voice.set(s.notify_friends_voice);
+            signals.notif_reactions.set(s.notify_reactions);
+            signals.sound_new_msg.set(s.sound_new_message);
+            signals.sound_dm.set(s.sound_dm);
+            signals.sound_ring.set(s.sound_ring);
+            signals.badge_unread.set(s.badge_unread);
+        }
+    });
+}
+
 /// Notification settings panel for a single account.
 ///
 /// Loads saved settings on mount and persists any toggle change immediately.
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`].
 #[component]
 pub fn NotificationsSettings(account_id: String) -> Element {
-    let mut notif_streams = use_signal(|| true);
-    let mut notif_friends_voice = use_signal(|| true);
-    let mut notif_reactions = use_signal(|| true);
-    let mut sound_new_msg = use_signal(|| true);
-    let mut sound_dm = use_signal(|| true);
-    let mut sound_ring = use_signal(|| true);
-    let mut badge_unread = use_signal(|| true);
+    let notif_streams = use_signal(|| true);
+    let notif_friends_voice = use_signal(|| true);
+    let notif_reactions = use_signal(|| true);
+    let sound_new_msg = use_signal(|| true);
+    let sound_dm = use_signal(|| true);
+    let sound_ring = use_signal(|| true);
+    let badge_unread = use_signal(|| true);
+    let signals = NotifSignals {
+        notif_streams,
+        notif_friends_voice,
+        notif_reactions,
+        sound_new_msg,
+        sound_dm,
+        sound_ring,
+        badge_unread,
+    };
+    let account_id_for_load = account_id.clone();
 
-    let account_id_load = account_id.clone();
     let _load = use_future(move || {
-        let aid = account_id_load.clone();
+        let aid = account_id_for_load.clone();
         async move {
-            if let Some(storage) = crate::STORAGE.get()
-                && let Ok(s) = storage.get_account_notification_settings(&aid).await
-            {
-                notif_streams.set(s.notify_streams);
-                notif_friends_voice.set(s.notify_friends_voice);
-                notif_reactions.set(s.notify_reactions);
-                sound_new_msg.set(s.sound_new_message);
-                sound_dm.set(s.sound_dm);
-                sound_ring.set(s.sound_ring);
-                badge_unread.set(s.badge_unread);
-            }
+            load_account_notif_settings(aid, signals);
         }
     });
 
-    let make_settings = move || AccountNotificationSettings {
-        notify_streams: *notif_streams.read(),
-        notify_friends_voice: *notif_friends_voice.read(),
-        notify_reactions: *notif_reactions.read(),
-        sound_new_message: *sound_new_msg.read(),
-        sound_dm: *sound_dm.read(),
-        sound_ring: *sound_ring.read(),
-        badge_unread: *badge_unread.read(),
-    };
+    rsx! {
+        AccountNotifSignalsSection { account_id, signals }
+    }
+}
+
+#[component]
+fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Element {
+    let make_settings = move || current_notif_settings(signals);
 
     rsx! {
         AccountNotifSectionInner {
             account_id: account_id.clone(),
-            notif_streams: *notif_streams.read(),
-            notif_friends_voice: *notif_friends_voice.read(),
-            notif_reactions: *notif_reactions.read(),
-            sound_new_msg: *sound_new_msg.read(),
-            sound_dm: *sound_dm.read(),
-            sound_ring: *sound_ring.read(),
-            badge_unread: *badge_unread.read(),
+            notif_streams: *signals.notif_streams.read(),
+            notif_friends_voice: *signals.notif_friends_voice.read(),
+            notif_reactions: *signals.notif_reactions.read(),
+            sound_new_msg: *signals.sound_new_msg.read(),
+            sound_dm: *signals.sound_dm.read(),
+            sound_ring: *signals.sound_ring.read(),
+            badge_unread: *signals.badge_unread.read(),
             on_streams: {
                 let aid = account_id.clone();
                 move |v: bool| {
-                    notif_streams.set(v);
+                    signals.notif_streams.set(v);
                     save_account_notif(aid.clone(), make_settings());
                 }
             },
             on_friends_voice: {
                 let aid = account_id.clone();
                 move |v: bool| {
-                    notif_friends_voice.set(v);
+                    signals.notif_friends_voice.set(v);
                     save_account_notif(aid.clone(), make_settings());
                 }
             },
             on_reactions: {
                 let aid = account_id.clone();
                 move |v: bool| {
-                    notif_reactions.set(v);
+                    signals.notif_reactions.set(v);
                     save_account_notif(aid.clone(), make_settings());
                 }
             },
             on_sound_msg: {
                 let aid = account_id.clone();
                 move |v: bool| {
-                    sound_new_msg.set(v);
+                    signals.sound_new_msg.set(v);
                     save_account_notif(aid.clone(), make_settings());
                 }
             },
             on_sound_dm: {
                 let aid = account_id.clone();
                 move |v: bool| {
-                    sound_dm.set(v);
+                    signals.sound_dm.set(v);
                     save_account_notif(aid.clone(), make_settings());
                 }
             },
             on_sound_ring: {
                 let aid = account_id.clone();
                 move |v: bool| {
-                    sound_ring.set(v);
+                    signals.sound_ring.set(v);
                     save_account_notif(aid.clone(), make_settings());
                 }
             },
             on_badge: {
                 let aid = account_id.clone();
                 move |v: bool| {
-                    badge_unread.set(v);
+                    signals.badge_unread.set(v);
                     save_account_notif(aid.clone(), make_settings());
                 }
             },

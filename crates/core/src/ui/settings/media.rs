@@ -38,6 +38,30 @@ fn provider_options() -> Vec<SelectOption> {
     ]
 }
 
+fn update_media_settings(
+    mut media: Signal<MediaProviderSettings>,
+    update: impl FnOnce(&mut MediaProviderSettings),
+) {
+    let mut next = media.read().clone();
+    update(&mut next);
+    media.set(next.clone());
+    spawn(async move {
+        persist_media_settings(next).await;
+    });
+}
+
+fn load_media_settings(mut media: Signal<MediaProviderSettings>) {
+    spawn(async move {
+        let Some(storage) = crate::STORAGE.get() else {
+            return;
+        };
+        match storage.get_app_settings().await {
+            Ok(app_settings) => media.set(app_settings.media),
+            Err(err) => tracing::warn!("Failed to load media settings: {err}"),
+        }
+    });
+}
+
 #[component]
 fn ProviderCard(
     title: String,
@@ -83,10 +107,76 @@ fn ProviderCard(
     }
 }
 
+#[component]
+fn ActiveProviderSelector(active_value: String, on_change: EventHandler<String>) -> Element {
+    rsx! {
+        div { class: "media-settings-active-provider",
+            label { class: "settings-label", "{t(\"settings-media-active-provider\")}" }
+            PolySelect {
+                options: provider_options(),
+                value: active_value,
+                onchange: move |value: String| on_change.call(value),
+            }
+        }
+    }
+}
+
+#[component]
+fn ProviderCards(
+    klippy_api_key: String,
+    klippy_enabled: bool,
+    giphy_api_key: String,
+    giphy_enabled: bool,
+    imgur_api_key: String,
+    imgur_enabled: bool,
+    media: Signal<MediaProviderSettings>,
+) -> Element {
+    rsx! {
+        ProviderCard {
+            title: t("settings-media-provider-klippy"),
+            api_key: klippy_api_key.clone(),
+            enabled: klippy_enabled,
+            configured: !klippy_api_key.trim().is_empty(),
+            on_toggle: move |enabled| {
+                update_media_settings(media, |next| next.klippy.enabled = enabled);
+            },
+            on_key_input: move |value: String| {
+                update_media_settings(media, |next| next.klippy.api_key = value);
+            },
+        }
+
+        ProviderCard {
+            title: t("settings-media-provider-giphy"),
+            api_key: giphy_api_key.clone(),
+            enabled: giphy_enabled,
+            configured: !giphy_api_key.trim().is_empty(),
+            on_toggle: move |enabled| {
+                update_media_settings(media, |next| next.giphy.enabled = enabled);
+            },
+            on_key_input: move |value: String| {
+                update_media_settings(media, |next| next.giphy.api_key = value);
+            },
+        }
+
+        ProviderCard {
+            title: t("settings-media-provider-imgur"),
+            api_key: imgur_api_key.clone(),
+            enabled: imgur_enabled,
+            configured: !imgur_api_key.trim().is_empty(),
+            on_toggle: move |enabled| {
+                update_media_settings(media, |next| next.imgur.enabled = enabled);
+            },
+            on_key_input: move |value: String| {
+                update_media_settings(media, |next| next.imgur.api_key = value);
+            },
+        }
+    }
+}
+
 /// Media integrations settings section.
 #[component]
 pub(super) fn MediaSettings() -> Element {
-    let mut media = use_signal(MediaProviderSettings::default);
+    let media = use_signal(MediaProviderSettings::default);
     let mut loaded = use_signal(|| false);
 
     use_effect(move || {
@@ -94,113 +184,32 @@ pub(super) fn MediaSettings() -> Element {
             return;
         }
         loaded.set(true);
-        spawn(async move {
-            let Some(storage) = crate::STORAGE.get() else {
-                return;
-            };
-            match storage.get_app_settings().await {
-                Ok(app_settings) => media.set(app_settings.media),
-                Err(err) => tracing::warn!("Failed to load media settings: {err}"),
-            }
-        });
+        load_media_settings(media);
     });
 
     let current = media.read().clone();
-    let active_value = current.active_gif_provider.as_str().to_string();
-    let title = t("settings-media");
-    let description = t("settings-media-description");
-    let active_label = t("settings-media-active-provider");
 
     rsx! {
         div { class: "settings-section media-settings",
-            h2 { "{title}" }
-            p { class: "settings-description", "{description}" }
+            h2 { "{t(\"settings-media\")}" }
+            p { class: "settings-description", "{t(\"settings-media-description\")}" }
 
-            div { class: "media-settings-active-provider",
-                label { class: "settings-label", "{active_label}" }
-                PolySelect {
-                    options: provider_options(),
-                    value: active_value,
-                    onchange: move |value: String| {
-                        if let Some(kind) = GifProviderKind::from_slug(&value) {
-                            let mut next = media.read().clone();
-                            next.active_gif_provider = kind;
-                            media.set(next.clone());
-                            spawn(async move {
-                                persist_media_settings(next).await;
-                            });
-                        }
-                    },
-                }
-            }
-
-            ProviderCard {
-                title: t("settings-media-provider-klippy"),
-                api_key: current.klippy.api_key.clone(),
-                enabled: current.klippy.enabled,
-                configured: !current.klippy.api_key.trim().is_empty(),
-                on_toggle: move |enabled| {
-                    let mut next = media.read().clone();
-                    next.klippy.enabled = enabled;
-                    media.set(next.clone());
-                    spawn(async move {
-                        persist_media_settings(next).await;
-                    });
-                },
-                on_key_input: move |value: String| {
-                    let mut next = media.read().clone();
-                    next.klippy.api_key = value;
-                    media.set(next.clone());
-                    spawn(async move {
-                        persist_media_settings(next).await;
-                    });
+            ActiveProviderSelector {
+                active_value: current.active_gif_provider.as_str().to_string(),
+                on_change: move |value: String| {
+                    if let Some(kind) = GifProviderKind::from_slug(&value) {
+                        update_media_settings(media, |next| next.active_gif_provider = kind);
+                    }
                 },
             }
-
-            ProviderCard {
-                title: t("settings-media-provider-giphy"),
-                api_key: current.giphy.api_key.clone(),
-                enabled: current.giphy.enabled,
-                configured: !current.giphy.api_key.trim().is_empty(),
-                on_toggle: move |enabled| {
-                    let mut next = media.read().clone();
-                    next.giphy.enabled = enabled;
-                    media.set(next.clone());
-                    spawn(async move {
-                        persist_media_settings(next).await;
-                    });
-                },
-                on_key_input: move |value: String| {
-                    let mut next = media.read().clone();
-                    next.giphy.api_key = value;
-                    media.set(next.clone());
-                    spawn(async move {
-                        persist_media_settings(next).await;
-                    });
-                },
-            }
-
-            ProviderCard {
-                title: t("settings-media-provider-imgur"),
-                api_key: current.imgur.api_key.clone(),
-                enabled: current.imgur.enabled,
-                configured: !current.imgur.api_key.trim().is_empty(),
-                on_toggle: move |enabled| {
-                    let mut next = media.read().clone();
-                    next.imgur.enabled = enabled;
-                    media.set(next.clone());
-                    spawn(async move {
-                        persist_media_settings(next).await;
-                    });
-                },
-                on_key_input: move |value: String| {
-                    let mut next = media.read().clone();
-                    next.imgur.api_key = value;
-                    media.set(next.clone());
-                    spawn(async move {
-                        persist_media_settings(next).await;
-                    });
-                },
+            ProviderCards {
+                klippy_api_key: current.klippy.api_key.clone(),
+                klippy_enabled: current.klippy.enabled,
+                giphy_api_key: current.giphy.api_key.clone(),
+                giphy_enabled: current.giphy.enabled,
+                imgur_api_key: current.imgur.api_key.clone(),
+                imgur_enabled: current.imgur.enabled,
+                media,
             }
         }
     }

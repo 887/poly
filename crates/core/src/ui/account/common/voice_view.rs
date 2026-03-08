@@ -27,6 +27,106 @@ use poly_client::{ChannelType, VoiceParticipant};
 ///
 /// Renders the voice/video call experience: participant grid,
 /// join/leave buttons, and status indicators.
+/// Join a voice channel: fetch participants from backend, add local user, set connection.
+async fn join_voice_channel(
+    channel_id: String,
+    current_channel: Option<poly_client::Channel>,
+    current_server: Option<poly_client::Server>,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+    mut app_state: Signal<AppState>,
+) {
+    let server_id = app_state.read().nav.selected_server.clone();
+    let Some(server_id) = server_id else { return };
+
+    // Get backend for this server
+    let backend_info = client_manager.read().get_backend_for_server(&server_id);
+    let Some((voice_account_id, backend)) = backend_info else {
+        return;
+    };
+
+    // Resolve the backend type from the current server for routing
+    let voice_backend = current_server
+        .as_ref()
+        .map(|s| s.backend)
+        .unwrap_or(poly_client::BackendType::Demo);
+
+    // Fetch current participants from backend
+    let mut participants = {
+        let guard = backend.read().await;
+        guard
+            .get_voice_participants(&channel_id)
+            .await
+            .unwrap_or_default()
+    };
+
+    // Add the local (self) user to participants using the session for this account.
+    // Use voice_account_id to look up the correct session from account_sessions.
+    let self_session = chat_data
+        .read()
+        .account_sessions
+        .get(&voice_account_id)
+        .cloned();
+    if let Some(ref session) = self_session {
+        let already_in = participants.iter().any(|p| p.user.id == session.user.id);
+        if !already_in {
+            participants.push(poly_client::VoiceParticipant {
+                user: session.user.clone(),
+                is_muted: false,
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            });
+        }
+    }
+
+    // Store participants and set the voice connection
+    chat_data
+        .write()
+        .voice_channel_participants
+        .insert(channel_id.clone(), participants);
+
+    // Resolve instance_id for the voice account before mutating chat_data
+    let voice_instance_id = chat_data
+        .read()
+        .account_sessions
+        .get(&voice_account_id)
+        .map(|s| s.instance_id.clone())
+        .unwrap_or_default();
+
+    chat_data.write().voice_connection = Some(poly_client::VoiceConnection {
+        channel_id: channel_id.clone(),
+        server_id: current_server
+            .as_ref()
+            .map(|s| s.id.clone())
+            .unwrap_or_default(),
+        channel_name: current_channel
+            .as_ref()
+            .map(|c| c.name.clone())
+            .unwrap_or_default(),
+        server_name: current_server
+            .as_ref()
+            .map(|s| s.name.clone())
+            .unwrap_or_default(),
+        backend: voice_backend,
+        account_id: voice_account_id.clone(),
+        instance_id: voice_instance_id,
+        is_muted: false,
+        is_deafened: false,
+        is_streaming: false,
+        is_video_on: false,
+    });
+
+    // Update nav state
+    app_state.write().nav.selected_channel = Some(channel_id);
+}
+
+/// Join / Disconnect buttons and voice control logic.
+///
+/// On join: fetches participant list from backend, adds local user,
+/// sets `voice_connection`. On disconnect: removes local user from
+/// participants and clears `voice_connection`.
 #[component]
 pub fn VoiceChannelView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -232,11 +332,6 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
     }
 }
 
-/// Join / Disconnect buttons and voice control logic.
-///
-/// On join: fetches participant list from backend, adds local user,
-/// sets `voice_connection`. On disconnect: removes local user from
-/// participants and clears `voice_connection`.
 #[component]
 fn VoiceControls(
     channel_id: Option<String>,
@@ -300,99 +395,4 @@ fn VoiceControls(
             }
         }
     }
-}
-
-/// Join a voice channel: fetch participants from backend, add local user, set connection.
-async fn join_voice_channel(
-    channel_id: String,
-    current_channel: Option<poly_client::Channel>,
-    current_server: Option<poly_client::Server>,
-    client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
-    mut app_state: Signal<AppState>,
-) {
-    let server_id = app_state.read().nav.selected_server.clone();
-    let Some(server_id) = server_id else { return };
-
-    // Get backend for this server
-    let backend_info = client_manager.read().get_backend_for_server(&server_id);
-    let Some((voice_account_id, backend)) = backend_info else {
-        return;
-    };
-
-    // Resolve the backend type from the current server for routing
-    let voice_backend = current_server
-        .as_ref()
-        .map(|s| s.backend)
-        .unwrap_or(poly_client::BackendType::Demo);
-
-    // Fetch current participants from backend
-    let mut participants = {
-        let guard = backend.read().await;
-        guard
-            .get_voice_participants(&channel_id)
-            .await
-            .unwrap_or_default()
-    };
-
-    // Add the local (self) user to participants using the session for this account.
-    // Use voice_account_id to look up the correct session from account_sessions.
-    let self_session = chat_data
-        .read()
-        .account_sessions
-        .get(&voice_account_id)
-        .cloned();
-    if let Some(ref session) = self_session {
-        let already_in = participants.iter().any(|p| p.user.id == session.user.id);
-        if !already_in {
-            participants.push(poly_client::VoiceParticipant {
-                user: session.user.clone(),
-                is_muted: false,
-                is_deafened: false,
-                is_streaming: false,
-                is_video_on: false,
-                is_speaking: false,
-            });
-        }
-    }
-
-    // Store participants and set the voice connection
-    chat_data
-        .write()
-        .voice_channel_participants
-        .insert(channel_id.clone(), participants);
-
-    // Resolve instance_id for the voice account before mutating chat_data
-    let voice_instance_id = chat_data
-        .read()
-        .account_sessions
-        .get(&voice_account_id)
-        .map(|s| s.instance_id.clone())
-        .unwrap_or_default();
-
-    chat_data.write().voice_connection = Some(poly_client::VoiceConnection {
-        channel_id: channel_id.clone(),
-        server_id: current_server
-            .as_ref()
-            .map(|s| s.id.clone())
-            .unwrap_or_default(),
-        channel_name: current_channel
-            .as_ref()
-            .map(|c| c.name.clone())
-            .unwrap_or_default(),
-        server_name: current_server
-            .as_ref()
-            .map(|s| s.name.clone())
-            .unwrap_or_default(),
-        backend: voice_backend,
-        account_id: voice_account_id.clone(),
-        instance_id: voice_instance_id,
-        is_muted: false,
-        is_deafened: false,
-        is_streaming: false,
-        is_video_on: false,
-    });
-
-    // Update nav state
-    app_state.write().nav.selected_channel = Some(channel_id);
 }

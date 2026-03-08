@@ -188,6 +188,87 @@ async fn persist_setup_completion(account_id: String) {
     }
 }
 
+fn router_config(
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+) -> dioxus_router::RouterConfig<Route> {
+    dioxus_router::RouterConfig::default().on_update(
+        move |state: dioxus_router::GenericRouterContext<Route>| {
+            let route = state.current();
+            sync_route_to_app_state(&route, app_state);
+
+            let route_account_id: Option<&str> = match &route {
+                Route::DmsHome { account_id, .. }
+                | Route::DmChat { account_id, .. }
+                | Route::ServerHome { account_id, .. }
+                | Route::ServerChat { account_id, .. }
+                | Route::ServerSettingsRoute { account_id, .. }
+                | Route::FriendsRoute { account_id, .. }
+                | Route::AccountSettingsRoute { account_id, .. } => Some(account_id.as_str()),
+                _ => None,
+            };
+
+            if let Some(aid) = route_account_id {
+                let ids = client_manager.read().active_account_ids();
+                if !ids.is_empty() {
+                    let is_known = ids.iter().any(|id| id == aid);
+                    if !is_known {
+                        let mut next_app_state = app_state;
+                        next_app_state.write().settings_section = SettingsSection::Accounts;
+                        return Some(NavigationTarget::Internal(Route::SettingsRoute));
+                    }
+                }
+            }
+
+            if matches!(route, Route::PageNotFound { .. } | Route::Root) {
+                let cm = client_manager.read();
+                if cm.demo_active {
+                    let last_route = app_state
+                        .read()
+                        .nav
+                        .account_last_routes
+                        .values()
+                        .find_map(|url| url.parse::<Route>().ok());
+                    if let Some(stored_route) = last_route {
+                        return Some(NavigationTarget::Internal(stored_route));
+                    }
+                    return Some(NavigationTarget::Internal(Route::DmsHome {
+                        backend: "demo".to_string(),
+                        instance_id: "demo".to_string(),
+                        account_id: "demo-cat".to_string(),
+                    }));
+                }
+                drop(cm);
+                let mut next_app_state = app_state;
+                next_app_state.write().settings_section = SettingsSection::Accounts;
+                return Some(NavigationTarget::Internal(Route::SettingsRoute));
+            }
+
+            None
+        },
+    )
+}
+
+#[component]
+fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
+    rsx! {
+        if !storage_ready {
+            div { class: "storage-loading" }
+        } else if !setup_complete {
+            SetupWizard {
+                on_complete: move |account_id: String| {
+                    app_state.write().is_setup_complete = true;
+                    spawn(async move {
+                        persist_setup_completion(account_id).await;
+                    });
+                },
+            }
+        } else {
+            Router::<Route> { config: move || router_config(app_state, use_context()) }
+        }
+    }
+}
+
 // ── App component ─────────────────────────────────────────────────────────────
 
 /// Root application component.
@@ -202,7 +283,7 @@ async fn persist_setup_completion(account_id: String) {
 /// - `Signal<ChatData>` — reactive chat data store
 #[component]
 pub fn App() -> Element {
-    let mut app_state = use_signal(AppState::default);
+    let app_state = use_signal(AppState::default);
     let storage_ready = use_signal(|| false);
     // DECISION(DX-I18N-1): Signal<String> context; use_locale() in children subscribes.
     crate::i18n::provide_locale_context();
@@ -235,122 +316,18 @@ pub fn App() -> Element {
         .await;
     });
     let theme_css = crate::theme::generate_css(&theme_config.read());
+    let storage_ready_now = *storage_ready.read();
+    let setup_complete = app_state.read().is_setup_complete;
+
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }
         style { id: "poly-theme", "{theme_css}" }
         div { class: "poly-app",
             ElectronTitleBar {}
-            if !*storage_ready.read() {
-                div { class: "storage-loading" }
-            } else if !app_state.read().is_setup_complete {
-                SetupWizard {
-                    on_complete: move |account_id: String| {
-                        app_state.write().is_setup_complete = true;
-                        spawn(async move {
-                            // Router handles initial route via on_update redirect.
-                            // TODO(phase-2.7): If no accounts exist, prompt user to
-                            // add one via a modal or navigate to settings after mount.
-                            persist_setup_completion(account_id).await;
-                        });
-                    },
-                }
-            } else {
-                Router::<Route> {
-                    config: move || {
-                        dioxus_router::RouterConfig::default()
-                            .on_update(move |state: dioxus_router::GenericRouterContext<Route>| {
-                                let route = state.current();
-                                sync_route_to_app_state(&route, app_state);
-
-                                // If the route is account-scoped and that account no
-                                // longer exists (demo toggled off, account removed, …)
-                                // redirect to Settings › Accounts rather than rendering
-                                // a broken empty shell.
-                                let route_account_id: Option<&str> = match &route {
-                                    Route::DmsHome { account_id, .. }
-                                    | Route::DmChat { account_id, .. }
-                                    | Route::ServerHome { account_id, .. }
-                                    | Route::ServerChat { account_id, .. }
-                                    | Route::ServerSettingsRoute { account_id, .. }
-                                    | Route::FriendsRoute { account_id, .. }
-                                    | Route::AccountSettingsRoute { account_id, .. } => {
-                                        Some(account_id.as_str())
-                                    }
-                                    _ => None,
-                                };
-                                if let Some(aid) = route_account_id {
-                                    // Only redirect to Settings if accounts are actually loaded
-                                    // but the requested account is unknown.
-                                    //
-                                    // Guarding on `!ids.is_empty()` handles two race conditions
-                                    // on hard refresh (F5):
-                                    //   1. Router fires on_update before init_storage runs
-                                    //      → client_manager is empty → skip redirect.
-                                    //   2. init_storage sets is_setup_complete=true (Router
-                                    //      mounts early) and then yields into async toggle_demo
-                                    //      → client_manager still empty → skip redirect.
-                                    //
-                                    // Once toggle_demo completes and accounts populate,
-                                    // the signal change re-triggers on_update. At that point
-                                    // ids is non-empty and the "demo" account IS known →
-                                    // no redirect, AccountServerBar (Bar 2) stays visible.
-                                    let ids = client_manager.read().active_account_ids();
-                                    if !ids.is_empty() {
-                                        let is_known = ids.iter().any(|id| id == aid);
-                                        if !is_known {
-                                            let mut as_ = app_state;
-                                            as_.write().settings_section =
-                                                SettingsSection::Accounts;
-                                            return Some(
-                                                NavigationTarget::Internal(Route::SettingsRoute),
-                                            );
-                                        }
-
-                                        // Redirect root path and catch-all 404 to the best
-                                        // active account's DMs route.
-                                        //
-                                        // Priority:
-                                        //   1. Demo account (if active)     → /demo/demo/dms
-                                        //   2. First real account (future)  → /:backend/:id/dms
-                                        //   3. No accounts at all           → /settings (Accounts tab)
-                                        //
-                                        // TODO(phase-2.7): Read last-active account from AppSettings
-                                        // and prefer real accounts over demo when multiple exist.
-                                    }
-                                }
-                                if matches!(route, Route::PageNotFound { .. } | Route::Root) {
-                                    let cm = client_manager.read();
-                                    if cm.demo_active {
-                                        // Restore the last-visited route for the demo account,
-                                        // if one was persisted from a previous session.
-                                        // This makes the app feel like it "remembers" where
-                                        // you were instead of always landing on DmsHome.
-                                        let last_route = app_state
-                                            .read()
-                                            .nav
-                                            .account_last_routes
-                                            .values()
-                                            .find_map(|url| url.parse::<Route>().ok());
-                                        if let Some(stored_route) = last_route {
-                                            return Some(NavigationTarget::Internal(stored_route));
-                                        }
-                                        return Some(
-                                            NavigationTarget::Internal(Route::DmsHome {
-                                                backend: "demo".to_string(),
-                                                instance_id: "demo".to_string(),
-                                                account_id: "demo-cat".to_string(),
-                                            }),
-                                        );
-                                    }
-                                    drop(cm);
-                                    let mut as_ = app_state;
-                                    as_.write().settings_section = SettingsSection::Accounts;
-                                    return Some(NavigationTarget::Internal(Route::SettingsRoute));
-                                }
-                                None
-                            })
-                    },
-                }
+            AppBody {
+                storage_ready: storage_ready_now,
+                setup_complete,
+                app_state,
             }
         }
     }

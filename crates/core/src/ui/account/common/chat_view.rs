@@ -137,6 +137,15 @@ struct SearchFilterSuggestion {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+struct SearchFilterOption {
+    icon: &'static str,
+    title: String,
+    subtitle: String,
+    token: String,
+    completion_token: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct PendingAttachmentPreview {
     id: String,
     filename: String,
@@ -177,6 +186,87 @@ const SEARCH_FILTER_SUGGESTIONS: &[SearchFilterSuggestion] = &[
         token: "has:link from:alice",
     },
 ];
+
+fn completion_token_for_search_filter(token: &str) -> String {
+    if token.starts_with("from:") {
+        return "from:".to_string();
+    }
+    if token.starts_with("in:#") {
+        return "in:#".to_string();
+    }
+    if token.starts_with("has:") {
+        return "has:".to_string();
+    }
+    if token.starts_with("mentions:") {
+        return "mentions:".to_string();
+    }
+    token.to_string()
+}
+
+fn build_search_filter_options(current_channel_name: &str) -> Vec<SearchFilterOption> {
+    SEARCH_FILTER_SUGGESTIONS
+        .iter()
+        .map(|suggestion| {
+            let token = if suggestion.token == "in:#current" {
+                format!("in:#{}", current_channel_name)
+            } else {
+                suggestion.token.to_string()
+            };
+
+            SearchFilterOption {
+                icon: suggestion.icon,
+                title: t(suggestion.title_key),
+                subtitle: t(suggestion.subtitle_key),
+                completion_token: completion_token_for_search_filter(&token),
+                token,
+            }
+        })
+        .collect()
+}
+
+fn active_search_filter_term(raw_query: &str) -> &str {
+    raw_query
+        .split_whitespace()
+        .last()
+        .map(str::trim)
+        .unwrap_or("")
+}
+
+fn filter_search_filter_options(
+    options: &[SearchFilterOption],
+    raw_query: &str,
+) -> Vec<SearchFilterOption> {
+    let term = active_search_filter_term(raw_query).to_ascii_lowercase();
+    if term.is_empty() {
+        return options.to_vec();
+    }
+
+    options
+        .iter()
+        .filter(|option| {
+            option
+                .completion_token
+                .to_ascii_lowercase()
+                .starts_with(&term)
+                || option.token.to_ascii_lowercase().contains(&term)
+                || option.title.to_ascii_lowercase().contains(&term)
+                || option.subtitle.to_ascii_lowercase().contains(&term)
+        })
+        .cloned()
+        .collect()
+}
+
+fn apply_search_filter_completion(existing: &str, completion_token: &str) -> String {
+    let mut parts = existing.split_whitespace().collect::<Vec<_>>();
+    if parts.is_empty() {
+        return format!("{completion_token} ");
+    }
+
+    parts.pop();
+    parts.push(completion_token);
+
+    format!("{} ", parts.join(" "))
+}
 
 fn message_plain_text(content: &MessageContent) -> String {
     match content {
@@ -543,6 +633,7 @@ pub fn ChatView() -> Element {
     let mut pinned_messages = use_signal(Vec::<Message>::new);
     let mut notifications_muted = use_signal(|| false);
     let mut show_search_filters = use_signal(|| false);
+    let mut active_search_filter_idx = use_signal(|| 0_usize);
     let mut pending_attachments = use_signal(Vec::<PendingAttachmentPreview>::new);
     // Slash command popup state
     let mut command_suggestions = use_signal(Vec::<ChatCommand>::new);
@@ -559,6 +650,13 @@ pub fn ChatView() -> Element {
     let group_members = chat_data.read().active_group_members.clone();
     let search_query_input_value = search_query.read().clone();
     let search_query_value = search_query_input_value.trim().to_string();
+    let current_channel_name = current_channel
+        .as_ref()
+        .map(|channel| channel.name.clone())
+        .unwrap_or_default();
+    let search_filter_options = build_search_filter_options(&current_channel_name);
+    let filtered_search_filter_options =
+        filter_search_filter_options(&search_filter_options, &search_query_input_value);
     let is_dm_channel = channel_id.as_deref().unwrap_or_default().starts_with("dm-");
     let is_group_channel = channel_id
         .as_deref()
@@ -574,6 +672,8 @@ pub fn ChatView() -> Element {
         contextual_search_placeholder(current_channel.as_ref(), is_dm_channel, is_group_channel);
     let compose_placeholder =
         contextual_compose_placeholder(current_channel.as_ref(), is_dm_channel, is_group_channel);
+    let search_filter_channel_name_onfocus = current_channel_name.clone();
+    let search_filter_channel_name_oninput = current_channel_name.clone();
 
     let self_user_id: String = {
         let state = app_state.read();
@@ -915,7 +1015,7 @@ pub fn ChatView() -> Element {
                                 }
                                 if is_group_channel {
                                     button {
-                                        class: "header-btn",
+                                        class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
                                         title: t("chat-toggle-members"),
                                         onclick: move |_| {
                                             let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -927,7 +1027,7 @@ pub fn ChatView() -> Element {
                                     }
                                 } else if is_dm_channel {
                                     button {
-                                        class: "header-btn",
+                                        class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
                                         title: t("chat-toggle-contact"),
                                         onclick: move |_| {
                                             let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -939,7 +1039,7 @@ pub fn ChatView() -> Element {
                                     }
                                 } else {
                                     button {
-                                        class: if app_state.read().nav.right_sidebar_visible { "header-btn active" } else { "header-btn" },
+                                        class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
                                         title: t("chat-toggle-members"),
                                         onclick: move |_| {
                                             let current = app_state.read().nav.right_sidebar_visible;
@@ -960,22 +1060,77 @@ pub fn ChatView() -> Element {
                                     placeholder: "{search_placeholder}",
                                     value: "{search_query_input_value}",
                                     onfocus: move |_| {
-                                        let empty = search_query.read().trim().is_empty();
-                                        show_search_filters.set(empty);
-                                        if !empty {
+                                        let raw = search_query.read().clone();
+                                        let has_matches = !filter_search_filter_options(
+                                                &build_search_filter_options(&search_filter_channel_name_onfocus),
+                                                &raw,
+                                            )
+                                            .is_empty();
+                                        active_search_filter_idx.set(0);
+                                        show_search_filters.set(has_matches);
+                                        if !raw.trim().is_empty() {
                                             utility_panel.set(Some(ChatUtilityPanel::Search));
                                         }
                                     },
                                     oninput: move |evt| {
                                         let next_value = evt.value();
                                         let is_empty = next_value.trim().is_empty();
+                                        let has_matches = !filter_search_filter_options(
+                                                &build_search_filter_options(&search_filter_channel_name_oninput),
+                                                &next_value,
+                                            )
+                                            .is_empty();
                                         search_query.set(next_value);
-                                        show_search_filters.set(is_empty);
+                                        active_search_filter_idx.set(0);
+                                        show_search_filters.set(has_matches);
                                         if is_empty {
                                             utility_panel.set(None);
                                             search_hits.set(Vec::new());
                                         } else {
                                             utility_panel.set(Some(ChatUtilityPanel::Search));
+                                        }
+                                    },
+                                    onkeydown: move |evt: KeyboardEvent| {
+                                        if filtered_search_filter_options.is_empty() || !*show_search_filters.read() {
+                                            if evt.key() == Key::Escape {
+                                                show_search_filters.set(false);
+                                            }
+                                            return;
+                                        }
+
+                                        let item_count = filtered_search_filter_options.len();
+                                        match evt.key() {
+                                            Key::ArrowDown => {
+                                                evt.prevent_default();
+                                                let next = (*active_search_filter_idx.read() + 1) % item_count;
+                                                active_search_filter_idx.set(next);
+                                            }
+                                            Key::ArrowUp => {
+                                                evt.prevent_default();
+                                                let current = *active_search_filter_idx.read();
+                                                let next = if current == 0 { item_count - 1 } else { current - 1 };
+                                                active_search_filter_idx.set(next);
+                                            }
+                                            Key::Enter | Key::Tab => {
+                                                evt.prevent_default();
+                                                let current = (*active_search_filter_idx.read()).min(item_count - 1);
+                                                if let Some(option) = filtered_search_filter_options.get(current) {
+                                                    let existing_query = search_query.read().clone();
+                                                    let next_query = apply_search_filter_completion(
+                                                        &existing_query,
+                                                        &option.completion_token,
+                                                    );
+                                                    search_query.set(next_query);
+                                                    active_search_filter_idx.set(0);
+                                                    show_search_filters.set(false);
+                                                    utility_panel.set(Some(ChatUtilityPanel::Search));
+                                                }
+                                            }
+                                            Key::Escape => {
+                                                evt.prevent_default();
+                                                show_search_filters.set(false);
+                                            }
+                                            _ => {}
                                         }
                                     },
                                 }
@@ -986,22 +1141,21 @@ pub fn ChatView() -> Element {
                                         onclick: move |_| {
                                             search_query.set(String::new());
                                             search_hits.set(Vec::new());
+                                            active_search_filter_idx.set(0);
                                             utility_panel.set(None);
                                             show_search_filters.set(true);
                                         },
                                         "✕"
                                     }
                                 }
-                                if *show_search_filters.read() {
+                                if *show_search_filters.read() && !filtered_search_filter_options.is_empty() {
                                     SearchFilterPopup {
-                                        current_channel_name: current_channel.as_ref().map(|channel| channel.name.clone()).unwrap_or_default(),
+                                        suggestions: filtered_search_filter_options.clone(),
+                                        active_index: *active_search_filter_idx.read(),
                                         on_append_filter: move |token: String| {
-                                            let existing = search_query.read().trim().to_string();
-                                            if existing.is_empty() {
-                                                search_query.set(token);
-                                            } else {
-                                                search_query.set(format!("{existing} {token}"));
-                                            }
+                                            let next_value = apply_search_filter_completion(&search_query.read(), &token);
+                                            search_query.set(next_value);
+                                            active_search_filter_idx.set(0);
                                             show_search_filters.set(false);
                                             utility_panel.set(Some(ChatUtilityPanel::Search));
                                         },
@@ -1024,10 +1178,10 @@ pub fn ChatView() -> Element {
                                     spawn(async move {
                                         let mut eval = document::eval(
                                             r#"
-                                                                                                                                                        let el = document.getElementById('message-list-scroll');
-                                                                                                                                                        if (el && el.scrollTop < 100) { dioxus.send(true); }
-                                                                                                                                                        else { dioxus.send(false); }
-                                                                                                                                                    "#,
+                                                                                                                                                                                                                let el = document.getElementById('message-list-scroll');
+                                                                                                                                                                                                                if (el && el.scrollTop < 100) { dioxus.send(true); }
+                                                                                                                                                                                                                else { dioxus.send(false); }
+                                                                                                                                                                                                            "#,
                                         );
                                         if let Ok(near_top) = eval.recv::<bool>().await && near_top {
                                             tracing::trace!("Scroll near top — would load more messages");
@@ -1329,9 +1483,9 @@ pub fn ChatView() -> Element {
                                                 onclick: move |_| {
                                                     document::eval(
                                                         r#"
-                                                                                                                                                                                                                                                    let input = document.getElementById('poly-file-input');
-                                                                                                                                                                                                                                                    if (input) { input.click(); }
-                                                                                                                                                                                                                                                "#,
+                                                                                                                                                                                                                                                                                                                                            let input = document.getElementById('poly-file-input');
+                                                                                                                                                                                                                                                                                                                                            if (input) { input.click(); }
+                                                                                                                                                                                                                                                                                                                                        "#,
                                                     );
                                                 },
                                                 "➕"
@@ -1353,7 +1507,7 @@ pub fn ChatView() -> Element {
                                                             let matches = filtered_slash_commands(query, &all_cmds);
                                                             if !matches.is_empty() {
                                                                 show_command_popup.set(true);
-                                                            }
+                                                            } else {
                                                                 show_command_popup.set(false);
                                                             }
                                                             active_command_idx.set(0);
@@ -1737,7 +1891,8 @@ fn ChatUtilityRail(
 
 #[component]
 fn SearchFilterPopup(
-    current_channel_name: String,
+    suggestions: Vec<SearchFilterOption>,
+    active_index: usize,
     on_append_filter: EventHandler<String>,
     on_close: EventHandler<()>,
 ) -> Element {
@@ -1748,12 +1903,13 @@ fn SearchFilterPopup(
                 button { class: "close-btn", onclick: move |_| on_close.call(()), "✕" }
             }
             div { class: "search-filter-list",
-                for suggestion in SEARCH_FILTER_SUGGESTIONS {
+                for (index , suggestion) in suggestions.into_iter().enumerate() {
                     SearchFilterRow {
                         icon: suggestion.icon,
-                        title: t(suggestion.title_key),
-                        subtitle: t(suggestion.subtitle_key),
-                        token: if suggestion.token == "in:#current" { format!("in:#{}", current_channel_name) } else { suggestion.token.to_string() },
+                        title: suggestion.title,
+                        subtitle: suggestion.subtitle,
+                        token: suggestion.completion_token,
+                        selected: index == active_index,
                         on_click: move |token| on_append_filter.call(token),
                     }
                 }
@@ -1768,11 +1924,13 @@ fn SearchFilterRow(
     title: String,
     subtitle: String,
     token: String,
+    #[props(default)] selected: bool,
     on_click: EventHandler<String>,
 ) -> Element {
     rsx! {
         button {
-            class: "search-filter-row",
+            class: if selected { "search-filter-row selected" } else { "search-filter-row" },
+            aria_selected: if selected { "true" } else { "false" },
             onclick: move |_| on_click.call(token.clone()),
             span { class: "search-filter-icon", "{icon}" }
             div { class: "search-filter-copy",
@@ -2288,23 +2446,29 @@ fn MsgContextMenuOverlay(
     let mid_copy_id = menu.message_id.clone();
     let txt_copy = menu.message_text.clone();
 
+    // Data-driven menu items (label, icon)
+    let stub_items: &[(&str, &str)] = &[
+        ("msg-reply", "↩"),
+        ("msg-forward", "➡"),
+        ("msg-apps", ""),
+        ("msg-mark-unread", ""),
+        ("msg-copy-link", ""),
+        ("msg-speak", ""),
+    ];
+
     rsx! {
-        // Transparent backdrop — closes menu on click
         div {
             class: "context-menu-backdrop",
             onclick: move |_| msg_context_menu.set(None),
-            oncontextmenu: move |evt| {
-                evt.prevent_default();
-            },
+            oncontextmenu: move |evt| evt.prevent_default(),
         }
 
-        // Floating context menu
         div {
             class: "context-menu msg-context-menu",
             style: "left: {x}px; top: {y}px;",
             onclick: move |evt| evt.stop_propagation(),
 
-            // Quick reactions row
+            // Quick reactions
             div { class: "msg-context-quick-reactions",
                 for emoji in QUICK_REACTIONS {
                     {
@@ -2325,32 +2489,28 @@ fn MsgContextMenuOverlay(
             }
 
             div { class: "context-menu-separator" }
-
-            // Add Reaction
             ContextMenuItemSimple {
                 label: t("reaction-add"),
                 has_arrow: true,
                 onclick: move |_| msg_context_menu.set(None),
             }
 
-            // Reply
-            ContextMenuItemSimple {
-                label: t("msg-reply"),
-                icon: "↩",
-                onclick: move |_| {
-                    tracing::debug!("Reply (stub)");
-                    msg_context_menu.set(None);
-                },
-            }
-
-            // Forward
-            ContextMenuItemSimple {
-                label: t("msg-forward"),
-                icon: "➡",
-                onclick: move |_| {
-                    tracing::debug!("Forward (stub)");
-                    msg_context_menu.set(None);
-                },
+            // Stub items
+            for (key , icon) in stub_items {
+                {
+                    let key = key.to_string();
+                    let icon_str = icon.to_string();
+                    rsx! {
+                        ContextMenuItemSimple {
+                            label: t(&key),
+                            icon: icon_str,
+                            onclick: move |_| {
+                                tracing::debug!("{} (stub)", key);
+                                msg_context_menu.set(None);
+                            },
+                        }
+                    }
+                }
             }
 
             // Copy Text
@@ -2369,43 +2529,8 @@ fn MsgContextMenuOverlay(
                 },
             }
 
-            // Apps
-            ContextMenuItemSimple {
-                label: t("msg-apps"),
-                has_arrow: true,
-                onclick: move |_| msg_context_menu.set(None),
-            }
-
-            // Mark Unread
-            ContextMenuItemSimple {
-                label: t("msg-mark-unread"),
-                onclick: move |_| {
-                    tracing::debug!("Mark unread (stub)");
-                    msg_context_menu.set(None);
-                },
-            }
-
-            // Copy Message Link
-            ContextMenuItemSimple {
-                label: t("msg-copy-link"),
-                onclick: move |_| {
-                    tracing::debug!("Copy link (stub)");
-                    msg_context_menu.set(None);
-                },
-            }
-
-            // Speak Message
-            ContextMenuItemSimple {
-                label: t("msg-speak"),
-                onclick: move |_| {
-                    tracing::debug!("Speak (stub)");
-                    msg_context_menu.set(None);
-                },
-            }
-
             div { class: "context-menu-separator" }
 
-            // Report Message — only for others' messages
             if !is_own {
                 ContextMenuItemSimple {
                     label: t("msg-report"),
@@ -2417,7 +2542,6 @@ fn MsgContextMenuOverlay(
                 }
             }
 
-            // Delete — only for own messages
             if is_own {
                 ContextMenuItemSimple {
                     label: t("msg-delete"),
@@ -2430,7 +2554,6 @@ fn MsgContextMenuOverlay(
                 }
             }
 
-            // Copy Message ID
             ContextMenuItemSimple {
                 label: t("msg-copy-id"),
                 onclick: {

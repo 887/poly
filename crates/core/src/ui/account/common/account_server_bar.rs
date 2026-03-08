@@ -9,7 +9,6 @@
 //! 3. Separator
 //! 4. All servers for the active account (drag-and-drop reorderable)
 //! 5. Spacer
-//! 6. Account Settings gear
 //!
 //! ## Components
 //! - [`AccountServerBar`] — root, orchestrates the column
@@ -28,10 +27,75 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use dioxus::prelude::*;
 
+/// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
+fn get_ordered_servers(
+    chat_data: &ChatData,
+    account_id: &str,
+    account_servers: &[poly_client::Server],
+) -> Vec<poly_client::Server> {
+    if let Some(order) = chat_data.account_server_order.get(account_id) {
+        let mut ordered: Vec<_> = order
+            .iter()
+            .filter_map(|id| account_servers.iter().find(|s| &s.id == id))
+            .cloned()
+            .collect();
+        for s in account_servers {
+            if !order.contains(&s.id) {
+                ordered.push(s.clone());
+            }
+        }
+        ordered
+    } else {
+        account_servers.to_vec()
+    }
+}
+
+/// Compute the new server order after a Bar-2 drag-and-drop reorder.
+fn compute_bar2_reorder(
+    existing: Option<&Vec<String>>,
+    all_servers: &[poly_client::Server],
+    account_id: &str,
+    drag_id: &str,
+    target_id: &str,
+) -> Vec<String> {
+    let mut order: Vec<String> = existing.cloned().unwrap_or_else(|| {
+        all_servers
+            .iter()
+            .filter(|s| s.account_id == account_id)
+            .map(|s| s.id.clone())
+            .collect()
+    });
+    if !order.contains(&drag_id.to_string()) {
+        order.push(drag_id.to_string());
+    }
+    if let Some(from) = order.iter().position(|x| x == drag_id) {
+        order.remove(from);
+        if let Some(to) = order.iter().position(|x| x == target_id) {
+            order.insert(to, drag_id.to_string());
+        } else {
+            order.push(drag_id.to_string());
+        }
+    }
+    order
+}
+
+/// Apply a Bar-2 drop event: update `ChatData` with the new server order.
+fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id: &str) {
+    let order = compute_bar2_reorder(
+        cd.account_server_order.get(account_id),
+        &cd.servers,
+        account_id,
+        drag_id,
+        target_id,
+    );
+    cd.account_server_order
+        .insert(account_id.to_string(), order);
+}
+
 /// Account server bar — second sidebar column, per-account.
 ///
 /// Only rendered when `active_account_id` is `Some(...)`.
-/// Shows DMs, notifications, all servers for this account, and account settings.
+/// Shows DMs, notifications, and all servers for this account.
 #[component]
 pub fn AccountServerBar() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -67,22 +131,7 @@ pub fn AccountServerBar() -> Element {
     // Falls back to default (insertion) order if no ordering has been set.
     let ordered_account_servers = {
         let cd = chat_data.read();
-        if let Some(order) = cd.account_server_order.get(&account_id) {
-            let mut ordered: Vec<_> = order
-                .iter()
-                .filter_map(|id| account_servers.iter().find(|s| &s.id == id))
-                .cloned()
-                .collect();
-            // Append servers not yet in the saved order (newly joined servers)
-            for s in &account_servers {
-                if !order.contains(&s.id) {
-                    ordered.push(s.clone());
-                }
-            }
-            ordered
-        } else {
-            account_servers.clone()
-        }
+        get_ordered_servers(&cd, &account_id, &account_servers)
     };
 
     // Count unread notifications for this account
@@ -125,24 +174,8 @@ pub fn AccountServerBar() -> Element {
                 }
             }
 
-            // Spacer
+            // Spacer keeps the icon rail aligned above the shared bottom account bar.
             div { class: "sidebar-spacer" }
-
-            // Account settings gear — active only when viewing account-scoped settings,
-            // NOT when viewing server settings (ServerSettingsRoute sets selected_server).
-            div {
-                class: if current_view == View::Settings && selected_server.is_none() { "server-icon active" } else { "server-icon" },
-                onclick: move |_| {
-                    navigator()
-                        .push(Route::AccountSettingsRoute {
-                            backend: backend_slug.clone(),
-                            instance_id: instance_id.clone(),
-                            account_id: account_id.clone(),
-                        });
-                },
-                title: "{t(\"account-settings\")}",
-                div { class: "icon-settings", "⚙" }
-            }
         }
     }
 }
@@ -171,12 +204,6 @@ fn AccountServerIcon(
     let mut chat_data: Signal<ChatData> = use_context();
 
     let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
-    let first_letter: String = server_name
-        .chars()
-        .next()
-        .map(|c| c.to_string())
-        .unwrap_or_default();
-    let icon_color = user_color(&server_id);
     let item_class = match (is_selected, is_drag_over) {
         (true, true) => "server-icon active drag-over-target",
         (true, false) => "server-icon active",
@@ -184,167 +211,153 @@ fn AccountServerIcon(
         (false, false) => "server-icon",
     };
 
+    // Pre-build closures to keep the RSX block compact.
+    let sid_ctx = server_id.clone();
+    let sname_ctx = server_name.clone();
+    let aid_ctx = account_id.clone();
+    let iid_ctx = instance_id.clone();
+    let bslug_ctx = backend_slug.clone();
+    let on_context_menu = move |evt: Event<MouseData>| {
+        evt.prevent_default();
+        evt.stop_propagation();
+        let coords = evt.client_coordinates();
+        app_state.write().context_menu = Some(ContextMenuState {
+            x: coords.x,
+            y: coords.y,
+            server_id: sid_ctx.clone(),
+            server_name: sname_ctx.clone(),
+            account_id: aid_ctx.clone(),
+            instance_id: iid_ctx.clone(),
+            backend_slug: bslug_ctx.clone(),
+        });
+    };
+
+    let sid_ds = server_id.clone();
+    let on_drag_start = move |_: Event<DragData>| {
+        let mut cd = chat_data.write();
+        cd.dragging_server_id = Some(sid_ds.clone());
+        cd.drag_source = DragSource::AccountServer;
+    };
+
+    let sid_do = server_id.clone();
+    let on_drag_over = move |evt: Event<DragData>| {
+        evt.prevent_default();
+        evt.stop_propagation();
+        chat_data.write().drag_over_id = Some(sid_do.clone());
+    };
+
+    let sid_dl = server_id.clone();
+    let on_drag_leave = move |_: Event<DragData>| {
+        if chat_data.read().drag_over_id.as_deref() == Some(sid_dl.as_str()) {
+            chat_data.write().drag_over_id = None;
+        }
+    };
+
+    let tid = server_id.clone();
+    let aid_drop = account_id.clone();
+    let on_drop = move |evt: Event<DragData>| {
+        evt.prevent_default();
+        evt.stop_propagation();
+        let mut cd = chat_data.write();
+        let dragging = cd.dragging_server_id.clone();
+        let src = cd.drag_source.clone();
+        cd.drag_over_id = None;
+        let Some(drag_id) = dragging else {
+            cd.dragging_server_id = None;
+            cd.drag_source = DragSource::None;
+            return;
+        };
+        if matches!(src, DragSource::AccountServer) && drag_id != tid {
+            apply_bar2_drop(&mut cd, &drag_id, &tid, &aid_drop);
+        }
+        cd.dragging_server_id = None;
+        cd.drag_source = DragSource::None;
+    };
+
+    let on_drag_end = move |_: Event<DragData>| {
+        let mut cd = chat_data.write();
+        cd.dragging_server_id = None;
+        cd.drag_source = DragSource::None;
+        cd.drag_over_id = None;
+    };
+
+    let sid_click = server_id.clone();
+    let bslug_click = backend_slug.clone();
+    let aid_click = account_id.clone();
+    let on_click = move |_: Event<MouseData>| {
+        app_state.write().nav.selected_server = Some(sid_click.clone());
+        app_state.write().nav.selected_channel = None;
+        let sid2 = sid_click.clone();
+        spawn(async move {
+            super::super::super::favorites_sidebar::load_server_data(
+                sid2,
+                app_state,
+                client_manager,
+                chat_data,
+            )
+            .await;
+        });
+        navigator().push(Route::ServerHome {
+            backend: bslug_click.clone(),
+            instance_id: instance_id.clone(),
+            account_id: aid_click.clone(),
+            server_id: sid_click.clone(),
+        });
+    };
+
     rsx! {
         div {
             class: "{item_class}",
             draggable: "true",
             title: "{server_name}",
+            oncontextmenu: on_context_menu,
+            ondragstart: on_drag_start,
+            ondragover: on_drag_over,
+            ondragleave: on_drag_leave,
+            ondrop: on_drop,
+            ondragend: on_drag_end,
+            onclick: on_click,
 
-            // Right-click → open context menu
-            oncontextmenu: {
-                let sid = server_id.clone();
-                let sname = server_name.clone();
-                let aid = account_id.clone();
-                let iid = instance_id.clone();
-                let bslug = backend_slug.clone();
-                move |evt: Event<MouseData>| {
-                    evt.prevent_default();
-                    evt.stop_propagation();
-                    let coords = evt.client_coordinates();
-                    app_state.write().context_menu = Some(ContextMenuState {
-                        x: coords.x,
-                        y: coords.y,
-                        server_id: sid.clone(),
-                        server_name: sname.clone(),
-                        account_id: aid.clone(),
-                        instance_id: iid.clone(),
-                        backend_slug: bslug.clone(),
-                    });
-                }
-            },
-
-            // Drag start — mark as dragging from Bar 2
-            ondragstart: {
-                let sid = server_id.clone();
-                move |_| {
-                    let mut cd = chat_data.write();
-                    cd.dragging_server_id = Some(sid.clone());
-                    cd.drag_source = DragSource::AccountServer;
-                }
-            },
-
-            // Drag over this item — set as Bar 2 reorder target
-            ondragover: {
-                let sid = server_id.clone();
-                move |evt: Event<DragData>| {
-                    evt.prevent_default();
-                    evt.stop_propagation();
-                    chat_data.write().drag_over_id = Some(sid.clone());
-                }
-            },
-
-            // Drag leave — clear highlight if we are still the target
-            ondragleave: {
-                let sid = server_id.clone();
-                move |_| {
-                    let currently_us =
-                        chat_data.read().drag_over_id.as_deref()
-                        == Some(sid.as_str());
-                    if currently_us {
-                        chat_data.write().drag_over_id = None;
-                    }
-                }
-            },
-
-            // Drop on this item — reorder within Bar 2
-            ondrop: {
-                let tid = server_id.clone();
-                let aid_drop = account_id.clone();
-                move |evt: Event<DragData>| {
-                    evt.prevent_default();
-                    evt.stop_propagation();
-                    let mut cd = chat_data.write();
-                    let dragging = cd.dragging_server_id.clone();
-                    let src = cd.drag_source.clone();
-                    cd.drag_over_id = None;
-                    let Some(drag_id) = dragging else {
-                        cd.dragging_server_id = None;
-                        cd.drag_source = DragSource::None;
-                        return;
-                    };
-                    if matches!(src, DragSource::AccountServer) && drag_id != tid {
-                        let base_order: Vec<String> = cd
-                            .account_server_order
-                            .get(&aid_drop)
-                            .cloned()
-                            .unwrap_or_else(|| {
-                                cd.servers
-                                    .iter()
-                                    .filter(|s| s.account_id == aid_drop)
-                                    .map(|s| s.id.clone())
-                                    .collect()
-                            });
-                        let mut order = base_order;
-                        if !order.contains(&drag_id) {
-                            order.push(drag_id.clone());
-                        }
-                        if let Some(from) = order.iter().position(|x| *x == drag_id) {
-                            order.remove(from);
-                            if let Some(to) = order.iter().position(|x| *x == tid) {
-                                order.insert(to, drag_id);
-                            } else {
-                                order.push(drag_id);
-                            }
-                        }
-                        cd.account_server_order.insert(aid_drop.clone(), order);
-                    }
-                    cd.dragging_server_id = None;
-                    cd.drag_source = DragSource::None;
-                }
-            },
-
-            // Drag end — always clean up
-            ondragend: move |_| {
-                let mut cd = chat_data.write();
-                cd.dragging_server_id = None;
-                cd.drag_source = DragSource::None;
-                cd.drag_over_id = None;
-            },
-
-            // Click — navigate to server home
-            onclick: {
-                let sid = server_id.clone();
-                let bslug = backend_slug.clone();
-                let aid = account_id.clone();
-                move |_| {
-                    app_state.write().nav.selected_server = Some(sid.clone());
-                    app_state.write().nav.selected_channel = None;
-                    let sid2 = sid.clone();
-                    spawn(async move {
-                        super::super::super::favorites_sidebar::load_server_data(
-                                sid2,
-                                app_state,
-                                client_manager,
-                                chat_data,
-                            )
-                            .await;
-                    });
-                    navigator()
-                        .push(Route::ServerHome {
-                            backend: bslug.clone(),
-                            instance_id: instance_id.clone(),
-                            account_id: aid.clone(),
-                            server_id: sid.clone(),
-                        });
-                }
-            },
-
-            if let Some(ref url) = icon_url {
-                img {
-                    class: "server-icon-image",
-                    src: "{url}",
-                    alt: "{server_name}",
-                }
-            } else {
-                div {
-                    class: "server-icon-letter",
-                    style: "background-color: {icon_color};",
-                    "{first_letter}"
-                }
+            ServerIconDisplay {
+                icon_url: icon_url.clone(),
+                server_name: server_name.clone(),
+                server_id: server_id.clone(),
+                unread,
             }
-            if unread > 0 {
-                span { class: "badge", "{unread}" }
+        }
+    }
+}
+
+/// Renders the visual content of a server icon: image (or letter fallback) plus unread badge.
+#[component]
+fn ServerIconDisplay(
+    icon_url: Option<String>,
+    server_name: String,
+    server_id: String,
+    unread: u32,
+) -> Element {
+    let first_letter: String = server_name
+        .chars()
+        .next()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
+    let icon_color = user_color(&server_id);
+    rsx! {
+        if let Some(ref url) = icon_url {
+            img {
+                class: "server-icon-image",
+                src: "{url}",
+                alt: "{server_name}",
             }
+        } else {
+            div {
+                class: "server-icon-letter",
+                style: "background-color: {icon_color};",
+                "{first_letter}"
+            }
+        }
+        if unread > 0 {
+            span { class: "badge", "{unread}" }
         }
     }
 }

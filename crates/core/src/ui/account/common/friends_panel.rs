@@ -25,9 +25,9 @@ pub fn FriendsPanel() -> Element {
     let servers = chat_data.read().servers.clone();
 
     // Filter state
-    let mut search_filter = use_signal(String::new);
-    let mut account_filter = use_signal(|| None::<String>);
-    let mut server_filter = use_signal(|| None::<String>);
+    let search_filter = use_signal(String::new);
+    let account_filter = use_signal(|| None::<String>);
+    let server_filter = use_signal(|| None::<String>);
 
     let search_lower = search_filter.read().to_lowercase();
 
@@ -74,55 +74,68 @@ pub fn FriendsPanel() -> Element {
             }
 
             // Filter bar
-            div { class: "friends-filters",
-                // Search box
-                input {
-                    class: "friends-search",
-                    placeholder: "{t(\"friends-search-placeholder\")}",
-                    value: "{search_filter.read()}",
-                    oninput: move |evt| {
-                        search_filter.set(evt.value().clone());
-                    },
-                }
-
-                // Account filter dropdown — populated from real backend data
-                select {
-                    class: "friends-filter-select",
-                    value: "{account_filter.read().as_deref().unwrap_or(\"all\")}",
-                    onchange: move |evt| {
-                        let val = evt.value();
-                        account_filter.set(if val == "all" { None } else { Some(val) });
-                    },
-                    option { value: "all", "{t(\"filter-all\")}" }
-                    for name in &backend_names {
-                        option { value: "{name}", "{name}" }
-                    }
-                }
-
-                // Server filter dropdown — populated from real server data
-                select {
-                    class: "friends-filter-select",
-                    value: "{server_filter.read().as_deref().unwrap_or(\"all\")}",
-                    onchange: move |evt| {
-                        let val = evt.value();
-                        server_filter.set(if val == "all" { None } else { Some(val) });
-                    },
-                    option { value: "all", "{t(\"filter-all-servers\")}" }
-                    for srv in &servers {
-                        {
-                            let badge = backend_badge(&srv.backend);
-                            let label = format!("{badge} {}", srv.name);
-                            let sid = srv.id.clone();
-                            rsx! {
-                                option { value: "{sid}", "{label}" }
-                            }
-                        }
-                    }
-                }
+            FriendsFilterBar {
+                search_filter,
+                account_filter,
+                server_filter,
+                backend_names,
+                servers,
             }
 
             // Friends grid
             FriendsGrid { friends: filtered_friends.into_iter().cloned().collect() }
+        }
+    }
+}
+
+/// Filter bar for the friends panel: search, account, and server dropdowns.
+#[component]
+fn FriendsFilterBar(
+    search_filter: Signal<String>,
+    account_filter: Signal<Option<String>>,
+    server_filter: Signal<Option<String>>,
+    backend_names: Vec<String>,
+    servers: Vec<poly_client::Server>,
+) -> Element {
+    rsx! {
+        div { class: "friends-filters",
+            input {
+                class: "friends-search",
+                placeholder: "{t(\"friends-search-placeholder\")}",
+                value: "{search_filter.read()}",
+                oninput: move |evt| search_filter.set(evt.value().clone()),
+            }
+            select {
+                class: "friends-filter-select",
+                value: "{account_filter.read().as_deref().unwrap_or(\"all\")}",
+                onchange: move |evt| {
+                    let val = evt.value();
+                    account_filter.set(if val == "all" { None } else { Some(val) });
+                },
+                option { value: "all", "{t(\"filter-all\")}" }
+                for name in &backend_names {
+                    option { value: "{name}", "{name}" }
+                }
+            }
+            select {
+                class: "friends-filter-select",
+                value: "{server_filter.read().as_deref().unwrap_or(\"all\")}",
+                onchange: move |evt| {
+                    let val = evt.value();
+                    server_filter.set(if val == "all" { None } else { Some(val) });
+                },
+                option { value: "all", "{t(\"filter-all-servers\")}" }
+                for srv in &servers {
+                    {
+                        let badge = backend_badge(&srv.backend);
+                        let label = format!("{badge} {}", srv.name);
+                        let sid = srv.id.clone();
+                        rsx! {
+                            option { value: "{sid}", "{label}" }
+                        }
+                    }
+                }
+            }
         }
     }
 }

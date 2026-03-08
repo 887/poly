@@ -26,6 +26,117 @@ use notifications::ServerNotificationsSettings;
 use overview::ServerOverviewSettings;
 use profile::ServerProfileSettings;
 
+const SERVER_SETTINGS_SECTIONS: [(&str, ServerSettingsSection); 4] = [
+    ("server-settings-overview", ServerSettingsSection::Overview),
+    (
+        "server-settings-notifications",
+        ServerSettingsSection::Notifications,
+    ),
+    ("server-settings-profile", ServerSettingsSection::Profile),
+    ("server-settings-general", ServerSettingsSection::General),
+];
+
+fn matches_server_settings_search(filter: &str, label: &str) -> bool {
+    filter.is_empty() || label.to_lowercase().contains(filter)
+}
+
+#[component]
+fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
+    let current = search_text.read().clone();
+
+    rsx! {
+        div { class: "settings-search-bar",
+            input {
+                r#type: "text",
+                class: "settings-search-input",
+                placeholder: "{t(\"settings-search\")}",
+                value: "{current}",
+                oninput: move |e| search_text.set(e.value()),
+            }
+            if !current.is_empty() {
+                button {
+                    class: "settings-search-clear",
+                    onclick: move |_| search_text.set(String::new()),
+                    "×"
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn ServerSettingsNavigation(
+    active_section: ServerSettingsSection,
+    search_text: Signal<String>,
+    on_select: EventHandler<ServerSettingsSection>,
+) -> Element {
+    let filter = search_text.read().to_lowercase();
+
+    rsx! {
+        nav { class: "settings-nav",
+            ServerSettingsSearchBar { search_text }
+            for (label_key , section) in SERVER_SETTINGS_SECTIONS {
+                {
+                    let label = t(label_key);
+                    if matches_server_settings_search(&filter, &label) {
+                        rsx! {
+                            ServerSettingsNavItem {
+                                label,
+                                active: active_section == section,
+                                onclick: move |_| on_select.call(section),
+                            }
+                        }
+                    } else {
+                        rsx! {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn ServerSettingsContent(
+    section: ServerSettingsSection,
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    server_name: String,
+) -> Element {
+    rsx! {
+        div { class: "settings-content",
+            div { class: "settings-header",
+                h2 { "{t(\"server-settings-title\")} — {server_name}" }
+            }
+            match section {
+                ServerSettingsSection::Overview => rsx! {
+                    ServerOverviewSettings {
+                        server_id: server_id.clone(),
+                        server_name: server_name.clone(),
+                        backend_slug: backend.clone(),
+                    }
+                },
+                ServerSettingsSection::Notifications => rsx! {
+                    ServerNotificationsSettings { server_id: server_id.clone(), server_name: server_name.clone() }
+                },
+                ServerSettingsSection::Profile => rsx! {
+                    ServerProfileSettings { server_id: server_id.clone(), server_name: server_name.clone() }
+                },
+                ServerSettingsSection::General => rsx! {
+                    ServerGeneralSettings {
+                        server_id,
+                        server_name,
+                        backend_slug: backend,
+                        instance_id,
+                        account_id,
+                    }
+                },
+            }
+        }
+    }
+}
+
 /// Which section of server settings is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum ServerSettingsSection {
@@ -49,7 +160,7 @@ pub fn ServerSettingsPage(
 ) -> Element {
     let mut section = use_signal(ServerSettingsSection::default);
     let _locale = crate::i18n::use_locale().read().clone();
-    let mut search_text = use_signal(String::new);
+    let search_text = use_signal(String::new);
     let chat_data: Signal<crate::state::ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
 
@@ -62,15 +173,6 @@ pub fn ServerSettingsPage(
         .map(|s| s.name.clone())
         .unwrap_or_else(|| server_id.clone());
 
-    let sf_raw = search_text.read().clone();
-    let sf = sf_raw.to_lowercase();
-    let shows = move |label: &str| -> bool { sf.is_empty() || label.to_lowercase().contains(&sf) };
-
-    let overview_label = t("server-settings-overview");
-    let notif_label = t("server-settings-notifications");
-    let profile_label = t("server-settings-profile");
-    let general_label = t("server-settings-general");
-
     // Keep nav.selected_server in sync (needed if arrived via context menu)
     let server_id_for_effect = server_id.clone();
     use_effect(move || {
@@ -82,84 +184,18 @@ pub fn ServerSettingsPage(
 
     rsx! {
         div { class: "settings-page",
-            nav { class: "settings-nav",
-                // Search bar
-                div { class: "settings-search-bar",
-                    input {
-                        r#type: "text",
-                        class: "settings-search-input",
-                        placeholder: "{t(\"settings-search\")}",
-                        value: "{sf_raw}",
-                        oninput: move |e| search_text.set(e.value()),
-                    }
-                    if !sf_raw.is_empty() {
-                        button {
-                            class: "settings-search-clear",
-                            onclick: move |_| search_text.set(String::new()),
-                            "×"
-                        }
-                    }
-                }
-                // Navigation items
-                if shows(&overview_label) {
-                    ServerSettingsNavItem {
-                        label: overview_label.clone(),
-                        active: section() == ServerSettingsSection::Overview,
-                        onclick: move |_| section.set(ServerSettingsSection::Overview),
-                    }
-                }
-                if shows(&notif_label) {
-                    ServerSettingsNavItem {
-                        label: notif_label.clone(),
-                        active: section() == ServerSettingsSection::Notifications,
-                        onclick: move |_| section.set(ServerSettingsSection::Notifications),
-                    }
-                }
-                if shows(&profile_label) {
-                    ServerSettingsNavItem {
-                        label: profile_label.clone(),
-                        active: section() == ServerSettingsSection::Profile,
-                        onclick: move |_| section.set(ServerSettingsSection::Profile),
-                    }
-                }
-                if shows(&general_label) {
-                    ServerSettingsNavItem {
-                        label: general_label.clone(),
-                        active: section() == ServerSettingsSection::General,
-                        onclick: move |_| section.set(ServerSettingsSection::General),
-                    }
-                }
+            ServerSettingsNavigation {
+                active_section: section(),
+                search_text,
+                on_select: move |next| section.set(next),
             }
-
-            // Content area
-            div { class: "settings-content",
-                div { class: "settings-header",
-                    h2 { "{t(\"server-settings-title\")} — {server_name}" }
-                }
-                match section() {
-                    ServerSettingsSection::Overview => rsx! {
-                        ServerOverviewSettings {
-                            server_id: server_id.clone(),
-                            server_name: server_name.clone(),
-                            backend_slug: backend.clone(),
-                        }
-                    },
-                    ServerSettingsSection::Notifications => rsx! {
-                        ServerNotificationsSettings { server_id: server_id.clone(), server_name: server_name.clone() }
-                    },
-                    ServerSettingsSection::Profile => rsx! {
-                        ServerProfileSettings { server_id: server_id.clone(), server_name: server_name.clone() }
-                    },
-                    ServerSettingsSection::General => rsx! {
-                        ServerGeneralSettings {
-                            server_id: server_id.clone(),
-                            server_name: server_name.clone(),
-                            backend_slug: backend.clone(),
-                            instance_id: instance_id.clone(),
-                            account_id: account_id.clone(),
-                        }
-                    },
-                }
+            ServerSettingsContent {
+                section: section(),
+                backend,
+                instance_id,
+                account_id,
+                server_id,
+                server_name,
             }
         }
     }
