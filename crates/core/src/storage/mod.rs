@@ -36,6 +36,11 @@ const fn default_server_member_list_open() -> bool {
     true
 }
 
+/// Demo is active by default so new users get demo data on first launch.
+const fn default_demo_active() -> bool {
+    true
+}
+
 const fn default_gif_provider() -> GifProviderKind {
     GifProviderKind::Klippy
 }
@@ -151,8 +156,8 @@ pub struct AppSettings {
     ///
     /// When `true`, the demo client is automatically restored on next launch
     /// so the user doesn't lose their demo session across restarts. Defaults
-    /// to `false` for backwards compatibility with existing stored records.
-    #[serde(default)]
+    /// to `true` so new users get demo data on first launch.
+    #[serde(default = "default_demo_active")]
     pub demo_active: bool,
     /// Server IDs pinned to the Favorites Bar (Bar 1), in display order.
     ///
@@ -186,6 +191,39 @@ pub struct AppSettings {
     /// External media provider configuration (GIF search, etc.).
     #[serde(default)]
     pub media: MediaProviderSettings,
+    /// List of native backend type slugs that have been disabled by the user.
+    ///
+    /// E.g. `["discord", "teams"]` means those compiled-in backends are toggled off.
+    /// Absent from this list = enabled. Uses slugs from `BackendType::slug()`.
+    #[serde(default)]
+    pub disabled_native_backends: Vec<String>,
+    /// WASM plugin entries added by the user (from URLs or local files).
+    ///
+    /// Each entry records the URL and an optional display name override.
+    /// The app appends its WIT version to the URL before fetching so the
+    /// remote can serve the correct plugin binary.
+    #[serde(default)]
+    pub wasm_plugins: Vec<WasmPluginEntry>,
+}
+
+/// A user-added WASM plugin, loaded from a URL.
+///
+/// Persisted in [`AppSettings::wasm_plugins`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WasmPluginEntry {
+    /// The base URL to fetch the plugin from.
+    /// The app appends `?wit=<version>` before making the request.
+    pub url: String,
+    /// Optional user-defined name override. Falls back to the URL hostname.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Whether this plugin is currently enabled.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Global notification preferences — device-level settings only.

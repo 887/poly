@@ -3,6 +3,7 @@
 //! Custom thin wrapper over `fluent-bundle` for Project Fluent `.ftl` files.
 //! All user-facing strings MUST go through this system.
 //!
+//! Locale strings are embedded at compile time via `include_str!`.
 //! ## Usage
 //!
 //! ```rust,ignore

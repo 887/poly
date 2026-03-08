@@ -30,6 +30,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
         View::Friends => t("nav-friends"),
         View::Notifications => t("notifications-title"),
         View::Settings => t("settings-title"),
+        View::Search => t("search-page-title"),
         View::Server => {
             if let Some(ch) = &chat_data.current_channel {
                 format!("# {}", ch.name)

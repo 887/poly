@@ -4,52 +4,102 @@
 //! Unlike the app-level `SettingsPage`, this page scopes everything to
 //! one account and omits global concerns (theme, language, identity, etc.).
 //!
+//! Voice & Audio settings are in the app-level `SettingsPage` (Voice & Video section).
+//!
 //! ## Sections
 //! | Section | Component |
 //! |---|---|
 //! | Notifications | `NotificationsSettings` — per-account notification toggles |
-//! | Voice & Audio | `VoiceSettings` — mic/speaker device pickers + noise cancellation |
 //!
 //! ## 150-line component rule
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**
 //! of RSX + logic. Extract sub-components rather than growing any file.
 
 mod notifications;
-mod voice_settings;
 
 use crate::i18n::t;
 use dioxus::prelude::*;
 
 use super::AccountBar;
 use notifications::NotificationsSettings;
-use voice_settings::VoiceSettings;
+
+/// Account-specific searchable settings nodes.
+/// Format: (i18n key, section slug).
+const ACCT_NAV_SECTIONS: &[(&str, &str)] = &[
+    ("settings-notifications", "notifications"),
+];
+
+/// Returns true if any node for this account section matches the query.
+fn acct_section_has_match(section_slug: &str, q: &str) -> bool {
+    if q.is_empty() {
+        return true;
+    }
+    ACCT_NAV_SECTIONS
+        .iter()
+        .any(|(key, slug)| *slug == section_slug && t(key).to_lowercase().contains(q))
+}
+
+/// Fire-and-forget JS: smooth-scroll the account settings content area to a section.
+fn scroll_to_acct_section(slug: &str) {
+    let id = format!("acct-section-{slug}");
+    let js = format!(
+        "(() => {{ \
+            const el = document.getElementById('{id}'); \
+            const c = el && el.closest('.settings-content'); \
+            if (el && c) c.scrollTo({{ top: el.offsetTop - 16, behavior: 'smooth' }}); \
+        }})()"
+    );
+    let _ = document::eval(&js);
+}
 
 /// Account-scoped settings page.
 ///
-/// Shows only account-relevant preferences: notification toggles and
-/// voice/audio device settings. Global settings (theme, language,
-/// voice/video, identity, backup) are handled by the app-level `SettingsPage`.
+/// VS Code-style single-scroll layout: account-specific sections are rendered
+/// in a scrollable column. The nav sidebar shows a header (account name) and
+/// section items that scroll the content on click. Search dims non-matching
+/// sections.
+///
+/// Global settings (theme, language, voice/video, identity, backup) are handled
+/// by the app-level `SettingsPage`.
 #[rustfmt::skip]
 #[component]
 pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     // Subscribe to locale so labels re-render on language change.
     let _locale = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
-    // Track which section is active ('notifications' or 'voice')
     let mut active_section = use_signal(|| "notifications".to_string());
 
-    let sf_raw = search_text.read().clone();
-    let sf = sf_raw.to_lowercase();
-    // Helper: is this nav item visible given the current search filter?
-    let shows = |label: &str| -> bool { sf.is_empty() || label.to_lowercase().contains(&sf) };
-    let notif_label = t("settings-notifications");
-    let voice_label = t("voice-audio-settings");
+    // Scroll to active section when it changes (inc. initial render).
+    use_effect(move || {
+        let slug = active_section.read().clone();
+        scroll_to_acct_section(&slug);
+    });
 
+    // When search changes, scroll to first matching section.
+    use_effect(move || {
+        let q = search_text.read().to_lowercase();
+        if q.is_empty() {
+            return;
+        }
+        if let Some((_, slug)) = ACCT_NAV_SECTIONS.iter().find(|(_, slug)| acct_section_has_match(slug, &q)) {
+            scroll_to_acct_section(slug);
+            active_section.set(slug.to_string());
+        }
+    });
+
+    let acct_id_upper = account_id.to_uppercase();
+    let sf = search_text.read().to_lowercase();
     let active = active_section.read().clone();
+    let sf_raw = search_text.read().clone();
 
     rsx! {
         div { class: "channel-list-wrapper",
             nav { class: "settings-nav",
+                // Header: shows which account's settings we're viewing
+                div { class: "settings-nav-header",
+                    h3 { class: "settings-nav-title", "{t(\"account-settings-title\")}" }
+                    p { class: "settings-nav-subtitle", "{acct_id_upper}" }
+                }
                 // Search bar
                 div { class: "settings-search-bar",
                     input {
@@ -57,7 +107,9 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                         class: "settings-search-input",
                         placeholder: "{t(\"settings-search\")}",
                         value: "{sf_raw}",
-                        oninput: move |e| search_text.set(e.value()),
+                        oninput: move |e| {
+                            search_text.set(e.value());
+                        },
                     }
                     if !sf_raw.is_empty() {
                         button {
@@ -67,34 +119,39 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                         }
                     }
                 }
-                // Notifications section nav item
-                if shows(&notif_label) {
-                    div {
-                        class: if active == "notifications" { "settings-nav-item active" } else { "settings-nav-item" },
-                        onclick: move |_| active_section.set("notifications".to_string()),
-                        "{notif_label}"
-                    }
-                }
-                // Voice & Audio section nav item
-                if shows(&voice_label) {
-                    div {
-                        class: if active == "voice" { "settings-nav-item active" } else { "settings-nav-item" },
-                        onclick: move |_| active_section.set("voice".to_string()),
-                        "{voice_label}"
+                // Nav items — one per section
+                for (label_key, slug) in ACCT_NAV_SECTIONS {
+                    {
+                        let label = t(label_key);
+                        let has_match = acct_section_has_match(slug, &sf);
+                        let is_active = active == *slug;
+                        let class = match (is_active, has_match) {
+                            (true, _) => "settings-nav-item active",
+                            (false, true) => "settings-nav-item",
+                            (false, false) => "settings-nav-item settings-nav-item-dimmed",
+                        };
+                        let slug_s = slug.to_string();
+                        rsx! {
+                            div {
+                                class,
+                                onclick: move |_| {
+                                    *search_text.write() = String::new();
+                                    active_section.set(slug_s.clone());
+                                },
+                                "{label}"
+                            }
+                        }
                     }
                 }
             }
             AccountBar {}
         }
         div { class: "settings-content",
-            div { class: "settings-header",
-                h2 { "{t(\"account-settings-title\")} — {account_id.to_uppercase()}" }
-            }
-            if active == "notifications" {
+            // Notifications section
+            div {
+                id: "acct-section-notifications",
+                class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
                 NotificationsSettings { account_id: account_id.clone() }
-            }
-            if active == "voice" {
-                VoiceSettings {}
             }
         }
     }

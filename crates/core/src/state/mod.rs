@@ -30,6 +30,8 @@ pub enum View {
     Server,
     /// Settings page.
     Settings,
+    /// Global search page.
+    Search,
 }
 
 /// Current navigation state.
@@ -112,6 +114,52 @@ pub enum SettingsSection {
     VoiceVideo,
     /// Diagnostics — connection stats, storage usage, account health.
     Diagnostics,
+    /// Demo data settings — toggle demo client, regenerate data.
+    Demo,
+    /// Plugin manager — view and manage loaded client plugins.
+    Plugins,
+    /// Plugin-provided settings pages — each backend can expose its own settings.
+    PluginSettings,
+}
+
+impl SettingsSection {
+    /// Convert to a URL-friendly slug used in `/settings/:section` routes.
+    pub fn to_slug(self) -> &'static str {
+        match self {
+            Self::Accounts | Self::Notifications => "accounts",
+            Self::VoiceVideo => "voice-video",
+            Self::Backup => "backup",
+            Self::Identity => "identity",
+            Self::Theme | Self::Appearance => "theme",
+            Self::Media => "media",
+            Self::Language => "language",
+            Self::General => "general",
+            Self::Plugins => "plugins",
+            Self::PluginSettings => "plugin-settings",
+            Self::Diagnostics => "diagnostics",
+            Self::Demo => "demo",
+        }
+    }
+
+    /// Parse a URL slug back into a `SettingsSection`.
+    /// Returns `Self::Accounts` as the default for unknown slugs.
+    pub fn from_slug(slug: &str) -> Self {
+        match slug {
+            "accounts" => Self::Accounts,
+            "voice-video" => Self::VoiceVideo,
+            "backup" => Self::Backup,
+            "identity" => Self::Identity,
+            "theme" => Self::Theme,
+            "media" => Self::Media,
+            "language" => Self::Language,
+            "general" => Self::General,
+            "plugins" => Self::Plugins,
+            "plugin-settings" => Self::PluginSettings,
+            "diagnostics" => Self::Diagnostics,
+            "demo" => Self::Demo,
+            _ => Self::Accounts,
+        }
+    }
 }
 
 /// State for the active right-click server context menu.

@@ -363,30 +363,45 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     fn extension_tools(&self) -> Vec<Value> {
-        vec![json!({
-            "name": "get_generation",
-            "description": "Returns rebuild-detection counters for this MCP session.\n\n\
-                **IMPORTANT: Semantics differ by platform!**\n\n\
-                **Desktop MCP (this tool):**\n\
-                - **generation**: starts at 1 on launch, increments on each hot-patch (component remount). \
-                  Resets to 1 only on full process restart (PID change).\n\
-                - **build_id**: increments on each rebuild_app call (reads /tmp/poly-devtools-rebuild-counter). \
-                  0 = no rebuild this session.\n\
-                - **pid**: OS process ID — stable across hot-patches, changes only on full restart.\n\n\
-                **Web MCP (poly-web-devtools-mcp):**\n\
-                - **generation**: increments on EVERY connect_cdp call (not on each rebuild). \
-                  This is because each WASM rebuild drops the CDP WebSocket, requiring explicit reconnection.\n\
-                - **build_id**: increments on each rebuild_app call (same as desktop, reads /tmp/poly-devtools-web-rebuild-counter).\n\
-                - **dx_serve_pid**: OS process ID of managed dx serve process.\n\n\
-                **Decision table (Desktop):**\n\
-                - generation changed, pid stable → hot-patch applied\n\
-                - pid changed (generation back to 1) → full rebuild / process restart\n\
-                - build_id changed → rebuild was triggered (independent of generation / pid)\n\n\
-                **Key difference:** Desktop generation may NOT change on every rebuild (hot-patches preserve state). \
-                Always check build_id to know if a rebuild happened. Call connect_cdp explicitly after \
-                rebuild_app to get updated generation (web) or check if hot-patch succeeded (desktop).",
-            "inputSchema": { "type": "object", "properties": {}, "required": [] }
-        })]
+        vec![
+            json!({
+                "name": "get_generation",
+                "description": "Returns rebuild-detection counters for this MCP session.\n\n\
+                    **IMPORTANT: Semantics differ by platform!**\n\n\
+                    **Desktop MCP (this tool):**\n\
+                    - **generation**: starts at 1 on launch, increments on each hot-patch (component remount). \
+                      Resets to 1 only on full process restart (PID change).\n\
+                    - **build_id**: increments on each rebuild_app call (reads /tmp/poly-devtools-rebuild-counter). \
+                      0 = no rebuild this session.\n\
+                    - **pid**: OS process ID — stable across hot-patches, changes only on full restart.\n\n\
+                    **Web MCP (poly-web-devtools-mcp):**\n\
+                    - **generation**: increments on EVERY connect_cdp call (not on each rebuild). \
+                      This is because each WASM rebuild drops the CDP WebSocket, requiring explicit reconnection.\n\
+                    - **build_id**: increments on each rebuild_app call (same as desktop, reads /tmp/poly-devtools-web-rebuild-counter).\n\
+                    - **dx_serve_pid**: OS process ID of managed dx serve process.\n\n\
+                    **Decision table (Desktop):**\n\
+                    - generation changed, pid stable → hot-patch applied\n\
+                    - pid changed (generation back to 1) → full rebuild / process restart\n\
+                    - build_id changed → rebuild was triggered (independent of generation / pid)\n\n\
+                    **Key difference:** Desktop generation may NOT change on every rebuild (hot-patches preserve state). \
+                    Always check build_id to know if a rebuild happened. Call connect_cdp explicitly after \
+                    rebuild_app to get updated generation (web) or check if hot-patch succeeded (desktop).",
+                "inputSchema": { "type": "object", "properties": {}, "required": [] }
+            }),
+            json!({
+                "name": "force_rebuild",
+                "description": "Force a full desktop rebuild by running `dx build --platform desktop` directly.\n\n\
+                    USE THIS when rebuild_app (hot-patch via touch lib.rs) fails to apply changes.\n\
+                    This kills the running desktop app, rebuilds from scratch, and the app process\n\
+                    must be relaunched via launch_app afterwards.\n\n\
+                    NOTE: Unlike the web MCP force_rebuild, this does NOT auto-launch the app.\n\
+                    After this tool returns:\n\
+                    1. Call launch_app to start the freshly built binary\n\
+                    2. Call connect_cdp\n\
+                    3. Verify with get_generation that build_id and pid both changed",
+                "inputSchema": { "type": "object", "properties": {}, "required": [] }
+            }),
+        ]
     }
 
     async fn handle_extension_tool(
@@ -409,6 +424,34 @@ impl DevtoolsBackend for DesktopHttpBackend {
                 }
                 .await;
                 Some(result)
+            }
+            "force_rebuild" => {
+                let workspace = self
+                    .workspace
+                    .lock()
+                    .await
+                    .clone()
+                    .unwrap_or_else(|| "/home/laragana/workspcacemsg".to_string());
+                let app_dir = format!("{workspace}/apps/desktop-devtools");
+                let status = tokio::process::Command::new("dx")
+                    .args(["build", "--platform", "desktop"])
+                    .current_dir(&app_dir)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .await;
+                let _ = Self::increment_rebuild_counter().await;
+                match status {
+                    Ok(s) if s.success() => Some(Ok(
+                        "Force rebuild complete! Fresh desktop binary is ready.\n\
+                         Call launch_app to start it, then connect_cdp."
+                            .to_string(),
+                    )),
+                    Ok(s) => Some(Err(anyhow::anyhow!(
+                        "dx build --platform desktop failed with exit code: {s}"
+                    ))),
+                    Err(e) => Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}"))),
+                }
             }
             _ => None,
         }

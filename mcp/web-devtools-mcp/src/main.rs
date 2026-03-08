@@ -906,6 +906,22 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     - dx_serve_pid changed → dx serve was restarted",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
+            json!({
+                "name": "force_rebuild",
+                "description": "Force a complete WASM rebuild by running `dx build --platform web` directly.\n\n\
+                    USE THIS when rebuild_app fails to update the browser (stale incremental cache issue).\n\
+                    dx serve's wasm-dev profile incremental cache can get stale: it receives the file-watch\n\
+                    event from touch lib.rs but cargo considers targets \"fresh\" and skips recompilation,\n\
+                    leaving the old WASM binary in place.\n\n\
+                    This tool bypasses dx serve entirely and runs `dx build --platform web` in apps/web/,\n\
+                    which forces a full recompile and writes a fresh WASM to the output directory.\n\
+                    dx serve then serves the new WASM on the next page load.\n\n\
+                    After this tool returns:\n\
+                    1. Call page_reload with ignoreCache=true\n\
+                    2. Call connect_cdp\n\
+                    3. Verify with get_generation that build_id and generation both incremented",
+                "inputSchema": { "type": "object", "properties": {}, "required": [] }
+            }),
         ]
     }
 
@@ -953,6 +969,38 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     "dx_serve_pid": pid
                 })
                 .to_string()))
+            }
+            "force_rebuild" => {
+                let workspace = self
+                    .workspace
+                    .lock()
+                    .await
+                    .clone()
+                    .unwrap_or_else(|| "/home/laragana/workspcacemsg".to_string());
+                let app_dir = format!("{workspace}/apps/web");
+                let status = tokio::process::Command::new("dx")
+                    .args(["build", "--platform", "web"])
+                    .current_dir(&app_dir)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .await;
+                Self::increment_rebuild_counter();
+                *self.ws.lock().await = None;
+                match status {
+                    Ok(s) if s.success() => Some(Ok(
+                        "Force rebuild complete! A fresh WASM binary has been written.\n\
+                         Next steps:\n\
+                         1. Call page_reload with ignoreCache=true\n\
+                         2. Call connect_cdp\n\
+                         3. Verify with get_generation that build_id and generation both incremented"
+                            .to_string(),
+                    )),
+                    Ok(s) => Some(Err(anyhow::anyhow!(
+                        "dx build --platform web failed with exit code: {s}"
+                    ))),
+                    Err(e) => Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}"))),
+                }
             }
             _ => None,
         }

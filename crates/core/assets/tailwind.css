@@ -1502,6 +1502,10 @@ body {
     font-size: 22px;
 }
 
+.icon-search {
+    font-size: 22px;
+}
+
 .demo-active {
     background-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
@@ -1871,6 +1875,35 @@ body {
     border-right: 1px solid var(--border-primary);
 }
 
+/* Strip default anchor link styling inside settings nav (Dioxus Link renders as <a>) */
+.settings-nav a {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+/* Header section at the top of the settings sidebar */
+.settings-nav-header {
+    padding: 4px 8px 12px;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 8px;
+}
+
+.settings-nav-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 2px;
+}
+
+.settings-nav-subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 .settings-nav-item {
     padding: 8px 16px;
     border-radius: var(--radius-md);
@@ -1889,6 +1922,34 @@ body {
 .settings-nav-item.active {
     background-color: var(--bg-active);
     color: var(--text-primary);
+}
+
+/* Nav items dimmed when search active and they don't match */
+.settings-nav-item.settings-nav-item-dimmed {
+    opacity: 0.4;
+}
+
+/* ===========================
+ * Settings single-scroll layout
+ * =========================== */
+
+/* Each section block in the scrollable content column */
+.settings-section-block {
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 32px;
+    transition: opacity 0.15s ease;
+}
+
+.settings-section-block:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+/* Dim sections that don't match the current search query */
+.settings-section-block.settings-section-dimmed {
+    opacity: 0.25;
+    pointer-events: none;
 }
 
 .settings-content {
@@ -1910,6 +1971,738 @@ body {
 }
 
 /* ===========================
+ * Accounts Settings Section
+ * =========================== */
+
+.settings-empty-hint {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-style: italic;
+    padding: 8px 0 16px;
+}
+
+.accounts-settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 20px;
+}
+
+.accounts-settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    transition: background 0.15s;
+}
+
+.accounts-settings-row:hover {
+    background: var(--bg-hover);
+}
+
+.accounts-settings-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.accounts-settings-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.accounts-settings-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.accounts-settings-backend {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.accounts-settings-gear {
+    font-size: 18px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.accounts-settings-gear:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    gap: 16px;
+}
+
+.settings-toggle-label {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+/* ===========================
+ * Plugin Manager
+ * =========================== */
+
+.plugin-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 8px 0;
+}
+
+.plugin-summary-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.plugin-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 24px;
+}
+
+.plugin-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.plugin-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    transition: background-color 0.15s ease;
+}
+
+.plugin-row:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.plugin-row-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-sm);
+}
+
+.plugin-row-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.plugin-row-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plugin-row-account-id {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+/* Checkbox toggle column on the left of each plugin row */
+.plugin-row-toggle {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.plugin-row-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+}
+
+/* Description / subtitle under the plugin name */
+.plugin-row-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Active account count shown under description */
+.plugin-row-accounts {
+    font-size: 12px;
+    color: var(--accent-primary);
+    margin-top: 2px;
+}
+
+/* Greyed-out row for backends not compiled in */
+.plugin-row-unavailable {
+    opacity: 0.5;
+}
+
+/* "not in this build" text inside the name */
+.plugin-not-compiled {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* ── WASM plugin add form ─────────────────── */
+.plugin-add-form {
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.plugin-add-form h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.plugin-add-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.plugin-url-input {
+    flex: 2;
+    min-width: 200px;
+    padding: 8px 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.plugin-url-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.plugin-name-input {
+    flex: 1;
+    min-width: 140px;
+    padding: 8px 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.plugin-name-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.plugin-add-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+.plugin-add-error {
+    font-size: 13px;
+    color: #f04747;
+    margin-top: 6px;
+}
+
+/* Small button variant for plugin remove etc. */
+.btn-small {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.plugin-row-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.plugin-status-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.plugin-status-badge.connected {
+    background-color: rgba(67, 181, 129, 0.15);
+    color: #43b581;
+}
+
+.plugin-status-badge.connecting {
+    background-color: rgba(250, 166, 26, 0.15);
+    color: #faa61a;
+}
+
+.plugin-status-badge.disconnected {
+    background-color: rgba(116, 127, 141, 0.15);
+    color: var(--text-muted);
+}
+
+.plugin-status-badge.error {
+    background-color: rgba(240, 71, 71, 0.15);
+    color: #f04747;
+}
+
+.plugin-type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.plugin-type-badge.native {
+    background-color: rgba(114, 137, 218, 0.15);
+    color: #7289da;
+}
+
+.plugin-type-badge.wasm {
+    background-color: rgba(160, 94, 237, 0.15);
+    color: #a05eed;
+}
+
+.plugin-wasm-section {
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Plugin Settings Page (sub-nav + content) */
+
+.plugin-settings-page {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.plugin-settings-nav {
+    width: 180px;
+    flex-shrink: 0;
+    padding: 16px 12px;
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+}
+
+.plugin-settings-nav-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    margin-bottom: 8px;
+}
+
+.plugin-settings-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.plugin-settings-nav-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.plugin-settings-nav-item.active {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.plugin-settings-nav-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.plugin-settings-nav-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plugin-settings-content {
+    flex: 1;
+    padding: 16px 24px;
+    overflow-y: auto;
+}
+
+.plugin-settings-empty,
+.plugin-settings-empty-content {
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 12px 8px;
+}
+
+/* ===========================
+ * Global Search Page
+ * =========================== */
+
+.search-page {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.search-page-sidebar {
+    width: 260px;
+    min-width: 220px;
+    background-color: var(--sidebar-bg);
+    padding: 16px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.search-page-sidebar h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.search-page-sidebar h3 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0 0 4px 0;
+}
+
+.search-page-input-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-page-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+
+.search-page-input:focus {
+    border-color: var(--accent-primary);
+}
+
+.search-page-clear {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.search-page-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.search-account-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 6px 4px;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.1s;
+}
+
+.search-account-filter:hover {
+    background-color: var(--bg-hover);
+}
+
+.search-account-filter input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* Round colored bubble with emoji/initials */
+.search-account-filter-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+/* Shared circular avatar used in account filters, server headers, DM/group rows */
+.search-avatar-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* Fallback coloured bubble rendered when no avatar_url is available */
+.search-avatar-icon-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    user-select: none;
+}
+
+/* Name + backend stacked */
+.search-account-filter-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.search-account-filter-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-account-filter-backend {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-page-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.search-section-header {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 16px 0 4px 0;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Subtle count badge next to section header, e.g. "Showing 5 of 120" */
+.search-section-count {
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: none;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Hint shown at the bottom of a paginated list */
+.search-load-more-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 8px 0 4px;
+    opacity: 0.7;
+}
+
+/* Type filter row: "Show: ☑ Servers  ☑ DMs  ☑ Groups" */
+.search-type-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 4px;
+}
+
+.search-type-filters-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.search-type-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.search-type-filter-item input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.search-server-node {
+    margin-bottom: 8px;
+}
+
+.search-server-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+/* Stacked name + account attribution */
+.search-server-header-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Small badge showing which account this server belongs to */
+.search-node-account-badge {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-server-channels {
+    padding-left: 16px;
+}
+
+.search-node-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.1s;
+}
+
+.search-node-row:hover {
+    background-color: var(--bg-hover);
+}
+
+.search-node-icon {
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.search-node-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.search-node-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-node-sublabel {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+/* ===========================
  * Setup Wizard
  * =========================== */
 
@@ -1922,15 +2715,53 @@ body {
 }
 
 .setup-step {
-    max-width: 480px;
+    max-width: 520px;
     padding: 32px;
     text-align: center;
 }
 
 .setup-title {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+.setup-tagline {
+    font-size: 16px;
+    line-height: 1.5;
+    margin-bottom: 32px;
+}
+
+.setup-features {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+    margin-bottom: 32px;
+}
+
+.setup-feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+}
+
+.setup-feature-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.setup-feature-text {
+    color: var(--text-primary);
+}
+
+.setup-start-btn {
+    font-size: 16px;
+    padding: 12px 32px;
 }
 
 .setup-description {
@@ -4853,6 +5684,52 @@ select {
 
 .settings-search-clear:hover {
     color: var(--text-primary);
+}
+
+/* ===========================
+ * Settings Search Results (node search)
+ * =========================== */
+
+.settings-search-results {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-search-no-results {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-style: italic;
+    padding: 24px 0;
+    text-align: center;
+}
+
+.settings-search-result-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+    gap: 12px;
+}
+
+.settings-search-result-row:hover {
+    background: var(--bg-hover);
+}
+
+.settings-search-result-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.settings-search-result-section {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════

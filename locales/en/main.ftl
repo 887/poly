@@ -20,6 +20,12 @@ nav-demo-active = Demo Client Active
 
 # Setup Wizard
 setup-welcome-title = Welcome to Poly
+setup-welcome-tagline = A multi-account messenger client powered by plugins. Connect all your chat platforms in one place.
+setup-feature-plugins = Plugin-based — add support for any messenger via WASM plugins
+setup-feature-multi-account = Multi-account — manage all your accounts across platforms
+setup-feature-demo = Demo data loaded — explore the app with sample conversations
+setup-feature-keys = Identity keys — generate in Settings → Identity when you're ready
+setup-get-started = Get Started
 setup-welcome-description = A unified messenger for all your chat platforms.
 setup-generating-keys = Generating your identity keys...
 setup-your-account-id = Your Account ID
@@ -79,6 +85,8 @@ settings-accounts = Accounts
 settings-accounts-description = Manage your messenger accounts
 settings-add-account = Add Account
 settings-remove-account = Remove Account
+settings-no-accounts = No accounts connected. Add an account to get started.
+settings-account-settings-link = Account Settings
 account-switch = Switch Account
 account-settings = Account Settings
 settings-account-settings = Account Settings
@@ -145,6 +153,40 @@ settings-diagnostics-no-accounts = No accounts are currently active.
 settings-demo = Demo
 settings-demo-description = Manage the built-in demo data client. When enabled, Poly loads sample accounts with servers, channels, and conversations so you can explore the app.
 settings-demo-toggle = Enable Demo Data
+
+# Plugin Manager
+settings-plugins = Plugins
+settings-plugins-description = Enable or disable messenger backend plugins. Each plugin is a messenger client (Demo, Discord, Matrix, Stoat, Teams, Poly Server). Accounts are sessions created by those plugins.
+plugins-native-title = Built-in Plugins
+plugins-native-description = These plugins are compiled into this build of Poly. Toggle them on or off with the checkboxes. Disabled plugins will not create new accounts.
+plugins-loaded-count = Active backends
+plugins-none-loaded = No WASM plugins added yet. Add a plugin URL below to get started.
+plugins-status-disconnected = Disconnected
+plugins-status-connecting = Connecting…
+plugins-status-connected = Connected
+plugins-status-error = Error
+plugins-type-native = Native
+plugins-type-wasm = WASM
+plugins-not-compiled = not in this build
+plugins-active-accounts = Active accounts
+plugins-wasm-title = WASM Plugins
+plugins-wasm-description = WASM plugins extend Poly with additional messenger backends. Load a plugin from a URL — Poly will append its WIT interface version so the server can serve the correct binary.
+plugins-add-wasm-title = Add Plugin from URL
+plugins-add-wasm-description = Enter the base URL of a WASM plugin. The WIT version will be appended automatically so you always get a compatible build.
+plugins-url-placeholder = https://plugins.example.com/matrix.wasm
+plugins-name-placeholder = Display name (optional)
+plugins-add-btn = Add Plugin
+plugins-url-required = Please enter a plugin URL
+plugins-remove = Remove
+plugins-wit-hint = WIT interface version
+
+# Plugin Settings
+settings-plugin-settings = Plugin Settings
+plugin-settings-nav-title = Backend Settings
+plugin-settings-none = No backends with settings are loaded. Enable demo data or connect an account.
+plugin-settings-demo-title = Demo Settings
+plugin-settings-demo-description = Configure the built-in demo data client. Toggle demo mode to load or clear sample accounts, servers, and conversations.
+plugin-settings-generic-description = This backend does not have custom settings yet. Settings will appear here when the plugin supports them.
 
 # Backup Server Settings
 settings-backup-add-server = Add Server
@@ -297,6 +339,7 @@ nav-forward = Forward
 
 # Settings search
 settings-search = Search settings...
+settings-search-no-results = No settings found matching your search.
 settings-voice-video = Voice & Video
 settings-notifications = Notifications
 account-settings-title = Account Settings
@@ -375,6 +418,20 @@ search-filter-mentions = Mentions a specific user
 search-filter-mentions-subtitle = mentions: user
 search-filter-more = More filters
 search-filter-more-subtitle = dates, author type and more
+
+# Global Search Page
+search-page-title = Search
+search-page-placeholder = Search servers, channels, DMs, groups…
+search-page-accounts = Accounts
+search-page-dms = Direct Messages
+search-page-groups = Groups
+search-page-type-filter = Show
+search-type-servers = Servers
+search-type-dms = DMs
+search-type-groups = Groups
+search-showing-of = Showing { $count } of { $total }
+search-load-more = Scroll to load more…
+
 pinned-messages = Pinned messages
 no-pinned-messages = No pinned messages
 threads = Threads

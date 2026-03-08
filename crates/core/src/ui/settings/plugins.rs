@@ -1,0 +1,415 @@
+//! Plugin manager settings page.
+//!
+//! Plugins in Poly are **messenger backends** — each backend type (Demo,
+//! Discord, Matrix, Stoat, Teams, Poly Server) is a plugin. Native backends
+//! are compiled-in by feature flag; WASM plugins can be loaded from URLs.
+//!
+//! This page lets the user:
+//! - Toggle native backends on / off with checkboxes
+//! - Add WASM plugins from URLs (the app appends `?wit=<version>`)
+//! - Toggle WASM plugins on / off
+//! - Remove WASM plugins
+//!
+//! Accounts are *sessions created by a logged-in plugin* — they live in the
+//! Accounts settings page, not here.
+//!
+//! # 150-line component rule
+//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
+
+use crate::i18n::t;
+use crate::storage::WasmPluginEntry;
+use dioxus::prelude::*;
+
+/// WIT version string appended to WASM plugin fetch URLs.
+const WIT_VERSION: &str = "0.1.0";
+
+/// All native backend types compiled into this build.
+///
+/// Lists every known backend; `available` is `false` when the backend
+/// was not compiled in (feature flag absent). An unavailable backend shows
+/// greyed-out so the user knows it exists but is not in this build.
+const NATIVE_BACKENDS: &[NativeBackend] = &[
+    NativeBackend {
+        slug: "demo",
+        icon: "🧪",
+        name: "Demo",
+        description: "Built-in mock data for exploring Poly without real accounts.",
+        available: true,
+    },
+    NativeBackend {
+        slug: "stoat",
+        icon: "🦦",
+        name: "Stoat (Revolt)",
+        description: "Open-source alternative to Discord. Self-hosted or revolt.chat.",
+        available: cfg!(feature = "stoat"),
+    },
+    NativeBackend {
+        slug: "matrix",
+        icon: "🟩",
+        name: "Matrix",
+        description: "Federated, end-to-end encrypted messaging protocol.",
+        available: cfg!(feature = "matrix"),
+    },
+    NativeBackend {
+        slug: "discord",
+        icon: "🟣",
+        name: "Discord",
+        description: "Popular gaming and community chat platform.",
+        available: cfg!(feature = "discord"),
+    },
+    NativeBackend {
+        slug: "teams",
+        icon: "🟦",
+        name: "Microsoft Teams",
+        description: "Enterprise communication platform by Microsoft.",
+        available: cfg!(feature = "teams"),
+    },
+    NativeBackend {
+        slug: "poly",
+        icon: "🔷",
+        name: "Poly Server",
+        description: "Self-hosted Poly backup / sync server with E2E encryption.",
+        // Not yet a separate feature flag — will be added in phase 3.
+        available: false,
+    },
+];
+
+/// Compile-time backend descriptor (only const-compatible types).
+struct NativeBackend {
+    slug: &'static str,
+    icon: &'static str,
+    name: &'static str,
+    description: &'static str,
+    /// Whether this backend was compiled in (feature flag check).
+    available: bool,
+}
+
+/// Load current app settings from storage (or return default).
+async fn load_settings() -> crate::storage::AppSettings {
+    if let Some(storage) = crate::STORAGE.get() {
+        storage.get_app_settings().await.unwrap_or_default()
+    } else {
+        crate::storage::AppSettings::default()
+    }
+}
+
+/// Save updated settings to storage.
+async fn save_settings(settings: &crate::storage::AppSettings) {
+    if let Some(storage) = crate::STORAGE.get()
+        && let Err(e) = storage.set_app_settings(settings).await
+    {
+        tracing::warn!("Failed to save plugin settings: {e}");
+    }
+}
+
+/// A single native backend row with toggle checkbox.
+#[rustfmt::skip]
+#[component]
+fn NativePluginRow(
+    slug: String,
+    icon: String,
+    name: String,
+    description: String,
+    available: bool,
+    enabled: bool,
+    account_count: usize,
+    on_toggle: EventHandler<String>,
+) -> Element {
+    let slug_for_toggle = slug.clone();
+    rsx! {
+        div {
+            class: if available { "plugin-row" } else { "plugin-row plugin-row-unavailable" },
+            label { class: "plugin-row-toggle",
+                input {
+                    r#type: "checkbox",
+                    checked: enabled && available,
+                    disabled: !available,
+                    onchange: move |_| {
+                        if available {
+                            on_toggle.call(slug_for_toggle.clone());
+                        }
+                    },
+                }
+            }
+            div { class: "plugin-row-icon", "{icon}" }
+            div { class: "plugin-row-info",
+                div { class: "plugin-row-name",
+                    "{name}"
+                    if !available {
+                        span { class: "plugin-not-compiled",
+                            " ({t(\"plugins-not-compiled\")})"
+                        }
+                    }
+                }
+                div { class: "plugin-row-description", "{description}" }
+                if account_count > 0 {
+                    div { class: "plugin-row-accounts",
+                        "{t(\"plugins-active-accounts\")}: {account_count}"
+                    }
+                }
+            }
+            div { class: "plugin-row-meta",
+                span { class: "plugin-type-badge native", "{t(\"plugins-type-native\")}" }
+            }
+        }
+    }
+}
+
+/// A single WASM plugin row with toggle and remove buttons.
+#[rustfmt::skip]
+#[component]
+fn WasmPluginRow(
+    index: usize,
+    entry: WasmPluginEntry,
+    on_toggle: EventHandler<usize>,
+    on_remove: EventHandler<usize>,
+) -> Element {
+    let display_name = entry
+        .name
+        .as_deref()
+        .unwrap_or(entry.url.as_str())
+        .to_string();
+    let idx_toggle = index;
+    let idx_remove = index;
+    rsx! {
+        div { class: "plugin-row",
+            label { class: "plugin-row-toggle",
+                input {
+                    r#type: "checkbox",
+                    checked: entry.enabled,
+                    onchange: move |_| on_toggle.call(idx_toggle),
+                }
+            }
+            div { class: "plugin-row-icon", "🔌" }
+            div { class: "plugin-row-info",
+                div { class: "plugin-row-name", "{display_name}" }
+                div { class: "plugin-row-description", "{entry.url}" }
+            }
+            div { class: "plugin-row-meta",
+                span { class: "plugin-type-badge wasm", "{t(\"plugins-type-wasm\")}" }
+                button {
+                    class: "btn btn-small btn-danger",
+                    onclick: move |_| on_remove.call(idx_remove),
+                    "{t(\"plugins-remove\")}"
+                }
+            }
+        }
+    }
+}
+
+/// URL input form to add a new WASM plugin.
+#[rustfmt::skip]
+#[component]
+fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
+    let mut url = use_signal(String::new);
+    let mut name = use_signal(String::new);
+    let mut error = use_signal(String::new);
+    rsx! {
+        div { class: "plugin-add-form",
+            h4 { "{t(\"plugins-add-wasm-title\")}" }
+            p { class: "settings-description",
+                "{t(\"plugins-add-wasm-description\")}"
+            }
+            div { class: "plugin-add-row",
+                input {
+                    r#type: "text",
+                    class: "plugin-url-input",
+                    placeholder: "{t(\"plugins-url-placeholder\")}",
+                    value: "{url.read()}",
+                    oninput: move |e| {
+                        url.set(e.value());
+                        error.set(String::new());
+                    },
+                }
+                input {
+                    r#type: "text",
+                    class: "plugin-name-input",
+                    placeholder: "{t(\"plugins-name-placeholder\")}",
+                    value: "{name.read()}",
+                    oninput: move |e| name.set(e.value()),
+                }
+                button {
+                    class: "btn btn-primary",
+                    disabled: url.read().trim().is_empty(),
+                    onclick: move |_| {
+                        let u = url.read().trim().to_string();
+                        if u.is_empty() {
+                            error.set(t("plugins-url-required"));
+                            return;
+                        }
+                        let n = name.read().trim().to_string();
+                        on_add.call(WasmPluginEntry {
+                            url: u,
+                            name: if n.is_empty() { None } else { Some(n) },
+                            enabled: true,
+                        });
+                        url.set(String::new());
+                        name.set(String::new());
+                    },
+                    "{t(\"plugins-add-btn\")}"
+                }
+            }
+            p { class: "plugin-add-hint",
+                "{t(\"plugins-wit-hint\")}: {WIT_VERSION}"
+            }
+            if !error.read().is_empty() {
+                p { class: "plugin-add-error", "{error.read()}" }
+            }
+        }
+    }
+}
+
+/// Plugin manager settings page.
+///
+/// Shows all messenger backend plugins (native + WASM) with toggle checkboxes.
+/// Native backends are compiled-in; WASM plugins are loaded from user-provided URLs.
+///
+/// **Accounts** ("Cat (demo)", "Dog (demo)") are sessions created when a plugin
+/// authenticates a user — they appear in the Accounts settings page. Here we
+/// manage *which plugins are available and enabled*.
+#[rustfmt::skip]
+#[component]
+pub fn PluginsSettings() -> Element {
+    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+
+    // Local reactive copies of the persisted list — updated on every toggle/add/remove.
+    let mut disabled: Signal<Vec<String>> = use_signal(Vec::new);
+    let mut wasm_plugins: Signal<Vec<WasmPluginEntry>> = use_signal(Vec::new);
+
+    // Load settings from storage once on mount.
+    use_future(move || async move {
+        let s = load_settings().await;
+        disabled.set(s.disabled_native_backends.clone());
+        wasm_plugins.set(s.wasm_plugins.clone());
+    });
+
+    let disabled_snap = disabled.read().clone();
+    let wasm_snap = wasm_plugins.read().clone();
+
+    rsx! {
+        div { class: "settings-section",
+            h2 { class: "settings-section-title", "{t(\"settings-plugins\")}" }
+            p { class: "settings-section-description",
+                "{t(\"settings-plugins-description\")}"
+            }
+
+            // ── Native backends ────────────────────────────────────────────
+            h3 { class: "settings-subsection-title",
+                "{t(\"plugins-native-title\")}"
+            }
+            p { class: "settings-description",
+                "{t(\"plugins-native-description\")}"
+            }
+            div { class: "plugin-list",
+                for backend in NATIVE_BACKENDS {
+                    {
+                        let slug = backend.slug.to_string();
+                        let slug_key = slug.clone();
+                        let enabled = !disabled_snap.contains(&slug);
+                        let account_count = client_manager
+                            .read()
+                            .sessions
+                            .values()
+                            .filter(|s| s.backend.slug() == backend.slug)
+                            .count();
+                        rsx! {
+                            NativePluginRow {
+                                key: "{slug_key}",
+                                slug: slug.clone(),
+                                icon: backend.icon.to_string(),
+                                name: backend.name.to_string(),
+                                description: backend.description.to_string(),
+                                available: backend.available,
+                                enabled,
+                                account_count,
+                                on_toggle: move |toggled: String| {
+                                    let mut d = disabled.write();
+                                    if d.contains(&toggled) {
+                                        d.retain(|s| s != &toggled);
+                                    } else {
+                                        d.push(toggled);
+                                    }
+                                    let new_disabled = d.clone();
+                                    drop(d);
+                                    let wasm = wasm_plugins.read().clone();
+                                    spawn(async move {
+                                        let mut s = load_settings().await;
+                                        s.disabled_native_backends = new_disabled;
+                                        s.wasm_plugins = wasm;
+                                        save_settings(&s).await;
+                                    });
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── WASM plugins ───────────────────────────────────────────────
+            h3 { class: "settings-subsection-title",
+                "{t(\"plugins-wasm-title\")}"
+            }
+            p { class: "settings-description",
+                "{t(\"plugins-wasm-description\")}"
+            }
+            div { class: "plugin-list",
+                if wasm_snap.is_empty() {
+                    div { class: "plugin-empty",
+                        "{t(\"plugins-none-loaded\")}"
+                    }
+                }
+                for (idx, entry) in wasm_snap.iter().enumerate() {
+                    WasmPluginRow {
+                        key: "{idx}",
+                        index: idx,
+                        entry: entry.clone(),
+                        on_toggle: move |i: usize| {
+                            let mut wasm = wasm_plugins.write();
+                            if let Some(p) = wasm.get_mut(i) {
+                                p.enabled = !p.enabled;
+                            }
+                            let new_wasm = wasm.clone();
+                            drop(wasm);
+                            let dis = disabled.read().clone();
+                            spawn(async move {
+                                let mut s = load_settings().await;
+                                s.disabled_native_backends = dis;
+                                s.wasm_plugins = new_wasm;
+                                save_settings(&s).await;
+                            });
+                        },
+                        on_remove: move |i: usize| {
+                            let mut wasm = wasm_plugins.write();
+                            if i < wasm.len() {
+                                wasm.remove(i);
+                            }
+                            let new_wasm = wasm.clone();
+                            drop(wasm);
+                            let dis = disabled.read().clone();
+                            spawn(async move {
+                                let mut s = load_settings().await;
+                                s.disabled_native_backends = dis;
+                                s.wasm_plugins = new_wasm;
+                                save_settings(&s).await;
+                            });
+                        },
+                    }
+                }
+            }
+
+            AddWasmPlugin {
+                on_add: move |entry: WasmPluginEntry| {
+                    wasm_plugins.write().push(entry);
+                    let new_wasm = wasm_plugins.read().clone();
+                    let dis = disabled.read().clone();
+                    spawn(async move {
+                        let mut s = load_settings().await;
+                        s.disabled_native_backends = dis;
+                        s.wasm_plugins = new_wasm;
+                        save_settings(&s).await;
+                    });
+                },
+            }
+        }
+    }
+}

@@ -258,6 +258,43 @@ hot-reload WebSocket) works correctly without `--hotpatch`.
 **`rebuild_app` strategy**: touch `crates/core/src/lib.rs` ONLY — do NOT also
 send `r` to dx serve stdin. Sending both signals causes a double-rebuild loop.
 
+### ⚠️ CRITICAL: Stale WASM Cache — When `rebuild_app` Fails (DECISION 2026-03-08)
+
+**Symptom**: You call `rebuild_app`, the browser shows "Oops! build failed" or the app
+shows the old code. `get_generation` confirms `build_id` changed but the UI hasn't updated.
+
+**Root cause**: `dx serve` uses the `wasm-dev` incremental Cargo profile. After calling
+`rebuild_app` (which touches `lib.rs`), `dx serve` receives the file-watch event and invokes
+Cargo — but Cargo may consider all targets "fresh" (fingerprints match) and skip recompilation.
+The WASM binary timestamp stays old. `dx serve` then serves the stale binary to the browser.
+
+**Fix — use `force_rebuild`**:
+
+```
+force_rebuild {}
+```
+
+This tool runs `dx build --platform web` directly in `apps/web/`, completely bypassing
+`dx serve`'s file-watcher and incremental cache detection. Cargo is forced to re-evaluate
+all target freshness from scratch and writes a new WASM binary, which `dx serve` then serves.
+
+After `force_rebuild` completes:
+1. Call `page_reload { ignoreCache: true }`
+2. Call `connect_cdp`
+3. Verify with `get_generation` that both `build_id` and `generation` increased
+
+**When to use `force_rebuild` vs `rebuild_app`:**
+
+| Scenario | Tool to use |
+|---|---|
+| Normal code change during development | `rebuild_app` (fast, touches lib.rs) |
+| `rebuild_app` result doesn't appear in browser | `force_rebuild` (forces full WASM build) |
+| "Oops! build failed" toast in Poly | `force_rebuild` |
+| WASM timestamp is older than source file | `force_rebuild` |
+
+Note: `force_rebuild` takes 30–90 seconds (full compile). Use `rebuild_app` first, only
+upgrade to `force_rebuild` if the browser doesn't show the updated code.
+
 ### Port 3000, NOT 8080
 
 `dx serve --platform desktop` binds port 8080 for its hot-reload asset server.

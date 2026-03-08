@@ -61,6 +61,7 @@ mod electron_titlebar;
 mod favorites_sidebar;
 mod main_layout;
 pub mod routes;
+pub(crate) mod search;
 mod settings;
 mod setup_wizard;
 mod voice_banner;
@@ -164,9 +165,8 @@ async fn persist_setup_completion(account_id: String) {
         account_id,
         locale,
         theme: "neutral-dark".to_string(),
-        // demo_active remains false — setup wizard completion means a real account;
-        // demo is managed separately by the 🧪 toggle.
-        demo_active: false,
+        // demo_active defaults to true — new users get demo data to explore.
+        demo_active: true,
         // New install has no favorites yet.
         favorited_server_ids: Vec::new(),
         server_icon_overrides: std::collections::HashMap::new(),
@@ -174,6 +174,9 @@ async fn persist_setup_completion(account_id: String) {
         server_member_list_open: true,
         dm_member_list_open: false,
         media: crate::storage::MediaProviderSettings::default(),
+        // All native backends enabled by default; no WASM plugins yet.
+        disabled_native_backends: Vec::new(),
+        wasm_plugins: Vec::new(),
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");

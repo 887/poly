@@ -54,7 +54,7 @@ use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, View};
+use crate::state::{AppState, ChatData, SettingsSection, View};
 use crate::ui::account::common::chat_history::initial_message_query;
 use crate::ui::account::common::chat_history::request_restore_scroll_position_or_bottom;
 use dioxus::prelude::*;
@@ -72,6 +72,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::AccountSettingsRoute { account_id, .. } => Some(account_id.as_str()),
         Route::Root
         | Route::SettingsRoute
+        | Route::SettingsSectionRoute { .. }
+        | Route::SearchRoute
         | Route::NotificationsRoute
         | Route::PageNotFound { .. } => None,
     }
@@ -149,6 +151,12 @@ pub enum Route {
 
         #[route("/settings")]
         SettingsRoute,
+
+        #[route("/settings/:section")]
+        SettingsSectionRoute { section: String },
+
+        #[route("/search")]
+        SearchRoute,
 
         // ── Account-scoped settings ──────────────────────────────────
         #[route("/:backend/:instance_id/:account_id/settings")]
@@ -271,6 +279,24 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         Route::SettingsRoute => {
             s.nav.view = View::Settings;
             // App-level — clear account context so Bar 2 hides and no server stays "open"
+            s.nav.active_account_id = None;
+            s.nav.active_instance_id = None;
+            s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::SettingsSectionRoute { section } => {
+            s.nav.view = View::Settings;
+            s.settings_section = SettingsSection::from_slug(section);
+            s.nav.active_account_id = None;
+            s.nav.active_instance_id = None;
+            s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::SearchRoute => {
+            s.nav.view = View::Search;
+            // App-level — clear account context so Bar 2 hides
             s.nav.active_account_id = None;
             s.nav.active_instance_id = None;
             s.nav.active_backend = None;
@@ -639,6 +665,31 @@ fn NotificationsRoute() -> Element {
 fn SettingsRoute() -> Element {
     rsx! {
         SettingsPage {}
+    }
+}
+
+/// Settings page with a specific section pre-selected via URL.
+///
+/// `/settings/:section` deep-links directly into a settings section.
+/// `sync_route_to_app_state` parses the `section` slug and writes it to
+/// `AppState.settings_section`, so `SettingsPage` renders the correct content.
+#[rustfmt::skip]
+#[component]
+fn SettingsSectionRoute(section: String) -> Element {
+    // Navigation was already handled by sync_route_to_app_state;
+    // SettingsPage reads settings_section from AppState.
+    let _ = section; // consumed by router; state already synced
+    rsx! {
+        SettingsPage {}
+    }
+}
+
+/// Global search page — browse the full node tree of all accounts.
+#[rustfmt::skip]
+#[component]
+fn SearchRoute() -> Element {
+    rsx! {
+        super::search::SearchPage {}
     }
 }
 

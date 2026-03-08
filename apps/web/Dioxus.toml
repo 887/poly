@@ -1,6 +1,7 @@
 [application]
 name = "Poly Web"
 default_platform = "web"
+watch_paths = ["../../crates", "../../clients", "../../locales"]
 
 [web.app]
 title = "Poly — PolyGlot Messenger"

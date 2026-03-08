@@ -21,6 +21,12 @@ nav-demo-active = Demo-Client aktiv
 # Einrichtungsassistent
 setup-welcome-title = Willkommen bei Poly
 setup-welcome-description = Ein einheitlicher Messenger für alle Ihre Chat-Plattformen.
+setup-welcome-tagline = Ein Multi-Account-Messenger-Client, angetrieben durch Plugins. Verbinde all deine Chat-Plattformen an einem Ort.
+setup-feature-plugins = Plugin-basiert — füge Unterstützung für jeden Messenger per WASM-Plugins hinzu
+setup-feature-multi-account = Multi-Account — verwalte all deine Konten plattformübergreifend
+setup-feature-demo = Demo-Daten geladen — erkunde die App mit Beispielunterhaltungen
+setup-feature-keys = Identitätsschlüssel — in Einstellungen → Identität generieren, wenn du bereit bist
+setup-get-started = Loslegen
 setup-generating-keys = Identitätsschlüssel werden generiert...
 setup-your-account-id = Ihre Konto-ID
 setup-account-id-description = Dies ist Ihre eindeutige Kennung. Teilen Sie sie mit Freunden, um sich zu verbinden.
@@ -79,6 +85,8 @@ settings-accounts = Konten
 settings-accounts-description = Verwalten Sie Ihre Messenger-Konten
 settings-add-account = Konto hinzufügen
 settings-remove-account = Konto entfernen
+settings-no-accounts = Keine Konten verbunden. Füge ein Konto hinzu, um loszulegen.
+settings-account-settings-link = Kontoeinstellungen
 account-switch = Konto wechseln
 account-settings = Kontoeinstellungen
 settings-account-settings = Kontoeinstellungen
@@ -133,6 +141,40 @@ settings-reset-error-reload = Zurücksetzen erfolgreich, aber Neuladen fehlgesch
 settings-demo = Demo
 settings-demo-description = Verwalte den integrierten Demo-Datenclient. Wenn aktiviert, lädt Poly Beispielkonten mit Servern, Kanälen und Unterhaltungen, damit du die App erkunden kannst.
 settings-demo-toggle = Demo-Daten aktivieren
+
+# Plugin-Manager
+settings-plugins = Plugins
+settings-plugins-description = Messenger-Backend-Plugins aktivieren oder deaktivieren. Jedes Plugin ist ein Messenger-Client. Konten sind von Plugins erzeugte Sitzungen.
+plugins-native-title = Integrierte Plugins
+plugins-native-description = Diese Plugins sind in diese Poly-Version einkompiliert. Aktiviere oder deaktiviere sie mit den Checkboxen.
+plugins-loaded-count = Aktive Backends
+plugins-none-loaded = Noch keine WASM-Plugins hinzugefügt. Füge unten eine Plugin-URL hinzu.
+plugins-status-disconnected = Getrennt
+plugins-status-connecting = Verbinde…
+plugins-status-connected = Verbunden
+plugins-status-error = Fehler
+plugins-type-native = Nativ
+plugins-type-wasm = WASM
+plugins-not-compiled = nicht in diesem Build
+plugins-active-accounts = Aktive Konten
+plugins-wasm-title = WASM-Plugins
+plugins-wasm-description = WASM-Plugins erweitern Poly um weitere Messenger-Backends. Lade ein Plugin von einer URL — Poly hängt automatisch die WIT-Version an.
+plugins-add-wasm-title = Plugin von URL hinzufügen
+plugins-add-wasm-description = Gib die Basis-URL eines WASM-Plugins ein. Die WIT-Version wird automatisch angehängt.
+plugins-url-placeholder = https://plugins.example.com/matrix.wasm
+plugins-name-placeholder = Anzeigename (optional)
+plugins-add-btn = Plugin hinzufügen
+plugins-url-required = Bitte eine Plugin-URL eingeben
+plugins-remove = Entfernen
+plugins-wit-hint = WIT-Schnittstellenversion
+
+# Plugin-Einstellungen
+settings-plugin-settings = Plugin-Einstellungen
+plugin-settings-nav-title = Backend-Einstellungen
+plugin-settings-none = Keine Backends mit Einstellungen geladen. Aktiviere Demo-Daten oder verbinde ein Konto.
+plugin-settings-demo-title = Demo-Einstellungen
+plugin-settings-demo-description = Den integrierten Demo-Datenclient konfigurieren. Demo-Modus umschalten, um Beispielkonten, Server und Unterhaltungen zu laden oder zu löschen.
+plugin-settings-generic-description = Dieses Backend hat noch keine benutzerdefinierten Einstellungen. Einstellungen erscheinen hier, wenn das Plugin sie unterstützt.
 
 # Backup Server Settings
 settings-backup-add-server = Server hinzufügen
@@ -285,6 +327,7 @@ nav-forward = Vorwärts
 
 # Settings search
 settings-search = Einstellungen durchsuchen...
+settings-search-no-results = Keine Einstellungen für diese Suche gefunden.
 settings-voice-video = Sprache & Video
 settings-notifications = Benachrichtigungen
 account-settings-title = Kontoeinstellungen
@@ -493,3 +536,16 @@ dm-contact-not-found = Kontakt nicht gefunden
 
 # Demo backend
 demo-regenerate-data = Demodaten neu generieren
+
+# Search page
+search-page-title = Suche
+search-page-placeholder = Server, Kanäle, DMs, Gruppen suchen…
+search-page-accounts = Konten
+search-page-dms = Direktnachrichten
+search-page-groups = Gruppen
+search-page-type-filter = Anzeigen
+search-type-servers = Server
+search-type-dms = DMs
+search-type-groups = Gruppen
+search-showing-of = { $count } von { $total } angezeigt
+search-load-more = Scrollen für mehr…

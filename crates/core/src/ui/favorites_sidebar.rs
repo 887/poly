@@ -19,7 +19,7 @@ use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
+use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
     request_restore_scroll_position_or_bottom,
@@ -49,7 +49,7 @@ fn NavBarSpacer() -> Element {
 #[component]
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: Signal<AppState> = use_context();
     let current_view = app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
@@ -160,32 +160,14 @@ pub fn FavoritesBar() -> Element {
             // Spacer
             div { class: "sidebar-spacer" }
 
-            // Demo toggle button
+            // Global Search button
             div {
-                class: if demo_active { "server-icon demo-active" } else { "server-icon demo-inactive" },
+                class: "server-icon",
                 onclick: move |_| {
-                    spawn(async move {
-                        let was_active = client_manager.read().demo_active;
-                        toggle_demo(client_manager, chat_data, app_state).await;
-                        if !was_active {
-                            // Demo just turned ON — mark setup complete in memory
-                            // (storage is handled inside toggle_demo). Stay on the
-                            // current page; no auto-navigation.
-                            app_state.write().is_setup_complete = true;
-                        } else {
-                            // Demo just turned OFF — any route under /demo/demo/*
-                            // is now invalid. Navigate to Settings › Accounts so the
-                            // user has a valid, useful landing page.
-                            app_state.write().settings_section = SettingsSection::Accounts;
-                            navigator().replace(Route::SettingsRoute);
-                        }
-                    });
+                    navigator().push(Route::SearchRoute);
                 },
-                title: if demo_active { t("nav-demo-active") } else { t("nav-demo") },
-                div { class: "icon-demo", "🧪" }
-                if demo_active {
-                    span { class: "demo-dot" }
-                }
+                title: "{t(\"nav-search\")}",
+                div { class: "icon-search", "🔍" }
             }
 
             // App Settings button — only "active" for app-level settings (no account scoped)

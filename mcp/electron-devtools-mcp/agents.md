@@ -54,6 +54,31 @@ Then wait ~5 seconds and call `connect_cdp`.
 
 Caller must call `connect_cdp` afterwards to re-establish CDP.
 
+### `force_rebuild` Extension Tool
+
+The Electron MCP's `rebuild_app` already uses `dx build --platform web` (not touch+file-watcher),
+so it doesn't suffer the stale-cache issue that affects the web MCP.
+
+However, a `force_rebuild` tool is exposed for consistency with the other MCPs.
+It does the same thing as `rebuild_app` — runs `dx build --platform web` in
+`apps/desktop-electron/` — but it's explicitly called out as a "full rebuild".
+
+After `force_rebuild`, call `connect_cdp`.
+
+### Background: Web MCP Stale Cache Issue (DECISION 2026-03-08)
+
+The web MCP (`poly-web-devtools-mcp`) uses `dx serve --platform web --port 3000` for
+hot-reloading. Its `rebuild_app` touches `lib.rs` to trigger the file-watcher — but
+`dx serve`'s `wasm-dev` incremental Cargo cache can become stale: Cargo fingerprints
+may consider all targets "fresh" and skip recompilation, leaving the old WASM binary.
+
+The web MCP's `force_rebuild` tool fixes this by calling `dx build --platform web`
+directly, bypassing the file-watcher entirely and forcing a fresh compile.
+
+The Electron MCP already uses `dx build` directly (no `dx serve`), so it doesn't
+have this issue. But if you ever need to trigger a guaranteed-fresh build for Electron,
+use `force_rebuild` the same way.
+
 ## get_generation Fields
 
 | Field | Type | Meaning |

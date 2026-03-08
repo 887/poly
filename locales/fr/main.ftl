@@ -21,6 +21,12 @@ nav-demo-active = Client de démo actif
 # Assistant de configuration
 setup-welcome-title = Bienvenue sur Poly
 setup-welcome-description = Un messager unifié pour toutes vos plateformes de chat.
+setup-welcome-tagline = Un client de messagerie multi-compte alimenté par des plugins. Connectez toutes vos plateformes de chat en un seul endroit.
+setup-feature-plugins = Basé sur des plugins — ajoutez la prise en charge de n'importe quel messager via des plugins WASM
+setup-feature-multi-account = Multi-compte — gérez tous vos comptes sur toutes les plateformes
+setup-feature-demo = Données démo chargées — explorez l'application avec des conversations d'exemple
+setup-feature-keys = Clés d'identité — générez-les dans Paramètres → Identité quand vous êtes prêt
+setup-get-started = Commencer
 setup-generating-keys = Génération de vos clés d'identité...
 setup-your-account-id = Votre identifiant de compte
 setup-account-id-description = C'est votre identifiant unique. Partagez-le avec vos amis pour vous connecter.
@@ -79,6 +85,8 @@ settings-accounts = Comptes
 settings-accounts-description = Gérer vos comptes de messagerie
 settings-add-account = Ajouter un compte
 settings-remove-account = Supprimer le compte
+settings-no-accounts = Aucun compte connecté. Ajoutez un compte pour commencer.
+settings-account-settings-link = Paramètres du compte
 account-switch = Changer de compte
 account-settings = Paramètres du compte
 settings-account-settings = Paramètres du compte
@@ -133,6 +141,40 @@ settings-reset-error-reload = Réinitialisation réussie, mais rechargement éch
 settings-demo = Démo
 settings-demo-description = Gérer le client de données démo intégré. Lorsqu’il est activé, Poly charge des comptes d’exemple avec des serveurs, des canaux et des conversations pour explorer l’application.
 settings-demo-toggle = Activer les données démo
+
+# Gestionnaire de plugins
+settings-plugins = Plugins
+settings-plugins-description = Activer ou désactiver les plugins de backend de messagerie. Chaque plugin est un client de messagerie. Les comptes sont des sessions créées par ces plugins.
+plugins-native-title = Plugins intégrés
+plugins-native-description = Ces plugins sont compilés dans cette version de Poly. Activez-les ou désactivez-les via les cases à cocher.
+plugins-loaded-count = Backends actifs
+plugins-none-loaded = Aucun plugin WASM ajouté. Ajoutez une URL de plugin ci-dessous.
+plugins-status-disconnected = Déconnecté
+plugins-status-connecting = Connexion…
+plugins-status-connected = Connecté
+plugins-status-error = Erreur
+plugins-type-native = Natif
+plugins-type-wasm = WASM
+plugins-not-compiled = absent de ce build
+plugins-active-accounts = Comptes actifs
+plugins-wasm-title = Plugins WASM
+plugins-wasm-description = Les plugins WASM étendent Poly avec des backends supplémentaires. Chargez un plugin depuis une URL — Poly ajoutera automatiquement la version WIT.
+plugins-add-wasm-title = Ajouter un plugin depuis une URL
+plugins-add-wasm-description = Entrez l'URL de base d'un plugin WASM. La version WIT sera ajoutée automatiquement.
+plugins-url-placeholder = https://plugins.example.com/matrix.wasm
+plugins-name-placeholder = Nom d'affichage (optionnel)
+plugins-add-btn = Ajouter le plugin
+plugins-url-required = Veuillez entrer une URL de plugin
+plugins-remove = Supprimer
+plugins-wit-hint = Version de l'interface WIT
+
+# Paramètres des plugins
+settings-plugin-settings = Paramètres des plugins
+plugin-settings-nav-title = Paramètres des backends
+plugin-settings-none = Aucun backend avec des paramètres n'est chargé. Activez les données démo ou connectez un compte.
+plugin-settings-demo-title = Paramètres démo
+plugin-settings-demo-description = Configurer le client de données démo intégré. Basculez le mode démo pour charger ou effacer des comptes, serveurs et conversations d'exemple.
+plugin-settings-generic-description = Ce backend n'a pas encore de paramètres personnalisés. Les paramètres apparaîtront ici lorsque le plugin les prendra en charge.
 
 # Backup Server Settings
 settings-backup-add-server = Ajouter un serveur
@@ -285,6 +327,7 @@ nav-forward = Avancer
 
 # Settings search
 settings-search = Rechercher dans les paramètres...
+settings-search-no-results = Aucun paramètre trouvé pour cette recherche.
 settings-voice-video = Voix & Vidéo
 settings-notifications = Notifications
 account-settings-title = Paramètres du compte
@@ -493,3 +536,16 @@ dm-contact-not-found = Contact introuvable
 
 # Demo backend
 demo-regenerate-data = Régénérer les données démo
+
+# Search page
+search-page-title = Recherche
+search-page-placeholder = Rechercher serveurs, canaux, DMs, groupes…
+search-page-accounts = Comptes
+search-page-dms = Messages Directs
+search-page-groups = Groupes
+search-page-type-filter = Afficher
+search-type-servers = Serveurs
+search-type-dms = DMs
+search-type-groups = Groupes
+search-showing-of = { $count } sur { $total } affichés
+search-load-more = Défilez pour en voir plus…

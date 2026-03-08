@@ -175,6 +175,18 @@ for the bridge to come back, same as before.
 **`rebuild_app` strategy**: Touch `crates/core/src/lib.rs` to trigger the file
 watcher. dx serve will hot-patch if possible, or full-rebuild if necessary.
 
+### `force_rebuild` Extension Tool — When Hot-Patch Fails
+
+The `force_rebuild` extension tool runs `dx build --platform desktop` directly in
+`apps/desktop-devtools/`, bypassing `dx serve`'s file-watcher entirely.
+
+Use this when:
+- `rebuild_app` doesn't visually update the app
+- Hot-patch fails with an error
+- You need a guaranteed fresh binary before launching
+
+After `force_rebuild` completes, call `launch_app` to start the new binary, then `connect_cdp`.
+
 ## Debugging CSS Not Loading
 
 If the app looks unstyled (white/transparent background):
