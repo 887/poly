@@ -15,6 +15,7 @@ use crate::i18n::t;
 use crate::state::chat_data::backend_badge;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
+use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use dioxus::prelude::*;
 
 /// Friends browser panel with tiled grid display and filtering options.
@@ -167,17 +168,22 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                 onclick: {
                                     let fid = friend_id.clone();
                                     move |_| {
+                                        if let Some(previous_channel_id) = app_state
+                                            .read()
+                                            .nav
+                                            .selected_channel
+                                            .clone()
+                                        {
+                                            remember_message_list_scroll_position(&previous_channel_id);
+                                        }
                                         app_state.write().nav.selected_channel = Some(fid.clone());
-                                        // Use the friend's backend slug for the route; read
-                                        // the active account_id from nav state (the account
-                                        // that owns this friend relationship).
                                         let account_id = app_state
                                             .read()
                                             .nav
                                             .active_account_id
                                             .clone()
                                             .unwrap_or_else(|| backend.slug().to_string());
-                                        let instance_id = app_state
+                                        let instance_id = app_state // TODO(phase-3): mutual servers list (2.6.6.3)
                                             .read()
                                             .nav
                                             .active_instance_id

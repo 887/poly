@@ -17,6 +17,7 @@ use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
+use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use dioxus::prelude::*;
 
 #[component]
@@ -70,6 +71,10 @@ fn VoiceBannerChannelLink(
             class: "voice-banner-center",
             title: "{t(\"voice-go-to-channel\")}",
             onclick: move |_| {
+                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                {
+                    remember_message_list_scroll_position(&previous_channel_id);
+                }
                 app_state.write().nav.selected_server = Some(server_id.clone());
                 app_state.write().nav.selected_channel = Some(channel_id.clone());
                 navigator()

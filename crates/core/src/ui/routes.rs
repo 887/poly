@@ -55,9 +55,38 @@ use super::settings::SettingsPage;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
-use crate::ui::account::common::chat_history::{initial_message_query, request_scroll_to_bottom};
+use crate::ui::account::common::chat_history::initial_message_query;
+use crate::ui::account::common::chat_history::request_restore_scroll_position_or_bottom;
 use dioxus::prelude::*;
 use poly_client::{BackendType, Channel, ChannelType};
+
+/// Return the account id encoded by an account-scoped route, if any.
+pub fn route_account_id(route: &Route) -> Option<&str> {
+    match route {
+        Route::DmsHome { account_id, .. }
+        | Route::DmChat { account_id, .. }
+        | Route::ServerHome { account_id, .. }
+        | Route::ServerChat { account_id, .. }
+        | Route::ServerSettingsRoute { account_id, .. }
+        | Route::FriendsRoute { account_id, .. }
+        | Route::AccountSettingsRoute { account_id, .. } => Some(account_id.as_str()),
+        Route::Root | Route::SettingsRoute | Route::NotificationsRoute | Route::PageNotFound { .. } => {
+            None
+        }
+    }
+}
+
+/// Whether the current route targets an account that is not currently active.
+pub fn route_targets_unknown_account(route: &Route, client_manager: &ClientManager) -> bool {
+    let Some(account_id) = route_account_id(route) else {
+        return false;
+    };
+
+    !client_manager
+        .active_account_ids()
+        .into_iter()
+        .any(|id| id == account_id)
+}
 
 // ── Route enum ──────────────────────────────────────────────────────────────
 
@@ -365,7 +394,7 @@ fn restore_dm_chat(
             .await
         {
             chat_data.write().messages = messages;
-            request_scroll_to_bottom();
+            request_restore_scroll_position_or_bottom(&dm_id);
         }
         if let Ok(members) = guard.get_channel_members(&dm_id).await {
             chat_data.write().members = members;

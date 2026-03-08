@@ -454,10 +454,6 @@ fn VoiceSettingsPopup(on_close: EventHandler<()>) -> Element {
                         let val = e.value();
                         chat_data.write().voice_media_settings.mic_device_id =
                             if val.is_empty() { None } else { Some(val) };
-                            None
-                        } else {
-                            Some(val)
-                        };
                     },
                     option { value: "", "{t(\"voice-default-device\")}" }
                     for (id , label) in mic_devices.read().iter() {
@@ -484,10 +480,6 @@ fn VoiceSettingsPopup(on_close: EventHandler<()>) -> Element {
                         let val = e.value();
                         chat_data.write().voice_media_settings.speaker_device_id =
                             if val.is_empty() { None } else { Some(val) };
-                            None
-                        } else {
-                            Some(val)
-                        };
                     },
                     option { value: "", "{t(\"voice-default-device\")}" }
                     for (id , label) in spk_devices.read().iter() {

@@ -20,7 +20,10 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, SettingsSection, View};
-use crate::ui::account::common::chat_history::{initial_message_query, request_scroll_to_bottom};
+use crate::ui::account::common::chat_history::{
+    initial_message_query, remember_message_list_scroll_position,
+    request_restore_scroll_position_or_bottom,
+};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 
@@ -426,6 +429,14 @@ fn FavoriteServerIcon(
                 let iid = instance_id.clone();
                 let aid = account_id.clone();
                 move |_| {
+                    if let Some(previous_channel_id) = app_state
+                        .read()
+                        .nav
+                        .selected_channel
+                        .clone()
+                    {
+                        remember_message_list_scroll_position(&previous_channel_id);
+                    }
                     app_state.write().nav.selected_server = Some(sid.clone());
                     app_state.write().nav.selected_channel = None;
                     let sid2 = sid.clone();
@@ -826,7 +837,7 @@ pub async fn load_server_data(
             .await
         {
             chat_data.write().messages = messages;
-            request_scroll_to_bottom();
+            request_restore_scroll_position_or_bottom(&ch.id);
         }
         // Load members
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
@@ -954,7 +965,7 @@ pub async fn restore_server_channel(
                 .await
             {
                 chat_data.write().messages = messages;
-                request_scroll_to_bottom();
+                request_restore_scroll_position_or_bottom(&ch.id);
             }
             if let Ok(members) = guard.get_channel_members(&ch.id).await {
                 chat_data.write().members = members;

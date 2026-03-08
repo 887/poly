@@ -14,7 +14,8 @@
 use super::super::super::routes::Route;
 use super::chat_history::{
     ChatHistoryUiState, OLDER_MESSAGES_PAGE_SIZE, read_message_list_scroll_metrics,
-    request_preserve_scroll_position, unread_marker_message_id,
+    remember_message_list_scroll_position, request_preserve_scroll_position,
+    unread_marker_message_id,
 };
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
@@ -597,6 +598,12 @@ async fn open_message_hit(
 ) -> Option<(Route, String)> {
     let target_message_id = hit.message.id.clone();
     let target_channel_id = hit.channel_id.clone();
+
+    if let Some(ref previous_channel_id) = current_channel_id
+        && previous_channel_id != &target_channel_id
+    {
+        remember_message_list_scroll_position(previous_channel_id);
+    }
 
     if message_hit_already_rendered(
         &chat_data,

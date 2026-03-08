@@ -2,6 +2,7 @@
 
 use dioxus::prelude::document;
 use poly_client::{Message, MessageQuery};
+use serde_json::to_string as json_string;
 
 /// Number of messages to load on first open when there is no unread context.
 pub const INITIAL_MESSAGE_PAGE_SIZE: u32 = 36;
@@ -72,25 +73,83 @@ pub async fn read_message_list_scroll_metrics() -> Option<(f64, f64)> {
     Some((scroll_top, scroll_height))
 }
 
+fn encoded_channel_id(channel_id: &str) -> Option<String> {
+    json_string(channel_id).ok()
+}
+
+/// Remember the current message-list scroll position for a channel.
+pub fn remember_message_list_scroll_position(channel_id: &str) {
+    let Some(encoded_channel_id) = encoded_channel_id(channel_id) else {
+        return;
+    };
+
+    document::eval(&format!(
+        r#"
+            window.__polyMessageScrollPositions ??= Object.create(null);
+            const el = document.getElementById('message-list-scroll');
+            if (el) {{
+                window.__polyMessageScrollPositions[{encoded_channel_id}] = el.scrollTop;
+            }}
+        "#,
+    ));
+}
+
+fn request_scroll_top(scroll_script: &str) {
+    document::eval(&format!(
+        r#"
+            window.__polyScrollRequestSeq = (window.__polyScrollRequestSeq ?? 0) + 1;
+            const seq = window.__polyScrollRequestSeq;
+            if (window.__polyScrollRafId) {{
+                cancelAnimationFrame(window.__polyScrollRafId);
+            }}
+            if (Array.isArray(window.__polyScrollTimeoutIds)) {{
+                for (const timeoutId of window.__polyScrollTimeoutIds) {{
+                    clearTimeout(timeoutId);
+                }}
+            }}
+            window.__polyScrollTimeoutIds = [];
+            const applyScroll = () => {{
+                if (window.__polyScrollRequestSeq !== seq) {{
+                    return;
+                }}
+                const el = document.getElementById('message-list-scroll');
+                if (el) {{
+                    {scroll_script}
+                }}
+            }};
+            window.__polyScrollRafId = requestAnimationFrame(() => {{
+                applyScroll();
+                window.__polyScrollTimeoutIds = [32, 90, 240, 480].map(
+                    (delay) => setTimeout(applyScroll, delay),
+                );
+            }});
+        "#,
+    ));
+}
+
 /// Scroll the message list to the bottom after the next render frame.
 pub fn request_scroll_to_bottom() {
-    document::eval(
+    request_scroll_top("el.scrollTop = el.scrollHeight;");
+}
+
+/// Restore a remembered scroll position for a channel, or fall back to bottom.
+pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
+    let Some(encoded_channel_id) = encoded_channel_id(channel_id) else {
+        request_scroll_to_bottom();
+        return;
+    };
+
+    request_scroll_top(&format!(
         r#"
-            const snapToBottom = () => {
-                const el = document.getElementById('message-list-scroll');
-                if (el) {
-                    el.scrollTop = el.scrollHeight;
-                }
-            };
-            requestAnimationFrame(() => {
-                snapToBottom();
-                setTimeout(snapToBottom, 32);
-                setTimeout(snapToBottom, 90);
-                setTimeout(snapToBottom, 240);
-                setTimeout(snapToBottom, 480);
-            });
+            window.__polyMessageScrollPositions ??= Object.create(null);
+            const saved = window.__polyMessageScrollPositions[{encoded_channel_id}];
+            if (Number.isFinite(saved)) {{
+                el.scrollTop = saved;
+            }} else {{
+                el.scrollTop = el.scrollHeight;
+            }}
         "#,
-    );
+    ));
 }
 
 /// Preserve the user's viewport after prepending older messages.

@@ -74,7 +74,7 @@ pub use setup_wizard::SetupWizard;
 use crate::client_manager::ClientManager;
 use crate::state::{AppState, ChatData, SettingsSection, View};
 use dioxus::prelude::*;
-use routes::sync_route_to_app_state;
+use routes::{route_targets_unknown_account, sync_route_to_app_state};
 
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
 const CSS: Asset = asset!("assets/tailwind.css");
@@ -197,27 +197,10 @@ fn router_config(
             let route = state.current();
             sync_route_to_app_state(&route, app_state);
 
-            let route_account_id: Option<&str> = match &route {
-                Route::DmsHome { account_id, .. }
-                | Route::DmChat { account_id, .. }
-                | Route::ServerHome { account_id, .. }
-                | Route::ServerChat { account_id, .. }
-                | Route::ServerSettingsRoute { account_id, .. }
-                | Route::FriendsRoute { account_id, .. }
-                | Route::AccountSettingsRoute { account_id, .. } => Some(account_id.as_str()),
-                _ => None,
-            };
-
-            if let Some(aid) = route_account_id {
-                let ids = client_manager.read().active_account_ids();
-                if !ids.is_empty() {
-                    let is_known = ids.iter().any(|id| id == aid);
-                    if !is_known {
-                        let mut next_app_state = app_state;
-                        next_app_state.write().settings_section = SettingsSection::Accounts;
-                        return Some(NavigationTarget::Internal(Route::SettingsRoute));
-                    }
-                }
+            if route_targets_unknown_account(&route, &client_manager.read()) {
+                let mut next_app_state = app_state;
+                next_app_state.write().settings_section = SettingsSection::Accounts;
+                return Some(NavigationTarget::Internal(Route::SettingsRoute));
             }
 
             if matches!(route, Route::PageNotFound { .. } | Route::Root) {

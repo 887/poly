@@ -25,6 +25,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
+use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use dioxus::prelude::*;
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
@@ -285,6 +286,9 @@ fn AccountServerIcon(
     let bslug_click = backend_slug.clone();
     let aid_click = account_id.clone();
     let on_click = move |_: Event<MouseData>| {
+        if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
+            remember_message_list_scroll_position(&previous_channel_id);
+        }
         app_state.write().nav.selected_server = Some(sid_click.clone());
         app_state.write().nav.selected_channel = None;
         let sid2 = sid_click.clone();

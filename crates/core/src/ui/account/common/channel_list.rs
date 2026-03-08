@@ -10,7 +10,10 @@
 //! - `ServerChannelView`: server categories and channels
 
 use super::super::super::routes::Route;
-use super::chat_history::{initial_message_query, request_scroll_to_bottom};
+use super::chat_history::{
+    initial_message_query, remember_message_list_scroll_position,
+    request_restore_scroll_position_or_bottom,
+};
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
@@ -72,7 +75,7 @@ async fn load_channel_data(
                 .await
             {
                 chat_data.write().messages = messages;
-                request_scroll_to_bottom();
+                request_restore_scroll_position_or_bottom(&channel_id);
             }
             if let Ok(members) = guard.get_channel_members(&channel_id).await {
                 chat_data.write().members = members;
@@ -112,7 +115,7 @@ async fn load_dm_messages(
         .await
     {
         chat_data.write().messages = messages;
-        request_scroll_to_bottom();
+        request_restore_scroll_position_or_bottom(&channel_id);
     }
     if let Ok(members) = guard.get_channel_members(&channel_id).await {
         chat_data.write().members = members;
@@ -675,11 +678,13 @@ fn DMChannelItem(
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
+                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                {
+                    remember_message_list_scroll_position(&previous_channel_id); // Clear group member list — this is an individual DM.
+                }
                 app_state.write().nav.selected_channel = Some(channel_id.clone());
-                // Clear group member list — this is an individual DM.
                 chat_data.write().active_group_members = Vec::new();
                 app_state.write().nav.dm_right_sidebar_visible = false;
-                // Synthesize a Channel so ChatView can display the DM header
                 chat_data.write().current_channel = Some(Channel {
                     id: channel_id.clone(),
                     name: display_name.clone(),
@@ -751,10 +756,12 @@ fn GroupChannelItem(
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
+                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                {
+                    remember_message_list_scroll_position(&previous_channel_id); // Populate group members for the DM member sidebar.
+                } // Synthesize a Channel so ChatView can display the group header
                 app_state.write().nav.selected_channel = Some(group_id.clone());
-                // Populate group members for the DM member sidebar.
                 chat_data.write().active_group_members = members.clone();
-                // Synthesize a Channel so ChatView can display the group header
                 chat_data.write().current_channel = Some(Channel {
                     id: group_id.clone(),
                     name: display_name.clone(),
@@ -878,6 +885,10 @@ fn ChannelItemRow(channel: Channel) -> Element {
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
+                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                {
+                    remember_message_list_scroll_position(&previous_channel_id);
+                }
                 app_state.write().nav.selected_channel = Some(ch_id.clone());
                 chat_data.write().current_channel = Some(channel.clone());
                 let cid = ch_id.clone();

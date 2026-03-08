@@ -16,9 +16,10 @@
 
 use super::account::{AccountServerBar, ServerContextMenu};
 use super::favorites_sidebar::FavoritesBar;
-use super::routes::{Route, sync_route_to_app_state};
+use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
-use crate::state::AppState;
+use crate::client_manager::ClientManager;
+use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
 
@@ -71,6 +72,7 @@ fn NavBar() -> Element {
 #[component]
 pub fn MainLayout() -> Element {
     let mut app_state: Signal<AppState> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
 
     // DECISION(DX-ROUTER-3): Dioxus 0.7 web router does not fire on_update for the
     // initial browser URL when the Router component first mounts — only for subsequent
@@ -88,6 +90,13 @@ pub fn MainLayout() -> Element {
     // read app_state via .read() in its own render body — only in event handlers.
     let route = use_route::<Route>();
     sync_route_to_app_state(&route, app_state);
+
+    use_effect(move || {
+        if route_targets_unknown_account(&route, &client_manager.read()) {
+            app_state.write().settings_section = SettingsSection::Accounts;
+            navigator().replace(Route::SettingsRoute);
+        }
+    });
 
     // Persist per-account last-visited routes to storage whenever they change.
     // This fires after every route navigation (because sync_route_to_app_state

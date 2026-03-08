@@ -20,6 +20,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
+use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use dioxus::prelude::*;
 use poly_client::{ChannelType, VoiceParticipant};
 
@@ -119,6 +120,9 @@ async fn join_voice_channel(
     });
 
     // Update nav state
+    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
+        remember_message_list_scroll_position(&previous_channel_id);
+    }
     app_state.write().nav.selected_channel = Some(channel_id);
 }
 
