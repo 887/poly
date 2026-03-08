@@ -454,17 +454,21 @@ fn VoiceSettingsPopup(on_close: EventHandler<()>) -> Element {
                         let val = e.value();
                         chat_data.write().voice_media_settings.mic_device_id =
                             if val.is_empty() { None } else { Some(val) };
+                            None
+                        } else {
+                            Some(val)
+                        };
                     },
                     option { value: "", "{t(\"voice-default-device\")}" }
                     for (id , label) in mic_devices.read().iter() {
                         option {
                             value: "{id}",
                             selected: chat_data
-                                                                                        .read()
-                                                                                        .voice_media_settings
-                                                                                        .mic_device_id
-                                                                                        .as_deref()
-                                                                                        == Some(id.as_str()),
+                                                                                                                    .read()
+                                                                                                                    .voice_media_settings
+                                                                                                                    .mic_device_id
+                                                                                                                    .as_deref()
+                                                                                                                    == Some(id.as_str()),
                             "{label}"
                         }
                     }
@@ -480,16 +484,20 @@ fn VoiceSettingsPopup(on_close: EventHandler<()>) -> Element {
                         let val = e.value();
                         chat_data.write().voice_media_settings.speaker_device_id =
                             if val.is_empty() { None } else { Some(val) };
+                            None
+                        } else {
+                            Some(val)
+                        };
                     },
                     option { value: "", "{t(\"voice-default-device\")}" }
                     for (id , label) in spk_devices.read().iter() {
                         option {
                             value: "{id}",
                             selected: chat_data
-                                                                                        .read()
-                                                                                        .voice_media_settings
-                                                                                        .speaker_device_id
-                                                                                        .as_deref()
+                                                                                                                    .read()
+                                                                                                                    .voice_media_settings
+                                                                                                                    .speaker_device_id
+                                                                                                                    .as_deref()
                                 == Some(id.as_str()),
                             "{label}"
                         }
