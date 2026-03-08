@@ -446,6 +446,7 @@ pub async fn remove_backup_server(&self, url: &str) -> Result<(), StorageError>
 // Identity key (Ed25519 private key bytes, 32 bytes, hex-encoded in DB)
 pub async fn get_identity_key(&self) -> Result<Option<[u8; 32]>, StorageError>
 pub async fn set_identity_key(&self, key: &[u8; 32]) -> Result<(), StorageError>
+pub async fn delete_identity_key(&self) -> Result<(), StorageError>
 ```
 
 `BackupServerRecord` fields: `url`, `label`, `enabled`, `last_sequence`, `token` (Option),

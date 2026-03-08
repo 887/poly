@@ -101,6 +101,8 @@ settings-theme = Theme
 settings-theme-description = Customize colors, themes, and appearance
 settings-media = Media
 settings-media-description = Configure GIF providers and future rich media integrations
+settings-media-description-tabs = Configure GIF providers. Enable a provider to make it available in the chat GIF picker. Enabling a provider also makes it the active one.
+settings-media-active-hint = The enabled providers appear as tabs in the GIF picker when composing a message.
 settings-media-active-provider = Active GIF Provider
 settings-media-api-key = API Key
 settings-media-api-key-placeholder = Paste provider API key
@@ -158,7 +160,7 @@ settings-demo-toggle = Enable Demo Data
 settings-plugins = Plugins
 settings-plugins-description = Enable or disable messenger backend plugins. Each plugin is a messenger client (Demo, Discord, Matrix, Stoat, Teams, Poly Server). Accounts are sessions created by those plugins.
 plugins-native-title = Built-in Plugins
-plugins-native-description = These plugins are compiled into this build of Poly. Toggle them on or off with the checkboxes. Disabled plugins will not create new accounts.
+plugins-native-description = Toggle messenger backends on or off. Backends marked "not in this build" are not compiled into this version — enabling them here saves your preference for when they become available, or add them as WASM plugins below.
 plugins-loaded-count = Active backends
 plugins-none-loaded = No WASM plugins added yet. Add a plugin URL below to get started.
 plugins-status-disconnected = Disconnected
@@ -171,22 +173,28 @@ plugins-not-compiled = not in this build
 plugins-active-accounts = Active accounts
 plugins-wasm-title = WASM Plugins
 plugins-wasm-description = WASM plugins extend Poly with additional messenger backends. Load a plugin from a URL — Poly will append its WIT interface version so the server can serve the correct binary.
-plugins-add-wasm-title = Add Plugin from URL
+plugins-add-wasm-title = Add Plugin
 plugins-add-wasm-description = Enter the base URL of a WASM plugin. The WIT version will be appended automatically so you always get a compatible build.
 plugins-url-placeholder = https://plugins.example.com/matrix.wasm
-plugins-name-placeholder = Display name (optional)
 plugins-add-btn = Add Plugin
 plugins-url-required = Please enter a plugin URL
+plugins-install-from-url = From URL
+plugins-install-from-file = From File
+plugins-add-file-description = Select a local .wasm file to install as a plugin. The plugin can optionally contain its own update URL in its metadata.
+plugins-file-hint = The plugin will be registered locally. Reload the app to activate it.
 plugins-remove = Remove
 plugins-wit-hint = WIT interface version
 
 # Plugin Settings
 settings-plugin-settings = Plugin Settings
+# Label shown in the nav sidebar and in the scroll divider before plugin-contributed sections
+settings-plugins-section-divider = Plugin-Provided Settings
+# Small badge label shown on plugin-sourced settings headings
+settings-plugins-badge = Plugin
 plugin-settings-nav-title = Backend Settings
 plugin-settings-none = No backends with settings are loaded. Enable demo data or connect an account.
-plugin-settings-demo-title = Demo Settings
-plugin-settings-demo-description = Configure the built-in demo data client. Toggle demo mode to load or clear sample accounts, servers, and conversations.
 plugin-settings-generic-description = This backend does not have custom settings yet. Settings will appear here when the plugin supports them.
+# Note: plugin-demo-* strings are loaded from the demo plugin's own FTL bundle.
 
 # Backup Server Settings
 settings-backup-add-server = Add Server
@@ -234,6 +242,19 @@ settings-identity-phrase-warning = Keep this phrase secret. Anyone who has it ca
 settings-identity-copy-all = Copy All Words
 settings-identity-close = Close
 settings-identity-no-identity = Identity not yet generated. Complete the setup wizard first.
+settings-identity-create-btn = Create Identity
+settings-identity-creating = Creating…
+settings-identity-backup-servers = Backup Servers
+settings-identity-backup-servers-description = This identity is used for authentication on the following backup servers.
+settings-identity-poly-accounts = Poly Server Accounts
+settings-identity-poly-accounts-description = This identity is used for the following accounts on self-hosted Poly servers.
+settings-identity-no-servers = No backup servers configured yet.
+settings-identity-no-poly-accounts = No Poly server accounts.
+settings-identity-delete = Delete Identity
+settings-identity-delete-confirm-title = Delete Identity?
+settings-identity-delete-confirm-message = This will permanently remove this identity key. Make sure you have the recovery phrase backed up or you won't be able to recover access!
+settings-identity-delete-confirm = Yes, Delete
+settings-identity-cancel = Cancel
 
 # Theme Presets
 theme-blue = Blue

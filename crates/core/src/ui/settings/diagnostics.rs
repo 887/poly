@@ -12,7 +12,6 @@ use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 
 /// Diagnostics page — shows health and status information for all accounts.
-#[allow(clippy::module_name_repetitions)]
 #[rustfmt::skip]
 #[component]
 pub fn DiagnosticsPage() -> Element {
@@ -36,11 +35,7 @@ pub fn DiagnosticsPage() -> Element {
                 div { class: "diagnostics-row",
                     span { class: "diagnostics-label", {t("settings-diagnostics-demo-active")} }
                     span { class: if demo_active { "diagnostics-value value-ok" } else { "diagnostics-value value-off" },
-                        if demo_active {
-                            "Yes"
-                        } else {
-                            "No"
-                        }
+                        if demo_active { "Yes" } else { "No" }
                     }
                 }
                 div { class: "diagnostics-row",
@@ -53,7 +48,6 @@ pub fn DiagnosticsPage() -> Element {
             if !account_ids.is_empty() {
                 h3 { class: "settings-subsection-title", {t("settings-diagnostics-accounts-title")} }
                 div { class: "diagnostics-accounts-table",
-                    // Header row
                     div { class: "diagnostics-table-header",
                         span { {t("settings-diagnostics-col-account")} }
                         span { {t("settings-diagnostics-col-connection")} }
@@ -94,8 +88,6 @@ fn AccountDiagnosticsRow(account_id: String) -> Element {
         ConnectionStatus::Connecting => "Connecting…",
         ConnectionStatus::Disconnected => "Disconnected",
         ConnectionStatus::Error(e) => {
-            // We can't return e directly; show a static label.
-            // TODO(phase-2.12): show error detail in a tooltip
             let _ = e;
             "Error"
         }

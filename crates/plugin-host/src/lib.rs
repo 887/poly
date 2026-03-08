@@ -49,4 +49,4 @@ pub mod engine;
 pub mod host_impl;
 pub mod registry;
 
-pub use registry::{PluginBackend, PluginRegistry};
+pub use registry::{PluginBackend, PluginRegistry, SettingDescriptor, SettingKind};

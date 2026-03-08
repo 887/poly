@@ -1,9 +1,9 @@
 //! Media settings — external GIF providers and future rich-media integrations.
 //!
-//! Keeps provider config app-scoped (not backend-scoped) because GIF search is
-//! an external integration, unlike emojis/stickers which are loaded per client.
+//! Each provider has a tab. The tabs show all providers and their config.
+//! Only enabled providers appear as selectable tabs in the GIF picker in chat;
+//! the chat picker tab for each provider maps to the `active_gif_provider`.
 
-use super::common::{PolySelect, SelectOption};
 use crate::i18n::t;
 use crate::storage::{GifProviderKind, MediaProviderSettings};
 use dioxus::prelude::*;
@@ -19,23 +19,6 @@ async fn persist_media_settings(media: MediaProviderSettings) {
     if let Err(err) = storage.set_app_settings(&app_settings).await {
         tracing::warn!("Failed to persist media settings: {err}");
     }
-}
-
-fn provider_options() -> Vec<SelectOption> {
-    vec![
-        SelectOption {
-            value: GifProviderKind::Klippy.as_str(),
-            label: "Klippy",
-        },
-        SelectOption {
-            value: GifProviderKind::Giphy.as_str(),
-            label: "Giphy",
-        },
-        SelectOption {
-            value: GifProviderKind::Imgur.as_str(),
-            label: "Imgur",
-        },
-    ]
 }
 
 fn update_media_settings(
@@ -62,9 +45,10 @@ fn load_media_settings(mut media: Signal<MediaProviderSettings>) {
     });
 }
 
+/// Single provider config panel (shown when that provider's tab is active).
 #[rustfmt::skip]
 #[component]
-fn ProviderCard(
+fn ProviderPanel(
     title: String,
     api_key: String,
     enabled: bool,
@@ -108,78 +92,36 @@ fn ProviderCard(
     }
 }
 
+/// Tab bar for provider selection — each provider is a clickable tab.
 #[rustfmt::skip]
 #[component]
-fn ActiveProviderSelector(active_value: String, on_change: EventHandler<String>) -> Element {
+fn ProviderTabs(active_tab: Signal<GifProviderKind>, providers: Vec<(GifProviderKind, String)>) -> Element {
     rsx! {
-        div { class: "media-settings-active-provider",
-            label { class: "settings-label", "{t(\"settings-media-active-provider\")}" }
-            PolySelect {
-                options: provider_options(),
-                value: active_value,
-                onchange: move |value: String| on_change.call(value),
+        div { class: "media-provider-tabs",
+            for (kind, label) in providers {
+                {
+                    let is_active = *active_tab.read() == kind;
+                    rsx! {
+                        button {
+                            key: "{kind.as_str()}",
+                            class: if is_active { "media-provider-tab active" } else { "media-provider-tab" },
+                            onclick: move |_| *active_tab.write() = kind,
+                            "{label}"
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-#[component]
-fn ProviderCards(
-    klippy_api_key: String,
-    klippy_enabled: bool,
-    giphy_api_key: String,
-    giphy_enabled: bool,
-    imgur_api_key: String,
-    imgur_enabled: bool,
-    media: Signal<MediaProviderSettings>,
-) -> Element {
-    rsx! {
-        ProviderCard {
-            title: t("settings-media-provider-klippy"),
-            api_key: klippy_api_key.clone(),
-            enabled: klippy_enabled,
-            configured: !klippy_api_key.trim().is_empty(),
-            on_toggle: move |enabled| {
-                update_media_settings(media, |next| next.klippy.enabled = enabled);
-            },
-            on_key_input: move |value: String| {
-                update_media_settings(media, |next| next.klippy.api_key = value);
-            },
-        }
-
-        ProviderCard {
-            title: t("settings-media-provider-giphy"),
-            api_key: giphy_api_key.clone(),
-            enabled: giphy_enabled,
-            configured: !giphy_api_key.trim().is_empty(),
-            on_toggle: move |enabled| {
-                update_media_settings(media, |next| next.giphy.enabled = enabled);
-            },
-            on_key_input: move |value: String| {
-                update_media_settings(media, |next| next.giphy.api_key = value);
-            },
-        }
-
-        ProviderCard {
-            title: t("settings-media-provider-imgur"),
-            api_key: imgur_api_key.clone(),
-            enabled: imgur_enabled,
-            configured: !imgur_api_key.trim().is_empty(),
-            on_toggle: move |enabled| {
-                update_media_settings(media, |next| next.imgur.enabled = enabled);
-            },
-            on_key_input: move |value: String| {
-                update_media_settings(media, |next| next.imgur.api_key = value);
-            },
-        }
-    }
-}
-
-/// Media integrations settings section.
+/// Media integrations settings section — provider tabs layout.
+#[rustfmt::skip]
 #[component]
 pub(super) fn MediaSettings() -> Element {
     let media = use_signal(MediaProviderSettings::default);
     let mut loaded = use_signal(|| false);
+    let mut active_tab: Signal<GifProviderKind> = use_signal(|| GifProviderKind::Klippy);
 
     use_effect(move || {
         if *loaded.read() {
@@ -191,27 +133,89 @@ pub(super) fn MediaSettings() -> Element {
 
     let current = media.read().clone();
 
+    // Sync active_tab to active_gif_provider on first load
+    use_effect(move || {
+        let provider = media.read().active_gif_provider;
+        *active_tab.write() = provider;
+    });
+
+    let tab_providers = vec![
+        (GifProviderKind::Klippy, t("settings-media-provider-klippy")),
+        (GifProviderKind::Giphy, t("settings-media-provider-giphy")),
+        (GifProviderKind::Imgur, t("settings-media-provider-imgur")),
+    ];
+
+    let tab = *active_tab.read();
+
     rsx! {
         div { class: "settings-section media-settings",
             h2 { "{t(\"settings-media\")}" }
-            p { class: "settings-description", "{t(\"settings-media-description\")}" }
+            p { class: "settings-description", "{t(\"settings-media-description-tabs\")}" }
 
-            ActiveProviderSelector {
-                active_value: current.active_gif_provider.as_str().to_string(),
-                on_change: move |value: String| {
-                    if let Some(kind) = GifProviderKind::from_slug(&value) {
-                        update_media_settings(media, |next| next.active_gif_provider = kind);
-                    }
-                },
+            ProviderTabs {
+                active_tab,
+                providers: tab_providers,
             }
-            ProviderCards {
-                klippy_api_key: current.klippy.api_key.clone(),
-                klippy_enabled: current.klippy.enabled,
-                giphy_api_key: current.giphy.api_key.clone(),
-                giphy_enabled: current.giphy.enabled,
-                imgur_api_key: current.imgur.api_key.clone(),
-                imgur_enabled: current.imgur.enabled,
-                media,
+
+            div { class: "media-provider-tab-content",
+                match tab {
+                    GifProviderKind::Klippy => rsx! {
+                        ProviderPanel {
+                            title: t("settings-media-provider-klippy"),
+                            api_key: current.klippy.api_key.clone(),
+                            enabled: current.klippy.enabled,
+                            configured: !current.klippy.api_key.trim().is_empty(),
+                            on_toggle: move |enabled| {
+                                update_media_settings(media, |next| {
+                                    next.klippy.enabled = enabled;
+                                    if enabled { next.active_gif_provider = GifProviderKind::Klippy; }
+                                });
+                            },
+                            on_key_input: move |value: String| {
+                                update_media_settings(media, |next| next.klippy.api_key = value);
+                            },
+                        }
+                    },
+                    GifProviderKind::Giphy => rsx! {
+                        ProviderPanel {
+                            title: t("settings-media-provider-giphy"),
+                            api_key: current.giphy.api_key.clone(),
+                            enabled: current.giphy.enabled,
+                            configured: !current.giphy.api_key.trim().is_empty(),
+                            on_toggle: move |enabled| {
+                                update_media_settings(media, |next| {
+                                    next.giphy.enabled = enabled;
+                                    if enabled { next.active_gif_provider = GifProviderKind::Giphy; }
+                                });
+                            },
+                            on_key_input: move |value: String| {
+                                update_media_settings(media, |next| next.giphy.api_key = value);
+                            },
+                        }
+                    },
+                    GifProviderKind::Imgur => rsx! {
+                        ProviderPanel {
+                            title: t("settings-media-provider-imgur"),
+                            api_key: current.imgur.api_key.clone(),
+                            enabled: current.imgur.enabled,
+                            configured: !current.imgur.api_key.trim().is_empty(),
+                            on_toggle: move |enabled| {
+                                update_media_settings(media, |next| {
+                                    next.imgur.enabled = enabled;
+                                    if enabled { next.active_gif_provider = GifProviderKind::Imgur; }
+                                });
+                            },
+                            on_key_input: move |value: String| {
+                                update_media_settings(media, |next| next.imgur.api_key = value);
+                            },
+                        }
+                    },
+                }
+            }
+
+            // Note: Enabling a provider also sets it as the active chat GIF tab.
+            p { class: "settings-description media-active-hint",
+                "{t(\"settings-media-active-hint\")}"
             }
         }
     }

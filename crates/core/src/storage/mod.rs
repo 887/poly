@@ -723,6 +723,12 @@ impl Storage {
             .await
     }
 
+    /// Delete the identity key from storage. This is irreversible unless you have
+    /// the mnemonic backed up.
+    pub async fn delete_identity_key(&self) -> Result<(), StorageError> {
+        self.delete("identity_key").await
+    }
+
     // ── Migrations ────────────────────────────────────────────────────────────
 
     /// Current storage schema version.

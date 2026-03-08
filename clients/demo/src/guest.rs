@@ -10,7 +10,7 @@ use std::cell::RefCell;
 
 use poly_client as pc;
 
-use crate::wit_bindings::{Guest, wit};
+use crate::wit_bindings::{MessengerClientGuest, PluginMetadataGuest, SettingDescriptor, SettingKind, wit};
 
 // ─── State Management ──────────────────────────────────────────────
 // WASM components are single-threaded; use thread_local + RefCell.
@@ -338,7 +338,7 @@ fn convert_result<T, W>(
 /// The demo plugin component type.
 struct DemoPlugin;
 
-impl Guest for DemoPlugin {
+impl MessengerClientGuest for DemoPlugin {
     fn authenticate(_credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
         let session = crate::data::demo_session();
         STATE.with(|s| s.borrow_mut().authenticated = true);
@@ -541,6 +541,48 @@ impl Guest for DemoPlugin {
 
     fn get_backend_name() -> String {
         "Demo".to_string()
+    }
+}
+
+// ─── Plugin Metadata Implementation ───────────────────────────────
+
+/// FTL translation source strings embedded at WASM compile time.
+///
+/// These are returned via `get-translations(locale)` and merged by the
+/// host into its global Fluent bundle under the plugin namespace.
+/// All message IDs are prefixed with `plugin-demo-`.
+const FTL_EN: &str = include_str!("../locales/en/plugin.ftl");
+const FTL_DE: &str = include_str!("../locales/de/plugin.ftl");
+const FTL_FR: &str = include_str!("../locales/fr/plugin.ftl");
+const FTL_ES: &str = include_str!("../locales/es/plugin.ftl");
+
+impl PluginMetadataGuest for DemoPlugin {
+    fn get_translations(locale: String) -> String {
+        match locale.as_str() {
+            "en" => FTL_EN.to_string(),
+            "de" => FTL_DE.to_string(),
+            "fr" => FTL_FR.to_string(),
+            "es" => FTL_ES.to_string(),
+            // Fall back to English for unknown locales
+            _ => FTL_EN.to_string(),
+        }
+    }
+
+    fn get_settings_schema() -> Vec<SettingDescriptor> {
+        vec![SettingDescriptor {
+            key: "enabled".to_string(),
+            kind: SettingKind::Toggle,
+            default_value: "false".to_string(),
+            extra: String::new(),
+        }]
+    }
+
+    fn get_display_name_key() -> String {
+        "plugin-demo-title".to_string()
+    }
+
+    fn get_icon() -> String {
+        "🧪".to_string()
     }
 }
 

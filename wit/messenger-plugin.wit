@@ -567,6 +567,86 @@ interface messenger-client {
     get-backend-name: func() -> string;
 }
 
+// ─── Plugin Metadata (optional exports — host uses if present) ─────
+
+/// Plugin metadata: localisation, settings schema, and display information.
+///
+/// This interface is OPTIONAL — plugins do not have to implement it.
+/// When present, the host uses it to:
+/// - Load the plugin's FTL translation strings into the global i18n system
+///   under the `plugin.<id>.*` namespace prefix.
+/// - Build the structured settings UI from the schema returned by
+///   `get-settings-schema`, so the host renders the settings page from
+///   the plugin's own definition (no hard-coded host UI per backend).
+///
+/// ## Translation key convention
+///
+/// All FTL message IDs returned by `get-translations` MUST be prefixed with
+/// `plugin-<plugin-id>-`. The host strips nothing — keys are used as-is.
+/// Example for the demo plugin:
+///   `plugin-demo-title = Demo Settings`
+///   `plugin-demo-toggle-label = Enable Demo Data`
+///
+/// ## Settings schema
+///
+/// The settings schema is a flat list of `setting-descriptor` records.
+/// The host renders each one using the appropriate control widget. The
+/// plugin's FTL keys supply all user-visible labels and descriptions.
+interface plugin-metadata {
+    /// The type of setting control to render.
+    enum setting-kind {
+        /// Boolean toggle / checkbox.
+        toggle,
+        /// Single-line text input.
+        text-input,
+        /// Dropdown with a fixed list of options.
+        select,
+        /// Numeric slider (min / max / step encoded in `extra`).
+        slider,
+        /// Read-only informational label row.
+        info-label,
+    }
+
+    /// One entry in a plugin's settings schema.
+    ///
+    /// `key` is the storage key AND the FTL key suffix for label/description.
+    /// FTL lookup: `plugin-<plugin-id>-setting-<key>-label`
+    ///             `plugin-<plugin-id>-setting-<key>-desc`   (optional)
+    /// Storage key in SurrealDB: `plugin/<plugin-id>/<key>`
+    record setting-descriptor {
+        /// Unique key within this plugin (snake_case). Used as storage key.
+        key: string,
+        /// The kind of widget to render.
+        kind: setting-kind,
+        /// JSON-serialized default value (e.g. "true", "\"option-a\"", "42").
+        default-value: string,
+        /// For `select` kind: JSON array of option values. For `slider`:
+        /// JSON object `{"min":0,"max":100,"step":1}`. Empty otherwise.
+        extra: string,
+    }
+
+    /// Return the raw FTL source text for a given locale code (e.g. "en", "de").
+    ///
+    /// Returns an empty string if the locale is not supported by this plugin,
+    /// in which case the host falls back to the English bundle.
+    get-translations: func(locale: string) -> string;
+
+    /// Return the ordered list of settings this plugin exposes.
+    ///
+    /// The host renders them in the plugin's settings panel in list order.
+    /// Return an empty list if the plugin has no configurable settings.
+    get-settings-schema: func() -> list<setting-descriptor>;
+
+    /// Return the plugin's human-readable display name FTL key.
+    ///
+    /// The key must exist in the FTL returned by `get-translations("en")`.
+    /// Example: "plugin-demo-title"
+    get-display-name-key: func() -> string;
+
+    /// Return the plugin's icon emoji or short string (e.g. "🧪").
+    get-icon: func() -> string;
+}
+
 // ─── World Definition ──────────────────────────────────────────────
 
 /// The complete plugin world — what a messenger plugin must satisfy.
@@ -574,7 +654,9 @@ interface messenger-client {
 /// A valid plugin WASM component must:
 /// 1. Import (use) the host-api interface for all I/O
 /// 2. Export (implement) the messenger-client interface
+/// 3. Optionally export plugin-metadata for i18n and settings schema
 world messenger-plugin {
     import host-api;
     export messenger-client;
+    export plugin-metadata;
 }

@@ -1952,6 +1952,207 @@ body {
     pointer-events: none;
 }
 
+.settings-scroll-spacer {
+    min-height: 60vh;
+}
+
+/* Mnemonic phrase grid — 2 columns for nice display */
+.mnemonic-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.mnemonic-word {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-card-bg, #2a2a3e);
+    border: 1px solid var(--color-border, #3a3a4e);
+    border-radius: 0.375rem;
+    font-size: 0.95rem;
+}
+
+.word-number {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--color-text-muted, #999aaa);
+    min-width: 2.5rem;
+}
+
+.word-text {
+    flex: 1;
+    font-family: monospace;
+    letter-spacing: 0.025em;
+}
+
+/* Modal overlay and content styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--bg-secondary, #16213e);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.06));
+    border-radius: 0.5rem;
+    padding: 2rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.modal-warning {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    color: #ef4444;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+}
+
+.modal-account-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+    margin-bottom: 1.5rem;
+    word-break: break-all;
+}
+
+/* Identity list and cards */
+.identity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.identity-card {
+    background: var(--bg-surface, #1e1e3a);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.06));
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+}
+
+.identity-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.identity-account-id {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 200px;
+}
+
+.identity-account-id code {
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: var(--bg-input, #12122a);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    word-break: break-all;
+    flex: 1;
+}
+
+.identity-card-usage {
+    border-top: 1px solid var(--border-primary, rgba(255, 255, 255, 0.06));
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+
+.identity-card-usage h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.identity-server-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.identity-server-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--bg-input, #12122a);
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.identity-server-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.identity-server-label {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.identity-server-url {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.identity-server-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.identity-server-status.status-ok {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.identity-server-status.status-off {
+    background: rgba(107, 114, 128, 0.1);
+    color: #9ca3af;
+}
+
 .settings-content {
     flex: 1;
     padding: 24px 32px;
@@ -2060,6 +2261,106 @@ body {
 .settings-toggle-label {
     font-size: 14px;
     color: var(--text-primary);
+}
+
+/* Group label + description vertically inside a toggle row */
+.settings-toggle-label-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Muted description text shown beneath a toggle label */
+.settings-toggle-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* ===========================
+ * Plugin section divider
+ * Shown between host settings and plugin-provided settings
+ * =========================== */
+
+.settings-plugin-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 24px 0 8px 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--divider);
+}
+
+.settings-plugin-divider-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.settings-plugin-divider-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--accent-primary);
+    color: var(--accent-text);
+    white-space: nowrap;
+}
+
+/* ===========================
+ * Plugin-owned settings section
+ * Each plugin gets a visually distinct block
+ * =========================== */
+
+/* Outer wrapper that slightly differentiates plugin sections */
+.plugin-section {
+    border-left: 3px solid var(--accent-primary);
+    padding-left: 12px;
+    margin-bottom: 8px;
+}
+
+/* Header row: icon + title + badge */
+.plugin-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--divider);
+}
+
+/* Emoji / icon for the plugin */
+.plugin-section-icon {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* Plugin display name heading */
+.plugin-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+/* "Plugin" badge shown in section headers */
+.plugin-section-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    color: var(--accent-primary);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+    white-space: nowrap;
 }
 
 /* ===========================
@@ -2200,6 +2501,38 @@ body {
     margin-bottom: 4px;
 }
 
+/* Install mode tabs (URL | File) */
+.plugin-install-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 10px 0;
+    background: var(--bg-secondary);
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    width: fit-content;
+}
+
+.plugin-install-tab {
+    padding: 5px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: calc(var(--radius-sm) - 2px);
+    transition: background 0.15s, color 0.15s;
+}
+
+.plugin-install-tab.active {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.plugin-install-tab:hover:not(.active) {
+    color: var(--text-primary);
+}
+
 .plugin-add-row {
     display: flex;
     gap: 8px;
@@ -2223,20 +2556,15 @@ body {
     border-color: var(--accent-primary);
 }
 
-.plugin-name-input {
+.plugin-file-input {
     flex: 1;
-    min-width: 140px;
-    padding: 8px 12px;
+    padding: 6px 12px;
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
     font-size: 13px;
-}
-
-.plugin-name-input:focus {
-    outline: none;
-    border-color: var(--accent-primary);
+    cursor: pointer;
 }
 
 .plugin-add-hint {
@@ -2390,6 +2718,51 @@ body {
     color: var(--text-muted);
     font-size: 14px;
     padding: 12px 8px;
+}
+
+/* ===========================
+ * Language Picker
+ * =========================== */
+
+.lang-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 380px;
+    margin-top: 8px;
+}
+
+.lang-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.lang-option:hover {
+    background: var(--bg-tertiary);
+}
+
+.lang-option-selected {
+    border-color: var(--accent-primary);
+    background: var(--bg-tertiary);
+}
+
+.lang-flag-label {
+    font-size: 15px;
+}
+
+.lang-checkmark {
+    color: var(--accent-primary);
+    font-size: 16px;
+    font-weight: 700;
 }
 
 /* ===========================
@@ -3012,6 +3385,49 @@ select {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+/* Provider tab bar — replaces the active-provider dropdown */
+.media-provider-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 16px;
+    background: var(--bg-secondary);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    width: fit-content;
+}
+
+.media-provider-tab {
+    padding: 6px 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: calc(var(--radius-sm) - 2px);
+    transition: background 0.15s, color 0.15s;
+}
+
+.media-provider-tab.active {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.media-provider-tab:hover:not(.active) {
+    color: var(--text-secondary);
+}
+
+.media-provider-tab-content {
+    flex: 1;
+}
+
+.media-active-hint {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
 }
 
 .media-provider-card {

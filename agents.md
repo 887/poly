@@ -290,6 +290,39 @@ At the END of each session:
 - Feature: `kv-surrealkv` on the `surrealdb` crate
 - If SurrealKV fails to compile on a mobile target, that's a P0 blocker to resolve
 
+### 11a. Client Plugin WASM Boundary — WIT Component Model, NOT `wasm-bindgen` (DECISION, 2026-03-08)
+
+Poly's **client plugins** do **not** use the typical Rust↔JS `wasm-bindgen` boundary described in many Wasm blog posts.
+They compile as **WASM Component Model** plugins targeting `wasm32-wasip2`, with the ABI defined in
+`wit/messenger-plugin.wit`, generated guest bindings via `wit-bindgen`, and host bindings via
+`wasmtime::component::bindgen!`.
+
+This means the Brooklyn Zelenka-style guidance about:
+- passing exported objects by `&reference`
+- `Rc<RefCell<T>>` / `Arc<Mutex<T>>` for JS-visible handles
+- avoiding `Copy` on exported wrapper types
+- `wasm_refgen` for `Vec<WasmFoo>`-style collections
+- `Wasm*` / `Js*` naming for `wasm-bindgen`
+- `From<Error> for JsValue` with `js_sys::Error`
+
+is **mostly NOT the governing rule set for Poly client plugins**, because our boundary is **typed WIT values**, not
+JS object handles.
+
+**Rules for Poly client plugins instead:**
+1. Model the plugin ABI in **WIT** using records, variants, enums, options, lists, tuples, and `result<_, client-error>`.
+2. Treat the boundary as **value-based**. Do **not** design the plugin ABI around Rust borrows/references crossing the boundary.
+3. Do **not** introduce `wasm-bindgen`, `JsValue`, `js_sys::Error`, `extern "C"`, `js_name`, or `js_class` into the client-plugin ABI.
+4. Keep boundary types **flat, serializable, and Component-Model-friendly**. If a type is awkward to express in WIT, redesign the boundary.
+5. Use the shared typed error channel: WIT `client-error` ↔ `poly-client::ClientError` via guest/host bridge code.
+6. When changing any client-facing shared type, update **all four layers** together:
+  - `clients/client/src/*`
+  - `wit/messenger-plugin.wit`
+  - `clients/*/src/guest.rs`
+  - `crates/plugin-host/src/bridge.rs`
+7. Validate boundary changes by rebuilding the affected plugins and running `poly-plugin-loader-tests`.
+
+`wasm-bindgen` advice may still be relevant for **separate browser/JS interop code**, but **not** for the Poly client-plugin boundary.
+
 ### 12. Research Resources
 
 When implementing messenger backends, consult:

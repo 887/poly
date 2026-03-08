@@ -34,6 +34,10 @@ use super::bridge;
 use super::engine::{self, MessengerPlugin};
 use super::host_impl::PluginHostState;
 
+/// Locales the host supports — must match poly-core's `SUPPORTED_LOCALES`.
+/// Stored here to avoid a circular dependency on poly-core.
+const SUPPORTED_LOCALES: &[&str] = &["en", "de", "fr", "es"];
+
 /// Registry that manages all loaded WASM plugins.
 ///
 /// Holds the shared [`Engine`] and provides methods to load plugin
@@ -142,15 +146,80 @@ impl PluginRegistry {
             .await
             .map_err(|e| format!("Failed to get backend_name from '{plugin_id}': {e}"))?;
 
+        // Load plugin translations and settings schema via the plugin-metadata interface.
+        // FTL strings are stored in PluginBackend.plugin_ftl; the host (poly-core) reads
+        // them after instantiation and calls i18n::register_plugin_ftl().
+        let _ = store.set_fuel(1_000_000_000);
+        let meta = instance.poly_messenger_plugin_metadata();
+        let mut plugin_ftl: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        for locale in SUPPORTED_LOCALES {
+            let _ = store.set_fuel(1_000_000_000);
+            match meta.call_get_translations(&mut store, locale).await {
+                Ok(ftl_src) if !ftl_src.trim().is_empty() => {
+                    plugin_ftl.insert(locale.to_string(), ftl_src);
+                    tracing::debug!("Loaded '{plugin_id}' FTL for locale '{locale}'");
+                }
+                Ok(_) => {
+                    tracing::debug!("Plugin '{plugin_id}' has no FTL for locale '{locale}'");
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Plugin '{plugin_id}' get-translations({locale}) failed: {e}"
+                    );
+                }
+            }
+        }
+
+        // Load settings schema
+        let _ = store.set_fuel(1_000_000_000);
+        let schema_raw = match meta.call_get_settings_schema(&mut store).await {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!("Plugin '{plugin_id}' get-settings-schema failed: {e}");
+                vec![]
+            }
+        };
+        // Convert WIT setting-descriptor records to our portable SettingDescriptor type.
+        let schema: Vec<SettingDescriptor> = schema_raw
+            .into_iter()
+            .map(|sd| SettingDescriptor {
+                key: sd.key,
+                kind: match sd.kind {
+                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::Toggle => SettingKind::Toggle,
+                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::TextInput => SettingKind::TextInput,
+                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::Select => SettingKind::Select,
+                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::Slider => SettingKind::Slider,
+                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::InfoLabel => SettingKind::InfoLabel,
+                },
+                default_value: sd.default_value,
+                extra: sd.extra,
+            })
+            .collect();
+
+        let _ = store.set_fuel(1_000_000_000);
+        let display_name_key = match meta.call_get_display_name_key(&mut store).await {
+            Ok(k) => k,
+            Err(_) => format!("plugin-{plugin_id}-title"),
+        };
+
+        let _ = store.set_fuel(1_000_000_000);
+        let icon = meta.call_get_icon(&mut store).await.unwrap_or_default();
+
         tracing::info!(
-            "Plugin '{plugin_id}' reports: type={:?}, name={cached_backend_name}",
+            "Plugin '{plugin_id}' reports: type={:?}, name={cached_backend_name}, \
+             icon={icon}, settings={} fields",
             cached_backend_type,
+            schema.len(),
         );
 
         Ok(PluginBackend {
             plugin_id: plugin_id.to_string(),
             cached_backend_type,
             cached_backend_name,
+            display_name_key,
+            icon,
+            plugin_ftl,
+            schema,
             store: Arc::new(Mutex::new(store)),
             instance: Arc::new(instance),
         })
@@ -165,6 +234,37 @@ impl PluginRegistry {
     pub fn is_loaded(&self, plugin_id: &str) -> bool {
         self.components.contains_key(plugin_id)
     }
+}
+
+/// Kind of UI control for a plugin setting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SettingKind {
+    /// On/off toggle / checkbox.
+    Toggle,
+    /// Single-line text input.
+    TextInput,
+    /// Dropdown with a fixed list of options.
+    Select,
+    /// Numeric slider (min/max/step encoded in `extra`).
+    Slider,
+    /// Read-only informational label row.
+    InfoLabel,
+}
+
+/// Descriptor for a single plugin-provided setting field.
+///
+/// Returned from the plugin's `get-settings-schema` WIT export.
+/// The host uses this to render the appropriate UI control.
+#[derive(Debug, Clone)]
+pub struct SettingDescriptor {
+    /// Unique key for this setting (used as storage key).
+    pub key: String,
+    /// UI control kind.
+    pub kind: SettingKind,
+    /// Default value as a string (parsed by the host for each kind).
+    pub default_value: String,
+    /// Kind-specific extra data (e.g. comma-separated options for Select).
+    pub extra: String,
 }
 
 /// A WASM plugin wrapped as a [`ClientBackend`].
@@ -183,6 +283,17 @@ pub struct PluginBackend {
     cached_backend_type: BackendType,
     /// Cached backend name from the plugin's `get_backend_name()` export.
     cached_backend_name: String,
+    /// FTL key for the plugin's display name (from `get-display-name-key`).
+    pub display_name_key: String,
+    /// Icon emoji or short string (from `get-icon`).
+    pub icon: String,
+    /// Plugin-owned FTL strings, keyed by locale code (e.g. "en", "de").
+    ///
+    /// The host (poly-core) reads this after instantiation and merges the FTL
+    /// into the live i18n bundles via `i18n::register_plugin_ftl()`.
+    pub plugin_ftl: std::collections::HashMap<String, String>,
+    /// Settings schema (from `get-settings-schema`).
+    pub schema: Vec<SettingDescriptor>,
     /// Wasmtime store holding the plugin's host state.
     /// Uses Mutex (not RwLock) because wasmtime::Store is Send but not Sync.
     store: Arc<Mutex<Store<PluginHostState>>>,

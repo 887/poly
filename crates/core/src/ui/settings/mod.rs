@@ -47,7 +47,7 @@ use general::GeneralSettings;
 use identity::IdentitySettings;
 use language::LanguageSettings;
 use media::MediaSettings;
-use plugin_settings::PluginSettingsPage;
+use plugin_settings::{DemoPluginSettings, PluginSettingsPage};
 use plugins::PluginsSettings;
 use theme::ThemeSettings;
 use voice_video::VoiceVideoSettings;
@@ -62,8 +62,9 @@ const NAV_SECTIONS: [(&str, SettingsSection); 11] = [
     ("settings-language", SettingsSection::Language),
     ("settings-general", SettingsSection::General),
     ("settings-plugins", SettingsSection::Plugins),
-    ("settings-plugin-settings", SettingsSection::PluginSettings),
     ("settings-diagnostics", SettingsSection::Diagnostics),
+    // Demo always visible so it never disappears when demo is toggled off
+    ("settings-demo", SettingsSection::Demo),
 ];
 
 /// All searchable nodes in the settings tree.
@@ -119,14 +120,11 @@ const SETTINGS_NODES: &[(&str, SettingsSection)] = &[
     ("settings-nuke-app", SettingsSection::General),
     // Plugins
     ("settings-plugins", SettingsSection::Plugins),
-    // Plugin Settings
-    ("settings-plugin-settings", SettingsSection::PluginSettings),
-    (
-        "plugin-settings-demo-title",
-        SettingsSection::PluginSettings,
-    ),
     // Diagnostics
     ("settings-diagnostics", SettingsSection::Diagnostics),
+    // Demo — always present so the toggle never vanishes from the sidebar
+    ("settings-demo", SettingsSection::Demo),
+    ("plugin-demo-setting-enabled-label", SettingsSection::Demo),
 ];
 
 /// Returns true if this section has at least one searchable node whose
@@ -232,7 +230,7 @@ fn SettingsNavigation(
 fn SettingsAllSections(search_query: String) -> Element {
     let q = search_query.to_lowercase();
     rsx! {
-        for (_, section) in NAV_SECTIONS {
+        for (_label_key, section) in NAV_SECTIONS {
             {
                 let slug = section.to_slug();
                 let id = format!("settings-section-{slug}");
@@ -242,7 +240,20 @@ fn SettingsAllSections(search_query: String) -> Element {
                 } else {
                     "settings-section-block settings-section-dimmed"
                 };
+                // Inject the plugin-section divider before the first plugin section,
+                // but only when search is not active (dimming is sufficient hint).
+                let is_first_plugin = section == SettingsSection::Plugins && q.is_empty();
                 rsx! {
+                    if is_first_plugin {
+                        div { class: "settings-plugin-divider",
+                            span { class: "settings-plugin-divider-label",
+                                "{t(\"settings-plugins-section-divider\")}"
+                            }
+                            span { class: "settings-plugin-divider-badge",
+                                "{t(\"settings-plugins-badge\")}"
+                            }
+                        }
+                    }
                     div { id, class,
                         match section {
                             SettingsSection::Accounts | SettingsSection::Notifications => rsx! {
@@ -272,8 +283,11 @@ fn SettingsAllSections(search_query: String) -> Element {
                             SettingsSection::Plugins => rsx! {
                                 PluginsSettings {}
                             },
-                            SettingsSection::PluginSettings | SettingsSection::Demo => rsx! {
+                            SettingsSection::PluginSettings => rsx! {
                                 PluginSettingsPage {}
+                            },
+                            SettingsSection::Demo => rsx! {
+                                DemoPluginSettings {}
                             },
                             SettingsSection::Diagnostics => rsx! {
                                 DiagnosticsPage {}
@@ -283,6 +297,8 @@ fn SettingsAllSections(search_query: String) -> Element {
                 }
             }
         }
+        // Spacer ensures the last nav section can always be scrolled to the top of the viewport.
+        div { class: "settings-scroll-spacer" }
     }
 }
 
@@ -309,9 +325,18 @@ pub fn SettingsPage() -> Element {
     let section_memo = use_memo(move || app_state.read().settings_section);
 
     // Scroll to the active section whenever it changes (inc. initial route load).
+    // Defer with setTimeout to ensure DOM has rendered before scrolling.
     use_effect(move || {
-        let slug = section_memo.read().to_slug();
-        scroll_to_section_anchor(slug);
+        let slug = section_memo.read().to_slug().to_string();
+        // Use setTimeout(0) to defer until after DOM paints
+        let js = format!(
+            "setTimeout(() => {{ \
+                const el = document.getElementById('settings-section-{slug}'); \
+                const c = el && el.closest('.settings-content'); \
+                if (el && c) c.scrollTo({{ top: el.offsetTop - 16, behavior: 'smooth' }}); \
+            }}, 0)"
+        );
+        let _ = document::eval(&js);
     });
 
     // When the search query changes to non-empty, scroll to the first matching section.

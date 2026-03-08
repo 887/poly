@@ -54,6 +54,10 @@ static I18N: LazyLock<RwLock<I18nState>> = LazyLock::new(|| RwLock::new(I18nStat
 struct I18nState {
     current_locale: String,
     bundles: HashMap<String, FluentBundle<FluentResource>>,
+    /// Extra FTL sources added by plugins at runtime.
+    /// Keyed by (locale, plugin_id) → raw FTL source string.
+    /// On locale switch / reload, these are merged back into the bundles.
+    plugin_ftl: HashMap<(String, String), String>,
 }
 
 impl I18nState {
@@ -61,6 +65,7 @@ impl I18nState {
         Self {
             current_locale: DEFAULT_LOCALE.to_string(),
             bundles: HashMap::new(),
+            plugin_ftl: HashMap::new(),
         }
     }
 }
@@ -117,7 +122,102 @@ fn load_locale(locale: &str) {
     let mut state = I18N
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    // Also inject any plugin FTL that was registered for this locale
+    let plugin_sources: Vec<String> = state
+        .plugin_ftl
+        .iter()
+        .filter(|((loc, _), _)| loc == locale)
+        .map(|(_, src)| src.clone())
+        .collect();
+
+    for src in plugin_sources {
+        match FluentResource::try_new(src) {
+            Ok(res) => {
+                if let Err(errs) = bundle.add_resource(res) {
+                    for e in errs {
+                        tracing::warn!("Plugin FTL error in locale {locale}: {e:?}");
+                    }
+                }
+            }
+            Err((_res, errs)) => {
+                for e in errs {
+                    tracing::warn!("Plugin FTL parse error in locale {locale}: {e:?}");
+                }
+            }
+        }
+    }
+
     state.bundles.insert(locale.to_string(), bundle);
+}
+
+/// Register a plugin's FTL translation source for a given locale.
+///
+/// The host calls this during plugin load after calling the plugin's
+/// `get-translations(locale)` WIT export for all supported locales.
+/// The FTL is immediately merged into the live bundle for that locale.
+///
+/// ## Key convention
+///
+/// All message IDs in plugin FTL MUST be prefixed with `plugin-<plugin_id>-`.
+/// Example for plugin `demo`:  
+/// ```text
+/// plugin-demo-title = Demo Settings
+/// plugin-demo-setting-enabled-label = Enable Demo Data
+/// ```
+///
+/// The host enforces nothing — plugins are responsible for correct prefixing.
+/// Violating this may overwrite global keys, which is considered a plugin bug.
+pub fn register_plugin_ftl(plugin_id: &str, locale: &str, ftl_source: String) {
+    if ftl_source.trim().is_empty() {
+        return;
+    }
+    {
+        let mut state = I18N
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.plugin_ftl.insert(
+            (locale.to_string(), plugin_id.to_string()),
+            ftl_source.clone(),
+        );
+    }
+
+    // Merge immediately into the live bundle if it already exists
+    let langid: LanguageIdentifier = locale
+        .parse()
+        .unwrap_or_else(|_| DEFAULT_LOCALE.parse().unwrap_or_default());
+
+    match FluentResource::try_new(ftl_source) {
+        Ok(resource) => {
+            let mut state = I18N
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(bundle) = state.bundles.get_mut(locale) {
+                bundle.add_resource_overriding(resource);
+                tracing::debug!("Plugin '{plugin_id}' FTL merged into locale '{locale}'");
+            } else {
+                // Bundle not loaded yet — create it
+                drop(state);
+                let mut bundle = FluentBundle::new_concurrent(vec![langid]);
+                if let Ok(resource) = FluentResource::try_new(get_embedded_ftl(locale))
+                    && let Err(errors) = bundle.add_resource(resource)
+                {
+                    for e in errors {
+                        tracing::warn!("FTL error creating bundle for {locale}: {e:?}");
+                    }
+                }
+                let mut state = I18N
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                state.bundles.insert(locale.to_string(), bundle);
+            }
+        }
+        Err((_res, errs)) => {
+            for e in errs {
+                tracing::warn!("Plugin '{plugin_id}' FTL parse error for locale {locale}: {e:?}");
+            }
+        }
+    }
 }
 
 /// Get embedded FTL source for a locale.
@@ -132,16 +232,23 @@ fn get_embedded_ftl(locale: &str) -> String {
 }
 
 /// Set the current locale.
+///
+/// Also reloads the target locale bundle (re-merging all plugin FTL).
 pub fn set_locale(locale: &str) {
-    let mut state = I18N
-        .write()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if SUPPORTED_LOCALES.contains(&locale) {
-        state.current_locale = locale.to_string();
-        tracing::info!("Locale changed to: {locale}");
-    } else {
-        tracing::warn!("Unsupported locale: {locale}, keeping current");
+    {
+        let mut state = I18N
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if SUPPORTED_LOCALES.contains(&locale) {
+            state.current_locale = locale.to_string();
+            tracing::info!("Locale changed to: {locale}");
+        } else {
+            tracing::warn!("Unsupported locale: {locale}, keeping current");
+            return;
+        }
     }
+    // Reload the bundle so any registered plugin FTL is (re-)merged
+    load_locale(locale);
 }
 
 /// Get the current locale.

@@ -122,13 +122,8 @@ fn NativePluginRow(
             label { class: "plugin-row-toggle",
                 input {
                     r#type: "checkbox",
-                    checked: enabled && available,
-                    disabled: !available,
-                    onchange: move |_| {
-                        if available {
-                            on_toggle.call(slug_for_toggle.clone());
-                        }
-                    },
+                    checked: enabled,
+                    onchange: move |_| on_toggle.call(slug_for_toggle.clone()),
                 }
             }
             div { class: "plugin-row-icon", "{icon}" }
@@ -197,61 +192,108 @@ fn WasmPluginRow(
     }
 }
 
-/// URL input form to add a new WASM plugin.
+/// URL input form to add a new WASM plugin, or install from a local file.
+///
+/// Two install modes: from URL (with WIT version appended) or from a local .wasm file.
+/// Display name is inferred from the URL hostname or file name — no manual entry needed.
 #[rustfmt::skip]
 #[component]
 fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
     let mut url = use_signal(String::new);
-    let mut name = use_signal(String::new);
     let mut error = use_signal(String::new);
+    // "url" | "file"
+    let mut install_mode = use_signal(|| "url".to_string());
     rsx! {
         div { class: "plugin-add-form",
             h4 { "{t(\"plugins-add-wasm-title\")}" }
-            p { class: "settings-description",
-                "{t(\"plugins-add-wasm-description\")}"
-            }
-            div { class: "plugin-add-row",
-                input {
-                    r#type: "text",
-                    class: "plugin-url-input",
-                    placeholder: "{t(\"plugins-url-placeholder\")}",
-                    value: "{url.read()}",
-                    oninput: move |e| {
-                        url.set(e.value());
-                        error.set(String::new());
-                    },
-                }
-                input {
-                    r#type: "text",
-                    class: "plugin-name-input",
-                    placeholder: "{t(\"plugins-name-placeholder\")}",
-                    value: "{name.read()}",
-                    oninput: move |e| name.set(e.value()),
+            // Mode tabs
+            div { class: "plugin-install-tabs",
+                button {
+                    class: if *install_mode.read() == "url" { "plugin-install-tab active" } else { "plugin-install-tab" },
+                    onclick: move |_| install_mode.set("url".to_string()),
+                    "{t(\"plugins-install-from-url\")}"
                 }
                 button {
-                    class: "btn btn-primary",
-                    disabled: url.read().trim().is_empty(),
-                    onclick: move |_| {
-                        let u = url.read().trim().to_string();
-                        if u.is_empty() {
-                            error.set(t("plugins-url-required"));
-                            return;
-                        }
-                        let n = name.read().trim().to_string();
-                        on_add.call(WasmPluginEntry {
-                            url: u,
-                            name: if n.is_empty() { None } else { Some(n) },
-                            enabled: true,
-                        });
-                        url.set(String::new());
-                        name.set(String::new());
-                    },
-                    "{t(\"plugins-add-btn\")}"
+                    class: if *install_mode.read() == "file" { "plugin-install-tab active" } else { "plugin-install-tab" },
+                    onclick: move |_| install_mode.set("file".to_string()),
+                    "{t(\"plugins-install-from-file\")}"
                 }
             }
-            p { class: "plugin-add-hint",
-                "{t(\"plugins-wit-hint\")}: {WIT_VERSION}"
+
+            if *install_mode.read() == "url" {
+                // URL install
+                p { class: "settings-description",
+                    "{t(\"plugins-add-wasm-description\")}"
+                }
+                div { class: "plugin-add-row",
+                    input {
+                        r#type: "text",
+                        class: "plugin-url-input",
+                        placeholder: "{t(\"plugins-url-placeholder\")}",
+                        value: "{url.read()}",
+                        oninput: move |e| {
+                            url.set(e.value());
+                            error.set(String::new());
+                        },
+                    }
+                    button {
+                        class: "btn btn-primary",
+                        disabled: url.read().trim().is_empty(),
+                        onclick: move |_| {
+                            let u = url.read().trim().to_string();
+                            if u.is_empty() {
+                                error.set(t("plugins-url-required"));
+                                return;
+                            }
+                            on_add.call(WasmPluginEntry {
+                                url: u,
+                                name: None,
+                                enabled: true,
+                            });
+                            url.set(String::new());
+                        },
+                        "{t(\"plugins-add-btn\")}"
+                    }
+                }
+                p { class: "plugin-add-hint",
+                    "{t(\"plugins-wit-hint\")}: {WIT_VERSION}"
+                }
+            } else {
+                // File install
+                p { class: "settings-description",
+                    "{t(\"plugins-add-file-description\")}"
+                }
+                div { class: "plugin-add-row",
+                    input {
+                        r#type: "file",
+                        class: "plugin-file-input",
+                        accept: ".wasm",
+                        onchange: move |e| {
+                            // Extract file name from the event value (browser returns path or name)
+                            let raw = e.value();
+                            let file_name = raw
+                                .split(['/', '\\'])
+                                .next_back()
+                                .unwrap_or(raw.as_str())
+                                .to_string();
+                            if !file_name.is_empty() && file_name != "null" {
+                                url.set(file_name.clone());
+                                on_add.call(WasmPluginEntry {
+                                    // Store as file:// reference; actual loading handled by plugin host
+                                    url: format!("file://{file_name}"),
+                                    name: Some(file_name),
+                                    enabled: true,
+                                });
+                                url.set(String::new());
+                            }
+                        },
+                    }
+                }
+                p { class: "plugin-add-hint",
+                    "{t(\"plugins-file-hint\")}"
+                }
             }
+
             if !error.read().is_empty() {
                 p { class: "plugin-add-error", "{error.read()}" }
             }

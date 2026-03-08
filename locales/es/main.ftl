@@ -170,11 +170,14 @@ plugins-wit-hint = Versión de interfaz WIT
 
 # Ajustes de plugins
 settings-plugin-settings = Ajustes de plugins
+# Etiqueta que aparece antes de las secciones de plugins en el menú de ajustes
+settings-plugins-section-divider = Ajustes de plugins
+# Pequeña insignia para secciones de plugins
+settings-plugins-badge = Plugin
 plugin-settings-nav-title = Ajustes de backends
 plugin-settings-none = No hay backends con ajustes cargados. Activa los datos demo o conecta una cuenta.
-plugin-settings-demo-title = Ajustes de demo
-plugin-settings-demo-description = Configurar el cliente de datos demo integrado. Activa o desactiva el modo demo para cargar o limpiar cuentas, servidores y conversaciones de ejemplo.
 plugin-settings-generic-description = Este backend aún no tiene ajustes personalizados. Los ajustes aparecerán aquí cuando el plugin los soporte.
+# Nota: las cadenas plugin-demo-* se cargan desde el bundle FTL del plugin de demostración.
 
 # Backup Server Settings
 settings-backup-add-server = Agregar servidor
@@ -222,6 +225,19 @@ settings-identity-phrase-warning = Mantén esta frase en secreto. Quien la tenga
 settings-identity-copy-all = Copiar todas las palabras
 settings-identity-close = Cerrar
 settings-identity-no-identity = Identidad no generada aún. Completa primero el asistente de configuración.
+settings-identity-create-btn = Crear identidad
+settings-identity-creating = Creando…
+settings-identity-backup-servers = Servidores de copia de seguridad
+settings-identity-backup-servers-description = Esta identidad se utiliza para la autenticación en los siguientes servidores de copia de seguridad.
+settings-identity-poly-accounts = Cuentas de Poly Server
+settings-identity-poly-accounts-description = Esta identidad se utiliza para las siguientes cuentas en servidores Poly auto-hospedados.
+settings-identity-no-servers = Ningún servidor de copia de seguridad configurado aún.
+settings-identity-no-poly-accounts = Sin cuentas de Poly server.
+settings-identity-delete = Eliminar identidad
+settings-identity-delete-confirm-title = ¿Eliminar identidad?
+settings-identity-delete-confirm-message = Esto eliminará permanentemente esta clave de identidad. ¡Asegúrate de tener la frase de recuperación respaldada o no podrás recuperar el acceso!
+settings-identity-delete-confirm = Sí, eliminar
+settings-identity-cancel = Cancelar
 
 # Presets de tema
 theme-blue = Azul

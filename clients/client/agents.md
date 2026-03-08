@@ -28,6 +28,18 @@ The types in this crate are the **source of truth** for the WIT (WebAssembly Int
 4. Rebuild all WASM plugins: `cargo component build -p <crate> --target wasm32-wasip2`
 5. Run E2E tests: `cargo test -p poly-plugin-loader-tests --all-features` (77 tests validate the full interface)
 
+## Boundary Model — IMPORTANT
+
+The Poly client-plugin ABI is a **WIT / Wasm Component Model** boundary, **not** a `wasm-bindgen` Rust↔JS boundary.
+
+That means:
+- Types cross as **WIT values** (`record`, `variant`, `enum`, `list`, `option`, `result`), not JS-managed handle objects.
+- The boundary is **value-oriented**, so blog advice about passing exported objects by `&reference`, `Wasm*`/`Js*` naming, `wasm_refgen`, or converting Rust errors into `JsValue`/`js_sys::Error` is **not the main rule set here**.
+- Errors must stay in the typed WIT channel (`client-error`) and map cleanly to/from `poly-client::ClientError`.
+- If a new type cannot be expressed cleanly in WIT, the ABI design is wrong and should be simplified before implementation.
+
+Use `wasm-bindgen`-style patterns only for separate browser/JS interop code, not for the client-plugin contract itself.
+
 ## E2E Test Validation
 
 The entire `ClientBackend` trait interface is validated by 77 E2E tests in `crates/plugin-host-tests/`:
