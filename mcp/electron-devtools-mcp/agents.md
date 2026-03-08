@@ -62,6 +62,23 @@ Caller must call `connect_cdp` afterwards to re-establish CDP.
 | `build_id` | u64 | Reads `/tmp/poly-devtools-electron-rebuild-counter` |
 | `electron_pid` | u32? | PID of the managed Electron process (`null` if not launched by us) |
 
+## Dioxus Rebuild Toast Warning (2026-03-08)
+
+Electron runs the Dioxus web bundle, so a rebuild/reload cycle may also surface temporary
+dev-runtime text such as **"Your app is being rebuilt"**.
+
+That text is **not** ground truth for whether the app is actually ready.
+
+Agents should instead:
+
+1. check `get_generation()`
+2. confirm `build_id` increased after `launch_app` / `rebuild_app`
+3. reconnect with `connect_cdp()` after reload
+4. verify the real target UI via snapshot/screenshot
+5. **Note:** The toast DOM element may linger in snapshots/screenshots even after successful rebuild
+
+Do not report failure solely because the rebuild toast appeared in a screenshot or DOM snapshot.
+
 ## Key Differences from `web-devtools-mcp`
 
 | Feature | `web-devtools-mcp` | `electron-devtools-mcp` |

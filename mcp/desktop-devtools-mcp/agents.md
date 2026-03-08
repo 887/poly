@@ -242,6 +242,31 @@ Always check **`build_id`** to know if a rebuild happened.
 
 **In both cases, `build_id` is the reliable indicator** of "did a rebuild happen?"
 
+## Dioxus Rebuild Toast Warning (2026-03-08)
+
+During desktop `dx serve --hotpatch`, Dioxus may show a visible toast/overlay like
+**"Your app is being rebuilt"** while recompilation is in progress.
+
+This text is **not** a reliable readiness or failure signal for agents:
+
+- it is injected by the Dioxus dev runtime, not by Poly
+- it may still be visible in a screenshot even though the app underneath already hot-patched
+- it does **not** prove the rebuild is stuck
+
+For MCP automation and visual verification:
+
+1. Check `get_generation()` and compare **all three** fields
+2. Use `build_id` as the primary rebuild indicator
+3. Take a fresh snapshot/screenshot after the bridge is reachable again
+4. Verify real Poly UI markers instead of the rebuild-toast text
+5. **Note:** The toast DOM element may persist in the snapshot/screenshot even after successful
+   hot-reload — its presence does not prove the app is stuck
+
+**Avoid:** `wait_for(["Your app is being rebuilt"])`
+
+**Prefer:** account list, setup wizard text, channel title, settings headings, composer placeholder,
+or other route-specific content that proves the intended screen is actually ready.
+
 See the tool descriptions in `src/main.rs:extension_tools()` for full cross-platform semantics.
 
 ---

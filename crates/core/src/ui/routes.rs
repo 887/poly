@@ -589,6 +589,9 @@ fn SettingsRoute() -> Element {
 /// Passes the account context to AccountSettingsPage so it shows only
 /// account-relevant settings (notifications). Global settings (theme,
 /// identity, backup) remain in the app-level SettingsRoute.
+///
+/// AccountSettingsPage renders its own channel-list-wrapper (with settings nav
+/// + AccountBar) and settings-content sibling, matching the normal layout.
 #[component]
 fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -600,6 +603,9 @@ fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String
 ///
 /// Routes to the server-scoped settings page which provides notification levels,
 /// per-server profile (nickname/avatar), and general options including leave server.
+///
+/// ServerSettingsPage renders its own channel-list-wrapper (with settings nav
+/// + AccountBar) and settings-content sibling, matching the normal layout.
 #[component]
 fn ServerSettingsRoute(
     backend: String,

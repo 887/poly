@@ -18,6 +18,7 @@ mod notifications;
 mod overview;
 mod profile;
 
+use super::super::AccountBar;
 use crate::i18n::t;
 use crate::state::AppState;
 use dioxus::prelude::*;
@@ -183,20 +184,21 @@ pub fn ServerSettingsPage(
     });
 
     rsx! {
-        div { class: "settings-page",
+        div { class: "channel-list-wrapper",
             ServerSettingsNavigation {
                 active_section: section(),
                 search_text,
                 on_select: move |next| section.set(next),
             }
-            ServerSettingsContent {
-                section: section(),
-                backend,
-                instance_id,
-                account_id,
-                server_id,
-                server_name,
-            }
+            AccountBar {}
+        }
+        ServerSettingsContent {
+            section: section(),
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            server_name,
         }
     }
 }

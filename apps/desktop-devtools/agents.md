@@ -183,6 +183,16 @@ approach because:
 - **Eval bridge**: Works correctly before, during (if rebuild finishes), and after hotpatch
 - **Navigation via eval + click**: Works across all rebuild cycles
 
+### Important interpretation rule for agents
+
+The presence of the Dioxus toast **does not by itself mean the app is stuck**.
+It is only a transient dev-runtime overlay. Agents must use `build_id`/`generation`/`pid`
+plus a fresh post-rebuild snapshot to determine whether the app actually finished updating.
+
+**DOM element behavior:** The toast overlay element may remain visible in DOM snapshots and screenshots
+even after the underlying app has already hot-reloaded successfully. Its presence in a snapshot does
+not indicate the rebuild failed or the app is unresponsive.
+
 ### What resets on hotpatch (non-hot-reloadable structural changes) ⚠️
 
 - **Navigation state**: The app resets to the setup wizard (Welcome to Poly) after a

@@ -182,6 +182,37 @@ To verify **nothing changed**, all three must be identical from the previous pol
 
 See `mcp/desktop-devtools-mcp/agents.md` and `mcp/web-devtools-mcp/agents.md` for platform-specific details.
 
+### 9b. Dioxus Rebuild Toast Is NOT Ground Truth (DECISION, 2026-03-08)
+
+Dioxus may temporarily inject a visible overlay/toast such as **"Your app is being rebuilt"**
+during hot-reload / hotpatch cycles.
+
+**Do NOT treat that text as authoritative app state.** It is only a transient UI artifact from
+the Dioxus dev runtime and may briefly remain visible even after the app underneath has already
+updated successfully.
+
+For all agent-driven visual verification and MCP automation:
+
+1. **Never** use the rebuild toast text as the success/failure signal.
+2. **Never** conclude the app is stuck solely because a screenshot or snapshot contains that text.
+3. Use the MCP rebuild counters instead:
+  - Desktop: compare `generation`, `build_id`, and `pid`
+  - Web: compare `generation`, `build_id`, and `dx_serve_pid`
+  - Electron: compare `generation`, `build_id`, and `electron_pid`
+4. Prefer this readiness order:
+  - confirm `build_id` changed if a rebuild was requested
+  - reconnect if required (`connect_cdp` for web/electron)
+  - take a fresh DOM snapshot / screenshot
+  - verify expected app UI markers (real route text, buttons, inputs, message list, etc.)
+5. Avoid `wait_for(...)` using rebuild-toast strings; wait for stable app-specific content instead.
+
+**Rule of thumb:** the rebuild toast is a hint that recompilation happened, not proof that the app
+is broken.
+
+**DOM element behavior:** The overlay/toast element may persist in the DOM or remain visible in snapshots
+even after the app underneath has already updated successfully. Do not conclude the build failed or the app
+is stuck solely because you see the rebuild-toast text in a DOM snapshot or screenshot.
+
 ---
 
 

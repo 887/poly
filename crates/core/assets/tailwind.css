@@ -3518,6 +3518,15 @@ select {
     border-right: none;
 }
 
+/* Settings nav inside the channel-list-wrapper column — fills the column */
+.channel-list-wrapper .settings-nav {
+    width: 100%;
+    min-width: unset;
+    border-right: none;
+    flex: 1;
+    overflow-y: auto;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    VOICE USERS IN CHANNEL LIST
    ═══════════════════════════════════════════════════════════════ */

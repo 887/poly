@@ -217,6 +217,28 @@ Three-rebuild test confirmed all counters work correctly:
 Decision table validated: **`build_id` advances immediately on `rebuild_app`** (before `connect_cdp`);
 `generation` advances only after `connect_cdp`.
 
+## Dioxus Rebuild Toast Warning (2026-03-08)
+
+The browser may temporarily display Dioxus dev-runtime text like
+**"Your app is being rebuilt"** during a rebuild.
+
+Agents must **not** use that text as the primary signal for success/failure because:
+
+- it is a transient Dioxus overlay, not Poly application state
+- it can appear in screenshots during a healthy rebuild cycle
+- a page can already be healthy again shortly after while a previous screenshot still captured it
+
+Use this order instead:
+
+1. `get_generation()` → confirm `build_id` changed if a rebuild was requested
+2. `connect_cdp()` after the reload completes
+3. Take a fresh snapshot/screenshot
+4. Verify real app markers on the expected screen
+5. **Note:** The toast DOM element may still appear in the snapshot even after successful rebuild —
+   its presence does not indicate failure
+
+Avoid `wait_for` on rebuild-toast strings. Wait for stable app content instead.
+
 ---
 
 ### NEVER use `--hotpatch` for web/WASM (DECISION)

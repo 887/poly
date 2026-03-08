@@ -18,6 +18,7 @@ mod notifications;
 use crate::i18n::t;
 use dioxus::prelude::*;
 
+use super::AccountBar;
 use notifications::NotificationsSettings;
 
 /// Account-scoped settings page.
@@ -38,7 +39,7 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     let notif_label = t("settings-notifications");
 
     rsx! {
-        div { class: "settings-page",
+        div { class: "channel-list-wrapper",
             nav { class: "settings-nav",
                 // Search bar
                 div { class: "settings-search-bar",
@@ -62,12 +63,13 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                     div { class: "settings-nav-item active", "{notif_label}" }
                 }
             }
-            div { class: "settings-content",
-                div { class: "settings-header",
-                    h2 { "{t(\"account-settings-title\")} — {account_id.to_uppercase()}" }
-                }
-                NotificationsSettings { account_id: account_id.clone() }
+            AccountBar {}
+        }
+        div { class: "settings-content",
+            div { class: "settings-header",
+                h2 { "{t(\"account-settings-title\")} — {account_id.to_uppercase()}" }
             }
+            NotificationsSettings { account_id: account_id.clone() }
         }
     }
 }
