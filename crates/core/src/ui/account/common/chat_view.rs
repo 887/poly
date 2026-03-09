@@ -820,6 +820,7 @@ struct ChatViewSignals {
     show_command_popup: Signal<bool>,
     reply_target: Signal<Option<MessageReplyPreview>>,
     history_state: Signal<ChatHistoryUiState>,
+    unread_marker_on_screen: Signal<bool>,
 }
 
 fn use_chat_view_signals() -> ChatViewSignals {
@@ -848,6 +849,7 @@ fn use_chat_view_signals() -> ChatViewSignals {
         show_command_popup: use_signal(|| false),
         reply_target: use_signal(|| None::<MessageReplyPreview>),
         history_state: use_signal(ChatHistoryUiState::default),
+        unread_marker_on_screen: use_signal(|| false),
     }
 }
 
@@ -956,6 +958,7 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         show_command_popup: signals.show_command_popup,
         reply_target: signals.reply_target,
         history_state: signals.history_state,
+        unread_marker_on_screen: signals.unread_marker_on_screen,
     }
 }
 
@@ -1021,6 +1024,7 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     use_history_state_effect(signals);
     use_member_list_preferences_effect(signals.app_state);
     use_command_preload_effect(signals, &ctx.channel_id);
+    use_unread_marker_visibility_effect(signals);
 }
 
 fn use_member_list_effect(signals: &ChatViewSignals) {
@@ -1251,6 +1255,41 @@ fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<Str
     });
 }
 
+fn use_unread_marker_visibility_effect(signals: &ChatViewSignals) {
+    let mut unread_marker_on_screen = signals.unread_marker_on_screen;
+    let history_state = signals.history_state;
+
+    use_effect(move || {
+        let unread_marker_id = history_state.read().unread_marker_message_id.clone();
+        let unread_count = history_state.read().unread_count;
+
+        // If no unread marker or no unread count, marker is not visible
+        if unread_marker_id.is_none() || unread_count == 0 {
+            unread_marker_on_screen.set(false);
+            return;
+        }
+
+        // Check if the unread marker message element is visible in the viewport
+        let marker_id = unread_marker_id.unwrap_or_default();
+        let dom_id = format!("message-{marker_id}");
+        let js = format!(
+            "(() => {{ \
+                const el = document.getElementById('{dom_id}'); \
+                if (!el) {{ dioxus.send(false); return; }} \
+                const rect = el.getBoundingClientRect(); \
+                const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight; \
+                dioxus.send(isVisible); \
+            }})()"
+        );
+        let mut eval = document::eval(&js);
+        spawn(async move {
+            if let Ok(visible) = eval.recv::<bool>().await {
+                unread_marker_on_screen.set(visible);
+            }
+        });
+    });
+}
+
 #[derive(Clone)]
 struct ChatViewMarkupCtx {
     app_state: Signal<AppState>,
@@ -1310,6 +1349,7 @@ struct ChatViewMarkupCtx {
     show_command_popup: Signal<bool>,
     reply_target: Signal<Option<MessageReplyPreview>>,
     history_state: Signal<ChatHistoryUiState>,
+    unread_marker_on_screen: Signal<bool>,
 }
 
 fn render_chat_view_markup(ctx: ChatViewMarkupCtx) -> Element {
@@ -1901,7 +1941,8 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
-    if !ctx.unread_banner_visible {
+    // Only show the banner if there are unread messages AND the unread marker is not visible on screen
+    if !ctx.unread_banner_visible || *ctx.unread_marker_on_screen.read() {
         return rsx! {};
     }
 

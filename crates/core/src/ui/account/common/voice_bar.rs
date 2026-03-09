@@ -139,12 +139,20 @@ pub fn VoiceBar() -> Element {
 #[component]
 fn VoiceDockInfo(conn: poly_client::VoiceConnection) -> Element {
     rsx! {
+        // Row layout: left column (status above channel) | right end (server + latency)
         div { class: "voice-dock-info",
-            div { class: "voice-bar-status",
-                span { class: "voice-bar-dot" }
-                span { class: "voice-bar-status-text", "{t(\"voice-connected\")}" }
+            div { class: "voice-dock-left",
+                div { class: "voice-bar-status",
+                    span { class: "voice-bar-dot" }
+                    span { class: "voice-bar-status-text", "{t(\"voice-connected\")}" }
+                }
+                div { class: "voice-bar-channel", title: "{conn.channel_name}",
+                    span { class: "voice-bar-channel", "{conn.channel_name} / {conn.server_name}" }
+                }
             }
-            div { class: "voice-bar-channel", "{conn.channel_name} / {conn.server_name}" }
+            div { class: "voice-dock-end",
+                VoiceLatencyBar {}
+            }
         }
     }
 }
@@ -331,8 +339,6 @@ fn VoiceDockControls(
                     }
                 }
             }
-            // CSS latency / signal quality bar with hover popup
-            VoiceLatencyBar {}
             // Disconnect
             button {
                 class: "voice-bar-quick-btn voice-bar-hangup",

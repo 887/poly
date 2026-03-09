@@ -4463,14 +4463,31 @@ select {
     box-sizing: border-box;
 }
 
-/* ROW 1: status dot + "Voice Connected" label + channel/server name below */
+/* ROW 1: status dot + "Voice Connected" label + channel/server name — single row */
 .voice-dock-info {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    flex-direction: row;
+    gap: 12px;
     min-width: 0;
     width: 100%;
     flex-shrink: 0;
+}
+
+/* Left column inside the top row: status above channel name */
+.voice-dock-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    /* allow left column to take available space */
+    min-width: 0;
+}
+
+.voice-dock-end {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
 }
 
 /* ROW 2: scrollable row of participant avatar tiles */
