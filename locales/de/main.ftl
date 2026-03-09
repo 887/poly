@@ -172,6 +172,8 @@ plugins-wit-hint = WIT-Schnittstellenversion
 settings-plugin-settings = Plugin-Einstellungen
 # Beschriftung vor plugin-eigenen Abschnitten in der Einstellungs-Sidebar
 settings-plugins-section-divider = Plugin-Einstellungen
+# Gruppen-Header in der Einstellungs-Sidebar vor Plugin-Seiten
+settings-plugin-settings-nav-header = Plugin-Einstellungen
 # Kleines Badge für plugin-eigene Abschnitte
 settings-plugins-badge = Plugin
 plugin-settings-nav-title = Backend-Einstellungen

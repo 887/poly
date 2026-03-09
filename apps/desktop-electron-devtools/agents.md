@@ -47,7 +47,6 @@ This directory does **NOT** contain a `Cargo.toml`. It is pure Node.js and is
 | WASM source | `../../../target/dx/poly-desktop-electron/debug/web/public/` served over loopback HTTP |
 | Window size | 1440×900 |
 | DevTools | Closed by default; set `POLY_DEV_DEVTOOLS=1` to auto-open |
-| No-sandbox | Enabled via `app.commandLine.appendSwitch('no-sandbox')` |
 | Linux stability flags | `disable-dev-shm-usage` + `no-zygote` |
 | contextIsolation | `false` (devtools build only — **never** for production) |
 

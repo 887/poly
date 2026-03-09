@@ -32,6 +32,28 @@ mod wit_bindings;
 #[cfg(target_os = "wasi")]
 mod guest;
 
+// ─── Native plugin metadata ─────────────────────────────────────────
+//
+// Mirrors the WIT `plugin-metadata.get-translations` interface for native
+// (non-WASM) builds. The plugin-host calls `get-translations(locale)` on
+// WASM components at instantiation time; for native backends poly-core calls
+// this free function instead. The FTL paths are owned by this crate, not core.
+
+/// Return the raw FTL translation source for the demo plugin.
+///
+/// Mirrors the WIT `plugin-metadata.get-translations(locale) → string` export.
+/// Returns an empty string for unsupported locales so the host falls back to
+/// English (the same contract as the WIT interface).
+pub fn plugin_translations(locale: &str) -> String {
+    match locale {
+        "de" => include_str!("../locales/de/plugin.ftl").to_string(),
+        "fr" => include_str!("../locales/fr/plugin.ftl").to_string(),
+        "es" => include_str!("../locales/es/plugin.ftl").to_string(),
+        "en" => include_str!("../locales/en/plugin.ftl").to_string(),
+        _ => String::new(),
+    }
+}
+
 // ─── Native ClientBackend implementations ──────────────────────────
 // These are available when the `native` feature is enabled (default).
 // They implement the async `ClientBackend` trait from poly-client.

@@ -18,16 +18,13 @@
 mod notifications;
 
 use crate::i18n::t;
+use crate::ui::account::common::VoiceAccountFooter;
 use dioxus::prelude::*;
-
-use super::AccountBar;
 use notifications::NotificationsSettings;
 
 /// Account-specific searchable settings nodes.
 /// Format: (i18n key, section slug).
-const ACCT_NAV_SECTIONS: &[(&str, &str)] = &[
-    ("settings-notifications", "notifications"),
-];
+const ACCT_NAV_SECTIONS: &[(&str, &str)] = &[("settings-notifications", "notifications")];
 
 /// Returns true if any node for this account section matches the query.
 fn acct_section_has_match(section_slug: &str, q: &str) -> bool {
@@ -144,7 +141,7 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                     }
                 }
             }
-            AccountBar {}
+            VoiceAccountFooter {}
         }
         div { class: "settings-content",
             // Notifications section

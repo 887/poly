@@ -8,6 +8,7 @@ use poly_core::ui::App;
 fn main() {
     tracing::info!("Starting Poly Web");
 
+    // i18n::init() also registers native plugin FTL (e.g. demo translations).
     poly_core::i18n::init();
     poly_core::theme::init();
 

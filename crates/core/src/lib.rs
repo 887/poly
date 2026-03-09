@@ -81,10 +81,14 @@ pub static STORAGE: std::sync::OnceLock<storage::Storage> = std::sync::OnceLock:
 ///
 /// This sets up all core subsystems: database, i18n, theme, and crypto.
 /// Called once at application startup from each platform's `main.rs`.
+///
+/// Note: native plugin FTL registration (e.g. demo) is handled inside
+/// [`i18n::init`] so that ALL entry points (including web WASM, which calls
+/// `i18n::init()` directly) receive translations before any component renders.
 pub async fn init() -> anyhow::Result<()> {
     tracing::info!("Initializing Poly core...");
 
-    // Initialize i18n with system locale
+    // Initialize i18n with system locale (also registers native plugin FTL).
     i18n::init();
 
     // Initialize theme engine with default theme

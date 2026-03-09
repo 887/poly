@@ -651,3 +651,88 @@ Rewrote `ServerBanner` in `channel_list.rs` to Discord-style:
 ### Server.banner_url Field
 
 Added `banner_url: Option<String>` with `#[serde(default)]` to `Server` struct in `poly-client`. Updated bridge.rs, server-client/backend.rs, and all 7 demo Server constructors with `banner_url: None`.
+
+---
+
+## DECISION: Dioxus `spawn` vs `spawn_forever` for Component Event Handlers
+
+**Date:** 2026-03-09  
+**Files:** `crates/core/src/ui/settings/plugin_settings.rs`
+
+### Problem
+
+When a Dioxus component's `onchange` event handler calls `spawn(async move { ... })`, the spawned task is **scope-bound** to that component. Every time a scope-bound task is polled, `Runtime::with_scope_on_stack(task.scope, ...)` is called, keeping the component scope "active" for the task's lifetime.
+
+If the task calls `unregister_plugin_settings(...)` which causes a parent component to re-render and **unmount** the current component mid-task, Dioxus tries to drop/clean up the scope while the task is still running. This causes:
+
+```
+panicked at dioxus-core-0.7.3/src/diff/node.rs:70:49: RefCell already borrowed
+```
+
+Specifically: `dom.runtime.mounts.borrow_mut()` panics because the scope cleanup was already borrowing `mounts`.
+
+### Solution
+
+Use **`dioxus::core::spawn_forever`** for async event handlers that may trigger their own component's unmount:
+
+```rust
+onchange: move |_| {
+    // spawn_forever pins the task to ScopeId::ROOT — only dropped when
+    // the whole VirtualDom is dropped. The task is NOT cancelled when the
+    // component that spawned it unmounts.
+    dioxus::core::spawn_forever(async move {
+        toggle_demo(client_manager, chat_data, app_state).await;
+    });
+},
+```
+
+`spawn_forever` is defined in `dioxus_core::global_context` as:
+```rust
+pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Task {
+    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut))
+}
+```
+
+It is NOT re-exported from `dioxus::prelude::*` (only `spawn` is). Access it via `dioxus::core::spawn_forever(...)`.
+
+### When to use `spawn_forever` vs `spawn`
+
+| Situation | Use |
+|---|---|
+| Task may cause its OWN component to unmount mid-execution | `dioxus::core::spawn_forever` |
+| Normal background work that won't affect component lifecycle | `spawn` |
+| Any component that deregisters itself (settings toggle, plugin unload) | `dioxus::core::spawn_forever` |
+
+### Confirmed Root Cause (from Dioxus 0.7.3 source)
+
+In `tasks.rs`, when Dioxus polls a task:
+```rust
+let poll_result = self.with_scope_on_stack(task.scope, || {
+    self.current_task.set(Some(id));
+    task.task.borrow_mut().as_mut().poll(&mut cx)
+    // ^ task's future is borrowed here
+});
+```
+If the component's scope is cleaned up (dropped) while `task.task.borrow_mut()` is active → RefCell panic in diff code.
+
+---
+
+## DECISION: Three-Phase Deactivation Pattern for toggle_demo
+
+**Date:** 2026-03-09  
+**File:** `crates/core/src/ui/demo.rs`
+
+The deactivate branch of `toggle_demo` uses a **three-phase** approach to avoid the RefCell panic:
+
+1. **Phase 1** — Collect data (brief read locks, no await, no writes)
+2. **Phase 2** — Synchronous writes: `deactivate_demo()` + batch `chat_data` write  
+   - All chat data cleared in a SINGLE `chat_data.write()` block (one notification, not N)
+   - `unregister_plugin_settings` is **NOT called here**
+3. **Phase 3** — Async storage persist (`get_app_settings().await`, `set_app_settings().await`)  
+   - At this point `plugin_settings` still contains the demo entry, so `SettingsAllSections` keeps rendering `DemoPluginSettings`, keeping the task's scope alive through the await
+4. **Phase 4** — `unregister_plugin_settings("demo")` — THE LAST OPERATION (sync, no await after)  
+   - After this returns, the task itself is done. By the time Dioxus unmounts  
+   `DemoPluginSettings`, the task scope has no active borrow.
+
+**Key rule**: `unregister_plugin_settings` must be called **AFTER all await points** in the deactivate task.
+

@@ -31,6 +31,10 @@ mod identity;
 mod language;
 mod media;
 mod plugin_settings;
+// Re-export the demo render function so ui/demo.rs can register it at runtime
+// via ClientManager::register_plugin_settings without knowing UI module internals.
+#[cfg(feature = "demo")]
+pub(crate) use plugin_settings::demo_settings_render_fn;
 mod plugins;
 mod theme;
 mod voice_video;
@@ -47,12 +51,14 @@ use general::GeneralSettings;
 use identity::IdentitySettings;
 use language::LanguageSettings;
 use media::MediaSettings;
-use plugin_settings::{DemoPluginSettings, PluginSettingsPage};
 use plugins::PluginsSettings;
 use theme::ThemeSettings;
 use voice_video::VoiceVideoSettings;
 
-const NAV_SECTIONS: [(&str, SettingsSection); 11] = [
+// plugin_settings is used via the dynamic registry — no compile-time import
+// of specific plugin components into the host.
+
+const NAV_SECTIONS: [(&str, SettingsSection); 10] = [
     ("settings-accounts", SettingsSection::Accounts),
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("settings-backup", SettingsSection::Backup),
@@ -63,8 +69,8 @@ const NAV_SECTIONS: [(&str, SettingsSection); 11] = [
     ("settings-general", SettingsSection::General),
     ("settings-plugins", SettingsSection::Plugins),
     ("settings-diagnostics", SettingsSection::Diagnostics),
-    // Demo always visible so it never disappears when demo is toggled off
-    ("settings-demo", SettingsSection::Demo),
+    // Plugin-provided settings pages are NOT in this static array.
+    // They are registered at runtime via ClientManager::register_plugin_settings.
 ];
 
 /// All searchable nodes in the settings tree.
@@ -122,9 +128,8 @@ const SETTINGS_NODES: &[(&str, SettingsSection)] = &[
     ("settings-plugins", SettingsSection::Plugins),
     // Diagnostics
     ("settings-diagnostics", SettingsSection::Diagnostics),
-    // Demo — always present so the toggle never vanishes from the sidebar
-    ("settings-demo", SettingsSection::Demo),
-    ("plugin-demo-setting-enabled-label", SettingsSection::Demo),
+    // Plugin-provided settings pages are not listed here; they have no static
+    // search nodes. Search coverage for plugin pages is a future TODO.
 ];
 
 /// Returns true if this section has at least one searchable node whose
@@ -190,6 +195,10 @@ fn SettingsNavigation(
     on_select: EventHandler<SettingsSection>,
 ) -> Element {
     let filter = search_text.read().to_lowercase();
+    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    // Snapshot the registered plugin settings pages so we don't hold the read
+    // guard across the RSX macro expansion.
+    let plugin_entries: Vec<_> = client_manager.read().plugin_settings.to_vec();
 
     rsx! {
         nav { class: "settings-nav",
@@ -216,6 +225,41 @@ fn SettingsNavigation(
                     }
                 }
             }
+            // Plugin-provided settings pages — registered dynamically by active backends.
+            // A group header separates them visually from the built-in sections.
+            if !plugin_entries.is_empty() {
+                div { class: "settings-nav-group-header",
+                    "{t(\"settings-plugin-settings-nav-header\")}"
+                }
+            }
+            for entry in &plugin_entries {
+                {
+                    let entry = *entry;
+                    let label = t(entry.nav_label_key);
+                    let slug = entry.slug;
+                    rsx! {
+                        div {
+                            class: "settings-nav-item",
+                            onclick: move |_| {
+                                // Scroll directly to the plugin section anchor.
+                                // Plugin pages are not part of SettingsSection routing
+                                // (no enum variant) — they live below the built-in sections.
+                                let anchor = format!("settings-section-plugin-{slug}");
+                                let js = format!(
+                                    "(() => {{ \\
+                                        const el = document.getElementById('{anchor}'); \\
+                                        const c = el && el.closest('.settings-content'); \\
+                                        if (el && c) c.scrollTo({{ top: el.offsetTop - 16, behavior: 'smooth' }}); \\
+                                    }})()"
+                                );
+                                let _ = document::eval(&js);
+                            },
+                            span { class: "settings-nav-plugin-icon", "{entry.nav_icon}" }
+                            "{label}"
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -229,6 +273,9 @@ fn SettingsNavigation(
 #[component]
 fn SettingsAllSections(search_query: String) -> Element {
     let q = search_query.to_lowercase();
+    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    // Snapshot plugin settings pages so the read lock is released before RSX.
+    let plugin_entries: Vec<_> = client_manager.read().plugin_settings.to_vec();
     rsx! {
         for (_label_key, section) in NAV_SECTIONS {
             {
@@ -283,16 +330,35 @@ fn SettingsAllSections(search_query: String) -> Element {
                             SettingsSection::Plugins => rsx! {
                                 PluginsSettings {}
                             },
-                            SettingsSection::PluginSettings => rsx! {
-                                PluginSettingsPage {}
-                            },
-                            SettingsSection::Demo => rsx! {
-                                DemoPluginSettings {}
-                            },
                             SettingsSection::Diagnostics => rsx! {
                                 DiagnosticsPage {}
                             },
                         }
+                    }
+                }
+            }
+        }
+        // Dynamic plugin settings pages — appended after the last built-in section.
+        // Divider is shown only when search is not active.
+        if !plugin_entries.is_empty() && q.is_empty() {
+            div { class: "settings-plugin-divider",
+                span { class: "settings-plugin-divider-label",
+                    "{t(\"settings-plugins-section-divider\")}"
+                }
+                span { class: "settings-plugin-divider-badge",
+                    "{t(\"settings-plugins-badge\")}"
+                }
+            }
+        }
+        for entry in &plugin_entries {
+            {
+                let entry = *entry;
+                let slug = entry.slug;
+                let id = format!("settings-section-plugin-{slug}");
+                let render_fn = entry.render;
+                rsx! {
+                    div { id, class: "settings-section-block",
+                        { render_fn() }
                     }
                 }
             }

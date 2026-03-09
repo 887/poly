@@ -75,6 +75,12 @@ impl I18nState {
 /// Detects the system locale via `sys_locale`, then pre-loads **all**
 /// supported locales so that switching languages at runtime never hits a
 /// "bundle not found" state (which would silently fall back to English).
+///
+/// Also registers native plugin FTL translations for any feature-gated native
+/// backends (e.g. `demo`). This mirrors what the WASM plugin host does for
+/// WASM plugins via the `plugin-metadata.get-translations` WIT interface, and
+/// must run at `init()` time so that ALL entry points (web WASM, desktop,
+/// mobile) get the plugin FTL registered before any component renders.
 pub fn init() {
     let system_locale = sys_locale::get_locale().unwrap_or_else(|| DEFAULT_LOCALE.to_string());
 
@@ -94,10 +100,33 @@ pub fn init() {
         load_locale(locale);
     }
 
+    // Register FTL for native backend plugins, mirroring the WIT
+    // `plugin-metadata.get-translations(locale)` contract.
+    // DECISION(DX): Native plugin FTL must be registered in i18n::init() so
+    // all entry points (web/desktop/mobile) get translations regardless of
+    // whether they call poly_core::init() or poly_core::i18n::init() directly.
+    register_native_plugin_ftl();
+
     // Activate the detected locale
     set_locale(initial_locale);
 
     tracing::info!("i18n initialized with locale: {initial_locale} (all locales pre-loaded)");
+}
+
+/// Register FTL translations for all native backend plugins that are
+/// compiled in via feature flags. Called from [`init`] to ensure every
+/// entry point (web, desktop, mobile) gets the translations.
+fn register_native_plugin_ftl() {
+    #[cfg(feature = "demo")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_demo::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("demo", locale, src);
+            }
+        }
+        tracing::debug!("Native demo plugin FTL registered for all locales");
+    }
 }
 
 /// Load `.ftl` resources for a locale into the bundle store.

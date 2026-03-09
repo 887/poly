@@ -172,6 +172,9 @@ plugins-wit-hint = Versión de interfaz WIT
 settings-plugin-settings = Ajustes de plugins
 # Etiqueta que aparece antes de las secciones de plugins en el menú de ajustes
 settings-plugins-section-divider = Ajustes de plugins
+# Encabezado de grupo en la barra lateral que separa las secciones integradas de las páginas de plugins
+settings-plugin-settings-nav-header = Ajustes de plugins
+# Pequeña insignia para las secciones proporcionadas por plugins
 # Pequeña insignia para secciones de plugins
 settings-plugins-badge = Plugin
 plugin-settings-nav-title = Ajustes de backends

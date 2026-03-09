@@ -44,6 +44,7 @@ pub mod emoji_picker;
 pub mod friends_panel;
 pub mod notifications;
 pub mod user_sidebar;
+pub mod voice_account_footer;
 pub mod voice_bar;
 pub mod voice_view;
 
@@ -57,5 +58,6 @@ pub use emoji_picker::EmojiPicker;
 pub use friends_panel::FriendsPanel;
 pub use notifications::NotificationsView;
 pub use user_sidebar::UserSidebar;
+pub use voice_account_footer::VoiceAccountFooter;
 pub use voice_bar::VoiceBar;
 pub use voice_view::VoiceChannelView;

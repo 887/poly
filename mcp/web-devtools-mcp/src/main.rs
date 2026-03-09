@@ -128,7 +128,6 @@ impl ChromeCdpBackend {
             args.push(format!("http://127.0.0.1:{WEB_SERVER_PORT}"));
         } else {
             // Visible mode: ensure window is created and visible
-            args.push("--no-sandbox".to_string()); // Help with window creation
             args.push(format!("http://127.0.0.1:{WEB_SERVER_PORT}"));
         }
 

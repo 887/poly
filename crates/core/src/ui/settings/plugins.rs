@@ -313,6 +313,8 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 #[component]
 pub fn PluginsSettings() -> Element {
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let chat_data: Signal<crate::state::ChatData> = use_context();
+    let app_state: Signal<crate::state::AppState> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
     let mut disabled: Signal<Vec<String>> = use_signal(Vec::new);
@@ -347,7 +349,12 @@ pub fn PluginsSettings() -> Element {
                     {
                         let slug = backend.slug.to_string();
                         let slug_key = slug.clone();
-                        let enabled = !disabled_snap.contains(&slug);
+                        // Demo enabled state is driven by demo_active (not disabled_native_backends).
+                        let enabled = if backend.slug == "demo" {
+                            client_manager.read().demo_active
+                        } else {
+                            !disabled_snap.contains(&slug)
+                        };
                         let account_count = client_manager
                             .read()
                             .sessions
@@ -365,21 +372,31 @@ pub fn PluginsSettings() -> Element {
                                 enabled,
                                 account_count,
                                 on_toggle: move |toggled: String| {
-                                    let mut d = disabled.write();
-                                    if d.contains(&toggled) {
-                                        d.retain(|s| s != &toggled);
+                                    if toggled == "demo" {
+                                        // Use toggle_demo to keep demo_active and nav
+                                        // visibility in sync across the whole app.
+                                        spawn(async move {
+                                            crate::ui::demo::toggle_demo(
+                                                client_manager, chat_data, app_state,
+                                            ).await;
+                                        });
                                     } else {
-                                        d.push(toggled);
+                                        let mut d = disabled.write();
+                                        if d.contains(&toggled) {
+                                            d.retain(|s| s != &toggled);
+                                        } else {
+                                            d.push(toggled);
+                                        }
+                                        let new_disabled = d.clone();
+                                        drop(d);
+                                        let wasm = wasm_plugins.read().clone();
+                                        spawn(async move {
+                                            let mut s = load_settings().await;
+                                            s.disabled_native_backends = new_disabled;
+                                            s.wasm_plugins = wasm;
+                                            save_settings(&s).await;
+                                        });
                                     }
-                                    let new_disabled = d.clone();
-                                    drop(d);
-                                    let wasm = wasm_plugins.read().clone();
-                                    spawn(async move {
-                                        let mut s = load_settings().await;
-                                        s.disabled_native_backends = new_disabled;
-                                        s.wasm_plugins = wasm;
-                                        save_settings(&s).await;
-                                    });
                                 },
                             }
                         }

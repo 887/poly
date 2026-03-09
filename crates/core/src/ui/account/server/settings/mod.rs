@@ -18,9 +18,9 @@ mod notifications;
 mod overview;
 mod profile;
 
-use super::super::AccountBar;
 use crate::i18n::t;
 use crate::state::AppState;
+use crate::ui::account::common::VoiceAccountFooter;
 use dioxus::prelude::*;
 use general::ServerGeneralSettings;
 use notifications::ServerNotificationsSettings;
@@ -189,12 +189,14 @@ pub fn ServerSettingsPage(
 
     rsx! {
         div { class: "channel-list-wrapper",
-            ServerSettingsNavigation {
-                active_section: section(),
-                search_text,
-                on_select: move |next| section.set(next),
+            nav { class: "settings-nav",
+                ServerSettingsNavigation {
+                    active_section: section(),
+                    search_text,
+                    on_select: move |next| section.set(next),
+                }
             }
-            AccountBar {}
+            VoiceAccountFooter {}
         }
         ServerSettingsContent {
             section: section(),

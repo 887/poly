@@ -57,12 +57,17 @@
 //! through the `ClientBackend` trait via `ClientManager`.
 
 pub mod account;
+pub(crate) mod demo;
 mod electron_titlebar;
 mod favorites_sidebar;
 mod main_layout;
 pub mod routes;
 pub(crate) mod search;
 mod settings;
+// Re-export the demo settings render function so demo.rs can register it in
+// ClientManager::plugin_settings without a pub(crate) path through private modules.
+#[cfg(feature = "demo")]
+pub(crate) use settings::demo_settings_render_fn;
 mod setup_wizard;
 mod voice_banner;
 
@@ -127,7 +132,7 @@ async fn init_storage(
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
                     if settings.demo_active {
-                        favorites_sidebar::toggle_demo(client_manager, chat_data, app_state).await;
+                        demo::toggle_demo(client_manager, chat_data, app_state).await;
                     }
                     app_state.write().nav.right_sidebar_visible = settings.server_member_list_open;
                     app_state.write().nav.dm_right_sidebar_visible = settings.dm_member_list_open;
@@ -238,15 +243,31 @@ fn router_config(
 #[rustfmt::skip]
 #[component]
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
+    // Pull context signals so we can activate demo after setup completes.
+    let client_manager: Signal<ClientManager> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
     rsx! {
         if !storage_ready {
             div { class: "storage-loading" }
         } else if !setup_complete {
             SetupWizard {
                 on_complete: move |account_id: String| {
-                    app_state.write().is_setup_complete = true;
+                    // Keep showing the wizard (storage-loading overlay) until
+                    // toggle_demo completes so the router only mounts when demo
+                    // data is already populated. That way the router's on_update
+                    // initial redirect correctly lands on DmsHome instead of the
+                    // empty Accounts settings page.
                     spawn(async move {
                         persist_setup_completion(account_id).await;
+                        // Activate demo immediately so new users see demo data
+                        // right away without needing an app restart.
+                        // demo_active is true in persist_setup_completion so it
+                        // will also be restored correctly on subsequent launches.
+                        demo::toggle_demo(client_manager, chat_data, app_state).await;
+                        // Only now flip is_setup_complete — this mounts the Router
+                        // with demo already active, so on_update's initial redirect
+                        // lands on DmsHome.
+                        app_state.write().is_setup_complete = true;
                     });
                 },
             }

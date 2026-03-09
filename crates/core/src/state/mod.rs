@@ -114,12 +114,12 @@ pub enum SettingsSection {
     VoiceVideo,
     /// Diagnostics — connection stats, storage usage, account health.
     Diagnostics,
-    /// Demo data settings — toggle demo client, regenerate data.
-    Demo,
     /// Plugin manager — view and manage loaded client plugins.
+    ///
+    /// Plugin-provided settings pages are registered dynamically at runtime
+    /// via [`crate::client_manager::ClientManager::register_plugin_settings`].
+    /// No plugin-specific variants exist in this enum.
     Plugins,
-    /// Plugin-provided settings pages — each backend can expose its own settings.
-    PluginSettings,
 }
 
 impl SettingsSection {
@@ -135,9 +135,7 @@ impl SettingsSection {
             Self::Language => "language",
             Self::General => "general",
             Self::Plugins => "plugins",
-            Self::PluginSettings => "plugin-settings",
             Self::Diagnostics => "diagnostics",
-            Self::Demo => "demo",
         }
     }
 
@@ -154,9 +152,7 @@ impl SettingsSection {
             "language" => Self::Language,
             "general" => Self::General,
             "plugins" => Self::Plugins,
-            "plugin-settings" => Self::PluginSettings,
             "diagnostics" => Self::Diagnostics,
-            "demo" => Self::Demo,
             _ => Self::Accounts,
         }
     }

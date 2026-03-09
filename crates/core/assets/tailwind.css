@@ -444,6 +444,10 @@ body {
     transition: border-radius var(--transition-fast), background-color var(--transition-fast);
     position: relative;
     font-size: 20px;
+    /* Allow absolutely-positioned status dots to render outside the icon
+       boundary without being clipped by the border-radius or any ancestor
+       overflow rule. */
+    overflow: visible;
 }
 
 .server-icon:hover {
@@ -510,14 +514,30 @@ body {
  * Account Status Dots
  * =========================== */
 
-/* Base dot — position relative to the account icon (.server-icon). */
-.status-dot {
+/* Sidebar overlay dots — absolutely positioned relative to the account icon
+   (.server-icon). These are the connection + presence indicators in Bar 1.
+   .connection-dot and .presence-dot are ONLY used in favorites_sidebar.rs
+   for the overlay badges; the inline 8px .status-dot used in the account bar
+   and user sidebar does not carry these modifier classes. */
+.status-dot.connection-dot,
+.status-dot.presence-dot {
     position: absolute;
     width: 12px;
     height: 12px;
     border-radius: 50%;
     border: 1px solid var(--account-bar-bg, var(--sidebar-bg));
     pointer-events: none;
+}
+
+/* Inline / flow status dot (used in account-bar and user sidebar) — 8px,
+   NOT absolutely positioned. Defined here so it's clear this is the base;
+   the .connection-dot/.presence-dot overrides above take priority for the
+   sidebar overlay use-case via specificity (2 classes vs 1). */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
 /* Connection status dot — top-left corner of the icon. */
@@ -1927,6 +1947,23 @@ body {
 /* Nav items dimmed when search active and they don't match */
 .settings-nav-item.settings-nav-item-dimmed {
     opacity: 0.4;
+}
+
+/* Group header separating built-in sections from plugin-provided settings pages */
+.settings-nav-group-header {
+    padding: 16px 16px 6px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+/* Emoji icon prefix on plugin nav items */
+.settings-nav-plugin-icon {
+    margin-right: 6px;
+    flex-shrink: 0;
 }
 
 /* ===========================
@@ -5188,13 +5225,10 @@ select {
     color: var(--text-muted);
 }
 
-.status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
+/* Inline status dot colour rules — used in account-bar (.status-dot.online)
+   and user sidebar (.status-dot without modifier). The 8px base size and
+   colours for the inline dots are defined here and in the Account Status Dots
+   section near the top of this file. */
 .status-dot.online {
     background: var(--status-speaking, #43b581);
 }

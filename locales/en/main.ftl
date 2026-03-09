@@ -189,6 +189,8 @@ plugins-wit-hint = WIT interface version
 settings-plugin-settings = Plugin Settings
 # Label shown in the nav sidebar and in the scroll divider before plugin-contributed sections
 settings-plugins-section-divider = Plugin-Provided Settings
+# Group header in the settings sidebar nav separating built-in sections from plugin pages
+settings-plugin-settings-nav-header = Plugin Settings
 # Small badge label shown on plugin-sourced settings headings
 settings-plugins-badge = Plugin
 plugin-settings-nav-title = Backend Settings

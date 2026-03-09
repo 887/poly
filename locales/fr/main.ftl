@@ -172,6 +172,8 @@ plugins-wit-hint = Version de l'interface WIT
 settings-plugin-settings = Paramètres des plugins
 # Libellé affiché avant les sections fournies par les plugins dans la barre de navigation
 settings-plugins-section-divider = Paramètres des plugins
+# En-tête de groupe dans la barre latérale séparant les sections intégrées des pages de plugins
+settings-plugin-settings-nav-header = Paramètres des plugins
 # Petit badge pour les sections fournies par les plugins
 settings-plugins-badge = Plugin
 plugin-settings-nav-title = Paramètres des backends

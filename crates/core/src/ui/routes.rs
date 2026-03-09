@@ -47,14 +47,15 @@
 // DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
 use super::account::{
-    AccountBar, AccountSettingsPage, ChannelList, ChatView, FriendsPanel, NotificationsView,
-    ServerSettingsPage, VoiceBar, VoiceChannelView,
+    AccountSettingsPage, ChannelList, ChatView, FriendsPanel, NotificationsView,
+    ServerSettingsPage, VoiceChannelView,
 };
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, SettingsSection, View};
+use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::account::common::chat_history::initial_message_query;
 use crate::ui::account::common::chat_history::request_restore_scroll_position_or_bottom;
 use dioxus::prelude::*;
@@ -447,10 +448,7 @@ fn DmsLayout() -> Element {
     rsx! {
         div { class: "channel-list-wrapper",
             ChannelList {}
-            div { class: "voice-account-footer",
-                VoiceBar {}
-                AccountBar {}
-            }
+            VoiceAccountFooter {}
         }
         Outlet::<Route> {}
     }
@@ -473,10 +471,7 @@ fn ServerLayout() -> Element {
     rsx! {
         div { class: "channel-list-wrapper",
             ChannelList {}
-            div { class: "voice-account-footer",
-                VoiceBar {}
-                AccountBar {}
-            }
+            VoiceAccountFooter {}
         }
         Outlet::<Route> {}
     }

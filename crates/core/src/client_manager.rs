@@ -7,12 +7,37 @@
 //! Provided as `Signal<ClientManager>` at the `App` level.
 // TODO(phase-2.5.1): Client Manager Module
 
+use dioxus::prelude::Element;
 use poly_client::{
     AccountPresence, AuthCredentials, BackendType, ClientBackend, ConnectionStatus, Server, Session,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+/// A settings page registered by an active client backend plugin at runtime.
+///
+/// Backends call [`ClientManager::register_plugin_settings`] when they activate
+/// and [`ClientManager::unregister_plugin_settings`] when they deactivate.
+/// The settings UI reads this list reactively — the host has no compile-time
+/// knowledge of any specific plugin's settings.
+///
+/// All fields are `'static` so the struct is `Copy` and can be stored
+/// cheaply in a `Vec` without heap allocation per entry.
+#[derive(Clone, Copy, Debug)]
+pub struct PluginSettingsEntry {
+    /// URL-safe slug — used for scroll-anchor IDs
+    /// (`settings-section-plugin-{slug}`) and future deep-link routing.
+    pub slug: &'static str,
+    /// i18n key resolved via `t(nav_label_key)` for the sidebar nav label.
+    /// Convention: `"plugin-{id}-title"` (mirrors WIT `plugin-metadata`).
+    pub nav_label_key: &'static str,
+    /// Emoji icon displayed next to the nav label.
+    pub nav_icon: &'static str,
+    /// Plain `fn() -> Element` wrapper that renders this plugin's settings page.
+    /// Must be a static function (not a closure) so the entry is `Copy`.
+    pub render: fn() -> Element,
+}
 
 /// A shared, thread-safe handle to a messenger backend.
 pub type BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>;
@@ -44,6 +69,13 @@ pub struct ClientManager {
     /// Persisted to local storage so the preference survives restarts.
     /// Defaults to `Online` for new accounts.
     pub presence_statuses: HashMap<String, AccountPresence>,
+    /// Settings pages registered by active plugin backends at runtime.
+    ///
+    /// Populated via [`register_plugin_settings`] when a backend activates
+    /// and cleared via [`unregister_plugin_settings`] when it deactivates.
+    /// The settings nav sidebar and content area iterate this list to render
+    /// plugin settings — nothing is hardcoded in the host.
+    pub plugin_settings: Vec<PluginSettingsEntry>,
 }
 
 impl std::fmt::Debug for ClientManager {
@@ -72,6 +104,7 @@ impl ClientManager {
             sessions: HashMap::new(),
             connection_statuses: HashMap::new(),
             presence_statuses: HashMap::new(),
+            plugin_settings: Vec::new(),
         }
     }
 
@@ -156,6 +189,58 @@ impl ClientManager {
         tracing::info!("Demo clients deactivated");
     }
 
+    /// Return the account IDs of all currently active demo accounts.
+    ///
+    /// Determined by inspecting the live `sessions` map for entries whose
+    /// `backend` field is [`poly_client::BackendType::Demo`]. This keeps the
+    /// UI layer free from any knowledge of hard-coded demo account IDs.
+    #[cfg(feature = "demo")]
+    pub fn demo_account_ids(&self) -> Vec<String> {
+        self.sessions
+            .iter()
+            .filter(|(_, s)| s.backend == BackendType::Demo)
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    /// Commit pre-authenticated demo client bundles into the manager synchronously.
+    ///
+    /// This is the **second phase** of the two-phase demo activation used by
+    /// [`crate::ui::demo::toggle_demo`]. The first phase authenticates all demo
+    /// clients asynchronously **without** holding any Dioxus `Signal` lock; this
+    /// method commits the results synchronously so no `SignalMut` is ever held
+    /// across an `.await` boundary.
+    ///
+    /// # Signal / RefCell discipline — CRITICAL
+    ///
+    /// **Never** call `signal.write().activate_demo().await`. A `SignalMut` is a
+    /// Dioxus `RefCell` write guard. Holding it across `.await` points causes
+    /// `"RefCell already borrowed"` panics in WASM because the Dioxus runtime
+    /// re-renders subscribed components during yield points, which attempt
+    /// `signal.read()` borrows while the write borrow is still held.
+    ///
+    /// Always do async work first, then call this method inside a brief
+    /// `signal.write()` block with **no** subsequent `.await`.
+    #[cfg(feature = "demo")]
+    pub fn commit_demo_activation(
+        &mut self,
+        entries: Vec<(String, Session, BackendHandle)>,
+        server_map: HashMap<String, String>,
+    ) {
+        for (account_id, session, backend) in entries {
+            self.sessions.insert(account_id.clone(), session);
+            self.backends.insert(account_id.clone(), backend);
+            self.connection_statuses
+                .insert(account_id.clone(), ConnectionStatus::Connected);
+            self.presence_statuses
+                .entry(account_id)
+                .or_insert(AccountPresence::Online);
+        }
+        self.server_account_map.extend(server_map);
+        self.demo_active = true;
+        tracing::info!("Demo clients committed to ClientManager");
+    }
+
     /// Get the backend for a specific account ID.
     pub fn get_backend(&self, account_id: &str) -> Option<BackendHandle> {
         self.backends.get(account_id).cloned()
@@ -197,6 +282,25 @@ impl ClientManager {
     /// Get the list of active account IDs.
     pub fn active_account_ids(&self) -> Vec<String> {
         self.backends.keys().cloned().collect()
+    }
+
+    /// Register a settings page for an active plugin backend.
+    ///
+    /// If a page with the same slug is already registered the existing entry
+    /// is replaced (idempotent — safe to call on every activation).
+    pub fn register_plugin_settings(&mut self, entry: PluginSettingsEntry) {
+        self.plugin_settings.retain(|e| e.slug != entry.slug);
+        self.plugin_settings.push(entry);
+        tracing::debug!("Plugin settings registered: {}", entry.slug);
+    }
+
+    /// Unregister a plugin's settings page.
+    ///
+    /// Call this when a plugin deactivates. Silently does nothing if the
+    /// slug is not currently registered.
+    pub fn unregister_plugin_settings(&mut self, slug: &str) {
+        self.plugin_settings.retain(|e| e.slug != slug);
+        tracing::debug!("Plugin settings unregistered: {slug}");
     }
 
     /// Get the backend type for a given account ID.
