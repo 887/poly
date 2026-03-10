@@ -6,7 +6,7 @@
     "description": null,
     "status": "in-progress",
     "created_at": "2026-03-10T00:30:10.472802724Z",
-    "updated_at": "2026-03-10T00:32:32.555126448Z",
+    "updated_at": "2026-03-10T01:10:58.750177104Z",
     "completed_at": null,
     "memory_count": 1,
     "finding_count": 0,
@@ -14,47 +14,47 @@
       {
         "id": 1,
         "text": "Fix get_dm_channels: resolve other user via participants API",
-        "done": false
+        "done": true
       },
       {
         "id": 2,
         "text": "Fix send_reply_message: pass reply_to to HTTP send_message",
-        "done": false
+        "done": true
       },
       {
         "id": 3,
         "text": "Fix map_message: populate attachments list with proper URLs",
-        "done": false
+        "done": true
       },
       {
         "id": 4,
         "text": "Expand event stream: reactions, voice, server/channel updates",
-        "done": false
+        "done": true
       },
       {
         "id": 5,
         "text": "Add missing HTTP endpoints: update/delete server, channel, category, kick, group DMs, upload",
-        "done": false
+        "done": true
       },
       {
         "id": 6,
         "text": "Fix get_groups: return group DM channels from server",
-        "done": false
+        "done": true
       },
       {
         "id": 7,
         "text": "Add WS typing indicator sender (hold write half)",
-        "done": false
+        "done": true
       },
       {
         "id": 8,
         "text": "Fix get_channel: resolve DM channels, proper error for server channels without sid",
-        "done": false
+        "done": true
       },
       {
         "id": 9,
         "text": "cargo cranky pass - zero warnings",
-        "done": false
+        "done": true
       }
     ]
   }
