@@ -699,7 +699,10 @@ async fn test_update_and_delete_channel() {
     assert_eq!(updated.name, "new-name");
 
     // Delete channel.
-    client.delete_channel(&ch.id).await.expect("delete_channel");
+    client
+        .delete_channel(&ch.id)
+        .await
+        .expect("delete_channel");
 
     // Channel should no longer appear.
     let channels = client.get_channels(&server_id).await.expect("get_channels");
@@ -737,18 +740,9 @@ async fn test_category_crud() {
     assert_eq!(ch.name, "cat-channel");
     // Note: the server's channel-creation response doesn't always return category_id
     // in the same response. Verify via server detail instead.
-    let detail = client
-        .get_server(&server_id)
-        .await
-        .expect("get_server for category");
-    let found = detail
-        .channels
-        .iter()
-        .any(|c| c.name == "cat-channel" && c.category_id.as_deref() == Some(cat_id.as_str()));
-    assert!(
-        found,
-        "cat-channel should be in category {cat_id}: {detail:?}"
-    );
+    let detail = client.get_server(&server_id).await.expect("get_server for category");
+    let found = detail.channels.iter().any(|c| c.name == "cat-channel" && c.category_id.as_deref() == Some(cat_id.as_str()));
+    assert!(found, "cat-channel should be in category {cat_id}: {detail:?}");
 
     // Update category name.
     let updated_cat = client
@@ -788,21 +782,12 @@ async fn test_remove_friend() {
 
     // Verify friendship is active.
     let alice_friends_before = alice.get_friends().await.expect("get_friends before");
-    assert!(
-        !alice_friends_before.is_empty(),
-        "Alice should have Bob as friend"
-    );
+    assert!(!alice_friends_before.is_empty(), "Alice should have Bob as friend");
 
     // Alice removes the friendship — the endpoint takes the OTHER user's ID, not the request ID.
-    alice
-        .remove_friend(&bob_auth.user_id)
-        .await
-        .expect("remove_friend");
+    alice.remove_friend(&bob_auth.user_id).await.expect("remove_friend");
 
     // Alice's friends list should be empty.
     let alice_friends = alice.get_friends().await.expect("get_friends");
-    assert!(
-        alice_friends.is_empty(),
-        "Alice should have no friends after removal"
-    );
+    assert!(alice_friends.is_empty(), "Alice should have no friends after removal");
 }

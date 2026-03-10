@@ -397,10 +397,7 @@ impl ClientBackend for PolyServerBackend {
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
 
-        Ok(msgs
-            .iter()
-            .map(|m| Self::map_message(m, &self.base_url))
-            .collect())
+        Ok(msgs.iter().map(|m| Self::map_message(m, &self.base_url)).collect())
     }
 
     // ── Users ────────────────────────────────────────────────────────────────
@@ -510,7 +507,9 @@ impl ClientBackend for PolyServerBackend {
                 .map_err(|e| ClientError::Network(e.to_string()))?;
 
             // The other participant is the one who isn't us.
-            let other = participants.iter().find(|p| p.user != account_id);
+            let other = participants
+                .iter()
+                .find(|p| p.user != account_id);
 
             let user = if let Some(p) = other {
                 self.http
