@@ -43,7 +43,9 @@ pub fn signup_render_fn(
     on_complete: Callback<SignupCompleted>,
     ctx: SignupContext,
 ) -> Element {
-    rsx! { PolySignupPage { on_complete, ctx } }
+    rsx! {
+        PolySignupPage { on_complete, ctx }
+    }
 }
 
 // ── Components ───────────────────────────────────────────────────────────────
