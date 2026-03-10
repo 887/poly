@@ -214,6 +214,39 @@ impl RollingBuildLog {
         collected.reverse();
         collected
     }
+
+    /// Scan recent log lines for patterns that indicate the launched app binary
+    /// crashed at startup (e.g. exit 127 from undefined symbols, missing `.so`,
+    /// linker errors). Returns the first matching line if found.
+    ///
+    /// This is used by bridge/server wait loops so they can abort immediately
+    /// instead of polling for 120 seconds when the app already crashed.
+    #[must_use]
+    pub fn check_for_app_crash(&self) -> Option<String> {
+        /// Fatal patterns that indicate the app binary died at startup.
+        /// Checked against the last 30 log lines (most recent output).
+        const CRASH_PATTERNS: &[&str] = &[
+            "exit status: 127",
+            "exited with error",
+            "symbol lookup error",
+            "undefined symbol",
+            "cannot open shared object",
+            "SIGABRT",
+            "SIGSEGV",
+            "signal: 6",
+            "signal: 11",
+            "exit status: 134",  // SIGABRT
+            "exit status: 139",  // SIGSEGV
+        ];
+        for (_, line) in self.lines.iter().rev().take(30) {
+            for pattern in CRASH_PATTERNS {
+                if line.contains(pattern) {
+                    return Some(line.clone());
+                }
+            }
+        }
+        None
+    }
 }
 
 // ─── JavaScript Snippets ──────────────────────────────────────────────────────
@@ -675,7 +708,10 @@ pub trait DevtoolsBackend: Send + Sync {
     /// hung renderer or stalled transport cannot block the MCP session forever.
     fn tool_timeout_ms(&self, name: &str, args: &serde_json::Value) -> u64 {
         match name {
-            "launch_app" | "rebuild_app" | "reset_app" | "force_rebuild" => 180_000,
+            // launch_app / rebuild_app / force_rebuild are NON-BLOCKING: they spawn a background
+            // build task and return in ~1 s. 30 s is a generous budget. reset_app does a data
+            // directory wipe (+sync) then delegates to launch_app — still completes quickly.
+            "launch_app" | "rebuild_app" | "reset_app" | "force_rebuild" => 30_000,
             "kill_app" | "hard_kill" => 30_000,
             "connect_cdp" | "cdp_status" => 30_000,
             "get_last_build_status" | "get_last_build_log" | "get_generation" => 10_000,
@@ -717,5 +753,58 @@ pub trait DevtoolsBackend: Send + Sync {
     /// Return extra tool definitions specific to this backend.
     fn extension_tools(&self) -> Vec<serde_json::Value> {
         vec![]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn crash_detection_catches_exit_127() {
+        let mut log = RollingBuildLog::default();
+        log.push_line("[dx-stdout] Build completed successfully in 4.41s, launching app! 💫");
+        log.push_line(
+            "[dx-stdout] \u{001b}[31mERROR\u{001b}[0m Application [linux] exited with error: exit status: 127",
+        );
+        let crash = log.check_for_app_crash();
+        assert!(crash.is_some(), "should detect exit status: 127");
+        assert!(
+            crash.unwrap().contains("exit status: 127"),
+            "matched line should contain the exit code"
+        );
+    }
+
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn crash_detection_catches_undefined_symbol() {
+        let mut log = RollingBuildLog::default();
+        log.push_line("[dx-stdout] Build completed successfully");
+        log.push_line(
+            "./poly-desktop-devtools: symbol lookup error: undefined symbol: _ZN70_foo",
+        );
+        let crash = log.check_for_app_crash();
+        assert!(crash.is_some(), "should detect undefined symbol");
+    }
+
+    #[test]
+    fn crash_detection_no_false_positive_on_success() {
+        let mut log = RollingBuildLog::default();
+        log.push_line("[dx-stdout] Build completed successfully in 4.41s, launching app! 💫");
+        log.push_line("[dx-stdout] Some normal log line");
+        assert!(
+            log.check_for_app_crash().is_none(),
+            "should not trigger on normal build output"
+        );
+    }
+
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn crash_detection_catches_exited_with_error() {
+        let mut log = RollingBuildLog::default();
+        log.push_line("[dx-stdout] Application [linux] exited with error: exit status: 1");
+        let crash = log.check_for_app_crash();
+        assert!(crash.is_some(), "should detect 'exited with error'");
     }
 }

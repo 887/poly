@@ -2,19 +2,19 @@
 //!
 //! MCP server for the **desktop** devtools backend.
 //!
-//! Builds the desktop-devtools app via `dx build --platform desktop` (one-shot,
-//! synchronous, immediate exit-code feedback) and then launches the resulting
-//! binary directly.  The binary embeds an HTTP eval-bridge that this MCP uses
-//! for JS evaluation, screenshots, and DOM inspection.
+//! Builds and runs the desktop-devtools app via `dx serve --hotpatch`.
+//! `--hotpatch` is required: it configures `LD_LIBRARY_PATH` so the launched
+//! binary can find `libpoly_plugin_host.so` and other dynamic libs. Without
+//! it the binary launches but exits immediately with code 127.
 //!
 //! ## Build model
 //!
-//! - `launch_app` runs `dx build --platform desktop`, waits for the process to
-//!   exit (success or failure is **immediately** visible), then spawns the built
-//!   binary and waits for the eval-bridge at `http://127.0.0.1:9223`.
-//! - `rebuild_app` kills the running binary and re-runs `launch_app`.
-//! - No file watchers, no hotpatch, no background serve process — just a plain
-//!   build + binary launch.
+//! - `launch_app` spawns `dx serve --hotpatch` as a long-running background
+//!   process (non-blocking, returns ~600 ms). Agent polls `get_last_build_status`
+//!   until state = Succeeded/Failed, then calls `connect_cdp`.
+//! - `rebuild_app` kills the running `dx serve` and re-runs `launch_app`.
+//! - `dx serve --hotpatch` matches the working VS Code "Desktop Wry (Linux)"
+//!   launch.json configuration exactly.
 //!
 //! ## Usage
 //! ```bash
@@ -135,9 +135,12 @@ where
 
 // ─── Desktop HTTP Backend ─────────────────────────────────────────────────────
 
-/// Desktop devtools backend — builds the app via `dx build --platform desktop`
-/// then launches the resulting binary and communicates via its HTTP eval-bridge
-/// at [`BASE`].
+/// Desktop devtools backend — builds and launches the app via `dx serve --hotpatch`
+/// and communicates via its HTTP eval-bridge at [`BASE`].
+///
+/// `Clone` is derived so that a cheap Arc-clone can be given to background build
+/// tasks without sharing ownership of the entire backend.
+#[derive(Clone)]
 struct DesktopHttpBackend {
     client: reqwest::Client,
     /// Handle to the running desktop-devtools binary process.
@@ -148,6 +151,9 @@ struct DesktopHttpBackend {
     build_log: Arc<Mutex<RollingBuildLog>>,
     /// Structured diagnostics for the last build attempt.
     last_build: Arc<Mutex<Option<DesktopBuildRecord>>>,
+    /// Background build task handle — `None` when idle, `Some` while a build
+    /// is in progress. Used to prevent concurrent builds.
+    build_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 impl DesktopHttpBackend {
@@ -161,6 +167,7 @@ impl DesktopHttpBackend {
             workspace: Arc::new(Mutex::new(None)),
             build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
             last_build: Arc::new(Mutex::new(None)),
+            build_task: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -293,7 +300,7 @@ impl DesktopHttpBackend {
         let diagnostics = BuildDiagnostics {
             backend: self.name().to_string(),
             trigger: "none".to_string(),
-            mode: "dx build --platform desktop".to_string(),
+            mode: "dx serve --hotpatch".to_string(),
             working_directory: String::new(),
             command_line: String::new(),
             state: BuildLifecycleState::NotStarted,
@@ -354,12 +361,27 @@ impl DesktopHttpBackend {
             .unwrap_or(false)
     }
 
-    /// Poll the eval bridge until it responds or timeout.
+    /// Poll the eval bridge until it responds, a crash is detected, or timeout.
+    ///
+    /// On each iteration the build log is scanned for fatal crash patterns
+    /// (exit 127, undefined symbol, missing `.so`, etc.). If the app binary
+    /// crashed at startup the wait aborts immediately instead of blocking for
+    /// the full `max_seconds`.
     async fn wait_for_bridge(&self, max_seconds: u64) -> anyhow::Result<()> {
         let polls = max_seconds * 2; // poll every 500 ms
         for _ in 0..polls {
             if self.is_bridge_alive().await {
                 return Ok(());
+            }
+            // Early abort: check if the app binary crashed before the bridge came up.
+            if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
+                anyhow::bail!(
+                    "App binary crashed before eval bridge came up.\n\
+                     Matched log line: {crash_line}\n\n\
+                     This usually means the binary has an undefined symbol or missing .so.\n\
+                     Fix: run `cd apps/desktop-devtools && dx build --platform desktop` \
+                     to rebuild everything in sync, then retry launch_app."
+                );
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
@@ -376,6 +398,96 @@ impl DesktopHttpBackend {
         std::fs::write(path, (current + 1).to_string())?;
         Ok(())
     }
+
+    /// Background task body for `launch_app` / `rebuild_app`.
+    ///
+    /// Spawns `dx serve --hotpatch` as a long-running background process.
+    /// `--hotpatch` is required: it configures `LD_LIBRARY_PATH` so the launched
+    /// app binary can find `libpoly_plugin_host.so` and other dynamic libs.
+    /// Without `--hotpatch` the binary launches but exits immediately with
+    /// code 127 (dynamic linker failure). This matches the working VS Code
+    /// `launch.json` "Desktop Wry (Linux)" configuration.
+    async fn bg_build_and_launch_desktop(&self, app_dir: &str) {
+        // ── Spawn dx serve as a long-running background process ───────────────
+        let mut child = match tokio::process::Command::new("dx")
+            .args(["serve", "--hotpatch"])
+            .current_dir(app_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "Failed to spawn dx serve.",
+                    format!("Could not spawn `dx serve --hotpatch`: {e}"),
+                    None,
+                )
+                .await;
+                return;
+            }
+        };
+
+        if let Some(stdout) = child.stdout.take() {
+            spawn_log_reader(stdout, "dx-stdout", self.build_log.clone());
+        }
+        if let Some(stderr) = child.stderr.take() {
+            spawn_log_reader(stderr, "dx-stderr", self.build_log.clone());
+        }
+
+        let pid = match child.id() {
+            Some(p) => p,
+            None => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "dx serve process has no PID immediately after spawn.",
+                    "tokio process::id() returned None.",
+                    None,
+                )
+                .await;
+                return;
+            }
+        };
+        // Store the dx serve PID so kill_app can terminate it.
+        *self.app_process.lock().await = Some(AppProcess { pid });
+
+        // Auto-clear the handle when dx serve exits (build failure, etc.).
+        let app_ref = self.app_process.clone();
+        tokio::spawn(async move {
+            let _ = child.wait().await;
+            *app_ref.lock().await = None;
+        });
+
+        let _ = Self::increment_rebuild_counter().await;
+
+        // ── Wait for the eval bridge ──────────────────────────────────────────
+        // Allow up to 120 s: dx serve must compile before launching the app.
+        match self.wait_for_bridge(120).await {
+            Ok(()) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Succeeded,
+                    "Desktop app compiled and launched by dx serve. Eval bridge ready. Call connect_cdp.",
+                    format!("Verified {BASE}/status (dx serve PID {pid})."),
+                    None,
+                )
+                .await;
+            }
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "dx serve started but eval bridge did not respond within 120 s.",
+                    format!(
+                        "Bridge not ready at {BASE}/status: {e}. \
+                         Check get_last_build_log for dx serve / cargo errors."
+                    ),
+                    None,
+                )
+                .await;
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -387,11 +499,25 @@ impl DevtoolsBackend for DesktopHttpBackend {
     async fn launch_app(&self, workspace: &str) -> anyhow::Result<String> {
         *self.workspace.lock().await = Some(workspace.to_string());
         let app_dir = format!("{workspace}/apps/desktop-devtools");
-        let binary_path = format!(
-            "{workspace}/target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools"
-        );
 
-        // ── Step 1: Kill any stale app process ───────────────────────────
+        // ── Guard: refuse concurrent builds ──────────────────────────────────
+        {
+            let guard = self.build_task.lock().await;
+            if let Some(handle) = guard.as_ref()
+                && !handle.is_finished() {
+                    return Ok(
+                        "A build is already in progress.\n\
+                         Poll get_last_build_status \u{2014} state will change Running \u{2192} Succeeded/Failed."
+                            .to_string(),
+                    );
+                }
+        }
+
+        // ── Step 1: Kill any stale dx serve / app instance synchronously ──────
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", "dx.*serve.*hotpatch"])
+            .status()
+            .await;
         let _ = tokio::process::Command::new("pkill")
             .args(["-f", APP_PROCESS_PATTERN])
             .status()
@@ -399,131 +525,57 @@ impl DevtoolsBackend for DesktopHttpBackend {
         *self.app_process.lock().await = None;
         tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-        // ── Step 2: Build with dx build --platform desktop ───────────────
+        // ── Hand off the slow work (dx serve + wait for bridge) to background ─
         //
-        // This blocks until the build finishes.  The exit code gives immediate
-        // pass/fail feedback — no file watchers, no hotpatch ambiguity.
+        // `dx serve --hotpatch` takes 30-90 s to compile before the app
+        // starts. Running it synchronously blocks this MCP response long enough
+        // for VS Code to drop the connection.  We set state = Running, return
+        // immediately (\u{2248}600 ms), and the agent polls get_last_build_status
+        // until Running \u{2192} Succeeded/Failed.
         self.start_build_record(
             "launch_app",
-            "dx build --platform desktop",
+            "dx serve --hotpatch",
             &app_dir,
-            "dx build --platform desktop",
-            "Building desktop app — blocks until complete, exit code gives immediate pass/fail.",
+            "dx serve --hotpatch",
+            "dx serve started in background (state: Running). \
+             Poll get_last_build_status for progress.",
         )
         .await;
 
-        let build_output = tokio::process::Command::new("dx")
-            .args(["build", "--platform", "desktop"])
-            .current_dir(&app_dir)
-            .stdin(Stdio::null())
-            .output()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to spawn `dx build --platform desktop`: {e}"))?;
-
-        // Push build output to the rolling log.
-        {
-            let mut buffer = self.build_log.lock().await;
-            for line in String::from_utf8_lossy(&build_output.stdout).lines() {
-                buffer.push_line(format!("[stdout] {line}"));
-            }
-            for line in String::from_utf8_lossy(&build_output.stderr).lines() {
-                buffer.push_line(format!("[stderr] {line}"));
-            }
-        }
-
-        if !build_output.status.success() {
-            self.finish_build_record(
-                BuildLifecycleState::Failed,
-                "Desktop build failed.",
-                "dx build --platform desktop exited with a non-zero status. \
-                 Check get_last_build_log for the exact compiler/Dioxus error.",
-                build_output.status.code(),
-            )
-            .await;
-            anyhow::bail!(
-                "dx build --platform desktop failed (exit {:?}). \
-                 Call get_last_build_log to see the compiler error.",
-                build_output.status.code()
-            );
-        }
-
-        // Build succeeded — increment the rebuild counter.
-        let _ = Self::increment_rebuild_counter().await;
-
-        // ── Step 3: Launch the built binary ──────────────────────────────
-        let mut child = tokio::process::Command::new(&binary_path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to launch built binary at {binary_path}: {e}"))?;
-
-        if let Some(stdout) = child.stdout.take() {
-            spawn_log_reader(stdout, "app-stdout", self.build_log.clone());
-        }
-        if let Some(stderr) = child.stderr.take() {
-            spawn_log_reader(stderr, "app-stderr", self.build_log.clone());
-        }
-
-        let pid = child
-            .id()
-            .ok_or_else(|| anyhow::anyhow!("Launched app process has no PID"))?;
-        *self.app_process.lock().await = Some(AppProcess { pid });
-
-        let app_ref = self.app_process.clone();
-        tokio::spawn(async move {
-            let _ = child.wait().await;
-            *app_ref.lock().await = None;
+        let ctx = self.clone(); // cheap Arc clone \u{2014} shares all mutable state
+        let handle = tokio::spawn(async move {
+            ctx.bg_build_and_launch_desktop(&app_dir).await;
         });
+        *self.build_task.lock().await = Some(handle);
 
-        // ── Step 4: Wait for the eval bridge ─────────────────────────────
-        // Short timeout — the binary starts fast since the build already finished.
-        match self.wait_for_bridge(30).await {
-            Ok(()) => {
-                self.finish_build_record(
-                    BuildLifecycleState::Succeeded,
-                    "Desktop app built and launched. Eval bridge is ready.",
-                    format!("Verified by reaching {BASE}/status after launching the built binary."),
-                    build_output.status.code(),
-                )
-                .await;
-                Ok(format!(
-                    "Build succeeded ✓ — app launched (PID: {pid})\n\
-                     Eval bridge ready at {BASE}\n\
-                     Call connect_cdp to start interacting. Use rebuild_app to rebuild and relaunch."
-                ))
-            }
-            Err(e) => {
-                self.finish_build_record(
-                    BuildLifecycleState::Failed,
-                    "Desktop build succeeded but eval bridge did not respond.",
-                    format!(
-                        "Bridge not ready at {BASE}/status within 30s: {e}. \
-                         Check get_last_build_log for app startup errors."
-                    ),
-                    build_output.status.code(),
-                )
-                .await;
-                anyhow::bail!("Build succeeded but eval bridge did not respond within 30s: {e}")
-            }
-        }
+        Ok(
+            "\u{1f527} Build started in background (state: Running).\n\
+             \u{25b6} Poll `get_last_build_status` until state = Succeeded or Failed.\n\
+             \u{1f4cb} On Succeeded: app is running \u{2014} call `connect_cdp`.\n\
+             \u{274c} On Failed: call `get_last_build_log` for the exact compiler error."
+                .to_string(),
+        )
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {
-        // SIGTERM the app by PID if we have it.
+        // SIGTERM the dx serve process (which also terminates the app it compiled).
         if let Some(proc) = self.app_process.lock().await.take() {
             let _ = tokio::process::Command::new("kill")
                 .args(["-15", &proc.pid.to_string()])
                 .status()
                 .await;
         }
-        // Pattern fallback to catch any stray instances.
+        // Pattern fallbacks: kill any stray dx serve or app instances.
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", "dx.*serve.*hotpatch"])
+            .status()
+            .await;
         let _ = tokio::process::Command::new("pkill")
             .args(["-f", APP_PROCESS_PATTERN])
             .status()
             .await;
 
-        Ok("Killed poly-desktop-devtools. Call launch_app to rebuild and restart.".to_string())
+        Ok("Killed dx serve and poly-desktop-devtools. Call launch_app to restart.".to_string())
     }
 
     async fn connect(&self) -> anyhow::Result<String> {
@@ -559,21 +611,25 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn hard_kill(&self) -> anyhow::Result<String> {
-        // SIGKILL the app process by PID (avoids killing the MCP).
+        // SIGKILL the dx serve process by PID.
         if let Some(proc) = self.app_process.lock().await.take() {
             let _ = tokio::process::Command::new("kill")
                 .args(["-9", &proc.pid.to_string()])
                 .status()
                 .await;
         }
-        // Pattern fallback for any orphaned instances.
+        // Pattern fallbacks: SIGKILL dx serve and the app binary.
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-9", "-f", "dx.*serve.*hotpatch"])
+            .status()
+            .await;
         let _ = tokio::process::Command::new("pkill")
             .args(["-9", "-f", APP_PROCESS_PATTERN])
             .status()
             .await;
 
         Ok(
-            "Hard-killed poly-desktop-devtools (SIGKILL). Call launch_app to rebuild and restart."
+            "Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
                 .to_string(),
         )
     }
@@ -637,12 +693,13 @@ impl DevtoolsBackend for DesktopHttpBackend {
             json!({
                 "name": "force_rebuild",
                 "description": "Alias for rebuild_app — kills the running app, rebuilds with\n\
-                    `dx build --platform desktop`, and relaunches the fresh binary.\n\n\
+                    `dx serve --hotpatch`, and relaunches the fresh binary.\n\n\
                     Identical to calling rebuild_app. Provided for convenience.\n\n\
                     After this tool returns:\n\
-                    1. Call connect_cdp\n\
-                    2. Verify with get_generation that build_id and pid both changed\n\
-                    3. If anything looks wrong, inspect get_last_build_status and get_last_build_log",
+                    1. Poll get_last_build_status until Succeeded\n\
+                    2. Call connect_cdp\n\
+                    3. Verify with get_generation that build_id and pid both changed\n\
+                    4. If anything looks wrong, inspect get_last_build_status and get_last_build_log",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
         ]
@@ -936,6 +993,7 @@ fn cli_detect_workspace() -> String {
 const CLI_COMMANDS: &[&str] = &[
     "status",
     "launch",
+    "rebuild",
     "kill",
     "screenshot",
     "snapshot",
@@ -977,7 +1035,8 @@ fn desktop_cli_help() -> &'static str {
 
 COMMANDS:
   status                    Check if app is running
-  launch [workspace]        Start the devtools app
+  launch [workspace]        Start the devtools app (non-blocking, polls until done)
+  rebuild [workspace]       Rebuild and relaunch (non-blocking, polls until done)
   kill                      Stop the devtools app
   screenshot [--save path]  Take a screenshot (saves PNG or prints base64)
   snapshot [--verbose]      Print DOM snapshot
@@ -1028,9 +1087,52 @@ async fn dispatch_desktop_cli(
                 .map(String::as_str)
                 .map(str::to_string)
                 .unwrap_or_else(cli_detect_workspace);
-            backend.launch_app(&ws).await
+            // launch_app is non-blocking — poll until background build finishes,
+            // otherwise the process exits and kills the tokio task.
+            let initial_msg = backend.launch_app(&ws).await?;
+            cli_write(&initial_msg)?;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                let status_str = backend.get_last_build_status().await.unwrap_or_default();
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&status_str).unwrap_or(serde_json::Value::Null);
+                let state = parsed
+                    .get("state")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("Unknown");
+                cli_write(&format!("[build] state = {state}"))?;
+                if state != "Running" {
+                    break;
+                }
+            }
+            backend.get_last_build_status().await
         }
         "kill" => backend.kill_app().await,
+        "rebuild" => {
+            let ws = args
+                .first()
+                .map(String::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(cli_detect_workspace);
+            // rebuild_app is non-blocking — poll until background rebuild finishes.
+            let initial_msg = backend.rebuild_app(&ws).await?;
+            cli_write(&initial_msg)?;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                let status_str = backend.get_last_build_status().await.unwrap_or_default();
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&status_str).unwrap_or(serde_json::Value::Null);
+                let state = parsed
+                    .get("state")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("Unknown");
+                cli_write(&format!("[rebuild] state = {state}"))?;
+                if state != "Running" {
+                    break;
+                }
+            }
+            backend.get_last_build_status().await
+        }
         "snapshot" => {
             let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
             backend.take_snapshot(verbose).await

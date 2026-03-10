@@ -315,6 +315,60 @@
       "problemMatcher": []
     },
 
+    // ─── MCP Launch Tasks (for use with launch.json configurations) ────────────
+    // These run the MCPs in background mode and keep them alive so apps stay open.
+    // Referenced by the "🖥️  Desktop (DevTools MCP)", "🌐 Web (DevTools MCP)",
+    // and "⚛️  Electron (DevTools MCP)" launch configurations.
+
+    {
+      "label": "Launch: desktop-devtools-mcp",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--", "launch"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "POLY_WORKSPACE": "${workspaceFolder}" }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "Launch: web-devtools-mcp",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--", "launch"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "POLY_WORKSPACE": "${workspaceFolder}" }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "Launch: electron-devtools-mcp",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--", "launch"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "POLY_WORKSPACE": "${workspaceFolder}" }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+
     // ─── CLI Tasks (PREFERRED over MCP where possible) ────────────────────────
     // These are the non-MCP, shell-scriptable equivalents of the MCP tools.
     // Use these in terminal scripts, CI, or anywhere you don't need the full

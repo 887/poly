@@ -76,7 +76,7 @@ pub fn standard_tool_list() -> Vec<Value> {
         // ── Lifecycle (Poly-specific) ────────────────────────────────
         json!({
             "name": "launch_app",
-            "description": "Build and launch the Poly app under dx serve with hot-reload. If an instance is already running, reuses it. Wait ~2 seconds then call connect_cdp to interact with the app.",
+            "description": "Build the Poly app (dx build) and launch it. NON-BLOCKING: returns immediately (~1 s) with state=Running; the actual dx build runs in the background. REQUIRED workflow: (1) call launch_app, (2) loop calling get_last_build_status every 5-10 s until state = \"Succeeded\" or \"Failed\", (3a) on Succeeded → call connect_cdp (web: call page_reload {ignoreCache:true} first), (3b) on Failed → call get_last_build_log to see the compiler error. Do NOT call connect_cdp immediately after launch_app — the build will still be in progress.",
             "annotations": { "title": "Launch App", "category": "lifecycle", "readOnlyHint": false },
             "inputSchema": { "type": "object", "properties": {
                 "workspace": { "type": "string", "description": "Path to workspace root. Auto-detected if omitted." }
@@ -90,7 +90,7 @@ pub fn standard_tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "connect_cdp",
-            "description": "Verify that the devtools backend is connected and reachable. Returns a status message. Call this after launch_app to confirm the app is ready.",
+            "description": "Verify that the devtools backend is connected and reachable. Returns a status message. IMPORTANT: call this only AFTER get_last_build_status reports state = \"Succeeded\", not immediately after launch_app or rebuild_app (which are non-blocking and return before the build finishes).",
             "annotations": { "title": "Connect", "category": "lifecycle", "readOnlyHint": true },
             "inputSchema": { "type": "object", "properties": {} }
         }),
@@ -108,7 +108,7 @@ pub fn standard_tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "rebuild_app",
-            "description": "Trigger a Dioxus full rebuild (recompilation + app restart). Hot-reload handles RSX-only changes automatically — use this for structural code changes that need recompilation. The app will restart after building. If generation or readiness does not change as expected afterwards, immediately inspect get_last_build_status and get_last_build_log for the exact Dioxus output.",
+            "description": "Trigger a full WASM recompilation and app restart. NON-BLOCKING: returns immediately (~1 s); the actual dx build runs in the background (30-90 s). REQUIRED workflow: (1) call rebuild_app, (2) loop calling get_last_build_status every 5-10 s until state = \"Succeeded\" or \"Failed\", (3a) on Succeeded → web: call page_reload {ignoreCache:true} then connect_cdp; desktop: call connect_cdp. (3b) on Failed → call get_last_build_log. Hot-reload handles RSX-only changes; use rebuild_app only for structural Rust code changes that need recompilation.",
             "annotations": { "title": "Rebuild App", "category": "lifecycle", "readOnlyHint": false },
             "inputSchema": { "type": "object", "properties": {
                 "workspace": { "type": "string", "description": "Path to workspace root. Auto-detected if omitted." }
@@ -116,7 +116,7 @@ pub fn standard_tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "get_last_build_status",
-            "description": "Return a structured JSON summary of the most recent Dioxus build / hotpatch attempt, including trigger, command line, working directory, lifecycle state, exit code, verification notes, and a tail excerpt from the captured output. Use this first when launch_app/rebuild_app appears stuck or generation does not advance as expected.",
+            "description": "Return a structured JSON summary of the most recent build attempt. KEY FIELD: \"state\" is one of \"Running\" (build in progress), \"Succeeded\" (app ready), or \"Failed\" (build failed). POLLING WORKFLOW: after calling launch_app or rebuild_app, call get_last_build_status every 5-10 s until state != \"Running\". On Succeeded → call connect_cdp (web: page_reload first). On Failed → call get_last_build_log for the compiler/linker error. Also includes trigger, command, directory, exit code, and a log tail.",
             "annotations": { "title": "Last Build Status", "category": "lifecycle", "readOnlyHint": true },
             "inputSchema": { "type": "object", "properties": {} }
         }),

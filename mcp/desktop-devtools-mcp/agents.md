@@ -1,33 +1,37 @@
 # poly-desktop-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-11
+> **Last Updated:** 2026-03-12
 
 ---
 
-## CLI Preference (IMPORTANT — Updated 2026-03-10)
+## MCP Preference (IMPORTANT — Updated 2026-03-12)
 
-> **Prefer CLI over MCP whenever possible.**
+> **Prefer MCP mode over CLI subcommands.**
 
-All devtools functionality is available as CLI subcommands — no JSON-RPC overhead:
+The MCP server is the primary integration point:
+- Proper error handling and timeout protection baked into all calls
+- Integrated with VS Code's built-in Copilot agent workflow
+- Single shared `DevtoolsBackend` instance (connects once, reuses connection)
+- Non-blocking background builds — MCP returns ~600ms while `dx serve` continues compiling
+
+### When to use CLI (rare)
+
+CLI subcommands are available for testing or scripting when MCP server is not needed:
 
 ```bash
 cargo run --bin poly-desktop-devtools-mcp -- status
-cargo run --bin poly-desktop-devtools-mcp -- launch
+cargo run --bin poly-desktop-devtools-mcp -- launch  # polls background build
 cargo run --bin poly-desktop-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
 cargo run --bin poly-desktop-devtools-mcp -- snapshot
-cargo run --bin poly-desktop-devtools-mcp -- eval "document.title"
-cargo run --bin poly-desktop-devtools-mcp -- click "#my-button"
-cargo run --bin poly-desktop-devtools-mcp -- fill "#input" "value"
-cargo run --bin poly-desktop-devtools-mcp -- generation
 cargo run --bin poly-desktop-devtools-mcp -- build-status
 cargo run --bin poly-desktop-devtools-mcp -- build-log
 cargo run --bin poly-desktop-devtools-mcp -- help
 ```
 
-VS Code CLI tasks are available under **"CLI: desktop — *"** in `.vscode/tasks.json`.
+VS Code CLI tasks under **"CLI: desktop — *"** exist but are not recommended for regular development.
 
-Use MCP mode (via `.vscode/mcp.json`) only when orchestrating multi-step sequences through Copilot agent mode.
+**Always use MCP mode** (VS Code MCP integration or explicit MCP server launch) for production workflows.
 
 ---
 
@@ -166,17 +170,30 @@ This pattern:
 If `launch_app` times out and `get_last_build_status` mentions port 9223 still being occupied while `/status` is dead,
 assume a stale desktop app blocked the bridge bind instead of assuming the build itself is broken.
 
-### launch_app() — Builds and Launches
+### launch_app() — NON-BLOCKING build + launch
 
+`launch_app` is **NON-BLOCKING** — it returns immediately (~1 s). The actual
+`dx build --platform desktop` runs in the background (takes 30-90 s). You **must** poll
+`get_last_build_status` to know when it finishes.
+
+Background sequence:
 1. Kill any existing app instance (pkill MCP-safe pattern)
-2. Run **`dx build --platform desktop`** in `apps/desktop-devtools/` — **blocks synchronously** until the build finishes  
-   - Exit code gives **immediate pass/fail** — no polling, no ambiguity  
-   - Stdout/stderr captured and available via `get_last_build_log`
-3. Launch the binary from `target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools`
-4. Spawn a background log reader for app output
-5. Wait up to 30 s for the HTTP eval bridge on port 9223 to become reachable
+2. Record build state as `Running` and **return immediately** to the caller
+3. Run **`dx build --platform desktop`** in `apps/desktop-devtools/` (background)
+4. Launch the binary from `target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools`
+5. Spawn a background log reader for app output
+6. Wait up to 30 s for the HTTP eval bridge on port 9223, then record `Succeeded` or `Failed`
 
-Call `connect_cdp()` after launch_app returns to verify the bridge is ready.
+**Workflow after calling `launch_app`:**
+```
+launch_app {}                     # returns in ~1 s
+get_last_build_status {}          # repeat every 5-10 s until state != "Running"
+  state = "Running"  → keep polling
+  state = "Succeeded" → call connect_cdp {}
+  state = "Failed"   → call get_last_build_log {} to see the error
+```
+
+Do **NOT** call `connect_cdp` immediately after `launch_app` — the build may still be in progress.
 
 
 ### 5. Reset to Setup Wizard
@@ -196,21 +213,27 @@ Call `launch_app` again to restart at the setup wizard.
 - Binary output: `target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools`
 - CSS asset: `target/dx/poly-desktop-devtools/debug/linux/app/assets/tailwind-*.css`
 
-## Build Approach — `dx build` everywhere (DECISION, 2026-03-11)
+## Build Approach — `dx build` non-blocking (DECISION, 2026-03-12)
 
-**All desktop rebuilds use `dx build --platform desktop` — never `dx serve --hotpatch`.**
+**All desktop builds use `dx build --platform desktop`, spawned in a background tokio task.**
 
-- `launch_app`: runs `dx build --platform desktop` (blocking, sync) then launches the binary
-- `rebuild_app`: calls `launch_app` (kills old binary, rebuilds, relaunches)
-- `force_rebuild`: delegates to `rebuild_app`
+- `launch_app`: kills old process, records `state=Running`, **returns immediately**, spawns
+  background task: `dx build` → launch binary → wait for bridge (up to 30 s) → `state=Succeeded|Failed`
+- `rebuild_app`: delegates to `launch_app` (same non-blocking pattern)
+- `reset_app`: wipes the data directory, then calls `launch_app` (same non-blocking pattern)
+
+**Why non-blocking?**
+- `dx build --platform desktop` can take 30-90 s — long enough to timeout VS Code's MCP client
+- Background tasks prevent connection drops while still capturing full stdout/stderr
+- Agent polls `get_last_build_status` until `state` transitions: `Running → Succeeded | Failed`
+- Exit code + build log are still captured and available via `get_last_build_log`
 
 **Why `dx build` instead of `dx serve --hotpatch`:**
-- Exit code is immediate — any build failure is surfaced at once with exact Cargo error
 - No background dx serve process to manage or pkill
-- Simpler lifecycle: one binary PID to track, not a dx serve process + binary PID
+- Simpler lifecycle: one binary PID to track
 - No stale port / pkill-regex edge cases
 
-After `rebuild_app` or `force_rebuild` completes, call `connect_cdp` to verify the bridge.
+After `rebuild_app` completes (`state=Succeeded`): call `connect_cdp` to verify the bridge.
 
 ## Debugging CSS Not Loading
 

@@ -168,6 +168,36 @@
         "RUST_LOG": "debug"
       },
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "🖥️  Desktop (DevTools MCP)",
+      "program": "/bin/sleep",
+      "args": ["infinity"],
+      "preLaunchTask": "Launch: desktop-devtools-mcp",
+      "stopOnEntry": false,
+      "sourceMap": {}
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "🌐 Web (DevTools MCP)",
+      "program": "/bin/sleep",
+      "args": ["infinity"],
+      "preLaunchTask": "Launch: web-devtools-mcp",
+      "stopOnEntry": false,
+      "sourceMap": {}
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "⚛️  Electron (DevTools MCP)",
+      "program": "/bin/sleep",
+      "args": ["infinity"],
+      "preLaunchTask": "Launch: electron-devtools-mcp",
+      "stopOnEntry": false,
+      "sourceMap": {}
     }
   ]
 }

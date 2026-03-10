@@ -90,6 +90,7 @@ fn excerpt_from_lines(lines: &[String]) -> String {
 const WEB_CLI_COMMANDS: &[&str] = &[
     "status",
     "launch",
+    "rebuild",
     "kill",
     "screenshot",
     "snapshot",
@@ -133,9 +134,10 @@ impl CliConfig {
 
 /// Chrome CDP Backend — builds the WASM bundle via `dx build`, serves it with
 /// a static file server, and drives Chrome via CDP.
+#[derive(Clone)]
 struct ChromeCdpBackend {
     ws: Arc<Mutex<Option<WsStream>>>,
-    msg_id: AtomicI64,
+    msg_id: Arc<AtomicI64>,
     client: reqwest::Client,
     /// Whether to run Chrome headless (no window).
     headless: bool,
@@ -149,18 +151,53 @@ struct ChromeCdpBackend {
     /// Workspace path — set during `launch_app`, used by `rebuild_app`.
     workspace: Arc<Mutex<Option<String>>>,
     /// Generation counter — increments on each successful `connect()` call.
-    generation: AtomicU64,
+    generation: Arc<AtomicU64>,
     /// Rolling combined stdout/stderr log from dx build and app output.
     build_log: Arc<Mutex<RollingBuildLog>>,
     /// Structured diagnostics for the last build attempt.
     last_build: Arc<Mutex<Option<WebBuildRecord>>>,
+    /// Background build task handle — `None` when idle, `Some` while a build
+    /// is in progress. Used to prevent concurrent builds.
+    build_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+}
+
+/// Pipe an async reader (stdout/stderr) line-by-line into a [`RollingBuildLog`].
+///
+/// Spawns a detached tokio task that reads until EOF, tagging each line with
+/// `[stream_name]` so stdout and stderr are distinguishable in the log.
+fn spawn_log_reader<R>(
+    reader: R,
+    stream_name: &'static str,
+    buffer: Arc<Mutex<RollingBuildLog>>,
+) where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        use tokio::io::AsyncBufReadExt as _;
+        let mut lines = tokio::io::BufReader::new(reader).lines();
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    buffer.lock().await.push_line(format!("[{stream_name}] {line}"));
+                }
+                Ok(None) => break,
+                Err(err) => {
+                    buffer
+                        .lock()
+                        .await
+                        .push_line(format!("[{stream_name}] <read error: {err}>"));
+                    break;
+                }
+            }
+        }
+    });
 }
 
 impl ChromeCdpBackend {
     fn new(headless: bool) -> Self {
         Self {
             ws: Arc::new(Mutex::new(None)),
-            msg_id: AtomicI64::new(1),
+            msg_id: Arc::new(AtomicI64::new(1)),
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
@@ -170,12 +207,18 @@ impl ChromeCdpBackend {
             watchdog_handle: Arc::new(Mutex::new(None)),
             dx_serve_pid: Arc::new(Mutex::new(None)),
             workspace: Arc::new(Mutex::new(None)),
-            generation: AtomicU64::new(0),
+            generation: Arc::new(AtomicU64::new(0)),
             build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
             last_build: Arc::new(Mutex::new(None)),
+            build_task: Arc::new(Mutex::new(None)),
         }
     }
 
+    /// Wait for the dx serve web server to respond, with early crash detection.
+    ///
+    /// Checks the build log on every poll for fatal crash patterns (exit 127,
+    /// undefined symbol, missing `.so`, etc.). Aborts immediately instead of
+    /// blocking for 120 s when the build already failed.
     async fn wait_for_web_server(&self, max_seconds: u64) -> anyhow::Result<()> {
         let polls = max_seconds * 2;
         for _ in 0..polls {
@@ -189,6 +232,15 @@ impl ChromeCdpBackend {
                 .unwrap_or(false);
             if ok {
                 return Ok(());
+            }
+            // Early abort: check if the build/app crashed.
+            if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
+                anyhow::bail!(
+                    "Build/app crashed before web server came up.\n\
+                     Matched log line: {crash_line}\n\n\
+                     Fix: run `cd apps/web && dx build --platform web` \
+                     to rebuild everything in sync, then retry launch_app."
+                );
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
@@ -683,6 +735,198 @@ impl ChromeCdpBackend {
             .and_then(|s| s.trim().parse().ok())
             .unwrap_or(0)
     }
+
+    /// Background task body for `launch_app`.
+    ///
+    /// Spawns `dx serve --platform web --port {WEB_SERVER_PORT}` as a long-running
+    /// background process. `dx serve` compiles the WASM bundle and serves it on
+    /// port {WEB_SERVER_PORT} — no python3 static server needed. We poll for HTTP
+    /// readiness then launch Chrome via the watchdog.
+    async fn bg_build_and_launch(&self, app_dir: &str) {
+        // ── Kill any existing dx serve process ────────────────────────────────
+        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .status()
+                .await;
+        }
+
+        // ── Spawn dx serve as a long-running background process ───────────────
+        let mut child = match tokio::process::Command::new("dx")
+            .args([
+                "serve",
+                "--platform",
+                "web",
+                "--port",
+                &WEB_SERVER_PORT.to_string(),
+            ])
+            .current_dir(app_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "Failed to spawn dx serve.",
+                    format!("Could not spawn `dx serve --platform web`: {e}"),
+                    None,
+                )
+                .await;
+                return;
+            }
+        };
+
+        if let Some(stdout) = child.stdout.take() {
+            spawn_log_reader(stdout, "dx-stdout", self.build_log.clone());
+        }
+        if let Some(stderr) = child.stderr.take() {
+            spawn_log_reader(stderr, "dx-stderr", self.build_log.clone());
+        }
+
+        if let Some(pid) = child.id() {
+            *self.dx_serve_pid.lock().await = Some(pid);
+        }
+        let pid_ref = self.dx_serve_pid.clone();
+        tokio::spawn(async move {
+            let _ = child.wait().await;
+            *pid_ref.lock().await = None;
+        });
+
+        Self::increment_rebuild_counter();
+
+        // ── Wait for dx serve's HTTP server ───────────────────────────────────
+        // Allow up to 120 s: dx serve must compile the WASM bundle before serving.
+        if let Err(e) = self.wait_for_web_server(120).await {
+            self.finish_build_record(
+                BuildLifecycleState::Failed,
+                "dx serve started but HTTP server did not respond within 120 s.",
+                format!(
+                    "Port {WEB_SERVER_PORT} not reachable: {e}. \
+                     Check get_last_build_log for dx serve / cargo errors."
+                ),
+                None,
+            )
+            .await;
+            return;
+        }
+
+        self.finish_build_record(
+            BuildLifecycleState::Succeeded,
+            "WASM compiled \u{2713} \u{2014} dx serve is up. Launching Chrome.",
+            format!(
+                "dx serve answered on port {WEB_SERVER_PORT}. Launching Chrome with CDP."
+            ),
+            None,
+        )
+        .await;
+
+        // ── Chrome ────────────────────────────────────────────────────────────
+        self.shutting_down.store(false, Ordering::Relaxed);
+        if let Err(e) = self.spawn_chrome_with_watchdog().await
+            && let Some(rec) = self.last_build.lock().await.as_mut()
+        {
+            rec.diagnostics.summary = format!(
+                "WASM compiled and dx serve started, but Chrome failed to launch: {e}"
+            );
+        }
+    }
+
+    /// Background task body for `rebuild_app`.
+    ///
+    /// Kills the running `dx serve`, spawns a fresh one to recompile and re-serve
+    /// the WASM bundle, then reloads the Chrome page via CDP. On success the agent
+    /// only needs to call `connect_cdp` — the page reload is done automatically.
+    async fn bg_rebuild(&self, app_dir: &str) {
+        // ── Kill current dx serve ─────────────────────────────────────────────
+        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .status()
+                .await;
+        }
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", "dx.*serve.*web"])
+            .status()
+            .await;
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+
+        // ── Spawn fresh dx serve ──────────────────────────────────────────────
+        let mut child = match tokio::process::Command::new("dx")
+            .args([
+                "serve",
+                "--platform",
+                "web",
+                "--port",
+                &WEB_SERVER_PORT.to_string(),
+            ])
+            .current_dir(app_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "Failed to spawn dx serve for rebuild.",
+                    format!("Could not spawn `dx serve --platform web`: {e}"),
+                    None,
+                )
+                .await;
+                return;
+            }
+        };
+
+        if let Some(stdout) = child.stdout.take() {
+            spawn_log_reader(stdout, "dx-stdout", self.build_log.clone());
+        }
+        if let Some(stderr) = child.stderr.take() {
+            spawn_log_reader(stderr, "dx-stderr", self.build_log.clone());
+        }
+
+        if let Some(pid) = child.id() {
+            *self.dx_serve_pid.lock().await = Some(pid);
+        }
+        let pid_ref = self.dx_serve_pid.clone();
+        tokio::spawn(async move {
+            let _ = child.wait().await;
+            *pid_ref.lock().await = None;
+        });
+
+        // ── Wait for dx serve to recompile and come up ────────────────────────
+        if let Err(e) = self.wait_for_web_server(120).await {
+            self.finish_build_record(
+                BuildLifecycleState::Failed,
+                "Fresh dx serve did not become ready within 120 s.",
+                format!("Port {WEB_SERVER_PORT} not reachable after restart: {e}."),
+                None,
+            )
+            .await;
+            return;
+        }
+
+        // ── CDP page reload ───────────────────────────────────────────────────
+        // Chrome is still alive (we didn't kill it). Reload so it picks up the
+        // new WASM bundle. The WS connection drops during reload; clear it so
+        // the next connect_cdp reconnects cleanly.
+        let reload_ok = self
+            .cdp_send("Page.reload", json!({ "ignoreCache": true }))
+            .await
+            .is_ok();
+        *self.ws.lock().await = None;
+
+        self.finish_build_record(
+            BuildLifecycleState::Succeeded,
+            "WASM rebuilt \u{2713} \u{2014} dx serve restarted, Chrome reloaded. Call connect_cdp.",
+            format!("dx serve up on port {WEB_SERVER_PORT}. CDP reload sent: {reload_ok}."),
+            None,
+        )
+        .await;
+    }
 }
 
 #[async_trait]
@@ -693,12 +937,23 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
     async fn launch_app(&self, workspace: &str) -> anyhow::Result<String> {
         let app_dir = format!("{workspace}/apps/web");
-        let serve_dir = format!("{workspace}/target/dx/poly-web/debug/web/public");
-        let mut messages = Vec::new();
 
         *self.workspace.lock().await = Some(workspace.to_string());
 
-        // ── Step 0: Kill existing Chrome, static server, and stale dx serve ──
+        // ── Guard: refuse concurrent builds ──────────────────────────────────
+        {
+            let guard = self.build_task.lock().await;
+            if let Some(handle) = guard.as_ref()
+                && !handle.is_finished() {
+                    return Ok(
+                        "A build is already in progress.\n\
+                         Poll get_last_build_status \u{2014} state will change Running \u{2192} Succeeded/Failed."
+                            .to_string(),
+                    );
+                }
+        }
+
+        // ── Step 0: Kill Chrome / static server synchronously (fast) ─────────
         self.shutting_down.store(true, Ordering::Relaxed);
         if let Some(handle) = self.watchdog_handle.lock().await.take() {
             handle.abort();
@@ -708,147 +963,48 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .args(["-f", &format!("remote-debugging-port={CDP_PORT}")])
             .status()
             .await;
-        // Kill any stale dx serve from previous sessions.
         let _ = tokio::process::Command::new("pkill")
             .args(["-f", "dx.*serve.*web"])
             .status()
             .await;
-        // Kill any stale static file server (python3 http.server on port 3000).
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
             let _ = tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
                 .await;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-        // ── Step 1: Build the WASM bundle via dx build --platform web ────────
+        // ── Hand off the slow work (build + server + Chrome) to a background task
         //
-        // This blocks until the build finishes. The exit code gives immediate
-        // pass/fail feedback — no file watchers, no ambiguous build state.
-        messages.push(format!(
-            "Building WASM bundle (`dx build --platform web` in {app_dir})\u{2026}"
-        ));
+        // `dx build --platform web` takes 30-90 s.  Running it synchronously would
+        // block this MCP response long enough for VS Code to drop the connection.
+        // We set state = Running, return immediately (\u2248 50 ms), and the agent
+        // polls get_last_build_status until Running \u2192 Succeeded/Failed.
         let _ = self
             .start_build_record(
                 "launch_app",
-                "dx build --platform web",
+                "dx serve --platform web",
                 &app_dir,
-                "dx build --platform web",
-                "Building web WASM bundle \u{2014} blocks until complete, exit code gives immediate pass/fail.",
+                "dx serve --platform web",
+                "dx serve started in background (state: Running). \
+                 Poll get_last_build_status for progress.",
             )
             .await;
 
-        let build_output = tokio::process::Command::new("dx")
-            .args(["build", "--platform", "web"])
-            .current_dir(&app_dir)
-            .stdin(Stdio::null())
-            .output()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to spawn `dx build --platform web`: {e}"))?;
-
-        // Push build output to the rolling log.
-        {
-            let mut buffer = self.build_log.lock().await;
-            for line in String::from_utf8_lossy(&build_output.stdout).lines() {
-                buffer.push_line(format!("[stdout] {line}"));
-            }
-            for line in String::from_utf8_lossy(&build_output.stderr).lines() {
-                buffer.push_line(format!("[stderr] {line}"));
-            }
-        }
-
-        if !build_output.status.success() {
-            self.finish_build_record(
-                BuildLifecycleState::Failed,
-                "Web WASM build failed.",
-                "dx build --platform web exited with a non-zero status. \
-                 Check get_last_build_log for the exact compiler/Dioxus error.",
-                build_output.status.code(),
-            )
-            .await;
-            anyhow::bail!(
-                "dx build --platform web failed (exit {:?}). \
-                 Call get_last_build_log to see the compiler error.",
-                build_output.status.code()
-            );
-        }
-        Self::increment_rebuild_counter();
-        messages.push("WASM build succeeded \u{2713}".to_string());
-
-        // ── Step 2: Launch a static file server for the built WASM bundle ────
-        //
-        // python3 -m http.server is universally available on Linux and serves
-        // the dx build output directory at port 3000.  No rebuild magic needed:
-        // after each `dx build`, the files in the same directory are just
-        // overwritten in place and Chrome reloads to pick them up.
-        let mut srv_child = tokio::process::Command::new("python3")
-            .args([
-                "-m",
-                "http.server",
-                &WEB_SERVER_PORT.to_string(),
-                "--directory",
-                &serve_dir,
-            ])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to start static file server: {e}"))?;
-
-        let srv_pid = srv_child.id();
-        if let Some(pid) = srv_pid {
-            *self.dx_serve_pid.lock().await = Some(pid);
-        }
-        let pid_ref = self.dx_serve_pid.clone();
-        tokio::spawn(async move {
-            let _ = srv_child.wait().await;
-            *pid_ref.lock().await = None;
+        let ctx = self.clone(); // cheap Arc clone — shares all state
+        let handle = tokio::spawn(async move {
+            ctx.bg_build_and_launch(&app_dir).await;
         });
+        *self.build_task.lock().await = Some(handle);
 
-        // Wait for the static server to be reachable (should be very fast).
-        self.wait_for_web_server(15).await.map_err(|e| {
-            anyhow::anyhow!(
-                "Static file server on port {WEB_SERVER_PORT} did not start: {e}. \
-                 Is python3 installed?"
-            )
-        })?;
-
-        self.finish_build_record(
-            BuildLifecycleState::Succeeded,
-            "Web WASM built and static file server started. Launching Chrome next.",
-            format!(
-                "Build exited 0; static server responded on port {WEB_SERVER_PORT}. \
-                 Serving: {serve_dir}"
-            ),
-            build_output.status.code(),
+        Ok(
+            "\u{1f527} Build started in background (state: Running).\n\
+             \u{25b6} Poll `get_last_build_status` until state = Succeeded or Failed.\n\
+             \u{1f4cb} On Succeeded: Chrome is already running \u{2014} call `connect_cdp`.\n\
+             \u{274c} On Failed: call `get_last_build_log` for the exact compiler error."
+                .to_string(),
         )
-        .await;
-
-        messages.push(format!(
-            "Static file server running on port {WEB_SERVER_PORT} \u{2713}  (serving {serve_dir})"
-        ));
-
-        // ── Step 3: Launch Chrome with CDP ────────────────────────────────────
-        self.shutting_down.store(false, Ordering::Relaxed);
-        self.spawn_chrome_with_watchdog().await?;
-
-        if self.headless {
-            messages.push(format!(
-                "Launched Chrome (headless) with CDP on port {CDP_PORT}"
-            ));
-        } else {
-            messages.push(format!(
-                "\u{1f5a5}\u{fe0f}  Launched Chromium (visible window) with CDP on port {CDP_PORT}"
-            ));
-            messages.push(
-                "\u{1f4cd} Watch the Chromium window \u{2014} you can see exactly what the MCP is doing!"
-                    .to_string(),
-            );
-        }
-        messages.push("Wait ~3 seconds then call connect_cdp.".to_string());
-
-        Ok(messages.join("\n"))
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {
@@ -1213,79 +1369,52 @@ impl DevtoolsBackend for ChromeCdpBackend {
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
         let app_dir = format!("{workspace}/apps/web");
 
-        // Increment counter before build so get_generation's build_id advances
-        // on every rebuild_app call.
+        // ── Guard: refuse concurrent builds ──────────────────────────────────
+        {
+            let guard = self.build_task.lock().await;
+            if let Some(handle) = guard.as_ref()
+                && !handle.is_finished() {
+                    return Ok(
+                        "A build is already in progress.\n\
+                         Poll get_last_build_status \u{2014} state will change Running \u{2192} Succeeded/Failed."
+                            .to_string(),
+                    );
+                }
+        }
+
+        // Increment counter before build so build_id advances on every rebuild_app call.
         Self::increment_rebuild_counter();
 
         let _ = self
             .start_build_record(
                 "rebuild_app",
-                "dx build --platform web",
+                "dx serve --platform web",
                 &app_dir,
-                "dx build --platform web",
-                "Rebuilding WASM bundle — blocks until complete, exit code gives immediate pass/fail.",
+                "dx serve --platform web",
+                "dx serve restarting in background (state: Running). \
+                 Poll get_last_build_status for progress.",
             )
             .await;
 
-        // ── Build WASM bundle (synchronous, blocking) ──────────────────────
-        let build_output = tokio::process::Command::new("dx")
-            .args(["build", "--platform", "web"])
-            .current_dir(&app_dir)
-            .stdin(Stdio::null())
-            .output()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to spawn `dx build --platform web`: {e}"))?;
+        // ── Spawn background rebuild task (returns immediately to avoid MCP timeout)
+        //
+        // `dx serve --platform web` takes 30-90 s to recompile.  We set state =
+        // Running, return immediately, and the agent polls get_last_build_status
+        // until Running \u{2192} Succeeded or Failed.  On success the background task
+        // has already reloaded Chrome — the agent only needs connect_cdp.
+        let ctx = self.clone(); // cheap Arc clone — shares all mutable state
+        let handle = tokio::spawn(async move {
+            ctx.bg_rebuild(&app_dir).await;
+        });
+        *self.build_task.lock().await = Some(handle);
 
-        // Push build output to the rolling log.
-        {
-            let mut buffer = self.build_log.lock().await;
-            for line in String::from_utf8_lossy(&build_output.stdout).lines() {
-                buffer.push_line(format!("[stdout] {line}"));
-            }
-            for line in String::from_utf8_lossy(&build_output.stderr).lines() {
-                buffer.push_line(format!("[stderr] {line}"));
-            }
-        }
-
-        if !build_output.status.success() {
-            self.finish_build_record(
-                BuildLifecycleState::Failed,
-                "Web WASM rebuild failed.",
-                "dx build --platform web exited with a non-zero status. \
-                 Inspect get_last_build_log for the exact compiler/Dioxus error.",
-                build_output.status.code(),
-            )
-            .await;
-            anyhow::bail!(
-                "dx build --platform web failed (exit {:?}). \
-                 Call get_last_build_log to see the compiler error.",
-                build_output.status.code()
-            );
-        }
-
-        self.finish_build_record(
-            BuildLifecycleState::Succeeded,
-            "Web WASM rebuild succeeded.",
-            "dx build --platform web exited 0. \
-             Static file server is still running; Chrome needs a Page.reload to pick up new files.",
-            build_output.status.code(),
+        Ok(
+            "\u{1f527} WASM rebuild started in background (state: Running).\n\
+             \u{25b6} Poll `get_last_build_status` until state = Succeeded or Failed.\n\
+             \u{1f4cb} On Succeeded: call `connect_cdp` (Chrome already reloaded).\n\
+             \u{274c} On Failed: call `get_last_build_log` for the exact compiler error."
+                .to_string(),
         )
-        .await;
-
-        // ── Reload Chrome (files updated in-place in serve_dir) ───────────
-        // Static server is still running; just tell Chrome to reload.
-        let had_ws = self.ws.lock().await.is_some();
-        if had_ws {
-            let _ = self
-                .cdp_send("Page.reload", json!({ "ignoreCache": true }))
-                .await;
-        }
-        // Drop CDP connection so caller must reconnect (page reload may drop ws).
-        *self.ws.lock().await = None;
-
-        Ok("WASM rebuilt \u{2713} \u{2014} Chrome reloaded. \
-            Call connect_cdp to reconnect (takes ~2 s)."
-            .to_string())
     }
 
     async fn get_last_build_status(&self) -> anyhow::Result<String> {
@@ -1398,74 +1527,9 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     .await
                     .clone()
                     .unwrap_or_else(|| "/home/laragana/workspcacemsg".to_string());
-                let app_dir = format!("{workspace}/apps/web");
-                self.start_build_record(
-                    "force_rebuild",
-                    "dx build --platform web",
-                    &app_dir,
-                    "dx build --platform web",
-                    "Running `dx build --platform web` — blocks until done, exit code is immediate.",
-                )
-                .await;
-                let output = tokio::process::Command::new("dx")
-                    .args(["build", "--platform", "web"])
-                    .current_dir(&app_dir)
-                    .output()
-                    .await;
-                Self::increment_rebuild_counter();
-                *self.ws.lock().await = None;
-                match output {
-                    Ok(out) => {
-                        let stdout_text = String::from_utf8_lossy(&out.stdout).into_owned();
-                        let stderr_text = String::from_utf8_lossy(&out.stderr).into_owned();
-                        {
-                            let mut buffer = self.build_log.lock().await;
-                            for line in stdout_text.lines() {
-                                buffer.push_line(format!("[stdout] {line}"));
-                            }
-                            for line in stderr_text.lines() {
-                                buffer.push_line(format!("[stderr] {line}"));
-                            }
-                        }
-                        if out.status.success() {
-                            self.finish_build_record(
-                                BuildLifecycleState::Succeeded,
-                                "Force rebuild completed successfully.",
-                                "dx build --platform web exited 0. Static file server is still running; \
-                                 Chrome needs a Page.reload to pick up the new files.",
-                                out.status.code(),
-                            )
-                            .await;
-                            Some(Ok(
-                                "Force rebuild complete \u{2713} — fresh WASM binary written to serve directory.\n\
-                                 Call connect_cdp to reconnect (Chrome reloaded automatically if it was connected)."
-                                    .to_string(),
-                            ))
-                        } else {
-                            self.finish_build_record(
-                                BuildLifecycleState::Failed,
-                                "Force rebuild failed.",
-                                "dx build --platform web exited with a non-zero status. Inspect get_last_build_log for the exact Dioxus/compiler output.",
-                                out.status.code(),
-                            )
-                            .await;
-                            Some(Err(anyhow::anyhow!(
-                                "dx build --platform web failed with exit code: {:?}",
-                                out.status.code()
-                            )))
-                        }
-                    }
-                    Err(e) => {
-                        self.finish_build_record(
-                            BuildLifecycleState::Failed,
-                            "Force rebuild failed to start.",
-                            format!("Failed to spawn dx build --platform web: {e}"),
-                            None,
-                        )
-                        .await;
-                        Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}")))
-                    }
-                }
+                // Delegate to rebuild_app, which now starts the build in the background
+                // and returns immediately.  This prevents MCP client timeouts.
+                Some(self.rebuild_app(&workspace).await)
             }
             _ => None,
         }
@@ -1525,6 +1589,7 @@ fn web_cli_help() -> &'static str {
 COMMANDS:
   status                    Check CDP connection
   launch [workspace]        Build WASM (dx build --platform web), start static server + Chrome
+  rebuild [workspace]       Rebuild WASM + reload Chrome (non-blocking, polls until done)
   kill                      Stop Chrome and static file server
   screenshot [--save path]  Take a screenshot
   snapshot [--verbose]      Print DOM snapshot
@@ -1589,9 +1654,52 @@ async fn dispatch_web_cli(
                 .map(String::as_str)
                 .map(str::to_string)
                 .unwrap_or_else(web_detect_workspace);
-            backend.launch_app(&ws).await
+            // launch_app is non-blocking — poll until background build finishes,
+            // otherwise the process exits and kills the tokio task.
+            let initial_msg = backend.launch_app(&ws).await?;
+            web_cli_write(&initial_msg)?;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                let status_str = backend.get_last_build_status().await.unwrap_or_default();
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&status_str).unwrap_or(serde_json::Value::Null);
+                let state = parsed
+                    .get("state")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("Unknown");
+                web_cli_write(&format!("[build] state = {state}"))?;
+                if state != "Running" {
+                    break;
+                }
+            }
+            backend.get_last_build_status().await
         }
         "kill" => backend.kill_app().await,
+        "rebuild" => {
+            let ws = args
+                .first()
+                .map(String::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(web_detect_workspace);
+            // rebuild_app is non-blocking — poll until background rebuild finishes.
+            let initial_msg = backend.rebuild_app(&ws).await?;
+            web_cli_write(&initial_msg)?;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                let status_str = backend.get_last_build_status().await.unwrap_or_default();
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&status_str).unwrap_or(serde_json::Value::Null);
+                let state = parsed
+                    .get("state")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("Unknown");
+                web_cli_write(&format!("[rebuild] state = {state}"))?;
+                if state != "Running" {
+                    break;
+                }
+            }
+            backend.get_last_build_status().await
+        }
         "snapshot" => {
             let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
             backend.take_snapshot(verbose).await

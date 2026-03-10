@@ -241,18 +241,11 @@ fn SettingsNavigation(
                         div {
                             class: "settings-nav-item",
                             onclick: move |_| {
-                                // Scroll directly to the plugin section anchor.
-                                // Plugin pages are not part of SettingsSection routing
-                                // (no enum variant) — they live below the built-in sections.
-                                let anchor = format!("settings-section-plugin-{slug}");
-                                let js = format!(
-                                    "(() => {{ \\
-                                        const el = document.getElementById('{anchor}'); \\
-                                        const c = el && el.closest('.settings-content'); \\
-                                        if (el && c) c.scrollTo({{ top: el.offsetTop - 16, behavior: 'smooth' }}); \\
-                                    }})()"
-                                );
-                                let _ = document::eval(&js);
+                                // Plugin sections live below the built-in sections and are
+                                // not part of SettingsSection routing (no enum variant).
+                                // Reuse scroll_to_section_anchor with "plugin-{slug}" so
+                                // the generated ID matches "settings-section-plugin-{slug}".
+                                scroll_to_section_anchor(&format!("plugin-{slug}"));
                             },
                             span { class: "settings-nav-plugin-icon", "{entry.nav_icon}" }
                             "{label}"

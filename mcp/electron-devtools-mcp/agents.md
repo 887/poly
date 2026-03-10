@@ -1,31 +1,36 @@
 # poly-electron-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-10
+> **Last Updated:** 2026-03-12
 
-## CLI Preference (IMPORTANT — Updated 2026-03-10)
+## MCP Preference (IMPORTANT — Updated 2026-03-12)
 
-> **Prefer CLI over MCP whenever possible.**
+> **Prefer MCP mode over CLI subcommands.**
 
-All devtools functionality is available as CLI subcommands — no JSON-RPC overhead:
+The MCP server is the primary integration point:
+- Proper error handling and timeout protection baked into all calls
+- Integrated with VS Code's built-in Copilot agent workflow
+- Single shared `ElectronCdpBackend` instance (Electron window stays open, reuses CDP session)
+- Non-blocking background builds — Electron launches when ready, pages reload on rebuild
+- Full Chrome DevTools Protocol (CDP) support over Electron renderer
+
+### When to use CLI (rare)
+
+CLI subcommands are available for testing or scripting when MCP server is not needed:
 
 ```bash
 cargo run --bin poly-electron-devtools-mcp -- status
-cargo run --bin poly-electron-devtools-mcp -- launch
+cargo run --bin poly-electron-devtools-mcp -- launch  # polls background build
 cargo run --bin poly-electron-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
 cargo run --bin poly-electron-devtools-mcp -- snapshot
-cargo run --bin poly-electron-devtools-mcp -- eval "document.title"
-cargo run --bin poly-electron-devtools-mcp -- click "#my-button"
-cargo run --bin poly-electron-devtools-mcp -- fill "#input" "value"
-cargo run --bin poly-electron-devtools-mcp -- generation
 cargo run --bin poly-electron-devtools-mcp -- build-status
 cargo run --bin poly-electron-devtools-mcp -- build-log
 cargo run --bin poly-electron-devtools-mcp -- help
 ```
 
-VS Code CLI tasks are available under **"CLI: electron — *"** in `.vscode/tasks.json`.
+VS Code CLI tasks under **"CLI: electron — *"** exist but are not recommended for regular development.
 
-Use MCP mode (via `.vscode/mcp.json`) only when orchestrating multi-step sequences through Copilot agent mode.
+**Always use MCP mode** (VS Code MCP integration or explicit MCP server launch) for production workflows.
 
 ## Purpose
 
@@ -54,19 +59,25 @@ If the renderer is still responsive enough for JS evaluation, inspect `window.__
 - **No `dx serve`:** uses `dx build --platform web` (one-shot builds, not watch mode)
 - **MCP name:** `"poly-electron"`
 
-## Launch Sequence
+## Launch Sequence (NON-BLOCKING)
 
-`launch_app(workspace)` performs these steps *in order*:
+`launch_app(workspace)` is **non-blocking** — it returns in ~1 s. The actual build runs in
+the background. **Required workflow:**
 
-1. Kill any existing Electron devtools process and stale CDP listeners via `pkill`
-2. Run `dx build --platform web` in `apps/desktop-electron/` — **waits until done**
-   (cold build: 2+ min; warm cache: 30–90 s)
-3. Run `npm install --prefer-offline` in `apps/desktop-electron-devtools/electron/`
-4. Launch `node_modules/.bin/electron .` (or `npx electron .` as fallback)
-5. Electron auto-configures CDP on port 9224 via `app.commandLine.appendSwitch` in `main.js`
-6. Store the Electron PID for later `kill_app` / `hard_kill`
+1. Call `launch_app { workspace }` → returns "Build started in background"
+2. Loop: call `get_last_build_status` every 5-10 s until `state` ≠ `"Running"`
+   - `"Succeeded"` → wait ~5 s, then call `connect_cdp`
+   - `"Failed"` → call `get_last_build_log` to see the Cargo/Dioxus error
+3. Do **NOT** call `connect_cdp` immediately after `launch_app` — the build will still be in progress
 
-Then wait ~5 seconds and call `connect_cdp`.
+Background steps performed by `launch_app`:
+1. Kill any existing Electron devtools process and stale CDP listeners via `pkill` (~1.3 s, sync)
+2. Record `state = Running`, return immediately to caller
+3. (background) Run `dx build --platform web` in `apps/desktop-electron/`
+   (cold build: 2+ min; warm cache: 30-90 s)
+4. (background) Run `npm install --prefer-offline` in `apps/desktop-electron-devtools/electron/`
+5. (background) Launch `node_modules/.bin/electron .` (or `npx electron .` as fallback)
+6. (background) Record `state = Succeeded` when Electron PID is up, or `Failed` on any error
 
 ## Reliability Notes
 
@@ -78,40 +89,28 @@ Then wait ~5 seconds and call `connect_cdp`.
 - `launch_app` performs both graceful and SIGKILL cleanup for stale Electron
    devtools processes before building and launching a fresh instance.
 
-## Rebuild Flow
+## Rebuild Flow (NON-BLOCKING)
 
-`rebuild_app(workspace)`:
-1. Increment `/tmp/poly-devtools-electron-rebuild-counter`
-2. Run `dx build --platform web` again — **waits until done**
-3. Send `Page.reload` via CDP
-4. Clear WebSocket (reload invalidates the debugger session)
+`rebuild_app(workspace)` is **non-blocking** — returns in ~1 s:
 
-Caller must call `connect_cdp` afterwards to re-establish CDP.
+1. Increment `/tmp/poly-devtools-electron-rebuild-counter` immediately
+2. Record `state = Running`, return immediately
+3. (background) Run `dx build --platform web`
+4. (background) Send `Page.reload` via CDP on success
+5. (background) Record `state = Succeeded` or `Failed`
+
+**Polling workflow:**
+```
+rebuild_app { workspace }         # returns immediately
+get_last_build_status {}          # repeat every 5-10 s
+  state = "Running"  → keep polling
+  state = "Succeeded" → call connect_cdp {}
+  state = "Failed"   → call get_last_build_log {}
+```
 
 ### `force_rebuild` Extension Tool
 
-The Electron MCP's `rebuild_app` already uses `dx build --platform web` (not touch+file-watcher),
-so it doesn't suffer the stale-cache issue that affects the web MCP.
-
-However, a `force_rebuild` tool is exposed for consistency with the other MCPs.
-It does the same thing as `rebuild_app` — runs `dx build --platform web` in
-`apps/desktop-electron/` — but it's explicitly called out as a "full rebuild".
-
-After `force_rebuild`, call `connect_cdp`.
-
-### Background: Web MCP Stale Cache Issue (DECISION 2026-03-08)
-
-The web MCP (`poly-web-devtools-mcp`) uses `dx serve --platform web --port 3000` for
-hot-reloading. Its `rebuild_app` touches `lib.rs` to trigger the file-watcher — but
-`dx serve`'s `wasm-dev` incremental Cargo cache can become stale: Cargo fingerprints
-may consider all targets "fresh" and skip recompilation, leaving the old WASM binary.
-
-The web MCP's `force_rebuild` tool fixes this by calling `dx build --platform web`
-directly, bypassing the file-watcher entirely and forcing a fresh compile.
-
-The Electron MCP already uses `dx build` directly (no `dx serve`), so it doesn't
-have this issue. But if you ever need to trigger a guaranteed-fresh build for Electron,
-use `force_rebuild` the same way.
+Delegates to `rebuild_app`. Same non-blocking behavior. Same polling required.
 
 ## get_generation Fields
 

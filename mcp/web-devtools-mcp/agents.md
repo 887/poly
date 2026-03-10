@@ -1,36 +1,39 @@
 # poly-web-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-11
+> **Last Updated:** 2026-03-12
 
 ---
 
-## CLI Preference (IMPORTANT — Updated 2026-03-10)
+## MCP Preference (IMPORTANT — Updated 2026-03-12)
 
-> **Prefer CLI over MCP whenever possible.**
+> **Prefer MCP mode over CLI subcommands.**
 
-All devtools functionality is available as CLI subcommands — no JSON-RPC overhead:
+The MCP server is the primary integration point:
+- Proper error handling and timeout protection baked into all calls
+- Integrated with VS Code's built-in Copilot agent workflow
+- Single shared `ChromeCdpBackend` instance (Chrome stays open, reuses session)
+- Non-blocking background builds — Chrome auto-launches, pages reload on rebuild
+- Full Chrome DevTools Protocol (CDP) support for advanced debugging
+
+### When to use CLI (rare)
+
+CLI subcommands are available for testing or scripting when MCP server is not needed:
 
 ```bash
 cargo run --bin poly-web-devtools-mcp -- status
-cargo run --bin poly-web-devtools-mcp -- launch
+cargo run --bin poly-web-devtools-mcp -- launch  # polls background build
 cargo run --bin poly-web-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
 cargo run --bin poly-web-devtools-mcp -- snapshot
-cargo run --bin poly-web-devtools-mcp -- eval "document.title"
-cargo run --bin poly-web-devtools-mcp -- click "#my-button"
-cargo run --bin poly-web-devtools-mcp -- fill "#input" "value"
-cargo run --bin poly-web-devtools-mcp -- generation
 cargo run --bin poly-web-devtools-mcp -- build-status
 cargo run --bin poly-web-devtools-mcp -- build-log
-cargo run --bin poly-web-devtools-mcp -- help
-
-# Headless: add --headless before the subcommand
 cargo run --bin poly-web-devtools-mcp -- --headless screenshot --save snap.png
+cargo run --bin poly-web-devtools-mcp -- help
 ```
 
-VS Code CLI tasks are available under **"CLI: web — *"** in `.vscode/tasks.json`.
+VS Code CLI tasks under **"CLI: web — *"** exist but are not recommended for regular development.
 
-Use MCP mode (via `.vscode/mcp.json`) only when orchestrating multi-step sequences through Copilot agent mode.
+**Always use MCP mode** (VS Code MCP integration or explicit MCP server launch) for production workflows.
 
 ---
 
@@ -102,21 +105,33 @@ Chrome is managed by a background watchdog task:
 launch_app { workspace: "/home/laragana/workspcacemsg" }
 ```
 
-`launch_app` does:
-1. **Kills** any stale Chrome, old `dx serve`, and old python3 static-file-server processes
-2. **Runs `dx build --platform web`** in `apps/web/` — **blocks synchronously** until the build finishes.  
-   - **Exit code is immediate** — if the build fails, you see the error at once (no polling, no ambiguity)
-   - Stdout/stderr are captured and available via `get_last_build_log`
-3. **Starts a python3 static file server** on port 3000 serving `target/dx/poly-web/debug/web/public/`
-4. **Launches Chrome with CDP** on port 9222 and starts the auto-restart watchdog
+`launch_app` is **NON-BLOCKING** — it returns immediately (~1 s). The actual `dx build` runs
+in the background (takes 30-90 s). You **must** poll `get_last_build_status` to know when
+it finishes.
 
-Wait ~3 seconds, then:
+`launch_app` does (sequentially, all very fast):
+1. **Guards** against concurrent builds — if one is already running, returns immediately with a message
+2. **Kills** any stale Chrome, old static-file-server processes (synchronous, ~600 ms)
+3. **Records** build state as `Running` and **returns** immediately
+4. In background: runs `dx build --platform web` in `apps/web/`, starts python3 static file server
+   on port 3000, launches Chrome with CDP on port 9222, starts auto-restart watchdog
 
-### 2. Connect
+**After calling `launch_app`:** poll `get_last_build_status` (every 5-10 s) until `state` is
+`Succeeded` or `Failed`. Do NOT call `connect_cdp` immediately — the build will still be in progress.
+
+```
+# Poll loop:
+get_last_build_status {}    ← repeat until state ≠ "Running"
+```
+
+### 2. Connect (only after Succeeded)
 
 ```
 connect_cdp {}
 ```
+
+**Only call `connect_cdp` after `get_last_build_status` reports `state = "Succeeded"`.**
+If the build fails, call `get_last_build_log {}` to see the compiler/linker output.
 
 Discovers the CDP WebSocket URL via `GET http://127.0.0.1:9222/json`,
 connects, and enables `Page`, `Runtime`, and `DOM` domains.
@@ -290,23 +305,32 @@ counter (`/tmp/poly-devtools-rebuild-counter`) to avoid cross-contamination when
 
 ---
 
-### Build approach — `dx build` everywhere (DECISION, 2026-03-11)
+### Build approach — `dx build` non-blocking (DECISION, 2026-03-12)
 
-**All web rebuilds use `dx build --platform web` — never `dx serve`.**
+**All web builds/rebuilds use `dx build --platform web`, spawned in a background tokio task.**
 
-- `launch_app` runs `dx build --platform web` (blocking, sync), then starts a python3 static file server
-- `rebuild_app` runs `dx build --platform web` (blocking), then reloads Chrome via `Page.reload`
-- `force_rebuild` does the same as `rebuild_app` — it exists as a named extension tool alias
+- `launch_app` kills stale processes, records `state=Running`, **returns immediately**, spawns
+  background task: `dx build --platform web` → python3 static server → Chrome watchdog
+- `rebuild_app` increments rebuild counter, records `state=Running`, **returns immediately**, spawns
+  background task: `dx build --platform web` → Chrome page reload via `Page.reload`
+- `force_rebuild` is an extension-tool alias that delegates to `rebuild_app`
+
+**Why non-blocking?**
+- `dx build` can take 30-90 s — long enough to timeout VS Code's MCP client connection  
+- Background tasks prevent connection drops while still capturing full build output
+- Agent polls `get_last_build_status` until `state` transitions: `Running → Succeeded | Failed`
+- Exit code + stdout/stderr are still captured and available via `get_last_build_log`
 
 **Why `dx build` instead of `dx serve`:**
-- Exit code is immediate — build fails loudly with the exact Cargo/Dioxus error
 - No file watcher, no hotpatch, no ambiguous background state
 - No WASM infinite-rebuild-loop (the infamous `dx serve --hotpatch` WASM bug)
 - No stale incremental cache issue (full compile every time)
 
-After `rebuild_app` or `force_rebuild` completes:
-1. Call `connect_cdp` (Chrome reloaded automatically if it was connected)
-2. Verify with `get_generation` that `build_id` incremented
+**Workflow after `rebuild_app` or `force_rebuild`:**
+1. Poll `get_last_build_status` until `state = "Succeeded"` or `"Failed"`
+2. On Succeeded: call `page_reload { ignoreCache: true }`, then `connect_cdp`
+3. On Failed: call `get_last_build_log` to see the Cargo/Dioxus error
+4. Verify with `get_generation` that `build_id` incremented
 
 ---
 

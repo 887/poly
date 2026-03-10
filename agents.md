@@ -182,19 +182,38 @@ When making architectural decisions:
 
 ### 9a. DevTools MCP Rebuild Detection — `build_id` (DECISION, 2026-03-03)
 
-Both desktop and web MCPs expose `/generation` endpoints that return a JSON object with three fields:
+### ⭐ NON-BLOCKING BUILDS — Mandatory Polling Workflow (DECISION, 2026-03-12)
+
+`launch_app` and `rebuild_app` on **all three MCPs** (desktop, web, electron) are
+**non-blocking** — they return in ~1 s while the actual `dx build` runs in the background.
+
+**You MUST poll `get_last_build_status` before calling `connect_cdp`:**
+
+```
+launch_app {} or rebuild_app {}    # returns immediately with state=Running
+get_last_build_status {}           # repeat every 5-10 s until state ≠ "Running"
+  state="Succeeded" → connect_cdp (web/electron rebuild: page_reload first, then connect_cdp)
+  state="Failed"    → call get_last_build_log to see compiler error
+```
+
+**Do NOT call `connect_cdp` immediately after `launch_app` or `rebuild_app`** — the build
+will still be in progress and the connection will fail or show stale content.
+
+All three DevTools MCPs expose a `get_generation` tool that returns a JSON object with three fields:
 
 ```json
-{ "generation": 3, "build_id": 2, "pid": 2890763 }  // desktop
-{ "generation": 4, "build_id": 2, "dx_serve_pid": 2898097 }  // web
+{ "generation": 3, "build_id": 2, "pid": 2890763 }            // desktop
+{ "generation": 4, "build_id": 2, "dx_serve_pid": 2898097 }    // web
+{ "generation": 2, "build_id": 1, "electron_pid": 3210456 }    // electron
 ```
 
 **All three fields are always included in every response.** Use `build_id` to know if a rebuild was triggered.
 
-| MCP | Endpoint | Counter File | Key Insight |
-|---|---|---|---|
-| **Desktop** | via `poly-desktop-devtools-mcp` | `/tmp/poly-devtools-rebuild-counter` | `generation` may NOT change on hot-patches (state preserved) |
-| **Web** | via `poly-web-devtools-mcp` | `/tmp/poly-devtools-web-rebuild-counter` | `generation` increments on EVERY `connect_cdp` (page reload) |
+| MCP | Counter File | Key Insight |
+|---|---|---|
+| **Desktop** | `/tmp/poly-devtools-rebuild-counter` | `generation` may NOT change on hot-patches (state preserved) |
+| **Web** | `/tmp/poly-devtools-web-rebuild-counter` | `generation` increments on EVERY `connect_cdp` (page reload) |
+| **Electron** | `/tmp/poly-devtools-electron-rebuild-counter` | Electron process must fully restart; no hotpatch support |
 
 ### ⭐ Complete Decision Table — Check All Three
 
@@ -216,6 +235,14 @@ To verify **nothing changed**, all three must be identical from the previous pol
 | **Same** | **Same** | **Same** | ✅ No changes |
 | Changed | **Changed** | Same | 🔨 **Rebuild + reconnect succeeded** |
 | Changed | Changed | Changed | `dx serve` restarted |
+
+**Electron:**
+
+| `generation` | `build_id` | `electron_pid` | Meaning |
+|---|---|---|---|
+| **Same** | **Same** | **Same** | ✅ No changes |
+| Changed | **Changed** | Any | 🔨 **Rebuild triggered** |
+| Changed | Changed | Changed | Electron process restarted |
 
 **Key rule:** 
 - **If all three fields are identical to the previous poll, nothing changed**
