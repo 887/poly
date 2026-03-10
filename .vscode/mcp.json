@@ -1,5 +1,11 @@
 {
   "servers": {
+    "poly-memory": {
+      "type": "stdio",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-memory-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml", "--", "mcp"],
+      "env": {}
+    },
     "poly-desktop": {
       "type": "stdio",
       "command": "cargo",

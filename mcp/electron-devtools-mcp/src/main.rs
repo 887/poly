@@ -847,6 +847,153 @@ impl DevtoolsBackend for ElectronCdpBackend {
     }
 }
 
+// ─── CLI Mode ─────────────────────────────────────────────────────────────────
+//
+// PREFERRED: Use the CLI over MCP access wherever possible.
+// CLI is faster, scriptable, and doesn't require a Copilot MCP session.
+//
+// Usage examples:
+//   cargo run --bin poly-electron-devtools-mcp -- status
+//   cargo run --bin poly-electron-devtools-mcp -- screenshot --save /tmp/shot.png
+//   cargo run --bin poly-electron-devtools-mcp -- snapshot
+//   cargo run --bin poly-electron-devtools-mcp -- eval "document.title"
+//   cargo run --bin poly-electron-devtools-mcp -- launch /path/to/workspace
+
+/// Commands that trigger CLI mode instead of MCP server mode.
+const ELECTRON_CLI_COMMANDS: &[&str] = &[
+    "status", "launch", "kill", "screenshot", "snapshot",
+    "eval", "click", "fill", "navigate", "generation",
+    "help", "--help", "-h",
+];
+
+/// Check if the first argument selects CLI mode.
+fn is_electron_cli_mode(args: &[String]) -> bool {
+    args.get(1)
+        .map(|a| ELECTRON_CLI_COMMANDS.contains(&a.as_str()))
+        .unwrap_or(false)
+}
+
+/// Write a line to stdout without `println!`.
+fn electron_cli_write(text: &str) -> anyhow::Result<()> {
+    use std::io::Write as _;
+    writeln!(std::io::stdout().lock(), "{text}")?;
+    Ok(())
+}
+
+/// Electron CLI help text.
+fn electron_cli_help() -> &'static str {
+    "poly-electron-devtools-mcp — CLI mode (PREFERRED over MCP)
+
+COMMANDS:
+  status                    Check CDP connection
+  launch [workspace]        Build WASM + launch Electron
+  kill                      Stop Electron
+  screenshot [--save path]  Take a screenshot
+  snapshot [--verbose]      Print DOM snapshot
+  eval <script>             Evaluate JavaScript
+  click <selector>          Click element
+  fill <selector> <value>   Fill input
+  navigate <url>            Navigate to URL
+  generation                Get rebuild generation counters
+  help                      Show this help
+
+MCP mode (default, no subcommand):
+  cargo run --bin poly-electron-devtools-mcp
+"
+}
+
+/// Detect workspace root (POLY_WORKSPACE env var or cwd).
+fn electron_detect_workspace() -> String {
+    if let Ok(ws) = std::env::var("POLY_WORKSPACE") {
+        return ws;
+    }
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
+/// Handle `screenshot` CLI command for electron backend.
+async fn electron_cli_screenshot(
+    backend: &ElectronCdpBackend,
+    args: &[String],
+) -> anyhow::Result<String> {
+    use base64::Engine as _;
+    let save_path = args
+        .iter()
+        .position(|a| a == "--save")
+        .and_then(|p| args.get(p + 1))
+        .map(String::as_str);
+    let params = ScreenshotParams::default();
+    let result = backend.take_screenshot(&params).await?;
+    if let Some(path) = save_path {
+        std::fs::write(path, &result.image_bytes)?;
+        Ok(format!("Screenshot saved to {path}"))
+    } else {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&result.image_bytes);
+        Ok(format!("data:{};base64,{b64}", result.mime_type))
+    }
+}
+
+/// Dispatch a CLI command for the electron backend.
+async fn dispatch_electron_cli(
+    backend: &ElectronCdpBackend,
+    cmd: &str,
+    args: &[String],
+) -> anyhow::Result<String> {
+    match cmd {
+        "status" | "connect" => backend.connect().await,
+        "launch" => {
+            let ws = args
+                .first()
+                .map(String::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(electron_detect_workspace);
+            backend.launch_app(&ws).await
+        }
+        "kill" => backend.kill_app().await,
+        "snapshot" => {
+            let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
+            backend.take_snapshot(verbose).await
+        }
+        "eval" => {
+            let script = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: eval <script>"))?;
+            backend.js_eval(script).await
+        }
+        "click" => {
+            let sel = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: click <selector>"))?;
+            backend.click_element(sel).await
+        }
+        "fill" => {
+            let sel = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: fill <selector> <value>"))?;
+            let val = args
+                .get(1)
+                .ok_or_else(|| anyhow::anyhow!("Usage: fill <selector> <value>"))?;
+            backend.fill_element(sel, val).await
+        }
+        "navigate" => {
+            let url = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: navigate <url>"))?;
+            backend
+                .navigate_page(&NavigateParams {
+                    nav_type: "url".to_string(),
+                    url: Some(url.to_string()),
+                    ..Default::default()
+                })
+                .await
+        }
+        "generation" => backend.connect().await,
+        "screenshot" => electron_cli_screenshot(backend, args).await,
+        _ => Ok(electron_cli_help().to_string()),
+    }
+}
+
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
 #[tokio::main]
@@ -859,11 +1006,31 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    tracing::info!(
-        "Starting poly-electron-devtools-mcp (CDP port {})",
-        CDP_PORT
-    );
+    let args: Vec<String> = std::env::args().collect();
 
-    let backend = ElectronCdpBackend::new();
-    run_mcp_loop(&backend, "poly-electron").await;
+    if is_electron_cli_mode(&args) {
+        let cmd = args.get(1).map(String::as_str).unwrap_or("help");
+        let rest = args.get(2..).unwrap_or(&[]).to_vec();
+        let backend = ElectronCdpBackend::new();
+        match dispatch_electron_cli(&backend, cmd, &rest).await {
+            Ok(out) => {
+                if let Err(e) = electron_cli_write(&out) {
+                    use std::io::Write as _;
+                    let _ = writeln!(std::io::stderr().lock(), "Output error: {e}");
+                }
+            }
+            Err(e) => {
+                use std::io::Write as _;
+                let _ = writeln!(std::io::stderr().lock(), "Error: {e}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        tracing::info!(
+            "Starting poly-electron-devtools-mcp (CDP port {})",
+            CDP_PORT
+        );
+        let backend = ElectronCdpBackend::new();
+        run_mcp_loop(&backend, "poly-electron").await;
+    }
 }

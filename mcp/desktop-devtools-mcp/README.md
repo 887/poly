@@ -2,6 +2,10 @@
 
 MCP server that exposes the **Poly** desktop app to GitHub Copilot as a set of devtools tools — screenshot, click, JS eval, DOM inspection, console access, and app lifecycle management.
 
+> **Prefer CLI over MCP where possible.**  
+> The CLI mode is faster, directly testable in a terminal, and doesn't require the full JSON-RPC handshake.  
+> Use MCP (via `.vscode/mcp.json`) only when writing agent prompts that need to orchestrate multi-step sequences through Copilot.
+
 ## Why It Exists
 
 Copilot agents need a way to "see" and interact with the running Poly UI without a human in the loop. The Chrome DevTools Protocol (CDP) is unavailable on WebKit2GTK (which backs Dioxus's desktop target on Linux). This MCP server bridges that gap by talking to `apps/desktop-devtools`, which embeds a small Axum HTTP eval-bridge on port 9223.
@@ -21,6 +25,49 @@ apps/desktop-devtools  (eval-bridge embedded in the Dioxus app)
 WebKit webview running poly-core UI
 ```
 
+## CLI Access (PREFERRED)
+
+All MCP tools are also available as direct CLI subcommands — no JSON-RPC protocol overhead:
+
+```bash
+# Check if the devtools app is running
+cargo run --bin poly-desktop-devtools-mcp -- status
+
+# Start the devtools app
+cargo run --bin poly-desktop-devtools-mcp -- launch
+
+# Stop the devtools app
+cargo run --bin poly-desktop-devtools-mcp -- kill
+
+# Take a screenshot (prints base64 or saves file)
+cargo run --bin poly-desktop-devtools-mcp -- screenshot
+cargo run --bin poly-desktop-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
+
+# DOM snapshot
+cargo run --bin poly-desktop-devtools-mcp -- snapshot
+cargo run --bin poly-desktop-devtools-mcp -- snapshot --verbose
+
+# Evaluate JavaScript
+cargo run --bin poly-desktop-devtools-mcp -- eval "document.title"
+
+# Click a CSS selector
+cargo run --bin poly-desktop-devtools-mcp -- click "#my-button"
+
+# Fill an input
+cargo run --bin poly-desktop-devtools-mcp -- fill "#username" "alice"
+
+# Navigate to a route
+cargo run --bin poly-desktop-devtools-mcp -- navigate "/settings"
+
+# Get rebuild/hotpatch generation counters
+cargo run --bin poly-desktop-devtools-mcp -- generation
+
+# Show help
+cargo run --bin poly-desktop-devtools-mcp -- help
+```
+
+VS Code tasks for the most common CLI commands are defined in `.vscode/tasks.json` under "CLI: desktop — *".
+
 ## MCP Tools Exposed
 
 | Tool | Description |
@@ -38,7 +85,8 @@ WebKit webview running poly-core UI
 
 ## VS Code Integration
 
-Configured in `.vscode/mcp.json` so Copilot loads it automatically when the workspace is open.
+- **MCP (Copilot agent):** configured in `.vscode/mcp.json` as `poly-desktop`
+- **CLI (terminal):** tasks in `.vscode/tasks.json` under "CLI: desktop — *"
 
 ## Key Implementation Notes
 
@@ -49,3 +97,4 @@ Configured in `.vscode/mcp.json` so Copilot loads it automatically when the work
 ## License
 
 MIT / Apache-2.0
+

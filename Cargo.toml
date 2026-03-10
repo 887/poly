@@ -17,6 +17,7 @@ members = [
     "mcp/desktop-devtools-mcp",
     "mcp/web-devtools-mcp",
     "mcp/electron-devtools-mcp",
+    "mcp/memory-mcp",
     "apps/desktop",
     "apps/desktop-blitz",
     "apps/desktop-electron",     # Electron wrapper (WASM → Electron shell)

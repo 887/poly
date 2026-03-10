@@ -682,10 +682,187 @@ fn dirs_data_path() -> Option<String> {
     Some(format!("{home}/.local/share/poly"))
 }
 
+// ─── CLI Mode ─────────────────────────────────────────────────────────────────
+//
+// PREFERRED: Use the CLI over MCP access wherever possible.
+// CLI is faster, scriptable, and testable without a Copilot MCP session.
+//
+// Usage examples:
+//   cargo run --bin poly-desktop-devtools-mcp -- status
+//   cargo run --bin poly-desktop-devtools-mcp -- screenshot --save /tmp/shot.png
+//   cargo run --bin poly-desktop-devtools-mcp -- snapshot
+//   cargo run --bin poly-desktop-devtools-mcp -- eval "document.title"
+//   cargo run --bin poly-desktop-devtools-mcp -- launch /path/to/workspace
+//   cargo run --bin poly-desktop-devtools-mcp -- generation
+
+/// Detect the workspace root at runtime (POLY_WORKSPACE env var or cwd).
+fn cli_detect_workspace() -> String {
+    if let Ok(ws) = std::env::var("POLY_WORKSPACE") {
+        return ws;
+    }
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
+/// Commands that trigger CLI mode instead of MCP server mode.
+const CLI_COMMANDS: &[&str] = &[
+    "status", "launch", "kill", "screenshot", "snapshot",
+    "eval", "click", "fill", "navigate", "generation",
+    "help", "--help", "-h",
+];
+
+/// Check if the first argument selects CLI mode.
+fn is_cli_mode(args: &[String]) -> bool {
+    args.get(1)
+        .map(|a| CLI_COMMANDS.contains(&a.as_str()))
+        .unwrap_or(false)
+}
+
+/// Write a line to stdout without using `println!`.
+fn cli_write(text: &str) -> anyhow::Result<()> {
+    use std::io::Write as _;
+    writeln!(std::io::stdout().lock(), "{text}")?;
+    Ok(())
+}
+
+/// Extract value of `--flag <value>` from args.
+fn extract_cli_flag<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+    let pos = args.iter().position(|a| a == flag)?;
+    args.get(pos + 1).map(String::as_str)
+}
+
+/// CLI help text for the desktop MCP.
+fn desktop_cli_help() -> &'static str {
+    "poly-desktop-devtools-mcp — CLI mode (PREFERRED over MCP)
+
+COMMANDS:
+  status                    Check if app is running
+  launch [workspace]        Start the devtools app
+  kill                      Stop the devtools app
+  screenshot [--save path]  Take a screenshot (saves PNG or prints base64)
+  snapshot [--verbose]      Print DOM snapshot
+  eval <script>             Evaluate JavaScript expression
+  click <selector>          Click a CSS selector
+  fill <selector> <value>   Fill an input element
+  navigate <url>            Navigate to a URL
+  generation                Get rebuild/hotpatch generation counters
+  help                      Show this help
+
+MCP mode (default, no subcommand):
+  cargo run --bin poly-desktop-devtools-mcp
+"
+}
+
+/// Handle the `screenshot` CLI command.
+async fn cli_screenshot_cmd(
+    backend: &DesktopHttpBackend,
+    args: &[String],
+) -> anyhow::Result<String> {
+    use base64::Engine as _;
+    let save_path = extract_cli_flag(args, "--save");
+    let params = poly_devtools_protocol::backend::ScreenshotParams::default();
+    let result = backend.take_screenshot(&params).await?;
+    if let Some(path) = save_path {
+        std::fs::write(path, &result.image_bytes)?;
+        Ok(format!("Screenshot saved to {path}"))
+    } else {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&result.image_bytes);
+        Ok(format!("data:{};base64,{b64}", result.mime_type))
+    }
+}
+
+/// Dispatch a single CLI command for the desktop backend.
+async fn dispatch_desktop_cli(
+    backend: &DesktopHttpBackend,
+    cmd: &str,
+    args: &[String],
+) -> anyhow::Result<String> {
+    use poly_devtools_protocol::backend::NavigateParams;
+    match cmd {
+        "status" | "connect" => backend.connect().await,
+        "launch" => {
+            let ws = args
+                .first()
+                .map(String::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(cli_detect_workspace);
+            backend.launch_app(&ws).await
+        }
+        "kill" => backend.kill_app().await,
+        "snapshot" => {
+            let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
+            backend.take_snapshot(verbose).await
+        }
+        "eval" => {
+            let script = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: eval <script>"))?;
+            backend.js_eval(script).await
+        }
+        "click" => {
+            let sel = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: click <selector>"))?;
+            backend.click_element(sel).await
+        }
+        "fill" => dispatch_desktop_fill(backend, args).await,
+        "navigate" => {
+            let url = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: navigate <url>"))?;
+            backend
+                .navigate_page(&NavigateParams {
+                    nav_type: "url".to_string(),
+                    url: Some(url.to_string()),
+                    ..Default::default()
+                })
+                .await
+        }
+        "generation" => http_get(&backend.client, "/generation")
+            .await
+            .map(|b| String::from_utf8_lossy(&b).into_owned()),
+        "screenshot" => cli_screenshot_cmd(backend, args).await,
+        _ => Ok(desktop_cli_help().to_string()),
+    }
+}
+
+async fn dispatch_desktop_fill(
+    backend: &DesktopHttpBackend,
+    args: &[String],
+) -> anyhow::Result<String> {
+    let sel = args
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("Usage: fill <selector> <value>"))?;
+    let val = args
+        .get(1)
+        .ok_or_else(|| anyhow::anyhow!("Usage: fill <selector> <value>"))?;
+    backend.fill_element(sel, val).await
+}
+
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
 #[tokio::main]
 async fn main() {
+    let args: Vec<String> = std::env::args().collect();
     let backend = DesktopHttpBackend::new();
-    run_mcp_loop(&backend, "poly-devtools-desktop").await;
+    if is_cli_mode(&args) {
+        let cmd = args.get(1).map(String::as_str).unwrap_or("help");
+        let rest = args.get(2..).unwrap_or(&[]).to_vec();
+        match dispatch_desktop_cli(&backend, cmd, &rest).await {
+            Ok(out) => {
+                if let Err(e) = cli_write(&out) {
+                    use std::io::Write as _;
+                    let _ = writeln!(std::io::stderr().lock(), "Output error: {e}");
+                }
+            }
+            Err(e) => {
+                use std::io::Write as _;
+                let _ = writeln!(std::io::stderr().lock(), "Error: {e}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        run_mcp_loop(&backend, "poly-devtools-desktop").await;
+    }
 }

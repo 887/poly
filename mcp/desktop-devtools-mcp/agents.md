@@ -1,7 +1,31 @@
 # poly-desktop-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-03
+> **Last Updated:** 2026-03-10
+
+---
+
+## CLI Preference (IMPORTANT — Updated 2026-03-10)
+
+> **Prefer CLI over MCP whenever possible.**
+
+All devtools functionality is available as CLI subcommands — no JSON-RPC overhead:
+
+```bash
+cargo run --bin poly-desktop-devtools-mcp -- status
+cargo run --bin poly-desktop-devtools-mcp -- launch
+cargo run --bin poly-desktop-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
+cargo run --bin poly-desktop-devtools-mcp -- snapshot
+cargo run --bin poly-desktop-devtools-mcp -- eval "document.title"
+cargo run --bin poly-desktop-devtools-mcp -- click "#my-button"
+cargo run --bin poly-desktop-devtools-mcp -- fill "#input" "value"
+cargo run --bin poly-desktop-devtools-mcp -- generation
+cargo run --bin poly-desktop-devtools-mcp -- help
+```
+
+VS Code CLI tasks are available under **"CLI: desktop — *"** in `.vscode/tasks.json`.
+
+Use MCP mode (via `.vscode/mcp.json`) only when orchestrating multi-step sequences through Copilot agent mode.
 
 ---
 

@@ -1,7 +1,29 @@
 # poly-electron-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-07
+> **Last Updated:** 2026-03-10
+
+## CLI Preference (IMPORTANT — Updated 2026-03-10)
+
+> **Prefer CLI over MCP whenever possible.**
+
+All devtools functionality is available as CLI subcommands — no JSON-RPC overhead:
+
+```bash
+cargo run --bin poly-electron-devtools-mcp -- status
+cargo run --bin poly-electron-devtools-mcp -- launch
+cargo run --bin poly-electron-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
+cargo run --bin poly-electron-devtools-mcp -- snapshot
+cargo run --bin poly-electron-devtools-mcp -- eval "document.title"
+cargo run --bin poly-electron-devtools-mcp -- click "#my-button"
+cargo run --bin poly-electron-devtools-mcp -- fill "#input" "value"
+cargo run --bin poly-electron-devtools-mcp -- generation
+cargo run --bin poly-electron-devtools-mcp -- help
+```
+
+VS Code CLI tasks are available under **"CLI: electron — *"** in `.vscode/tasks.json`.
+
+Use MCP mode (via `.vscode/mcp.json`) only when orchestrating multi-step sequences through Copilot agent mode.
 
 ## Purpose
 

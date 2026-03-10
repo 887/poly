@@ -6054,6 +6054,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly-memory-mcp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "poly-plugin-host"
 version = "0.1.0"
 dependencies = [

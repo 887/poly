@@ -47,13 +47,37 @@ type WsStream =
 struct CliConfig {
     /// Run Chrome in headless mode (no visible window).
     headless: bool,
+    /// If set, run as CLI with this command instead of MCP server mode.
+    cli_command: Option<Vec<String>>,
 }
+
+/// Known CLI subcommand names.
+const WEB_CLI_COMMANDS: &[&str] = &[
+    "status", "launch", "kill", "screenshot", "snapshot",
+    "eval", "click", "fill", "navigate", "generation",
+    "help", "--help", "-h",
+];
 
 impl CliConfig {
     fn parse() -> Self {
         let args: Vec<String> = std::env::args().collect();
+        let headless = args.iter().any(|a| a == "--headless");
+        // Check for CLI command: first non-flag arg that matches a known command.
+        let cli_command = args
+            .iter()
+            .skip(1)
+            .find(|a| !a.starts_with("--") && WEB_CLI_COMMANDS.contains(&a.as_str()))
+            .map(|_| {
+                // Return all args from the command position onward.
+                let pos = args
+                    .iter()
+                    .position(|a| WEB_CLI_COMMANDS.contains(&a.as_str()))
+                    .unwrap_or(1);
+                args.get(pos..).unwrap_or(&[]).to_vec()
+            });
         Self {
-            headless: args.iter().any(|a| a == "--headless"),
+            headless,
+            cli_command,
         }
     }
 }
@@ -1033,6 +1057,146 @@ fn find_chrome() -> String {
     "chromium".to_string()
 }
 
+// ─── CLI Mode ─────────────────────────────────────────────────────────────────
+//
+// PREFERRED: Use the CLI over MCP access wherever possible.
+// CLI is faster, scriptable, and doesn't require a Copilot MCP session.
+//
+// Usage examples:
+//   cargo run --bin poly-web-devtools-mcp -- status
+//   cargo run --bin poly-web-devtools-mcp -- screenshot --save /tmp/shot.png
+//   cargo run --bin poly-web-devtools-mcp -- snapshot
+//   cargo run --bin poly-web-devtools-mcp -- eval "document.title"
+//   cargo run --bin poly-web-devtools-mcp -- [--headless] launch /path/to/ws
+
+/// Write a line to stdout without `println!`.
+fn web_cli_write(text: &str) -> anyhow::Result<()> {
+    use std::io::Write as _;
+    writeln!(std::io::stdout().lock(), "{text}")?;
+    Ok(())
+}
+
+/// Web CLI help text.
+fn web_cli_help() -> &'static str {
+    "poly-web-devtools-mcp — CLI mode (PREFERRED over MCP)
+
+COMMANDS:
+  status                    Check CDP connection
+  launch [workspace]        Start dx serve + Chrome
+  kill                      Stop processes
+  screenshot [--save path]  Take a screenshot
+  snapshot [--verbose]      Print DOM snapshot
+  eval <script>             Evaluate JavaScript
+  click <selector>          Click element
+  fill <selector> <value>   Fill input
+  navigate <url>            Navigate to URL
+  generation                Get rebuild generation counters
+  help                      Show this help
+
+FLAGS (before command):
+  --headless                Run Chrome headless
+
+MCP mode (default, no subcommand):
+  cargo run --bin poly-web-devtools-mcp [--headless]
+"
+}
+
+/// Handle `screenshot` CLI command for web backend.
+async fn web_cli_screenshot(
+    backend: &ChromeCdpBackend,
+    args: &[String],
+) -> anyhow::Result<String> {
+    use base64::Engine as _;
+    let save_path = args
+        .iter()
+        .position(|a| a == "--save")
+        .and_then(|p| args.get(p + 1))
+        .map(String::as_str);
+    let params = poly_devtools_protocol::backend::ScreenshotParams::default();
+    let result = backend.take_screenshot(&params).await?;
+    if let Some(path) = save_path {
+        std::fs::write(path, &result.image_bytes)?;
+        Ok(format!("Screenshot saved to {path}"))
+    } else {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&result.image_bytes);
+        Ok(format!("data:{};base64,{b64}", result.mime_type))
+    }
+}
+
+/// Detect workspace root (POLY_WORKSPACE env var or cwd).
+fn web_detect_workspace() -> String {
+    if let Ok(ws) = std::env::var("POLY_WORKSPACE") {
+        return ws;
+    }
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
+/// Dispatch a CLI command for the web backend.
+async fn dispatch_web_cli(
+    backend: &ChromeCdpBackend,
+    cmd: &str,
+    args: &[String],
+) -> anyhow::Result<String> {
+    use poly_devtools_protocol::backend::NavigateParams;
+    match cmd {
+        "status" | "connect" => backend.connect().await,
+        "launch" => {
+            let ws = args
+                .first()
+                .map(String::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(web_detect_workspace);
+            backend.launch_app(&ws).await
+        }
+        "kill" => backend.kill_app().await,
+        "snapshot" => {
+            let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
+            backend.take_snapshot(verbose).await
+        }
+        "eval" => {
+            let script = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: eval <script>"))?;
+            backend.js_eval(script).await
+        }
+        "click" => {
+            let sel = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: click <selector>"))?;
+            backend.click_element(sel).await
+        }
+        "fill" => {
+            let sel = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: fill <selector> <value>"))?;
+            let val = args
+                .get(1)
+                .ok_or_else(|| anyhow::anyhow!("Usage: fill <selector> <value>"))?;
+            backend.fill_element(sel, val).await
+        }
+        "navigate" => {
+            let url = args
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Usage: navigate <url>"))?;
+            backend
+                .navigate_page(&NavigateParams {
+                    nav_type: "url".to_string(),
+                    url: Some(url.to_string()),
+                    ..Default::default()
+                })
+                .await
+        }
+        "generation" => {
+            // For web CLI: connect to CDP and report status with generation info.
+            backend.connect().await
+        }
+        "screenshot" => web_cli_screenshot(backend, args).await,
+        _ => Ok(web_cli_help().to_string()),
+    }
+}
+
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
 #[tokio::main]
@@ -1046,6 +1210,26 @@ async fn main() {
         .init();
 
     let config = CliConfig::parse();
+
+    if let Some(cli_args) = config.cli_command {
+        let backend = ChromeCdpBackend::new(config.headless);
+        let cmd = cli_args.first().map(String::as_str).unwrap_or("help");
+        let rest = cli_args.get(1..).unwrap_or(&[]).to_vec();
+        match dispatch_web_cli(&backend, cmd, &rest).await {
+            Ok(out) => {
+                if let Err(e) = web_cli_write(&out) {
+                    use std::io::Write as _;
+                    let _ = writeln!(std::io::stderr().lock(), "Output error: {e}");
+                }
+            }
+            Err(e) => {
+                use std::io::Write as _;
+                let _ = writeln!(std::io::stderr().lock(), "Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
 
     if config.headless {
         tracing::info!("🔍 Starting poly-web-devtools-mcp in HEADLESS mode (no visible window)");

@@ -1,0 +1,28 @@
+[package]
+name = "poly-memory-mcp"
+description = "Persistent task list and memory/knowledge-base MCP + CLI server for Poly agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-memory-mcp"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "fs",
+    "io-std",
+    "io-util",
+    "net",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

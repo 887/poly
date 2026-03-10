@@ -313,6 +313,159 @@
         "reveal": "always"
       },
       "problemMatcher": []
+    },
+
+    // ─── CLI Tasks (PREFERRED over MCP where possible) ────────────────────────
+    // These are the non-MCP, shell-scriptable equivalents of the MCP tools.
+    // Use these in terminal scripts, CI, or anywhere you don't need the full
+    // JSON-RPC MCP protocol.
+
+    {
+      "label": "CLI: desktop — status",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--", "status"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: desktop — screenshot",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--", "screenshot", "--save", "${workspaceFolder}/devtools-screenshots/cli-desktop.png"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: desktop — snapshot",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--", "snapshot"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: desktop — launch",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--", "launch"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: desktop — generation",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--", "generation"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    {
+      "label": "CLI: web — status",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--", "status"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: web — screenshot",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--", "screenshot", "--save", "${workspaceFolder}/devtools-screenshots/cli-web.png"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: web — snapshot",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--", "snapshot"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: web — launch",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--", "launch"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: web — generation",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-web-devtools-mcp", "--", "generation"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    {
+      "label": "CLI: electron — status",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--", "status"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: electron — screenshot",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--", "screenshot", "--save", "${workspaceFolder}/devtools-screenshots/cli-electron.png"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: electron — snapshot",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--", "snapshot"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: electron — launch",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--", "launch"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: electron — generation",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--", "generation"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    {
+      "label": "CLI: memory — tasks list",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-memory-mcp", "--", "tasks", "list"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: memory — tasks next",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-memory-mcp", "--", "tasks", "next"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CLI: memory — knowledge list",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--bin", "poly-memory-mcp", "--", "knowledge", "list"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
     }
   ]
 }
