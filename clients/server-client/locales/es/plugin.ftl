@@ -27,3 +27,9 @@ plugin-poly-signup-back-btn = ← Volver
 # --- Compartido ---
 plugin-poly-signup-connecting = Conectando…
 plugin-poly-signup-no-identity = No se encontró clave de identidad. Crea una en Ajustes → Identidad primero.
+
+# --- Página de ajustes del plugin ---
+plugin-poly-title = Poly Server
+plugin-poly-settings-description = Configura las opciones de conexión para el backend de Poly Server.
+plugin-poly-setting-websocket-label = Usar WebSocket para eventos en tiempo real
+plugin-poly-setting-websocket-desc = Cuando está activado, Poly abre una conexión WebSocket persistente para recibir mensajes y eventos al instante. Deactivar para volver al sondeo HTTP. Requiere volver a conectar o reiniciar la aplicación para tomar efecto.

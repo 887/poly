@@ -1,14 +1,14 @@
 //! Plugin-provided settings pages.
 //!
-//! Each active backend **registers** its settings page at runtime via
-//! [`crate::client_manager::ClientManager::register_plugin_settings`] when it
-//! activates, and unregisters it when it deactivates. The settings host has no
-//! compile-time knowledge of any specific plugin.
+//! Each compiled-in backend **registers** its settings page unconditionally at
+//! app startup via
+//! [`crate::client_manager::ClientManager::register_plugin_settings`]. The
+//! settings host has no compile-time knowledge of any specific plugin.
 //!
 //! ## What lives here
 //! Dioxus component implementations for **native** (non-WASM) built-in backends.
-//! Currently that is just the Demo backend. WASM plugins render their settings
-//! through schema-driven widgets hosted by the plugin-host crate.
+//! WASM plugins render their settings through schema-driven widgets hosted by
+//! the plugin-host crate.
 //!
 //! ## Translation convention
 //! Plugin strings come from the plugin's own FTL bundle (loaded at startup via
@@ -19,13 +19,13 @@ use dioxus::prelude::*;
 
 /// Settings content for the Demo backend.
 ///
-/// Registered dynamically by [`toggle_demo`] — the settings host never
-/// knows about the Demo plugin at compile time.
+/// Registered unconditionally at app startup so the page is always visible
+/// in the Plugin Settings nav, even when demo data is disabled. Toggling the
+/// checkbox enables or disables demo accounts/servers without unmounting this
+/// component or removing it from the nav.
 ///
 /// Strings come from the plugin's own FTL bundle (prefixed `plugin-demo-`),
 /// registered by [`crate::i18n::init`] at startup.
-///
-/// [`toggle_demo`]: crate::ui::demo::toggle_demo
 #[rustfmt::skip]
 #[component]
 pub fn DemoPluginSettings() -> Element {
@@ -61,15 +61,11 @@ pub fn DemoPluginSettings() -> Element {
                         r#type: "checkbox",
                         checked: demo_active,
                         onchange: move |_| {
-                            // `spawn_forever` runs in `ScopeId::ROOT` so it is never
-                            // cancelled when `DemoPluginSettings` unmounts (which happens
-                            // the moment toggle_demo calls unregister_plugin_settings and
-                            // SettingsAllSections re-renders without the demo entry).
-                            // A plain `spawn` here creates a task owned by this component's
-                            // scope; dropping that scope mid-await causes the
-                            // "RefCell already borrowed" panic at dioxus-core/diff/node.rs.
-                            // `spawn_forever` is not in `dioxus::prelude` but is available
-                            // via `dioxus::core` (= `dioxus_core`).
+                            // `spawn_forever` runs in `ScopeId::ROOT` so it survives
+                            // any component re-renders triggered by toggle_demo. A plain
+                            // `spawn` would tie the task to this component's scope; if
+                            // Dioxus ever reorders scopes during the demo transition,
+                            // the "RefCell already borrowed" panic could reappear.
                             let was_active = client_manager.read().demo_active;
                             dioxus::core::spawn_forever(async move {
                                 crate::ui::demo::toggle_demo(
@@ -91,14 +87,115 @@ pub fn DemoPluginSettings() -> Element {
 /// Plain `fn() -> Element` wrapper for [`DemoPluginSettings`].
 ///
 /// Stored as the `render` field of a
-/// [`crate::client_manager::PluginSettingsEntry`] by [`toggle_demo`] when the
-/// demo backend activates. Using an explicit wrapper guarantees the stored
-/// value is always `fn() -> Element`, independent of how `#[component]`
-/// transforms the component's inner signature.
-///
-/// [`toggle_demo`]: crate::ui::demo::toggle_demo
+/// [`crate::client_manager::PluginSettingsEntry`] by
+/// [`crate::ui::mod::register_native_plugin_settings`] at app startup.
+/// Using an explicit wrapper guarantees the stored value is always
+/// `fn() -> Element`, independent of how `#[component]` transforms the
+/// component's inner signature.
 pub fn demo_settings_render_fn() -> Element {
     rsx! {
         DemoPluginSettings {}
+    }
+}
+
+// ── Poly Server plugin settings ───────────────────────────────────────────────
+
+/// Settings content for the Poly Server backend.
+///
+/// Registered unconditionally at app startup (when compiled with `feature =
+/// "server"`) so the page is always reachable in the Plugin Settings nav.
+///
+/// Strings come from the `server-client` plugin's own FTL bundle
+/// (prefixed `plugin-poly-`), registered by [`crate::i18n::init`] at startup.
+#[cfg(feature = "server")]
+#[rustfmt::skip]
+#[component]
+pub fn PolyServerPluginSettings() -> Element {
+    // Read the stored setting. If storage is not yet initialised, default to true.
+    let use_ws = use_signal(|| {
+        if let Some(s) = crate::STORAGE.get() {
+            // Storage reads are async; we prime from the known default and let
+            // the user's saved value be applied on next app launch. For the
+            // settings toggle, read from the signal only — no blocking call.
+            let _ = s; // force use so cfg(test) hygiene is satisfied
+        }
+        true // default: WebSocket on
+    });
+    // Load the persisted value asynchronously and update the signal once ready.
+    let mut use_ws_sig = use_ws;
+    use_future(move || async move {
+        if let Some(s) = crate::STORAGE.get()
+            && let Ok(settings) = s.get_app_settings().await
+        {
+            use_ws_sig.set(settings.poly_use_websocket);
+        }
+    });
+
+    let ws_checked = *use_ws.read();
+
+    rsx! {
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🔷" }
+                h2 { class: "plugin-section-title",
+                    "{t(\"plugin-poly-title\")}"
+                }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
+                "{t(\"plugin-poly-settings-description\")}"
+            }
+            div { class: "settings-toggle-row",
+                div { class: "settings-toggle-label-group",
+                    label { class: "settings-toggle-label",
+                        "{t(\"plugin-poly-setting-websocket-label\")}"
+                    }
+                    p { class: "settings-toggle-desc",
+                        "{t(\"plugin-poly-setting-websocket-desc\")}"
+                    }
+                }
+                label { class: "toggle-switch",
+                    input {
+                        r#type: "checkbox",
+                        checked: ws_checked,
+                        onchange: move |_| {
+                            let new_val = !*use_ws_sig.read();
+                            use_ws_sig.set(new_val);
+                            dioxus::core::spawn_forever(async move {
+                                if let Some(s) = crate::STORAGE.get() {
+                                    match s.get_app_settings().await {
+                                        Ok(mut settings) => {
+                                            settings.poly_use_websocket = new_val;
+                                            if let Err(e) = s.set_app_settings(&settings).await {
+                                                tracing::warn!(
+                                                    "Failed to persist poly_use_websocket: {e}"
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                "Failed to read app settings for poly ws toggle: {e}"
+                                            );
+                                        }
+                                    }
+                                }
+                            });
+                        },
+                    }
+                    span { class: "toggle-slider" }
+                }
+            }
+        }
+    }
+}
+
+/// Plain `fn() -> Element` wrapper for [`PolyServerPluginSettings`].
+///
+/// Stored as the `render` field of a
+/// [`crate::client_manager::PluginSettingsEntry`] at app startup.
+#[cfg(feature = "server")]
+pub fn poly_settings_render_fn() -> Element {
+    rsx! {
+        PolyServerPluginSettings {}
     }
 }

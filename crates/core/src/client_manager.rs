@@ -328,9 +328,77 @@ impl ClientManager {
         }
     }
 
-    /// Get the list of active account IDs.
+    /// Get the list of account IDs that have a known session (online or offline).
+    ///
+    /// Accounts that failed to reconnect on startup (e.g. server unreachable) are
+    /// included here with no entry in `self.backends` — their connection status is
+    /// [`ConnectionStatus::Disconnected`] so the UI can show them as offline.
     pub fn active_account_ids(&self) -> Vec<String> {
-        self.backends.keys().cloned().collect()
+        self.sessions.keys().cloned().collect()
+    }
+
+    /// Register an offline (session-only) account that failed to reconnect on startup.
+    ///
+    /// The account appears in the favorites bar with a disconnected status dot.
+    /// No backend handle is added — the account cannot perform any network operations
+    /// until the user explicitly reconnects or the next app restart retries auth.
+    pub fn register_offline_session(
+        &mut self,
+        account_id: String,
+        session: Session,
+    ) {
+        self.sessions.insert(account_id.clone(), session);
+        self.connection_statuses
+            .insert(account_id.clone(), ConnectionStatus::Disconnected);
+        self.presence_statuses
+            .entry(account_id)
+            .or_insert(AccountPresence::Offline);
+        tracing::info!("Registered offline session (server unreachable)");
+    }
+
+    /// Disconnect and remove all active accounts belonging to the given backend type.
+    ///
+    /// Returns the list of account IDs that were removed so the caller can clean
+    /// up `ChatData` entries (servers, DMs, etc.) accordingly.
+    ///
+    /// Uses the same two-phase pattern as `remove_poly_server`: backend handles are
+    /// drained first (no Signal locks held during `.await`), then state is cleared.
+    pub async fn remove_accounts_by_backend(
+        &mut self,
+        backend_type: BackendType,
+    ) -> Vec<String> {
+        // Phase 1: collect handles for accounts of this backend type.
+        let target_ids: Vec<String> = self
+            .sessions
+            .iter()
+            .filter(|(_, s)| s.backend == backend_type)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        // Drain backend handles (need to await logout).
+        for id in &target_ids {
+            if let Some(backend) = self.backends.remove(id) {
+                let mut guard = backend.write().await;
+                if let Err(e) = guard.logout().await {
+                    tracing::warn!("Logout failed for {id}: {e}");
+                }
+            }
+        }
+
+        // Phase 2: remove all related state synchronously.
+        for id in &target_ids {
+            self.sessions.remove(id);
+            self.connection_statuses.remove(id);
+            self.presence_statuses.remove(id);
+            self.server_account_map.retain(|_, aid| aid != id);
+        }
+
+        tracing::info!(
+            "Removed {} account(s) for backend {:?}",
+            target_ids.len(),
+            backend_type
+        );
+        target_ids
     }
 
     /// Register a settings page for an active plugin backend.
@@ -431,5 +499,48 @@ impl ClientManager {
         self.server_account_map.retain(|_, aid| aid != account_id);
         tracing::info!("Poly server account removed: {account_id}");
         Ok(())
+    }
+
+    /// Phase-1 (sync): Remove and return backend handles for all accounts of a given
+    /// backend type, clearing all related state from `ClientManager` immediately.
+    ///
+    /// The caller is responsible for calling `logout()` on the returned handles
+    /// asynchronously **after** this method returns (i.e. after all Signal write
+    /// guards have been dropped). This follows the two-phase disconnect pattern
+    /// used by `toggle_demo` to avoid holding a `SignalMut` across `.await` points.
+    ///
+    /// Returns `(account_ids, backend_handles)` so the caller can:
+    /// 1. Await `handle.write().await.logout()` for each handle (Phase 2).
+    /// 2. Clean up `ChatData` and storage (Phase 3).
+    pub fn take_accounts_by_backend(
+        &mut self,
+        backend_type: BackendType,
+    ) -> (Vec<String>, Vec<BackendHandle>) {
+        let ids: Vec<String> = self
+            .sessions
+            .iter()
+            .filter(|(_, s)| s.backend == backend_type)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        let handles = ids
+            .iter()
+            .filter_map(|id| self.backends.remove(id))
+            .collect();
+
+        for id in &ids {
+            self.sessions.remove(id);
+            self.connection_statuses.remove(id);
+            self.presence_statuses.remove(id);
+        }
+        self.server_account_map
+            .retain(|_, aid| !ids.contains(aid));
+
+        tracing::info!(
+            "Took {} {:?} account(s) for async disconnect",
+            ids.len(),
+            backend_type
+        );
+        (ids, handles)
     }
 }

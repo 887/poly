@@ -204,6 +204,15 @@ pub struct AppSettings {
     /// remote can serve the correct plugin binary.
     #[serde(default)]
     pub wasm_plugins: Vec<WasmPluginEntry>,
+    /// Whether the Poly Server backend should use WebSocket/JSON-RPC for
+    /// real-time event delivery.
+    ///
+    /// When `true` (default), the backend opens a persistent WebSocket
+    /// connection (`ws://host/ws?token=<JWT>`) to receive pushes immediately.
+    /// When `false`, the backend falls back to periodic HTTP polling.
+    /// Changing this setting requires reconnecting or restarting the app.
+    #[serde(default = "default_true")]
+    pub poly_use_websocket: bool,
 }
 
 /// A user-added WASM plugin, loaded from a URL.

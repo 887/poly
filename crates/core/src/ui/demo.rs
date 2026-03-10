@@ -115,9 +115,6 @@ pub(crate) async fn toggle_demo(
             }
 
             // Phase 3: async storage persist.
-            // At this point `plugin_settings` still contains the demo entry, so
-            // `SettingsAllSections` continues to render `DemoPluginSettings` through
-            // these await points — the scope remains valid and no RefCell conflict arises.
             if let Some(s) = crate::STORAGE.get() {
                 let mut settings = s.get_app_settings().await.unwrap_or_default();
                 settings.demo_active = false;
@@ -127,11 +124,11 @@ pub(crate) async fn toggle_demo(
                 }
             }
 
-            // Phase 4: unregister the demo settings page — the LAST operation.
-            // By the time Dioxus processes this signal change and unmounts
-            // `DemoPluginSettings`, this task has returned and there is no active
-            // borrow on the component scope.
-            client_manager.write().unregister_plugin_settings("demo");
+            // NOTE: We intentionally do NOT call unregister_plugin_settings("demo").
+            // The Demo Settings page must remain accessible even when demo data is
+            // disabled so the user can re-enable it from the same page.  Removing
+            // the unregister call also eliminates the "RefCell already borrowed"
+            // risk that previously required this to be the very last operation.
         } else {
             // ── Phase 1: async auth WITHOUT holding any Dioxus Signal lock ──────────────
             //

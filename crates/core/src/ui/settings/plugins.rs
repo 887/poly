@@ -69,8 +69,7 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
         icon: "🔷",
         name: "Poly Server",
         description: "Self-hosted Poly backup / sync server with E2E encryption.",
-        // Not yet a separate feature flag — will be added in phase 3.
-        available: false,
+        available: cfg!(feature = "server"),
     },
 ];
 
@@ -312,8 +311,8 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 #[rustfmt::skip]
 #[component]
 pub fn PluginsSettings() -> Element {
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
-    let chat_data: Signal<crate::state::ChatData> = use_context();
+    let mut client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let mut chat_data: Signal<crate::state::ChatData> = use_context();
     let app_state: Signal<crate::state::AppState> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
@@ -381,21 +380,105 @@ pub fn PluginsSettings() -> Element {
                                             ).await;
                                         });
                                     } else {
-                                        let mut d = disabled.write();
-                                        if d.contains(&toggled) {
-                                            d.retain(|s| s != &toggled);
+                                        // For any other native backend:
+                                        // - If currently enabled (toggling OFF): disconnect
+                                        //   all active accounts of that backend type.
+                                        // - If currently disabled (toggling ON): re-enable
+                                        //   the option (user must add accounts via /signup).
+                                        let is_enabled = !disabled.read().contains(&toggled);
+                                        if is_enabled {
+                                            // Toggling OFF — actually disconnect all sessions.
+                                            let backend_type =
+                                                poly_client::BackendType::from_slug(&toggled);
+                                            if let Some(bt) = backend_type {
+                                                // Phase 1 (sync): take handles + clear
+                                                // ClientManager state. No await held.
+                                                let (removed_ids, handles) = client_manager
+                                                    .write()
+                                                    .take_accounts_by_backend(bt);
+                                                let backend_slug = bt.slug().to_string();
+                                                // Update local disabled signal immediately for
+                                                // instant UI feedback.
+                                                disabled.write().push(toggled.clone());
+                                                let new_disabled = disabled.read().clone();
+                                                let wasm = wasm_plugins.read().clone();
+                                                spawn(async move {
+                                                    // Phase 2: async logout (no signal lock).
+                                                    for h in handles {
+                                                        let mut g = h.write().await;
+                                                        let _ = g.logout().await;
+                                                    }
+                                                    // Phase 3: clean up ChatData.
+                                                    if !removed_ids.is_empty() {
+                                                        let mut cd = chat_data.write();
+                                                        cd.servers.retain(|s| {
+                                                            s.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&s.account_id)
+                                                        });
+                                                        cd.dm_channels.retain(|d| {
+                                                            d.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&d.account_id)
+                                                        });
+                                                        cd.groups.retain(|g| {
+                                                            g.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&g.account_id)
+                                                        });
+                                                        cd.notifications.retain(|n| {
+                                                            n.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&n.account_id)
+                                                        });
+                                                        cd.friends
+                                                            .retain(|u| u.backend != bt);
+                                                        for id in &removed_ids {
+                                                            cd.account_sessions
+                                                                .remove(id.as_str());
+                                                        }
+                                                        // Retain only favorites that still have a matching server.
+                                                        // Collect the server IDs first to avoid concurrent borrow.
+                                                        let live_server_ids: Vec<String> = cd
+                                                            .servers
+                                                            .iter()
+                                                            .map(|s| s.id.clone())
+                                                            .collect();
+                                                        cd.favorited_server_ids
+                                                            .retain(|fid| live_server_ids.contains(fid));
+                                                    }
+                                                    // Phase 4: remove stored tokens.
+                                                    if let Some(storage) = crate::STORAGE.get() {
+                                                        for id in &removed_ids {
+                                                            let _ = storage
+                                                                .remove_account_token(
+                                                                    &backend_slug,
+                                                                    id,
+                                                                )
+                                                                .await;
+                                                        }
+                                                    }
+                                                    // Phase 5: persist the disabled state.
+                                                    let mut settings =
+                                                        load_settings().await;
+                                                    settings.disabled_native_backends =
+                                                        new_disabled;
+                                                    settings.wasm_plugins = wasm;
+                                                    save_settings(&settings).await;
+                                                });
+                                            }
                                         } else {
-                                            d.push(toggled);
+                                            // Toggling ON — re-enable the backend option.
+                                            disabled.write().retain(|s| s != &toggled);
+                                            let new_disabled = disabled.read().clone();
+                                            let wasm = wasm_plugins.read().clone();
+                                            spawn(async move {
+                                                let mut s = load_settings().await;
+                                                s.disabled_native_backends = new_disabled;
+                                                s.wasm_plugins = wasm;
+                                                save_settings(&s).await;
+                                            });
                                         }
-                                        let new_disabled = d.clone();
-                                        drop(d);
-                                        let wasm = wasm_plugins.read().clone();
-                                        spawn(async move {
-                                            let mut s = load_settings().await;
-                                            s.disabled_native_backends = new_disabled;
-                                            s.wasm_plugins = wasm;
-                                            save_settings(&s).await;
-                                        });
                                     }
                                 },
                             }

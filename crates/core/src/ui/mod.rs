@@ -71,6 +71,9 @@ pub(crate) mod signup;
 // ClientManager::plugin_settings without a pub(crate) path through private modules.
 #[cfg(feature = "demo")]
 pub(crate) use settings::demo_settings_render_fn;
+// Re-export the poly server settings render function for the same reason.
+#[cfg(feature = "server")]
+pub(crate) use settings::poly_settings_render_fn;
 mod setup_wizard;
 mod voice_banner;
 
@@ -108,6 +111,38 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         name_key: "plugin-poly-signup-name",
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
+    });
+}
+
+/// Register all native backend plugin settings pages into `ClientManager`.
+///
+/// Called once at `App` mount (via `use_effect`), immediately after
+/// [`register_native_signup_entries`]. Plugin settings pages are registered
+/// **unconditionally** regardless of whether the backend is currently active.
+/// This ensures the settings page is always reachable in the Plugin Settings
+/// nav so users can enable/disable the plugin or adjust its options at any
+/// time.
+///
+/// Registration is idempotent: if the activation path (e.g. [`demo::toggle_demo`])
+/// calls [`ClientManager::register_plugin_settings`] a second time, the entry
+/// is simply replaced in place.
+fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
+    use crate::client_manager::PluginSettingsEntry;
+
+    #[cfg(feature = "demo")]
+    client_manager.write().register_plugin_settings(PluginSettingsEntry {
+        slug: "demo",
+        nav_label_key: "plugin-demo-title",
+        nav_icon: "🧪",
+        render: demo_settings_render_fn,
+    });
+
+    #[cfg(feature = "server")]
+    client_manager.write().register_plugin_settings(PluginSettingsEntry {
+        slug: "poly",
+        nav_label_key: "plugin-poly-title",
+        nav_icon: "🔷",
+        render: poly_settings_render_fn,
     });
 }
 
@@ -233,9 +268,34 @@ async fn restore_poly_accounts(
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to restore poly account {} from {base_url}: {e}",
+                    "Failed to restore poly account {} from {base_url}: {e}. Showing as offline.",
                     token.account_id
                 );
+                // Still show the account in the favorites bar as offline so the
+                // user knows it exists and can see its disconnected state.
+                let offline_session = poly_client::Session {
+                    id: token.account_id.clone(),
+                    user: poly_client::User {
+                        id: token.account_id.clone(),
+                        display_name: token.display_name.clone(),
+                        avatar_url: None,
+                        presence: poly_client::PresenceStatus::Offline,
+                        backend: poly_client::BackendType::Poly,
+                    },
+                    token: token.token.clone(),
+                    backend: poly_client::BackendType::Poly,
+                    icon_emoji: None,
+                    instance_id: base_url.to_string(),
+                    backend_url: Some(base_url.to_string()),
+                };
+                client_manager.write().register_offline_session(
+                    token.account_id.clone(),
+                    offline_session.clone(),
+                );
+                chat_data
+                    .write()
+                    .account_sessions
+                    .insert(token.account_id.clone(), offline_session);
             }
         }
     }
@@ -341,6 +401,8 @@ async fn persist_setup_completion(account_id: String) {
         // All native backends enabled by default; no WASM plugins yet.
         disabled_native_backends: Vec::new(),
         wasm_plugins: Vec::new(),
+        // Use WebSocket for real-time events by default.
+        poly_use_websocket: true,
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");
@@ -470,8 +532,13 @@ pub fn App() -> Element {
     // which backends exist — each plugin registers itself once at startup.
     // DECISION(DX-SIGNUP-1): Signup entries are registered at App mount
     // so they are available before the first SignupPickerPage render.
+    //
+    // Plugin settings pages are also registered here unconditionally so the
+    // Demo Settings and Poly Server settings pages are always reachable in
+    // the Plugin Settings nav, even before the user has activated the plugin.
     use_effect(move || {
         register_native_signup_entries(&mut client_manager);
+        register_native_plugin_settings(&mut client_manager);
     });
 
     let chat_data: Signal<ChatData> = use_signal(ChatData::default);
