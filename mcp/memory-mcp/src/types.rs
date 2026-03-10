@@ -116,9 +116,34 @@ impl Task {
         }
     }
 
-    /// Directory name for this task (e.g. `"001-add-cli-to-mcp"`).
+    /// Directory name for this task's findings/memories subdirectory.
+    ///
+    /// Uses dash-separated slug for backward compatibility with existing on-disk directories.
+    /// e.g. `"001-add-cli-to-mcp"`
     pub fn dir_name(&self) -> String {
         format!("{:03}-{}", self.id, self.slug)
+    }
+
+    /// Base name for this task's individual JSON file (and its subdir alias).
+    ///
+    /// Format: `{id:03}_{slug_with_underscores}`, capped at 50 characters total.
+    ///
+    /// Examples:
+    /// - `001_implement_poly_server_client_backend`
+    /// - `002_e2e_poly_server_via_poly_web_visual_test`
+    pub fn file_name(&self) -> String {
+        let prefix = format!("{:03}_", self.id);
+        let max_slug_len = 50_usize.saturating_sub(prefix.len());
+        let slug = self.slug.replace('-', "_");
+        let slug = if slug.len() > max_slug_len {
+            // Truncate then strip any dangling trailing underscore.
+            slug[..max_slug_len]
+                .trim_end_matches('_')
+                .to_string()
+        } else {
+            slug
+        };
+        format!("{prefix}{slug}")
     }
 
     /// One-line status summary: `"✅ [3] My Task (2/4 items)"`.

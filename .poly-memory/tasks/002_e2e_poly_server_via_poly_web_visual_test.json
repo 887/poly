@@ -1,0 +1,89 @@
+{
+  "id": 2,
+  "slug": "e2e-poly-server-via-poly-web-visual-test",
+  "title": "E2E: Poly Server via poly-web visual test",
+  "description": null,
+  "status": "in-progress",
+  "created_at": "2026-03-10T01:15:13.332795858Z",
+  "updated_at": "2026-03-10T01:28:27.020693397Z",
+  "completed_at": null,
+  "memory_count": 1,
+  "finding_count": 0,
+  "checklist": [
+    {
+      "id": 1,
+      "text": "Make poly-server-client HTTP compile for wasm32-unknown-unknown",
+      "done": true
+    },
+    {
+      "id": 2,
+      "text": "Gate WS module behind native feature, add wasm-http feature",
+      "done": true
+    },
+    {
+      "id": 3,
+      "text": "Add poly-server-client to poly-core for WASM + update async_trait",
+      "done": true
+    },
+    {
+      "id": 4,
+      "text": "Remove wasm32 gate from add_poly_server in client_manager",
+      "done": true
+    },
+    {
+      "id": 5,
+      "text": "Build Add Account wizard UI component",
+      "done": false
+    },
+    {
+      "id": 6,
+      "text": "Wire Create Server action in UI",
+      "done": false
+    },
+    {
+      "id": 7,
+      "text": "Wire Create Channel action in UI",
+      "done": false
+    },
+    {
+      "id": 8,
+      "text": "Ensure send_message works E2E for poly-server accounts",
+      "done": false
+    },
+    {
+      "id": 9,
+      "text": "cargo check WASM + cargo cranky zero warnings",
+      "done": false
+    },
+    {
+      "id": 10,
+      "text": "Start poly-server + poly-web and verify demo still works",
+      "done": false
+    },
+    {
+      "id": 11,
+      "text": "Visual E2E: Add Poly Server account via Settings UI",
+      "done": false
+    },
+    {
+      "id": 12,
+      "text": "Visual E2E: Create a server/guild in the UI",
+      "done": false
+    },
+    {
+      "id": 13,
+      "text": "Visual E2E: Create a text channel in the UI",
+      "done": false
+    },
+    {
+      "id": 14,
+      "text": "Visual E2E: Send a chat message and see it appear",
+      "done": false
+    },
+    {
+      "id": 15,
+      "text": "Screenshot final result and confirm success",
+      "done": false
+    }
+  ]
+}

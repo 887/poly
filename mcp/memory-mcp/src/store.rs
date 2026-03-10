@@ -20,14 +20,27 @@ async fn ensure_dir(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Path to `tasks.json` in the data directory.
-pub fn tasks_json_path(data_dir: &Path) -> PathBuf {
-    data_dir.join("tasks.json")
+/// Path to the global counter/metadata file (`poly-memory.json`).
+pub fn meta_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("poly-memory.json")
 }
 
-/// Path to the task's subdirectory under `tasks/`.
+/// Path to the `tasks/` directory that contains both individual task JSON files
+/// and per-task subdirectories (for findings and memories).
+fn tasks_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join("tasks")
+}
+
+/// Path to a single task's JSON file: `tasks/<file_name>.json`.
+pub fn task_json_path(data_dir: &Path, task: &Task) -> PathBuf {
+    tasks_dir(data_dir).join(format!("{}.json", task.file_name()))
+}
+
+/// Path to the task's findings/memories subdirectory: `tasks/<dir_name>/`.
+///
+/// Uses `dir_name()` (dash-based) for backward compatibility with existing directories.
 pub fn task_dir(data_dir: &Path, task: &Task) -> PathBuf {
-    data_dir.join("tasks").join(task.dir_name())
+    tasks_dir(data_dir).join(task.dir_name())
 }
 
 /// Path to `findings.md` inside a task directory.
@@ -45,25 +58,131 @@ pub fn knowledge_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("knowledge")
 }
 
+// ─── Counter / metadata ──────────────────────────────────────────────────────
+
+/// Load the next available task ID.
+///
+/// Precedence:
+/// 1. `poly-memory.json` → `next_id` field.
+/// 2. Scan `tasks/*.json` filenames for the highest numeric prefix, then +1.
+/// 3. Default to `1` when no tasks exist yet.
+pub async fn load_next_id(data_dir: &Path) -> anyhow::Result<u32> {
+    // Fast path: read from meta file.
+    let path = meta_path(data_dir);
+    if path.exists() {
+        let bytes = tokio::fs::read(&path).await?;
+        let val: serde_json::Value = serde_json::from_slice(&bytes)?;
+        if let Some(n) = val.get("next_id").and_then(|v| v.as_u64()) {
+            return Ok(n as u32);
+        }
+    }
+
+    // Slow path: derive from existing task filenames.
+    let tdir = tasks_dir(data_dir);
+    if !tdir.exists() {
+        return Ok(1);
+    }
+    let mut entries = tokio::fs::read_dir(&tdir).await?;
+    let mut max_id: u32 = 0;
+    while let Some(entry) = entries.next_entry().await? {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.ends_with(".json") {
+            // Filenames look like `001_my_task.json`; parse the numeric prefix.
+            if let Some(Ok(id)) = name.split('_').next().map(|s| s.parse::<u32>()) {
+                max_id = max_id.max(id);
+            }
+        }
+    }
+    Ok(max_id + 1)
+}
+
+/// Persist the next available task ID to `poly-memory.json`.
+pub async fn save_next_id(data_dir: &Path, next_id: u32) -> anyhow::Result<()> {
+    ensure_dir(data_dir).await?;
+    let path = meta_path(data_dir);
+    let json = serde_json::to_string_pretty(&serde_json::json!({ "next_id": next_id }))?;
+    tokio::fs::write(&path, json.as_bytes()).await?;
+    Ok(())
+}
+
 // ─── Tasks storage ────────────────────────────────────────────────────────────
 
-/// Load all tasks from `tasks.json`. Returns empty vec if file missing.
+/// Load all tasks by scanning `tasks/*.json` individual task files.
+///
+/// If the legacy monolithic `tasks.json` is present, it is **automatically
+/// migrated** to the per-file format and renamed to `tasks.json.bak`.
 pub async fn load_tasks(data_dir: &Path) -> anyhow::Result<Vec<Task>> {
-    let path = tasks_json_path(data_dir);
-    if !path.exists() {
+    // Auto-migrate legacy tasks.json if present.
+    let legacy = data_dir.join("tasks.json");
+    if legacy.exists() {
+        migrate_legacy_tasks_json(data_dir, &legacy).await?;
+    }
+
+    let tdir = tasks_dir(data_dir);
+    if !tdir.exists() {
         return Ok(Vec::new());
     }
-    let bytes = tokio::fs::read(&path).await?;
-    let tasks: Vec<Task> = serde_json::from_slice(&bytes)?;
+    let mut entries = tokio::fs::read_dir(&tdir).await?;
+    let mut tasks: Vec<Task> = Vec::new();
+    while let Some(entry) = entries.next_entry().await? {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.ends_with(".json") {
+            let bytes = tokio::fs::read(entry.path()).await?;
+            let task: Task = serde_json::from_slice(&bytes)?;
+            tasks.push(task);
+        }
+    }
+    tasks.sort_by_key(|t| t.id);
     Ok(tasks)
 }
 
-/// Persist the entire task list to `tasks.json`.
-pub async fn save_tasks(data_dir: &Path, tasks: &[Task]) -> anyhow::Result<()> {
-    ensure_dir(data_dir).await?;
-    let path = tasks_json_path(data_dir);
-    let json = serde_json::to_string_pretty(tasks)?;
+/// Write a single task to its own JSON file (`tasks/<file_name>.json`).
+///
+/// Creates the `tasks/` directory if it doesn't exist.
+pub async fn save_task(data_dir: &Path, task: &Task) -> anyhow::Result<()> {
+    let tdir = tasks_dir(data_dir);
+    ensure_dir(&tdir).await?;
+    let path = task_json_path(data_dir, task);
+    let json = serde_json::to_string_pretty(task)?;
     tokio::fs::write(&path, json.as_bytes()).await?;
+    Ok(())
+}
+
+/// Migrate the legacy monolithic `tasks.json` to individual per-task JSON files.
+///
+/// Steps:
+/// 1. Parse the old file.
+/// 2. Write each task to `tasks/<file_name>.json`.
+/// 3. Write `poly-memory.json` counter (if not already present).
+/// 4. Rename `tasks.json` → `tasks.json.bak` so migration is not repeated.
+async fn migrate_legacy_tasks_json(
+    data_dir: &Path,
+    old_path: &PathBuf,
+) -> anyhow::Result<()> {
+    let bytes = tokio::fs::read(old_path).await?;
+    let tasks: Vec<Task> = serde_json::from_slice(&bytes)?;
+
+    let tdir = tasks_dir(data_dir);
+    ensure_dir(&tdir).await?;
+
+    for task in &tasks {
+        save_task(data_dir, task).await?;
+    }
+
+    // Write counter only if it doesn't already exist.
+    let meta = meta_path(data_dir);
+    if !meta.exists() {
+        let next_id = tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
+        save_next_id(data_dir, next_id).await?;
+    }
+
+    // Rename old file so we don't migrate again.
+    let bak = data_dir.join("tasks.json.bak");
+    tokio::fs::rename(old_path, &bak).await?;
+    tracing::info!(
+        "Migrated {} task(s) from tasks.json → individual task files (backup: tasks.json.bak)",
+        tasks.len()
+    );
     Ok(())
 }
 

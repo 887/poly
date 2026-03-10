@@ -8,15 +8,23 @@
 //!
 //! ```text
 //! ~/.poly-memory/
-//! ├── tasks.json          # master task list (all metadata + checklists)
+//! ├── poly-memory.json    # global counter: { "next_id": N }
 //! ├── knowledge/          # general knowledge base
 //! │   └── <topic>.md
 //! └── tasks/
-//!     └── 001-task-slug/
-//!         ├── findings.md     # accumulated research findings (append-only)
-//!         └── memories/       # individual memory notes
-//!             └── <timestamp>-<slug>.md
+//!     ├── 001_my_task_title.json          # per-task metadata + checklist
+//!     ├── 001-my-task-title/              # per-task findings + memories
+//!     │   ├── findings.md                 # accumulated research (append-only)
+//!     │   └── memories/
+//!     │       └── <timestamp>-<slug>.md
+//!     └── 002_another_task.json
+//!         002-another-task/
+//!         ...
 //! ```
+//!
+//! **Migration:** If a legacy monolithic `tasks.json` is present it is
+//! automatically migrated to the per-task file layout on first load and
+//! renamed to `tasks.json.bak`.
 //!
 //! ## Modes
 //!

@@ -1,7 +1,7 @@
 # poly-memory-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-10
+> **Last Updated:** 2026-03-10 — per-task JSON file layout (was monolithic tasks.json)
 
 ---
 
@@ -40,15 +40,36 @@ cargo run --bin poly-memory-mcp -- work --count 3
 
 ```
 ~/.poly-memory/               (or POLY_MEMORY_DIR env var)
-├── tasks.json                # master task array (all metadata + checklists)
-├── knowledge/                # general knowledge base
+├── poly-memory.json          # global ID counter: { "next_id": N }
+├── knowledge/                # general knowledge base (not task-specific)
 │   └── <topic-slug>.md
 └── tasks/
-    └── 001-task-slug/
-        ├── findings.md       # append-only research findings  
-        └── memories/
-            └── <timestamp>-<slug>.md
+    ├── 001_my_task_title.json          # per-task metadata + checklist (≤50 chars)
+    ├── 001-my-task-title/              # per-task findings + memories (dash-slug)
+    │   ├── findings.md                 # append-only research findings
+    │   └── memories/
+    │       └── <timestamp>-<slug>.md   # individual memory notes
+    ├── 002_another_task.json
+    └── 002-another-task/
+        └── ...
 ```
+
+### File naming rules
+
+| File/Dir | Pattern | Notes |
+|---|---|---|
+| `poly-memory.json` | fixed | stores `{ "next_id": N }` — NOT the old monolithic tasks array |
+| task JSON file | `{id:03}_{title_underscored}.json` | max 50 chars total per filename (excl. `.json`) |
+| task subdir | `{id:03}-{title_dashed}/` | dash-slug for backward compat with existing dirs |
+| findings | `{task_subdir}/findings.md` | append-only |
+| memory notes | `{task_subdir}/memories/{ts}-{slug}.md` | individual files |
+
+### Migration from legacy format
+
+If a monolithic `tasks.json` is found on startup it is **automatically migrated**:
+1. Each task is written to its own `tasks/{id:03}_{slug}.json` file.
+2. `poly-memory.json` is created with `next_id = max_existing_id + 1`.
+3. The old file is renamed to `tasks.json.bak` (never deleted).
 
 ---
 

@@ -11,17 +11,19 @@ use crate::types::{ChecklistItem, Task, TaskStatus};
 // ─── Task operations ──────────────────────────────────────────────────────────
 
 /// Create a new task and return a confirmation string.
+///
+/// The next task ID is read from `poly-memory.json` (or derived from existing
+/// task files on first use). After creation the counter is bumped atomically.
 pub async fn create_task(
     data_dir: &Path,
     title: &str,
     description: Option<&str>,
 ) -> anyhow::Result<String> {
-    let mut tasks = store::load_tasks(data_dir).await?;
-    let next_id = tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
+    let next_id = store::load_next_id(data_dir).await?;
     let task = Task::new(next_id, title, description);
     let line = task.summary_line();
-    tasks.push(task);
-    store::save_tasks(data_dir, &tasks).await?;
+    store::save_task(data_dir, &task).await?;
+    store::save_next_id(data_dir, next_id + 1).await?;
     Ok(format!("✅ Created task: {line}"))
 }
 
@@ -137,7 +139,7 @@ pub async fn set_task_status(
         task.completed_at = Some(chrono::Utc::now());
     }
     let title = task.title.clone();
-    store::save_tasks(data_dir, &tasks).await?;
+    store::save_task(data_dir, task).await?;
     Ok(format!(
         "Task '{title}': {old} → {new_status} {}",
         new_status.emoji()
@@ -157,7 +159,7 @@ pub async fn redo_task(data_dir: &Path, id_or_name: &str) -> anyhow::Result<Stri
         item.done = false;
     }
     let title = task.title.clone();
-    store::save_tasks(data_dir, &tasks).await?;
+    store::save_task(data_dir, task).await?;
     Ok(format!(
         "🔄 Task '{title}' reset for redo. \
          Status → todo, all checklist items unchecked. \
@@ -183,7 +185,7 @@ pub async fn add_task_item(
     task.checklist.push(item);
     task.updated_at = chrono::Utc::now();
     let title = task.title.clone();
-    store::save_tasks(data_dir, &tasks).await?;
+    store::save_task(data_dir, task).await?;
     Ok(format!("⬜ Added item [{next_item_id}] to '{title}': {text}"))
 }
 
@@ -206,7 +208,7 @@ pub async fn check_task_item(
     let text = item.text.clone();
     task.updated_at = chrono::Utc::now();
     let task_title = task.title.clone();
-    store::save_tasks(data_dir, &tasks).await?;
+    store::save_task(data_dir, task).await?;
     Ok(format!("{tick} Item [{item_id}] in '{task_title}': {text}"))
 }
 
@@ -228,7 +230,7 @@ pub async fn store_memory(
         .ok_or_else(|| anyhow::anyhow!("Task not found: {id_or_name}"))?;
     task_mut.memory_count += 1;
     task_mut.updated_at = chrono::Utc::now();
-    store::save_tasks(data_dir, &tasks).await?;
+    store::save_task(data_dir, task_mut).await?;
     Ok(format!(
         "💾 Memory stored for task '{}' → {}",
         task.title,
@@ -248,15 +250,13 @@ pub async fn store_finding(
         .clone();
     store::append_finding(data_dir, &task, content).await?;
     let task_title = task.title.clone();
-    // Use a block to scope the mutable borrow so we can pass &tasks to save_tasks.
-    let count = {
-        let task_mut = find_task_mut(&mut tasks, id_or_name)
-            .ok_or_else(|| anyhow::anyhow!("Task not found: {id_or_name}"))?;
-        task_mut.finding_count += 1;
-        task_mut.updated_at = chrono::Utc::now();
-        task_mut.finding_count
-    };
-    store::save_tasks(data_dir, &tasks).await?;
+    // Mutate and save only the affected task (no need to rewrite all task files).
+    let task_mut = find_task_mut(&mut tasks, id_or_name)
+        .ok_or_else(|| anyhow::anyhow!("Task not found: {id_or_name}"))?;
+    task_mut.finding_count += 1;
+    task_mut.updated_at = chrono::Utc::now();
+    let count = task_mut.finding_count;
+    store::save_task(data_dir, task_mut).await?;
     Ok(format!(
         "🔍 Finding #{count} stored for task '{task_title}'.\n\
          ⚠️  AGENT: Continue storing findings as you research — prevents data loss on crash."
