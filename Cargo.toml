@@ -154,7 +154,7 @@ poly-discord = { path = "clients/discord" }
 poly-teams = { path = "clients/teams" }
 poly-backup-server = { path = "servers/backup-server" }
 poly-server = { path = "servers/server" }
-poly-server-client = { path = "clients/server-client" }
+poly-server-client = { path = "clients/server-client", default-features = false }
 poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools-mcp" }
 poly-web-devtools-mcp = { path = "mcp/web-devtools-mcp" }
 poly-electron-devtools-mcp = { path = "mcp/electron-devtools-mcp" }

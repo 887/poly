@@ -59,7 +59,11 @@ pub type ClientResult<T> = Result<T, ClientError>;
 /// Each backend (Stoat, Matrix, Discord, Teams, Demo) implements this trait
 /// to provide a unified API for the Poly UI layer.
 // DECISION(D12): Demo client implements this trait for Phase 2 UI testing.
-#[async_trait]
+//
+// On WASM, reqwest's futures are !Send (they use Rc<RefCell<>> internally).
+// We use ?Send on the async_trait to avoid requiring Send-able futures on WASM.
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait ClientBackend: Send + Sync {
     // --- Authentication ---
 

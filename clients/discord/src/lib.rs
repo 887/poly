@@ -60,7 +60,8 @@ impl Default for DiscordClient {
 }
 
 #[cfg(feature = "native")]
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl ClientBackend for DiscordClient {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
         Err(ClientError::Internal(

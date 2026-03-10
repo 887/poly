@@ -35,24 +35,29 @@ mod wit_bindings;
 #[cfg(target_os = "wasi")]
 mod guest;
 
-#[cfg(feature = "native")]
+/// [`ClientBackend`](poly_client::ClientBackend) implementation (native + wasm-http).
+#[cfg(feature = "wasm-http")]
 pub mod backend;
-#[cfg(feature = "native")]
+/// Error types (native + wasm-http).
+#[cfg(feature = "wasm-http")]
 pub mod error;
-#[cfg(feature = "native")]
+/// HTTP REST client (native + wasm-http).
+#[cfg(feature = "wasm-http")]
 pub mod http;
-#[cfg(feature = "native")]
+/// Wire-format models matching poly-server JSON payloads (native + wasm-http).
+#[cfg(feature = "wasm-http")]
 pub mod models;
+/// WebSocket client for real-time events (native only — requires tokio-tungstenite).
 #[cfg(feature = "native")]
 pub mod ws;
 
-#[cfg(feature = "native")]
+#[cfg(feature = "wasm-http")]
 pub use backend::PolyServerBackend;
-#[cfg(feature = "native")]
+#[cfg(feature = "wasm-http")]
 pub use error::{PolyServerError, Result};
-#[cfg(feature = "native")]
+#[cfg(feature = "wasm-http")]
 pub use http::{PolyServerConfig, PolyServerHttpClient, SessionState};
-#[cfg(feature = "native")]
+#[cfg(feature = "wasm-http")]
 pub use models::*;
 #[cfg(feature = "native")]
 pub use ws::PolyServerWsClient;

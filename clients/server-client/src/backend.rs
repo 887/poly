@@ -12,6 +12,7 @@
 //! ```
 
 use async_trait::async_trait;
+#[cfg(feature = "native")]
 use chrono::Utc;
 use futures::stream::Stream;
 use std::pin::Pin;
@@ -19,6 +20,7 @@ use tracing::debug;
 
 use crate::http::{PolyServerConfig, PolyServerHttpClient};
 use crate::models::{self as srv, ChannelKind};
+#[cfg(feature = "native")]
 use crate::ws::PolyServerWsClient;
 use poly_client::*;
 
@@ -29,7 +31,8 @@ use poly_client::*;
 pub struct PolyServerBackend {
     /// HTTP client for REST API calls.
     http: PolyServerHttpClient,
-    /// WebSocket client for real-time events.
+    /// WebSocket client for real-time events (native only).
+    #[cfg(feature = "native")]
     ws: PolyServerWsClient,
     /// Base URL of the server.
     base_url: String,
@@ -58,9 +61,11 @@ impl PolyServerBackend {
             private_key_bytes,
         };
         let http = PolyServerHttpClient::new(config);
+        #[cfg(feature = "native")]
         let ws = PolyServerWsClient::new(base_url, http.session_lock());
         Self {
             http,
+            #[cfg(feature = "native")]
             ws,
             base_url: base_url.to_string(),
             account_id: None,
@@ -171,7 +176,8 @@ impl PolyServerBackend {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl ClientBackend for PolyServerBackend {
     // ── Authentication ───────────────────────────────────────────────────────
 
@@ -207,7 +213,8 @@ impl ClientBackend for PolyServerBackend {
                     .map_err(|e| ClientError::Network(e.to_string()))?;
                 self.display_name = Some(profile.display_name.clone());
 
-                // Start WebSocket connection.
+                // Start WebSocket connection (native only — WASM uses polling).
+                #[cfg(feature = "native")]
                 self.ws.connect();
 
                 Ok(Session {
@@ -235,6 +242,7 @@ impl ClientBackend for PolyServerBackend {
                     .await
                     .map_err(|e| ClientError::Network(e.to_string()))?;
                 self.display_name = Some(profile.display_name.clone());
+                #[cfg(feature = "native")]
                 self.ws.connect();
 
                 Ok(Session {
@@ -253,6 +261,7 @@ impl ClientBackend for PolyServerBackend {
     }
 
     async fn logout(&mut self) -> ClientResult<()> {
+        #[cfg(feature = "native")]
         self.ws.disconnect();
         if let Err(e) = self.http.signout().await {
             debug!("Signout error (non-fatal): {e}");
@@ -574,16 +583,24 @@ impl ClientBackend for PolyServerBackend {
     // ── Events ───────────────────────────────────────────────────────────────
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        let rx = self.ws.subscribe();
-        let stream = tokio_stream::wrappers::BroadcastStream::new(rx);
+        #[cfg(feature = "native")]
+        {
+            let rx = self.ws.subscribe();
+            let stream = tokio_stream::wrappers::BroadcastStream::new(rx);
 
-        Box::pin(futures::stream::StreamExt::filter_map(stream, |result| {
-            let event = match result {
-                Ok(srv_event) => map_server_event(srv_event),
-                Err(_) => None,
-            };
-            async move { event }
-        }))
+            Box::pin(futures::stream::StreamExt::filter_map(stream, |result| {
+                let event = match result {
+                    Ok(srv_event) => map_server_event(srv_event),
+                    Err(_) => None,
+                };
+                async move { event }
+            }))
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            // WASM: no WebSocket support — return an empty stream.
+            Box::pin(futures::stream::empty())
+        }
     }
 
     // ── Backend info ─────────────────────────────────────────────────────────
@@ -598,6 +615,9 @@ impl ClientBackend for PolyServerBackend {
 }
 
 /// Map a poly-server `ServerEvent` to a `poly_client::ClientEvent`.
+///
+/// Only used with the `native` feature (WebSocket events).
+#[cfg(feature = "native")]
 fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
     match event {
         srv::ServerEvent::MessageCreated(payload) => Some(ClientEvent::MessageReceived {

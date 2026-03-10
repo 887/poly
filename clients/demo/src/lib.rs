@@ -99,7 +99,8 @@ impl Default for DemoClient {
 }
 
 #[cfg(feature = "native")]
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl ClientBackend for DemoClient {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
         let session = data::demo_session();
@@ -437,7 +438,8 @@ impl Default for DemoClient2 {
 }
 
 #[cfg(feature = "native")]
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl ClientBackend for DemoClient2 {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
         let session = data::demo2_session();

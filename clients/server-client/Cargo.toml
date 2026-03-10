@@ -10,21 +10,33 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["native"]
-native = [
+
+# HTTP + crypto only — compiles on both native and wasm32-unknown-unknown.
+# Use this for browser/web builds that can't link tokio-tungstenite/native-tls.
+wasm-http = [
     "dep:reqwest",
-    "dep:tokio-tungstenite",
-    "dep:futures-util",
     "dep:ed25519-dalek",
     "dep:hex",
     "dep:serde",
     "dep:serde_json",
     "dep:tokio",
-    "dep:tokio-stream",
     "dep:futures",
     "dep:async-trait",
     "dep:chrono",
     "dep:thiserror",
     "dep:tracing",
+]
+
+# Full native support: HTTP + WebSocket + Ed25519.
+# Includes everything in wasm-http plus tokio-tungstenite for real-time events.
+native = [
+    "wasm-http",
+    "dep:tokio-tungstenite",
+    "dep:futures-util",
+    "dep:tokio-stream",
+    "tokio/rt",
+    "tokio/macros",
+    "tokio/time",
 ]
 
 [dependencies]
@@ -53,11 +65,8 @@ serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 # Async
-tokio = { workspace = true, features = [
-    "rt",
-    "macros",
+tokio = { version = "1", default-features = false, features = [
     "sync",
-    "time",
 ], optional = true }
 tokio-stream = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }

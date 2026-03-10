@@ -3670,6 +3670,57 @@ select {
     gap: 8px;
 }
 
+/* ── Add Poly Server Wizard ─────────────────────────────────────────────── */
+
+.add-server-wizard {
+    max-width: 460px;
+    min-width: 380px;
+}
+
+.add-server-wizard .settings-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 12px 0 4px;
+}
+
+.add-server-wizard .settings-input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: 9px 13px;
+    font-size: 14px;
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+}
+
+.add-server-wizard .settings-input:focus {
+    border-color: var(--accent-primary);
+}
+
+.wizard-mode-toggle {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wizard-mode-toggle input[type="checkbox"] {
+    margin-right: 6px;
+}
+
+.settings-error {
+    color: var(--text-danger, #f44);
+    font-size: 13px;
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: var(--bg-danger, rgba(255, 68, 68, 0.08));
+    border-radius: var(--radius-sm);
+}
+
 /* Form fields */
 .form-field {
     margin-bottom: 14px;

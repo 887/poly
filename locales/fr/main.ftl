@@ -90,6 +90,25 @@ settings-account-settings-link = Paramètres du compte
 account-switch = Changer de compte
 account-settings = Paramètres du compte
 settings-account-settings = Paramètres du compte
+
+# Add Poly Server Wizard
+add-server-wizard-title = Ajouter un compte Poly Server
+add-server-wizard-description = Connectez-vous à une instance Poly Server en utilisant votre clé d'identité.
+add-server-wizard-url-label = URL du serveur
+add-server-wizard-url-placeholder = http://127.0.0.1:7080
+add-server-wizard-username-label = Nom d'utilisateur
+add-server-wizard-username-placeholder = Entrez un nom d'utilisateur
+add-server-wizard-displayname-label = Nom d'affichage
+add-server-wizard-displayname-placeholder = Entrez votre nom d'affichage
+add-server-wizard-signup = Inscription
+add-server-wizard-signin = Connexion
+add-server-wizard-cancel = Annuler
+add-server-wizard-connecting = Connexion…
+add-server-wizard-error = Échec de la connexion : { $error }
+add-server-wizard-no-identity = Aucune clé d'identité trouvée. Créez-en une dans les paramètres d'identité d'abord.
+add-server-wizard-signup-hint = Nouveau compte — sera enregistré sur le serveur
+add-server-wizard-signin-hint = Compte existant — s'authentifie avec votre clé
+
 settings-backup = Serveurs de sauvegarde
 settings-backup-description = Configurer les serveurs de synchronisation chiffrée
 settings-add-backup = Ajouter un serveur de sauvegarde

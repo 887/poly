@@ -14,7 +14,7 @@ futures = { workspace = true }
 
 [dev-dependencies]
 poly-server = { workspace = true }
-poly-server-client = { path = "../server-client" }
+poly-server-client = { path = "../server-client", features = ["native"] }
 reqwest = { workspace = true }
 axum = { workspace = true, features = ["ws", "macros", "multipart"] }
 tower-http = { workspace = true, features = ["cors", "trace"] }

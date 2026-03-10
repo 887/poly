@@ -333,6 +333,32 @@ impl ClientManager {
         self.demo_active = false;
     }
 
+    /// Commit a pre-authenticated poly-server backend **synchronously**.
+    ///
+    /// This is the **second phase** of the two-phase poly-server activation
+    /// used by the UI wizard. Phase 1 creates and authenticates the backend
+    /// **without** any Dioxus `Signal` lock; this method commits the result
+    /// inside a brief `.write()` block with **no** subsequent `.await`.
+    ///
+    /// See [`crate::ui::demo::toggle_demo`] for the pattern rationale.
+    pub fn commit_poly_server(
+        &mut self,
+        account_id: String,
+        session: Session,
+        backend: BackendHandle,
+        server_map: HashMap<String, String>,
+    ) {
+        self.sessions.insert(account_id.clone(), session);
+        self.backends.insert(account_id.clone(), backend);
+        self.connection_statuses
+            .insert(account_id.clone(), ConnectionStatus::Connected);
+        self.presence_statuses
+            .entry(account_id)
+            .or_insert(AccountPresence::Online);
+        self.server_account_map.extend(server_map);
+        tracing::info!("Poly server account committed to ClientManager");
+    }
+
     /// Add a poly-server account.
     ///
     /// Creates a [`PolyServerBackend`], authenticates (signup or signin), and
@@ -344,7 +370,6 @@ impl ClientManager {
     /// * `username` — Username (for signup only)
     /// * `display_name` — Display name (for signup only)
     /// * `is_signup` — `true` for signup, `false` for signin
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn add_poly_server(
         &mut self,
         server_url: &str,

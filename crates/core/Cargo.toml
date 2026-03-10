@@ -64,13 +64,13 @@ ammonia = { workspace = true }
 # See docs/phase-voice-plan.md DECISION(V-4).
 nnnoiseless = { workspace = true }
 
-# Native-only: SurrealDB + poly-server client + WASM plugin host (dylib)
+# Native-only: SurrealDB + WASM plugin host (dylib)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 surrealdb = { workspace = true, features = ["kv-surrealkv"] }
-poly-server-client = { workspace = true }
+poly-server-client = { workspace = true, features = ["native"] }
 poly-plugin-host = { workspace = true }
 
-# WASM-only: browser localStorage + getrandom JS backend forwarding.
+# WASM-only: browser localStorage + getrandom JS backend forwarding + poly-server HTTP client.
 # rand_core 0.6 (aead, ed25519-dalek) and rand 0.10 each pull a different getrandom
 # semver line; both need their WASM JS backend feature enabled or they fail to compile.
 # These aliases are defined once in the workspace; no version numbers live here.
@@ -78,6 +78,7 @@ poly-plugin-host = { workspace = true }
 gloo-storage = { workspace = true }
 getrandom02-js = { workspace = true }
 getrandom04-wasm = { workspace = true }
+poly-server-client = { workspace = true, features = ["wasm-http"] }
 
 [lints]
 workspace = true
