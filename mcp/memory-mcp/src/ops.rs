@@ -66,7 +66,10 @@ pub fn find_task<'a>(tasks: &'a [Task], id_or_name: &str) -> Option<&'a Task> {
         return tasks.iter().find(|t| t.id == id);
     }
     // Exact title match.
-    if let Some(t) = tasks.iter().find(|t| t.title.eq_ignore_ascii_case(id_or_name)) {
+    if let Some(t) = tasks
+        .iter()
+        .find(|t| t.title.eq_ignore_ascii_case(id_or_name))
+    {
         return Some(t);
     }
     // Slug match.
@@ -101,7 +104,10 @@ pub async fn get_task(data_dir: &Path, id_or_name: &str) -> anyhow::Result<Strin
     let mut lines = vec![
         format!("# Task [{}] {}", task.id, task.title),
         format!("**Status:** {} {}", task.status.emoji(), task.status),
-        format!("**Created:** {}", task.created_at.format("%Y-%m-%d %H:%M UTC")),
+        format!(
+            "**Created:** {}",
+            task.created_at.format("%Y-%m-%d %H:%M UTC")
+        ),
     ];
     if let Some(desc) = &task.description {
         lines.push(format!("**Description:** {desc}"));
@@ -186,7 +192,9 @@ pub async fn add_task_item(
     task.updated_at = chrono::Utc::now();
     let title = task.title.clone();
     store::save_task(data_dir, task).await?;
-    Ok(format!("⬜ Added item [{next_item_id}] to '{title}': {text}"))
+    Ok(format!(
+        "⬜ Added item [{next_item_id}] to '{title}': {text}"
+    ))
 }
 
 /// Mark a checklist item as done (or undo if already done).
@@ -299,10 +307,7 @@ pub async fn load_findings(data_dir: &Path, id_or_name: &str) -> anyhow::Result<
     }
     Ok(format!(
         "# Findings for Task [{}] {}\n({} finding entries)\n\n{}",
-        task.id,
-        task.title,
-        task.finding_count,
-        findings
+        task.id, task.title, task.finding_count, findings
     ))
 }
 
@@ -370,11 +375,9 @@ pub async fn work_plan(data_dir: &Path, count: usize) -> anyhow::Result<String> 
         .take(count)
         .collect();
     if pending.is_empty() {
-        return Ok(
-            "✅ No pending tasks. All tasks are completed!\n\
+        return Ok("✅ No pending tasks. All tasks are completed!\n\
              Create new tasks with: `tasks create \"My task title\"`"
-                .to_string(),
-        );
+            .to_string());
     }
     let mut lines = vec![format!(
         "# Work Plan — {} task(s)\n\

@@ -155,10 +155,7 @@ pub async fn save_task(data_dir: &Path, task: &Task) -> anyhow::Result<()> {
 /// 2. Write each task to `tasks/<file_name>.json`.
 /// 3. Write `poly-memory.json` counter (if not already present).
 /// 4. Rename `tasks.json` → `tasks.json.bak` so migration is not repeated.
-async fn migrate_legacy_tasks_json(
-    data_dir: &Path,
-    old_path: &PathBuf,
-) -> anyhow::Result<()> {
+async fn migrate_legacy_tasks_json(data_dir: &Path, old_path: &PathBuf) -> anyhow::Result<()> {
     let bytes = tokio::fs::read(old_path).await?;
     let tasks: Vec<Task> = serde_json::from_slice(&bytes)?;
 
@@ -201,11 +198,7 @@ pub async fn load_findings(data_dir: &Path, task: &Task) -> anyhow::Result<Strin
 /// Append a new finding entry to `findings.md`.
 ///
 /// Creates the file (and directories) if they don't exist.
-pub async fn append_finding(
-    data_dir: &Path,
-    task: &Task,
-    content: &str,
-) -> anyhow::Result<()> {
+pub async fn append_finding(data_dir: &Path, task: &Task, content: &str) -> anyhow::Result<()> {
     let tdir = task_dir(data_dir, task);
     ensure_dir(&tdir).await?;
     let path = findings_path(&tdir);
@@ -248,9 +241,7 @@ pub async fn store_memory(
     let filename = format!("{timestamp}-{slug}.md");
     let path = mdir.join(&filename);
     let stored_at = Utc::now().to_rfc3339();
-    let body = format!(
-        "# Memory: {title}\n\n*Stored: {stored_at}*\n\n---\n\n{content}\n"
-    );
+    let body = format!("# Memory: {title}\n\n*Stored: {stored_at}*\n\n---\n\n{content}\n");
     tokio::fs::write(&path, body.as_bytes()).await?;
     Ok(path)
 }
@@ -292,9 +283,8 @@ pub async fn store_knowledge(
     let slug = crate::types::slugify(topic);
     let path = kdir.join(format!("{slug}.md"));
     let updated_at = Utc::now().to_rfc3339();
-    let body = format!(
-        "# Knowledge: {topic}\n\n*Last Updated: {updated_at}*\n\n---\n\n{content}\n"
-    );
+    let body =
+        format!("# Knowledge: {topic}\n\n*Last Updated: {updated_at}*\n\n---\n\n{content}\n");
     tokio::fs::write(&path, body.as_bytes()).await?;
     Ok(path)
 }
@@ -320,9 +310,7 @@ pub async fn search_knowledge(
         }
         let bytes = tokio::fs::read(entry.path()).await?;
         let text = String::from_utf8_lossy(&bytes).into_owned();
-        if name.to_lowercase().contains(&q_lower)
-            || text.to_lowercase().contains(&q_lower)
-        {
+        if name.to_lowercase().contains(&q_lower) || text.to_lowercase().contains(&q_lower) {
             matches.push((name.trim_end_matches(".md").to_string(), text));
         }
     }
