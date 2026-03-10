@@ -48,9 +48,9 @@ impl TaskStatus {
             "in-progress" | "inprogress" | "wip" => Ok(Self::InProgress),
             "completed" | "done" | "complete" => Ok(Self::Completed),
             "redo" => Ok(Self::Redo),
-            other => anyhow::bail!(
-                "Unknown status '{other}'. Use: todo, in-progress, completed, redo"
-            ),
+            other => {
+                anyhow::bail!("Unknown status '{other}'. Use: todo, in-progress, completed, redo")
+            }
         }
     }
 }
