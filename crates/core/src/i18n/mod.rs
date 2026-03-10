@@ -127,6 +127,18 @@ fn register_native_plugin_ftl() {
         }
         tracing::debug!("Native demo plugin FTL registered for all locales");
     }
+
+    // poly-server-client translations (feature-gated on "server" feature)
+    #[cfg(feature = "server")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_server_client::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("poly", locale, src);
+            }
+        }
+        tracing::debug!("Native poly-server-client plugin FTL registered for all locales");
+    }
 }
 
 /// Load `.ftl` resources for a locale into the bundle store.

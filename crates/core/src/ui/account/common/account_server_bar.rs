@@ -27,6 +27,7 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use dioxus::prelude::*;
+use poly_client::BackendType;
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
 fn get_ordered_servers(
@@ -174,6 +175,11 @@ pub fn AccountServerBar() -> Element {
                     is_selected: selected_server.as_deref() == Some(server.id.as_str()),
                     icon_url: server.icon_url.clone(),
                 }
+            }
+
+            // Poly accounts: "+" button to create a new server/guild.
+            if active_backend == Some(BackendType::Poly) {
+                CreateServerButton { account_id: account_id.clone() }
             }
 
             // Spacer keeps the icon rail aligned above the shared bottom account bar.
@@ -427,6 +433,90 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
             div { class: "icon-notifications", "🔔" }
             if notif_count > 0 {
                 span { class: "badge", "{notif_count}" }
+            }
+        }
+    }
+}
+
+/// "+" button that lets Poly accounts create a new server/guild.
+///
+/// Shows a compact pill button by default.  When clicked, expands to an
+/// inline form with a server-name input, a Create button and a Cancel button.
+/// On success the new server is appended to `ChatData.servers` so it appears
+/// immediately in the rail without a full data reload.
+#[rustfmt::skip]
+#[component]
+fn CreateServerButton(account_id: String) -> Element {
+    let client_manager: Signal<ClientManager> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
+    let mut form_open = use_signal(|| false);
+    let mut server_name = use_signal(String::new);
+    let mut creating = use_signal(|| false);
+    let mut error_msg = use_signal(String::new);
+
+    rsx! {
+        div { class: "create-server-btn-wrap",
+            if *creating.read() {
+                div { class: "create-server-creating", "{t(\"create-server-creating\")}" }
+            } else if *form_open.read() {
+                div { class: "create-server-form",
+                    input {
+                        r#type: "text",
+                        class: "create-server-input",
+                        placeholder: "{t(\"create-server-placeholder\")}",
+                        value: "{server_name}",
+                        oninput: move |e| server_name.set(e.value()),
+                    }
+                    if !error_msg.read().is_empty() {
+                        p { class: "create-server-error", "{error_msg}" }
+                    }
+                    div { class: "create-server-actions",
+                        button {
+                            class: "btn btn-primary btn-xs",
+                            disabled: server_name.read().trim().is_empty(),
+                            onclick: move |_| {
+                                let name = server_name.read().trim().to_string();
+                                if name.is_empty() { return; }
+                                let acct = account_id.clone();
+                                let backend_opt = client_manager.read().get_backend(&acct);
+                                let Some(backend) = backend_opt else { return; };
+                                creating.set(true);
+                                error_msg.set(String::new());
+                                spawn(async move {
+                                    let guard = backend.read().await;
+                                    match guard.create_server(&name).await {
+                                        Ok(server) => {
+                                            chat_data.write().servers.push(server);
+                                            form_open.set(false);
+                                            server_name.set(String::new());
+                                        }
+                                        Err(e) => {
+                                            error_msg.set(e.to_string());
+                                        }
+                                    }
+                                    creating.set(false);
+                                });
+                            },
+                            "{t(\"create-server-submit\")}"
+                        }
+                        button {
+                            class: "btn btn-secondary btn-xs",
+                            onclick: move |_| {
+                                form_open.set(false);
+                                server_name.set(String::new());
+                                error_msg.set(String::new());
+                            },
+                            "{t(\"create-server-cancel\")}"
+                        }
+                    }
+                }
+            } else {
+                button {
+                    class: "create-server-pill",
+                    title: "{t(\"create-server-btn\")}",
+                    onclick: move |_| form_open.set(true),
+                    "+"
+                }
             }
         }
     }

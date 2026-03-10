@@ -6,13 +6,14 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["demo"]
+default = ["demo", "server"]
 stoat = ["dep:poly-stoat"]
 matrix = ["dep:poly-matrix"]
 discord = ["dep:poly-discord"]
 teams = ["dep:poly-teams"]
 demo = ["dep:poly-demo"]
-native-nav = []                # Back/forward nav buttons (desktop/mobile only, not web)
+server = ["dep:poly-server-client"]
+native-nav = []                     # Back/forward nav buttons (desktop/mobile only, not web)
 
 [dependencies]
 # UI
@@ -27,6 +28,7 @@ poly-stoat = { workspace = true, optional = true }
 poly-matrix = { workspace = true, optional = true }
 poly-discord = { workspace = true, optional = true }
 poly-teams = { workspace = true, optional = true }
+poly-server-client = { workspace = true, optional = true }
 
 # Crypto
 ed25519-dalek = { workspace = true }
@@ -67,8 +69,10 @@ nnnoiseless = { workspace = true }
 # Native-only: SurrealDB + WASM plugin host (dylib)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 surrealdb = { workspace = true, features = ["kv-surrealkv"] }
-poly-server-client = { workspace = true, features = ["native"] }
 poly-plugin-host = { workspace = true }
+poly-server-client = { workspace = true, optional = true, features = [
+    "native",
+] }
 
 # WASM-only: browser localStorage + getrandom JS backend forwarding + poly-server HTTP client.
 # rand_core 0.6 (aead, ed25519-dalek) and rand 0.10 each pull a different getrandom
@@ -78,7 +82,9 @@ poly-plugin-host = { workspace = true }
 gloo-storage = { workspace = true }
 getrandom02-js = { workspace = true }
 getrandom04-wasm = { workspace = true }
-poly-server-client = { workspace = true, features = ["wasm-http"] }
+poly-server-client = { workspace = true, optional = true, features = [
+    "wasm-http",
+] }
 
 [lints]
 workspace = true

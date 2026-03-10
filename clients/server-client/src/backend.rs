@@ -406,7 +406,10 @@ impl ClientBackend for PolyServerBackend {
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
 
-        Ok(msgs.iter().map(|m| Self::map_message(m, &self.base_url)).collect())
+        Ok(msgs
+            .iter()
+            .map(|m| Self::map_message(m, &self.base_url))
+            .collect())
     }
 
     // ── Users ────────────────────────────────────────────────────────────────
@@ -516,9 +519,7 @@ impl ClientBackend for PolyServerBackend {
                 .map_err(|e| ClientError::Network(e.to_string()))?;
 
             // The other participant is the one who isn't us.
-            let other = participants
-                .iter()
-                .find(|p| p.user != account_id);
+            let other = participants.iter().find(|p| p.user != account_id);
 
             let user = if let Some(p) = other {
                 self.http
@@ -559,6 +560,38 @@ impl ClientBackend for PolyServerBackend {
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
         Ok(Vec::new())
+    }
+
+    // ── Server management ────────────────────────────────────────────────────
+
+    async fn create_server(&self, name: &str) -> ClientResult<Server> {
+        let wire = self
+            .http
+            .create_server(name)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        let account_id = self.account_id.clone().unwrap_or_default();
+        let display_name = self.display_name.clone().unwrap_or_default();
+        Ok(Self::map_server(&wire, &[], &account_id, &display_name))
+    }
+
+    async fn create_channel(
+        &self,
+        server_id: &str,
+        name: &str,
+        channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        let kind_str = match channel_type {
+            ChannelType::Text => "text",
+            ChannelType::Voice | ChannelType::Video => "voice",
+        };
+        let wire = self
+            .http
+            .create_channel(server_id, name, kind_str, None)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        Ok(Self::map_channel(&wire))
     }
 
     // ── Voice ────────────────────────────────────────────────────────────────

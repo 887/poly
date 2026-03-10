@@ -64,6 +64,7 @@ mod main_layout;
 pub mod routes;
 pub(crate) mod search;
 mod settings;
+pub(crate) mod signup;
 // Re-export the demo settings render function so demo.rs can register it in
 // ClientManager::plugin_settings without a pub(crate) path through private modules.
 #[cfg(feature = "demo")]
@@ -77,13 +78,36 @@ pub use main_layout::MainLayout;
 pub use routes::Route;
 pub use setup_wizard::SetupWizard;
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{ClientManager, SignupEntry};
 use crate::state::{AppState, ChatData, SettingsSection, View};
 use dioxus::prelude::*;
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
 
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
 const CSS: Asset = asset!("assets/tailwind.css");
+
+// ── App — startup registration helpers ──────────────────────────────────────
+
+/// Register all native backend signup entries into `ClientManager`.
+///
+/// Called once at `App` mount (via `use_effect`).  Each compiled-in backend
+/// registers itself here.  WASM plugins register via the plugin host at
+/// load time (not yet implemented).
+///
+/// This mirrors the WIT `plugin-metadata` pattern: the host has zero
+/// compile-time knowledge of specific backends — each plugin registers itself.
+fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
+    // Register the Poly Server backend when compiled with the `server` feature.
+    // The render fn lives in poly-server-client — core has no knowledge of the form.
+    #[cfg(feature = "server")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "poly",
+        icon: "🔷",
+        name_key: "plugin-poly-signup-name",
+        desc_key: "plugin-poly-signup-desc",
+        render: poly_server_client::signup::signup_render_fn,
+    });
+}
 
 // ── App — async helpers ──────────────────────────────────────────────────────
 
@@ -303,8 +327,18 @@ pub fn App() -> Element {
     provide_context(theme_config);
 
     // DECISION(DX-2.5.1): ClientManager + ChatData as context Signals.
-    let client_manager: Signal<ClientManager> = use_signal(ClientManager::new);
+    let mut client_manager: Signal<ClientManager> = use_signal(ClientManager::new);
     provide_context(client_manager);
+
+    // Register all native backend signup entries.  This mirrors the WIT
+    // plugin-metadata pattern: the host has no compile-time knowledge of
+    // which backends exist — each plugin registers itself once at startup.
+    // DECISION(DX-SIGNUP-1): Signup entries are registered at App mount
+    // so they are available before the first SignupPickerPage render.
+    use_effect(move || {
+        register_native_signup_entries(&mut client_manager);
+    });
+
     let chat_data: Signal<ChatData> = use_signal(ChatData::default);
     provide_context(chat_data);
 

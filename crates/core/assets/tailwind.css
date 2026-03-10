@@ -7905,3 +7905,135 @@ select {
 .voice-view-right-spacer {
     display: none;
 }
+
+/* ── Signup flow — full-page account setup ─────────────────────────────────── */
+
+.signup-page-root {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: var(--bg-primary);
+    padding: 24px;
+}
+
+.signup-card {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 32px 36px;
+    width: 520px;
+    max-width: 100%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.32);
+}
+
+.signup-card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 8px;
+}
+
+.signup-card-desc {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0 0 24px;
+}
+
+.signup-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.88rem;
+    margin-bottom: 20px;
+    transition: color 0.15s;
+}
+
+.signup-back-link:hover {
+    color: var(--text-primary);
+}
+
+/* Backend picker list */
+.signup-backend-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.signup-backend-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+    width: 100%;
+    color: var(--text-primary);
+}
+
+.signup-backend-btn:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.signup-backend-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.signup-backend-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.signup-backend-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.signup-backend-desc {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.signup-backend-arrow {
+    font-size: 1.4rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+/* Per-backend signup form */
+.signup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 8px;
+}
+
+/* Stub pages */
+.signup-stub-icon {
+    font-size: 3rem;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.signup-stub-notice {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 8px 0;
+}
+
+.signup-stub-coming-soon {
+    color: var(--text-disabled, var(--text-muted));
+    font-size: 0.85rem;
+    font-style: italic;
+    margin-top: 16px;
+}
+}

@@ -47,6 +47,9 @@ pub mod http;
 /// Wire-format models matching poly-server JSON payloads (native + wasm-http).
 #[cfg(feature = "wasm-http")]
 pub mod models;
+/// Dioxus signup page component (native + wasm-http; gated on wasm-http since native implies it).
+#[cfg(feature = "wasm-http")]
+pub mod signup;
 /// WebSocket client for real-time events (native only — requires tokio-tungstenite).
 #[cfg(feature = "native")]
 pub mod ws;
@@ -61,3 +64,26 @@ pub use http::{PolyServerConfig, PolyServerHttpClient, SessionState};
 pub use models::*;
 #[cfg(feature = "native")]
 pub use ws::PolyServerWsClient;
+
+// ─── Native plugin metadata ─────────────────────────────────────────────────
+//
+// Mirrors the WIT `plugin-metadata.get-translations` interface for native
+// (non-WASM) builds.  `poly-core` calls this free function at startup via
+// `i18n::register_native_plugin_ftl()`, mirroring how the WASM plugin host
+// calls `get-translations(locale)` on WASM components at instantiation time.
+// FTL files are owned by this crate, not core.
+
+/// Return the raw FTL translation source for the Poly Server client plugin.
+///
+/// Mirrors the WIT `plugin-metadata.get-translations(locale) → string` export.
+/// Returns an empty string for unsupported locales so the host falls back to
+/// English (same contract as the WIT interface).
+pub fn plugin_translations(locale: &str) -> String {
+    match locale {
+        "de" => include_str!("../locales/de/plugin.ftl").to_string(),
+        "fr" => include_str!("../locales/fr/plugin.ftl").to_string(),
+        "es" => include_str!("../locales/es/plugin.ftl").to_string(),
+        "en" => include_str!("../locales/en/plugin.ftl").to_string(),
+        _ => String::new(),
+    }
+}

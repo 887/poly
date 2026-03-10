@@ -40,7 +40,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
                 t("app-title")
             }
         }
-        View::Setup => t("app-title"),
+        View::Setup | View::Signup => t("app-title"),
     }
 }
 

@@ -7,9 +7,10 @@
 //! Provided as `Signal<ClientManager>` at the `App` level.
 // TODO(phase-2.5.1): Client Manager Module
 
-use dioxus::prelude::Element;
+use dioxus::prelude::{Callback, Element};
 use poly_client::{
-    AccountPresence, AuthCredentials, BackendType, ClientBackend, ConnectionStatus, Server, Session,
+    AccountPresence, AuthCredentials, BackendType, ClientBackend, ConnectionStatus, Server,
+    Session, SignupCompleted, SignupContext,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -37,6 +38,38 @@ pub struct PluginSettingsEntry {
     /// Plain `fn() -> Element` wrapper that renders this plugin's settings page.
     /// Must be a static function (not a closure) so the entry is `Copy`.
     pub render: fn() -> Element,
+}
+
+/// Describes a client backend that the user can sign up for.
+///
+/// Registered at startup by each compiled-in native plugin via
+/// [`ClientManager::register_signup_entry`].  WASM plugins register
+/// themselves at load time.  The signup picker reads this list at
+/// runtime — the host has **no compile-time knowledge** of any specific
+/// backend.  This mirrors the `PluginSettingsEntry` pattern exactly.
+///
+/// FTL keys (`name_key`, `desc_key`) are resolved in the **plugin's own**
+/// Fluent bundle (e.g. `plugin-poly-signup-name`), NOT in core locale files.
+#[derive(Clone, Copy, Debug)]
+pub struct SignupEntry {
+    /// URL slug used in `/signup/:client` routing (e.g. `"poly"`, `"stoat"`).
+    pub slug: &'static str,
+    /// Emoji displayed in the backend picker card.
+    pub icon: &'static str,
+    /// FTL key for the backend display name (resolved from plugin's bundle).
+    pub name_key: &'static str,
+    /// FTL key for the one-line backend description (resolved from plugin's bundle).
+    pub desc_key: &'static str,
+    /// Function that renders the full-page signup UI for this backend.
+    ///
+    /// The host calls this with:
+    /// - `on_complete` — a callback the plugin calls when auth succeeds.
+    ///   The host commits the session to `ClientManager` + `ChatData` and navigates.
+    /// - `ctx` — [`SignupContext`] with the private key (for Ed25519-based auth)
+    ///   and the host's i18n lookup function.
+    ///
+    /// Must be a static function (not a closure) so the entry is `Copy`.
+    pub render: fn(Callback<SignupCompleted>, SignupContext) -> Element,
 }
 
 /// A shared, thread-safe handle to a messenger backend.
@@ -76,6 +109,13 @@ pub struct ClientManager {
     /// The settings nav sidebar and content area iterate this list to render
     /// plugin settings — nothing is hardcoded in the host.
     pub plugin_settings: Vec<PluginSettingsEntry>,
+    /// Signup entries registered by compiled-in or WASM plugins at startup.
+    ///
+    /// The signup picker (`/signup` route) reads this list at runtime to
+    /// show the available backends.  The host has no compile-time knowledge
+    /// of any specific backend — each plugin registers itself via
+    /// [`register_signup_entry`].
+    pub signup_entries: Vec<SignupEntry>,
 }
 
 impl std::fmt::Debug for ClientManager {
@@ -105,6 +145,7 @@ impl ClientManager {
             connection_statuses: HashMap::new(),
             presence_statuses: HashMap::new(),
             plugin_settings: Vec::new(),
+            signup_entries: Vec::new(),
         }
     }
 
@@ -303,6 +344,17 @@ impl ClientManager {
         tracing::debug!("Plugin settings unregistered: {slug}");
     }
 
+    /// Register a backend's signup entry in the /signup picker.
+    ///
+    /// Called at app startup by each compiled-in native plugin (and at load
+    /// time for WASM plugins). Idempotent — re-registering the same slug
+    /// replaces the existing entry.
+    pub fn register_signup_entry(&mut self, entry: SignupEntry) {
+        self.signup_entries.retain(|e| e.slug != entry.slug);
+        self.signup_entries.push(entry);
+        tracing::debug!("Signup entry registered: {}", entry.slug);
+    }
+
     /// Get the backend type for a given account ID.
     pub async fn backend_type_for_account(&self, account_id: &str) -> Option<BackendType> {
         let backend = self.backends.get(account_id)?;
@@ -357,57 +409,6 @@ impl ClientManager {
             .or_insert(AccountPresence::Online);
         self.server_account_map.extend(server_map);
         tracing::info!("Poly server account committed to ClientManager");
-    }
-
-    /// Add a poly-server account.
-    ///
-    /// Creates a [`PolyServerBackend`], authenticates (signup or signin), and
-    /// registers it in the backends map. Returns the session on success.
-    ///
-    /// # Arguments
-    /// * `server_url` — Base URL of the poly-server instance
-    /// * `private_key_bytes` — Raw 32-byte Ed25519 signing key
-    /// * `username` — Username (for signup only)
-    /// * `display_name` — Display name (for signup only)
-    /// * `is_signup` — `true` for signup, `false` for signin
-    pub async fn add_poly_server(
-        &mut self,
-        server_url: &str,
-        private_key_bytes: [u8; 32],
-        username: Option<&str>,
-        display_name: Option<&str>,
-        is_signup: bool,
-    ) -> Result<Session, String> {
-        use poly_server_client::PolyServerBackend;
-        let mut backend = PolyServerBackend::new(server_url, private_key_bytes);
-
-        let credentials = AuthCredentials::PolyServer {
-            server_url: server_url.to_string(),
-            private_key_bytes: private_key_bytes.to_vec(),
-            username: username.map(|s| s.to_string()),
-            display_name: display_name.map(|s| s.to_string()),
-            is_signup,
-        };
-
-        let session = backend
-            .authenticate(credentials)
-            .await
-            .map_err(|e| format!("Poly server auth failed: {e}"))?;
-
-        let account_id = session.id.clone();
-        self.sessions.insert(account_id.clone(), session.clone());
-        self.backends
-            .insert(account_id, Arc::new(RwLock::new(Box::new(backend))));
-
-        // Rebuild server map to include the new account's servers.
-        self.rebuild_server_map().await;
-
-        tracing::info!(
-            "Poly server account added: {} ({})",
-            session.user.display_name,
-            server_url
-        );
-        Ok(session)
     }
 
     /// Remove a poly-server account by account ID.

@@ -236,6 +236,37 @@ pub trait ClientBackend: Send + Sync {
     /// Set the authenticated user's presence status.
     async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()>;
 
+    // --- Server management (optional capability) ---
+
+    /// Create a new server/guild in this backend.
+    ///
+    /// Returns the newly created [`Server`].
+    ///
+    /// Backends that do not support server creation should return the default
+    /// `Err(ClientError::NotSupported(...))` provided here.
+    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
+        Err(ClientError::NotSupported("create_server".to_string()))
+    }
+
+    /// Create a new channel inside a server.
+    ///
+    /// `server_id` is the backend-specific ID of the parent server.
+    /// `name` is the channel display name.
+    /// `channel_type` selects Text, Voice, or Video.
+    ///
+    /// Returns the newly created [`Channel`].
+    ///
+    /// Backends that do not support channel creation should return the default
+    /// `Err(ClientError::NotSupported(...))` provided here.
+    async fn create_channel(
+        &self,
+        _server_id: &str,
+        _name: &str,
+        _channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        Err(ClientError::NotSupported("create_channel".to_string()))
+    }
+
     // --- Real-time events ---
 
     /// Get a stream of real-time events from the backend.
@@ -248,4 +279,81 @@ pub trait ClientBackend: Send + Sync {
 
     /// Human-readable name for this backend.
     fn backend_name(&self) -> &str;
+}
+
+// ── Signup plugin interface ──────────────────────────────────────────────────
+
+/// Host-provided context passed to a signup page component when it renders.
+///
+/// The host (poly-core) populates this struct from its own state before
+/// calling the plugin's render function.  Plugins use what they need.
+///
+/// Adding fields here is backwards-compatible — existing plugins ignore
+/// unknown fields.
+#[derive(Clone, Debug)]
+pub struct SignupContext {
+    /// The local Ed25519 private key, if one has been generated.
+    ///
+    /// Used by backends that authenticate via challenge-response
+    /// (e.g. Poly Server).  Backends that use passwords or OAuth may
+    /// ignore this field.
+    pub private_key: Option<Vec<u8>>,
+
+    /// i18n lookup function for the current locale.
+    ///
+    /// Resolves FTL message keys — including plugin-registered ones — to
+    /// translated strings in the currently active locale.  The host
+    /// points this at `poly_core::i18n::t` at context creation time.
+    ///
+    /// Using a function pointer instead of depending on `poly-core` keeps
+    /// the `poly-client` crate free of UI framework dependencies.
+    ///
+    /// Falls back to returning the key unchanged when not set (e.g. tests).
+    pub t: fn(&str) -> String,
+
+    /// Navigate back to the signup backend picker.
+    ///
+    /// Called when the user clicks a "← Back" link in the signup form.
+    /// The host sets this to navigate to `Route::SignupPicker`; tests use a no-op.
+    pub navigate_back: fn(),
+}
+
+fn _default_t(key: &str) -> String {
+    key.to_string()
+}
+
+fn _default_navigate_back() {}
+
+impl PartialEq for SignupContext {
+    fn eq(&self, other: &Self) -> bool {
+        // Function pointers (`t`, `navigate_back`) are set once at context
+        // creation and never change per-session.  Comparing them by address is
+        // unreliable across codegen units, so we treat them as always equal and
+        // only diff the meaningful runtime field: `private_key`.
+        self.private_key == other.private_key
+    }
+}
+
+impl Default for SignupContext {
+    fn default() -> Self {
+        Self {
+            private_key: None,
+            t: _default_t,
+            navigate_back: _default_navigate_back,
+        }
+    }
+}
+
+/// Returned by a signup page component when authentication succeeds.
+///
+/// The host receives this via the `on_complete` callback, wraps `backend`
+/// in `Arc<tokio::sync::RwLock<...>>`, commits it to `ClientManager` and
+/// `ChatData`, then navigates to the new account's home.
+pub struct SignupCompleted {
+    /// The authenticated session returned by the backend.
+    pub session: Session,
+    /// The authenticated backend, ready to serve requests.
+    ///
+    /// The host wraps this in `BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>`.
+    pub backend: Box<dyn ClientBackend + Send + Sync>,
 }

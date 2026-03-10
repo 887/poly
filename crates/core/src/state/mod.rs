@@ -32,6 +32,8 @@ pub enum View {
     Settings,
     /// Global search page.
     Search,
+    /// Account signup flow — full-page, outside MainLayout.
+    Signup,
 }
 
 /// Current navigation state.

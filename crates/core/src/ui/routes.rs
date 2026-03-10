@@ -76,6 +76,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::SettingsSectionRoute { .. }
         | Route::SearchRoute
         | Route::NotificationsRoute
+        | Route::SignupPicker
+        | Route::ClientSignup { .. }
         | Route::PageNotFound { .. } => None,
     }
 }
@@ -173,6 +175,14 @@ pub enum Route {
         },
 
     #[end_layout]
+
+    // ── Signup flow (full-page, no sidebar) ─────────────────────────────────
+    // These routes render without MainLayout, giving a clean signup experience.
+    #[route("/signup")]
+    SignupPicker,
+
+    #[route("/signup/:client")]
+    ClientSignup { client: String },
 
     // Catch-all → redirected by on_update to the best active route
     #[route("/:..segments")]
@@ -337,6 +347,15 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         }
         Route::Root | Route::PageNotFound { .. } => {
             // on_update will redirect — nothing to sync here
+        }
+        Route::SignupPicker | Route::ClientSignup { .. } => {
+            // Signup routes are outside MainLayout — clear account context.
+            s.nav.view = View::Signup;
+            s.nav.active_account_id = None;
+            s.nav.active_instance_id = None;
+            s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
         }
     }
 }
@@ -751,6 +770,31 @@ fn Root() -> Element {
         }
     });
     rsx! {}
+}
+
+/// Backend picker — `/signup` — full-page, outside MainLayout.
+///
+/// Renders [`super::signup::SignupPickerPage`] which lists available backends
+/// and navigates to `/signup/:client` on selection.
+#[rustfmt::skip]
+#[component]
+fn SignupPicker() -> Element {
+    rsx! {
+        super::signup::SignupPickerPage {}
+    }
+}
+
+/// Per-backend signup page — `/signup/:client` — full-page, outside MainLayout.
+///
+/// The `client` slug selects which backend signup page to render:
+/// - `"poly"` → full Poly server signup/sign-in form
+/// - all others → "coming soon" stub
+#[rustfmt::skip]
+#[component]
+fn ClientSignup(client: String) -> Element {
+    rsx! {
+        super::signup::ClientSignupPage { client }
+    }
 }
 
 /// Catch-all 404 — redirected by on_update before being seen.

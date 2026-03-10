@@ -14,6 +14,7 @@ default = ["native"]
 # HTTP + crypto only — compiles on both native and wasm32-unknown-unknown.
 # Use this for browser/web builds that can't link tokio-tungstenite/native-tls.
 wasm-http = [
+    "dep:dioxus",
     "dep:reqwest",
     "dep:ed25519-dalek",
     "dep:hex",
@@ -29,8 +30,10 @@ wasm-http = [
 
 # Full native support: HTTP + WebSocket + Ed25519.
 # Includes everything in wasm-http plus tokio-tungstenite for real-time events.
+# Also enables the Dioxus signup page component.
 native = [
     "wasm-http",
+    "dep:dioxus",
     "dep:tokio-tungstenite",
     "dep:futures-util",
     "dep:tokio-stream",
@@ -42,6 +45,9 @@ native = [
 [dependencies]
 # The shared abstraction trait + types
 poly-client = { workspace = true }
+
+# Dioxus — signup page component (native + wasm-http only; not on WASI)
+dioxus = { workspace = true, optional = true }
 
 # Native-only dependencies (feature-gated)
 # HTTP client

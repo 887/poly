@@ -91,23 +91,23 @@ account-switch = Switch Account
 account-settings = Account Settings
 settings-account-settings = Account Settings
 
-# Add Poly Server Wizard
-add-server-wizard-title = Add Poly Server Account
-add-server-wizard-description = Connect to a Poly server instance using your identity key.
-add-server-wizard-url-label = Server URL
-add-server-wizard-url-placeholder = http://127.0.0.1:7080
-add-server-wizard-username-label = Username
-add-server-wizard-username-placeholder = Enter a username
-add-server-wizard-displayname-label = Display Name
-add-server-wizard-displayname-placeholder = Enter your display name
-add-server-wizard-signup = Sign Up
-add-server-wizard-signin = Sign In
-add-server-wizard-cancel = Cancel
-add-server-wizard-connecting = Connecting…
-add-server-wizard-error = Connection failed: { $error }
-add-server-wizard-no-identity = No identity key found. Create one in Identity settings first.
-add-server-wizard-signup-hint = New account — will register with the server
-add-server-wizard-signin-hint = Existing account — will authenticate with your key
+# Signup flow — backend picker
+signup-picker-title = Add Account
+signup-picker-description = Choose which type of account to add.
+signup-picker-back = ← Back to Settings
+signup-stub-back = ← Choose Backend
+
+# ── Create server / channel ──────────────────────────────────────────────────
+create-server-btn = Create Server
+create-server-placeholder = Server name…
+create-server-submit = Create
+create-server-cancel = Cancel
+create-server-creating = Creating…
+create-channel-btn = New Channel
+create-channel-placeholder = Channel name…
+create-channel-submit = Create
+create-channel-cancel = Cancel
+create-channel-creating = Creating…
 
 settings-backup = Backup Servers
 settings-backup-description = Configure encrypted backup sync servers

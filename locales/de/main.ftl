@@ -91,24 +91,22 @@ account-switch = Konto wechseln
 account-settings = Kontoeinstellungen
 settings-account-settings = Kontoeinstellungen
 
-# Add Poly Server Wizard
-add-server-wizard-title = Poly-Server-Konto hinzufügen
-add-server-wizard-description = Verbinden Sie sich mit einer Poly-Server-Instanz über Ihren Identitätsschlüssel.
-add-server-wizard-url-label = Server-URL
-add-server-wizard-url-placeholder = http://127.0.0.1:7080
-add-server-wizard-username-label = Benutzername
-add-server-wizard-username-placeholder = Benutzernamen eingeben
-add-server-wizard-displayname-label = Anzeigename
-add-server-wizard-displayname-placeholder = Anzeigenamen eingeben
-add-server-wizard-signup = Registrieren
-add-server-wizard-signin = Anmelden
-add-server-wizard-cancel = Abbrechen
-add-server-wizard-connecting = Verbinde…
-add-server-wizard-error = Verbindung fehlgeschlagen: { $error }
-add-server-wizard-no-identity = Kein Identitätsschlüssel gefunden. Erstellen Sie zuerst einen in den Identitätseinstellungen.
-add-server-wizard-signup-hint = Neues Konto — wird beim Server registriert
-add-server-wizard-signin-hint = Vorhandenes Konto — authentifiziert sich mit Ihrem Schlüssel
-
+# Anmelde-Flow — Backend-Auswahl
+signup-picker-title = Konto hinzufügen
+signup-picker-description = Wählen Sie, welche Art von Konto hinzugefügt werden soll.
+signup-picker-back = ← Zurück zu Einstellungen
+signup-stub-back = ← Backend wählen
+# ── Server / Kanal erstellen ─────────────────────────────────────────────────
+create-server-btn = Server erstellen
+create-server-placeholder = Servername…
+create-server-submit = Erstellen
+create-server-cancel = Abbrechen
+create-server-creating = Erstelle…
+create-channel-btn = Neuer Kanal
+create-channel-placeholder = Kanalname…
+create-channel-submit = Erstellen
+create-channel-cancel = Abbrechen
+create-channel-creating = Erstelle…
 settings-backup = Backup-Server
 settings-backup-description = Verschlüsselte Backup-Sync-Server konfigurieren
 settings-add-backup = Backup-Server hinzufügen
