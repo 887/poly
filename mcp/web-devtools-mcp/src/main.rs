@@ -25,10 +25,12 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use poly_devtools_protocol::backend::{
-    DevtoolsBackend, NavigateParams, ScreenshotParams, ScreenshotResult,
+    BuildDiagnostics, BuildLifecycleState, DevtoolsBackend, NavigateParams, RollingBuildLog,
+    ScreenshotParams, ScreenshotResult,
 };
 use poly_devtools_protocol::mcp::run_mcp_loop;
 use serde_json::{Value, json};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -39,6 +41,7 @@ use tokio_tungstenite::tungstenite::Message;
 const WEB_SERVER_PORT: u16 = 3000;
 /// Chrome DevTools Protocol debugging port.
 const CDP_PORT: u16 = 9222;
+const BUILD_LOG_EXCERPT_LINES: usize = 60;
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -51,11 +54,104 @@ struct CliConfig {
     cli_command: Option<Vec<String>>,
 }
 
+/// Internal build record tracked by the web backend.
+#[derive(Debug, Clone)]
+struct WebBuildRecord {
+    diagnostics: BuildDiagnostics,
+    log_start_seq: u64,
+}
+
+fn unix_now_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+fn excerpt_from_lines(lines: &[String]) -> String {
+    let total = lines.len();
+    let start = total.saturating_sub(BUILD_LOG_EXCERPT_LINES);
+    lines.get(start..).unwrap_or(&[]).join("\n")
+}
+
+fn classify_build_lines(lines: &[String]) -> Option<(BuildLifecycleState, String)> {
+    let joined = lines.join("\n").to_lowercase();
+    let failure_markers = [
+        "error[",
+        "error:",
+        "failed to compile",
+        "build failed",
+        "could not compile",
+        "panicked at",
+    ];
+    if failure_markers.iter().any(|marker| joined.contains(marker)) {
+        return Some((
+            BuildLifecycleState::Failed,
+            "Observed compiler/Dioxus failure markers in dx serve output.".to_string(),
+        ));
+    }
+
+    let success_markers = [
+        "finished `dev` profile",
+        "finished dev",
+        "serving on",
+        "built in",
+        "running wasm-bindgen",
+    ];
+    if success_markers.iter().any(|marker| joined.contains(marker)) {
+        return Some((
+            BuildLifecycleState::Succeeded,
+            "Observed successful Dioxus/Cargo build markers in dx serve output.".to_string(),
+        ));
+    }
+
+    None
+}
+
+fn spawn_log_reader<R>(reader: R, stream_name: &'static str, buffer: Arc<Mutex<RollingBuildLog>>)
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(reader).lines();
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    buffer
+                        .lock()
+                        .await
+                        .push_line(format!("[{stream_name}] {line}"));
+                }
+                Ok(None) => break,
+                Err(err) => {
+                    buffer
+                        .lock()
+                        .await
+                        .push_line(format!("[{stream_name}] <read error: {err}>"));
+                    break;
+                }
+            }
+        }
+    });
+}
+
 /// Known CLI subcommand names.
 const WEB_CLI_COMMANDS: &[&str] = &[
-    "status", "launch", "kill", "screenshot", "snapshot",
-    "eval", "click", "fill", "navigate", "generation",
-    "help", "--help", "-h",
+    "status",
+    "launch",
+    "kill",
+    "screenshot",
+    "snapshot",
+    "eval",
+    "click",
+    "fill",
+    "navigate",
+    "generation",
+    "build-status",
+    "build-log",
+    "help",
+    "--help",
+    "-h",
 ];
 
 impl CliConfig {
@@ -104,6 +200,10 @@ struct ChromeCdpBackend {
     /// Generation counter — increments on each successful `connect()` call.
     /// Tracks how many CDP sessions have been opened (reloads, rebuilds, etc.).
     generation: AtomicU64,
+    /// Rolling combined stdout/stderr log from dx serve and one-shot builds.
+    build_log: Arc<Mutex<RollingBuildLog>>,
+    /// Structured diagnostics for the last build attempt.
+    last_build: Arc<Mutex<Option<WebBuildRecord>>>,
 }
 
 impl ChromeCdpBackend {
@@ -122,7 +222,238 @@ impl ChromeCdpBackend {
             dx_serve_pid: Arc::new(Mutex::new(None)),
             workspace: Arc::new(Mutex::new(None)),
             generation: AtomicU64::new(0),
+            build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
+            last_build: Arc::new(Mutex::new(None)),
         }
+    }
+
+    async fn wait_for_web_server(&self, max_seconds: u64) -> anyhow::Result<()> {
+        let polls = max_seconds * 2;
+        for _ in 0..polls {
+            let ok = self
+                .client
+                .get(format!("http://127.0.0.1:{WEB_SERVER_PORT}"))
+                .timeout(std::time::Duration::from_secs(2))
+                .send()
+                .await
+                .map(|resp| resp.status().is_success())
+                .unwrap_or(false);
+            if ok {
+                return Ok(());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+        anyhow::bail!(
+            "web dx serve did not become reachable on port {WEB_SERVER_PORT} within {max_seconds}s"
+        )
+    }
+
+    async fn start_build_record(
+        &self,
+        trigger: &str,
+        mode: &str,
+        working_directory: &str,
+        command_line: &str,
+        summary: &str,
+    ) -> u64 {
+        let start_seq = {
+            let mut buffer = self.build_log.lock().await;
+            let seq = buffer.next_sequence();
+            buffer.push_line(format!(
+                "[meta] trigger={trigger} mode={mode} command={command_line} cwd={working_directory}"
+            ));
+            seq
+        };
+        let diagnostics = BuildDiagnostics {
+            backend: self.name().to_string(),
+            trigger: trigger.to_string(),
+            mode: mode.to_string(),
+            working_directory: working_directory.to_string(),
+            command_line: command_line.to_string(),
+            state: BuildLifecycleState::Running,
+            summary: summary.to_string(),
+            verification: "Build command started; waiting for dx serve output / browser reconnect."
+                .to_string(),
+            exit_code: None,
+            started_at_unix_ms: Some(unix_now_ms()),
+            finished_at_unix_ms: None,
+            duration_ms: None,
+            build_id_before: Some(Self::read_rebuild_counter()),
+            build_id_after: None,
+            generation_before: Some(self.generation.load(Ordering::Relaxed)),
+            generation_after: None,
+            process_id_before: *self.dx_serve_pid.lock().await,
+            process_id_after: None,
+            log_line_count: 0,
+            log_excerpt: String::new(),
+        };
+        *self.last_build.lock().await = Some(WebBuildRecord {
+            diagnostics,
+            log_start_seq: start_seq,
+        });
+        start_seq
+    }
+
+    async fn finish_build_record(
+        &self,
+        state: BuildLifecycleState,
+        summary: impl Into<String>,
+        verification: impl Into<String>,
+        exit_code: Option<i32>,
+    ) {
+        let Some(log_start_seq) = self
+            .last_build
+            .lock()
+            .await
+            .as_ref()
+            .map(|record| record.log_start_seq)
+        else {
+            return;
+        };
+        let lines = self.build_log.lock().await.lines_since(log_start_seq);
+        let log_excerpt = excerpt_from_lines(&lines);
+        let now = unix_now_ms();
+        let pid_after = *self.dx_serve_pid.lock().await;
+        let generation_after = self.generation.load(Ordering::Relaxed);
+
+        if let Some(record) = self.last_build.lock().await.as_mut() {
+            let duration_ms = record
+                .diagnostics
+                .started_at_unix_ms
+                .map(|started| now.saturating_sub(started));
+            record.diagnostics.state = state;
+            record.diagnostics.summary = summary.into();
+            record.diagnostics.verification = verification.into();
+            record.diagnostics.exit_code = exit_code;
+            record.diagnostics.finished_at_unix_ms = Some(now);
+            record.diagnostics.duration_ms = duration_ms;
+            record.diagnostics.build_id_after = Some(Self::read_rebuild_counter());
+            record.diagnostics.generation_after = Some(generation_after);
+            record.diagnostics.process_id_after = pid_after;
+            record.diagnostics.log_line_count = lines.len();
+            record.diagnostics.log_excerpt = log_excerpt;
+        }
+    }
+
+    async fn wait_for_log_outcome(&self, start_seq: u64, timeout_secs: u64) -> BuildLifecycleState {
+        let polls = timeout_secs;
+        for _ in 0..polls {
+            let lines = self.build_log.lock().await.lines_since(start_seq);
+            if let Some((state, _)) = classify_build_lines(&lines) {
+                return state;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        BuildLifecycleState::Unknown
+    }
+
+    async fn note_successful_connect(&self) {
+        let record_snapshot = self.last_build.lock().await.clone();
+        let Some(record_snapshot) = record_snapshot else {
+            return;
+        };
+        if !matches!(
+            record_snapshot.diagnostics.state,
+            BuildLifecycleState::Running | BuildLifecycleState::Unknown
+        ) {
+            return;
+        }
+
+        let now = unix_now_ms();
+        let generation_after = self.generation.load(Ordering::Relaxed);
+        let pid_after = *self.dx_serve_pid.lock().await;
+        let lines = self
+            .build_log
+            .lock()
+            .await
+            .lines_since(record_snapshot.log_start_seq);
+
+        if let Some(record) = self.last_build.lock().await.as_mut() {
+            record.diagnostics.state = BuildLifecycleState::Succeeded;
+            record.diagnostics.summary =
+                "Browser/CDP reconnected successfully after the most recent build.".to_string();
+            record.diagnostics.verification =
+                "Verified by a successful connect_cdp after the rebuild/launch workflow."
+                    .to_string();
+            record.diagnostics.finished_at_unix_ms = Some(now);
+            record.diagnostics.duration_ms = record
+                .diagnostics
+                .started_at_unix_ms
+                .map(|started| now.saturating_sub(started));
+            record.diagnostics.generation_after = Some(generation_after);
+            record.diagnostics.process_id_after = pid_after;
+            record.diagnostics.log_line_count = lines.len();
+            record.diagnostics.log_excerpt = excerpt_from_lines(&lines);
+            record.diagnostics.build_id_after = Some(Self::read_rebuild_counter());
+        }
+    }
+
+    async fn last_build_status_json(&self) -> anyhow::Result<String> {
+        let record = self.last_build.lock().await.clone();
+        if let Some(record) = record {
+            let mut diagnostics = record.diagnostics;
+            let lines = self
+                .build_log
+                .lock()
+                .await
+                .lines_since(record.log_start_seq);
+            diagnostics.log_line_count = lines.len();
+            diagnostics.log_excerpt = excerpt_from_lines(&lines);
+            return serde_json::to_string_pretty(&diagnostics)
+                .map_err(|e| anyhow::anyhow!("serialize build diagnostics: {e}"));
+        }
+
+        let diagnostics = BuildDiagnostics {
+            backend: self.name().to_string(),
+            trigger: "none".to_string(),
+            mode: "dx serve --platform web".to_string(),
+            working_directory: String::new(),
+            command_line: String::new(),
+            state: BuildLifecycleState::NotStarted,
+            summary: "No Dioxus build has been recorded yet in this MCP session.".to_string(),
+            verification: "Call launch_app, rebuild_app, or force_rebuild first.".to_string(),
+            exit_code: None,
+            started_at_unix_ms: None,
+            finished_at_unix_ms: None,
+            duration_ms: None,
+            build_id_before: Some(Self::read_rebuild_counter()),
+            build_id_after: Some(Self::read_rebuild_counter()),
+            generation_before: Some(self.generation.load(Ordering::Relaxed)),
+            generation_after: Some(self.generation.load(Ordering::Relaxed)),
+            process_id_before: *self.dx_serve_pid.lock().await,
+            process_id_after: *self.dx_serve_pid.lock().await,
+            log_line_count: 0,
+            log_excerpt: String::new(),
+        };
+        serde_json::to_string_pretty(&diagnostics)
+            .map_err(|e| anyhow::anyhow!("serialize build diagnostics: {e}"))
+    }
+
+    async fn last_build_log_text(&self) -> anyhow::Result<String> {
+        let record = self.last_build.lock().await.clone();
+        if let Some(record) = record {
+            let lines = self
+                .build_log
+                .lock()
+                .await
+                .lines_since(record.log_start_seq);
+            return Ok(if lines.is_empty() {
+                "<no Dioxus build output captured yet for the last attempt>".to_string()
+            } else {
+                lines.join("\n")
+            });
+        }
+
+        let tail = self
+            .build_log
+            .lock()
+            .await
+            .tail_lines(BUILD_LOG_EXCERPT_LINES);
+        Ok(if tail.is_empty() {
+            "<no Dioxus build has been recorded yet in this MCP session>".to_string()
+        } else {
+            tail.join("\n")
+        })
     }
 
     /// Build the Chrome command-line arguments.
@@ -447,6 +778,15 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .send()
             .await;
         if dx_check.is_err() {
+            let build_start_seq = self
+                .start_build_record(
+                    "launch_app",
+                    "dx serve --platform web --port 3000",
+                    &app_dir,
+                    "dx serve --platform web --port 3000",
+                    "Starting web dx serve and waiting for the local server to become reachable.",
+                )
+                .await;
             let mut child = tokio::process::Command::new("dx")
                 .args([
                     "serve",
@@ -457,9 +797,16 @@ impl DevtoolsBackend for ChromeCdpBackend {
                 ])
                 .current_dir(&app_dir)
                 .stdin(Stdio::piped())
-                .stdout(Stdio::null())
-                .stderr(Stdio::inherit())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
                 .spawn()?;
+
+            if let Some(stdout) = child.stdout.take() {
+                spawn_log_reader(stdout, "stdout", self.build_log.clone());
+            }
+            if let Some(stderr) = child.stderr.take() {
+                spawn_log_reader(stderr, "stderr", self.build_log.clone());
+            }
 
             // Capture stdin for rebuild commands.
             if let Some(stdin) = child.stdin.take() {
@@ -478,6 +825,37 @@ impl DevtoolsBackend for ChromeCdpBackend {
                 *stdin_ref.lock().await = None;
                 *pid_ref.lock().await = None;
             });
+
+            match self.wait_for_web_server(120).await {
+                Ok(()) => {
+                    self.finish_build_record(
+                        BuildLifecycleState::Succeeded,
+                        "Web dx serve became reachable after launch.",
+                        "Verified by reaching the local web server after starting dx serve. Use connect_cdp plus get_last_build_status/log if the browser still looks stale.",
+                        None,
+                    )
+                    .await;
+                }
+                Err(err) => {
+                    let lines = self.build_log.lock().await.lines_since(build_start_seq);
+                    let verification = if let Some((BuildLifecycleState::Failed, reason)) =
+                        classify_build_lines(&lines)
+                    {
+                        format!("{reason} The local web server never became reachable: {err}")
+                    } else {
+                        format!(
+                            "The local web server never became reachable within 120s: {err}. Inspect get_last_build_log for the exact Dioxus output."
+                        )
+                    };
+                    self.finish_build_record(
+                        BuildLifecycleState::Failed,
+                        "Web dx serve failed to become reachable after launch.",
+                        verification,
+                        None,
+                    )
+                    .await;
+                }
+            }
 
             messages.push(format!(
                 "Started `dx serve` on port {WEB_SERVER_PORT} (building...)\n\
@@ -591,6 +969,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // means a new CDP session (fresh page, rebuild, or reconnect after reload).
         let generation_num = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
         tracing::info!("CDP connected: generation {generation_num}");
+        self.note_successful_connect().await;
 
         // NOTE: We intentionally do NOT call Page.enable / Runtime.enable / DOM.enable
         // here. Those domains push unsolicited events into the WebSocket buffer which
@@ -865,6 +1244,17 @@ impl DevtoolsBackend for ChromeCdpBackend {
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
+        let app_dir = format!("{workspace}/apps/web");
+        let start_seq = self
+            .start_build_record(
+                "rebuild_app",
+                "dx serve watcher rebuild",
+                &app_dir,
+                "touch crates/core/src/lib.rs",
+                "Triggered a watched WASM rebuild via the running dx serve process.",
+            )
+            .await;
+
         // Trigger a full WASM rebuild by touching a core source file so the
         // file watcher fires.  We do NOT send 'r' to stdin here because that
         // is a hotpatch-mode command; the file-watcher trigger is the correct
@@ -885,7 +1275,42 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // The WASM rebuild takes 30–90 s even with a warm Cargo cache.
         // dx serve will automatically push a page-reload to the browser via the
         // hot-reload WebSocket when compilation finishes.
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        let outcome = self.wait_for_log_outcome(start_seq, 120).await;
+
+        match outcome {
+            BuildLifecycleState::Succeeded => {
+                self.finish_build_record(
+                    BuildLifecycleState::Succeeded,
+                    "Web watcher rebuild appears to have compiled successfully.",
+                    "Success markers were observed in dx serve output. Call connect_cdp to re-establish the browser session and verify the rebuilt page.",
+                    None,
+                )
+                .await;
+            }
+            BuildLifecycleState::Failed => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "Web watcher rebuild failed according to dx serve output.",
+                    "Compiler/Dioxus failure markers were observed in dx serve output. Inspect get_last_build_log for the full failure details.",
+                    None,
+                )
+                .await;
+                anyhow::bail!(
+                    "dx serve watcher rebuild appears to have failed. Inspect get_last_build_status and get_last_build_log."
+                );
+            }
+            BuildLifecycleState::Unknown
+            | BuildLifecycleState::Running
+            | BuildLifecycleState::NotStarted => {
+                self.finish_build_record(
+                    BuildLifecycleState::Unknown,
+                    "Web watcher rebuild was triggered, but the outcome could not be classified yet.",
+                    "No definitive success/failure markers were observed before timeout. Use connect_cdp plus get_last_build_log to determine what happened.",
+                    None,
+                )
+                .await;
+            }
+        }
 
         // Reconnect CDP since the page reload may have dropped the WebSocket.
         *self.ws.lock().await = None;
@@ -894,6 +1319,14 @@ impl DevtoolsBackend for ChromeCdpBackend {
              dx serve is recompiling the WASM — this takes 30-90 s with a warm cache.\n\
              The browser will auto-reload when done. Call connect_cdp afterwards."
             .to_string())
+    }
+
+    async fn get_last_build_status(&self) -> anyhow::Result<String> {
+        self.last_build_status_json().await
+    }
+
+    async fn get_last_build_log(&self) -> anyhow::Result<String> {
+        self.last_build_log_text().await
     }
 
     fn extension_tools(&self) -> Vec<Value> {
@@ -926,7 +1359,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     Decision table:\n\
                     - build_id increased, generation same → rebuild triggered, connect_cdp not yet called\n\
                     - build_id increased, generation increased → full rebuild+reconnect completed\n\
-                    - dx_serve_pid changed → dx serve was restarted",
+                    - dx_serve_pid changed → dx serve was restarted\n\n\
+                    If generation/build_id do not move the way you expect, immediately inspect get_last_build_status and get_last_build_log for the actual Dioxus output.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
             json!({
@@ -942,7 +1376,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     After this tool returns:\n\
                     1. Call page_reload with ignoreCache=true\n\
                     2. Call connect_cdp\n\
-                    3. Verify with get_generation that build_id and generation both incremented",
+                    3. Verify with get_generation that build_id and generation both incremented\n\
+                    4. If anything looks wrong, inspect get_last_build_status and get_last_build_log",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
         ]
@@ -1001,28 +1436,74 @@ impl DevtoolsBackend for ChromeCdpBackend {
                     .clone()
                     .unwrap_or_else(|| "/home/laragana/workspcacemsg".to_string());
                 let app_dir = format!("{workspace}/apps/web");
-                let status = tokio::process::Command::new("dx")
+                self.start_build_record(
+                    "force_rebuild",
+                    "dx build --platform web",
+                    &app_dir,
+                    "dx build --platform web",
+                    "Running a one-shot web WASM rebuild outside the dx serve watcher.",
+                )
+                .await;
+                let output = tokio::process::Command::new("dx")
                     .args(["build", "--platform", "web"])
                     .current_dir(&app_dir)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
+                    .output()
                     .await;
                 Self::increment_rebuild_counter();
                 *self.ws.lock().await = None;
-                match status {
-                    Ok(s) if s.success() => Some(Ok(
-                        "Force rebuild complete! A fresh WASM binary has been written.\n\
-                         Next steps:\n\
-                         1. Call page_reload with ignoreCache=true\n\
-                         2. Call connect_cdp\n\
-                         3. Verify with get_generation that build_id and generation both incremented"
-                            .to_string(),
-                    )),
-                    Ok(s) => Some(Err(anyhow::anyhow!(
-                        "dx build --platform web failed with exit code: {s}"
-                    ))),
-                    Err(e) => Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}"))),
+                match output {
+                    Ok(out) => {
+                        let stdout_text = String::from_utf8_lossy(&out.stdout).into_owned();
+                        let stderr_text = String::from_utf8_lossy(&out.stderr).into_owned();
+                        {
+                            let mut buffer = self.build_log.lock().await;
+                            for line in stdout_text.lines() {
+                                buffer.push_line(format!("[stdout] {line}"));
+                            }
+                            for line in stderr_text.lines() {
+                                buffer.push_line(format!("[stderr] {line}"));
+                            }
+                        }
+                        if out.status.success() {
+                            self.finish_build_record(
+                                BuildLifecycleState::Succeeded,
+                                "Force rebuild completed successfully.",
+                                "dx build --platform web exited successfully. Reload the page, reconnect CDP, then inspect generation/build diagnostics if the browser still looks stale.",
+                                out.status.code(),
+                            )
+                            .await;
+                            Some(Ok(
+                                "Force rebuild complete! A fresh WASM binary has been written.\n\
+                                 Next steps:\n\
+                                 1. Call page_reload with ignoreCache=true\n\
+                                 2. Call connect_cdp\n\
+                                 3. Verify with get_generation that build_id and generation both incremented"
+                                    .to_string(),
+                            ))
+                        } else {
+                            self.finish_build_record(
+                                BuildLifecycleState::Failed,
+                                "Force rebuild failed.",
+                                "dx build --platform web exited with a non-zero status. Inspect get_last_build_log for the exact Dioxus/compiler output.",
+                                out.status.code(),
+                            )
+                            .await;
+                            Some(Err(anyhow::anyhow!(
+                                "dx build --platform web failed with exit code: {:?}",
+                                out.status.code()
+                            )))
+                        }
+                    }
+                    Err(e) => {
+                        self.finish_build_record(
+                            BuildLifecycleState::Failed,
+                            "Force rebuild failed to start.",
+                            format!("Failed to spawn dx build --platform web: {e}"),
+                            None,
+                        )
+                        .await;
+                        Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}")))
+                    }
                 }
             }
             _ => None,
@@ -1091,6 +1572,8 @@ COMMANDS:
   fill <selector> <value>   Fill input
   navigate <url>            Navigate to URL
   generation                Get rebuild generation counters
+    build-status              Get structured diagnostics for the last Dioxus build/rebuild
+    build-log                 Get the raw log for the last Dioxus build/rebuild
   help                      Show this help
 
 FLAGS (before command):
@@ -1102,10 +1585,7 @@ MCP mode (default, no subcommand):
 }
 
 /// Handle `screenshot` CLI command for web backend.
-async fn web_cli_screenshot(
-    backend: &ChromeCdpBackend,
-    args: &[String],
-) -> anyhow::Result<String> {
+async fn web_cli_screenshot(backend: &ChromeCdpBackend, args: &[String]) -> anyhow::Result<String> {
     use base64::Engine as _;
     let save_path = args
         .iter()
@@ -1192,6 +1672,8 @@ async fn dispatch_web_cli(
             // For web CLI: connect to CDP and report status with generation info.
             backend.connect().await
         }
+        "build-status" => backend.get_last_build_status().await,
+        "build-log" => backend.get_last_build_log().await,
         "screenshot" => web_cli_screenshot(backend, args).await,
         _ => Ok(web_cli_help().to_string()),
     }

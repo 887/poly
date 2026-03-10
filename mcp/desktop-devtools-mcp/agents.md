@@ -20,6 +20,8 @@ cargo run --bin poly-desktop-devtools-mcp -- eval "document.title"
 cargo run --bin poly-desktop-devtools-mcp -- click "#my-button"
 cargo run --bin poly-desktop-devtools-mcp -- fill "#input" "value"
 cargo run --bin poly-desktop-devtools-mcp -- generation
+cargo run --bin poly-desktop-devtools-mcp -- build-status
+cargo run --bin poly-desktop-devtools-mcp -- build-log
 cargo run --bin poly-desktop-devtools-mcp -- help
 ```
 
@@ -248,6 +250,22 @@ Returns a JSON object with three counters: `{generation, build_id, pid}`.
 
 For visual/screenshot testing: after each `rebuild_app()`, check `build_id` increased.
 Do NOT rely on `generation` — it may not change if hot-patch succeeded (hot-patches preserve state).
+
+## Build Diagnostics — REQUIRED when generation is ambiguous (2026-03-10)
+
+The desktop MCP now captures Dioxus CLI output and exposes two new tools/CLI commands:
+
+- `get_last_build_status` / `build-status`
+- `get_last_build_log` / `build-log`
+
+Use them immediately when:
+- `get_generation()` does not change as expected
+- `build_id` changed but the UI did not update
+- the eval bridge never came back after `rebuild_app`
+- `force_rebuild` succeeds/fails and you need the exact Dioxus output
+
+`get_last_build_status` is the fast structured summary.
+`get_last_build_log` is the raw stdout/stderr transcript from the most recent desktop Dioxus build/hotpatch attempt.
 
 ### ⭐ Complete Decision Table — Check All Three Together
 

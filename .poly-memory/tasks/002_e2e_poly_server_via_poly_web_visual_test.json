@@ -5,10 +5,10 @@
   "description": null,
   "status": "in-progress",
   "created_at": "2026-03-10T01:15:13.332795858Z",
-  "updated_at": "2026-03-10T01:28:27.020693397Z",
+  "updated_at": "2026-03-10T12:21:39.164827417Z",
   "completed_at": null,
   "memory_count": 1,
-  "finding_count": 0,
+  "finding_count": 1,
   "checklist": [
     {
       "id": 1,
@@ -33,7 +33,7 @@
     {
       "id": 5,
       "text": "Build Add Account wizard UI component",
-      "done": false
+      "done": true
     },
     {
       "id": 6,

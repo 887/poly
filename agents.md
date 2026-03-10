@@ -222,6 +222,25 @@ To verify **nothing changed**, all three must be identical from the previous pol
 - **If `build_id` changed, a rebuild was triggered** (most reliable indicator)
 - Use for visual/screenshot testing: poll `get_generation()`, compare all three fields to previous state
 
+### ⭐ Mandatory follow-up when generation/counters are ambiguous (2026-03-10)
+
+If `get_generation()` does **not** change the way you expect after `launch_app`, `rebuild_app`,
+or `force_rebuild`, do **not** guess. Immediately inspect:
+
+1. `get_last_build_status` — structured JSON summary of the most recent Dioxus build/hotpatch attempt
+2. `get_last_build_log` — raw captured Dioxus CLI / compiler stdout+stderr for that attempt
+
+This is now required workflow for the desktop, web, and electron devtools MCPs.
+
+Use these tools whenever:
+- `generation` does not advance
+- `build_id` changed but the UI did not update
+- readiness checks (`connect_cdp`, eval bridge, reload) fail after a rebuild
+- you need the exact reason a Dioxus build failed
+
+Do **not** report that a rebuild is "stuck" without checking `get_last_build_status`
+and `get_last_build_log` first.
+
 See `mcp/desktop-devtools-mcp/agents.md` and `mcp/web-devtools-mcp/agents.md` for platform-specific details.
 
 ### 9b. Dioxus Rebuild Toast Is NOT Ground Truth (DECISION, 2026-03-08)

@@ -336,10 +336,10 @@ impl Default for VoiceSettings {
 
 /// A stored messenger account credential/token.
 ///
-/// Persisted under the key `"account:{backend}:{id}"`.
+/// Persisted under the key `"account_tokens"` as a JSON array.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountToken {
-    /// Backend identifier (`"stoat"`, `"matrix"`, `"discord"`, …).
+    /// Backend identifier (`"poly"`, `"stoat"`, `"matrix"`, `"discord"`, …).
     pub backend: String,
     /// Account ID within that backend.
     pub account_id: String,
@@ -347,6 +347,12 @@ pub struct AccountToken {
     pub token: String,
     /// Display name.
     pub display_name: String,
+    /// Full backend base URL (with protocol) for reconnection after restart.
+    ///
+    /// Required for backends where the URL is user-configurable (e.g. poly
+    /// server: `"http://127.0.0.1:7080"`).  `None` for built-in services.
+    #[serde(default)]
+    pub instance_id: Option<String>,
 }
 
 /// Stored backup server configuration.

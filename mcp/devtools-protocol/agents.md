@@ -1,7 +1,7 @@
 # poly-devtools-protocol — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Last Updated:** 2026-03-10
 
 ---
 
@@ -44,11 +44,29 @@ Standard methods every backend must implement:
 Extension point: backends can add custom tools via `extension_tools()` and
 `handle_extension_tool()`.
 
-## Standard MCP Tools (12)
+## Standard MCP Tools
 
-`launch_app`, `kill_app`, `connect_cdp`, `cdp_status`, `screenshot`,
-`js_eval`, `get_dom`, `get_console`, `click`, `type_text`, `reset_app`,
-`navigate`
+The shared tool surface now includes the cross-backend build diagnostics workflow:
+
+- `launch_app`
+- `kill_app`
+- `connect_cdp` / `cdp_status`
+- `rebuild_app`
+- `get_last_build_status` ← structured JSON summary of the last Dioxus build/hotpatch attempt
+- `get_last_build_log` ← raw captured Dioxus CLI / compiler output for the last attempt
+- `reset_app`
+- plus the existing screenshot / snapshot / script / console / navigation / input tools
+
+## Build Diagnostics Protocol (NEW — 2026-03-10)
+
+`poly-devtools-protocol` now defines the shared last-build diagnostics surface used by all three devtools MCP backends:
+
+- `get_last_build_status` — returns structured JSON including trigger, mode, command line,
+  working directory, lifecycle state, exit code, timing, verification notes, and a log excerpt
+- `get_last_build_log` — returns the raw captured Dioxus stdout/stderr for the most recent build attempt
+
+**Mandatory agent workflow:** if generation / rebuild counters do not move as expected,
+inspect `get_last_build_status` and `get_last_build_log` before concluding the build is stuck or failed.
 
 ## Key Files
 

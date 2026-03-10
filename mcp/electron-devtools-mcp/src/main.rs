@@ -26,7 +26,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use poly_devtools_protocol::backend::{
-    DevtoolsBackend, NavigateParams, ScreenshotParams, ScreenshotResult,
+    BuildDiagnostics, BuildLifecycleState, DevtoolsBackend, NavigateParams, RollingBuildLog,
+    ScreenshotParams, ScreenshotResult,
 };
 use poly_devtools_protocol::mcp::run_mcp_loop;
 use serde_json::{Value, json};
@@ -43,9 +44,35 @@ const CDP_PORT: u16 = 9224;
 /// Rebuild counter file — incremented by `launch_app` and `rebuild_app`.
 /// Separate from desktop (`…rebuild-counter`) and web (`…web-rebuild-counter`).
 const REBUILD_COUNTER_PATH: &str = "/tmp/poly-devtools-electron-rebuild-counter";
+const BUILD_LOG_EXCERPT_LINES: usize = 60;
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// Internal build record tracked by the Electron backend.
+#[derive(Debug, Clone)]
+struct ElectronBuildRecord {
+    diagnostics: BuildDiagnostics,
+    log_start_seq: u64,
+}
+
+fn unix_now_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+fn excerpt_from_lines(lines: &[String]) -> String {
+    let total = lines.len();
+    let start = total.saturating_sub(BUILD_LOG_EXCERPT_LINES);
+    lines
+        .iter()
+        .skip(start)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 // ─── Backend ─────────────────────────────────────────────────────────────────
 
@@ -66,6 +93,10 @@ struct ElectronCdpBackend {
     workspace: Arc<Mutex<Option<String>>>,
     /// Generation counter — increments on each successful `connect()` call.
     generation: AtomicU64,
+    /// Rolling combined build log for dx build output.
+    build_log: Arc<Mutex<RollingBuildLog>>,
+    /// Structured diagnostics for the last dx build attempt.
+    last_build: Arc<Mutex<Option<ElectronBuildRecord>>>,
 }
 
 impl ElectronCdpBackend {
@@ -80,7 +111,211 @@ impl ElectronCdpBackend {
             electron_pid: Arc::new(Mutex::new(None)),
             workspace: Arc::new(Mutex::new(None)),
             generation: AtomicU64::new(0),
+            build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
+            last_build: Arc::new(Mutex::new(None)),
         }
+    }
+
+    async fn start_build_record(
+        &self,
+        trigger: &str,
+        mode: &str,
+        working_directory: &str,
+        command_line: &str,
+        summary: &str,
+    ) {
+        let start_seq = {
+            let mut buffer = self.build_log.lock().await;
+            let seq = buffer.next_sequence();
+            buffer.push_line(format!(
+                "[meta] trigger={trigger} mode={mode} command={command_line} cwd={working_directory}"
+            ));
+            seq
+        };
+        let diagnostics = BuildDiagnostics {
+            backend: self.name().to_string(),
+            trigger: trigger.to_string(),
+            mode: mode.to_string(),
+            working_directory: working_directory.to_string(),
+            command_line: command_line.to_string(),
+            state: BuildLifecycleState::Running,
+            summary: summary.to_string(),
+            verification: "Build command started; waiting for dx build to finish.".to_string(),
+            exit_code: None,
+            started_at_unix_ms: Some(unix_now_ms()),
+            finished_at_unix_ms: None,
+            duration_ms: None,
+            build_id_before: Some(Self::read_rebuild_counter()),
+            build_id_after: None,
+            generation_before: Some(self.generation.load(Ordering::Relaxed)),
+            generation_after: None,
+            process_id_before: *self.electron_pid.lock().await,
+            process_id_after: None,
+            log_line_count: 0,
+            log_excerpt: String::new(),
+        };
+        *self.last_build.lock().await = Some(ElectronBuildRecord {
+            diagnostics,
+            log_start_seq: start_seq,
+        });
+    }
+
+    async fn append_command_output(&self, stdout_text: &str, stderr_text: &str) {
+        let mut buffer = self.build_log.lock().await;
+        for line in stdout_text.lines() {
+            buffer.push_line(format!("[stdout] {line}"));
+        }
+        for line in stderr_text.lines() {
+            buffer.push_line(format!("[stderr] {line}"));
+        }
+    }
+
+    async fn finish_build_record(
+        &self,
+        state: BuildLifecycleState,
+        summary: impl Into<String>,
+        verification: impl Into<String>,
+        exit_code: Option<i32>,
+    ) {
+        let Some(log_start_seq) = self
+            .last_build
+            .lock()
+            .await
+            .as_ref()
+            .map(|record| record.log_start_seq)
+        else {
+            return;
+        };
+        let lines = self.build_log.lock().await.lines_since(log_start_seq);
+        let log_excerpt = excerpt_from_lines(&lines);
+        let now = unix_now_ms();
+        let generation_after = self.generation.load(Ordering::Relaxed);
+        let pid_after = *self.electron_pid.lock().await;
+
+        if let Some(record) = self.last_build.lock().await.as_mut() {
+            let duration_ms = record
+                .diagnostics
+                .started_at_unix_ms
+                .map(|started| now.saturating_sub(started));
+            record.diagnostics.state = state;
+            record.diagnostics.summary = summary.into();
+            record.diagnostics.verification = verification.into();
+            record.diagnostics.exit_code = exit_code;
+            record.diagnostics.finished_at_unix_ms = Some(now);
+            record.diagnostics.duration_ms = duration_ms;
+            record.diagnostics.build_id_after = Some(Self::read_rebuild_counter());
+            record.diagnostics.generation_after = Some(generation_after);
+            record.diagnostics.process_id_after = pid_after;
+            record.diagnostics.log_line_count = lines.len();
+            record.diagnostics.log_excerpt = log_excerpt;
+        }
+    }
+
+    async fn note_successful_connect(&self) {
+        let record_snapshot = self.last_build.lock().await.clone();
+        let Some(record_snapshot) = record_snapshot else {
+            return;
+        };
+        if !matches!(
+            record_snapshot.diagnostics.state,
+            BuildLifecycleState::Running | BuildLifecycleState::Unknown
+        ) {
+            return;
+        }
+
+        let lines = self
+            .build_log
+            .lock()
+            .await
+            .lines_since(record_snapshot.log_start_seq);
+        let now = unix_now_ms();
+        let generation_after = self.generation.load(Ordering::Relaxed);
+        let pid_after = *self.electron_pid.lock().await;
+        if let Some(record) = self.last_build.lock().await.as_mut() {
+            record.diagnostics.state = BuildLifecycleState::Succeeded;
+            record.diagnostics.summary =
+                "Electron CDP reconnected successfully after the most recent build.".to_string();
+            record.diagnostics.verification =
+                "Verified by a successful connect_cdp after the build/reload workflow.".to_string();
+            record.diagnostics.finished_at_unix_ms = Some(now);
+            record.diagnostics.duration_ms = record
+                .diagnostics
+                .started_at_unix_ms
+                .map(|started| now.saturating_sub(started));
+            record.diagnostics.generation_after = Some(generation_after);
+            record.diagnostics.process_id_after = pid_after;
+            record.diagnostics.log_line_count = lines.len();
+            record.diagnostics.log_excerpt = excerpt_from_lines(&lines);
+            record.diagnostics.build_id_after = Some(Self::read_rebuild_counter());
+        }
+    }
+
+    async fn last_build_status_json(&self) -> anyhow::Result<String> {
+        let record = self.last_build.lock().await.clone();
+        if let Some(record) = record {
+            let mut diagnostics = record.diagnostics;
+            let lines = self
+                .build_log
+                .lock()
+                .await
+                .lines_since(record.log_start_seq);
+            diagnostics.log_line_count = lines.len();
+            diagnostics.log_excerpt = excerpt_from_lines(&lines);
+            return serde_json::to_string_pretty(&diagnostics)
+                .map_err(|e| anyhow::anyhow!("serialize build diagnostics: {e}"));
+        }
+
+        let diagnostics = BuildDiagnostics {
+            backend: self.name().to_string(),
+            trigger: "none".to_string(),
+            mode: "dx build --platform web".to_string(),
+            working_directory: String::new(),
+            command_line: String::new(),
+            state: BuildLifecycleState::NotStarted,
+            summary: "No Dioxus build has been recorded yet in this MCP session.".to_string(),
+            verification: "Call launch_app or rebuild_app first.".to_string(),
+            exit_code: None,
+            started_at_unix_ms: None,
+            finished_at_unix_ms: None,
+            duration_ms: None,
+            build_id_before: Some(Self::read_rebuild_counter()),
+            build_id_after: Some(Self::read_rebuild_counter()),
+            generation_before: Some(self.generation.load(Ordering::Relaxed)),
+            generation_after: Some(self.generation.load(Ordering::Relaxed)),
+            process_id_before: *self.electron_pid.lock().await,
+            process_id_after: *self.electron_pid.lock().await,
+            log_line_count: 0,
+            log_excerpt: String::new(),
+        };
+        serde_json::to_string_pretty(&diagnostics)
+            .map_err(|e| anyhow::anyhow!("serialize build diagnostics: {e}"))
+    }
+
+    async fn last_build_log_text(&self) -> anyhow::Result<String> {
+        let record = self.last_build.lock().await.clone();
+        if let Some(record) = record {
+            let lines = self
+                .build_log
+                .lock()
+                .await
+                .lines_since(record.log_start_seq);
+            return Ok(if lines.is_empty() {
+                "<no Dioxus build output captured yet for the last attempt>".to_string()
+            } else {
+                lines.join("\n")
+            });
+        }
+
+        let tail = self
+            .build_log
+            .lock()
+            .await
+            .tail_lines(BUILD_LOG_EXCERPT_LINES);
+        Ok(if tail.is_empty() {
+            "<no Dioxus build has been recorded yet in this MCP session>".to_string()
+        } else {
+            tail.join("\n")
+        })
     }
 
     /// Ensure the CDP WebSocket is connected.
@@ -284,24 +519,51 @@ impl DevtoolsBackend for ElectronCdpBackend {
         ));
         tracing::info!("Running dx build --platform web in {dx_build_dir}");
 
-        let build_status = tokio::process::Command::new("dx")
+        self.start_build_record(
+            "launch_app",
+            "dx build --platform web",
+            &dx_build_dir,
+            "dx build --platform web",
+            "Running the Electron WASM bundle build before launching Electron.",
+        )
+        .await;
+
+        let build_output = tokio::process::Command::new("dx")
             .args(["build", "--platform", "web"])
             .current_dir(&dx_build_dir)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit()) // Show compile errors in the MCP log
-            .status()
+            .output()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to spawn `dx build`: {e}"))?;
 
-        if !build_status.success() {
+        self.append_command_output(
+            &String::from_utf8_lossy(&build_output.stdout),
+            &String::from_utf8_lossy(&build_output.stderr),
+        )
+        .await;
+
+        if !build_output.status.success() {
+            self.finish_build_record(
+                BuildLifecycleState::Failed,
+                "Electron WASM build failed during launch.",
+                "dx build --platform web exited with a non-zero status. Inspect get_last_build_log for the exact compiler and Dioxus CLI output.",
+                build_output.status.code(),
+            )
+            .await;
             anyhow::bail!(
                 "`dx build --platform web` failed (exit code: {:?}).\n\
-                 Check the MCP server stderr for compile errors.\n\
+                 Check get_last_build_status / get_last_build_log for compile errors.\n\
                  Note: poly-core may be in flux — wait a minute and retry.",
-                build_status.code()
+                build_output.status.code()
             );
         }
+        self.finish_build_record(
+            BuildLifecycleState::Succeeded,
+            "Electron WASM build completed successfully.",
+            "dx build --platform web exited successfully. Launching Electron next; use connect_cdp afterwards to verify the runtime session.",
+            build_output.status.code(),
+        )
+        .await;
         messages.push("WASM build succeeded ✓".to_string());
 
         // Increment rebuild counter to mark this as a new build.
@@ -425,23 +687,51 @@ impl DevtoolsBackend for ElectronCdpBackend {
         let dx_build_dir = format!("{workspace}/apps/desktop-electron");
         tracing::info!("Rebuilding WASM: dx build --platform web in {dx_build_dir}");
 
-        let build_status = tokio::process::Command::new("dx")
+        self.start_build_record(
+            "rebuild_app",
+            "dx build --platform web",
+            &dx_build_dir,
+            "dx build --platform web",
+            "Running the Electron WASM rebuild before forcing a page reload.",
+        )
+        .await;
+
+        let build_output = tokio::process::Command::new("dx")
             .args(["build", "--platform", "web"])
             .current_dir(&dx_build_dir)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status()
+            .output()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to spawn `dx build` for rebuild: {e}"))?;
 
-        if !build_status.success() {
+        self.append_command_output(
+            &String::from_utf8_lossy(&build_output.stdout),
+            &String::from_utf8_lossy(&build_output.stderr),
+        )
+        .await;
+
+        if !build_output.status.success() {
+            self.finish_build_record(
+                BuildLifecycleState::Failed,
+                "Electron WASM rebuild failed.",
+                "dx build --platform web exited with a non-zero status during rebuild. Inspect get_last_build_log for the exact compiler and Dioxus CLI output.",
+                build_output.status.code(),
+            )
+            .await;
             anyhow::bail!(
                 "`dx build --platform web` failed during rebuild (exit: {:?}).\n\
-                 Check the MCP server stderr for compile errors.",
-                build_status.code()
+                 Check get_last_build_status / get_last_build_log for compile errors.",
+                build_output.status.code()
             );
         }
+
+        self.finish_build_record(
+            BuildLifecycleState::Succeeded,
+            "Electron WASM rebuild completed successfully.",
+            "dx build --platform web exited successfully. The Electron page will now reload; reconnect with connect_cdp to verify the live runtime session.",
+            build_output.status.code(),
+        )
+        .await;
 
         // Reload the page via CDP so Electron picks up the new WASM bundle.
         // The reload command returns a result before the page actually reloads,
@@ -455,6 +745,14 @@ impl DevtoolsBackend for ElectronCdpBackend {
         Ok("WASM rebuilt and Electron page reloaded ✓\n\
              Call connect_cdp to re-establish the CDP session."
             .to_string())
+    }
+
+    async fn get_last_build_status(&self) -> anyhow::Result<String> {
+        self.last_build_status_json().await
+    }
+
+    async fn get_last_build_log(&self) -> anyhow::Result<String> {
+        self.last_build_log_text().await
     }
 
     async fn reset_app(&self) -> anyhow::Result<String> {
@@ -532,6 +830,7 @@ impl DevtoolsBackend for ElectronCdpBackend {
 
         let generation_num = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
         tracing::info!("Electron CDP connected (generation {generation_num}): {ws_url}");
+        self.note_successful_connect().await;
 
         Ok(format!(
             "Connected to Electron CDP ✓  (session #{generation_num})\n\
@@ -799,7 +1098,8 @@ impl DevtoolsBackend for ElectronCdpBackend {
                     - All three identical to previous poll → nothing changed\n\
                     - build_id increased, generation same → build triggered, connect_cdp not yet called\n\
                     - build_id increased, generation increased → build + reconnect completed\n\
-                    - electron_pid null → Electron is not running",
+                    - electron_pid null → Electron is not running\n\
+                    If generation/build_id do not move the way you expect, immediately inspect get_last_build_status and get_last_build_log for the exact Dioxus CLI output.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
@@ -861,9 +1161,21 @@ impl DevtoolsBackend for ElectronCdpBackend {
 
 /// Commands that trigger CLI mode instead of MCP server mode.
 const ELECTRON_CLI_COMMANDS: &[&str] = &[
-    "status", "launch", "kill", "screenshot", "snapshot",
-    "eval", "click", "fill", "navigate", "generation",
-    "help", "--help", "-h",
+    "status",
+    "launch",
+    "kill",
+    "screenshot",
+    "snapshot",
+    "eval",
+    "click",
+    "fill",
+    "navigate",
+    "generation",
+    "build-status",
+    "build-log",
+    "help",
+    "--help",
+    "-h",
 ];
 
 /// Check if the first argument selects CLI mode.
@@ -895,6 +1207,8 @@ COMMANDS:
   fill <selector> <value>   Fill input
   navigate <url>            Navigate to URL
   generation                Get rebuild generation counters
+    build-status              Get structured diagnostics for the last Dioxus build/rebuild
+    build-log                 Get the raw log for the last Dioxus build/rebuild
   help                      Show this help
 
 MCP mode (default, no subcommand):
@@ -989,6 +1303,8 @@ async fn dispatch_electron_cli(
                 .await
         }
         "generation" => backend.connect().await,
+        "build-status" => backend.get_last_build_status().await,
+        "build-log" => backend.get_last_build_log().await,
         "screenshot" => electron_cli_screenshot(backend, args).await,
         _ => Ok(electron_cli_help().to_string()),
     }

@@ -558,14 +558,23 @@ fn ServerHome(
     let client_manager: Signal<ClientManager> = use_context();
 
     // URL-restore: server data is absent after a hard reload. Load it now.
+    //
+    // Guard against double-loading: if `current_server` already matches (click
+    // navigation already ran `load_server_data`), or a load is already in flight
+    // (`loading == true`), skip spawning a second concurrent load.
+    let server_id_for_effect = server_id.clone();
     use_effect(move || {
-        let sid = server_id.clone();
-        let server_already_loaded = chat_data
-            .read()
+        let sid = server_id_for_effect.clone();
+        let snapshot = chat_data.read();
+        let server_already_loaded = snapshot
             .current_server
             .as_ref()
             .is_some_and(|s| s.id == sid);
-        if server_already_loaded {
+        // Prevent a second concurrent `load_server_data` while the click-handler's
+        // spawn is still running (i.e. loading is already true).
+        let already_loading = snapshot.loading;
+        drop(snapshot);
+        if server_already_loaded || already_loading {
             return;
         }
         spawn(async move {
@@ -574,11 +583,22 @@ fn ServerHome(
         });
     });
 
-    let is_voice_channel = chat_data
-        .read()
-        .current_channel
-        .as_ref()
-        .is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
+    // Only consider a channel "voice" if the loaded server actually matches
+    // the URL.  Without this guard, stale `current_channel` data left over
+    // from demo browsing (or from a previously visited server) can cause
+    // `VoiceChannelView` to render immediately — before `load_server_data`
+    // runs — which triggers `getUserMedia` / audio-device access and can
+    // hard-crash Chromium on Linux.
+    let is_voice_channel = {
+        let cd = chat_data.read();
+        cd.current_server
+            .as_ref()
+            .is_some_and(|s| s.id == server_id)
+            && cd
+                .current_channel
+                .as_ref()
+                .is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video))
+    };
 
     rsx! {
         if is_voice_channel {

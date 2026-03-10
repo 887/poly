@@ -111,6 +111,134 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
 
 // ── App — async helpers ──────────────────────────────────────────────────────
 
+/// Restore all persisted poly-server accounts from the token store.
+///
+/// Called during `init_storage` when `setup_complete` is true.
+/// For each stored `AccountToken` with `backend == "poly"` and a valid
+/// `instance_id` (the base URL), this function:
+/// 1. Reads the device identity key from storage.
+/// 2. Re-authenticates with the poly server using that key (token-based sign-in).
+/// 3. Commits the resulting session + backend to `ClientManager` and `ChatData`.
+/// 4. Fetches servers and populates `chat_data.servers` + `server_account_map`.
+///
+/// Accounts that fail to reconnect (e.g. server offline) are silently skipped.
+#[cfg(feature = "server")]
+async fn restore_poly_accounts(
+    storage: &crate::storage::Storage,
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    use crate::client_manager::BackendHandle;
+    use poly_client::ClientBackend as _;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    let Ok(tokens) = storage.get_account_tokens().await else {
+        return;
+    };
+
+    // Load the device identity key once — shared across all poly accounts.
+    let Ok(Some(key_bytes)) = storage.get_identity_key().await else {
+        tracing::warn!("restore_poly_accounts: no identity key found, skipping");
+        return;
+    };
+
+    let poly_tokens: Vec<_> = tokens
+        .into_iter()
+        .filter(|t| t.backend == "poly" && t.instance_id.is_some())
+        .collect();
+
+    if poly_tokens.is_empty() {
+        return;
+    }
+
+    tracing::info!(
+        "Restoring {} poly server account(s) from storage",
+        poly_tokens.len()
+    );
+
+    for token in poly_tokens {
+        let Some(ref base_url) = token.instance_id else {
+            continue;
+        };
+
+        let mut backend = poly_server_client::PolyServerBackend::new(base_url, key_bytes);
+
+        let credentials = poly_client::AuthCredentials::Token(token.token.clone());
+        match backend.authenticate(credentials).await {
+            Ok(session) => {
+                let account_id = session.id.clone();
+                let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(Box::new(
+                    backend,
+                )
+                    as Box<dyn poly_client::ClientBackend + Send + Sync>));
+
+                // Build server→account map.
+                let mut server_map = HashMap::new();
+                let servers = {
+                    let guard = backend_handle.read().await;
+                    guard.get_servers().await.unwrap_or_default()
+                };
+                for srv in &servers {
+                    server_map.insert(srv.id.clone(), account_id.clone());
+                }
+
+                // Commit synchronously.
+                client_manager.write().commit_poly_server(
+                    account_id.clone(),
+                    session.clone(),
+                    backend_handle.clone(),
+                    server_map,
+                );
+                chat_data
+                    .write()
+                    .account_sessions
+                    .insert(account_id.clone(), session);
+
+                // Populate servers in chat_data.
+                {
+                    let mut cd = chat_data.write();
+                    for srv in &servers {
+                        if !cd.favorited_server_ids.contains(&srv.id) {
+                            cd.favorited_server_ids.push(srv.id.clone());
+                        }
+                    }
+                    // Avoid duplicates if servers list was already populated.
+                    for srv in servers {
+                        if !cd.servers.iter().any(|s| s.id == srv.id) {
+                            cd.servers.push(srv);
+                        }
+                    }
+                }
+
+                // Fetch DMs and friends in background.
+                {
+                    let guard = backend_handle.read().await;
+                    if let Ok(dms) = guard.get_dm_channels().await {
+                        chat_data.write().dm_channels.extend(dms);
+                    }
+                    if let Ok(friends) = guard.get_friends().await {
+                        let mut cd = chat_data.write();
+                        for friend in friends {
+                            if !cd.friends.iter().any(|f| f.id == friend.id) {
+                                cd.friends.push(friend);
+                            }
+                        }
+                    }
+                }
+
+                tracing::info!("Restored poly account: {account_id}");
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to restore poly account {} from {base_url}: {e}",
+                    token.account_id
+                );
+            }
+        }
+    }
+}
+
 /// Initialise storage, apply persisted theme + locale, and decide the initial view.
 ///
 /// Called once via `use_future` on App mount. Always sets `storage_ready` to
@@ -170,6 +298,11 @@ async fn init_storage(
                         Ok(_) => {}
                         Err(e) => tracing::warn!("Failed to read account last routes: {e}"),
                     }
+
+                    // Restore poly server accounts from persisted tokens.
+                    // This runs after demo restore so both can coexist.
+                    #[cfg(feature = "server")]
+                    restore_poly_accounts(&storage, client_manager, chat_data).await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),

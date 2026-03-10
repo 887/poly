@@ -223,7 +223,16 @@ impl ClientBackend for PolyServerBackend {
                     token: auth.token,
                     backend: BackendType::Poly,
                     icon_emoji: Some("\u{1f536}".to_string()), // 🔶
-                    instance_id: self.base_url.clone(),
+                    // Strip "http(s)://" so instance_id is a URL-path-safe segment
+                    // (e.g. "127.0.0.1:7080" or "my.poly.server.com").
+                    instance_id: self
+                        .base_url
+                        .trim_start_matches("https://")
+                        .trim_start_matches("http://")
+                        .trim_end_matches('/')
+                        .to_string(),
+                    // Full URL (with protocol) for token persistence + reconnect.
+                    backend_url: Some(self.base_url.trim_end_matches('/').to_string()),
                 })
             }
             AuthCredentials::Token(token) => {
@@ -251,7 +260,15 @@ impl ClientBackend for PolyServerBackend {
                     token: auth.token,
                     backend: BackendType::Poly,
                     icon_emoji: Some("\u{1f536}".to_string()),
-                    instance_id: self.base_url.clone(),
+                    // Strip "http(s)://" so instance_id is a URL-path-safe segment.
+                    instance_id: self
+                        .base_url
+                        .trim_start_matches("https://")
+                        .trim_start_matches("http://")
+                        .trim_end_matches('/')
+                        .to_string(),
+                    // Full URL (with protocol) for token persistence + reconnect.
+                    backend_url: Some(self.base_url.trim_end_matches('/').to_string()),
                 })
             }
             _ => Err(ClientError::AuthFailed(

@@ -24,12 +24,17 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use poly_devtools_protocol::backend::{DevtoolsBackend, ScreenshotParams, ScreenshotResult};
+use poly_devtools_protocol::backend::{
+    BuildDiagnostics, BuildLifecycleState, DevtoolsBackend, RollingBuildLog, ScreenshotParams,
+    ScreenshotResult,
+};
 use poly_devtools_protocol::mcp::run_mcp_loop;
 use serde_json::{Value, json};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
 
 const BASE: &str = "http://127.0.0.1:9223";
+const BUILD_LOG_EXCERPT_LINES: usize = 60;
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
@@ -65,6 +70,66 @@ struct DxServeProcess {
     pid: u32,
 }
 
+/// Snapshot of the desktop app's `/generation` endpoint.
+#[derive(Debug, Clone, serde::Deserialize)]
+struct DesktopGenerationInfo {
+    generation: u64,
+    build_id: u64,
+    pid: u32,
+}
+
+/// Internal build record tracked by this MCP backend.
+#[derive(Debug, Clone)]
+struct DesktopBuildRecord {
+    diagnostics: BuildDiagnostics,
+    log_start_seq: u64,
+}
+
+fn unix_now_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+fn excerpt_from_lines(lines: &[String]) -> String {
+    let total = lines.len();
+    let start = total.saturating_sub(BUILD_LOG_EXCERPT_LINES);
+    lines
+        .iter()
+        .skip(start)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn spawn_log_reader<R>(reader: R, stream_name: &'static str, buffer: Arc<Mutex<RollingBuildLog>>)
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(reader).lines();
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    buffer
+                        .lock()
+                        .await
+                        .push_line(format!("[{stream_name}] {line}"));
+                }
+                Ok(None) => break,
+                Err(err) => {
+                    buffer
+                        .lock()
+                        .await
+                        .push_line(format!("[{stream_name}] <read error: {err}>"));
+                    break;
+                }
+            }
+        }
+    });
+}
+
 // ─── Desktop HTTP Backend ─────────────────────────────────────────────────────
 
 /// Desktop devtools backend — launches the app via `dx serve` and
@@ -75,6 +140,10 @@ struct DesktopHttpBackend {
     dx_serve: Arc<Mutex<Option<DxServeProcess>>>,
     /// Workspace path — set during `launch_app`, used by `rebuild_app`.
     workspace: Arc<Mutex<Option<String>>>,
+    /// Rolling combined stdout/stderr log from Dioxus commands.
+    build_log: Arc<Mutex<RollingBuildLog>>,
+    /// Structured diagnostics for the last build / hotpatch attempt.
+    last_build: Arc<Mutex<Option<DesktopBuildRecord>>>,
 }
 
 impl DesktopHttpBackend {
@@ -86,7 +155,188 @@ impl DesktopHttpBackend {
                 .unwrap_or_else(|_| reqwest::Client::new()),
             dx_serve: Arc::new(Mutex::new(None)),
             workspace: Arc::new(Mutex::new(None)),
+            build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
+            last_build: Arc::new(Mutex::new(None)),
         }
+    }
+
+    fn read_rebuild_counter() -> u64 {
+        let path = std::path::Path::new("/tmp/poly-devtools-rebuild-counter");
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(0)
+    }
+
+    async fn fetch_generation_info(&self) -> Option<DesktopGenerationInfo> {
+        let resp = self
+            .client
+            .get(format!("{BASE}/generation"))
+            .send()
+            .await
+            .ok()?;
+        let text = resp.text().await.ok()?;
+        serde_json::from_str::<DesktopGenerationInfo>(&text).ok()
+    }
+
+    async fn start_build_record(
+        &self,
+        trigger: &str,
+        mode: &str,
+        working_directory: &str,
+        command_line: &str,
+        summary: &str,
+    ) {
+        let start_seq = {
+            let mut buffer = self.build_log.lock().await;
+            let seq = buffer.next_sequence();
+            buffer.push_line(format!(
+                "[meta] trigger={trigger} mode={mode} command={command_line} cwd={working_directory}"
+            ));
+            seq
+        };
+
+        let generation_before = self.fetch_generation_info().await;
+        let diagnostics = BuildDiagnostics {
+            backend: self.name().to_string(),
+            trigger: trigger.to_string(),
+            mode: mode.to_string(),
+            working_directory: working_directory.to_string(),
+            command_line: command_line.to_string(),
+            state: BuildLifecycleState::Running,
+            summary: summary.to_string(),
+            verification: "Build command started; waiting for Dioxus output / readiness signal."
+                .to_string(),
+            exit_code: None,
+            started_at_unix_ms: Some(unix_now_ms()),
+            finished_at_unix_ms: None,
+            duration_ms: None,
+            build_id_before: Some(Self::read_rebuild_counter()),
+            build_id_after: None,
+            generation_before: generation_before.as_ref().map(|g| g.generation),
+            generation_after: None,
+            process_id_before: generation_before.as_ref().map(|g| g.pid),
+            process_id_after: None,
+            log_line_count: 0,
+            log_excerpt: String::new(),
+        };
+
+        *self.last_build.lock().await = Some(DesktopBuildRecord {
+            diagnostics,
+            log_start_seq: start_seq,
+        });
+    }
+
+    async fn finish_build_record(
+        &self,
+        state: BuildLifecycleState,
+        summary: impl Into<String>,
+        verification: impl Into<String>,
+        exit_code: Option<i32>,
+    ) {
+        let generation_after = self.fetch_generation_info().await;
+        let Some(log_start_seq) = self
+            .last_build
+            .lock()
+            .await
+            .as_ref()
+            .map(|record| record.log_start_seq)
+        else {
+            return;
+        };
+        let lines = self.build_log.lock().await.lines_since(log_start_seq);
+        let log_excerpt = excerpt_from_lines(&lines);
+        let now = unix_now_ms();
+
+        if let Some(record) = self.last_build.lock().await.as_mut() {
+            let duration_ms = record
+                .diagnostics
+                .started_at_unix_ms
+                .map(|started| now.saturating_sub(started));
+            record.diagnostics.state = state;
+            record.diagnostics.summary = summary.into();
+            record.diagnostics.verification = verification.into();
+            record.diagnostics.exit_code = exit_code;
+            record.diagnostics.finished_at_unix_ms = Some(now);
+            record.diagnostics.duration_ms = duration_ms;
+            record.diagnostics.build_id_after = Some(
+                generation_after
+                    .as_ref()
+                    .map_or_else(Self::read_rebuild_counter, |g| g.build_id),
+            );
+            record.diagnostics.generation_after = generation_after.as_ref().map(|g| g.generation);
+            record.diagnostics.process_id_after = generation_after.as_ref().map(|g| g.pid);
+            record.diagnostics.log_line_count = lines.len();
+            record.diagnostics.log_excerpt = log_excerpt;
+        }
+    }
+
+    async fn last_build_status_json(&self) -> anyhow::Result<String> {
+        let record = self.last_build.lock().await.clone();
+        if let Some(record) = record {
+            let mut diagnostics = record.diagnostics;
+            let lines = self
+                .build_log
+                .lock()
+                .await
+                .lines_since(record.log_start_seq);
+            diagnostics.log_line_count = lines.len();
+            diagnostics.log_excerpt = excerpt_from_lines(&lines);
+            return serde_json::to_string_pretty(&diagnostics)
+                .map_err(|e| anyhow::anyhow!("serialize build diagnostics: {e}"));
+        }
+
+        let diagnostics = BuildDiagnostics {
+            backend: self.name().to_string(),
+            trigger: "none".to_string(),
+            mode: "desktop dx serve --hotpatch".to_string(),
+            working_directory: String::new(),
+            command_line: String::new(),
+            state: BuildLifecycleState::NotStarted,
+            summary: "No Dioxus build has been recorded yet in this MCP session.".to_string(),
+            verification: "Call launch_app, rebuild_app, or force_rebuild first.".to_string(),
+            exit_code: None,
+            started_at_unix_ms: None,
+            finished_at_unix_ms: None,
+            duration_ms: None,
+            build_id_before: Some(Self::read_rebuild_counter()),
+            build_id_after: Some(Self::read_rebuild_counter()),
+            generation_before: None,
+            generation_after: None,
+            process_id_before: None,
+            process_id_after: None,
+            log_line_count: 0,
+            log_excerpt: String::new(),
+        };
+        serde_json::to_string_pretty(&diagnostics)
+            .map_err(|e| anyhow::anyhow!("serialize build diagnostics: {e}"))
+    }
+
+    async fn last_build_log_text(&self) -> anyhow::Result<String> {
+        let record = self.last_build.lock().await.clone();
+        if let Some(record) = record {
+            let lines = self
+                .build_log
+                .lock()
+                .await
+                .lines_since(record.log_start_seq);
+            return Ok(if lines.is_empty() {
+                "<no Dioxus build output captured yet for the last attempt>".to_string()
+            } else {
+                lines.join("\n")
+            });
+        }
+
+        let tail = self
+            .build_log
+            .lock()
+            .await
+            .tail_lines(BUILD_LOG_EXCERPT_LINES);
+        Ok(if tail.is_empty() {
+            "<no Dioxus build has been recorded yet in this MCP session>".to_string()
+        } else {
+            tail.join("\n")
+        })
     }
 
     /// Check if the eval bridge is currently responding.
@@ -192,13 +442,28 @@ impl DevtoolsBackend for DesktopHttpBackend {
         // The eval bridge inside the app uses recreatable channels that
         // survive hotpatch remounts.
         let app_dir = format!("{workspace}/apps/desktop-devtools");
+        self.start_build_record(
+            "launch_app",
+            "dx serve --hotpatch --platform desktop",
+            &app_dir,
+            "dx serve --hotpatch --platform desktop",
+            "Starting desktop dx serve --hotpatch and waiting for the eval bridge.",
+        )
+        .await;
         let mut child = tokio::process::Command::new("dx")
             .args(["serve", "--hotpatch", "--platform", "desktop"])
             .current_dir(&app_dir)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()?;
+
+        if let Some(stdout) = child.stdout.take() {
+            spawn_log_reader(stdout, "stdout", self.build_log.clone());
+        }
+        if let Some(stderr) = child.stderr.take() {
+            spawn_log_reader(stderr, "stderr", self.build_log.clone());
+        }
 
         let pid = child
             .id()
@@ -216,17 +481,37 @@ impl DevtoolsBackend for DesktopHttpBackend {
         // ── Step 4: wait for eval bridge (first build can take a while) ───
         // Poll for up to 120 s — initial compilation can be slow.
         match self.wait_for_bridge(120).await {
-            Ok(()) => Ok(format!(
-                "dx serve --hotpatch started in {app_dir}\n\
-                 Eval bridge ready at {BASE}\n\
-                 Hot-patch is active — code changes update the running window in-place.\n\
-                 Use rebuild_app for forced rebuild, kill_app to stop everything."
-            )),
-            Err(_) => Ok(format!(
-                "dx serve --hotpatch started in {app_dir}\n\
-                 Eval bridge not yet responding at {BASE} — first build may still be compiling.\n\
-                 Call connect_cdp in a moment to check."
-            )),
+            Ok(()) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Succeeded,
+                    "Desktop dx serve launched successfully and the eval bridge is reachable.",
+                    "Verified by reaching the desktop eval bridge after the initial Dioxus build. If later rebuilds behave strangely, inspect get_last_build_status and get_last_build_log.",
+                    None,
+                )
+                .await;
+                Ok(format!(
+                    "dx serve --hotpatch started in {app_dir}\n\
+                     Eval bridge ready at {BASE}\n\
+                     Hot-patch is active — code changes update the running window in-place.\n\
+                     Use rebuild_app for forced rebuild, kill_app to stop everything."
+                ))
+            }
+            Err(err) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "Desktop dx serve started, but the eval bridge never became ready.",
+                    format!(
+                        "The eval bridge did not respond within 120s: {err}. Check get_last_build_log for the exact Dioxus/compiler output."
+                    ),
+                    None,
+                )
+                .await;
+                Ok(format!(
+                    "dx serve --hotpatch started in {app_dir}\n\
+                     Eval bridge not yet responding at {BASE} — first build may still be compiling or may have failed.\n\
+                     Call get_last_build_status / get_last_build_log for the Dioxus output, then connect_cdp in a moment to check."
+                ))
+            }
         }
     }
 
@@ -314,6 +599,16 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
+        let app_dir = format!("{workspace}/apps/desktop-devtools");
+        self.start_build_record(
+            "rebuild_app",
+            "dx serve --hotpatch watcher rebuild",
+            &app_dir,
+            "touch crates/core/src/lib.rs",
+            "Triggered a desktop hotpatch/full rebuild via the dx serve file watcher.",
+        )
+        .await;
+
         // Touch a source file to trigger dx serve's file watcher.
         // With --hotpatch, this triggers a hot-patch (window stays alive)
         // or a full rebuild (for non-patchable changes).
@@ -323,15 +618,43 @@ impl DevtoolsBackend for DesktopHttpBackend {
         // Hot-patches are near-instant; full rebuilds take 10-30s.
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         match self.wait_for_bridge(120).await {
-            Ok(()) => Ok("Rebuild triggered (touched crates/core/src/lib.rs).\n\
-                 dx serve --hotpatch is recompiling — hot-patchable changes are near-instant,\n\
-                 full rebuilds take 10-30s with a warm cache.\n\
-                 The window stays alive; eval bridge reconnects automatically."
-                .to_string()),
-            Err(e) => Err(anyhow::anyhow!(
-                "Rebuild triggered but eval bridge didn't come back: {e}"
-            )),
+            Ok(()) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Succeeded,
+                    "Desktop rebuild completed and the eval bridge came back.",
+                    "Verified by waiting for the desktop eval bridge after triggering the dx serve watcher rebuild. Inspect get_generation together with get_last_build_status/log if hotpatch behavior remains unclear.",
+                    None,
+                )
+                .await;
+                Ok("Rebuild triggered (touched crates/core/src/lib.rs).\n\
+                     dx serve --hotpatch is recompiling — hot-patchable changes are near-instant,\n\
+                     full rebuilds take 10-30s with a warm cache.\n\
+                     The window stays alive; eval bridge reconnects automatically."
+                    .to_string())
+            }
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "Desktop rebuild was triggered, but the eval bridge did not return.",
+                    format!(
+                        "Bridge readiness check failed after the watcher rebuild: {e}. Inspect get_last_build_log for the exact Dioxus hotpatch/build failure."
+                    ),
+                    None,
+                )
+                .await;
+                Err(anyhow::anyhow!(
+                    "Rebuild triggered but eval bridge didn't come back: {e}"
+                ))
+            }
         }
+    }
+
+    async fn get_last_build_status(&self) -> anyhow::Result<String> {
+        self.last_build_status_json().await
+    }
+
+    async fn get_last_build_log(&self) -> anyhow::Result<String> {
+        self.last_build_log_text().await
     }
 
     async fn reset_app(&self) -> anyhow::Result<String> {
@@ -384,7 +707,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
                     - pid changed (generation back to 1) → full rebuild / process restart\n\
                     - build_id changed → rebuild was triggered (independent of generation / pid)\n\n\
                     **Key difference:** Desktop generation may NOT change on every rebuild (hot-patches preserve state). \
-                    Always check build_id to know if a rebuild happened. Call connect_cdp explicitly after \
+                    Always check build_id to know if a rebuild happened. If generation/pid do not change the way you expect, immediately inspect get_last_build_status and get_last_build_log for the actual Dioxus CLI output and failure reason. Call connect_cdp explicitly after \
                     rebuild_app to get updated generation (web) or check if hot-patch succeeded (desktop).",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
@@ -398,7 +721,8 @@ impl DevtoolsBackend for DesktopHttpBackend {
                     After this tool returns:\n\
                     1. Call launch_app to start the freshly built binary\n\
                     2. Call connect_cdp\n\
-                    3. Verify with get_generation that build_id and pid both changed",
+                    3. Verify with get_generation that build_id and pid both changed\n\
+                    4. If anything looks wrong, inspect get_last_build_status and get_last_build_log",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
         ]
@@ -433,24 +757,71 @@ impl DevtoolsBackend for DesktopHttpBackend {
                     .clone()
                     .unwrap_or_else(|| "/home/laragana/workspcacemsg".to_string());
                 let app_dir = format!("{workspace}/apps/desktop-devtools");
-                let status = tokio::process::Command::new("dx")
+                self.start_build_record(
+                    "force_rebuild",
+                    "dx build --platform desktop",
+                    &app_dir,
+                    "dx build --platform desktop",
+                    "Running a one-shot desktop rebuild outside dx serve.",
+                )
+                .await;
+                let output = tokio::process::Command::new("dx")
                     .args(["build", "--platform", "desktop"])
                     .current_dir(&app_dir)
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .status()
+                    .output()
                     .await;
                 let _ = Self::increment_rebuild_counter().await;
-                match status {
-                    Ok(s) if s.success() => Some(Ok(
-                        "Force rebuild complete! Fresh desktop binary is ready.\n\
-                         Call launch_app to start it, then connect_cdp."
-                            .to_string(),
-                    )),
-                    Ok(s) => Some(Err(anyhow::anyhow!(
-                        "dx build --platform desktop failed with exit code: {s}"
-                    ))),
-                    Err(e) => Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}"))),
+                match output {
+                    Ok(out) => {
+                        let stdout_text = String::from_utf8_lossy(&out.stdout).into_owned();
+                        let stderr_text = String::from_utf8_lossy(&out.stderr).into_owned();
+                        {
+                            let mut buffer = self.build_log.lock().await;
+                            for line in stdout_text.lines() {
+                                buffer.push_line(format!("[stdout] {line}"));
+                            }
+                            for line in stderr_text.lines() {
+                                buffer.push_line(format!("[stderr] {line}"));
+                            }
+                        }
+
+                        if out.status.success() {
+                            self.finish_build_record(
+                                BuildLifecycleState::Succeeded,
+                                "Force rebuild completed successfully.",
+                                "dx build --platform desktop exited successfully. Launch the app again, then use generation + build diagnostics if runtime readiness is still unclear.",
+                                out.status.code(),
+                            )
+                            .await;
+                            Some(Ok(
+                                "Force rebuild complete! Fresh desktop binary is ready.\n\
+                                 Call launch_app to start it, then connect_cdp."
+                                    .to_string(),
+                            ))
+                        } else {
+                            self.finish_build_record(
+                                BuildLifecycleState::Failed,
+                                "Force rebuild failed.",
+                                "dx build --platform desktop exited with a non-zero status. Inspect get_last_build_log for the exact compiler and Dioxus CLI output.",
+                                out.status.code(),
+                            )
+                            .await;
+                            Some(Err(anyhow::anyhow!(
+                                "dx build --platform desktop failed with exit code: {:?}",
+                                out.status.code()
+                            )))
+                        }
+                    }
+                    Err(e) => {
+                        self.finish_build_record(
+                            BuildLifecycleState::Failed,
+                            "Force rebuild failed to start.",
+                            format!("Failed to spawn dx build --platform desktop: {e}"),
+                            None,
+                        )
+                        .await;
+                        Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}")))
+                    }
                 }
             }
             _ => None,
@@ -707,9 +1078,21 @@ fn cli_detect_workspace() -> String {
 
 /// Commands that trigger CLI mode instead of MCP server mode.
 const CLI_COMMANDS: &[&str] = &[
-    "status", "launch", "kill", "screenshot", "snapshot",
-    "eval", "click", "fill", "navigate", "generation",
-    "help", "--help", "-h",
+    "status",
+    "launch",
+    "kill",
+    "screenshot",
+    "snapshot",
+    "eval",
+    "click",
+    "fill",
+    "navigate",
+    "generation",
+    "build-status",
+    "build-log",
+    "help",
+    "--help",
+    "-h",
 ];
 
 /// Check if the first argument selects CLI mode.
@@ -747,6 +1130,8 @@ COMMANDS:
   fill <selector> <value>   Fill an input element
   navigate <url>            Navigate to a URL
   generation                Get rebuild/hotpatch generation counters
+    build-status              Get structured diagnostics for the last Dioxus build/hotpatch
+    build-log                 Get the raw log for the last Dioxus build/hotpatch
   help                      Show this help
 
 MCP mode (default, no subcommand):
@@ -822,6 +1207,8 @@ async fn dispatch_desktop_cli(
         "generation" => http_get(&backend.client, "/generation")
             .await
             .map(|b| String::from_utf8_lossy(&b).into_owned()),
+        "build-status" => backend.get_last_build_status().await,
+        "build-log" => backend.get_last_build_log().await,
         "screenshot" => cli_screenshot_cmd(backend, args).await,
         _ => Ok(desktop_cli_help().to_string()),
     }

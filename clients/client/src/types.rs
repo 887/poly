@@ -221,6 +221,13 @@ pub struct Session {
     /// homeserver, `"discord.com"` for Discord, `"my-poly.server.com"` for
     /// a self-hosted Poly server.
     pub instance_id: String,
+    /// Full backend base URL (with protocol) for reconnection after restart.
+    ///
+    /// Set by backends that need a URL for re-authentication (e.g. poly server
+    /// stores `"http://127.0.0.1:7080"` here).  `None` for backends that do
+    /// not require a URL (demo, built-in services).
+    #[serde(default)]
+    pub backend_url: Option<String>,
 }
 
 /// A server/community/workspace.

@@ -294,6 +294,14 @@ impl ClientManager {
         Some((account_id.clone(), backend.clone()))
     }
 
+    /// Register a newly created server into the `server_account_map`.
+    ///
+    /// Call this immediately after `create_server` returns `Ok(server)` so
+    /// subsequent `get_backend_for_server` lookups can find the right backend.
+    pub fn register_server(&mut self, server_id: String, account_id: String) {
+        self.server_account_map.insert(server_id, account_id);
+    }
+
     /// Get all servers from all active backends.
     pub async fn all_servers(&self) -> Vec<Server> {
         let mut servers = Vec::new();

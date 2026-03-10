@@ -272,6 +272,7 @@ pub fn from_wit_session(s: wit::Session) -> pc::Session {
         backend: from_wit_backend_type(s.backend),
         icon_emoji: s.icon_emoji,
         instance_id: s.instance_id,
+        backend_url: None,
     }
 }
 

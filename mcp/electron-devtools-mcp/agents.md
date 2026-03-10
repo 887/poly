@@ -18,6 +18,8 @@ cargo run --bin poly-electron-devtools-mcp -- eval "document.title"
 cargo run --bin poly-electron-devtools-mcp -- click "#my-button"
 cargo run --bin poly-electron-devtools-mcp -- fill "#input" "value"
 cargo run --bin poly-electron-devtools-mcp -- generation
+cargo run --bin poly-electron-devtools-mcp -- build-status
+cargo run --bin poly-electron-devtools-mcp -- build-log
 cargo run --bin poly-electron-devtools-mcp -- help
 ```
 
@@ -109,6 +111,21 @@ use `force_rebuild` the same way.
 | `build_id` | u64 | Reads `/tmp/poly-devtools-electron-rebuild-counter` |
 | `electron_pid` | u32? | PID of the managed Electron process (`null` if not launched by us) |
 
+## Build Diagnostics — REQUIRED when generation is ambiguous (2026-03-10)
+
+The Electron MCP now captures the exact `dx build --platform web` output and exposes:
+
+- `get_last_build_status` / `build-status`
+- `get_last_build_log` / `build-log`
+
+Use them immediately when:
+- `build_id` changed but the Electron window did not update
+- `connect_cdp` fails after `launch_app` or `rebuild_app`
+- you need the exact compiler / Dioxus CLI error for a failed Electron WASM build
+
+`get_last_build_status` is the structured JSON summary.
+`get_last_build_log` is the raw captured Dioxus/Cargo output.
+
 ## Dioxus Rebuild Toast Warning (2026-03-08)
 
 Electron runs the Dioxus web bundle, so a rebuild/reload cycle may also surface temporary
@@ -120,9 +137,10 @@ Agents should instead:
 
 1. check `get_generation()`
 2. confirm `build_id` increased after `launch_app` / `rebuild_app`
-3. reconnect with `connect_cdp()` after reload
-4. verify the real target UI via snapshot/screenshot
-5. **Note:** The toast DOM element may linger in snapshots/screenshots even after successful rebuild
+3. if counters look wrong, inspect `get_last_build_status` and `get_last_build_log`
+4. reconnect with `connect_cdp()` after reload
+5. verify the real target UI via snapshot/screenshot
+6. **Note:** The toast DOM element may linger in snapshots/screenshots even after successful rebuild
 
 Do not report failure solely because the rebuild toast appeared in a screenshot or DOM snapshot.
 

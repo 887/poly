@@ -20,6 +20,7 @@
 //!    better native integration (e.g. CDP commands instead of JS eval).
 
 use async_trait::async_trait;
+use std::collections::VecDeque;
 
 // ─── Data Structures ──────────────────────────────────────────────────────────
 
@@ -86,6 +87,133 @@ pub struct ConsoleEntry {
     pub text: String,
     #[serde(default)]
     pub timestamp: Option<f64>,
+}
+
+/// High-level state of the most recent Dioxus build or hotpatch attempt.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum BuildLifecycleState {
+    /// No build has been observed yet in this MCP session.
+    NotStarted,
+    /// The build command or watched rebuild is currently running.
+    Running,
+    /// The build or hotpatch completed successfully.
+    Succeeded,
+    /// The build or hotpatch failed.
+    Failed,
+    /// The backend could not determine a definitive outcome.
+    Unknown,
+}
+
+/// Structured snapshot describing the most recent build attempt.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BuildDiagnostics {
+    /// Backend name, e.g. `desktop-http`, `web-cdp`, `electron-cdp`.
+    pub backend: String,
+    /// Tool or workflow that triggered the build.
+    pub trigger: String,
+    /// Human-readable build mode, e.g. `dx serve --hotpatch`, `dx build --platform web`.
+    pub mode: String,
+    /// Working directory used for the command.
+    pub working_directory: String,
+    /// Exact command line invoked for the build.
+    pub command_line: String,
+    /// Current lifecycle state.
+    pub state: BuildLifecycleState,
+    /// Short human-readable summary.
+    pub summary: String,
+    /// Additional verification notes explaining why the build is considered good/bad/unknown.
+    pub verification: String,
+    /// Optional exit code for one-shot commands.
+    pub exit_code: Option<i32>,
+    /// Start time in UNIX epoch milliseconds.
+    pub started_at_unix_ms: Option<u128>,
+    /// Finish time in UNIX epoch milliseconds.
+    pub finished_at_unix_ms: Option<u128>,
+    /// Duration in milliseconds.
+    pub duration_ms: Option<u128>,
+    /// Build counter before the attempt, if known.
+    pub build_id_before: Option<u64>,
+    /// Build counter after the attempt, if known.
+    pub build_id_after: Option<u64>,
+    /// Generation counter before the attempt, if known.
+    pub generation_before: Option<u64>,
+    /// Generation counter after the attempt, if known.
+    pub generation_after: Option<u64>,
+    /// Managed process identifier before the attempt, if known.
+    pub process_id_before: Option<u32>,
+    /// Managed process identifier after the attempt, if known.
+    pub process_id_after: Option<u32>,
+    /// Number of log lines captured for this attempt.
+    pub log_line_count: usize,
+    /// Tail excerpt from the build log for quick inspection.
+    pub log_excerpt: String,
+}
+
+/// In-memory rolling log buffer for Dioxus command output.
+#[derive(Debug, Clone)]
+pub struct RollingBuildLog {
+    next_seq: u64,
+    lines: VecDeque<(u64, String)>,
+    max_lines: usize,
+}
+
+impl Default for RollingBuildLog {
+    fn default() -> Self {
+        Self::new(4_000)
+    }
+}
+
+impl RollingBuildLog {
+    /// Create a new rolling build log with a maximum number of retained lines.
+    #[must_use]
+    pub fn new(max_lines: usize) -> Self {
+        Self {
+            next_seq: 1,
+            lines: VecDeque::new(),
+            max_lines,
+        }
+    }
+
+    /// Append a new log line and return its sequence number.
+    pub fn push_line(&mut self, line: impl Into<String>) -> u64 {
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        self.lines.push_back((seq, line.into()));
+        while self.lines.len() > self.max_lines {
+            let _ = self.lines.pop_front();
+        }
+        seq
+    }
+
+    /// Sequence number that the next appended line will receive.
+    #[must_use]
+    pub fn next_sequence(&self) -> u64 {
+        self.next_seq
+    }
+
+    /// Return all retained log lines whose sequence is at least `start_seq`.
+    #[must_use]
+    pub fn lines_since(&self, start_seq: u64) -> Vec<String> {
+        self.lines
+            .iter()
+            .filter(|(seq, _)| *seq >= start_seq)
+            .map(|(_, line)| line.clone())
+            .collect()
+    }
+
+    /// Return the last `tail_len` log lines.
+    #[must_use]
+    pub fn tail_lines(&self, tail_len: usize) -> Vec<String> {
+        let mut collected: Vec<String> = self
+            .lines
+            .iter()
+            .rev()
+            .take(tail_len)
+            .map(|(_, line)| line.clone())
+            .collect();
+        collected.reverse();
+        collected
+    }
 }
 
 // ─── JavaScript Snippets ──────────────────────────────────────────────────────
@@ -215,6 +343,16 @@ pub trait DevtoolsBackend: Send + Sync {
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
         let _ = workspace;
         anyhow::bail!("rebuild_app not supported by this backend")
+    }
+
+    /// Return structured diagnostics for the most recent Dioxus build / hotpatch attempt.
+    async fn get_last_build_status(&self) -> anyhow::Result<String> {
+        anyhow::bail!("get_last_build_status not supported by this backend")
+    }
+
+    /// Return the raw captured output for the most recent Dioxus build / hotpatch attempt.
+    async fn get_last_build_log(&self) -> anyhow::Result<String> {
+        anyhow::bail!("get_last_build_log not supported by this backend")
     }
 
     /// Delete the local database and restart at the setup wizard.

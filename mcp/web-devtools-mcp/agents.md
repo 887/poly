@@ -20,6 +20,8 @@ cargo run --bin poly-web-devtools-mcp -- eval "document.title"
 cargo run --bin poly-web-devtools-mcp -- click "#my-button"
 cargo run --bin poly-web-devtools-mcp -- fill "#input" "value"
 cargo run --bin poly-web-devtools-mcp -- generation
+cargo run --bin poly-web-devtools-mcp -- build-status
+cargo run --bin poly-web-devtools-mcp -- build-log
 cargo run --bin poly-web-devtools-mcp -- help
 
 # Headless: add --headless before the subcommand
@@ -225,6 +227,22 @@ is preserved (no page reload). This is the key behavioural difference between th
 
 In both cases, **`build_id` is the reliable indicator** of "did a rebuild happen?"
 
+## Build Diagnostics — REQUIRED when generation is ambiguous (2026-03-10)
+
+The web MCP now captures Dioxus stdout/stderr and exposes two new tools/CLI commands:
+
+- `get_last_build_status` / `build-status`
+- `get_last_build_log` / `build-log`
+
+Use them immediately when:
+- `build_id` changes but `generation` does not
+- the page appears stale after `rebuild_app` or `force_rebuild`
+- `connect_cdp` fails after a rebuild
+- you need the exact `dx serve` / `dx build` output explaining a failure
+
+`get_last_build_status` gives the structured summary.
+`get_last_build_log` gives the raw Dioxus/Cargo output for the most recent web build attempt.
+
 ### Counter file
 
 `/tmp/poly-devtools-web-rebuild-counter` — plain text U64, separate from the desktop
@@ -258,10 +276,11 @@ Agents must **not** use that text as the primary signal for success/failure beca
 Use this order instead:
 
 1. `get_generation()` → confirm `build_id` changed if a rebuild was requested
-2. `connect_cdp()` after the reload completes
-3. Take a fresh snapshot/screenshot
-4. Verify real app markers on the expected screen
-5. **Note:** The toast DOM element may still appear in the snapshot even after successful rebuild —
+2. if counters look wrong, inspect `get_last_build_status` and `get_last_build_log`
+3. `connect_cdp()` after the reload completes
+4. Take a fresh snapshot/screenshot
+5. Verify real app markers on the expected screen
+6. **Note:** The toast DOM element may still appear in the snapshot even after successful rebuild —
    its presence does not indicate failure
 
 Avoid `wait_for` on rebuild-toast strings. Wait for stable app content instead.

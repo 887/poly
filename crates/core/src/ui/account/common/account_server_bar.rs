@@ -299,6 +299,20 @@ fn AccountServerIcon(
         }
         app_state.write().nav.selected_server = Some(sid_click.clone());
         app_state.write().nav.selected_channel = None;
+        // Clear per-server transient data synchronously before the route change so
+        // that `ServerHome` never sees stale `current_channel` / `current_server`
+        // from a previous server or from demo data.  Without this, the stale channel
+        // type can flip `ServerHome` into rendering `VoiceChannelView` even before
+        // `load_server_data` fires, which requests audio permission and hard-crashes
+        // Chromium on Linux.
+        {
+            let mut cd = chat_data.write();
+            cd.current_server = None;
+            cd.current_channel = None;
+            cd.channels = Vec::new();
+            cd.members = Vec::new();
+            cd.messages = Vec::new();
+        }
         let sid2 = sid_click.clone();
         spawn(async move {
             super::super::super::favorites_sidebar::load_server_data(
@@ -447,7 +461,7 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
 #[rustfmt::skip]
 #[component]
 fn CreateServerButton(account_id: String) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let mut client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
     let mut form_open = use_signal(|| false);
     let mut server_name = use_signal(String::new);
@@ -486,6 +500,12 @@ fn CreateServerButton(account_id: String) -> Element {
                                     let guard = backend.read().await;
                                     match guard.create_server(&name).await {
                                         Ok(server) => {
+                                            // Register the new server in the map so
+                                            // load_server_data can find its backend.
+                                            client_manager.write().register_server(
+                                                server.id.clone(),
+                                                acct.clone(),
+                                            );
                                             chat_data.write().servers.push(server);
                                             form_open.set(false);
                                             server_name.set(String::new());

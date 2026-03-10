@@ -149,6 +149,7 @@ pub fn demo_session() -> Session {
         backend: BackendType::Demo,
         icon_emoji: Some("🐱".to_string()),
         instance_id: DEMO_INSTANCE_ID.to_string(),
+        backend_url: None,
     }
 }
 
@@ -167,6 +168,7 @@ pub fn demo2_session() -> Session {
         backend: BackendType::Demo,
         icon_emoji: Some("🐶".to_string()),
         instance_id: DEMO_INSTANCE_ID.to_string(),
+        backend_url: None,
     }
 }
 

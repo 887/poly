@@ -151,7 +151,8 @@ impl PluginRegistry {
         // them after instantiation and calls i18n::register_plugin_ftl().
         let _ = store.set_fuel(1_000_000_000);
         let meta = instance.poly_messenger_plugin_metadata();
-        let mut plugin_ftl: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut plugin_ftl: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
         for locale in SUPPORTED_LOCALES {
             let _ = store.set_fuel(1_000_000_000);
             match meta.call_get_translations(&mut store, locale).await {
@@ -163,9 +164,7 @@ impl PluginRegistry {
                     tracing::debug!("Plugin '{plugin_id}' has no FTL for locale '{locale}'");
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        "Plugin '{plugin_id}' get-translations({locale}) failed: {e}"
-                    );
+                    tracing::warn!("Plugin '{plugin_id}' get-translations({locale}) failed: {e}");
                 }
             }
         }

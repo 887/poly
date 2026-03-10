@@ -265,11 +265,7 @@ async fn dispatch_tool(name: &str, params: &Value, data_dir: &Path) -> Value {
 }
 
 /// Inner dispatch — returns `anyhow::Result<String>` so `?` works cleanly.
-async fn dispatch_inner(
-    name: &str,
-    params: &Value,
-    data_dir: &Path,
-) -> anyhow::Result<String> {
+async fn dispatch_inner(name: &str, params: &Value, data_dir: &Path) -> anyhow::Result<String> {
     match name {
         "list_tasks" => ops::list_tasks(data_dir).await,
         "create_task" => {
@@ -451,12 +447,7 @@ async fn handle_request(line: &str, data_dir: &Path) -> String {
 }
 
 /// Dispatch by JSON-RPC method.
-async fn handle_method(
-    method: &str,
-    id: Option<Value>,
-    params: &Value,
-    data_dir: &Path,
-) -> String {
+async fn handle_method(method: &str, id: Option<Value>, params: &Value, data_dir: &Path) -> String {
     match method {
         "initialize" => mcp_response(
             id,

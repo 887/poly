@@ -108,11 +108,23 @@ pub fn standard_tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "rebuild_app",
-            "description": "Trigger a Dioxus full rebuild (recompilation + app restart). Hot-reload handles RSX-only changes automatically — use this for structural code changes that need recompilation. The app will restart after building.",
+            "description": "Trigger a Dioxus full rebuild (recompilation + app restart). Hot-reload handles RSX-only changes automatically — use this for structural code changes that need recompilation. The app will restart after building. If generation or readiness does not change as expected afterwards, immediately inspect get_last_build_status and get_last_build_log for the exact Dioxus output.",
             "annotations": { "title": "Rebuild App", "category": "lifecycle", "readOnlyHint": false },
             "inputSchema": { "type": "object", "properties": {
                 "workspace": { "type": "string", "description": "Path to workspace root. Auto-detected if omitted." }
             }}
+        }),
+        json!({
+            "name": "get_last_build_status",
+            "description": "Return a structured JSON summary of the most recent Dioxus build / hotpatch attempt, including trigger, command line, working directory, lifecycle state, exit code, verification notes, and a tail excerpt from the captured output. Use this first when launch_app/rebuild_app appears stuck or generation does not advance as expected.",
+            "annotations": { "title": "Last Build Status", "category": "lifecycle", "readOnlyHint": true },
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "get_last_build_log",
+            "description": "Return the raw captured stdout/stderr for the most recent Dioxus build / hotpatch attempt. Use this to inspect the exact compiler / Dioxus CLI output and failure reason after checking get_last_build_status.",
+            "annotations": { "title": "Last Build Log", "category": "debugging", "readOnlyHint": true },
+            "inputSchema": { "type": "object", "properties": {} }
         }),
         json!({
             "name": "reset_app",
@@ -364,6 +376,14 @@ pub async fn dispatch_tool(backend: &dyn DevtoolsBackend, name: &str, args: &Val
         "rebuild_app" => match backend.rebuild_app(ws).await {
             Ok(r) => text_result(r, false),
             Err(e) => text_result(format!("rebuild error: {e}"), true),
+        },
+        "get_last_build_status" => match backend.get_last_build_status().await {
+            Ok(r) => text_result(r, false),
+            Err(e) => text_result(format!("last build status error: {e}"), true),
+        },
+        "get_last_build_log" => match backend.get_last_build_log().await {
+            Ok(r) => text_result(r, false),
+            Err(e) => text_result(format!("last build log error: {e}"), true),
         },
         "reset_app" => match backend.reset_app().await {
             Ok(r) => text_result(r, false),

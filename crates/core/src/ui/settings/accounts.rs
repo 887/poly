@@ -145,4 +145,3 @@ pub(super) fn AccountsSettings() -> Element {
         }
     }
 }
-
