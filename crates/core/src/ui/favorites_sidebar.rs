@@ -298,24 +298,24 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 }
 
                 // No stored route — fall back to the account's DMs home.
-                // Look up backend slug + instance_id from the stored session
+                // Look up backend slug + instance_id from the stored session.
+                // IMPORTANT: read the signal once and extract all needed data
+                // before dropping the guard; nested read() calls while an outer
+                // read guard is held cause a runtime borrow panic in WASM.
                 let (backend_slug, instance_id) = {
-                    chat_data
-                        .read()
-                        .account_sessions
-                        .get(&aid)
-                        .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()))
-                        .unwrap_or_else(|| (
-                            // Fallback: try to find from servers
-                            chat_data
-                                .read()
-                                .servers
-                                .iter()
-                                .find(|s| s.account_id == aid)
-                                .map(|s| s.backend.slug().to_string())
-                                .unwrap_or_else(|| "demo".to_string()),
-                            "demo".to_string(),
-                        ))
+                    let guard = chat_data.read();
+                    if let Some(session) = guard.account_sessions.get(&aid) {
+                        (session.backend.slug().to_string(), session.instance_id.clone())
+                    } else {
+                        // Fallback: derive from the first matching server entry.
+                        let slug = guard
+                            .servers
+                            .iter()
+                            .find(|s| s.account_id == aid)
+                            .map(|s| s.backend.slug().to_string())
+                            .unwrap_or_else(|| "demo".to_string());
+                        (slug, "demo".to_string())
+                    }
                 };
                 navigator()
                     .push(Route::DmsHome {

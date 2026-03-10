@@ -8073,3 +8073,172 @@ select {
     font-size: 0.9rem;
     margin: 8px 0;
 }
+
+/* ============================================================
+   Create Server — full-page form (routes inside MainLayout)
+   ============================================================ */
+
+/* Outer container: fills the content area to the right of both sidebars */
+.create-server-page {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-primary);
+    overflow: auto;
+    padding: 32px;
+}
+
+/* Centered card */
+.create-server-card {
+    width: 100%;
+    max-width: 480px;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: 40px 40px 32px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+}
+
+/* Title */
+.create-server-card-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+/* Subtitle / helper text */
+.create-server-card-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 28px;
+    line-height: 1.5;
+}
+
+/* Form body wrapper */
+.create-server-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Label above the input */
+.create-server-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+
+/* Wide server-name input */
+.create-server-page-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 15px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+
+.create-server-page-input:focus {
+    border-color: var(--accent-primary);
+}
+
+/* Inline error message */
+.create-server-page-error {
+    font-size: 13px;
+    color: var(--accent-danger);
+    margin: 0;
+}
+
+/* Cancel + Create button row */
+.create-server-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+/* ── Inline Create Channel ─────────────────────────────────────────────────── */
+
+/* Wrapper at the bottom of the channel list */
+.channel-create-section {
+    padding: 4px 8px 8px;
+}
+
+/* The "+ New Channel" trigger button */
+.channel-create-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 8px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.1s, color 0.1s;
+    text-align: left;
+}
+
+.channel-create-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.channel-create-btn-icon {
+    font-size: 16px;
+    line-height: 1;
+    font-weight: 600;
+}
+
+/* Inline form container */
+.channel-create-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Text input inside the inline form */
+.channel-create-input {
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--accent-primary);
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.channel-create-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Create / Cancel button row */
+.channel-create-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* Inline error text */
+.channel-create-error {
+    font-size: 12px;
+    color: var(--accent-danger);
+    margin: 0;
+}
+}

@@ -573,10 +573,42 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
     let channels = chat_data.read().channels.clone();
     let current_server = chat_data.read().current_server.clone();
-    let _selected_channel = app_state.read().nav.selected_channel.clone();
+
+    // Derive route construction fields for InlineCreateChannel.
+    let instance_id = app_state.read().nav.active_instance_id.clone().unwrap_or_default();
+    let account_id  = app_state.read().nav.active_account_id.clone().unwrap_or_default();
 
     if let Some(ref server) = current_server {
+        // Collect all channel IDs that are already assigned to a category.
+        let categorized_ids: Vec<String> = server
+            .categories
+            .iter()
+            .flat_map(|cat| cat.channel_ids.iter().cloned())
+            .collect();
+
+        // Uncategorized: channels loaded from the server but not in any category.
+        let uncategorized_ids: Vec<String> = channels
+            .iter()
+            .filter(|ch| !categorized_ids.contains(&ch.id))
+            .map(|ch| ch.id.clone())
+            .collect();
+
+        // Backend slug for route construction.
+        let backend_slug = server.backend.slug().to_string();
+        // Demo backend does not support channel creation — hide the button for it.
+        let can_create = !matches!(server.backend, BackendType::Demo);
+        let server_id = server.id.clone();
+
         rsx! {
+            // Show uncategorized channels first (Discord-style root section).
+            if !uncategorized_ids.is_empty() {
+                CategorySection {
+                    cat_name: t("channel-list-text-channels"),
+                    cat_channel_ids: uncategorized_ids,
+                    channels: channels.clone(),
+                }
+            }
+            // Then render all server-defined categories.
             for category in &server.categories {
                 if visible_category_ids.read().is_empty()
                     || visible_category_ids.read().contains(&category.id)
@@ -586,6 +618,20 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                         cat_channel_ids: category.channel_ids.clone(),
                         channels: channels.clone(),
                     }
+                }
+            }
+            // "+ New Channel" link → full-page CreateChannelRoute (non-demo only).
+            if can_create {
+                Link {
+                    class: "channel-create-btn",
+                    to: Route::CreateChannelRoute {
+                        backend: backend_slug,
+                        instance_id,
+                        account_id,
+                        server_id,
+                    },
+                    span { class: "channel-create-btn-icon", "+" }
+                    span { "{t(\"create-channel-btn\")}" }
                 }
             }
         }

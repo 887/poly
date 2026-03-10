@@ -57,6 +57,8 @@
 //! through the `ClientBackend` trait via `ClientManager`.
 
 pub mod account;
+pub(crate) mod create_channel;
+pub(crate) mod create_server;
 pub(crate) mod demo;
 mod electron_titlebar;
 mod favorites_sidebar;

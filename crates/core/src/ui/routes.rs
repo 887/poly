@@ -69,8 +69,10 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ServerHome { account_id, .. }
         | Route::ServerChat { account_id, .. }
         | Route::ServerSettingsRoute { account_id, .. }
+        | Route::CreateChannelRoute { account_id, .. }
         | Route::FriendsRoute { account_id, .. }
-        | Route::AccountSettingsRoute { account_id, .. } => Some(account_id.as_str()),
+        | Route::AccountSettingsRoute { account_id, .. }
+        | Route::CreateServerRoute { account_id, .. } => Some(account_id.as_str()),
         Route::Root
         | Route::SettingsRoute
         | Route::SettingsSectionRoute { .. }
@@ -126,6 +128,21 @@ pub enum Route {
 
         // ── Account-scoped: Server channels ─────────────────────────
         #[layout(ServerLayout)]
+            // ── Create Channel (more specific — must come BEFORE ServerChat) ──
+            // CreateChannelRoute uses a literal "/create-channel" suffix, while
+            // ServerChat uses a wildcard "/:channel_id". If ServerChat were
+            // listed first, Dioxus would match "/create-channel" as
+            // channel_id = "create-channel" and try to load that as a real
+            // channel, causing a crash. Always keep literal-suffix routes above
+            // wildcard-segment routes of the same depth.
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/create-channel")]
+            CreateChannelRoute {
+                backend: String,
+                instance_id: String,
+                account_id: String,
+                server_id: String,
+            },
+
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id")]
             ServerChat {
                 backend: String,
@@ -164,6 +181,10 @@ pub enum Route {
         // ── Account-scoped settings ──────────────────────────────────
         #[route("/:backend/:instance_id/:account_id/settings")]
         AccountSettingsRoute { backend: String, instance_id: String, account_id: String },
+
+        // ── Account-scoped: Create server (full-page form) ───────────
+        #[route("/:backend/:instance_id/:account_id/create-server")]
+        CreateServerRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped: Server settings ─────────────────────────
         #[route("/:backend/:instance_id/:account_id/servers/:server_id/settings")]
@@ -328,6 +349,36 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
+        }
+        Route::CreateServerRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
+            s.nav.view = View::Settings; // Reuse Settings view — hides channel list
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+            // Do NOT record in account_last_routes — create-server is transient
+        }
+        Route::CreateChannelRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+        } => {
+            // Keep the ServerLayout visible (selected_server stays set so
+            // ChannelList renders) but clear any selected channel so the
+            // Outlet renders CreateChannelPage instead of a chat view.
+            s.nav.view = View::Server;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = None;
+            // Do NOT record in account_last_routes — create-channel is transient
         }
         Route::ServerSettingsRoute {
             backend,
@@ -822,4 +873,34 @@ fn ClientSignup(client: String) -> Element {
 #[component]
 fn PageNotFound(segments: Vec<String>) -> Element {
     rsx! {}
+}
+
+/// Create Server — `/:backend/:instance_id/:account_id/create-server`.
+///
+/// Full-page form inside MainLayout (both FavoritesBar + AccountServerBar remain
+/// visible on the left). Delegates to [`super::create_server::CreateServerPage`].
+#[rustfmt::skip]
+#[component]
+fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    rsx! {
+        super::create_server::CreateServerPage { backend, instance_id, account_id }
+    }
+}
+
+/// Create Channel — `/:backend/:instance_id/:account_id/channels/:server_id/create-channel`.
+///
+/// Full-page form inside `ServerLayout` — the `ChannelList` sidebar (with all
+/// existing channels) stays visible on the left while the form occupies the
+/// main content area on the right.
+#[rustfmt::skip]
+#[component]
+fn CreateChannelRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+) -> Element {
+    rsx! {
+        super::create_channel::CreateChannelPage { backend, instance_id, account_id, server_id }
+    }
 }

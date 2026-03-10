@@ -1,0 +1,54 @@
+{
+  "id": 4,
+  "slug": "fix-ui-add-server-full-page-route-channel-list-fix-e2e-verify",
+  "title": "Fix UI: Add-Server full-page route + channel list fix + E2E verify",
+  "description": "Three issues to fix:\n1. 'Add Server' must be a full-page route (like Settings) with FavoritesBar + AccountServerBar on left, not an inline dialog\n2. Fix: #general channel not appearing in left channel list when viewing E2E test server\n3. E2E verify: Start poly-server, signup, create server, create channel, send message — all via poly-web screenshots",
+  "status": "todo",
+  "created_at": "2026-03-10T14:44:05.631312902Z",
+  "updated_at": "2026-03-10T14:46:26.224440313Z",
+  "completed_at": null,
+  "memory_count": 0,
+  "finding_count": 2,
+  "checklist": [
+    {
+      "id": 1,
+      "text": "Explore: find add-server dialog trigger and channel list rendering for poly servers",
+      "done": true
+    },
+    {
+      "id": 2,
+      "text": "Move 'Add Server' to a full-page Route with FavoritesBar + AccountServerBar visible on left",
+      "done": false
+    },
+    {
+      "id": 3,
+      "text": "Fix channel list: #general not showing in left sidebar for poly-server account servers",
+      "done": false
+    },
+    {
+      "id": 4,
+      "text": "cargo cranky --workspace zero warnings after all code changes",
+      "done": false
+    },
+    {
+      "id": 5,
+      "text": "Start poly-server + poly-web, do signup E2E flow via screenshots",
+      "done": false
+    },
+    {
+      "id": 6,
+      "text": "Visual verify: Add-Server page renders with both bars on left (screenshot)",
+      "done": false
+    },
+    {
+      "id": 7,
+      "text": "Visual verify: channel list shows #general for E2E test server (screenshot)",
+      "done": false
+    },
+    {
+      "id": 8,
+      "text": "Visual verify: create server, create channel, send message in #general (screenshot)",
+      "done": false
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": 5,
+  "slug": "add-wasm-crash-handler-and-mcp-timeouts",
+  "title": "Add wasm crash handler and MCP timeouts",
+  "description": "Add a robust WASM/Dioxus crash handler for route freezes and enforce timeouts across desktop/web/electron MCP methods so waits/screenshots/eval cannot hang indefinitely.",
+  "status": "todo",
+  "created_at": "2026-03-10T17:13:30.463834113Z",
+  "updated_at": "2026-03-10T17:13:49.664330125Z",
+  "completed_at": null,
+  "memory_count": 1,
+  "finding_count": 0,
+  "checklist": []
+}
