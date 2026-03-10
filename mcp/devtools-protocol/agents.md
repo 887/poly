@@ -68,6 +68,19 @@ The shared tool surface now includes the cross-backend build diagnostics workflo
 **Mandatory agent workflow:** if generation / rebuild counters do not move as expected,
 inspect `get_last_build_status` and `get_last_build_log` before concluding the build is stuck or failed.
 
+## Shared MCP Timeout Enforcement (NEW — 2026-03-10)
+
+`dispatch_tool()` now wraps **every** standard and extension tool call in a timeout budget derived from
+`DevtoolsBackend::tool_timeout_ms(name, args)`.
+
+This means:
+
+- MCP calls should fail with a timeout error instead of hanging forever
+- timeouts are now part of the expected debugging workflow
+- backend authors should override `tool_timeout_ms(...)` if a custom tool legitimately needs more time
+
+When you see a timeout error, interpret it as a probable hung renderer / transport issue, not as missing output.
+
 ## Key Files
 
 | File | Purpose |

@@ -25,12 +25,20 @@ struct AccountBarUserState {
 }
 
 fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> AccountBarUserState {
-    let session = app_state
-        .nav
-        .active_account_id
-        .as_deref()
-        .and_then(|aid| chat_data.account_sessions.get(aid).cloned());
-
+    let aid = app_state.nav.active_account_id.as_deref();
+    let session = aid.and_then(|aid| chat_data.account_sessions.get(aid).cloned());
+    let cm_signal = dioxus::prelude::use_context::<
+        dioxus::prelude::Signal<crate::client_manager::ClientManager>,
+    >();
+    let is_offline = if let Some(aid) = aid {
+        matches!(
+            cm_signal.read().connection_statuses.get(aid),
+            Some(poly_client::ConnectionStatus::Error(_))
+                | Some(poly_client::ConnectionStatus::Disconnected)
+        )
+    } else {
+        false
+    };
     if let Some(s) = session {
         let name = s.user.display_name.clone();
         let id = s.user.id.clone();
@@ -41,12 +49,15 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
                 .map(|c| c.to_string())
                 .unwrap_or_default(),
             user_name: name,
-            status_text: t("user-online"),
+            status_text: if is_offline {
+                t("user-offline")
+            } else {
+                t("user-online")
+            },
             color: user_color(&id).to_string(),
             avatar_url: s.user.avatar_url.clone(),
         };
     }
-
     AccountBarUserState {
         user_name: t("account-not-signed-in"),
         status_text: t("user-offline"),

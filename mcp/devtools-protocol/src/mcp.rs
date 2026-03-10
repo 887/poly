@@ -347,8 +347,30 @@ pub fn standard_tool_list() -> Vec<Value> {
 
 // ─── Tool Dispatch ────────────────────────────────────────────────────────────
 
+fn timeout_result(tool_name: &str, timeout_ms: u64) -> Value {
+    text_result(
+        format!(
+            "{tool_name} timed out after {timeout_ms} ms. The app, browser page, or devtools transport may be hung. If this happened after a rebuild, inspect get_last_build_status and get_last_build_log for the most recent Dioxus output."
+        ),
+        true,
+    )
+}
+
 /// Dispatch a `tools/call` request to the appropriate backend method.
 pub async fn dispatch_tool(backend: &dyn DevtoolsBackend, name: &str, args: &Value) -> Value {
+    let timeout_ms = backend.tool_timeout_ms(name, args);
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(timeout_ms),
+        dispatch_tool_inner(backend, name, args),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => timeout_result(name, timeout_ms),
+    }
+}
+
+async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &Value) -> Value {
     let ws = args
         .get("workspace")
         .and_then(|v| v.as_str())

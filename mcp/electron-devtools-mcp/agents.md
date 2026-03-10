@@ -35,6 +35,16 @@ Implements `DevtoolsBackend` via **Chrome DevTools Protocol (CDP)** over
 WebSocket — architecturally similar to `poly-web-devtools-mcp` (which targets
 Chrome) but adapted for the Electron runtime.
 
+## Timeout Behaviour (2026-03-10)
+
+The shared MCP protocol now wraps every tool call in a timeout, and this backend adds explicit
+timeouts to CDP send/response waits.
+
+If the Electron renderer freezes, MCP commands should now fail with timeout errors instead of hanging forever.
+Treat those timeout errors as a real signal that the page/renderer is wedged.
+
+If the renderer is still responsive enough for JS evaluation, inspect `window.__polyCrashState` to see whether the shared WASM crash handler recorded a panic or browser-side error.
+
 ## Architecture
 
 - **CDP port:** `9224` (distinct from web-devtools `9222` and desktop HTTP `9223`)

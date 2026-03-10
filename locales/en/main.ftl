@@ -7,6 +7,19 @@ electron-window-minimize = Minimize
 electron-window-maximize = Maximize or restore
 electron-window-close = Close window
 app-description = Multi-platform messenger client
+wasm-crash-title = Poly hit a browser crash
+wasm-crash-description = The current page crashed or threw an unhandled browser/WASM error. The UI below this overlay is no longer trustworthy.
+wasm-crash-details-label = Crash type
+wasm-crash-location-label = Source location
+wasm-crash-path-label = Route
+wasm-crash-reload-action = Reload Poly
+wasm-crash-kind-panic = Rust panic
+wasm-crash-kind-window-error = Browser error event
+wasm-crash-kind-unhandled-rejection = Unhandled promise rejection
+wasm-crash-kind-unknown = Unknown crash
+wasm-crash-generic-message = No crash details were provided by the browser.
+wasm-crash-window-error-fallback = The browser reported a global error event without a message.
+wasm-crash-rejection-fallback = A promise was rejected without a readable error message.
 
 # Navigation
 nav-dms = Direct Messages

@@ -41,6 +41,13 @@ This is how you verify UI changes in the **desktop (Wry/WebKit)** build.
 
 For the **web (Chrome)** build, use `poly-web-devtools-mcp` instead.
 
+## Timeout Behaviour (2026-03-10)
+
+The shared MCP protocol now wraps every desktop tool call in a timeout budget.
+Desktop transport already had HTTP client timeouts; now the outer MCP request will also fail fast instead of hanging forever if the eval bridge or app stops responding.
+
+Treat timeout errors as a strong signal that the app or bridge is wedged.
+
 ---
 
 ## Critical: App and MCP Isolation (2026-03-01)

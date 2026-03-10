@@ -46,6 +46,18 @@ This is the preferred backend when you want:
 - **Native input events** (via `Input.dispatchMouseEvent`, `Input.insertText`)
 - **Full CDP access** for advanced debugging
 
+## Timeout Behaviour (2026-03-10)
+
+The shared MCP protocol now times out every tool call, and this backend also applies explicit
+timeouts to CDP send/response waits.
+
+So if the Chromium renderer freezes, you should now get a timeout error such as:
+- tool timeout from shared MCP dispatch, or
+- CDP send/response timeout from this backend
+
+Do **not** treat timeouts as inconclusive. Treat them as evidence that the page or CDP session is wedged.
+If the page is still partially responsive, inspect `window.__polyCrashState` to see whether the WASM app reported a panic/error overlay.
+
 ---
 
 ## Architecture

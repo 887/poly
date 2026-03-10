@@ -669,6 +669,38 @@ pub trait DevtoolsBackend: Send + Sync {
         anyhow::bail!("handle_dialog not supported by this backend")
     }
 
+    /// Return the timeout budget for a tool call in milliseconds.
+    ///
+    /// Shared MCP dispatch enforces this timeout around every tool call so a
+    /// hung renderer or stalled transport cannot block the MCP session forever.
+    fn tool_timeout_ms(&self, name: &str, args: &serde_json::Value) -> u64 {
+        match name {
+            "launch_app" | "rebuild_app" | "reset_app" | "force_rebuild" => 180_000,
+            "kill_app" | "hard_kill" => 30_000,
+            "connect_cdp" | "cdp_status" => 30_000,
+            "get_last_build_status" | "get_last_build_log" | "get_generation" => 10_000,
+            "take_screenshot" | "take_snapshot" => 20_000,
+            "evaluate_script" | "js_eval" | "get_dom" | "list_console_messages" | "get_console" => {
+                15_000
+            }
+            "navigate_page" => args
+                .get("timeout")
+                .and_then(|value| value.as_u64())
+                .unwrap_or(30_000)
+                .saturating_add(5_000),
+            "wait_for" => args
+                .get("timeout")
+                .and_then(|value| value.as_u64())
+                .unwrap_or(10_000)
+                .saturating_add(5_000),
+            "click" | "click_at" | "hover" | "fill" | "type_text" | "handle_dialog"
+            | "page_reload" | "set_viewport" | "navigate" | "browser_reload" | "screenshot" => {
+                20_000
+            }
+            _ => 30_000,
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  Extension point
     // ═══════════════════════════════════════════════════════════════════

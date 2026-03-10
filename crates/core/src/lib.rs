@@ -38,6 +38,11 @@ pub mod storage;
 pub mod sync;
 pub mod theme;
 pub mod ui;
+#[cfg(target_arch = "wasm32")]
+mod wasm_crash_handler;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_crash_handler::install_wasm_crash_handler;
 
 // Re-export the client trait crate
 pub use poly_client;
@@ -76,6 +81,19 @@ macro_rules! t {
 /// already used in desktop-devtools. Components and event handlers can call
 /// storage without prop-drilling or context gymnastics.
 pub static STORAGE: std::sync::OnceLock<storage::Storage> = std::sync::OnceLock::new();
+
+/// Install the shared browser/WASM crash handler.
+///
+/// On `wasm32`, this registers:
+/// - a Rust panic hook,
+/// - `window.onerror`, and
+/// - `window.unhandledrejection`
+///
+/// Each failure path records crash metadata on `window.__polyCrashState` and
+/// injects a fixed overlay into the DOM so renderer crashes are immediately
+/// visible during manual testing and MCP automation.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn install_wasm_crash_handler() {}
 
 /// Initialize the Poly application.
 ///

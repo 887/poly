@@ -135,7 +135,12 @@ fn do_create_server(
     instance_id: String,
     signals: CreateSignals,
 ) {
-    let CreateSignals { mut client_manager, mut chat_data, mut creating, mut error_msg } = signals;
+    let CreateSignals {
+        mut client_manager,
+        mut chat_data,
+        mut creating,
+        mut error_msg,
+    } = signals;
     let backend_opt = client_manager.read().get_backend(&account_id);
     let Some(backend_arc) = backend_opt else {
         error_msg.set("No backend found for this account".to_string());
@@ -147,17 +152,14 @@ fn do_create_server(
         let guard = backend_arc.read().await;
         match guard.create_server(&name).await {
             Ok(server) => {
-                let server_id  = server.id.clone();
+                let server_id = server.id.clone();
                 // Register so load_server_data can match backend.
                 client_manager
                     .write()
                     .register_server(server_id.clone(), account_id.clone());
-                // Add to favorites so it shows in FavoritesBar.
+                // Only add to servers, NOT to favorited_server_ids.
                 {
                     let mut cd = chat_data.write();
-                    if !cd.favorited_server_ids.contains(&server_id) {
-                        cd.favorited_server_ids.push(server_id.clone());
-                    }
                     cd.servers.push(server);
                 }
                 creating.set(false);

@@ -42,6 +42,8 @@ const WEB_SERVER_PORT: u16 = 3000;
 /// Chrome DevTools Protocol debugging port.
 const CDP_PORT: u16 = 9222;
 const BUILD_LOG_EXCERPT_LINES: usize = 60;
+const CDP_SEND_TIMEOUT_SECS: u64 = 5;
+const CDP_RESPONSE_TIMEOUT_SECS: u64 = 15;
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -613,40 +615,68 @@ impl ChromeCdpBackend {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to CDP. Call connect_cdp first."))?;
 
-        ws.send(Message::Text(serde_json::to_string(&msg)?.into()))
-            .await?;
+        if tokio::time::timeout(
+            std::time::Duration::from_secs(CDP_SEND_TIMEOUT_SECS),
+            ws.send(Message::Text(serde_json::to_string(&msg)?.into())),
+        )
+        .await
+        .is_err()
+        {
+            drop(ws_guard);
+            *self.ws.lock().await = None;
+            anyhow::bail!(
+                "CDP send timeout for method '{method}' after {CDP_SEND_TIMEOUT_SECS}s. The renderer may be hung; call connect_cdp to retry."
+            );
+        }
 
-        // Read messages until we get our response (matching id)
-        loop {
-            let Some(Ok(raw)) = ws.next().await else {
-                // WebSocket died — clear it so reconnect works
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(CDP_RESPONSE_TIMEOUT_SECS),
+            async {
+                // Read messages until we get our response (matching id)
+                loop {
+                    let Some(Ok(raw)) = ws.next().await else {
+                        anyhow::bail!(
+                            "CDP WebSocket closed unexpectedly — Chrome may have crashed. Call connect_cdp to reconnect."
+                        );
+                    };
+
+                    let text = match raw {
+                        Message::Text(t) => t.to_string(),
+                        Message::Close(_) => {
+                            anyhow::bail!(
+                                "CDP WebSocket closed — Chrome may have crashed. Call connect_cdp to reconnect."
+                            );
+                        }
+                        _ => continue,
+                    };
+
+                    let resp: Value = serde_json::from_str(&text)?;
+                    if resp.get("id").and_then(|v| v.as_i64()) == Some(id) {
+                        if let Some(err) = resp.get("error") {
+                            anyhow::bail!("CDP error: {}", err);
+                        }
+                        return Ok(resp.get("result").cloned().unwrap_or(json!({})));
+                    }
+                    // Not our response — could be an event, skip it
+                }
+            },
+        )
+        .await;
+
+        match response {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(err)) => {
+                drop(ws_guard);
+                *self.ws.lock().await = None;
+                Err(err)
+            }
+            Err(_) => {
                 drop(ws_guard);
                 *self.ws.lock().await = None;
                 anyhow::bail!(
-                    "CDP WebSocket closed unexpectedly — Chrome may have crashed. Call connect_cdp to reconnect."
+                    "CDP response timeout for method '{method}' after {CDP_RESPONSE_TIMEOUT_SECS}s. The page may be frozen; call connect_cdp to reconnect once it recovers."
                 );
-            };
-
-            let text = match raw {
-                Message::Text(t) => t.to_string(),
-                Message::Close(_) => {
-                    drop(ws_guard);
-                    *self.ws.lock().await = None;
-                    anyhow::bail!(
-                        "CDP WebSocket closed — Chrome may have crashed. Call connect_cdp to reconnect."
-                    );
-                }
-                _ => continue,
-            };
-
-            let resp: Value = serde_json::from_str(&text)?;
-            if resp.get("id").and_then(|v| v.as_i64()) == Some(id) {
-                if let Some(err) = resp.get("error") {
-                    anyhow::bail!("CDP error: {}", err);
-                }
-                return Ok(resp.get("result").cloned().unwrap_or(json!({})));
             }
-            // Not our response — could be an event, skip it
         }
     }
 

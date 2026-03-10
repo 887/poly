@@ -5877,6 +5877,7 @@ dependencies = [
  "getrandom 0.4.1",
  "gloo-storage",
  "hex",
+ "js-sys",
  "nnnoiseless",
  "poly-client",
  "poly-demo",
@@ -5897,6 +5898,8 @@ dependencies = [
  "tokio",
  "tracing",
  "unic-langid",
+ "wasm-bindgen",
+ "web-sys",
  "x25519-dalek",
 ]
 

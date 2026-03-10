@@ -7,6 +7,19 @@ electron-window-minimize = Réduire
 electron-window-maximize = Agrandir ou restaurer
 electron-window-close = Fermer la fenêtre
 app-description = Client de messagerie multi-plateforme
+wasm-crash-title = Poly a subi un crash navigateur
+wasm-crash-description = La page actuelle a planté ou a déclenché une erreur navigateur/WASM non gérée. L’interface sous cette surcouche n’est plus fiable.
+wasm-crash-details-label = Type de crash
+wasm-crash-location-label = Emplacement source
+wasm-crash-path-label = Route
+wasm-crash-reload-action = Recharger Poly
+wasm-crash-kind-panic = Panic Rust
+wasm-crash-kind-window-error = Événement d’erreur du navigateur
+wasm-crash-kind-unhandled-rejection = Rejet de promesse non géré
+wasm-crash-kind-unknown = Crash inconnu
+wasm-crash-generic-message = Le navigateur n’a fourni aucun détail sur le crash.
+wasm-crash-window-error-fallback = Le navigateur a signalé un événement d’erreur global sans message.
+wasm-crash-rejection-fallback = Une promesse a été rejetée sans message d’erreur lisible.
 
 # Navigation
 nav-dms = Messages directs

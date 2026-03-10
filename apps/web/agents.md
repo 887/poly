@@ -10,9 +10,22 @@ Web entry point for Poly. Uses **Dioxus** compiled to WebAssembly (WASM).
 ## How It Works
 
 - `main.rs` initializes Dioxus web and mounts `poly_core::App`
+- `main.rs` must call `poly_core::install_wasm_crash_handler()` before `dioxus::launch(App)`
 - Frontend compiles to WASM via `wasm-bindgen`, served by Axum dev server
 - All shared logic lives in `poly-core`
 - SurrealDB uses SurrealKV with IndexedDB backend for browser-side persistence
+
+## WASM Crash Visibility (2026-03-10)
+
+The web app now installs a shared browser crash handler before launch.
+
+If the app hits a Rust panic, `window.onerror`, or `window.unhandledrejection`:
+
+- crash metadata is stored on `window.__polyCrashState`
+- a DOM overlay `#poly-wasm-crash-overlay` is injected
+
+When debugging route freezes, inspect `window.__polyCrashState` via devtools/MCP if the page is still responsive.
+If MCP methods start returning timeout errors, treat that as evidence that the renderer or CDP path is wedged — not as "no result yet".
 
 ## Development & Testing
 

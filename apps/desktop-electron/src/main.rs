@@ -15,6 +15,7 @@ fn main() {
 
     poly_core::i18n::init();
     poly_core::theme::init();
+    poly_core::install_wasm_crash_handler();
 
     dioxus::launch(App);
 }

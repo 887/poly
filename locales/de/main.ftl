@@ -7,6 +7,19 @@ electron-window-minimize = Minimieren
 electron-window-maximize = Maximieren oder wiederherstellen
 electron-window-close = Fenster schließen
 app-description = Multi-Plattform-Messenger-Client
+wasm-crash-title = Poly ist im Browser abgestürzt
+wasm-crash-description = Die aktuelle Seite ist abgestürzt oder hat einen unbehandelten Browser-/WASM-Fehler ausgelöst. Die UI unter diesem Overlay ist nicht mehr vertrauenswürdig.
+wasm-crash-details-label = Absturztyp
+wasm-crash-location-label = Quellort
+wasm-crash-path-label = Route
+wasm-crash-reload-action = Poly neu laden
+wasm-crash-kind-panic = Rust-Panic
+wasm-crash-kind-window-error = Browser-Fehlerereignis
+wasm-crash-kind-unhandled-rejection = Unbehandelte Promise-Ablehnung
+wasm-crash-kind-unknown = Unbekannter Absturz
+wasm-crash-generic-message = Der Browser hat keine Absturzdetails geliefert.
+wasm-crash-window-error-fallback = Der Browser hat ein globales Fehlerereignis ohne Meldung gemeldet.
+wasm-crash-rejection-fallback = Eine Promise wurde ohne lesbare Fehlermeldung abgelehnt.
 
 # Navigation
 nav-dms = Direktnachrichten

@@ -13,6 +13,20 @@ Desktop entry point wrapping the Dioxus web (WASM) build inside an **Electron** 
 2. Electron `main.js` creates a `BrowserWindow`, serves the built web app over
 	loopback HTTP, and loads that local URL
 3. All Poly logic runs as WASM inside Electron's Chromium webview
+4. `src/main.rs` must call `poly_core::install_wasm_crash_handler()` before `dioxus::launch(App)`
+
+## WASM Crash Visibility (2026-03-10)
+
+Electron uses the same WASM frontend path as `apps/web`, so it now installs the
+shared Poly browser crash handler before launch.
+
+If the renderer hits a Rust panic, `window.onerror`, or `window.unhandledrejection`:
+
+- crash metadata is stored on `window.__polyCrashState`
+- a DOM overlay `#poly-wasm-crash-overlay` is injected into the page
+
+When the Electron UI appears frozen, inspect `window.__polyCrashState` before assuming the build is stale.
+If Electron MCP commands start timing out, assume the renderer thread may be wedged.
 
 ## Structure
 

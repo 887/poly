@@ -30,6 +30,31 @@ Tested and confirmed working:
 - App stays running, no restart needed
 - **Note:** Must use `--package poly-desktop` flag — running `dx serve` from `apps/desktop/` alone doesn't work in workspace mode
 
+## WASM Crash Handler (2026-03-10)
+
+`poly-core` now owns the shared browser/Electron WASM crash handler in:
+
+- `src/wasm_crash_handler.rs`
+
+Both `apps/web` and `apps/desktop-electron` call
+`poly_core::install_wasm_crash_handler()` **after** `i18n::init()` / `theme::init()` and
+**before** `dioxus::launch(App)`.
+
+The handler registers:
+- Rust panic hook
+- `window.onerror`
+- `window.unhandledrejection`
+
+and writes crash state to `window.__polyCrashState` while rendering a fixed overlay
+`#poly-wasm-crash-overlay` directly into the DOM.
+
+### Rules
+
+1. If you add another WASM/browser entry point, it **must** call `install_wasm_crash_handler()`.
+2. All visible crash strings still go through Fluent translations in `locales/*/main.ftl`.
+3. When debugging a web/electron freeze, inspect `window.__polyCrashState` before guessing.
+4. Keep the crash overlay implementation dependency-light and browser-only — no native/Desktop-Wry code path should depend on it.
+
 ## Module Structure
 
 ```

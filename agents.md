@@ -274,6 +274,32 @@ is broken.
 even after the app underneath has already updated successfully. Do not conclude the build failed or the app
 is stuck solely because you see the rebuild-toast text in a DOM snapshot or screenshot.
 
+### 9c. WASM Crash Overlay + MCP Timeouts (DECISION, 2026-03-10)
+
+Browser/WASM entry points now install a shared crash handler from `poly-core` before `dioxus::launch(App)`.
+This handler registers:
+
+- a Rust panic hook,
+- `window.onerror`, and
+- `window.unhandledrejection`
+
+When one of these fires, Poly records crash metadata on `window.__polyCrashState` and injects a fixed
+full-page DOM overlay (`#poly-wasm-crash-overlay`) so the failure is visible even if Dioxus is no longer
+able to render normally.
+
+**Agent workflow when the web/electron UI appears frozen:**
+
+1. Assume MCP tool calls may now fail with a **timeout error** instead of hanging forever.
+2. If `evaluate_script` still works, inspect `window.__polyCrashState` first.
+3. If a route click or action times out, do **not** keep retrying blindly — the page may have panicked.
+4. Use screenshots/snapshots to confirm whether `#poly-wasm-crash-overlay` is present.
+5. For rebuild-related suspicion, still inspect `get_last_build_status` / `get_last_build_log`.
+
+**Important:** a timeout error from the MCP is now a signal, not missing output. It usually means:
+- the renderer main thread is wedged,
+- the CDP/WebKit transport stopped responding, or
+- the app hit a panic/unhandled browser-side failure.
+
 ---
 
 
