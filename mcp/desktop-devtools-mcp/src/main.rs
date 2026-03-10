@@ -2,17 +2,19 @@
 //!
 //! MCP server for the **desktop** devtools backend.
 //!
-//! Launches the desktop-devtools app via `dx serve --hotpatch` and communicates
-//! with the app via its embedded HTTP eval-bridge at `http://127.0.0.1:9223`.
+//! Builds the desktop-devtools app via `dx build --platform desktop` (one-shot,
+//! synchronous, immediate exit-code feedback) and then launches the resulting
+//! binary directly.  The binary embeds an HTTP eval-bridge that this MCP uses
+//! for JS evaluation, screenshots, and DOM inspection.
 //!
-//! ## Hot Reload
+//! ## Build model
 //!
-//! The app runs under `dx serve --hotpatch` so the desktop window stays alive
-//! across code changes (no window-jumping on every recompile).  The eval bridge
-//! inside the app uses recreatable channels that survive hot-patch remounts.
-//!
-//! For changes that can't be hot-patched (rare structural changes), Dioxus falls
-//! back to a full rebuild — the MCP waits for the bridge to come back.
+//! - `launch_app` runs `dx build --platform desktop`, waits for the process to
+//!   exit (success or failure is **immediately** visible), then spawns the built
+//!   binary and waits for the eval-bridge at `http://127.0.0.1:9223`.
+//! - `rebuild_app` kills the running binary and re-runs `launch_app`.
+//! - No file watchers, no hotpatch, no background serve process — just a plain
+//!   build + binary launch.
 //!
 //! ## Usage
 //! ```bash
@@ -35,6 +37,7 @@ use tokio::sync::Mutex;
 
 const BASE: &str = "http://127.0.0.1:9223";
 const BUILD_LOG_EXCERPT_LINES: usize = 60;
+const APP_PROCESS_PATTERN: &str = "poly-desktop-devtools($|[^-])";
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
@@ -60,12 +63,12 @@ async fn http_get(client: &reqwest::Client, path: &str) -> anyhow::Result<Vec<u8
     Ok(resp.bytes().await?.to_vec())
 }
 
-// ─── dx serve Process State ──────────────────────────────────────────────────
+// ─── App Process State ───────────────────────────────────────────────────────
 
-/// Handle to a managed `dx serve` process.
+/// Handle to the running desktop-devtools binary.
 ///
 /// Tracks the process ID for hard-kill via SIGKILL.
-struct DxServeProcess {
+struct AppProcess {
     /// OS process ID — used for hard-kill via SIGKILL.
     pid: u32,
 }
@@ -132,17 +135,18 @@ where
 
 // ─── Desktop HTTP Backend ─────────────────────────────────────────────────────
 
-/// Desktop devtools backend — launches the app via `dx serve` and
-/// talks to the embedded HTTP eval-bridge at [`BASE`].
+/// Desktop devtools backend — builds the app via `dx build --platform desktop`
+/// then launches the resulting binary and communicates via its HTTP eval-bridge
+/// at [`BASE`].
 struct DesktopHttpBackend {
     client: reqwest::Client,
-    /// Handle to the managed `dx serve` process (if we started it).
-    dx_serve: Arc<Mutex<Option<DxServeProcess>>>,
+    /// Handle to the running desktop-devtools binary process.
+    app_process: Arc<Mutex<Option<AppProcess>>>,
     /// Workspace path — set during `launch_app`, used by `rebuild_app`.
     workspace: Arc<Mutex<Option<String>>>,
-    /// Rolling combined stdout/stderr log from Dioxus commands.
+    /// Rolling combined stdout/stderr log from Dioxus build and app output.
     build_log: Arc<Mutex<RollingBuildLog>>,
-    /// Structured diagnostics for the last build / hotpatch attempt.
+    /// Structured diagnostics for the last build attempt.
     last_build: Arc<Mutex<Option<DesktopBuildRecord>>>,
 }
 
@@ -153,7 +157,7 @@ impl DesktopHttpBackend {
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
-            dx_serve: Arc::new(Mutex::new(None)),
+            app_process: Arc::new(Mutex::new(None)),
             workspace: Arc::new(Mutex::new(None)),
             build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
             last_build: Arc::new(Mutex::new(None)),
@@ -289,7 +293,7 @@ impl DesktopHttpBackend {
         let diagnostics = BuildDiagnostics {
             backend: self.name().to_string(),
             trigger: "none".to_string(),
-            mode: "desktop dx serve --hotpatch".to_string(),
+            mode: "dx build --platform desktop".to_string(),
             working_directory: String::new(),
             command_line: String::new(),
             state: BuildLifecycleState::NotStarted,
@@ -362,34 +366,6 @@ impl DesktopHttpBackend {
         anyhow::bail!("Eval bridge at {BASE} did not become ready within {max_seconds}s")
     }
 
-    /// Touch source files to trigger ``dx serve``'s file watcher, causing a
-    /// full rebuild.
-    ///
-    /// Two files are touched:
-    /// - `crates/core/src/lib.rs`  — triggers poly-core + poly-desktop-devtools
-    ///   recompilation via the normal dependency chain.
-    /// - `apps/desktop-devtools/src/main.rs` — causes the devtools `build.rs`
-    ///   to rerun (it is listed in `cargo:rerun-if-changed`), which emits a
-    ///   fresh `POLY_BUILD_TS` env-var so that `build_id()` in the app returns
-    ///   a new value after each hotpatch, making rebuild detection reliable.
-    async fn touch_source_file(workspace: &str) -> anyhow::Result<()> {
-        // Touch the core lib.rs to trigger dx serve's file watcher and cause
-        // poly-core + poly-desktop-devtools to recompile.
-        let core_trigger = format!("{workspace}/crates/core/src/lib.rs");
-        tokio::process::Command::new("touch")
-            .arg(&core_trigger)
-            .status()
-            .await?;
-
-        // Increment the rebuild counter that `build_id()` in the devtools app
-        // reads at runtime.  Using a runtime counter file is the most reliable
-        // approach: cargo's `rerun-if-changed` uses content checksums so a
-        // bare `touch` never reruns build.rs, making compile-time embedding
-        // fragile.  The running app reads this file on every /generation call.
-        Self::increment_rebuild_counter().await?;
-        Ok(())
-    }
-
     /// Atomically increment `/tmp/poly-devtools-rebuild-counter`.
     async fn increment_rebuild_counter() -> anyhow::Result<()> {
         let path = std::path::Path::new("/tmp/poly-devtools-rebuild-counter");
@@ -409,131 +385,147 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn launch_app(&self, workspace: &str) -> anyhow::Result<String> {
-        // Remember workspace for rebuild_app / reset_app.
         *self.workspace.lock().await = Some(workspace.to_string());
+        let app_dir = format!("{workspace}/apps/desktop-devtools");
+        let binary_path = format!(
+            "{workspace}/target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools"
+        );
 
-        // ── Step 1: check if an existing instance is already healthy ──────
-        if self.is_bridge_alive().await {
-            return Ok(format!(
-                "App already running on {BASE} — reusing existing instance.\n\
-                 Hot-patch is active. Call connect_cdp to interact."
-            ));
-        }
-
-        // ── Step 2: kill any stale processes ──────────────────────────────
+        // ── Step 1: Kill any stale app process ───────────────────────────
         let _ = tokio::process::Command::new("pkill")
-            .args(["-f", "poly-desktop-devtools[^-]"])
+            .args(["-f", APP_PROCESS_PATTERN])
             .status()
             .await;
-        // Also kill any stale dx serve for this app.
-        let _ = tokio::process::Command::new("bash")
-            .args([
-                "-c",
-                "pkill -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true",
-            ])
-            .status()
-            .await;
+        *self.app_process.lock().await = None;
         tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-        // ── Step 3: start dx serve --hotpatch ─────────────────────────────
+        // ── Step 2: Build with dx build --platform desktop ───────────────
         //
-        // --hotpatch keeps the desktop window alive across code changes by
-        // patching the running binary in-place (subsecond hot-reload).
-        // The eval bridge inside the app uses recreatable channels that
-        // survive hotpatch remounts.
-        let app_dir = format!("{workspace}/apps/desktop-devtools");
+        // This blocks until the build finishes.  The exit code gives immediate
+        // pass/fail feedback — no file watchers, no hotpatch ambiguity.
         self.start_build_record(
             "launch_app",
-            "dx serve --hotpatch --platform desktop",
+            "dx build --platform desktop",
             &app_dir,
-            "dx serve --hotpatch --platform desktop",
-            "Starting desktop dx serve --hotpatch and waiting for the eval bridge.",
+            "dx build --platform desktop",
+            "Building desktop app — blocks until complete, exit code gives immediate pass/fail.",
         )
         .await;
-        let mut child = tokio::process::Command::new("dx")
-            .args(["serve", "--hotpatch", "--platform", "desktop"])
+
+        let build_output = tokio::process::Command::new("dx")
+            .args(["build", "--platform", "desktop"])
             .current_dir(&app_dir)
+            .stdin(Stdio::null())
+            .output()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to spawn `dx build --platform desktop`: {e}"))?;
+
+        // Push build output to the rolling log.
+        {
+            let mut buffer = self.build_log.lock().await;
+            for line in String::from_utf8_lossy(&build_output.stdout).lines() {
+                buffer.push_line(format!("[stdout] {line}"));
+            }
+            for line in String::from_utf8_lossy(&build_output.stderr).lines() {
+                buffer.push_line(format!("[stderr] {line}"));
+            }
+        }
+
+        if !build_output.status.success() {
+            self.finish_build_record(
+                BuildLifecycleState::Failed,
+                "Desktop build failed.",
+                "dx build --platform desktop exited with a non-zero status. \
+                 Check get_last_build_log for the exact compiler/Dioxus error.",
+                build_output.status.code(),
+            )
+            .await;
+            anyhow::bail!(
+                "dx build --platform desktop failed (exit {:?}). \
+                 Call get_last_build_log to see the compiler error.",
+                build_output.status.code()
+            );
+        }
+
+        // Build succeeded — increment the rebuild counter.
+        let _ = Self::increment_rebuild_counter().await;
+
+        // ── Step 3: Launch the built binary ──────────────────────────────
+        let mut child = tokio::process::Command::new(&binary_path)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()?;
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("Failed to launch built binary at {binary_path}: {e}"))?;
 
         if let Some(stdout) = child.stdout.take() {
-            spawn_log_reader(stdout, "stdout", self.build_log.clone());
+            spawn_log_reader(stdout, "app-stdout", self.build_log.clone());
         }
         if let Some(stderr) = child.stderr.take() {
-            spawn_log_reader(stderr, "stderr", self.build_log.clone());
+            spawn_log_reader(stderr, "app-stderr", self.build_log.clone());
         }
 
         let pid = child
             .id()
-            .ok_or_else(|| anyhow::anyhow!("dx serve process has no PID"))?;
+            .ok_or_else(|| anyhow::anyhow!("Launched app process has no PID"))?;
+        *self.app_process.lock().await = Some(AppProcess { pid });
 
-        *self.dx_serve.lock().await = Some(DxServeProcess { pid });
-
-        // Background task: reap the child and clean up state on exit.
-        let dx_ref = self.dx_serve.clone();
+        let app_ref = self.app_process.clone();
         tokio::spawn(async move {
             let _ = child.wait().await;
-            *dx_ref.lock().await = None;
+            *app_ref.lock().await = None;
         });
 
-        // ── Step 4: wait for eval bridge (first build can take a while) ───
-        // Poll for up to 120 s — initial compilation can be slow.
-        match self.wait_for_bridge(120).await {
+        // ── Step 4: Wait for the eval bridge ─────────────────────────────
+        // Short timeout — the binary starts fast since the build already finished.
+        match self.wait_for_bridge(30).await {
             Ok(()) => {
                 self.finish_build_record(
                     BuildLifecycleState::Succeeded,
-                    "Desktop dx serve launched successfully and the eval bridge is reachable.",
-                    "Verified by reaching the desktop eval bridge after the initial Dioxus build. If later rebuilds behave strangely, inspect get_last_build_status and get_last_build_log.",
-                    None,
+                    "Desktop app built and launched. Eval bridge is ready.",
+                    format!("Verified by reaching {BASE}/status after launching the built binary."),
+                    build_output.status.code(),
                 )
                 .await;
                 Ok(format!(
-                    "dx serve --hotpatch started in {app_dir}\n\
+                    "Build succeeded ✓ — app launched (PID: {pid})\n\
                      Eval bridge ready at {BASE}\n\
-                     Hot-patch is active — code changes update the running window in-place.\n\
-                     Use rebuild_app for forced rebuild, kill_app to stop everything."
+                     Call connect_cdp to start interacting. Use rebuild_app to rebuild and relaunch."
                 ))
             }
-            Err(err) => {
+            Err(e) => {
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    "Desktop dx serve started, but the eval bridge never became ready.",
+                    "Desktop build succeeded but eval bridge did not respond.",
                     format!(
-                        "The eval bridge did not respond within 120s: {err}. Check get_last_build_log for the exact Dioxus/compiler output."
+                        "Bridge not ready at {BASE}/status within 30s: {e}. \
+                         Check get_last_build_log for app startup errors."
                     ),
-                    None,
+                    build_output.status.code(),
                 )
                 .await;
-                Ok(format!(
-                    "dx serve --hotpatch started in {app_dir}\n\
-                     Eval bridge not yet responding at {BASE} — first build may still be compiling or may have failed.\n\
-                     Call get_last_build_status / get_last_build_log for the Dioxus output, then connect_cdp in a moment to check."
-                ))
+                anyhow::bail!(
+                    "Build succeeded but eval bridge did not respond within 30s: {e}"
+                )
             }
         }
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {
-        // Drop the dx serve handle (closes stdin, helping it exit).
-        *self.dx_serve.lock().await = None;
-
-        // Kill the desktop app process (not the MCP server).
+        // SIGTERM the app by PID if we have it.
+        if let Some(proc) = self.app_process.lock().await.take() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-15", &proc.pid.to_string()])
+                .status()
+                .await;
+        }
+        // Pattern fallback to catch any stray instances.
         let _ = tokio::process::Command::new("pkill")
-            .args(["-f", "poly-desktop-devtools[^-]"])
-            .status()
-            .await;
-        // Kill dx serve for this app.
-        let _ = tokio::process::Command::new("bash")
-            .args([
-                "-c",
-                "pkill -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true",
-            ])
+            .args(["-f", APP_PROCESS_PATTERN])
             .status()
             .await;
 
-        Ok("Killed poly-desktop-devtools and dx serve. Call launch_app to restart.".to_string())
+        Ok("Killed poly-desktop-devtools. Call launch_app to rebuild and restart.".to_string())
     }
 
     async fn connect(&self) -> anyhow::Result<String> {
@@ -569,84 +561,28 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn hard_kill(&self) -> anyhow::Result<String> {
-        // SIGKILL the dx serve process by PID (precise — avoids killing the MCP).
-        let pid = self.dx_serve.lock().await.as_ref().map(|s| s.pid);
-        *self.dx_serve.lock().await = None;
-
-        if let Some(pid) = pid {
+        // SIGKILL the app process by PID (avoids killing the MCP).
+        if let Some(proc) = self.app_process.lock().await.take() {
             let _ = tokio::process::Command::new("kill")
-                .args(["-9", &pid.to_string()])
+                .args(["-9", &proc.pid.to_string()])
                 .status()
                 .await;
         }
-        // Also SIGKILL the app and any orphaned dx child processes.
+        // Pattern fallback for any orphaned instances.
         let _ = tokio::process::Command::new("pkill")
-            .args(["-9", "-f", "poly-desktop-devtools[^-]"])
-            .status()
-            .await;
-        let _ = tokio::process::Command::new("bash")
-            .args([
-                "-c",
-                "pkill -9 -f 'dx.*serve.*desktop-devtools' 2>/dev/null || true",
-            ])
+            .args(["-9", "-f", APP_PROCESS_PATTERN])
             .status()
             .await;
 
-        Ok(
-            "Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
-                .to_string(),
-        )
+        Ok("Hard-killed poly-desktop-devtools (SIGKILL). Call launch_app to rebuild and restart."
+            .to_string())
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
-        let app_dir = format!("{workspace}/apps/desktop-devtools");
-        self.start_build_record(
-            "rebuild_app",
-            "dx serve --hotpatch watcher rebuild",
-            &app_dir,
-            "touch crates/core/src/lib.rs",
-            "Triggered a desktop hotpatch/full rebuild via the dx serve file watcher.",
-        )
-        .await;
-
-        // Touch a source file to trigger dx serve's file watcher.
-        // With --hotpatch, this triggers a hot-patch (window stays alive)
-        // or a full rebuild (for non-patchable changes).
-        Self::touch_source_file(workspace).await?;
-
-        // Brief wait for the compilation + patch cycle.
-        // Hot-patches are near-instant; full rebuilds take 10-30s.
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        match self.wait_for_bridge(120).await {
-            Ok(()) => {
-                self.finish_build_record(
-                    BuildLifecycleState::Succeeded,
-                    "Desktop rebuild completed and the eval bridge came back.",
-                    "Verified by waiting for the desktop eval bridge after triggering the dx serve watcher rebuild. Inspect get_generation together with get_last_build_status/log if hotpatch behavior remains unclear.",
-                    None,
-                )
-                .await;
-                Ok("Rebuild triggered (touched crates/core/src/lib.rs).\n\
-                     dx serve --hotpatch is recompiling — hot-patchable changes are near-instant,\n\
-                     full rebuilds take 10-30s with a warm cache.\n\
-                     The window stays alive; eval bridge reconnects automatically."
-                    .to_string())
-            }
-            Err(e) => {
-                self.finish_build_record(
-                    BuildLifecycleState::Failed,
-                    "Desktop rebuild was triggered, but the eval bridge did not return.",
-                    format!(
-                        "Bridge readiness check failed after the watcher rebuild: {e}. Inspect get_last_build_log for the exact Dioxus hotpatch/build failure."
-                    ),
-                    None,
-                )
-                .await;
-                Err(anyhow::anyhow!(
-                    "Rebuild triggered but eval bridge didn't come back: {e}"
-                ))
-            }
-        }
+        // Kills the running binary then rebuilds and relaunches via launch_app.
+        // launch_app already kills stale instances at the start, so this is safe
+        // to call directly without an extra kill step.
+        self.launch_app(workspace).await
     }
 
     async fn get_last_build_status(&self) -> anyhow::Result<String> {
@@ -666,20 +602,15 @@ impl DevtoolsBackend for DesktopHttpBackend {
             std::fs::remove_dir_all(&dir)?;
         }
 
-        // Trigger a rebuild so the app restarts fresh at the setup wizard.
+        // Rebuild and relaunch so the app starts fresh at the setup wizard.
         let ws = self.workspace.lock().await.clone();
         if let Some(ws) = ws {
-            // Touch a source file to trigger rebuild.
-            Self::touch_source_file(&ws).await?;
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let _ = self.wait_for_bridge(60).await;
-            Ok(
-                "Data directory removed and rebuild triggered. App should restart at setup wizard."
-                    .to_string(),
-            )
+            self.launch_app(&ws)
+                .await
+                .map(|msg| format!("Data directory removed.\n{msg}"))
         } else {
             Ok(
-                "Data directory removed. Call launch_app or rebuild_app to restart at setup wizard."
+                "Data directory removed. Call launch_app to rebuild and restart at the setup wizard."
                     .to_string(),
             )
         }
@@ -690,39 +621,28 @@ impl DevtoolsBackend for DesktopHttpBackend {
             json!({
                 "name": "get_generation",
                 "description": "Returns rebuild-detection counters for this MCP session.\n\n\
-                    **IMPORTANT: Semantics differ by platform!**\n\n\
-                    **Desktop MCP (this tool):**\n\
-                    - **generation**: starts at 1 on launch, increments on each hot-patch (component remount). \
-                      Resets to 1 only on full process restart (PID change).\n\
-                    - **build_id**: increments on each rebuild_app call (reads /tmp/poly-devtools-rebuild-counter). \
-                      0 = no rebuild this session.\n\
-                    - **pid**: OS process ID — stable across hot-patches, changes only on full restart.\n\n\
-                    **Web MCP (poly-web-devtools-mcp):**\n\
-                    - **generation**: increments on EVERY connect_cdp call (not on each rebuild). \
-                      This is because each WASM rebuild drops the CDP WebSocket, requiring explicit reconnection.\n\
-                    - **build_id**: increments on each rebuild_app call (same as desktop, reads /tmp/poly-devtools-web-rebuild-counter).\n\
-                    - **dx_serve_pid**: OS process ID of managed dx serve process.\n\n\
-                    **Decision table (Desktop):**\n\
-                    - generation changed, pid stable → hot-patch applied\n\
-                    - pid changed (generation back to 1) → full rebuild / process restart\n\
-                    - build_id changed → rebuild was triggered (independent of generation / pid)\n\n\
-                    **Key difference:** Desktop generation may NOT change on every rebuild (hot-patches preserve state). \
-                    Always check build_id to know if a rebuild happened. If generation/pid do not change the way you expect, immediately inspect get_last_build_status and get_last_build_log for the actual Dioxus CLI output and failure reason. Call connect_cdp explicitly after \
-                    rebuild_app to get updated generation (web) or check if hot-patch succeeded (desktop).",
+                    **Desktop MCP counters:**\n\
+                    - **generation**: value from the app's /generation endpoint. Starts at 1 when the\n\
+                      binary launches; changes only on full process restart (PID change).\n\
+                    - **build_id**: increments on each successful launch_app / rebuild_app call\n\
+                      (reads /tmp/poly-devtools-rebuild-counter). 0 = no build this session.\n\
+                    - **pid**: OS process ID of the running desktop-devtools binary.\n\n\
+                    **Decision table:**\n\
+                    - build_id increased → a rebuild was triggered\n\
+                    - pid changed → the binary was relaunched (full restart)\n\n\
+                    If build_id does not move the way you expect, immediately inspect\n\
+                    get_last_build_status and get_last_build_log for the Dioxus CLI error.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
             json!({
                 "name": "force_rebuild",
-                "description": "Force a full desktop rebuild by running `dx build --platform desktop` directly.\n\n\
-                    USE THIS when rebuild_app (hot-patch via touch lib.rs) fails to apply changes.\n\
-                    This kills the running desktop app, rebuilds from scratch, and the app process\n\
-                    must be relaunched via launch_app afterwards.\n\n\
-                    NOTE: Unlike the web MCP force_rebuild, this does NOT auto-launch the app.\n\
+                "description": "Alias for rebuild_app — kills the running app, rebuilds with\n\
+                    `dx build --platform desktop`, and relaunches the fresh binary.\n\n\
+                    Identical to calling rebuild_app. Provided for convenience.\n\n\
                     After this tool returns:\n\
-                    1. Call launch_app to start the freshly built binary\n\
-                    2. Call connect_cdp\n\
-                    3. Verify with get_generation that build_id and pid both changed\n\
-                    4. If anything looks wrong, inspect get_last_build_status and get_last_build_log",
+                    1. Call connect_cdp\n\
+                    2. Verify with get_generation that build_id and pid both changed\n\
+                    3. If anything looks wrong, inspect get_last_build_status and get_last_build_log",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             }),
         ]
@@ -750,79 +670,15 @@ impl DevtoolsBackend for DesktopHttpBackend {
                 Some(result)
             }
             "force_rebuild" => {
+                // Identical to rebuild_app: kills the running binary, builds fresh,
+                // and relaunches. Provided as a named alias for MCP discoverability.
                 let workspace = self
                     .workspace
                     .lock()
                     .await
                     .clone()
                     .unwrap_or_else(|| "/home/laragana/workspcacemsg".to_string());
-                let app_dir = format!("{workspace}/apps/desktop-devtools");
-                self.start_build_record(
-                    "force_rebuild",
-                    "dx build --platform desktop",
-                    &app_dir,
-                    "dx build --platform desktop",
-                    "Running a one-shot desktop rebuild outside dx serve.",
-                )
-                .await;
-                let output = tokio::process::Command::new("dx")
-                    .args(["build", "--platform", "desktop"])
-                    .current_dir(&app_dir)
-                    .output()
-                    .await;
-                let _ = Self::increment_rebuild_counter().await;
-                match output {
-                    Ok(out) => {
-                        let stdout_text = String::from_utf8_lossy(&out.stdout).into_owned();
-                        let stderr_text = String::from_utf8_lossy(&out.stderr).into_owned();
-                        {
-                            let mut buffer = self.build_log.lock().await;
-                            for line in stdout_text.lines() {
-                                buffer.push_line(format!("[stdout] {line}"));
-                            }
-                            for line in stderr_text.lines() {
-                                buffer.push_line(format!("[stderr] {line}"));
-                            }
-                        }
-
-                        if out.status.success() {
-                            self.finish_build_record(
-                                BuildLifecycleState::Succeeded,
-                                "Force rebuild completed successfully.",
-                                "dx build --platform desktop exited successfully. Launch the app again, then use generation + build diagnostics if runtime readiness is still unclear.",
-                                out.status.code(),
-                            )
-                            .await;
-                            Some(Ok(
-                                "Force rebuild complete! Fresh desktop binary is ready.\n\
-                                 Call launch_app to start it, then connect_cdp."
-                                    .to_string(),
-                            ))
-                        } else {
-                            self.finish_build_record(
-                                BuildLifecycleState::Failed,
-                                "Force rebuild failed.",
-                                "dx build --platform desktop exited with a non-zero status. Inspect get_last_build_log for the exact compiler and Dioxus CLI output.",
-                                out.status.code(),
-                            )
-                            .await;
-                            Some(Err(anyhow::anyhow!(
-                                "dx build --platform desktop failed with exit code: {:?}",
-                                out.status.code()
-                            )))
-                        }
-                    }
-                    Err(e) => {
-                        self.finish_build_record(
-                            BuildLifecycleState::Failed,
-                            "Force rebuild failed to start.",
-                            format!("Failed to spawn dx build --platform desktop: {e}"),
-                            None,
-                        )
-                        .await;
-                        Some(Err(anyhow::anyhow!("Failed to spawn dx build: {e}")))
-                    }
-                }
+                Some(self.rebuild_app(&workspace).await)
             }
             _ => None,
         }

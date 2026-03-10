@@ -1,7 +1,7 @@
 # desktop-devtools — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-03 (Build-id counter file + rebuild detection best practices)
+> **Last Updated:** 2026-03-11 (Switched to dx build; removed dx serve --hotpatch)
 
 ---
 
@@ -25,7 +25,7 @@ The MCP server lives in `crates/poly-desktop-devtools-mcp/`.
 - Calling `kill_app()` from the MCP **does NOT kill the MCP itself**
 - This allows hot-reload: kill + relaunch the app while MCP stays connected
 
-**Pattern:** Use pattern `"poly-desktop-devtools[^-]"` in pkill to match the
+**Pattern:** Use pattern `"poly-desktop-devtools($|[^-])"` in pkill to match the
 app binary but exclude the `-mcp` variant. This ensures only the UI app dies,
 not the MCP server.
 
@@ -85,21 +85,18 @@ use webkit2gtk::WebViewExt as _;  // brings snapshot() into scope
 // webkit2gtk::gio::Cancellable::NONE — for optional cancellable parameter
 ```
 
-## Eval Bridge Pattern (Hot-Reload Safe)
+## Eval Bridge Pattern (Restart-Safe)
 
-The eval bridge uses a **recreatable channel** pattern so it survives `dx serve --hotpatch`:
+The eval bridge uses a **recreatable channel** pattern so it survives kill-and-relaunch cycles:
 
 1. `EVAL_TX` / `SCREENSHOT_TX` — `std::sync::Mutex<Option<mpsc::Sender>>` (NOT `OnceLock`)
-2. On each coroutine start (including after hot-patch remount), fresh `mpsc` channels are
-   created and the sender is stored in the global mutex
+2. On each app launch / `DevtoolsShell` mount, fresh `mpsc` channels are created and the sender is stored in the global mutex
 3. Each `EvalRequest` contains `js: String` + `oneshot::Sender<Result<String, String>>`
 4. The coroutine calls `eval(&req.js).await` and sends the result back
 5. HTTP handlers call `do_eval(js)` which clones the current sender from the mutex
 6. HTTP server binds :9223 once (guarded by `AtomicBool`), survives component remounts
 
-**Why not `OnceLock`?** `OnceLock` can only be set once per process. If Dioxus hot-patches
-the component tree and remounts `DevtoolsShell`, the old receiver is dropped but `OnceLock`
-prevents creating new channels — the eval bridge becomes permanently dead.
+**Why not `OnceLock`?** `OnceLock` can only be set once per process. If the component tree remounts for any reason, the old receiver is dropped but `OnceLock` prevents creating new channels — the eval bridge dies permanently.
 
 ### Dioxus eval() Semantics
 
@@ -122,7 +119,7 @@ This means:
 
 | Field | Reset condition | Increments on |
 |---|---|---|
-| `generation` | Process restart (→1) | `DevtoolsShell` component FULLY unmounts + remounts (rare under hotpatch — see below) |
+| `generation` | Process restart (→1) | `DevtoolsShell` component FULLY unmounts + remounts |
 | `build_id` | System reboot / file deleted | Every `rebuild_app` MCP call — the MCP writes `/tmp/poly-devtools-rebuild-counter` |
 | `pid` | Never resets (OS assigns) | Process restart only |
 
@@ -143,15 +140,12 @@ This means:
 
 **Always check all three to verify no changes occurred** — if all three values match the previous poll, then nothing happened.
 
-### Why NOT `generation` — Hot-Patch State Preservation
+### Why `build_id` not `generation`
 
-Under Dioxus 0.7 `--hotpatch`, `use_coroutine` hook state is **preserved** because
-subsecond patches function bodies in-place — the component scope is NOT dropped. This means:
+`use_coroutine` hook state may be preserved across some component remounts. This means:
 
 - `GENERATION` atomically increments **only when `DevtoolsShell` fully unmounts + remounts**
-- For RSX-only structural changes that Dioxus classifies as non-hot-reloadable, Dioxus
-  reloads the component tree from scratch → `generation` increments to 2
-- But in practice, **many structural changes skip a full unmount → generation stays at 1**
+- For some structural Dioxus changes, the component may skip a full unmount → `generation` stays the same
 - **`generation` is unreliable for rebuild detection** — use `build_id` instead
 
 ### `build_id` — Counter File Approach
@@ -159,70 +153,22 @@ subsecond patches function bodies in-place — the component scope is NOT droppe
 The counter file (`/tmp/poly-devtools-rebuild-counter`) is **incremented by the MCP** on
 each `rebuild_app` call, and **read at runtime by the app** on each `/generation` request.
 
-This is more reliable than the previously-attempted compile-time `env!("POLY_BUILD_TS")`
-approach because:
-
-1. `touch`-only file changes do NOT trigger `build.rs` reruns — cargo uses **content checksums**,
-   not mtime. Only actual content changes trigger build script reruns.
-2. The `rerun-if-changed` trigger file (`crates/core/src/lib.rs`) is touched by the MCP via
-   `touch`, so cargo sees no content change → `build.rs` never reruns → `POLY_BUILD_TS` is
-   always the same value.
-3. Runtime file read has zero compile-time complexity and works immediately without any
-   recompilation.
-
 ---
 
-## Hotpatch Behaviour — Verified Findings (2026-03-03)
+## Build Approach (DECISION, 2026-03-11)
 
-### What works ✅
+**The desktop MCP uses `dx build --platform desktop` — never `dx serve --hotpatch`.**
 
-- **RSX color/text changes**: Hot-patched instantly (< 1s) without any component remount
-- **RSX structural changes** (adding/removing elements): Classified as "non-hot-reloadable"
-  by `dx serve`; triggers a full cargo recompile + hotpatch. Window stays alive (same PID).
-  The Dioxus toast "Your app is being rebuilt" appears during compilation.
-- **Eval bridge**: Works correctly before, during (if rebuild finishes), and after hotpatch
-- **Navigation via eval + click**: Works across all rebuild cycles
+Each `rebuild_app` / `launch_app` call:
+1. Kills the running binary (pkill MCP-safe pattern)
+2. Runs `dx build --platform desktop` (blocking, synchronous, immediate exit code)
+3. Launches the new binary and waits for the eval bridge on port 9223
 
-### Important interpretation rule for agents
-
-The presence of the Dioxus toast **does not by itself mean the app is stuck**.
-It is only a transient dev-runtime overlay. Agents must use `build_id`/`generation`/`pid`
-plus a fresh post-rebuild snapshot to determine whether the app actually finished updating.
-
-**DOM element behavior:** The toast overlay element may remain visible in DOM snapshots and screenshots
-even after the underlying app has already hot-reloaded successfully. Its presence in a snapshot does
-not indicate the rebuild failed or the app is unresponsive.
-
-### What resets on hotpatch (non-hot-reloadable structural changes) ⚠️
-
-- **Navigation state**: The app resets to the setup wizard (Welcome to Poly) after a
-  structural RSX change + hotpatch. This is because Dioxus re-initialises the component tree.
-- **Page-level state** (form inputs, etc.): Also reset
-
-### Multiple dx serve instances accumulate — ALWAYS kill before relaunch
-
-Each `launch_app` call starts a **new `dx serve` process**. If `kill_app` is not called
-(or fails) before the next `launch_app`, multiple `dx serve` instances will accumulate and
-ALL watch the same workspace directory. This causes rebuild conflicts and can prevent
-hotpatching from working correctly (multiple instances compete to rebuild and hotpatch).
-
-**Workaround:** At the start of each coding session, call `kill_app` (or `pkill -f "dx serve"`)
-before `launch_app` to ensure a clean slate. The MCP's process tracking should handle this,
-but if you see multiple `dx serve` processes in `ps aux`, kill the stale ones manually.
-
-### `touch` vs content change for cargo (critical pitfall)
-
-The MCP's `rebuild_app` calls `touch crates/core/src/lib.rs` to wake up dx serve's
-file watcher. This works for triggering a cargo recompile (because dx serve sees the mtime
-change and invokes cargo). **BUT** cargo itself uses content checksums (not mtime) internally
-for `rerun-if-changed` build script triggers. This means:
-
-- `touch lib.rs` → dx serve fires → cargo checks → `lib.rs` content unchanged → cargo reruns
-  `poly-core` compile (because the package changed) but does NOT rerun `poly-desktop-devtools/build.rs`
-  (because its tracked files' content didn't change)
-- Only an actual content edit to `src/main.rs` or `build.rs` causes `build.rs` to rerun
-
-This is why the compile-time `POLY_BUILD_TS` approach failed: the build script never reran.
+**Advantages:**
+- Immediate pass/fail feedback from exit code — no polling
+- No dx serve process to manage
+- No stale port issues
+- Build errors appear in `get_last_build_log` immediately after the call returns
 
 ---
 

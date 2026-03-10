@@ -78,113 +78,120 @@ pub fn FavoritesBar() -> Element {
     let mut drag_over = use_signal(|| false);
 
     rsx! {
-        nav {
-            class: if drag_over() { "server-sidebar drag-over" } else { "server-sidebar" },
-            // Allow drops from Bar 2 server icons.
-            ondragover: move |evt| {
-                evt.prevent_default();
-                drag_over.set(true);
-            },
-            ondragleave: move |_| drag_over.set(false),
-            ondrop: move |evt| {
-                evt.prevent_default();
-                drag_over.set(false);
-                let new_favorites = {
-                    let mut cd = chat_data.write();
-                    let drag_id = cd.dragging_server_id.clone();
-                    let drag_src = cd.drag_source.clone();
-                    // Per-item ondrop handles positional drops via stop_propagation.
-                    // This handler catches drops on the nav background (append to end).
-                    if let Some(sid) = drag_id {
-                        match drag_src {
-                            DragSource::AccountServer | DragSource::FavoriteServer => {
-                                if !cd.favorited_server_ids.contains(&sid) {
-                                    cd.favorited_server_ids.push(sid);
-                                }
-                            }
-                            DragSource::None | DragSource::AccountIcon => {}
-                        }
-                    }
-                    cd.dragging_server_id = None;
-                    cd.drag_source = DragSource::None;
-                    cd.drag_over_id = None;
-                    cd.favorited_server_ids.clone()
-                };
-                spawn(async move {
-                    persist_favorites(new_favorites).await;
-                });
-            },
-            NavBarSpacer {}
-
-            // ── Account icons (one per active account) ────────────────
-            for aid in &account_ids {
-                AccountIcon {
-                    account_id: aid.clone(),
-                    is_active: active_account.as_deref() == Some(aid.as_str()),
-                }
-            }
-
-            // Separator (between accounts and favorites)
-            if !account_ids.is_empty() {
-                div { class: "sidebar-separator" }
-            }
-
-            // ── Favorited servers (dragged in from Bar 2) ─────────────
-            for server in &favorite_servers {
-                {
-                    let instance_id = chat_data
-                        .read()
-                        .account_sessions
-                        .get(&server.account_id)
-                        .map(|s| s.instance_id.clone())
-                        .unwrap_or_else(|| "demo".to_string());
-                    rsx! {
-                        FavoriteServerIcon {
-                            server_id: server.id.clone(),
-                            server_name: server.name.clone(),
-                            backend_slug: server.backend.slug().to_string(),
-                            instance_id,
-                            account_id: server.account_id.clone(),
-                            account_display_name: server.account_display_name.clone(),
-                            backend_name: server.backend.display_name().to_string(),
-                            unread: server.unread_count,
-                            icon_url: server.icon_url.clone(),
-                        }
-                    }
-                }
-            }
-
-            // Drop hint — shown only when no favorites yet.
-            if favorite_servers.is_empty() && demo_active {
-                div { class: "favorites-drop-hint",
-                    span { "← Drag servers here" }
-                }
-            }
-
-            // Spacer
-            div { class: "sidebar-spacer" }
-
-            // Global Search button
-            div {
-                class: "server-icon",
-                onclick: move |_| {
-                    navigator().push(Route::SearchRoute);
+        nav { class: "server-sidebar",
+            // Scrollable content area (accounts, favorites, spacer)
+            div { class: "sidebar-scroll-area",
+                // Allow drops from Bar 2 server icons.
+                ondragover: move |evt| {
+                    evt.prevent_default();
+                    drag_over.set(true);
                 },
-                title: "{t(\"nav-search\")}",
-                div { class: "icon-search", "🔍" }
+                ondragleave: move |_| drag_over.set(false),
+                ondrop: move |evt| {
+                    evt.prevent_default();
+                    drag_over.set(false);
+                    let new_favorites = {
+                        let mut cd = chat_data.write();
+                        let drag_id = cd.dragging_server_id.clone();
+                        let drag_src = cd.drag_source.clone();
+                        // Per-item ondrop handles positional drops via stop_propagation.
+                        // This handler catches drops on the nav background (append to end).
+                        if let Some(sid) = drag_id {
+                            match drag_src {
+                                DragSource::AccountServer | DragSource::FavoriteServer => {
+                                    if !cd.favorited_server_ids.contains(&sid) {
+                                        cd.favorited_server_ids.push(sid);
+                                    }
+                                }
+                                DragSource::None | DragSource::AccountIcon => {}
+                            }
+                        }
+                        cd.dragging_server_id = None;
+                        cd.drag_source = DragSource::None;
+                        cd.drag_over_id = None;
+                        cd.favorited_server_ids.clone()
+                    };
+                    spawn(async move {
+                        persist_favorites(new_favorites).await;
+                    });
+                },
+                class: if drag_over() { "drag-over" } else { "" },
+                
+                NavBarSpacer {}
+
+                // ── Account icons (one per active account) ────────────────
+                for aid in &account_ids {
+                    AccountIcon {
+                        account_id: aid.clone(),
+                        is_active: active_account.as_deref() == Some(aid.as_str()),
+                    }
+                }
+
+                // Separator (between accounts and favorites)
+                if !account_ids.is_empty() {
+                    div { class: "sidebar-separator" }
+                }
+
+                // ── Favorited servers (dragged in from Bar 2) ─────────────
+                for server in &favorite_servers {
+                    {
+                        let instance_id = chat_data
+                            .read()
+                            .account_sessions
+                            .get(&server.account_id)
+                            .map(|s| s.instance_id.clone())
+                            .unwrap_or_else(|| "demo".to_string());
+                        rsx! {
+                            FavoriteServerIcon {
+                                server_id: server.id.clone(),
+                                server_name: server.name.clone(),
+                                backend_slug: server.backend.slug().to_string(),
+                                instance_id,
+                                account_id: server.account_id.clone(),
+                                account_display_name: server.account_display_name.clone(),
+                                backend_name: server.backend.display_name().to_string(),
+                                unread: server.unread_count,
+                                icon_url: server.icon_url.clone(),
+                            }
+                        }
+                    }
+                }
+
+                // Drop hint — shown only when no favorites yet.
+                if favorite_servers.is_empty() && demo_active {
+                    div { class: "favorites-drop-hint",
+                        span { "← Drag servers here" }
+                    }
+                }
+
+                // Spacer (flex: 1 pushes footer to bottom)
+                div { class: "sidebar-spacer" }
             }
 
-            // App Settings button — only "active" for app-level settings (no account scoped)
-            {
-                let is_app_settings = current_view == View::Settings && active_account.is_none();
-                rsx! {
-                    div {
-                        class: if is_app_settings { "server-icon active" } else { "server-icon" },
-                        onclick: move |_| {
-                            navigator().push(Route::SettingsRoute);
-                        },
-                        title: "{t(\"nav-settings\")}",
-                        div { class: "icon-settings", "⚙" }
+            // Footer: search + settings buttons float at bottom
+            div { class: "sidebar-footer",
+                // Global Search button
+                div {
+                    class: "server-icon",
+                    onclick: move |_| {
+                        navigator().push(Route::SearchRoute);
+                    },
+                    title: "{t(\"nav-search\")}",
+                    div { class: "icon-search", "🔍" }
+                }
+
+                // App Settings button — only "active" for app-level settings (no account scoped)
+                {
+                    let is_app_settings = current_view == View::Settings && active_account.is_none();
+                    rsx! {
+                        div {
+                            class: if is_app_settings { "server-icon active" } else { "server-icon" },
+                            onclick: move |_| {
+                                navigator().push(Route::SettingsRoute);
+                            },
+                            title: "{t(\"nav-settings\")}",
+                            div { class: "icon-settings", "⚙" }
+                        }
                     }
                 }
             }

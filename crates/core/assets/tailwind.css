@@ -385,16 +385,32 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 12px 0;
+    padding: 0;
     gap: 8px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
+    position: relative;
     /* hide horizontal scrollbars caused by rounding/zoom */
     transition: outline 0.1s ease, background-color 0.1s ease;
 }
 
-/* Drop target highlight when dragging a server from Bar 2 */
-.server-sidebar.drag-over {
+/* Scrollable area for accounts and favorites */
+.sidebar-scroll-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 12px 0;
+    gap: 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    box-sizing: border-box;
+    scrollbar-gutter: stable;
+}
+
+/* Drop target highlight on scrollable area */
+.sidebar-scroll-area.drag-over {
     outline: 2px solid var(--accent-primary, #60a5fa);
     outline-offset: -2px;
     background-color: color-mix(in srgb, var(--favorites-bar-bg, var(--sidebar-bg)) 85%, var(--accent-primary, #60a5fa) 15%);
@@ -482,6 +498,22 @@ body {
 
 .sidebar-spacer {
     flex: 1;
+}
+
+/* Sidebar footer — contains search + settings buttons, floats at bottom */
+.sidebar-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--favorites-bar-bg, var(--sidebar-bg));
+    padding: 8px 0;
+    width: 72px;
+    z-index: 20;
 }
 
 /* ===========================

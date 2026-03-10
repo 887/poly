@@ -1,7 +1,7 @@
 # poly-web-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-10
+> **Last Updated:** 2026-03-11
 
 ---
 
@@ -72,11 +72,12 @@ poly-web-devtools-mcp (this crate)
 Chrome / Chromium
     │ loads http://127.0.0.1:3000
     ▼
-dx serve --platform web --port 3000 (apps/web/)
-    └── Serves the Poly web app (WASM, no server component)
+python3 -m http.server 3000 (static file server)
+    └── Serves target/dx/poly-web/debug/web/public/
+    (files produced by `dx build --platform web` in apps/web/)
 ```
 
-**Port**: `WEB_SERVER_PORT = 3000` (NOT 8080 — desktop dx serve claims 8080; we use 3000 to avoid conflict).
+**Port**: `WEB_SERVER_PORT = 3000` (NOT 8080 — desktop app uses 8080 for its asset server).
 
 ### Chrome Window Mode
 
@@ -101,12 +102,13 @@ Chrome is managed by a background watchdog task:
 launch_app { workspace: "/home/laragana/workspcacemsg" }
 ```
 
-The MCP now automatically:
-- **Kills any stale `dx serve`** on port 8080 (wrong port)
-- **Kills any `dx serve --hotpatch`** (breaks WASM)
-- **Starts the correct `dx serve --platform web --port 3000`**
-- **Launches Chrome with CDP**
-- **Starts the auto-restart watchdog**
+`launch_app` does:
+1. **Kills** any stale Chrome, old `dx serve`, and old python3 static-file-server processes
+2. **Runs `dx build --platform web`** in `apps/web/` — **blocks synchronously** until the build finishes.  
+   - **Exit code is immediate** — if the build fails, you see the error at once (no polling, no ambiguity)
+   - Stdout/stderr are captured and available via `get_last_build_log`
+3. **Starts a python3 static file server** on port 3000 serving `target/dx/poly-web/debug/web/public/`
+4. **Launches Chrome with CDP** on port 9222 and starts the auto-restart watchdog
 
 Wait ~3 seconds, then:
 
@@ -204,8 +206,8 @@ The `get_generation` extension tool returns a JSON object with three fields:
 | Field | Semantics |
 |---|---|
 | `generation` | Increments on each successful `connect_cdp` call. Starts at 0 before first connect, 1 after. |
-| `build_id` | **⭐ PRIMARY INDICATOR**: Increments on each `rebuild_app` call. Reads `/tmp/poly-devtools-web-rebuild-counter`. 0 = no rebuild this session. |
-| `dx_serve_pid` | OS PID of the managed `dx serve` process (null if not started by this MCP). |
+| `build_id` | **⭐ PRIMARY INDICATOR**: Increments on each `rebuild_app` / `force_rebuild` call. Reads `/tmp/poly-devtools-web-rebuild-counter`. 0 = no rebuild this session. |
+| `dx_serve_pid` | OS PID of the python3 static file server process (null if not started by this MCP). |
 
 ### ⭐ Complete Decision Table — Check All Three Together
 
@@ -214,9 +216,9 @@ To verify nothing changed, all three must be identical from the previous poll:
 | `generation` | `build_id` | `dx_serve_pid` | Meaning |
 |---|---|---|---|
 | **Same** | **Same** | **Same** | ✅ No changes (no rebuild, no reconnect, no process restart) |
-| Changed | Same | Same | 🔨 Hot-patch occurred (window alive, component remounted — rare under hotpatch) |
+| Changed | Same | Same | CDP reconnect happened (no rebuild) |
 | **Changed** | **Changed** | **Same** | 🔨 **Rebuild triggered + reconnected** (most common case) |
-| Changed | Changed | Changed | 🔄 `dx serve` restarted (full process restart) |
+| Changed | Changed | Changed | 🔄 Static server restarted (full `launch_app` re-run) |
 | Any changed | Any changed | Any changed | ⚠️ Something changed — investigate which field(s) |
 
 **Key insight:** Check `build_id` first to know if a rebuild happened. If `build_id` is the same, no rebuild occurred — even if other fields changed.
@@ -255,22 +257,6 @@ Use them immediately when:
 `get_last_build_status` gives the structured summary.
 `get_last_build_log` gives the raw Dioxus/Cargo output for the most recent web build attempt.
 
-### Counter file
-
-`/tmp/poly-devtools-web-rebuild-counter` — plain text U64, separate from the desktop
-counter (`/tmp/poly-devtools-rebuild-counter`) to avoid cross-contamination when running
-both MCPs simultaneously.
-
-### Visual verification (2026-03-02)
-
-Three-rebuild test confirmed all counters work correctly:
-
-| Step | Banner | `generation` | `build_id` | Notes |
-|---|---|---|---|---|
-| Baseline (launch + connect×2) | 🔴 Alpha | 2 | 0 | No rebuild yet |
-| After rebuild + `connect_cdp` | 🟡 Beta | 3 | 1 | ✅ `build_id` increased immediately |
-| After rebuild + `connect_cdp` | 🟢 Gamma | 4 | 2 | ✅ `build_id` increased immediately |
-
 Decision table validated: **`build_id` advances immediately on `rebuild_app`** (before `connect_cdp`);
 `generation` advances only after `connect_cdp`.
 
@@ -297,67 +283,30 @@ Use this order instead:
 
 Avoid `wait_for` on rebuild-toast strings. Wait for stable app content instead.
 
+### Counter File
+
+`/tmp/poly-devtools-web-rebuild-counter` — plain text U64, separate from the desktop
+counter (`/tmp/poly-devtools-rebuild-counter`) to avoid cross-contamination when both MCPs run simultaneously.
+
 ---
 
-### NEVER use `--hotpatch` for web/WASM (DECISION)
+### Build approach — `dx build` everywhere (DECISION, 2026-03-11)
 
-`dx serve --hotpatch` is **explicitly prohibited** for the web platform.
+**All web rebuilds use `dx build --platform web` — never `dx serve`.**
 
-When `--hotpatch` is enabled for WASM builds:
-1. dx serve does a normal initial WASM build (shows progress bar at 100%)
-2. It then immediately triggers a second "non-hot-reloadable" rebuild
-3. The browser shows "Your app is being rebuilt" and gets stuck — it never
-   resolves because the second build never sends a completion signal
+- `launch_app` runs `dx build --platform web` (blocking, sync), then starts a python3 static file server
+- `rebuild_app` runs `dx build --platform web` (blocking), then reloads Chrome via `Page.reload`
+- `force_rebuild` does the same as `rebuild_app` — it exists as a named extension tool alias
 
-This is a known limitation of Dioxus 0.7.3 experimental hotpatch mode with WASM.
-Standard hot-reload (file-watcher → full WASM recompile → page refresh via
-hot-reload WebSocket) works correctly without `--hotpatch`.
+**Why `dx build` instead of `dx serve`:**
+- Exit code is immediate — build fails loudly with the exact Cargo/Dioxus error
+- No file watcher, no hotpatch, no ambiguous background state
+- No WASM infinite-rebuild-loop (the infamous `dx serve --hotpatch` WASM bug)
+- No stale incremental cache issue (full compile every time)
 
-**`rebuild_app` strategy**: touch `crates/core/src/lib.rs` ONLY — do NOT also
-send `r` to dx serve stdin. Sending both signals causes a double-rebuild loop.
-
-### ⚠️ CRITICAL: Stale WASM Cache — When `rebuild_app` Fails (DECISION 2026-03-08)
-
-**Symptom**: You call `rebuild_app`, the browser shows "Oops! build failed" or the app
-shows the old code. `get_generation` confirms `build_id` changed but the UI hasn't updated.
-
-**Root cause**: `dx serve` uses the `wasm-dev` incremental Cargo profile. After calling
-`rebuild_app` (which touches `lib.rs`), `dx serve` receives the file-watch event and invokes
-Cargo — but Cargo may consider all targets "fresh" (fingerprints match) and skip recompilation.
-The WASM binary timestamp stays old. `dx serve` then serves the stale binary to the browser.
-
-**Fix — use `force_rebuild`**:
-
-```
-force_rebuild {}
-```
-
-This tool runs `dx build --platform web` directly in `apps/web/`, completely bypassing
-`dx serve`'s file-watcher and incremental cache detection. Cargo is forced to re-evaluate
-all target freshness from scratch and writes a new WASM binary, which `dx serve` then serves.
-
-After `force_rebuild` completes:
-1. Call `page_reload { ignoreCache: true }`
-2. Call `connect_cdp`
-3. Verify with `get_generation` that both `build_id` and `generation` increased
-
-**When to use `force_rebuild` vs `rebuild_app`:**
-
-| Scenario | Tool to use |
-|---|---|
-| Normal code change during development | `rebuild_app` (fast, touches lib.rs) |
-| `rebuild_app` result doesn't appear in browser | `force_rebuild` (forces full WASM build) |
-| "Oops! build failed" toast in Poly | `force_rebuild` |
-| WASM timestamp is older than source file | `force_rebuild` |
-
-Note: `force_rebuild` takes 30–90 seconds (full compile). Use `rebuild_app` first, only
-upgrade to `force_rebuild` if the browser doesn't show the updated code.
-
-### Port 3000, NOT 8080
-
-`dx serve --platform desktop` binds port 8080 for its hot-reload asset server.
-This web MCP uses port `3000` (`WEB_SERVER_PORT = 3000`) to avoid the conflict.
-Both desktop and web MCPs can run simultaneously.
+After `rebuild_app` or `force_rebuild` completes:
+1. Call `connect_cdp` (Chrome reloaded automatically if it was connected)
+2. Verify with `get_generation` that `build_id` incremented
 
 ---
 

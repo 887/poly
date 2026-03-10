@@ -1,7 +1,7 @@
 # poly-desktop-devtools-mcp — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-10
+> **Last Updated:** 2026-03-11
 
 ---
 
@@ -54,15 +54,15 @@ Treat timeout errors as a strong signal that the app or bridge is wedged.
 
 **The MCP and desktop app are now isolated.** Killing the app **does NOT kill the MCP.**
 
-- `kill_app()` uses pkill pattern `"poly-desktop-devtools[^-]"` to match only the app,
+- `kill_app()` uses pkill pattern `"poly-desktop-devtools($|[^-])"` to match only the app,
   excluding the `-mcp` variant
 - The MCP survives app kill/restart cycles
 - Enables hot-reload development: rebuild + kill + relaunch app without MCP downtime
 
 **Pattern explained:**
-- `poly-desktop-devtools` ← matches (the app)
+- `poly-desktop-devtools($|[^-])` ← matches either the exact app path/name end or a following non-dash character
 - `poly-desktop-devtools-mcp` ← does NOT match (protected)
-- Regex `[^-]` at end ensures we don't match lines with `-` after the app name
+- This avoids the old bug where a bare `/path/to/poly-desktop-devtools` process survived because there was no trailing character after the app name.
 
 ---
 
@@ -151,26 +151,32 @@ reset_app {}               → kill app + wipe data + docs for setup wizard
 ### kill_app() — MCP-Safe Pattern
 
 ```rust
-// Uses pattern that matches app but NOT the MCP server
+// Uses pattern that matches the exact app name/path but NOT the MCP server
 tokio::process::Command::new("pkill")
-    .args(["-f", "poly-desktop-devtools[^-]"])
+    .args(["-f", "poly-desktop-devtools($|[^-])"])
     .status()
     .await?;
 ```
 
 This pattern:
-- `poly-desktop-devtools[^-]` — match "poly-desktop-devtools" followed by non-dash
+- `poly-desktop-devtools($|[^-])` — match either the exact executable path end or a following non-dash
 - Will match: `/path/to/poly-desktop-devtools` (the app)
 - Will NOT match: `poly-desktop-devtools-mcp` (has a dash after)
 
-### launch_app() — Rebuilds if Needed
+If `launch_app` times out and `get_last_build_status` mentions port 9223 still being occupied while `/status` is dead,
+assume a stale desktop app blocked the bridge bind instead of assuming the build itself is broken.
 
-1. Kill any existing app instance (using MCP-safe pattern)
-2. If binary doesn't exist, build with `dx build --platform desktop`
-3. Spawn the binary in background with stdio piped to `/dev/null`
-4. Return immediately (app runs async)
+### launch_app() — Builds and Launches
 
-Call `connect_cdp()` ~2-3s later to verify the HTTP server is ready.
+1. Kill any existing app instance (pkill MCP-safe pattern)
+2. Run **`dx build --platform desktop`** in `apps/desktop-devtools/` — **blocks synchronously** until the build finishes  
+   - Exit code gives **immediate pass/fail** — no polling, no ambiguity  
+   - Stdout/stderr captured and available via `get_last_build_log`
+3. Launch the binary from `target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools`
+4. Spawn a background log reader for app output
+5. Wait up to 30 s for the HTTP eval bridge on port 9223 to become reachable
+
+Call `connect_cdp()` after launch_app returns to verify the bridge is ready.
 
 
 ### 5. Reset to Setup Wizard
@@ -190,35 +196,21 @@ Call `launch_app` again to restart at the setup wizard.
 - Binary output: `target/dx/poly-desktop-devtools/debug/linux/app/poly-desktop-devtools`
 - CSS asset: `target/dx/poly-desktop-devtools/debug/linux/app/assets/tailwind-*.css`
 
-## Rebuild Strategy — `--hotpatch` Enabled (DECISION, 2026-03-03)
+## Build Approach — `dx build` everywhere (DECISION, 2026-03-11)
 
-The desktop MCP launches `dx serve --hotpatch --platform desktop`.
+**All desktop rebuilds use `dx build --platform desktop` — never `dx serve --hotpatch`.**
 
-**`--hotpatch` keeps the desktop window alive** across code changes by patching
-the running binary in-place (Dioxus subsecond hot-reload). This eliminates the
-window-jumping problem where every recompile killed and restarted the window.
+- `launch_app`: runs `dx build --platform desktop` (blocking, sync) then launches the binary
+- `rebuild_app`: calls `launch_app` (kills old binary, rebuilds, relaunches)
+- `force_rebuild`: delegates to `rebuild_app`
 
-The eval bridge inside the app uses **recreatable `std::sync::Mutex<Option<Sender>>`
-channels** (not `OnceLock`) that survive hot-patch component remounts.
+**Why `dx build` instead of `dx serve --hotpatch`:**
+- Exit code is immediate — any build failure is surfaced at once with exact Cargo error
+- No background dx serve process to manage or pkill
+- Simpler lifecycle: one binary PID to track, not a dx serve process + binary PID
+- No stale port / pkill-regex edge cases
 
-For changes that can't be hot-patched (rare structural changes to statics or
-type layouts), Dioxus falls back to a full rebuild — the MCP polls and waits
-for the bridge to come back, same as before.
-
-**`rebuild_app` strategy**: Touch `crates/core/src/lib.rs` to trigger the file
-watcher. dx serve will hot-patch if possible, or full-rebuild if necessary.
-
-### `force_rebuild` Extension Tool — When Hot-Patch Fails
-
-The `force_rebuild` extension tool runs `dx build --platform desktop` directly in
-`apps/desktop-devtools/`, bypassing `dx serve`'s file-watcher entirely.
-
-Use this when:
-- `rebuild_app` doesn't visually update the app
-- Hot-patch fails with an error
-- You need a guaranteed fresh binary before launching
-
-After `force_rebuild` completes, call `launch_app` to start the new binary, then `connect_cdp`.
+After `rebuild_app` or `force_rebuild` completes, call `connect_cdp` to verify the bridge.
 
 ## Debugging CSS Not Loading
 
@@ -305,13 +297,12 @@ Always check **`build_id`** to know if a rebuild happened.
 
 ## Dioxus Rebuild Toast Warning (2026-03-08)
 
-During desktop `dx serve --hotpatch`, Dioxus may show a visible toast/overlay like
-**"Your app is being rebuilt"** while recompilation is in progress.
+Dioxus dev-runtime may show a visible toast/overlay like **"Your app is being rebuilt"**.
 
 This text is **not** a reliable readiness or failure signal for agents:
 
 - it is injected by the Dioxus dev runtime, not by Poly
-- it may still be visible in a screenshot even though the app underneath already hot-patched
+- it may still be visible in a screenshot even though the app underneath already updated
 - it does **not** prove the rebuild is stuck
 
 For MCP automation and visual verification:
@@ -320,8 +311,8 @@ For MCP automation and visual verification:
 2. Use `build_id` as the primary rebuild indicator
 3. Take a fresh snapshot/screenshot after the bridge is reachable again
 4. Verify real Poly UI markers instead of the rebuild-toast text
-5. **Note:** The toast DOM element may persist in the snapshot/screenshot even after successful
-   hot-reload — its presence does not prove the app is stuck
+5. **Note:** The toast DOM element may persist in the snapshot/screenshot even after a successful
+   rebuild — its presence does not prove the app is stuck
 
 **Avoid:** `wait_for(["Your app is being rebuilt"])`
 
