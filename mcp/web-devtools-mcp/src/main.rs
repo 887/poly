@@ -221,8 +221,7 @@ impl ChromeCdpBackend {
             command_line: command_line.to_string(),
             state: BuildLifecycleState::Running,
             summary: summary.to_string(),
-            verification: "Build command started; waiting for dx build to finish."
-                .to_string(),
+            verification: "Build command started; waiting for dx build to finish.".to_string(),
             exit_code: None,
             started_at_unix_ms: Some(unix_now_ms()),
             finished_at_unix_ms: None,
@@ -694,8 +693,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
     async fn launch_app(&self, workspace: &str) -> anyhow::Result<String> {
         let app_dir = format!("{workspace}/apps/web");
-        let serve_dir =
-            format!("{workspace}/target/dx/poly-web/debug/web/public");
+        let serve_dir = format!("{workspace}/target/dx/poly-web/debug/web/public");
         let mut messages = Vec::new();
 
         *self.workspace.lock().await = Some(workspace.to_string());
@@ -883,8 +881,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .status()
             .await;
 
-        Ok("Killed Chrome and static file server. Watchdog stopped. Call launch_app to restart."
-            .to_string())
+        Ok(
+            "Killed Chrome and static file server. Watchdog stopped. Call launch_app to restart."
+                .to_string(),
+        )
     }
 
     async fn connect(&self) -> anyhow::Result<String> {
@@ -1168,11 +1168,9 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .status()
             .await;
 
-        Ok(
-            "Hard-killed Chrome and static file server (SIGKILL). \
+        Ok("Hard-killed Chrome and static file server (SIGKILL). \
              Watchdog stopped. Call launch_app to rebuild and restart."
-                .to_string(),
-        )
+            .to_string())
     }
 
     async fn navigate_page(&self, params: &NavigateParams) -> anyhow::Result<String> {

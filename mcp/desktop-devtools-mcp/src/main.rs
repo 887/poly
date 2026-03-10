@@ -504,9 +504,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
                     build_output.status.code(),
                 )
                 .await;
-                anyhow::bail!(
-                    "Build succeeded but eval bridge did not respond within 30s: {e}"
-                )
+                anyhow::bail!("Build succeeded but eval bridge did not respond within 30s: {e}")
             }
         }
     }
@@ -574,8 +572,10 @@ impl DevtoolsBackend for DesktopHttpBackend {
             .status()
             .await;
 
-        Ok("Hard-killed poly-desktop-devtools (SIGKILL). Call launch_app to rebuild and restart."
-            .to_string())
+        Ok(
+            "Hard-killed poly-desktop-devtools (SIGKILL). Call launch_app to rebuild and restart."
+                .to_string(),
+        )
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
