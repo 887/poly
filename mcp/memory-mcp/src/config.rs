@@ -49,19 +49,18 @@ fn default_data_dir() -> anyhow::Result<PathBuf> {
     }
 
     // Check current working directory first
-    if let Ok(cwd) = std::env::current_dir() {
-        if let Some(root) = find_repo_root(&cwd) {
-            return Ok(root.join(".poly-memory"));
-        }
+    if let Ok(cwd) = std::env::current_dir()
+        && let Some(root) = find_repo_root(&cwd)
+    {
+        return Ok(root.join(".poly-memory"));
     }
 
     // Then check the executable's parent directory (covers some launcher cases)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exedir) = exe.parent() {
-            if let Some(root) = find_repo_root(exedir) {
-                return Ok(root.join(".poly-memory"));
-            }
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(exedir) = exe.parent()
+        && let Some(root) = find_repo_root(exedir)
+    {
+        return Ok(root.join(".poly-memory"));
     }
 
     // Otherwise fall back to the conventional home-location.
