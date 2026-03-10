@@ -142,7 +142,7 @@ async fn create_message(
                   channel: type::record($ch), \
                   author: type::record($author), \
                   content: $content, \
-                  reply_to: $reply_to, \
+                  reply_to: IF $reply_to != NONE THEN type::record($reply_to) ELSE NONE END, \
                   edited_at: NONE, \
                   deleted: false, \
                   created_at: time::now() \

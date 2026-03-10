@@ -367,6 +367,19 @@ impl PolyServerHttpClient {
         Ok(resp.json().await?)
     }
 
+    /// `DELETE /users/me/friends/:id` — remove a friend or cancel/reject a request.
+    pub async fn remove_friend(&self, request_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/users/me/friends/{request_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
     // ── Servers ──────────────────────────────────────────────────────────────
 
     /// `GET /servers` — list servers the user is a member of.
@@ -466,6 +479,123 @@ impl PolyServerHttpClient {
         Ok(())
     }
 
+    /// `PATCH /servers/:id` — update server metadata.
+    pub async fn update_server(
+        &self,
+        server_id: &str,
+        name: Option<&str>,
+        icon_url: Option<&str>,
+    ) -> Result<WireServer> {
+        let mut map = serde_json::Map::new();
+        if let Some(n) = name {
+            map.insert("name".into(), json!(n));
+        }
+        if let Some(u) = icon_url {
+            map.insert("icon_url".into(), json!(u));
+        }
+        let resp = self
+            .auth_patch(&self.url(&format!("/servers/{server_id}")))
+            .await?
+            .json(&serde_json::Value::Object(map))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// `DELETE /servers/:id` — delete a server (owner only).
+    pub async fn delete_server(&self, server_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/servers/{server_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /servers/:id/members/:user_id` — kick a member from a server.
+    pub async fn kick_member(&self, server_id: &str, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/servers/{server_id}/members/{user_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    // ── Categories ───────────────────────────────────────────────────────────
+
+    /// `POST /servers/:id/categories` — create a channel category.
+    pub async fn create_category(
+        &self,
+        server_id: &str,
+        name: &str,
+        position: Option<i64>,
+    ) -> Result<WireCategory> {
+        let mut map = serde_json::Map::new();
+        map.insert("name".into(), json!(name));
+        if let Some(pos) = position {
+            map.insert("position".into(), json!(pos));
+        }
+        let resp = self
+            .auth_post(&self.url(&format!("/servers/{server_id}/categories")))
+            .await?
+            .json(&serde_json::Value::Object(map))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// `PATCH /categories/:id` — update a category.
+    pub async fn update_category(
+        &self,
+        category_id: &str,
+        name: Option<&str>,
+        position: Option<i64>,
+    ) -> Result<WireCategory> {
+        let mut map = serde_json::Map::new();
+        if let Some(n) = name {
+            map.insert("name".into(), json!(n));
+        }
+        if let Some(pos) = position {
+            map.insert("position".into(), json!(pos));
+        }
+        let resp = self
+            .auth_patch(&self.url(&format!("/categories/{category_id}")))
+            .await?
+            .json(&serde_json::Value::Object(map))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// `DELETE /categories/:id` — delete a category.
+    pub async fn delete_category(&self, category_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/categories/{category_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
     // ── Channels ─────────────────────────────────────────────────────────────
 
     /// `GET /servers/:id/channels` — list channels in a server.
@@ -493,7 +623,10 @@ impl PolyServerHttpClient {
         map.insert("name".into(), json!(name));
         map.insert("kind".into(), json!(kind));
         if let Some(cat) = category_id {
-            map.insert("category".into(), json!(cat));
+            // Strip "category:" prefix — server prepends it internally, same
+            // pattern as reply_to / message IDs.
+            let stripped = cat.strip_prefix("category:").unwrap_or(cat);
+            map.insert("category_id".into(), json!(stripped));
         }
         let body = serde_json::Value::Object(map);
         let resp = self
@@ -506,6 +639,49 @@ impl PolyServerHttpClient {
             return Err(Self::parse_error(resp).await);
         }
         Ok(resp.json().await?)
+    }
+
+    /// `PATCH /channels/:id` — update a channel.
+    pub async fn update_channel(
+        &self,
+        channel_id: &str,
+        name: Option<&str>,
+        category_id: Option<&str>,
+        position: Option<i64>,
+    ) -> Result<WireChannel> {
+        let mut map = serde_json::Map::new();
+        if let Some(n) = name {
+            map.insert("name".into(), json!(n));
+        }
+        if let Some(cat) = category_id {
+            map.insert("category".into(), json!(cat));
+        }
+        if let Some(pos) = position {
+            map.insert("position".into(), json!(pos));
+        }
+        let resp = self
+            .auth_patch(&self.url(&format!("/channels/{channel_id}")))
+            .await?
+            .json(&serde_json::Value::Object(map))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// `DELETE /channels/:id` — delete a channel.
+    pub async fn delete_channel(&self, channel_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/channels/{channel_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
     }
 
     /// `GET /channels/@dms` — list DM channels.
@@ -533,6 +709,48 @@ impl PolyServerHttpClient {
             return Err(Self::parse_error(resp).await);
         }
         Ok(resp.json().await?)
+    }
+
+    /// `POST /channels/@groups` — create a group DM.
+    pub async fn create_group_dm(&self, name: &str, member_ids: &[String]) -> Result<WireChannel> {
+        let resp = self
+            .auth_post(&self.url("/channels/@groups"))
+            .await?
+            .json(&json!({ "name": name, "member_ids": member_ids }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// `POST /channels/@groups/:id/members` — add a member to a group DM.
+    pub async fn add_group_member(&self, group_id: &str, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url(&format!("/channels/@groups/{group_id}/members")))
+            .await?
+            .json(&json!({ "user_id": user_id }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /channels/@groups/:id/members` — remove a member from a group DM.
+    pub async fn remove_group_member(&self, group_id: &str, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/channels/@groups/{group_id}/members")))
+            .await?
+            .json(&json!({ "user_id": user_id }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
     }
 
     /// `GET /channels/:id/participants` — list channel participants.
@@ -586,7 +804,9 @@ impl PolyServerHttpClient {
         let mut map = serde_json::Map::new();
         map.insert("content".into(), json!(content));
         if let Some(rt) = reply_to {
-            map.insert("reply_to".into(), json!(rt));
+            // Strip the "message:" table prefix — the server prepends it internally.
+            let stripped = rt.strip_prefix("message:").unwrap_or(rt);
+            map.insert("reply_to".into(), json!(stripped));
         }
         if let Some(att) = attachments {
             map.insert("attachments".into(), json!(att));
@@ -673,6 +893,39 @@ impl PolyServerHttpClient {
     }
 
     // ── Attachments ──────────────────────────────────────────────────────────
+
+    /// `POST /attachments` — upload a file attachment (multipart/form-data).
+    ///
+    /// `data` is the raw file bytes. Returns the attachment metadata.
+    /// The server accepts up to 50 MiB per file.
+    pub async fn upload_attachment(
+        &self,
+        filename: &str,
+        content_type: &str,
+        data: Vec<u8>,
+    ) -> Result<WireAttachmentRef> {
+        let part = reqwest::multipart::Part::bytes(data)
+            .file_name(filename.to_string())
+            .mime_str(content_type)
+            .map_err(PolyServerError::Http)?;
+        let form = reqwest::multipart::Form::new().part("file", part);
+        let session = self.session.read().await;
+        let Some(ref s) = *session else {
+            return Err(PolyServerError::NotAuthenticated);
+        };
+        let resp = self
+            .http
+            .post(self.url("/attachments"))
+            .bearer_auth(&s.token)
+            .multipart(form)
+            .send()
+            .await?;
+        drop(session);
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
 
     /// `GET /attachments/:id` — get attachment download URL.
     ///

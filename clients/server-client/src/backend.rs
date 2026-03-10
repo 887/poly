@@ -137,7 +137,21 @@ impl PolyServerBackend {
     }
 
     /// Map a server-wire `WireMessage` to a `poly_client::Message`.
-    fn map_message(msg: &srv::WireMessage) -> Message {
+    ///
+    /// `base_url` is needed to construct attachment download URLs.
+    fn map_message(msg: &srv::WireMessage, base_url: &str) -> Message {
+        let attachments = msg
+            .attachments
+            .iter()
+            .map(|att| Attachment {
+                id: att.id.clone(),
+                filename: att.filename.clone(),
+                content_type: att.mime_type.clone(),
+                url: format!("{base_url}/attachments/{}", att.id),
+                size: att.size_bytes,
+            })
+            .collect();
+
         Message {
             id: msg.id.clone(),
             author: User {
@@ -149,7 +163,7 @@ impl PolyServerBackend {
             },
             content: MessageContent::Text(msg.content.clone()),
             timestamp: msg.created_at,
-            attachments: Vec::new(),
+            attachments,
             reactions: Vec::new(),
             reply_to: None,
             edited: msg.edited_at.is_some(),
@@ -314,7 +328,20 @@ impl ClientBackend for PolyServerBackend {
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        // The server doesn't have a dedicated GET /channels/:id endpoint.
+        // The server has no dedicated GET /channels/:id endpoint.
+        // Try to find the channel in the DM list (covers both DMs and group DMs).
+        let dms = self
+            .http
+            .get_dm_channels()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if let Some(ch) = dms.iter().find(|c| c.id == id) {
+            return Ok(Self::map_channel(ch));
+        }
+
+        // Server channels require knowing the server_id; without it we cannot look
+        // them up. Callers should use get_channels(server_id) instead.
         Err(ClientError::NotFound(format!("channel {id}")))
     }
 
@@ -336,7 +363,27 @@ impl ClientBackend for PolyServerBackend {
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
 
-        Ok(Self::map_message(&msg))
+        Ok(Self::map_message(&msg, &self.base_url))
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let text = match &content {
+            MessageContent::Text(t) => t.clone(),
+            MessageContent::WithAttachments { text, .. } => text.clone(),
+        };
+
+        let msg = self
+            .http
+            .send_message(channel_id, &text, Some(reply_to_message_id), None)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        Ok(Self::map_message(&msg, &self.base_url))
     }
 
     async fn get_messages(
@@ -350,7 +397,10 @@ impl ClientBackend for PolyServerBackend {
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
 
-        Ok(msgs.iter().map(Self::map_message).collect())
+        Ok(msgs
+            .iter()
+            .map(|m| Self::map_message(m, &self.base_url))
+            .collect())
     }
 
     // ── Users ────────────────────────────────────────────────────────────────
@@ -393,7 +443,45 @@ impl ClientBackend for PolyServerBackend {
     // ── Groups ───────────────────────────────────────────────────────────────
 
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(Vec::new())
+        // Group DMs are DM-like channels (no server_id) with a user-specified name.
+        // We identify them by fetching all DM-kind channels and checking participant count:
+        // >2 participants (including self) indicates a group DM.
+        let channels = self
+            .http
+            .get_dm_channels()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        let account_id = self.account_id.clone().unwrap_or_default();
+        let mut groups = Vec::new();
+
+        for ch in channels.iter().filter(|c| c.server_id.is_none()) {
+            let participants = self
+                .http
+                .get_participants(&ch.id)
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            // A group DM has more than 2 participants (or has a name not matching a user).
+            // We use participant count > 2 as the primary signal.
+            if participants.len() > 2 {
+                let mut members = Vec::with_capacity(participants.len());
+                for p in &participants {
+                    if let Ok(user) = self.http.get_user(&p.user).await {
+                        members.push(Self::map_user(&user));
+                    }
+                }
+                groups.push(Group {
+                    id: ch.id.clone(),
+                    name: Some(ch.name.clone()),
+                    members,
+                    last_message: None,
+                    backend: BackendType::Poly,
+                    account_id: account_id.clone(),
+                });
+            }
+        }
+        Ok(groups)
     }
 
     // ── DMs ──────────────────────────────────────────────────────────────────
@@ -406,24 +494,57 @@ impl ClientBackend for PolyServerBackend {
             .map_err(|e| ClientError::Network(e.to_string()))?;
 
         let account_id = self.account_id.clone().unwrap_or_default();
-
-        Ok(channels
+        // Only keep single-participant DMs (no group DMs — those go through get_groups).
+        let dm_channels: Vec<_> = channels
             .iter()
-            .map(|ch| DmChannel {
-                id: ch.id.clone(),
-                user: User {
+            .filter(|ch| ch.server_id.is_none())
+            .collect();
+
+        let mut result = Vec::with_capacity(dm_channels.len());
+        for ch in dm_channels {
+            // Resolve the other participant's profile.
+            let participants = self
+                .http
+                .get_participants(&ch.id)
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            // The other participant is the one who isn't us.
+            let other = participants.iter().find(|p| p.user != account_id);
+
+            let user = if let Some(p) = other {
+                self.http
+                    .get_user(&p.user)
+                    .await
+                    .map(|profile| Self::map_user(&profile))
+                    .unwrap_or_else(|_| User {
+                        id: p.user.clone(),
+                        display_name: ch.name.clone(),
+                        avatar_url: None,
+                        presence: PresenceStatus::Offline,
+                        backend: BackendType::Poly,
+                    })
+            } else {
+                // Fallback: use the channel name as display name.
+                User {
                     id: String::new(),
                     display_name: ch.name.clone(),
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
                     backend: BackendType::Poly,
-                },
+                }
+            };
+
+            result.push(DmChannel {
+                id: ch.id.clone(),
+                user,
                 last_message: None,
                 unread_count: 0,
                 backend: BackendType::Poly,
                 account_id: account_id.clone(),
-            })
-            .collect())
+            });
+        }
+        Ok(result)
     }
 
     // ── Notifications ────────────────────────────────────────────────────────
@@ -481,7 +602,7 @@ impl ClientBackend for PolyServerBackend {
 fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
     match event {
         srv::ServerEvent::MessageCreated(payload) => Some(ClientEvent::MessageReceived {
-            channel_id: payload.channel_id,
+            channel_id: payload.channel_id.clone(),
             message: Message {
                 id: payload.id,
                 author: User {
@@ -500,7 +621,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
             },
         }),
         srv::ServerEvent::MessageEdited(payload) => Some(ClientEvent::MessageEdited {
-            channel_id: payload.channel_id,
+            channel_id: payload.channel_id.clone(),
             message: Message {
                 id: payload.id,
                 author: User {
@@ -555,7 +676,49 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
             backend: BackendType::Poly,
             connected: false,
         }),
-        // Events we don't map yet (voice, server updates, etc).
-        _ => None,
+        srv::ServerEvent::VoiceStateUpdate {
+            channel_id,
+            user_id,
+            joined,
+        } => {
+            if joined {
+                Some(ClientEvent::VoiceUserJoined {
+                    channel_id,
+                    participant: VoiceParticipant {
+                        user: User {
+                            id: user_id,
+                            display_name: String::new(),
+                            avatar_url: None,
+                            presence: PresenceStatus::Online,
+                            backend: BackendType::Poly,
+                        },
+                        is_muted: false,
+                        is_deafened: false,
+                        is_streaming: false,
+                        is_video_on: false,
+                        is_speaking: false,
+                    },
+                })
+            } else {
+                Some(ClientEvent::VoiceUserLeft {
+                    channel_id,
+                    user_id,
+                })
+            }
+        }
+        // Server metadata updated — wrap into ServerUpdated client event.
+        // We don't have a full Server struct here, so we emit a reduced channel update.
+        // Future: expose a dedicated ServerMetaUpdated event in poly_client.
+        srv::ServerEvent::ServerMemberJoined { .. }
+        | srv::ServerEvent::ServerMemberLeft { .. }
+        | srv::ServerEvent::ServerUpdated { .. }
+        | srv::ServerEvent::ChannelCreated { .. }
+        | srv::ServerEvent::ChannelDeleted { .. }
+        | srv::ServerEvent::FriendRequestAccepted { .. }
+        | srv::ServerEvent::VoiceSignalRelay { .. }
+        | srv::ServerEvent::Ping => None,
+        // ReactionAdded / ReactionRemoved — poly_client::ClientEvent has no reaction
+        // variants yet. Events are intentionally dropped here until the trait adds them.
+        srv::ServerEvent::ReactionAdded { .. } | srv::ServerEvent::ReactionRemoved { .. } => None,
     }
 }

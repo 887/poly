@@ -3,10 +3,11 @@
 //! Connects to `ws://host/ws?token=<JWT>` and exposes a stream of `ServerEvent`s.
 //! Handles auto-reconnect with exponential backoff.
 
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{Mutex, RwLock, broadcast};
+use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{debug, info, warn};
 
 use crate::error::Result;
@@ -19,6 +20,20 @@ const MAX_BACKOFF_SECS: u64 = 30;
 /// Broadcast channel capacity.
 const CHAN_CAPACITY: usize = 256;
 
+/// Type alias for the WebSocket write half shared across tasks.
+type WsSink = Arc<
+    Mutex<
+        Option<
+            futures_util::stream::SplitSink<
+                tokio_tungstenite::WebSocketStream<
+                    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+                >,
+                WsMessage,
+            >,
+        >,
+    >,
+>;
+
 /// WebSocket client for receiving real-time events from a poly-server.
 pub struct PolyServerWsClient {
     /// Base URL of the server (http:// — we convert to ws://).
@@ -27,6 +42,8 @@ pub struct PolyServerWsClient {
     session: Arc<RwLock<Option<SessionState>>>,
     /// Event broadcaster — subscribers receive all events.
     tx: broadcast::Sender<ServerEvent>,
+    /// Shared write half of the WebSocket — `None` when disconnected.
+    sink: WsSink,
     /// Handle to the reconnect task (so we can abort on drop).
     task_handle: Option<tokio::task::JoinHandle<()>>,
 }
@@ -39,6 +56,7 @@ impl PolyServerWsClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             session,
             tx,
+            sink: Arc::new(Mutex::new(None)),
             task_handle: None,
         }
     }
@@ -64,9 +82,10 @@ impl PolyServerWsClient {
         let base_url = self.base_url.clone();
         let session = Arc::clone(&self.session);
         let tx = self.tx.clone();
+        let sink = Arc::clone(&self.sink);
 
         let handle = tokio::spawn(async move {
-            ws_reconnect_loop(base_url, session, tx).await;
+            ws_reconnect_loop(base_url, session, tx, sink).await;
         });
         self.task_handle = Some(handle);
     }
@@ -76,21 +95,42 @@ impl PolyServerWsClient {
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
         }
+        // Clear the sink so future send_message calls return gracefully.
+        let sink = Arc::clone(&self.sink);
+        tokio::spawn(async move {
+            *sink.lock().await = None;
+        });
     }
 
-    /// Send a client → server message (e.g. typing_start, heartbeat).
+    /// Send a JSON message to the server (e.g. `typing_start`, heartbeat).
+    ///
+    /// Returns `Ok(())` if no connection is currently active (fire-and-forget).
     pub async fn send_message(&self, msg: &serde_json::Value) -> Result<()> {
-        // This is a simplified version — for a full implementation we'd
-        // need to hold on to the write half of the WS. For now, typing
-        // indicators use HTTP or are fire-and-forget.
-        let _ = msg;
+        let text = serde_json::to_string(msg)?;
+        let mut guard = self.sink.lock().await;
+        if let Some(ref mut sink) = *guard {
+            sink.send(WsMessage::Text(text.into()))
+                .await
+                .map_err(|e| crate::error::PolyServerError::WebSocket(e.to_string()))?;
+        }
         Ok(())
+    }
+
+    /// Send a `typing_start` event for the given channel.
+    pub async fn send_typing(&self, channel_id: &str) -> Result<()> {
+        self.send_message(&serde_json::json!({
+            "event": "typing_start",
+            "channel_id": channel_id,
+        }))
+        .await
     }
 }
 
 impl Drop for PolyServerWsClient {
     fn drop(&mut self) {
-        self.disconnect();
+        if let Some(handle) = self.task_handle.take() {
+            handle.abort();
+        }
     }
 }
 
@@ -110,6 +150,7 @@ async fn ws_reconnect_loop(
     base_url: String,
     session: Arc<RwLock<Option<SessionState>>>,
     tx: broadcast::Sender<ServerEvent>,
+    sink: WsSink,
 ) {
     let mut backoff_secs = 1u64;
 
@@ -136,12 +177,14 @@ async fn ws_reconnect_loop(
                 info!("WS: Connected to {ws_base}");
                 backoff_secs = 1; // Reset backoff on successful connect.
 
-                let (mut _write, mut read) = ws_stream.split();
+                let (write, mut read) = ws_stream.split();
+                // Store the write half so callers can send messages.
+                *sink.lock().await = Some(write);
 
                 // Read events until the connection drops.
                 while let Some(msg_result) = read.next().await {
                     match msg_result {
-                        Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
+                        Ok(WsMessage::Text(text)) => {
                             match serde_json::from_str::<ServerEvent>(&text) {
                                 Ok(event) => {
                                     // Ignore send errors — no subscribers means nobody is listening.
@@ -152,7 +195,7 @@ async fn ws_reconnect_loop(
                                 }
                             }
                         }
-                        Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
+                        Ok(WsMessage::Close(_)) => {
                             info!("WS: Server closed connection");
                             break;
                         }
@@ -163,6 +206,9 @@ async fn ws_reconnect_loop(
                         _ => {} // Ignore binary, ping, pong frames.
                     }
                 }
+
+                // Clear the write half on disconnect.
+                *sink.lock().await = None;
             }
             Err(e) => {
                 warn!("WS: Connection failed: {e}");

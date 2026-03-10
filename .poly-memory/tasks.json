@@ -1,0 +1,61 @@
+[
+  {
+    "id": 1,
+    "slug": "implement-poly-server-client-backend",
+    "title": "Implement poly-server-client backend",
+    "description": null,
+    "status": "in-progress",
+    "created_at": "2026-03-10T00:30:10.472802724Z",
+    "updated_at": "2026-03-10T00:32:32.555126448Z",
+    "completed_at": null,
+    "memory_count": 1,
+    "finding_count": 0,
+    "checklist": [
+      {
+        "id": 1,
+        "text": "Fix get_dm_channels: resolve other user via participants API",
+        "done": false
+      },
+      {
+        "id": 2,
+        "text": "Fix send_reply_message: pass reply_to to HTTP send_message",
+        "done": false
+      },
+      {
+        "id": 3,
+        "text": "Fix map_message: populate attachments list with proper URLs",
+        "done": false
+      },
+      {
+        "id": 4,
+        "text": "Expand event stream: reactions, voice, server/channel updates",
+        "done": false
+      },
+      {
+        "id": 5,
+        "text": "Add missing HTTP endpoints: update/delete server, channel, category, kick, group DMs, upload",
+        "done": false
+      },
+      {
+        "id": 6,
+        "text": "Fix get_groups: return group DM channels from server",
+        "done": false
+      },
+      {
+        "id": 7,
+        "text": "Add WS typing indicator sender (hold write half)",
+        "done": false
+      },
+      {
+        "id": 8,
+        "text": "Fix get_channel: resolve DM channels, proper error for server channels without sid",
+        "done": false
+      },
+      {
+        "id": 9,
+        "text": "cargo cranky pass - zero warnings",
+        "done": false
+      }
+    ]
+  }
+]

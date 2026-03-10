@@ -557,3 +557,252 @@ async fn test_devices() {
     // At least one device (the current session).
     assert!(!devices.is_empty());
 }
+
+// ── New tests for Phase 2 additions ─────────────────────────────────────────
+
+#[tokio::test]
+async fn test_reply_message() {
+    let srv = TestServer::start().await;
+    let client = make_client(&srv);
+    client.signup("irene_reply", None).await.expect("signup");
+
+    let server = client
+        .create_server("Reply Guild")
+        .await
+        .expect("create_server");
+    let server_id = server.id.expect("id");
+    let channel = client
+        .create_channel(&server_id, "replies", "text", None)
+        .await
+        .expect("create_channel");
+
+    // Send the original message.
+    let original = client
+        .send_message(&channel.id, "This is the original", None, None)
+        .await
+        .expect("send original");
+
+    // Send a reply referencing the original.
+    let reply = client
+        .send_message(&channel.id, "This is a reply", Some(&original.id), None)
+        .await
+        .expect("send reply");
+    assert_eq!(reply.content, "This is a reply");
+    // The reply should record reply_to_id pointing to the original.
+    assert_eq!(
+        reply.reply_to_id.as_deref(),
+        Some(original.id.as_str()),
+        "reply_to_id should be set to the original message ID"
+    );
+}
+
+#[tokio::test]
+async fn test_update_and_delete_server() {
+    let srv = TestServer::start().await;
+    let client = make_client(&srv);
+    client.signup("jake_server", None).await.expect("signup");
+
+    // Create a server.
+    let server = client
+        .create_server("Old Name")
+        .await
+        .expect("create_server");
+    let server_id = server.id.expect("id");
+
+    // Update it.
+    let updated = client
+        .update_server(&server_id, Some("New Name"), None)
+        .await
+        .expect("update_server");
+    assert_eq!(updated.name, "New Name");
+
+    // Delete it.
+    client
+        .delete_server(&server_id)
+        .await
+        .expect("delete_server");
+
+    // The server should no longer appear in the list.
+    let servers = client.get_servers().await.expect("get_servers");
+    assert!(
+        !servers.iter().any(|s| s.name == "New Name"),
+        "Deleted server should not appear in get_servers"
+    );
+}
+
+#[tokio::test]
+async fn test_kick_member() {
+    let srv = TestServer::start().await;
+
+    // Alice creates a server.
+    let alice = make_client(&srv);
+    alice.signup("alice_kick", None).await.expect("signup");
+    let server = alice
+        .create_server("Kick Guild")
+        .await
+        .expect("create_server");
+    let server_id = server.id.expect("id");
+
+    // Alice creates an invite.
+    let invite = alice
+        .create_invite(&server_id, None, None)
+        .await
+        .expect("create_invite");
+
+    // Bob joins.
+    let bob = make_client(&srv);
+    let bob_auth = bob.signup("bob_kick", None).await.expect("signup bob");
+    bob.join_server(&invite.code).await.expect("join_server");
+
+    // Bob should be a member.
+    let bob_servers = bob.get_servers().await.expect("get_servers");
+    assert!(
+        bob_servers.iter().any(|s| s.name == "Kick Guild"),
+        "Bob should be in the server before kick"
+    );
+
+    // Alice kicks Bob.
+    alice
+        .kick_member(&server_id, &bob_auth.user_id)
+        .await
+        .expect("kick_member");
+
+    // Bob's server list should no longer contain the guild.
+    let bob_servers_after = bob.get_servers().await.expect("get_servers after kick");
+    assert!(
+        !bob_servers_after.iter().any(|s| s.name == "Kick Guild"),
+        "Bob should not see the server after being kicked"
+    );
+}
+
+#[tokio::test]
+async fn test_update_and_delete_channel() {
+    let srv = TestServer::start().await;
+    let client = make_client(&srv);
+    client.signup("kate_ch", None).await.expect("signup");
+
+    let server = client
+        .create_server("Channel Guild")
+        .await
+        .expect("create_server");
+    let server_id = server.id.expect("id");
+    let ch = client
+        .create_channel(&server_id, "old-name", "text", None)
+        .await
+        .expect("create_channel");
+
+    // Update channel name.
+    let updated = client
+        .update_channel(&ch.id, Some("new-name"), None, None)
+        .await
+        .expect("update_channel");
+    assert_eq!(updated.name, "new-name");
+
+    // Delete channel.
+    client.delete_channel(&ch.id).await.expect("delete_channel");
+
+    // Channel should no longer appear.
+    let channels = client.get_channels(&server_id).await.expect("get_channels");
+    assert!(
+        !channels.iter().any(|c| c.name == "new-name"),
+        "Deleted channel should not appear in list"
+    );
+}
+
+#[tokio::test]
+async fn test_category_crud() {
+    let srv = TestServer::start().await;
+    let client = make_client(&srv);
+    client.signup("leo_cat", None).await.expect("signup");
+
+    let server = client
+        .create_server("Category Guild")
+        .await
+        .expect("create_server");
+    let server_id = server.id.expect("id");
+
+    // Create a category.
+    let cat = client
+        .create_category(&server_id, "My Category", Some(0))
+        .await
+        .expect("create_category");
+    assert_eq!(cat.name, "My Category");
+    let cat_id = cat.id;
+
+    // Create a channel inside the category.
+    let ch = client
+        .create_channel(&server_id, "cat-channel", "text", Some(&cat_id))
+        .await
+        .expect("create_channel in category");
+    assert_eq!(ch.name, "cat-channel");
+    // Note: the server's channel-creation response doesn't always return category_id
+    // in the same response. Verify via server detail instead.
+    let detail = client
+        .get_server(&server_id)
+        .await
+        .expect("get_server for category");
+    let found = detail
+        .channels
+        .iter()
+        .any(|c| c.name == "cat-channel" && c.category_id.as_deref() == Some(cat_id.as_str()));
+    assert!(
+        found,
+        "cat-channel should be in category {cat_id}: {detail:?}"
+    );
+
+    // Update category name.
+    let updated_cat = client
+        .update_category(&cat_id, Some("Renamed Category"), None)
+        .await
+        .expect("update_category");
+    assert_eq!(updated_cat.name, "Renamed Category");
+
+    // Delete category.
+    client
+        .delete_category(&cat_id)
+        .await
+        .expect("delete_category");
+}
+
+#[tokio::test]
+async fn test_remove_friend() {
+    let srv = TestServer::start().await;
+
+    let alice = make_client(&srv);
+    alice.signup("alice_unfriend", None).await.expect("signup");
+
+    let bob = make_client(&srv);
+    let bob_auth = bob.signup("bob_unfriend", None).await.expect("signup bob");
+
+    // Alice sends a friend request.
+    let fr = alice
+        .send_friend_request("bob_unfriend")
+        .await
+        .expect("send_friend_request");
+    let fr_id = fr.id.expect("friend request id");
+
+    // Bob accepts.
+    bob.respond_friend_request(&fr_id, "accepted")
+        .await
+        .expect("accept");
+
+    // Verify friendship is active.
+    let alice_friends_before = alice.get_friends().await.expect("get_friends before");
+    assert!(
+        !alice_friends_before.is_empty(),
+        "Alice should have Bob as friend"
+    );
+
+    // Alice removes the friendship — the endpoint takes the OTHER user's ID, not the request ID.
+    alice
+        .remove_friend(&bob_auth.user_id)
+        .await
+        .expect("remove_friend");
+
+    // Alice's friends list should be empty.
+    let alice_friends = alice.get_friends().await.expect("get_friends");
+    assert!(
+        alice_friends.is_empty(),
+        "Alice should have no friends after removal"
+    );
+}

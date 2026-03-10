@@ -135,7 +135,7 @@ async fn create_channel(
             .query(
                 "CREATE channel CONTENT { \
                   server: type::record($sid), \
-                  category: $cat, \
+                  category: IF $cat != NONE THEN type::record($cat) ELSE NONE END, \
                   name: $name, \
                   kind: $kind, \
                   position: $pos, \
@@ -169,7 +169,7 @@ async fn update_channel(
             .query(
                 "UPDATE type::record($id) MERGE { \
                   name: $nm ?? name, \
-                  category: $cat ?? category, \
+                  category: IF $cat != NONE THEN type::record($cat) ELSE category END, \
                   position: $pos ?? position \
                 } RETURN *",
             )
