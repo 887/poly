@@ -28,6 +28,11 @@ Thumbs.db
 *.db-shm
 data/
 
+# Poly server data (local runtime artifacts)
+# Lockfile and write-ahead-log (remove from repo history if already committed)
+/poly-server-data/LOCK
+/poly-server-data/wal/
+
 # Node.js (for Electron wrapper)
 node_modules/
 npm-debug.log*
