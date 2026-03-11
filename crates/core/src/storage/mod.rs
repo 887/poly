@@ -215,6 +215,35 @@ pub struct AppSettings {
     pub poly_use_websocket: bool,
 }
 
+/// Minimal server metadata cached for offline display.
+///
+/// Persisted under `"offline_server_cache"` as a JSON array. Updated every
+/// time a poly-server account successfully connects so that on next startup
+/// (with the server offline) we can still render server icons in Bar 1 and
+/// show the account's servers as "offline" rather than making them disappear.
+///
+/// Stored separately from [`FavoriteItem`] because favorites track *order*
+/// while this cache tracks *metadata* (name, icon, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OfflineServerRecord {
+    /// Backend-specific server ID.
+    pub id: String,
+    /// Server display name.
+    pub name: String,
+    /// URL to the server icon/avatar.
+    #[serde(default)]
+    pub icon_url: Option<String>,
+    /// URL to the server banner image.
+    #[serde(default)]
+    pub banner_url: Option<String>,
+    /// Backend slug, e.g. `"poly"`.
+    pub backend: String,
+    /// Account ID this server belongs to.
+    pub account_id: String,
+    /// Display name of the owning account (for account header display).
+    pub account_display_name: String,
+}
+
 /// A user-added WASM plugin, loaded from a URL.
 ///
 /// Persisted in [`AppSettings::wasm_plugins`].
@@ -627,6 +656,50 @@ impl Storage {
             .await
     }
 
+    // ── Typed access — OfflineServerRecord ───────────────────────────────────
+
+    /// Read the entire offline server metadata cache.
+    ///
+    /// Returns an empty list if the key does not exist yet.
+    pub async fn get_offline_server_cache(&self) -> Result<Vec<OfflineServerRecord>, StorageError> {
+        Ok(self
+            .get("offline_server_cache")
+            .await?
+            .and_then(|v| serde_json::from_value::<Vec<OfflineServerRecord>>(v).ok())
+            .unwrap_or_default())
+    }
+
+    /// Upsert `new_records` into the offline server cache.
+    ///
+    /// Existing records with the same `id` are replaced; new ones are appended.
+    /// Other accounts' records are preserved.
+    pub async fn upsert_offline_server_cache(
+        &self,
+        new_records: &[OfflineServerRecord],
+    ) -> Result<(), StorageError> {
+        let mut existing = self.get_offline_server_cache().await?;
+        for record in new_records {
+            existing.retain(|r| r.id != record.id);
+            existing.push(record.clone());
+        }
+        self.set("offline_server_cache", serde_json::to_value(&existing)?)
+            .await
+    }
+
+    /// Remove all cached server records for a given account.
+    ///
+    /// Called when the user disables / removes a backend account so stale
+    /// records do not linger in the cache.
+    pub async fn remove_offline_server_cache_for_account(
+        &self,
+        account_id: &str,
+    ) -> Result<(), StorageError> {
+        let mut existing = self.get_offline_server_cache().await?;
+        existing.retain(|r| r.account_id != account_id);
+        self.set("offline_server_cache", serde_json::to_value(&existing)?)
+            .await
+    }
+
     // ── Typed access — ThemeConfig ────────────────────────────────────────────
 
     /// Read the stored theme configuration.
@@ -742,6 +815,46 @@ impl Storage {
     /// the mnemonic backed up.
     pub async fn delete_identity_key(&self) -> Result<(), StorageError> {
         self.delete("identity_key").await
+    }
+
+    // ── Typed access — LastChannelPerServer ──────────────────────────────────
+
+    /// Read the last-visited channel ID for a given server.
+    ///
+    /// Returns `None` if no channel has been visited for that server yet.
+    ///
+    /// Storage key: `"last_channel_per_server"` (a JSON `{ server_id → channel_id }` map).
+    pub async fn get_last_channel_for_server(
+        &self,
+        server_id: &str,
+    ) -> Result<Option<String>, StorageError> {
+        Ok(self
+            .get("last_channel_per_server")
+            .await?
+            .and_then(|v| {
+                serde_json::from_value::<std::collections::HashMap<String, String>>(v).ok()
+            })
+            .and_then(|m| m.get(server_id).cloned()))
+    }
+
+    /// Persist the last-visited channel ID for a given server.
+    ///
+    /// Other server entries in the map are preserved.
+    ///
+    /// Storage key: `"last_channel_per_server"`.
+    pub async fn set_last_channel_for_server(
+        &self,
+        server_id: &str,
+        channel_id: &str,
+    ) -> Result<(), StorageError> {
+        let mut map: std::collections::HashMap<String, String> = self
+            .get("last_channel_per_server")
+            .await?
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default();
+        map.insert(server_id.to_string(), channel_id.to_string());
+        self.set("last_channel_per_server", serde_json::to_value(&map)?)
+            .await
     }
 
     // ── Migrations ────────────────────────────────────────────────────────────

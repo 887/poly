@@ -75,13 +75,30 @@ channel-text = Textkanal
 channel-voice = Sprachkanal
 channel-video = Videokanal
 
-# Benutzer
+# Benutzer / Status
 user-online = Online
 user-idle = Abwesend
 user-dnd = Nicht stören
 user-invisible = Unsichtbar
 user-offline = Offline
+user-away = Abwesend
+user-appear-offline = Als offline anzeigen
 user-members = Mitglieder
+user-no-members = Keine Mitglieder
+
+# Konto-Bar — Avatar-Ecken-Badges
+account-profile-click-hint = Klicken, um dein Profil anzusehen
+account-conn-connected = Verbunden
+account-conn-connecting = Verbinde…
+account-conn-disconnected = Offline
+account-conn-error = Verbindungsfehler
+
+# Statuspicker-Popup
+status-picker-title = Status setzen
+
+# Mitgliederlistenfilter
+member-filter-placeholder = Mitglieder filtern…
+member-filter-tooltip = Mitglieder filtern
 
 # Benachrichtigungen
 notifications-title = Benachrichtigungen

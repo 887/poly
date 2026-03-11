@@ -82,9 +82,9 @@ poly-server-client = { workspace = true, optional = true, features = [
 gloo-storage = { workspace = true }
 getrandom02-js = { workspace = true }
 getrandom04-wasm = { workspace = true }
-js-sys = { workspace = true }
-wasm-bindgen = { workspace = true }
 web-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
 poly-server-client = { workspace = true, optional = true, features = [
     "wasm-http",
 ] }

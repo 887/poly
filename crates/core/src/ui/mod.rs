@@ -130,20 +130,24 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
     use crate::client_manager::PluginSettingsEntry;
 
     #[cfg(feature = "demo")]
-    client_manager.write().register_plugin_settings(PluginSettingsEntry {
-        slug: "demo",
-        nav_label_key: "plugin-demo-title",
-        nav_icon: "🧪",
-        render: demo_settings_render_fn,
-    });
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "demo",
+            nav_label_key: "plugin-demo-title",
+            nav_icon: "🧪",
+            render: demo_settings_render_fn,
+        });
 
     #[cfg(feature = "server")]
-    client_manager.write().register_plugin_settings(PluginSettingsEntry {
-        slug: "poly",
-        nav_label_key: "plugin-poly-title",
-        nav_icon: "🔷",
-        render: poly_settings_render_fn,
-    });
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "poly",
+            nav_label_key: "plugin-poly-title",
+            nav_icon: "🔷",
+            render: poly_settings_render_fn,
+        });
 }
 
 // ── App — async helpers ──────────────────────────────────────────────────────
@@ -232,12 +236,29 @@ async fn restore_poly_accounts(
                     .account_sessions
                     .insert(account_id.clone(), session);
 
-                // Populate servers in chat_data.
+                // Populate servers in chat_data and update the offline server
+                // metadata cache so they survive the next restart even when the
+                // server is unreachable.
                 {
+                    // Build cache records before consuming `servers`.
+                    let cache_records: Vec<crate::storage::OfflineServerRecord> = servers
+                        .iter()
+                        .map(|srv| crate::storage::OfflineServerRecord {
+                            id: srv.id.clone(),
+                            name: srv.name.clone(),
+                            icon_url: srv.icon_url.clone(),
+                            banner_url: srv.banner_url.clone(),
+                            backend: "poly".to_string(),
+                            account_id: account_id.clone(),
+                            account_display_name: srv.account_display_name.clone(),
+                        })
+                        .collect();
+                    let new_fav_ids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
+
                     let mut cd = chat_data.write();
-                    for srv in &servers {
-                        if !cd.favorited_server_ids.contains(&srv.id) {
-                            cd.favorited_server_ids.push(srv.id.clone());
+                    for id in &new_fav_ids {
+                        if !cd.favorited_server_ids.contains(id) {
+                            cd.favorited_server_ids.push(id.clone());
                         }
                     }
                     // Avoid duplicates if servers list was already populated.
@@ -246,6 +267,14 @@ async fn restore_poly_accounts(
                             cd.servers.push(srv);
                         }
                     }
+                    let all_fav_ids = cd.favorited_server_ids.clone();
+                    drop(cd);
+
+                    // Persist cache + favourites without holding any Signal lock.
+                    if let Err(e) = storage.upsert_offline_server_cache(&cache_records).await {
+                        tracing::warn!("Failed to cache server metadata: {e}");
+                    }
+                    crate::ui::favorites_sidebar::persist_favorites(all_fav_ids).await;
                 }
 
                 // Fetch DMs and friends in background.
@@ -288,14 +317,41 @@ async fn restore_poly_accounts(
                     instance_id: base_url.to_string(),
                     backend_url: Some(base_url.to_string()),
                 };
-                client_manager.write().register_offline_session(
-                    token.account_id.clone(),
-                    offline_session.clone(),
-                );
+                client_manager
+                    .write()
+                    .register_offline_session(token.account_id.clone(), offline_session.clone());
                 chat_data
                     .write()
                     .account_sessions
                     .insert(token.account_id.clone(), offline_session);
+
+                // Restore cached server metadata so Bar 1 can render server
+                // icons (shown as offline/disconnected) without a network round-trip.
+                let cached = storage.get_offline_server_cache().await.unwrap_or_default();
+                let account_servers: Vec<poly_client::Server> = cached
+                    .into_iter()
+                    .filter(|r| r.account_id == token.account_id)
+                    .map(|r| poly_client::Server {
+                        id: r.id,
+                        name: r.name,
+                        icon_url: r.icon_url,
+                        banner_url: r.banner_url,
+                        categories: Vec::new(),
+                        backend: poly_client::BackendType::Poly,
+                        unread_count: 0,
+                        mention_count: 0,
+                        account_id: r.account_id,
+                        account_display_name: r.account_display_name,
+                    })
+                    .collect();
+                if !account_servers.is_empty() {
+                    let mut cd = chat_data.write();
+                    for srv in account_servers {
+                        if !cd.servers.iter().any(|s| s.id == srv.id) {
+                            cd.servers.push(srv);
+                        }
+                    }
+                }
             }
         }
     }

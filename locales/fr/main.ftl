@@ -75,13 +75,30 @@ channel-text = Salon textuel
 channel-voice = Salon vocal
 channel-video = Salon vidéo
 
-# Utilisateurs
+# Utilisateurs / Statut
 user-online = En ligne
 user-idle = Absent
 user-dnd = Ne pas déranger
 user-invisible = Invisible
 user-offline = Hors ligne
+user-away = Absent
+user-appear-offline = Apparaître hors ligne
 user-members = Membres
+user-no-members = Aucun membre
+
+# Barre de compte — badges coins d'avatar
+account-profile-click-hint = Cliquez pour voir votre profil
+account-conn-connected = Connecté
+account-conn-connecting = Connexion…
+account-conn-disconnected = Hors ligne
+account-conn-error = Erreur de connexion
+
+# Popup de sélection de statut
+status-picker-title = Définir le statut
+
+# Filtre de la liste des membres
+member-filter-placeholder = Filtrer les membres…
+member-filter-tooltip = Filtrer les membres
 
 # Notifications
 notifications-title = Notifications

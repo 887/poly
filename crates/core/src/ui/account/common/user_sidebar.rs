@@ -4,6 +4,11 @@
 //! Backend-specific user card decorations (roles, badges, verification)
 //! will live in per-backend directories in future phases.
 //!
+//! ## Member filter
+//! A collapsible filter row lives below the header. Click the 🔍 icon to
+//! reveal the input; type to filter by display name (case-insensitive
+//! substring). The matching substring is highlighted in each visible entry.
+//!
 //! Reads members from `Signal<ChatData>` and groups them by
 //! presence status: Online, Idle, Do Not Disturb, Offline.
 //!
@@ -18,54 +23,112 @@ use crate::state::chat_data::user_color;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
 
+/// Renders a name with the matching substring highlighted via a `<mark>` element.
+///
+/// If `query` is empty or not found, renders the full name as plain text.
+#[rustfmt::skip]
+#[component]
+fn HighlightedName(name: String, query: String) -> Element {
+    if query.is_empty() {
+        return rsx! { span { "{name}" } };
+    }
+    let lower_name = name.to_lowercase();
+    let lower_q = query.to_lowercase();
+    if let Some(pos) = lower_name.find(lower_q.as_str()) {
+        let before = name[..pos].to_string();
+        let matched = name[pos..pos + lower_q.len()].to_string();
+        let after = name[pos + lower_q.len()..].to_string();
+        rsx! {
+            span {
+                "{before}"
+                mark { class: "member-name-highlight", "{matched}" }
+                "{after}"
+            }
+        }
+    } else {
+        rsx! { span { "{name}" } }
+    }
+}
+
 /// User sidebar component.
 ///
 /// Shows channel members grouped by presence status.
+/// A collapsible filter (🔍 icon → text input) lets users search by name.
 #[rustfmt::skip]
 #[component]
 pub fn UserSidebar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let members = chat_data.read().members.clone();
     let mut popup_user = use_signal(|| None::<User>);
+    let mut filter_open = use_signal(|| false);
+    let mut filter_text = use_signal(String::new);
 
-    // Group members by presence status
-    let online: Vec<_> = members
-        .iter()
-        .filter(|u| u.presence == PresenceStatus::Online)
-        .cloned()
-        .collect();
-    let idle: Vec<_> = members
-        .iter()
-        .filter(|u| u.presence == PresenceStatus::Idle)
-        .cloned()
-        .collect();
-    let dnd: Vec<_> = members
-        .iter()
-        .filter(|u| u.presence == PresenceStatus::DoNotDisturb)
-        .cloned()
-        .collect();
-    let offline: Vec<_> = members
-        .iter()
-        .filter(|u| {
-            u.presence == PresenceStatus::Offline || u.presence == PresenceStatus::Invisible
-        })
-        .cloned()
-        .collect();
+    let query = filter_text.read().clone();
+    let lower_q = query.to_lowercase();
+
+    // Apply filter across all members (empty query = show all)
+    let visible: Vec<_> = if lower_q.is_empty() {
+        members.to_vec()
+    } else {
+        members
+            .iter()
+            .filter(|u| u.display_name.to_lowercase().contains(&lower_q))
+            .cloned()
+            .collect()
+    };
+
+    // Group by presence status
+    let online: Vec<_> = visible.iter().filter(|u| u.presence == PresenceStatus::Online).cloned().collect();
+    let idle: Vec<_> = visible.iter().filter(|u| u.presence == PresenceStatus::Idle).cloned().collect();
+    let dnd: Vec<_> = visible.iter().filter(|u| u.presence == PresenceStatus::DoNotDisturb).cloned().collect();
+    let offline: Vec<_> = visible.iter().filter(|u| {
+        u.presence == PresenceStatus::Offline || u.presence == PresenceStatus::Invisible
+    }).cloned().collect();
 
     rsx! {
         aside { class: "user-sidebar",
-            h4 { class: "user-sidebar-title", "{t(\"user-members\")}" }
+            // Header row: title + filter toggle icon
+            div { class: "user-sidebar-header",
+                h4 { class: "user-sidebar-title", "{t(\"user-members\")}" }
+                button {
+                    class: if *filter_open.read() { "user-filter-btn user-filter-btn-active" } else { "user-filter-btn" },
+                    title: "{t(\"member-filter-tooltip\")}",
+                    onclick: move |_| {
+                        let was_open = *filter_open.read();
+                        filter_open.set(!was_open);
+                        if was_open {
+                            filter_text.set(String::new());
+                        }
+                    },
+                    "🔍"
+                }
+            }
+
+            // Collapsible filter input
+            if *filter_open.read() {
+                input {
+                    r#type: "text",
+                    class: "member-filter-input",
+                    placeholder: "{t(\"member-filter-placeholder\")}",
+                    value: "{query}",
+                    oninput: move |e| filter_text.set(e.value()),
+                    autofocus: true,
+                }
+            }
 
             if members.is_empty() {
                 div { class: "user-sidebar-empty", "{t(\"user-no-members\")}" }
+            } else if visible.is_empty() {
+                div { class: "user-sidebar-empty", "No members match the filter." }
             }
 
             // Online
             if !online.is_empty() {
                 UserGroup {
                     label: format!("{} — {}", t("user-online"), online.len()),
-                    users: online.clone(),
+                    users: online,
                     presence_class: "online",
+                    query: query.clone(),
                     on_click: move |user: User| popup_user.set(Some(user)),
                 }
             }
@@ -73,8 +136,9 @@ pub fn UserSidebar() -> Element {
             if !idle.is_empty() {
                 UserGroup {
                     label: format!("{} — {}", t("user-idle"), idle.len()),
-                    users: idle.clone(),
+                    users: idle,
                     presence_class: "idle",
+                    query: query.clone(),
                     on_click: move |user: User| popup_user.set(Some(user)),
                 }
             }
@@ -82,8 +146,9 @@ pub fn UserSidebar() -> Element {
             if !dnd.is_empty() {
                 UserGroup {
                     label: format!("{} — {}", t("user-dnd"), dnd.len()),
-                    users: dnd.clone(),
+                    users: dnd,
                     presence_class: "dnd",
+                    query: query.clone(),
                     on_click: move |user: User| popup_user.set(Some(user)),
                 }
             }
@@ -91,8 +156,9 @@ pub fn UserSidebar() -> Element {
             if !offline.is_empty() {
                 UserGroup {
                     label: format!("{} — {}", t("user-offline"), offline.len()),
-                    users: offline.clone(),
+                    users: offline,
                     presence_class: "offline",
+                    query: query.clone(),
                     on_click: move |user: User| popup_user.set(Some(user)),
                 }
             }
@@ -112,6 +178,8 @@ fn UserGroup(
     label: String,
     users: Vec<User>,
     presence_class: &'static str,
+    /// Current filter query for substring highlighting (empty = no highlight).
+    query: String,
     on_click: EventHandler<User>,
 ) -> Element {
     rsx! {
@@ -129,6 +197,7 @@ fn UserGroup(
                     let name = user.display_name.clone();
                     let u = user.clone();
                     let avatar_url = user.avatar_url.clone();
+                    let q = query.clone();
                     let entry_class = if presence_class == "offline" {
                         "user-entry offline"
                     } else {
@@ -147,8 +216,9 @@ fn UserGroup(
                                     }
                                 }
                             }
-                            span { class: "user-name", "{name}" }
-                        // TODO(phase-3): display roles when backend provides them (2.6.3.2)
+                            span { class: "user-name",
+                                HighlightedName { name: name.clone(), query: q.clone() }
+                            }
                         }
                     }
                 }

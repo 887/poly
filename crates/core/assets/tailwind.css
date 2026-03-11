@@ -590,6 +590,61 @@ body {
     flex-shrink: 0;
 }
 
+/* ---- Inline (account bar) status dot colours ----
+   These are the same palette as .connection-dot / .presence-dot but without
+   absolute positioning. They must be defined here (after .status-dot base) so
+   specificity wins over the empty default. */
+
+/* Connection status colours */
+.status-dot.connected {
+    background-color: #22c55e;
+}
+
+/* green-500 */
+.status-dot.connecting {
+    background-color: #eab308;
+    animation: dot-pulse 1.4s ease-in-out infinite;
+}
+
+/* yellow-500 + pulse */
+.status-dot.disconnected {
+    background-color: #6b7280;
+}
+
+/* gray-500 */
+.status-dot.error {
+    background-color: #ef4444;
+}
+
+/* red-500 */
+
+/* Presence status colours */
+.status-dot.online {
+    background-color: #22c55e;
+}
+
+/* green-500 */
+.status-dot.away {
+    background-color: #f97316;
+}
+
+/* orange-500 */
+.status-dot.dnd {
+    background-color: #ef4444;
+}
+
+/* red-500 */
+.status-dot.appear-offline {
+    background-color: #6b7280;
+}
+
+/* gray-500 */
+.status-dot.offline {
+    background-color: #6b7280;
+}
+
+/* gray-500 (same as appear-offline — both look grey to others) */
+
 /* Connection status dot — top-left corner of the icon. */
 .connection-dot {
     bottom: -2px;
@@ -901,6 +956,17 @@ body {
     color: var(--text-primary);
 }
 
+/* Unread channel: bold name + brighter text even without a hover */
+.channel-item.unread .channel-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Slight brightness bump so unread channels pop on the list */
+.channel-item.unread:not(.active) {
+    color: var(--text-primary);
+}
+
 .channel-icon {
     font-size: 18px;
     width: 20px;
@@ -919,6 +985,45 @@ body {
     padding: 1px 6px;
     border-radius: var(--radius-full);
     font-weight: 600;
+}
+
+/* ── @mention badge — channel list (“@2” in red) ── */
+.mention-badge {
+    background: #ed4245;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 8px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+/* ── @mention count badge — server icons in Bar 1 & favorites (“@3”) ── */
+.badge.mention-count-badge {
+    background: #ed4245;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    text-align: center;
+    padding: 1px 4px;
+}
+
+/* ── Unread-but-no-mention indicator — small white dot on server icon ── */
+.badge.server-unread-dot {
+    background: #fff;
+    width: 10px;
+    height: 10px;
+    min-width: 0;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0;
+    /* no visible text */
+    bottom: -4px;
+    right: -4px;
 }
 
 /* ===========================
@@ -1803,7 +1908,77 @@ body {
     font-weight: 700;
     text-transform: uppercase;
     color: var(--text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 0;
+    flex: 1;
+}
+
+/* Header row wrapping the title + filter icon */
+.user-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 4px;
+}
+
+/* Filter toggle icon button */
+.user-filter-btn {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+}
+
+.user-filter-btn:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+    color: var(--text-primary);
+}
+
+/* Active state when filter panel is open */
+.user-filter-btn-active {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+}
+
+.user-filter-btn-active:hover {
+    background: var(--accent-primary-hover, #4752c4);
+    color: #fff;
+}
+
+/* Collapsible filter text input */
+.member-filter-input {
+    width: 100%;
+    padding: 5px 8px;
+    margin-bottom: 8px;
+    font-size: 0.78rem;
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+    background: var(--bg-tertiary, #202225);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+}
+
+.member-filter-input:focus {
+    border-color: var(--accent-primary, #5865f2);
+}
+
+/* Highlighted substring in a member's name during filter */
+.member-name-highlight {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+    border-radius: 2px;
+    padding: 0 1px;
 }
 
 .user-group {
@@ -2448,6 +2623,135 @@ body {
     color: var(--accent-primary);
     border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
     white-space: nowrap;
+}
+
+/* ===========================
+ * Profile Settings (poly-server)
+ * Shown in Account Settings → Profile tab for poly-server accounts.
+ * =========================== */
+
+.profile-settings-header {
+    margin-bottom: 20px;
+}
+
+/* A horizontal row: left side = label+desc, right side = control/value */
+.profile-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+/* Vertical layout variant for controls that span full width */
+.profile-row.profile-row-column {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* Left column: label + description text */
+.profile-row-label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* Right column: value display or control */
+.profile-row-value {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Avatar preview circle (80×80) */
+.profile-avatar-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid var(--border-primary, rgba(255, 255, 255, 0.1));
+}
+
+/* Image avatar fills the circle */
+.profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Letter-based fallback when no avatar URL */
+.profile-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    border-radius: 50%;
+}
+
+/* Read-only display name text */
+.profile-display-name-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    padding: 6px 10px;
+    background: var(--bg-tertiary, #202225);
+    border-radius: 6px;
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+}
+
+/* 2×2 grid of presence-option buttons */
+.profile-status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Each status choice button */
+.profile-status-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary, #202225);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    text-align: left;
+}
+
+.profile-status-option:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+    color: var(--text-primary);
+}
+
+/* Currently-selected status gets an accent highlight */
+.profile-status-option.profile-status-selected {
+    border-color: var(--accent-primary, #5865f2);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    color: var(--text-primary);
+}
+
+/* Grey dashed banner placeholder area */
+.profile-banner-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
+    border: 2px dashed var(--border-primary, rgba(255, 255, 255, 0.15));
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 8px;
+    background: var(--bg-tertiary, rgba(0, 0, 0, 0.08));
 }
 
 /* ===========================
@@ -5294,7 +5598,10 @@ select {
     font-size: 0.875rem;
     color: #fff;
     flex-shrink: 0;
-    overflow: hidden;
+    overflow: visible;
+    /* allow corner badges to overflow the circle */
+    position: relative;
+    /* anchor for corner status badges */
 }
 
 .account-avatar-image {
@@ -5305,8 +5612,8 @@ select {
 }
 
 .account-avatar-fallback {
-    width: 100%;
-    height: 100%;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -5314,6 +5621,86 @@ select {
     font-weight: 700;
     font-size: 0.875rem;
     color: #fff;
+    overflow: hidden;
+}
+
+/* Clickable cursor on the avatar when an account is active */
+.account-avatar-clickable {
+    cursor: pointer;
+}
+
+.account-avatar-clickable:hover {
+    opacity: 0.88;
+}
+
+/* The image inside the account avatar must clip to the circle */
+.account-avatar .account-avatar-image,
+.account-avatar .account-avatar-fallback {
+    overflow: hidden;
+    border-radius: 50%;
+}
+
+/* Bottom-right presence dot — override the absolute-position values set for
+   Bar 1 sidebar dots (.presence-dot top:-2px right:-2px) so the account bar
+   dot sits in the bottom-right corner instead of top-right. */
+.account-avatar .status-dot.presence-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    top: auto;
+    /* cancel the bar-1 top:-2px override */
+    left: auto;
+}
+
+/* ── Account bar: connection-status icon (top-right corner badge) ── */
+/* Distinct from a plain dot so users can tell connectivity vs. presence */
+.account-conn-icon {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 900;
+    line-height: 1;
+    border: 2px solid var(--account-bar-bg, #1e1f22);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.account-conn-icon--connected {
+    background: #23a55a;
+    color: #fff;
+}
+
+.account-conn-icon--connecting {
+    background: #f0b232;
+    color: #fff;
+}
+
+.account-conn-icon--disconnected {
+    background: #717171;
+    color: #fff;
+}
+
+.account-conn-icon--error {
+    background: #ed4245;
+    color: #fff;
+}
+
+/* Small variant used inside the profile popup info row */
+.account-conn-icon.small {
+    position: static;
+    width: 12px;
+    height: 12px;
+    font-size: 7px;
+    border: none;
+    display: inline-flex;
+    vertical-align: middle;
 }
 
 .account-info {
@@ -5337,30 +5724,93 @@ select {
     align-items: center;
     gap: 4px;
     font-size: 0.7rem;
+    position: relative;
+    /* Relative so the presence-picker-popup absolute child anchors here */
+    border-radius: 4px;
+}
+
+/* Clickable variant — shown when an active account is selected */
+.account-status-clickable {
+    cursor: pointer;
+    padding: 2px 4px;
+    margin: -2px -4px;
+}
+
+.account-status-clickable:hover {
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .account-status-text {
     color: var(--text-muted);
+    font-size: 0.7rem;
 }
 
-/* Inline status dot colour rules — used in account-bar (.status-dot.online)
-   and user sidebar (.status-dot without modifier). The 8px base size and
-   colours for the inline dots are defined here and in the Account Status Dots
-   section near the top of this file. */
-.status-dot.online {
-    background: var(--status-speaking, #43b581);
+/* ===========================
+ * Presence Picker Popup
+ * =========================== */
+
+/* Anchor: absolutely positioned relative to .account-status */
+.presence-picker-popup {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 200;
+    white-space: nowrap;
 }
 
-.status-dot.idle {
-    background: #faa61a;
+/* Transparent full-screen backdrop — captures outside clicks */
+.presence-picker-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 199;
 }
 
-.status-dot.dnd {
-    background: var(--danger, #ed4245);
+/* The visible floating menu */
+.presence-picker-menu {
+    position: relative;
+    z-index: 201;
+    background: var(--bg-elevated, #2f3136);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    min-width: 168px;
 }
 
-.status-dot.offline {
-    background: #747f8d;
+.presence-picker-title {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 4px 8px 6px;
+}
+
+.presence-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary, #dcddde);
+    cursor: pointer;
+    font-size: 0.84rem;
+    width: 100%;
+    text-align: left;
+    transition: background 0.12s;
+}
+
+.presence-picker-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.presence-picker-label {
+    flex: 1;
 }
 
 .account-bar-controls {
@@ -7319,6 +7769,77 @@ select {
 
 .user-popup-close {
     margin: 0 16px 16px;
+}
+
+/* ===========================
+ * Account Profile Popup
+ * (extends .user-popup with presence picker)
+ * =========================== */
+
+/* Anchors the popup above the account bar — overrides centered alignment */
+.user-popup-overlay:has(.account-profile-popup) {
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding-bottom: 60px;
+    /* clear the account bar height */
+    padding-left: 8px;
+}
+
+/* Connection status mini-row in the popup info area */
+.user-popup-conn-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.user-popup-conn-label {
+    color: var(--text-secondary);
+}
+
+.user-popup-status-label {
+    color: var(--text-secondary);
+}
+
+/* Horizontal rule between info and presence picker */
+.user-popup-divider {
+    height: 1px;
+    background: var(--border-primary, rgba(255, 255, 255, 0.08));
+    margin: 0;
+}
+
+/* Presence picker section inside the account profile popup */
+.account-profile-presence-section {
+    padding: 8px 8px 4px;
+}
+
+/* Highlight the currently-active presence option */
+.presence-picker-item.active {
+    background: rgba(255, 255, 255, 0.10);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Avatar image within the popup */
+.user-popup-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.user-popup-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #fff;
 }
 
 .close-btn {

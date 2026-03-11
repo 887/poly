@@ -81,6 +81,9 @@ interface types {
         categories: list<category>,
         backend: backend-type,
         unread-count: u32,
+        /// Total @mention count across all channels (sum of channel mention-counts).
+        /// Distinct from unread-count: only counts direct @mentions.
+        mention-count: u32,
         account-id: string,
         account-display-name: string,
     }
@@ -92,6 +95,9 @@ interface types {
         channel-type: channel-type,
         server-id: string,
         unread-count: u32,
+        /// Number of @mention notifications in this channel.
+        /// Distinct from unread-count: only counts direct @mentions by @username, @here, @all.
+        mention-count: u32,
         last-message-id: option<string>,
     }
 

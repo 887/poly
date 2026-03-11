@@ -172,6 +172,7 @@ pub fn AccountServerBar() -> Element {
                     instance_id: instance_id.clone(),
                     account_id: server.account_id.clone(),
                     unread: server.unread_count,
+                    mention: server.mention_count,
                     is_selected: selected_server.as_deref() == Some(server.id.as_str()),
                     icon_url: server.icon_url.clone(),
                 }
@@ -203,6 +204,8 @@ fn AccountServerIcon(
     instance_id: String,
     account_id: String,
     unread: u32,
+    /// Number of @mention notifications (shown as red badge).
+    mention: u32,
     is_selected: bool,
     /// Optional server icon URL. When `Some`, rendered as an `<img>`; when
     /// `None`, falls back to a colored first-letter placeholder.
@@ -349,12 +352,16 @@ fn AccountServerIcon(
                 server_name: server_name.clone(),
                 server_id: server_id.clone(),
                 unread,
+                mention,
             }
         }
     }
 }
 
-/// Renders the visual content of a server icon: image (or letter fallback) plus unread badge.
+/// Renders the visual content of a server icon: image (or letter fallback) plus notification badges.
+///
+/// Shows a red `@{mention}` badge for direct @mentions, and a small unread dot
+/// when there are unread messages but no direct mentions.
 #[rustfmt::skip]
 #[component]
 fn ServerIconDisplay(
@@ -362,6 +369,8 @@ fn ServerIconDisplay(
     server_name: String,
     server_id: String,
     unread: u32,
+    /// Number of @mention notifications. When > 0, shows a red @badge.
+    mention: u32,
 ) -> Element {
     let first_letter: String = server_name
         .chars()
@@ -383,8 +392,12 @@ fn ServerIconDisplay(
                 "{first_letter}"
             }
         }
-        if unread > 0 {
-            span { class: "badge", "{unread}" }
+        // @mention badge (red): only for direct @mentions.
+        if mention > 0 {
+            span { class: "badge mention-count-badge", "@{mention}" }
+        } else if unread > 0 {
+            // Unread-but-not-mentioned: small white dot indicator.
+            span { class: "badge server-unread-dot" }
         }
     }
 }

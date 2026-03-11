@@ -251,6 +251,13 @@ pub struct Server {
     pub backend: BackendType,
     /// Total unread message count across all channels.
     pub unread_count: u32,
+    /// Total @mention count across all channels in this server.
+    ///
+    /// Only increments when the current user is directly @mentioned
+    /// (by @username, @here, @everyone, or a group they belong to),
+    /// distinct from [`unread_count`] which counts all unread messages.
+    #[serde(default)]
+    pub mention_count: u32,
     /// Which account this server comes from (multi-account support).
     pub account_id: String,
     /// Display name of the account that owns this server.
@@ -292,6 +299,15 @@ pub struct Channel {
     pub server_id: String,
     /// Number of unread messages.
     pub unread_count: u32,
+    /// Number of @mention notifications in this channel.
+    ///
+    /// Only increments when the current user is directly @mentioned
+    /// (by @username, @here, @everyone, or a group they belong to),
+    /// distinct from [`unread_count`] which counts all unread messages.
+    /// Displayed as a red badge in the channel list; plain unread_count
+    /// is shown as bold text only.
+    #[serde(default)]
+    pub mention_count: u32,
     /// ID of the last message (for ordering).
     pub last_message_id: Option<String>,
 }

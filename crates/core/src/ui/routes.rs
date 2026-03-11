@@ -437,6 +437,7 @@ fn restore_dm_chat(
                 channel_type: ChannelType::Text,
                 server_id: String::new(),
                 unread_count: dm.unread_count,
+                mention_count: 0,
                 last_message_id: None,
             })
             .or_else(|| {
@@ -457,6 +458,7 @@ fn restore_dm_chat(
                             channel_type: ChannelType::Text,
                             server_id: String::new(),
                             unread_count: 0,
+                            mention_count: 0,
                             last_message_id: None,
                         }
                     })

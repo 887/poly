@@ -75,13 +75,30 @@ channel-text = Canal de texto
 channel-voice = Canal de voz
 channel-video = Canal de video
 
-# Usuarios
+# Usuarios / Estado
 user-online = En línea
 user-idle = Ausente
 user-dnd = No molestar
 user-invisible = Invisible
 user-offline = Desconectado
+user-away = Ausente
+user-appear-offline = Aparecer desconectado
 user-members = Miembros
+user-no-members = Sin miembros
+
+# Barra de cuenta — insignias en esquinas del avatar
+account-profile-click-hint = Haz clic para ver tu perfil
+account-conn-connected = Conectado
+account-conn-connecting = Conectando…
+account-conn-disconnected = Sin conexión
+account-conn-error = Error de conexión
+
+# Selector de estado emergente
+status-picker-title = Establecer estado
+
+# Filtro de lista de miembros
+member-filter-placeholder = Filtrar miembros…
+member-filter-tooltip = Filtrar miembros
 
 # Notificaciones
 notifications-title = Notificaciones

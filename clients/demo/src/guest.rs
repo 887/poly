@@ -86,6 +86,7 @@ fn to_wit_server(s: pc::Server) -> wit::Server {
         categories: s.categories.iter().map(to_wit_category).collect(),
         backend: to_wit_backend_type(s.backend),
         unread_count: s.unread_count,
+        mention_count: s.mention_count,
         account_id: s.account_id,
         account_display_name: s.account_display_name,
     }
@@ -98,6 +99,7 @@ fn to_wit_channel(c: pc::Channel) -> wit::Channel {
         channel_type: to_wit_channel_type(c.channel_type),
         server_id: c.server_id,
         unread_count: c.unread_count,
+        mention_count: c.mention_count,
         last_message_id: c.last_message_id,
     }
 }

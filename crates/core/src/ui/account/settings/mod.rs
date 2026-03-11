@@ -17,10 +17,74 @@
 
 mod notifications;
 
+#[cfg(feature = "server")]
+mod profile;
+
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
 use dioxus::prelude::*;
 use notifications::NotificationsSettings;
+
+#[cfg(feature = "server")]
+use profile::PolyProfileSettings;
+
+/// Render the profile nav item when server feature is active and backend is "poly".
+#[cfg(feature = "server")]
+fn profile_nav_element(
+    show: bool,
+    is_active: bool,
+    mut search_text: Signal<String>,
+    mut active_section: Signal<String>,
+) -> Element {
+    if !show {
+        return rsx! {};
+    }
+    let class = if is_active {
+        "settings-nav-item active"
+    } else {
+        "settings-nav-item"
+    };
+    rsx! {
+        div {
+            class,
+            onclick: move |_| {
+                *search_text.write() = String::new();
+                active_section.set("profile".to_string());
+            },
+            {t("plugin-poly-profile-title")}
+        }
+    }
+}
+
+/// No-op when server feature is disabled.
+#[cfg(not(feature = "server"))]
+fn profile_nav_element(
+    _show: bool,
+    _is_active: bool,
+    _search_text: Signal<String>,
+    _active_section: Signal<String>,
+) -> Element {
+    rsx! {}
+}
+
+/// Render the profile settings section when server feature is active and backend is "poly".
+#[cfg(feature = "server")]
+fn profile_section_element(show: bool, account_id: String) -> Element {
+    if !show {
+        return rsx! {};
+    }
+    rsx! {
+        div { id: "acct-section-profile", class: "settings-section-block",
+            PolyProfileSettings { account_id }
+        }
+    }
+}
+
+/// No-op when server feature is disabled.
+#[cfg(not(feature = "server"))]
+fn profile_section_element(_show: bool, _account_id: String) -> Element {
+    rsx! {}
+}
 
 /// Account-specific searchable settings nodes.
 /// Format: (i18n key, section slug).
@@ -66,6 +130,14 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     let mut search_text = use_signal(String::new);
     let mut active_section = use_signal(|| "notifications".to_string());
 
+    // Whether to show the poly-server Profile tab.
+    // Compile-time: only available with the "server" feature.
+    // Runtime: only when the active backend is "poly".
+    #[cfg(feature = "server")]
+    let show_profile = backend == "poly";
+    #[cfg(not(feature = "server"))]
+    let show_profile = false;
+
     // Scroll to active section when it changes (inc. initial render).
     use_effect(move || {
         let slug = active_section.read().clone();
@@ -88,6 +160,7 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     let sf = search_text.read().to_lowercase();
     let active = active_section.read().clone();
     let sf_raw = search_text.read().clone();
+    let is_profile_active = active == "profile";
 
     rsx! {
         div { class: "channel-list-wrapper",
@@ -116,6 +189,8 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                         }
                     }
                 }
+                // Profile nav item — only shown for poly-server accounts.
+                { profile_nav_element(show_profile, is_profile_active, search_text, active_section) }
                 // Nav items — one per section
                 for (label_key, slug) in ACCT_NAV_SECTIONS {
                     {
@@ -144,6 +219,8 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
             VoiceAccountFooter {}
         }
         div { class: "settings-content",
+            // Profile section — poly-server only (shown first, above notifications).
+            { profile_section_element(show_profile, account_id.clone()) }
             // Notifications section
             div {
                 id: "acct-section-notifications",

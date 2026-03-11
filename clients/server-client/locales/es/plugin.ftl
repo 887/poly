@@ -33,3 +33,22 @@ plugin-poly-title = Poly Server
 plugin-poly-settings-description = Configura las opciones de conexión para el backend de Poly Server.
 plugin-poly-setting-websocket-label = Usar WebSocket para eventos en tiempo real
 plugin-poly-setting-websocket-desc = Cuando está activado, Poly abre una conexión WebSocket persistente para recibir mensajes y eventos al instante. Deactivar para volver al sondeo HTTP. Requiere volver a conectar o reiniciar la aplicación para tomar efecto.
+
+# --- Pestaña de perfil de cuenta ---
+plugin-poly-profile-title = Perfil
+plugin-poly-profile-section-desc = Gestiona la información de tu perfil en Poly Server.
+plugin-poly-profile-avatar-label = Foto de perfil
+plugin-poly-profile-display-name-label = Nombre para mostrar
+plugin-poly-profile-display-name-desc = Tu nombre para mostrar es visible para otros usuarios en este servidor.
+plugin-poly-profile-background-label = Banner / Fondo del servidor
+plugin-poly-profile-background-desc = Imagen de banner en tu perfil (próximamente).
+plugin-poly-profile-status-label = Estado actual
+plugin-poly-profile-status-desc = Tu disponibilidad visible para otros usuarios.
+plugin-poly-profile-status-online = En línea
+plugin-poly-profile-status-away = Ausente
+plugin-poly-profile-status-dnd = No molestar
+plugin-poly-profile-status-appear-offline = Aparecer desconectado
+plugin-poly-profile-save = Guardar perfil
+plugin-poly-profile-saved = ¡Perfil guardado!
+plugin-poly-profile-avatar-coming-soon = Subida de avatar próximamente.
+plugin-poly-profile-banner-coming-soon = Subida de banner próximamente.

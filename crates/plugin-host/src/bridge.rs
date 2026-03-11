@@ -123,6 +123,7 @@ pub fn from_wit_server(s: wit::Server) -> pc::Server {
         categories: s.categories.into_iter().map(from_wit_category).collect(),
         backend: from_wit_backend_type(s.backend),
         unread_count: s.unread_count,
+        mention_count: s.mention_count,
         account_id: s.account_id,
         account_display_name: s.account_display_name,
     }
@@ -138,6 +139,7 @@ pub fn from_wit_channel(c: wit::Channel) -> pc::Channel {
         channel_type: from_wit_channel_type(c.channel_type),
         server_id: c.server_id,
         unread_count: c.unread_count,
+        mention_count: c.mention_count,
         last_message_id: c.last_message_id,
     }
 }

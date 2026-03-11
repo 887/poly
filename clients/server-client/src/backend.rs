@@ -120,6 +120,7 @@ impl PolyServerBackend {
             categories: cats,
             backend: BackendType::Poly,
             unread_count: 0,
+            mention_count: 0,
             account_id: account_id.to_string(),
             account_display_name: account_display_name.to_string(),
         }
@@ -137,6 +138,7 @@ impl PolyServerBackend {
             channel_type,
             server_id: ch.server_id.clone().unwrap_or_default(),
             unread_count: 0,
+            mention_count: 0,
             last_message_id: None,
         }
     }

@@ -169,6 +169,8 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                     spawn(async move {
                         let account_id  = session.id.clone();
                         let instance_id = session.instance_id.clone();
+                        // Capture display name before session is moved into account_sessions.
+                        let display_name = session.user.display_name.clone();
 
                         // Persist the account token so it survives app restarts.
                         if let Some(storage) = crate::STORAGE.get() {
@@ -206,13 +208,45 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                         {
                             let guard = backend_handle.read().await;
                             if let Ok(servers) = guard.get_servers().await {
+                                // Build the offline cache records and new fav IDs
+                                // before consuming `servers` into chat_data.
+                                let cache_records: Vec<crate::storage::OfflineServerRecord> =
+                                    servers
+                                        .iter()
+                                        .map(|srv| crate::storage::OfflineServerRecord {
+                                            id: srv.id.clone(),
+                                            name: srv.name.clone(),
+                                            icon_url: srv.icon_url.clone(),
+                                            banner_url: srv.banner_url.clone(),
+                                            backend: "poly".to_string(),
+                                            account_id: account_id.clone(),
+                                            account_display_name: display_name.clone(),
+                                        })
+                                        .collect();
+                                let new_ids: Vec<String> =
+                                    servers.iter().map(|s| s.id.clone()).collect();
+
                                 let mut cd = chat_data.write();
-                                for srv in &servers {
-                                    if !cd.favorited_server_ids.contains(&srv.id) {
-                                        cd.favorited_server_ids.push(srv.id.clone());
+                                for id in &new_ids {
+                                    if !cd.favorited_server_ids.contains(id) {
+                                        cd.favorited_server_ids.push(id.clone());
                                     }
                                 }
                                 cd.servers.extend(servers);
+                                let all_fav_ids = cd.favorited_server_ids.clone();
+                                drop(cd);
+
+                                // Persist server metadata cache + favourites.
+                                if let Some(storage) = crate::STORAGE.get()
+                                    && let Err(e) =
+                                        storage.upsert_offline_server_cache(&cache_records).await
+                                {
+                                    tracing::warn!(
+                                        "Failed to cache server metadata: {e}"
+                                    );
+                                }
+                                crate::ui::favorites_sidebar::persist_favorites(all_fav_ids)
+                                    .await;
                             }
                         }
                         {

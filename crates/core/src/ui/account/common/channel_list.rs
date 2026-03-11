@@ -743,6 +743,7 @@ fn DMChannelItem(
                     channel_type: ChannelType::Text,
                     server_id: String::new(),
                     unread_count: unread,
+                    mention_count: 0,
                     last_message_id: None,
                 });
                 chat_data.write().current_server = None;
@@ -821,6 +822,7 @@ fn GroupChannelItem(
                     channel_type: ChannelType::Text,
                     server_id: String::new(),
                     unread_count: 0,
+                    mention_count: 0,
                     last_message_id: None,
                 });
                 chat_data.write().current_server = None;
@@ -918,12 +920,22 @@ fn ChannelItemRow(channel: Channel) -> Element {
     let ch_name = channel.name.clone();
     let ch_type = channel.channel_type;
     let unread = channel.unread_count;
+    let mention = channel.mention_count;
     let is_active = selected_channel.as_deref() == Some(&ch_id);
 
     let type_icon = match ch_type {
         ChannelType::Text => "#",
         ChannelType::Voice => "🔊",
         ChannelType::Video => "📹",
+    };
+
+    // Active wins over unread; unread class makes the channel name bold.
+    let channel_class = if is_active {
+        "channel-item active"
+    } else if unread > 0 {
+        "channel-item unread"
+    } else {
+        "channel-item"
     };
 
     let voice_participants = if matches!(ch_type, ChannelType::Voice | ChannelType::Video) {
@@ -939,7 +951,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
 
     rsx! {
         div {
-            class: if is_active { "channel-item active" } else { "channel-item" },
+            class: "{channel_class}",
             onclick: move |_| {
                 if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
                 {
@@ -947,6 +959,16 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 }
                 app_state.write().nav.selected_channel = Some(ch_id.clone());
                 chat_data.write().current_channel = Some(channel.clone());
+                // Persist last visited channel for this server (fire-and-forget).
+                let server_id_for_persist = channel.server_id.clone();
+                let channel_id_for_persist = ch_id.clone();
+                spawn(async move {
+                    if let Some(storage) = crate::STORAGE.get() {
+                        let _ = storage
+                            .set_last_channel_for_server(&server_id_for_persist, &channel_id_for_persist)
+                            .await;
+                    }
+                });
                 let cid = ch_id.clone();
                 spawn(async move {
                     load_channel_data(cid, client_manager, chat_data, app_state).await;
@@ -974,8 +996,10 @@ fn ChannelItemRow(channel: Channel) -> Element {
             },
             span { class: "channel-icon", "{type_icon}" }
             span { class: "channel-name", "{ch_name}" }
-            if unread > 0 {
-                span { class: "unread-badge", "{unread}" }
+            // @mention badge (red) — only for direct @mentions, not general unread.
+            // Plain unread is conveyed via the "unread" CSS class (bold channel name).
+            if mention > 0 {
+                span { class: "mention-badge", "@{mention}" }
             }
         }
         if !voice_participants.is_empty() {

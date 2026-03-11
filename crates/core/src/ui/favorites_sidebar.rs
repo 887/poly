@@ -151,6 +151,7 @@ pub fn FavoritesBar() -> Element {
                                 account_display_name: server.account_display_name.clone(),
                                 backend_name: server.backend.display_name().to_string(),
                                 unread: server.unread_count,
+                                mention: server.mention_count,
                                 icon_url: server.icon_url.clone(),
                             }
                         }
@@ -383,6 +384,8 @@ fn FavoriteServerIcon(
     account_display_name: String,
     backend_name: String,
     unread: u32,
+    /// Number of @mention notifications (shown as red badge).
+    mention: u32,
     /// Optional server icon URL. When `Some`, rendered as an `<img>`; when
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
@@ -600,8 +603,12 @@ fn FavoriteServerIcon(
             } else {
                 span { class: "source-badge", "A" }
             }
-            if unread > 0 {
-                span { class: "badge", "{unread}" }
+            // @mention badge (red): only for direct @mentions.
+            // Plain unread shown as a small dot.
+            if mention > 0 {
+                span { class: "badge mention-count-badge", "@{mention}" }
+            } else if unread > 0 {
+                span { class: "badge server-unread-dot" }
             }
         }
     }
