@@ -239,6 +239,17 @@ fn to_wit_notification_kind(nk: &pc::NotificationKind) -> wit::NotificationKind 
         pc::NotificationKind::ServerInvite { server_id } => {
             wit::NotificationKind::ServerInvite(server_id.clone())
         }
+        pc::NotificationKind::VoiceChannelInvite {
+            server_id,
+            channel_id,
+            channel_name,
+            inviter_user_id,
+        } => wit::NotificationKind::VoiceChannelInvite(wit::VoiceInviteInfo {
+            server_id: server_id.clone(),
+            channel_id: channel_id.clone(),
+            channel_name: channel_name.clone(),
+            inviter_user_id: inviter_user_id.clone(),
+        }),
         pc::NotificationKind::Other(desc) => wit::NotificationKind::Other(desc.clone()),
     }
 }

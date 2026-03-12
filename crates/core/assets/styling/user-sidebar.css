@@ -303,3 +303,154 @@
     background-color: var(--bg-hover);
 }
 
+/* ─── Notification header row (title + unread badge + actions) ─── */
+
+.notifications-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.notifications-title {
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+.notif-badge {
+    background-color: var(--color-danger, #ef4444);
+    color: #fff;
+    border-radius: 9999px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    display: inline-block;
+}
+
+.notif-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notif-filter-btn {
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    border: 1px solid var(--border-secondary);
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.notif-filter-btn:hover,
+.notif-filter-btn.active {
+    background-color: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+/* ─── Notification item body layout ─── */
+
+.notification-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.notification-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.notification-source {
+    font-size: 13px;
+}
+
+.notification-kind-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.notification-time {
+    margin-left: auto;
+}
+
+.notification-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+/* Per-kind action button colours */
+
+.notif-action-accept { /* green accept */
+    background-color: var(--color-success, #22c55e);
+    color: #fff;
+    border: none;
+}
+.notif-action-accept:hover {
+    background-color: color-mix(in srgb, var(--color-success, #22c55e) 80%, #000 20%);
+}
+
+.notif-action-join { /* green join-voice */
+    background-color: var(--color-success, #22c55e);
+    color: #fff;
+    border: none;
+}
+.notif-action-join:hover {
+    background-color: color-mix(in srgb, var(--color-success, #22c55e) 80%, #000 20%);
+}
+
+.notif-action-deny {
+    background: none;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-secondary);
+}
+.notif-action-deny:hover {
+    background-color: var(--bg-hover);
+}
+
+.notif-action-read {
+    background: none;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-secondary);
+}
+.notif-action-read:hover {
+    background-color: var(--bg-hover);
+}
+
+.notif-mark-all {
+    white-space: nowrap;
+}
+
+/* Backend filter dropdown inside notifications */
+.notif-filter {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    display: block;
+}
+
+.notifications-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 32px 0;
+    font-size: 14px;
+}
+

@@ -725,3 +725,205 @@
     font-weight: 700;
 }
 
+
+/* =====================================================
+ * Content & Social Settings
+ * ===================================================== */
+
+.content-social-section {
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+}
+
+.content-social-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.content-social-section-header {
+    margin-bottom: 16px;
+}
+
+.content-social-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 13px;
+}
+
+.content-social-section-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+    line-height: 1.5;
+}
+
+/* Select rows (Sensitive Media) */
+
+.content-social-select-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+}
+
+.content-social-select-row:last-child {
+    border-bottom: none;
+}
+
+.content-social-select-label {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.content-social-select {
+    display: block; /* override wizard.css global select {display:none} */
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 140px;
+    appearance: auto;
+}
+
+.content-social-select:focus {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
+}
+
+/* Radio group (DM Spam Filter) */
+
+.content-social-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.content-social-radio-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: background-color var(--transition-fast);
+}
+
+.content-social-radio-row:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.content-social-radio-row input[type="radio"] {
+    accent-color: var(--accent-primary);
+    width: 16px;
+    height: 16px;
+}
+
+/* Toggle rows (checkboxes) */
+
+.content-social-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+    cursor: pointer;
+}
+
+.content-social-toggle-row:last-child {
+    border-bottom: none;
+}
+
+.content-social-toggle-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.content-social-toggle {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+}
+
+/* Blocked users list */
+
+.content-social-blocked-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.content-social-blocked-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.05));
+}
+
+.content-social-blocked-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.content-social-blocked-avatar-placeholder {
+    background-color: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.content-social-blocked-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.content-social-unblock-btn {
+    padding: 5px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
+    background: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.content-social-unblock-btn:hover {
+    background-color: var(--color-danger, #ef4444);
+    color: #fff;
+    border-color: var(--color-danger, #ef4444);
+}
+
+.content-social-no-blocked {
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 16px 0;
+}
+

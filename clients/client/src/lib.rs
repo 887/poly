@@ -216,6 +216,62 @@ pub trait ClientBackend: Send + Sync {
     /// Get the user's notifications.
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>>;
 
+    /// Accept or reject a pending friend request.
+    ///
+    /// `user_id` is the ID of the user who sent the request.
+    /// `accept` is `true` to accept, `false` to reject.
+    ///
+    /// Backends that do not support this action return `NotSupported`.
+    async fn respond_to_friend_request(&self, user_id: &str, accept: bool) -> ClientResult<()> {
+        let _ = (user_id, accept);
+        Err(ClientError::NotSupported(
+            "respond_to_friend_request".to_string(),
+        ))
+    }
+
+    /// Accept or decline a pending server invite.
+    ///
+    /// Backends that do not support this action return `NotSupported`.
+    async fn respond_to_server_invite(&self, server_id: &str, accept: bool) -> ClientResult<()> {
+        let _ = (server_id, accept);
+        Err(ClientError::NotSupported(
+            "respond_to_server_invite".to_string(),
+        ))
+    }
+
+    // --- Content & Social Policy ---
+
+    /// Get the account's content and social policy settings.
+    ///
+    /// Returns [`ClientError::NotSupported`] if the backend does not expose
+    /// content policy settings — the UI will fall back to locally-stored defaults.
+    async fn get_content_policy(&self) -> ClientResult<ContentPolicy> {
+        Err(ClientError::NotSupported("get_content_policy".to_string()))
+    }
+
+    /// Update the account's content and social policy settings.
+    ///
+    /// Backends that do not support this action return `NotSupported`.
+    async fn set_content_policy(&self, policy: ContentPolicy) -> ClientResult<()> {
+        let _ = policy;
+        Err(ClientError::NotSupported("set_content_policy".to_string()))
+    }
+
+    /// Get the list of users blocked by the authenticated user.
+    ///
+    /// Returns an empty list if the backend does not track blocks.
+    async fn get_blocked_users(&self) -> ClientResult<Vec<BlockedUser>> {
+        Ok(Vec::new())
+    }
+
+    /// Unblock a previously blocked user.
+    ///
+    /// Backends that do not support unblocking return `NotSupported`.
+    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
+        let _ = user_id;
+        Err(ClientError::NotSupported("unblock_user".to_string()))
+    }
+
     // --- Presence ---
 
     // --- Voice / Video ---

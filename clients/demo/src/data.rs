@@ -1287,6 +1287,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
 pub fn demo_notifications() -> Vec<Notification> {
     let now = Utc::now();
     vec![
+        // — @mention in a channel —
         Notification {
             id: "notif-1".to_string(),
             kind: NotificationKind::Mention {
@@ -1295,10 +1296,24 @@ pub fn demo_notifications() -> Vec<Notification> {
             },
             backend: BackendType::Demo,
             account_id: "demo".to_string(),
-            timestamp: now - Duration::minutes(10),
+            timestamp: now - Duration::minutes(5),
             read: false,
-            preview: "Alice mentioned you in #general".to_string(),
+            preview: "Alice mentioned you in #general: \"@Cat have you tried Dioxus 0.7 hot-reload?\"".to_string(),
         },
+        // — @mention in a server channel —
+        Notification {
+            id: "notif-4".to_string(),
+            kind: NotificationKind::Mention {
+                channel_id: "ch-rust".to_string(),
+                message_id: "msg-30".to_string(),
+            },
+            backend: BackendType::Demo,
+            account_id: "demo".to_string(),
+            timestamp: now - Duration::minutes(20),
+            read: false,
+            preview: "Charlie mentioned you in #rust-help: \"@Cat can you help debug this lifetime error?\"".to_string(),
+        },
+        // — Friend request from Iris —
         Notification {
             id: "notif-2".to_string(),
             kind: NotificationKind::FriendRequest {
@@ -1306,10 +1321,23 @@ pub fn demo_notifications() -> Vec<Notification> {
             },
             backend: BackendType::Demo,
             account_id: "demo".to_string(),
-            timestamp: now - Duration::hours(1),
+            timestamp: now - Duration::minutes(45),
             read: false,
             preview: "Iris sent you a friend request".to_string(),
         },
+        // — Friend request from Jack —
+        Notification {
+            id: "notif-5".to_string(),
+            kind: NotificationKind::FriendRequest {
+                from_user_id: "user-jack".to_string(),
+            },
+            backend: BackendType::Demo,
+            account_id: "demo".to_string(),
+            timestamp: now - Duration::hours(2),
+            read: false,
+            preview: "Jack sent you a friend request".to_string(),
+        },
+        // — Server invite —
         Notification {
             id: "notif-3".to_string(),
             kind: NotificationKind::ServerInvite {
@@ -1317,9 +1345,97 @@ pub fn demo_notifications() -> Vec<Notification> {
             },
             backend: BackendType::Demo,
             account_id: "demo".to_string(),
-            timestamp: now - Duration::hours(5),
+            timestamp: now - Duration::hours(3),
+            read: false,
+            preview: "Diana invited you to join Rust Community".to_string(),
+        },
+        // — Another server invite —
+        Notification {
+            id: "notif-6".to_string(),
+            kind: NotificationKind::ServerInvite {
+                server_id: "server-art".to_string(),
+            },
+            backend: BackendType::Demo,
+            account_id: "demo".to_string(),
+            timestamp: now - Duration::hours(6),
+            read: false,
+            preview: "Grace invited you to join Digital Art Hub".to_string(),
+        },
+        // — Voice channel invite —
+        Notification {
+            id: "notif-7".to_string(),
+            kind: NotificationKind::VoiceChannelInvite {
+                server_id: "server-poly-dev".to_string(),
+                channel_id: "ch-voice-dev".to_string(),
+                channel_name: "Dev Voice".to_string(),
+                inviter_user_id: "user-bob".to_string(),
+            },
+            backend: BackendType::Demo,
+            account_id: "demo".to_string(),
+            timestamp: now - Duration::hours(1),
+            read: false,
+            preview: "Bob is calling you to join Dev Voice in Poly Development".to_string(),
+        },
+        // — Another voice invite —
+        Notification {
+            id: "notif-8".to_string(),
+            kind: NotificationKind::VoiceChannelInvite {
+                server_id: "server-gaming".to_string(),
+                channel_id: "ch-voice-gaming".to_string(),
+                channel_name: "Gaming Voice".to_string(),
+                inviter_user_id: "user-diana".to_string(),
+            },
+            backend: BackendType::Demo,
+            account_id: "demo".to_string(),
+            timestamp: now - Duration::hours(4),
             read: true,
-            preview: "You've been invited to Rust Community".to_string(),
+            preview: "Diana invited you to Gaming Voice in Gaming Lounge".to_string(),
+        },
+        // — Unread message mention (already read) —
+        Notification {
+            id: "notif-9".to_string(),
+            kind: NotificationKind::Mention {
+                channel_id: "ch-off-topic".to_string(),
+                message_id: "msg-ch-off-topic-0".to_string(),
+            },
+            backend: BackendType::Demo,
+            account_id: "demo".to_string(),
+            timestamp: now - Duration::hours(8),
+            read: true,
+            preview: "Eve mentioned you in #off-topic".to_string(),
+        },
+    ]
+}
+
+/// Generate a default demo content policy for settings preview.
+pub fn demo_content_policy() -> ContentPolicy {
+    ContentPolicy {
+        sensitive_content_dm_friends: SensitiveContentLevel::Hide,
+        sensitive_content_dm_others: SensitiveContentLevel::Hide,
+        sensitive_content_server_channels: SensitiveContentLevel::Hide,
+        dm_spam_filter: DmSpamFilterLevel::FilterNonFriends,
+        allow_age_restricted_servers: false,
+        allow_age_restricted_commands_in_dms: false,
+        allow_dms_from_server_members: true,
+        allow_message_requests: true,
+        friend_request_from_everyone: true,
+        friend_request_from_friends_of_friends: true,
+        friend_request_from_server_members: true,
+    }
+}
+
+/// Generate demo blocked users for the content & social settings page.
+pub fn demo_blocked_users() -> Vec<BlockedUser> {
+    vec![
+        BlockedUser {
+            user_id: "user-blocked-1".to_string(),
+            display_name: "SpamBot9000".to_string(),
+            avatar_url: None,
+        },
+        BlockedUser {
+            user_id: "user-blocked-2".to_string(),
+            display_name: "TrollUser42".to_string(),
+            avatar_url: None,
         },
     ]
 }

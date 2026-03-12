@@ -260,6 +260,7 @@ interface types {
         mention(mention-info),
         friend-request(string),
         server-invite(string),
+        voice-channel-invite(voice-invite-info),
         other(string),
     }
 
@@ -267,6 +268,14 @@ interface types {
     record mention-info {
         channel-id: string,
         message-id: string,
+    }
+
+    /// Info for a voice channel invite notification.
+    record voice-invite-info {
+        server-id: string,
+        channel-id: string,
+        channel-name: string,
+        inviter-user-id: string,
     }
 
     /// A notification from a backend.

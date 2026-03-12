@@ -108,6 +108,13 @@ notifications-dismiss = Dismiss
 notifications-mention = { $user } mentioned you in { $channel }
 notifications-friend-request = { $user } sent you a friend request
 notifications-server-invite = You've been invited to { $server }
+notifications-accept = Accept
+notifications-decline = Decline
+notifications-deny = Deny
+notifications-join-voice = Join
+notifications-voice-invite = { $user } invited you to { $channel }
+notifications-show-all = Show all notifications
+notifications-show-unread = Show unread only
 
 # Settings
 settings-title = Settings
@@ -421,7 +428,39 @@ settings-search = Search settings...
 settings-search-no-results = No settings found matching your search.
 settings-voice-video = Voice & Video
 settings-notifications = Notifications
+settings-content-social = Content & Social
 account-settings-title = Account Settings
+
+# Content & Social settings
+content-social-title = Content & Social
+content-social-sensitive-media = Sensitive Media
+content-social-sensitive-media-desc = Control how sensitive or age-restricted content is displayed in different contexts.
+content-social-dm-friends = DMs from friends
+content-social-dm-others = DMs from others
+content-social-server-channels = Server channels
+content-social-show = Show
+content-social-hide = Hide
+content-social-warn = Warn First
+content-social-spam-filter = DM Spam Filter
+content-social-spam-filter-desc = Choose how aggressively to filter unsolicited direct messages.
+content-social-filter-all = Filter all messages from non-friends
+content-social-filter-non-friends = Filter messages from non-friends
+content-social-filter-none = Do not filter
+content-social-age-restricted = Age-Restricted Content
+content-social-age-restricted-servers = Allow access to age-restricted servers
+content-social-age-restricted-commands = Allow age-restricted slash commands in DMs
+content-social-social-perms = Social Permissions
+content-social-social-perms-desc = Control who can contact you and how friend requests work.
+content-social-dms-from-members = Allow DMs from server members
+content-social-message-requests = Allow message requests from non-friends
+content-social-friend-requests = Friend Requests
+content-social-fr-everyone = Accept from everyone
+content-social-fr-friends-of-friends = Accept from friends of friends
+content-social-fr-server-members = Accept from server members
+content-social-blocked = Blocked Users
+content-social-blocked-desc = Users you have blocked cannot message you or see your profile.
+content-social-no-blocked = No blocked users
+content-social-unblock = Unblock
 
 # Voice & Video settings
 voice-input-device = Input Device

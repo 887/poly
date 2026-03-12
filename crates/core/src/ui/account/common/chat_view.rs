@@ -1025,6 +1025,28 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     use_member_list_preferences_effect(signals.app_state);
     use_command_preload_effect(signals, &ctx.channel_id);
     use_unread_marker_visibility_effect(signals);
+    use_composer_focus_effect(signals);
+}
+
+/// Auto-focus the message composer input whenever the selected channel or DM changes.
+///
+/// This gives the user immediate keyboard focus so they can start typing
+/// right after clicking a channel or DM, matching Discord UX.
+fn use_composer_focus_effect(signals: &ChatViewSignals) {
+    let app_state = signals.app_state;
+    use_effect(move || {
+        // Depend on channel + active account so switching DMs also refocuses.
+        let _channel = app_state.read().nav.selected_channel.clone();
+        let _account = app_state.read().nav.active_account_id.clone();
+
+        // Small delay so the composer DOM element is ready after route transition.
+        let _ = document::eval(
+            "setTimeout(() => { \
+                const el = document.getElementById('poly-message-composer'); \
+                if (el) el.focus(); \
+            }, 80)"
+        );
+    });
 }
 
 fn use_member_list_effect(signals: &ChatViewSignals) {

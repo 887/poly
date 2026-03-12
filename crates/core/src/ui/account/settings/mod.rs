@@ -15,6 +15,7 @@
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**
 //! of RSX + logic. Extract sub-components rather than growing any file.
 
+mod content_social;
 mod notifications;
 
 #[cfg(feature = "server")]
@@ -23,6 +24,7 @@ mod profile;
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
 use dioxus::prelude::*;
+use content_social::ContentSocialSettings;
 use notifications::NotificationsSettings;
 
 #[cfg(feature = "server")]
@@ -88,7 +90,10 @@ fn profile_section_element(_show: bool, _account_id: String) -> Element {
 
 /// Account-specific searchable settings nodes.
 /// Format: (i18n key, section slug).
-const ACCT_NAV_SECTIONS: &[(&str, &str)] = &[("settings-notifications", "notifications")];
+const ACCT_NAV_SECTIONS: &[(&str, &str)] = &[
+    ("settings-notifications", "notifications"),
+    ("settings-content-social", "content-social"),
+];
 
 /// Returns true if any node for this account section matches the query.
 fn acct_section_has_match(section_slug: &str, q: &str) -> bool {
@@ -226,6 +231,12 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                 id: "acct-section-notifications",
                 class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
                 NotificationsSettings { account_id: account_id.clone() }
+            }
+            // Content & Social section
+            div {
+                id: "acct-section-content-social",
+                class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                ContentSocialSettings { _account_id: account_id.clone() }
             }
         }
     }

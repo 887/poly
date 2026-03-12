@@ -295,6 +295,12 @@ pub(crate) async fn toggle_demo(
                         }
                     }
                 }
+                // Load content policy and blocked users for the first account only.
+                // (content policy is per-account; use the first demo account's data.)
+                if chat_data.read().blocked_users.is_empty() {
+                    chat_data.write().content_policy = poly_demo::data::demo_content_policy();
+                    chat_data.write().blocked_users = poly_demo::data::demo_blocked_users();
+                }
                 // Load voice participants for all voice channels.
                 let servers_snapshot = chat_data.read().servers.clone();
                 for server in &servers_snapshot {

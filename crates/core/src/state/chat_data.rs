@@ -134,6 +134,15 @@ pub struct ChatData {
     /// is opened. Empty for individual DMs and server channels.
     /// Used by `DmUserSidebar` to render the group member list.
     pub active_group_members: Vec<User>,
+    /// Content and social policy for the currently active account.
+    ///
+    /// Loaded from `get_content_policy()` on account switch.
+    /// Falls back to `ContentPolicy::default()` if the backend returns
+    /// `NotSupported`. Written to when the user changes settings in the
+    /// Content & Social settings page.
+    pub content_policy: ContentPolicy,
+    /// Users blocked by the currently active account (from all backends).
+    pub blocked_users: Vec<BlockedUser>,
 }
 
 /// Format a file size in human-readable form.

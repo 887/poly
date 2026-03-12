@@ -69,6 +69,18 @@ fn account_attribution(
 #[component]
 fn SearchInput(query: Signal<String>) -> Element {
     let current = query.read().clone();
+
+    // Auto-focus the search input when this component is first mounted.
+    // A short setTimeout ensures the DOM element is rendered before focusing.
+    use_effect(|| {
+        let _ = document::eval(
+            "setTimeout(() => { \
+                const el = document.querySelector('.search-page-input'); \
+                if (el) el.focus(); \
+            }, 50)"
+        );
+    });
+
     rsx! {
         div { class: "search-page-input-bar",
             input {

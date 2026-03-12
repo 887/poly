@@ -4,7 +4,8 @@
 //!
 //! Reads from `Signal<ChatData>` and displays notifications with
 //! source badges indicating which backend/account they came from.
-//! Features: mark-as-read, mark-all-as-read, filter by backend.
+//! Features: mark-as-read, mark-all-as-read, filter by backend,
+//! accept/decline friend requests, server invites, and voice invites.
 //!
 //! # 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
@@ -26,6 +27,7 @@ use poly_client::{BackendType, NotificationKind};
 pub fn NotificationsView() -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
     let mut filter_backend = use_signal(|| None::<BackendType>);
+    let mut show_unread_only = use_signal(|| false);
     let notifications = chat_data.read().notifications.clone();
 
     // Collect distinct backends present in notifications for filter
@@ -37,37 +39,61 @@ pub fn NotificationsView() -> Element {
     let filtered: Vec<_> = notifications
         .iter()
         .filter(|n| filter_backend.read().is_none_or(|f| n.backend == f))
+        .filter(|n| !*show_unread_only.read() || !n.read)
         .cloned()
         .collect();
 
-    let has_unread = filtered.iter().any(|n| !n.read);
+    let has_unread = notifications.iter().any(|n| !n.read);
+    let unread_count = notifications.iter().filter(|n| !n.read).count();
 
     rsx! {
         div { class: "notifications-view",
             div { class: "notifications-header",
-                h2 { class: "notifications-title", "{t(\"notifications-title\")}" }
-                // Backend filter
+                div { class: "notifications-title-row",
+                    h2 { class: "notifications-title",
+                        "{t(\"notifications-title\")}"
+                        if unread_count > 0 {
+                            span { class: "notif-badge", " {unread_count}" }
+                        }
+                    }
+                    div { class: "notif-header-actions",
+                        // Unread-only toggle
+                        button {
+                            class: if *show_unread_only.read() { "btn btn-sm notif-filter-btn active" } else { "btn btn-sm notif-filter-btn" },
+                            onclick: move |_| {
+                                let current = *show_unread_only.read();
+                                show_unread_only.set(!current);
+                            },
+                            if *show_unread_only.read() {
+                                "{t(\"notifications-show-all\")}"
+                            } else {
+                                "{t(\"notifications-show-unread\")}"
+                            }
+                        }
+                        // Mark all as read
+                        if has_unread {
+                            button {
+                                class: "btn btn-secondary btn-sm notif-mark-all",
+                                onclick: move |_| {
+                                    let filter = *filter_backend.read();
+                                    let mut cd = chat_data.write();
+                                    for notif in &mut cd.notifications {
+                                        if filter.is_none_or(|f| notif.backend == f) {
+                                            notif.read = true;
+                                        }
+                                    }
+                                },
+                                "{t(\"notifications-mark-read\")}"
+                            }
+                        }
+                    }
+                }
+                // Backend filter (only shown when multiple backends present)
                 if backends.len() > 1 {
                     NotificationFilter {
                         backends: backends.clone(),
                         selected: *filter_backend.read(),
                         on_change: move |b| filter_backend.set(b),
-                    }
-                }
-                // Mark all as read
-                if has_unread {
-                    button {
-                        class: "btn btn-secondary btn-sm notif-mark-all",
-                        onclick: move |_| {
-                            let filter = *filter_backend.read();
-                            let mut cd = chat_data.write();
-                            for notif in &mut cd.notifications {
-                                if filter.is_none_or(|f| notif.backend == f) {
-                                    notif.read = true;
-                                }
-                            }
-                        },
-                        "{t(\"notifications-mark-read\")}"
                     }
                 }
             }
@@ -94,7 +120,6 @@ fn NotificationFilter(
                 if val.is_empty() {
                     on_change.call(None);
                 } else {
-                    // Match backend type from debug name
                     let matched = backends.iter().find(|b| format!("{b:?}") == val).copied();
                     on_change.call(matched);
                 }
@@ -113,11 +138,11 @@ fn NotificationFilter(
     }
 }
 
-/// Rendered list of notification items.
+/// Rendered list of notification items with per-kind action buttons.
 #[rustfmt::skip]
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
 
     rsx! {
         div { class: "notification-list",
@@ -131,32 +156,161 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
                     let badge = backend_badge(&notif.backend);
                     let preview = notif.preview.clone();
                     let is_unread = !notif.read;
-                    let kind_icon = match &notif.kind {
-                        NotificationKind::Mention { .. } => "💬",
-                        NotificationKind::FriendRequest { .. } => "👤",
-                        NotificationKind::ServerInvite { .. } => "🏠",
-                        NotificationKind::Other(_) => "🔔",
-                    };
                     let time_ago = format_time_ago(notif.timestamp);
+                    let notif_id = notif.id.clone();
                     let item_class = if is_unread {
                         "notification-item unread"
                     } else {
                         "notification-item"
                     };
-                    let notif_id = notif.id.clone();
                     rsx! {
                         div { class: "{item_class}",
-                            div { class: "notification-icon", "{kind_icon}" }
-                            span { class: "notification-source", "{badge}" }
-                            div { class: "notification-content",
-                                p { class: "notification-text", "{preview}" }
-                                span { class: "notification-time", "{time_ago}" }
+                            NotificationItemContent {
+                                notif_id: notif_id.clone(),
+                                kind: notif.kind.clone(),
+                                badge: badge.to_string(),
+                                preview,
+                                time_ago,
+                                is_unread,
+                                chat_data,
                             }
-                            if is_unread {
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Inner content for a single notification item, with kind-specific action buttons.
+#[rustfmt::skip]
+#[component]
+fn NotificationItemContent(
+    notif_id: String,
+    kind: NotificationKind,
+    badge: String,
+    preview: String,
+    time_ago: String,
+    is_unread: bool,
+    mut chat_data: Signal<ChatData>,
+) -> Element {
+    let (kind_icon, kind_label) = match &kind {
+        NotificationKind::Mention { .. } => ("💬", "Mention"),
+        NotificationKind::FriendRequest { .. } => ("👤", "Friend Request"),
+        NotificationKind::ServerInvite { .. } => ("🏠", "Server Invite"),
+        NotificationKind::VoiceChannelInvite { .. } => ("🔊", "Voice Invite"),
+        NotificationKind::Other(_) => ("🔔", "Notification"),
+    };
+
+    // Helper: dismiss a notification (mark read and remove from list)
+    let dismiss_id = notif_id.clone();
+    let accept_id = notif_id.clone();
+    let mark_id = notif_id.clone();
+
+    rsx! {
+        div { class: "notification-icon", "{kind_icon}" }
+        div { class: "notification-body",
+            div { class: "notification-meta",
+                span { class: "notification-source", "{badge}" }
+                span { class: "notification-kind-label", "{kind_label}" }
+                span { class: "notification-time", "{time_ago}" }
+            }
+            p { class: "notification-text", "{preview}" }
+            div { class: "notification-actions",
+                // Per-kind action buttons
+                match &kind {
+                    NotificationKind::FriendRequest { from_user_id } => {
+                        let user_id = from_user_id.clone();
+                        rsx! {
+                            button {
+                                class: "btn btn-success btn-sm notif-action-accept",
+                                onclick: {
+                                    let uid = user_id.clone();
+                                    let nid = accept_id.clone();
+                                    move |_| {
+                                        let mut cd = chat_data.write();
+                                        // Remove the notification
+                                        cd.notifications.retain(|n| n.id != nid);
+                                        // Optimistically add to friends if we know the user
+                                        if let Some(user) = cd.members.iter().find(|u| u.id == uid).cloned()
+                                            && !cd.friends.iter().any(|f| f.id == user.id)
+                                        {
+                                            cd.friends.push(user);
+                                        }
+                                    }
+                                },
+                                "{t(\"notifications-accept\")}"
+                            }
+                            button {
+                                class: "btn btn-ghost btn-sm notif-action-deny",
+                                onclick: {
+                                    let nid = dismiss_id.clone();
+                                    move |_| {
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                    }
+                                },
+                                "{t(\"notifications-deny\")}"
+                            }
+                        }
+                    }
+                    NotificationKind::ServerInvite { .. } => {
+                        rsx! {
+                            button {
+                                class: "btn btn-success btn-sm notif-action-accept",
+                                onclick: {
+                                    let nid = accept_id.clone();
+                                    move |_| {
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                    }
+                                },
+                                "{t(\"notifications-accept\")}"
+                            }
+                            button {
+                                class: "btn btn-ghost btn-sm notif-action-deny",
+                                onclick: {
+                                    let nid = dismiss_id.clone();
+                                    move |_| {
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                    }
+                                },
+                                "{t(\"notifications-decline\")}"
+                            }
+                        }
+                    }
+                    NotificationKind::VoiceChannelInvite { channel_name, .. } => {
+                        let _ch_name = channel_name.clone();
+                        rsx! {
+                            button {
+                                class: "btn btn-success btn-sm notif-action-join",
+                                onclick: {
+                                    let nid = accept_id.clone();
+                                    move |_| {
+                                        // Dismiss the invite; navigation to voice channel
+                                        // is handled by the calling context (TODO: deep link).
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                    }
+                                },
+                                "{t(\"notifications-join-voice\")}"
+                            }
+                            button {
+                                class: "btn btn-ghost btn-sm notif-action-deny",
+                                onclick: {
+                                    let nid = dismiss_id.clone();
+                                    move |_| {
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                    }
+                                },
+                                "{t(\"notifications-dismiss\")}"
+                            }
+                        }
+                    }
+                    NotificationKind::Mention { .. } | NotificationKind::Other(_) => {
+                        if is_unread {
+                            rsx! {
                                 button {
-                                    class: "notification-action",
+                                    class: "btn btn-ghost btn-sm notif-action-read",
                                     onclick: {
-                                        let nid = notif_id.clone();
+                                        let nid = mark_id.clone();
                                         move |_| {
                                             let mut cd = chat_data.write();
                                             if let Some(n) = cd.notifications.iter_mut().find(|n| n.id == nid) {
@@ -167,6 +321,8 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
                                     "{t(\"notifications-mark-read\")}"
                                 }
                             }
+                        } else {
+                            rsx! {}
                         }
                     }
                 }

@@ -398,6 +398,14 @@ pub fn from_wit_notification_kind(nk: wit::NotificationKind) -> pc::Notification
         wit::NotificationKind::ServerInvite(server_id) => {
             pc::NotificationKind::ServerInvite { server_id }
         }
+        wit::NotificationKind::VoiceChannelInvite(info) => {
+            pc::NotificationKind::VoiceChannelInvite {
+                server_id: info.server_id,
+                channel_id: info.channel_id,
+                channel_name: info.channel_name,
+                inviter_user_id: info.inviter_user_id,
+            }
+        }
         wit::NotificationKind::Other(desc) => pc::NotificationKind::Other(desc),
     }
 }
