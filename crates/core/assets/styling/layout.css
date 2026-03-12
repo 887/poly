@@ -1,0 +1,300 @@
+/* Poly — Base Styles, Layout Grid, Window Chrome, Voice Banner, Nav Spacer
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * Base Styles
+ * =========================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.5;
+    overflow: hidden;
+    height: 100vh;
+}
+
+/* ===========================
+ * Layout
+ * =========================== */
+
+.poly-app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Body row: holds sidebar + channel list + chat horizontally */
+.main-layout-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    /* for nav-bar-top absolute positioning */
+}
+
+.electron-titlebar {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    min-height: 34px;
+    height: 34px;
+    background: color-mix(in srgb, var(--sidebar-bg) 86%, #000);
+    border-bottom: 1px solid var(--border-primary);
+    box-shadow: var(--shadow-sm);
+    user-select: none;
+    z-index: 350;
+    /* position: relative lets .electron-titlebar-title use absolute centering
+       over the full bar width, independent of left/right section widths. */
+    position: relative;
+}
+
+/* ── Left: back / forward navigation buttons ────────────────────────────── */
+.electron-nav-buttons {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    gap: 2px;
+    /* no -webkit-app-region here — inherits none, so buttons are clickable */
+}
+
+.electron-nav-btn {
+    width: 32px;
+    font-size: 1.05rem;
+}
+
+/* ── Center: drag region with absolutely-centered title ─────────────────── */
+.electron-titlebar-drag-region {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    -webkit-app-region: drag;
+}
+
+.electron-titlebar-title {
+    /* Absolute centering relative to .electron-titlebar (position: relative).
+       This keeps the title perfectly centered over the whole bar regardless of
+       the nav buttons and window controls being different widths. */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Cap width so title never overlaps nav buttons or window controls */
+    max-width: 45%;
+    /* Pass pointer events through to the drag region beneath */
+    pointer-events: none;
+}
+
+.electron-window-controls {
+    display: flex;
+    align-items: stretch;
+    -webkit-app-region: no-drag;
+}
+
+.electron-window-btn {
+    width: 46px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.electron-window-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.electron-window-btn.close:hover {
+    background: var(--accent-danger);
+    color: #fff;
+}
+
+/* ===========================
+ * Voice Connection Banner
+ * =========================== */
+
+.voice-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 40px;
+    min-height: 40px;
+    background: linear-gradient(90deg, var(--accent-primary) 0%, color-mix(in srgb, var(--accent-primary) 60%, #000) 100%);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 50%, #000);
+    z-index: 200;
+}
+
+.voice-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 160px;
+}
+
+.voice-banner-avatars {
+    display: flex;
+    gap: -4px;
+    /* negative to overlap */
+}
+
+.voice-banner-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #fff;
+    border: 2px solid var(--accent-primary);
+    margin-right: -6px;
+    cursor: default;
+    overflow: hidden;
+}
+
+.voice-banner-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.voice-banner-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #fff;
+}
+
+.voice-banner-count {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-left: 10px;
+    white-space: nowrap;
+}
+
+.voice-banner-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 12px;
+    border-radius: 6px;
+    transition: background 0.15s;
+    flex: 1;
+    justify-content: center;
+    text-align: center;
+}
+
+.voice-banner-center:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.voice-banner-icon {
+    font-size: 0.9rem;
+}
+
+.voice-banner-channel {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voice-banner-server {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.75);
+    white-space: nowrap;
+}
+
+.voice-banner-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 120px;
+    justify-content: flex-end;
+}
+
+.voice-ctrl-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.voice-ctrl-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.08);
+}
+
+.voice-ctrl-btn.muted {
+    background: rgba(255, 100, 100, 0.35);
+}
+
+.voice-ctrl-btn.muted:hover {
+    background: rgba(255, 100, 100, 0.55);
+}
+
+.voice-ctrl-btn.disconnect {
+    background: rgba(237, 66, 69, 0.5);
+}
+
+.voice-ctrl-btn.disconnect:hover {
+    background: rgba(237, 66, 69, 0.8);
+}
+
+/* ===========================
+ * Nav-bar spacer (native only)
+ * =========================== */
+
+.nav-bar-spacer {
+    height: 40px;
+    min-height: 40px;
+    flex-shrink: 0;
+}
+

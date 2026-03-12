@@ -1,0 +1,82 @@
+/* Poly — CSS Custom Properties — Neutral Dark Theme tokens
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * Neutral Dark Theme (Default)
+ * =========================== */
+:root {
+    /* Background colors */
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-surface: #1e1e3a;
+    --bg-hover: #252547;
+    --bg-active: #2d2d55;
+    --bg-input: #12122a;
+
+    /* Text colors */
+    --text-primary: #e4e4e7;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --text-inverse: #18181b;
+    --text-link: #60a5fa;
+
+    /* Border colors */
+    --border-primary: #27273f;
+    --border-secondary: #3f3f5c;
+    --border-focus: #60a5fa;
+
+    /* Accent colors */
+    --accent-primary: #60a5fa;
+    --accent-primary-hover: #3b82f6;
+    --accent-secondary: #818cf8;
+    --accent-success: #4ade80;
+    --accent-warning: #fbbf24;
+    --accent-danger: #f87171;
+
+    /* Presence colors */
+    --presence-online: #4ade80;
+    --presence-idle: #fbbf24;
+    --presence-dnd: #f87171;
+    --presence-offline: #71717a;
+
+    /* Sidebar */
+    --sidebar-bg: #111128;
+    --sidebar-icon-bg: #1e1e3a;
+    --sidebar-icon-hover: #2d2d55;
+    --sidebar-icon-active: #60a5fa;
+    --sidebar-separator: #27273f;
+    --favorites-bar-bg: #0d0d20;
+    --account-bar-bg: #161630;
+
+    /* Chat */
+    --chat-bg: #1a1a2e;
+    --chat-message-hover: #1e1e38;
+    --chat-input-bg: #12122a;
+    --chat-input-border: #27273f;
+
+    /* Scrollbar */
+    --scrollbar-thumb: #3f3f5c;
+    --scrollbar-track: transparent;
+
+    /* Badge */
+    --badge-bg: #f87171;
+    --badge-text: #ffffff;
+
+    /* Shadow */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+
+    /* Border radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-full: 9999px;
+
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+}
+

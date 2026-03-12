@@ -1,0 +1,463 @@
+/* Poly — Emoji Picker, Message Hover Actions + Reaction Picker, Input Toolbar, File Drag-Drop, Back/Forward Nav
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ═══════════════════════════════════════════════════════════════
+   EMOJI PICKER
+   ═══════════════════════════════════════════════════════════════ */
+
+.emoji-picker {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    pointer-events: none;
+}
+
+.emoji-picker-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 99;
+    pointer-events: auto;
+}
+
+.emoji-picker-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 340px;
+    max-height: 380px;
+    background: var(--bg-floating, var(--bg-secondary));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 101;
+    pointer-events: auto;
+}
+
+.emoji-search {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.emoji-search-input {
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    outline: none;
+}
+
+.emoji-search-input:focus {
+    border-color: var(--accent-primary);
+}
+
+.emoji-category-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0.375rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.emoji-tab {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.emoji-tab:hover {
+    background: var(--bg-hover);
+}
+
+.emoji-tab.active {
+    background: var(--accent-primary);
+}
+
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+    padding: 0.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.emoji-item {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.emoji-item:hover {
+    background: var(--bg-hover);
+    transform: scale(1.2);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MESSAGE HOVER ACTIONS + REACTION PICKER
+   ═══════════════════════════════════════════════════════════════ */
+
+.message {
+    position: relative;
+}
+
+.message-actions {
+    position: absolute;
+    top: -8px;
+    right: 16px;
+    display: flex;
+    gap: 4px;
+    background: var(--bg-floating, var(--bg-secondary));
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+}
+
+.msg-action-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: background 0.15s, color 0.15s;
+}
+
+.msg-action-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* Danger (delete) variant of the hover action button */
+.msg-action-btn-danger:hover {
+    background: rgba(220, 38, 38, 0.15);
+    color: #f87171;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   INLINE MESSAGE EDITING
+   ───────────────────────────────────────────────────────────── */
+
+.message-inline-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.message-edit-input {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--accent-primary);
+    border-radius: 4px;
+    padding: 8px 10px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.message-edit-input:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.25);
+}
+
+.message-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.message-edit-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.message-edit-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent-primary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.message-edit-link-btn:hover {
+    color: var(--accent-hover, #4752c4);
+}
+
+.message-edit-link-btn-save {
+    color: #43b581;
+}
+
+.message-edit-link-btn-save:hover {
+    color: #3ca374;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MESSAGE CONTEXT MENU (right-click)
+   — extends the shared .context-menu styles
+   ───────────────────────────────────────────────────────────── */
+
+/* Quick reactions row at the top of the message context menu */
+.msg-context-quick-reactions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+}
+
+.msg-context-quick-reaction-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    font-size: 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, transform 0.1s;
+}
+
+.msg-context-quick-reaction-btn:hover {
+    background: var(--bg-hover);
+    transform: scale(1.15);
+}
+
+/* Context menu items with icon + label + arrow layout */
+.context-menu-item-icon {
+    margin-right: 8px;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+}
+
+.context-menu-item-label {
+    flex: 1;
+    text-align: left;
+}
+
+/* Make reaction pills clickable (button style) */
+.reaction-pill {
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.reaction-pill:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INPUT TOOLBAR (emoji, GIF, attachment buttons)
+   ═══════════════════════════════════════════════════════════════ */
+
+.message-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    flex: 1;
+    position: relative;
+}
+
+.message-input-row .message-input {
+    flex: 1;
+}
+
+.input-toolbar {
+    display: flex;
+    gap: 2px;
+    padding-bottom: 4px;
+}
+
+.toolbar-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 1rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.toolbar-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.gif-btn {
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    padding: 0 6px;
+    width: auto;
+    height: 24px;
+    margin-bottom: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FILE DRAG AND DROP OVERLAY
+   ═══════════════════════════════════════════════════════════════ */
+
+.chat-view.drag-over {
+    position: relative;
+}
+
+.drag-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(88, 101, 242, 0.15);
+    border: 2px dashed var(--accent-primary);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    pointer-events: none;
+}
+
+.drag-overlay-content {
+    text-align: center;
+    color: var(--accent-primary);
+}
+
+.drag-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.drag-overlay-content p {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BACK / FORWARD NAVIGATION BAR
+   ═══════════════════════════════════════════════════════════════ */
+
+.nav-bar {
+    display: flex;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.nav-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.nav-btn:hover:not(.disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.nav-btn.disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TOP-LEFT CORNER NAV BAR (browser-style back/forward)
+   Symmetrically centered within the server sidebar width.
+   ───────────────────────────────────────────────────────────── */
+
+.nav-bar-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 72px;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 0;
+    z-index: 100;
+}
+
+.nav-bar-top .nav-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.nav-bar-top .nav-btn:hover:not(.disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.nav-bar-top .nav-btn.disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+

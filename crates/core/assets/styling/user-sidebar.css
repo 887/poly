@@ -1,0 +1,305 @@
+/* Poly — User/Member Sidebar, DM header, Notification indicators
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * User Sidebar
+ * =========================== */
+
+.user-sidebar {
+    flex: 1;
+    min-height: 0;
+    background-color: var(--bg-secondary);
+    padding: 16px;
+    overflow-y: auto;
+}
+
+/* DM contact info panel (right rail for 1:1 DMs) */
+.dm-contact-panel {
+    flex: 1;
+    min-height: 0;
+    background-color: var(--bg-secondary);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dm-contact-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dm-contact-panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.dm-contact-avatar-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+    text-align: center;
+}
+
+.dm-contact-avatar-wrap {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.dm-contact-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.dm-contact-avatar-fallback {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.dm-contact-avatar-wrap .status-dot {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    border: 3px solid var(--bg-secondary);
+}
+
+.dm-contact-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.dm-contact-presence {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.dm-contact-empty {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 24px 0;
+}
+
+
+
+.user-sidebar-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0;
+    flex: 1;
+}
+
+/* Header row wrapping the title + filter icon */
+.user-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 4px;
+}
+
+/* Filter toggle icon button */
+.user-filter-btn {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+}
+
+.user-filter-btn:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+    color: var(--text-primary);
+}
+
+/* Active state when filter panel is open */
+.user-filter-btn-active {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+}
+
+.user-filter-btn-active:hover {
+    background: var(--accent-primary-hover, #4752c4);
+    color: #fff;
+}
+
+/* Collapsible filter text input */
+.member-filter-input {
+    width: 100%;
+    padding: 5px 8px;
+    margin-bottom: 8px;
+    font-size: 0.78rem;
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+    background: var(--bg-tertiary, #202225);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+}
+
+.member-filter-input:focus {
+    border-color: var(--accent-primary, #5865f2);
+}
+
+/* Highlighted substring in a member's name during filter */
+.member-name-highlight {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+.user-group {
+    margin-bottom: 16px;
+}
+
+.user-group-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.user-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.user-entry:hover {
+    background-color: var(--bg-hover);
+}
+
+.user-entry.offline {
+    opacity: 0.5;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background-color: var(--accent-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    position: relative;
+}
+
+.user-name {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+/* ===========================
+ * Notifications
+ * =========================== */
+
+.notifications-view {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.notifications-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.notification-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.notification-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-md);
+    transition: background-color var(--transition-fast);
+}
+
+.notification-item:hover {
+    background-color: var(--bg-hover);
+}
+
+.notification-item.unread {
+    border-left: 3px solid var(--accent-primary);
+}
+
+.notification-icon {
+    font-size: 20px;
+}
+
+.notification-content {
+    flex: 1;
+}
+
+.notification-text {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.notification-time {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.notification-action {
+    background: none;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.notification-action:hover {
+    background-color: var(--bg-hover);
+}
+

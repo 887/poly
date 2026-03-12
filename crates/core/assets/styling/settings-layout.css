@@ -1,0 +1,335 @@
+/* Poly — Settings Page Layout Shell — nav sidebar, content area
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * Settings
+ * =========================== */
+
+.settings-page {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.settings-nav {
+    width: 220px;
+    min-width: 220px;
+    background-color: var(--bg-secondary);
+    padding: 16px 8px;
+    border-right: 1px solid var(--border-primary);
+}
+
+/* Strip default anchor link styling inside settings nav (Dioxus Link renders as <a>) */
+.settings-nav a {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+/* Header section at the top of the settings sidebar */
+.settings-nav-header {
+    padding: 4px 8px 12px;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 8px;
+}
+
+.settings-nav-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 2px;
+}
+
+.settings-nav-subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.settings-nav-item {
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: background-color var(--transition-fast);
+    margin-bottom: 2px;
+}
+
+.settings-nav-item:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.settings-nav-item.active {
+    background-color: var(--bg-active);
+    color: var(--text-primary);
+}
+
+/* Nav items dimmed when search active and they don't match */
+.settings-nav-item.settings-nav-item-dimmed {
+    opacity: 0.4;
+}
+
+/* Group header separating built-in sections from plugin-provided settings pages */
+.settings-nav-group-header {
+    padding: 16px 16px 6px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+/* Emoji icon prefix on plugin nav items */
+.settings-nav-plugin-icon {
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+/* ===========================
+ * Settings single-scroll layout
+ * =========================== */
+
+/* Each section block in the scrollable content column */
+.settings-section-block {
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 32px;
+    transition: opacity 0.15s ease;
+}
+
+.settings-section-block:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+/* Dim sections that don't match the current search query */
+.settings-section-block.settings-section-dimmed {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+.settings-scroll-spacer {
+    min-height: 60vh;
+}
+
+/* Mnemonic phrase grid — 2 columns for nice display */
+.mnemonic-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.mnemonic-word {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-card-bg, #2a2a3e);
+    border: 1px solid var(--color-border, #3a3a4e);
+    border-radius: 0.375rem;
+    font-size: 0.95rem;
+}
+
+.word-number {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--color-text-muted, #999aaa);
+    min-width: 2.5rem;
+}
+
+.word-text {
+    flex: 1;
+    font-family: monospace;
+    letter-spacing: 0.025em;
+}
+
+/* Modal overlay and content styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--bg-secondary, #16213e);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.06));
+    border-radius: 0.5rem;
+    padding: 2rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.modal-warning {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    color: #ef4444;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+}
+
+.modal-account-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+    margin-bottom: 1.5rem;
+    word-break: break-all;
+}
+
+/* Identity list and cards */
+.identity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.identity-card {
+    background: var(--bg-surface, #1e1e3a);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.06));
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+}
+
+.identity-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.identity-account-id {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 200px;
+}
+
+.identity-account-id code {
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: var(--bg-input, #12122a);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    word-break: break-all;
+    flex: 1;
+}
+
+.identity-card-usage {
+    border-top: 1px solid var(--border-primary, rgba(255, 255, 255, 0.06));
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+
+.identity-card-usage h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.identity-server-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.identity-server-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--bg-input, #12122a);
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.identity-server-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.identity-server-label {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.identity-server-url {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.identity-server-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.identity-server-status.status-ok {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.identity-server-status.status-off {
+    background: rgba(107, 114, 128, 0.1);
+    color: #9ca3af;
+}
+
+.settings-content {
+    flex: 1;
+    padding: 24px 32px;
+    overflow-y: auto;
+}
+
+.settings-section h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.settings-description {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+

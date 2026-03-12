@@ -1,0 +1,372 @@
+/* Poly — Server Sidebar, Account Server Bar, Account Status Dots
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * Server Sidebar
+ * =========================== */
+
+.server-sidebar {
+    width: 72px;
+    min-width: 72px;
+    background-color: var(--favorites-bar-bg, var(--sidebar-bg));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    gap: 8px;
+    overflow: hidden;
+    position: relative;
+    /* hide horizontal scrollbars caused by rounding/zoom */
+    transition: outline 0.1s ease, background-color 0.1s ease;
+}
+
+/* Scrollable area for accounts and favorites */
+.sidebar-scroll-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 12px 0;
+    gap: 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Webkit scrollbar styling (Chrome, Safari, Edge) */
+.sidebar-scroll-area::-webkit-scrollbar {
+    width: 8px;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.5);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(100, 116, 139, 0.8);
+}
+
+/* Drop target highlight on scrollable area */
+.sidebar-scroll-area.drag-over {
+    outline: 2px solid var(--accent-primary, #60a5fa);
+    outline-offset: -2px;
+    background-color: color-mix(in srgb, var(--favorites-bar-bg, var(--sidebar-bg)) 85%, var(--accent-primary, #60a5fa) 15%);
+}
+
+/* Hint text shown in Bar 1 when no servers are favorited yet */
+.favorites-drop-hint {
+    width: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0.5;
+    pointer-events: none;
+    padding: 4px 0;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* Make draggable server icons in Bar 2 show a grab cursor */
+.account-server-bar .server-icon[draggable="true"] {
+    cursor: grab;
+}
+
+.account-server-bar .server-icon[draggable="true"]:active {
+    cursor: grabbing;
+    opacity: 0.7;
+}
+
+.server-icon {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    flex-shrink: 0;
+    /* prevent icons from shrinking into pills when the sidebar gets a scrollbar or slightly resizes */
+    border-radius: var(--radius-full);
+    background-color: var(--sidebar-icon-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-radius var(--transition-fast), background-color var(--transition-fast);
+    position: relative;
+    font-size: 20px;
+    /* Allow absolutely-positioned status dots to render outside the icon
+       boundary without being clipped by the border-radius or any ancestor
+       overflow rule. */
+    overflow: visible;
+}
+
+.server-icon:hover {
+    border-radius: var(--radius-lg);
+    background-color: var(--sidebar-icon-hover);
+}
+
+.server-icon.active {
+    border-radius: var(--radius-lg);
+    background-color: var(--sidebar-icon-active);
+    color: white;
+}
+
+.server-icon-letter {
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.server-icon-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 50%;
+}
+
+.sidebar-separator {
+    width: 32px;
+    height: 2px;
+    background-color: var(--sidebar-separator);
+    margin: 4px 0;
+}
+
+.sidebar-spacer {
+    flex: 1;
+}
+
+/* Sidebar footer — contains search + settings buttons, sits at bottom as a flex child */
+.sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--favorites-bar-bg, var(--sidebar-bg));
+    padding: 8px 0;
+    width: 100%;
+    flex-shrink: 0;
+    border-top: 1px solid var(--sidebar-separator);
+}
+
+/* ===========================
+ * Account Server Bar (Bar 2)
+ * =========================== */
+
+.account-server-bar {
+    width: 72px;
+    min-width: 72px;
+    background-color: var(--account-bar-bg, color-mix(in srgb, var(--sidebar-bg) 85%, var(--bg-primary)));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* hide horizontal scrollbars caused by rounding/zoom */
+    border-right: 1px solid var(--border-primary);
+    padding-bottom: 64px;
+    scroll-padding-bottom: 64px;
+}
+
+/* Account icon extra styling — ring indicator for active account */
+.server-icon.account-icon.active {
+    box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* ===========================
+ * Account Status Dots
+ * =========================== */
+
+/* Sidebar overlay dots — absolutely positioned relative to the account icon
+   (.server-icon). These are the connection + presence indicators in Bar 1.
+   .connection-dot and .presence-dot are ONLY used in favorites_sidebar.rs
+   for the overlay badges; the inline 8px .status-dot used in the account bar
+   and user sidebar does not carry these modifier classes. */
+.status-dot.connection-dot,
+.status-dot.presence-dot {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid var(--account-bar-bg, var(--sidebar-bg));
+    pointer-events: none;
+}
+
+/* Inline / flow status dot (used in account-bar and user sidebar) — 8px,
+   absolutely positioned for sidebar icon overlays via .connection-dot / .presence-dot. */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: absolute;
+}
+
+/* ---- Inline (account bar) status dot colours ----
+   These are the same palette as .connection-dot / .presence-dot but without
+   absolute positioning. They must be defined here (after .status-dot base) so
+   specificity wins over the empty default. */
+
+/* Connection status colours */
+.status-dot.connected {
+    background-color: #22c55e;
+}
+
+/* green-500 */
+.status-dot.connecting {
+    background-color: #eab308;
+    animation: dot-pulse 1.4s ease-in-out infinite;
+}
+
+/* yellow-500 + pulse */
+.status-dot.disconnected {
+    background-color: #6b7280;
+}
+
+/* gray-500 */
+.status-dot.error {
+    background-color: #ef4444;
+}
+
+/* red-500 */
+
+/* Presence status colours */
+.status-dot.online {
+    background-color: #22c55e;
+}
+
+/* green-500 */
+.status-dot.away {
+    background-color: #f97316;
+}
+
+/* orange-500 */
+.status-dot.dnd {
+    background-color: #ef4444;
+}
+
+/* red-500 */
+.status-dot.appear-offline {
+    background-color: #6b7280;
+}
+
+/* gray-500 */
+.status-dot.offline {
+    background-color: #6b7280;
+}
+
+/* gray-500 (same as appear-offline — both look grey to others) */
+
+/* Connection status dot — bottom-left corner of the icon. */
+.connection-dot {
+    bottom: -2px;
+    left: -2px;
+}
+
+/* Mention count badge — top-left corner of the icon. */
+.mention-count-badge {
+    top: -2px;
+    left: -2px;
+}
+
+/* Presence status dot — bottom-right corner of the icon. */
+.presence-dot {
+    bottom: -2px;
+    right: -2px;
+}
+
+/* ---- Connection status colours ---- */
+.connection-dot.connected {
+    background-color: #22c55e;
+}
+
+/* green-500  */
+.connection-dot.connecting {
+    background-color: #eab308;
+}
+
+/* yellow-500 */
+.connection-dot.disconnected {
+    background-color: #6b7280;
+}
+
+/* gray-500   */
+.connection-dot.error {
+    background-color: #ef4444;
+}
+
+/* red-500    */
+
+/* Pulsing animation for "connecting" state */
+.connection-dot.connecting {
+    animation: dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.35;
+    }
+}
+
+/* ---- Presence status colours ---- */
+.presence-dot.online {
+    background-color: #22c55e;
+}
+
+/* green-500  */
+.presence-dot.away {
+    background-color: #f97316;
+}
+
+/* orange-500 */
+.presence-dot.dnd {
+    background-color: #ef4444;
+}
+
+/* red-500    */
+.presence-dot.appear-offline {
+    background-color: #6b7280;
+}
+
+/* gray-500   */
+.presence-dot.offline {
+    display: none;
+}
+
+/* hidden when truly offline */
+
+.badge {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    background-color: var(--badge-bg);
+    color: var(--badge-text);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: var(--radius-full);
+    min-width: 18px;
+    text-align: center;
+}
+

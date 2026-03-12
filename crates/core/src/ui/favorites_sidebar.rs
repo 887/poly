@@ -278,6 +278,14 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     // Resolve backend slug and instance_id for routing — read from the session.
     let aid_for_click = account_id.clone();
 
+    // Connection icon emoji for connection status
+    let conn_icon = match conn_class {
+        "connected" => "⚡",
+        "connecting" => "↺",
+        "disconnected" => "—",
+        _ => "⚠",
+    };
+
     rsx! {
         div {
             class: if is_active { "server-icon account-icon active" } else { "server-icon account-icon" },
@@ -348,15 +356,20 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     "{icon_label}"
                 }
             }
-            if total_unreads > 0 {
-                span { class: "badge", "{total_unreads}" }
-            }
-            // Connection status dot (top-right) — shows connected/connecting/error
+            // Bottom-left: connection status emoji icon
             span {
-                class: "status-dot connection-dot {conn_class}",
+                class: "account-conn-icon account-conn-icon--{conn_class}",
                 title: "Connection: {conn_class}",
+                "{conn_icon}"
             }
-            // Presence/availability dot (bottom-right) — shows online/away/dnd/etc.
+            // Top-left: notification count badge
+            if total_unreads > 0 {
+                span {
+                    class: "badge mention-count-badge",
+                    "{total_unreads}"
+                }
+            }
+            // Bottom-right: presence dot (online/away/dnd/etc.)
             span {
                 class: "status-dot presence-dot {presence_class}",
                 title: "Presence: {presence_class}",
@@ -393,6 +406,29 @@ fn FavoriteServerIcon(
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
+
+    // Get account's connection and presence status
+    let _account_conn_class: &'static str = client_manager
+        .read()
+        .connection_statuses
+        .get(&account_id)
+        .map(ConnectionStatus::css_class)
+        .unwrap_or("disconnected");
+    let account_presence_class: &'static str = client_manager
+        .read()
+        .presence_statuses
+        .get(&account_id)
+        .copied()
+        .unwrap_or(AccountPresence::Online)
+        .css_class();
+
+    // Connection icon emoji for account connection status
+    let conn_icon = match _account_conn_class {
+        "connected" => "⚡",
+        "connecting" => "↺",
+        "disconnected" => "—",
+        _ => "⚠",
+    };
 
     let is_selected = app_state.read().nav.selected_server.as_deref() == Some(&server_id);
     let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
@@ -593,7 +629,7 @@ fn FavoriteServerIcon(
                     "{first_letter}"
                 }
             }
-            // Source badge: show account avatar image (or fallback letter)
+            // Source badge: show account avatar image (or fallback letter) — top-left overlay
             if let Some(url) = &account_avatar_url {
                 img {
                     src: "{url}",
@@ -603,12 +639,23 @@ fn FavoriteServerIcon(
             } else {
                 span { class: "source-badge", "A" }
             }
-            // @mention badge (red): only for direct @mentions.
-            // Plain unread shown as a small dot.
+            // Bottom-left: account connection status emoji icon
+            span {
+                class: "account-conn-icon account-conn-icon--{_account_conn_class}",
+                title: "Account connection: {_account_conn_class}",
+                "{conn_icon}"
+            }
+            // Top-left: mention count badge
             if mention > 0 {
                 span { class: "badge mention-count-badge", "@{mention}" }
             } else if unread > 0 {
-                span { class: "badge server-unread-dot" }
+                // No mention, but unread: show count instead
+                span { class: "badge mention-count-badge", "{unread}" }
+            }
+            // Bottom-right: presence dot (account owner's availability)
+            span {
+                class: "status-dot presence-dot {account_presence_class}",
+                title: "Presence: {account_presence_class}",
             }
         }
     }

@@ -1,0 +1,314 @@
+/* Poly — Global Search Page
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * Global Search Page
+ * =========================== */
+
+.search-page {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.search-page-sidebar {
+    width: 260px;
+    min-width: 220px;
+    background-color: var(--sidebar-bg);
+    padding: 16px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.search-page-sidebar h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.search-page-sidebar h3 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0 0 4px 0;
+}
+
+.search-page-input-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-page-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+
+.search-page-input:focus {
+    border-color: var(--accent-primary);
+}
+
+.search-page-clear {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.search-page-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.search-account-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 6px 4px;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.1s;
+}
+
+.search-account-filter:hover {
+    background-color: var(--bg-hover);
+}
+
+.search-account-filter input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* Round colored bubble with emoji/initials */
+.search-account-filter-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+/* Shared circular avatar used in account filters, server headers, DM/group rows */
+.search-avatar-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* Fallback coloured bubble rendered when no avatar_url is available */
+.search-avatar-icon-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    user-select: none;
+}
+
+/* Name + backend stacked */
+.search-account-filter-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.search-account-filter-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-account-filter-backend {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-page-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.search-section-header {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 16px 0 4px 0;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Subtle count badge next to section header, e.g. "Showing 5 of 120" */
+.search-section-count {
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: none;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Hint shown at the bottom of a paginated list */
+.search-load-more-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 8px 0 4px;
+    opacity: 0.7;
+}
+
+/* Type filter row: "Show: ☑ Servers  ☑ DMs  ☑ Groups" */
+.search-type-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 4px;
+}
+
+.search-type-filters-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.search-type-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.search-type-filter-item input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.search-server-node {
+    margin-bottom: 8px;
+}
+
+.search-server-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+/* Stacked name + account attribution */
+.search-server-header-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Small badge showing which account this server belongs to */
+.search-node-account-badge {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-server-channels {
+    padding-left: 16px;
+}
+
+.search-node-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.1s;
+}
+
+.search-node-row:hover {
+    background-color: var(--bg-hover);
+}
+
+.search-node-icon {
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.search-node-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.search-node-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.search-node-sublabel {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+

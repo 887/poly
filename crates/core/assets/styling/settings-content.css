@@ -1,0 +1,727 @@
+/* Poly — Settings Content Pages — Accounts, Plugin section, Profile, Plugin Manager, Language Picker
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * Accounts Settings Section
+ * =========================== */
+
+.settings-empty-hint {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-style: italic;
+    padding: 8px 0 16px;
+}
+
+.accounts-settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 20px;
+}
+
+.accounts-settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    transition: background 0.15s;
+}
+
+.accounts-settings-row:hover {
+    background: var(--bg-hover);
+}
+
+.accounts-settings-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.accounts-settings-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.accounts-settings-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.accounts-settings-backend {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.accounts-settings-gear {
+    font-size: 18px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.accounts-settings-gear:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    gap: 16px;
+}
+
+.settings-toggle-label {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+/* Group label + description vertically inside a toggle row */
+.settings-toggle-label-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Muted description text shown beneath a toggle label */
+.settings-toggle-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* ===========================
+ * Plugin section divider
+ * Shown between host settings and plugin-provided settings
+ * =========================== */
+
+.settings-plugin-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 24px 0 8px 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--divider);
+}
+
+.settings-plugin-divider-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.settings-plugin-divider-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--accent-primary);
+    color: var(--accent-text);
+    white-space: nowrap;
+}
+
+/* ===========================
+ * Plugin-owned settings section
+ * Each plugin gets a visually distinct block
+ * =========================== */
+
+/* Outer wrapper that slightly differentiates plugin sections */
+.plugin-section {
+    border-left: 3px solid var(--accent-primary);
+    padding-left: 12px;
+    margin-bottom: 8px;
+}
+
+/* Header row: icon + title + badge */
+.plugin-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--divider);
+}
+
+/* Emoji / icon for the plugin */
+.plugin-section-icon {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* Plugin display name heading */
+.plugin-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+/* "Plugin" badge shown in section headers */
+.plugin-section-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    color: var(--accent-primary);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+    white-space: nowrap;
+}
+
+/* ===========================
+ * Profile Settings (poly-server)
+ * Shown in Account Settings → Profile tab for poly-server accounts.
+ * =========================== */
+
+.profile-settings-header {
+    margin-bottom: 20px;
+}
+
+/* A horizontal row: left side = label+desc, right side = control/value */
+.profile-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+/* Vertical layout variant for controls that span full width */
+.profile-row.profile-row-column {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* Left column: label + description text */
+.profile-row-label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* Right column: value display or control */
+.profile-row-value {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Avatar preview circle (80×80) */
+.profile-avatar-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid var(--border-primary, rgba(255, 255, 255, 0.1));
+}
+
+/* Image avatar fills the circle */
+.profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Letter-based fallback when no avatar URL */
+.profile-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    border-radius: 50%;
+}
+
+/* Read-only display name text */
+.profile-display-name-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    padding: 6px 10px;
+    background: var(--bg-tertiary, #202225);
+    border-radius: 6px;
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+}
+
+/* 2×2 grid of presence-option buttons */
+.profile-status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Each status choice button */
+.profile-status-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary, #202225);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    text-align: left;
+}
+
+.profile-status-option:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+    color: var(--text-primary);
+}
+
+/* Currently-selected status gets an accent highlight */
+.profile-status-option.profile-status-selected {
+    border-color: var(--accent-primary, #5865f2);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    color: var(--text-primary);
+}
+
+/* Grey dashed banner placeholder area */
+.profile-banner-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
+    border: 2px dashed var(--border-primary, rgba(255, 255, 255, 0.15));
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 8px;
+    background: var(--bg-tertiary, rgba(0, 0, 0, 0.08));
+}
+
+/* ===========================
+ * Plugin Manager
+ * =========================== */
+
+.plugin-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 8px 0;
+}
+
+.plugin-summary-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.plugin-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 24px;
+}
+
+.plugin-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.plugin-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    transition: background-color 0.15s ease;
+}
+
+.plugin-row:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.plugin-row-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-sm);
+}
+
+.plugin-row-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.plugin-row-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plugin-row-account-id {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+/* Checkbox toggle column on the left of each plugin row */
+.plugin-row-toggle {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.plugin-row-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+}
+
+/* Description / subtitle under the plugin name */
+.plugin-row-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Active account count shown under description */
+.plugin-row-accounts {
+    font-size: 12px;
+    color: var(--accent-primary);
+    margin-top: 2px;
+}
+
+/* Greyed-out row for backends not compiled in */
+.plugin-row-unavailable {
+    opacity: 0.5;
+}
+
+/* "not in this build" text inside the name */
+.plugin-not-compiled {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* ── WASM plugin add form ─────────────────── */
+.plugin-add-form {
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.plugin-add-form h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+/* Install mode tabs (URL | File) */
+.plugin-install-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 10px 0;
+    background: var(--bg-secondary);
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    width: fit-content;
+}
+
+.plugin-install-tab {
+    padding: 5px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: calc(var(--radius-sm) - 2px);
+    transition: background 0.15s, color 0.15s;
+}
+
+.plugin-install-tab.active {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.plugin-install-tab:hover:not(.active) {
+    color: var(--text-primary);
+}
+
+.plugin-add-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.plugin-url-input {
+    flex: 2;
+    min-width: 200px;
+    padding: 8px 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.plugin-url-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.plugin-file-input {
+    flex: 1;
+    padding: 6px 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.plugin-add-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+.plugin-add-error {
+    font-size: 13px;
+    color: #f04747;
+    margin-top: 6px;
+}
+
+/* Small button variant for plugin remove etc. */
+.btn-small {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.plugin-row-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.plugin-status-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.plugin-status-badge.connected {
+    background-color: rgba(67, 181, 129, 0.15);
+    color: #43b581;
+}
+
+.plugin-status-badge.connecting {
+    background-color: rgba(250, 166, 26, 0.15);
+    color: #faa61a;
+}
+
+.plugin-status-badge.disconnected {
+    background-color: rgba(116, 127, 141, 0.15);
+    color: var(--text-muted);
+}
+
+.plugin-status-badge.error {
+    background-color: rgba(240, 71, 71, 0.15);
+    color: #f04747;
+}
+
+.plugin-type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.plugin-type-badge.native {
+    background-color: rgba(114, 137, 218, 0.15);
+    color: #7289da;
+}
+
+.plugin-type-badge.wasm {
+    background-color: rgba(160, 94, 237, 0.15);
+    color: #a05eed;
+}
+
+.plugin-wasm-section {
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Plugin Settings Page (sub-nav + content) */
+
+.plugin-settings-page {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.plugin-settings-nav {
+    width: 180px;
+    flex-shrink: 0;
+    padding: 16px 12px;
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+}
+
+.plugin-settings-nav-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    margin-bottom: 8px;
+}
+
+.plugin-settings-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.plugin-settings-nav-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.plugin-settings-nav-item.active {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.plugin-settings-nav-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.plugin-settings-nav-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plugin-settings-content {
+    flex: 1;
+    padding: 16px 24px;
+    overflow-y: auto;
+}
+
+.plugin-settings-empty,
+.plugin-settings-empty-content {
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 12px 8px;
+}
+
+/* ===========================
+ * Language Picker
+ * =========================== */
+
+.lang-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 380px;
+    margin-top: 8px;
+}
+
+.lang-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.lang-option:hover {
+    background: var(--bg-tertiary);
+}
+
+.lang-option-selected {
+    border-color: var(--accent-primary);
+    background: var(--bg-tertiary);
+}
+
+.lang-flag-label {
+    font-size: 15px;
+}
+
+.lang-checkmark {
+    color: var(--accent-primary);
+    font-size: 16px;
+    font-weight: 700;
+}
+

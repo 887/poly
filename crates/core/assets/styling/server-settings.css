@@ -1,0 +1,661 @@
+/* Poly — Context Menu, Drag-over, Server Settings, Server Overview, Diagnostics Settings
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   Phase 2.10 — Context menu, drag-over indicators, server settings
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Context menu backdrop ────────────────────────────────────────────────── */
+
+.context-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    /* Transparent — only captures clicks to dismiss the menu */
+}
+
+/* ── Context menu panel ───────────────────────────────────────────────────── */
+
+.context-menu {
+    position: fixed;
+    z-index: 100;
+    min-width: 200px;
+    background: var(--modal-bg, #2b2d31);
+    border: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+    border-radius: 4px;
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    user-select: none;
+}
+
+.context-menu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 12px;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    border-radius: 2px;
+    margin: 0 4px;
+    transition: background 60ms;
+}
+
+.context-menu-item:hover {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+}
+
+.context-menu-item.danger {
+    color: #f87171;
+}
+
+.context-menu-item.danger:hover {
+    background: #dc2626;
+    color: #fff;
+}
+
+.context-menu-arrow {
+    font-size: 1rem;
+    color: var(--text-tertiary);
+}
+
+.context-menu-toggle-box {
+    font-size: 1rem;
+    min-width: 20px;
+    text-align: center;
+}
+
+.context-menu-toggle-box.checked {
+    color: var(--accent-primary, #5865f2);
+}
+
+.context-menu-separator {
+    height: 1px;
+    background: var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+    margin: 4px 0;
+}
+
+/* ── Drag-over indicator ──────────────────────────────────────────────────── */
+
+.server-icon.drag-over-target {
+    border-top: 2px solid var(--accent-primary, #5865f2);
+    margin-top: -2px;
+    /* compensate so layout doesn't shift */
+}
+
+/* ── Server settings page ─────────────────────────────────────────────────── */
+
+/* Notification level radio group */
+.notif-level-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.notif-level-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+    background: transparent;
+    color: var(--text-primary);
+    transition: border-color 100ms;
+}
+
+.notif-level-option:hover {
+    border-color: var(--text-tertiary);
+}
+
+.notif-level-option.selected {
+    border-color: var(--accent-primary, #5865f2);
+    background: rgba(88, 101, 242, 0.08);
+}
+
+.notif-level-radio {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.notif-level-option.selected .notif-level-radio {
+    background: var(--accent-primary, #5865f2);
+    border-color: var(--accent-primary, #5865f2);
+}
+
+/* Notification toggle rows */
+.notif-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.notif-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+}
+
+.notif-toggle-row:last-child {
+    border-bottom: none;
+}
+
+.notif-toggle-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.notif-toggle-desc {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* Danger zone (Leave server section) */
+.settings-danger-zone {
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    border-radius: 4px;
+    padding: 14px;
+    margin-top: 16px;
+}
+
+.settings-danger-zone .settings-section-title {
+    color: #f87171;
+}
+
+.leave-server-confirm {
+    background: var(--modal-bg, #2b2d31);
+    border: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 12px;
+    max-width: 400px;
+}
+
+.leave-server-confirm-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.leave-server-confirm-body {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+
+.leave-server-confirm-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* Remove from favorites inline confirm (in context menu) */
+.remove-favorites-confirm {
+    background: var(--modal-bg, #2b2d31);
+    border: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
+    border-radius: 8px;
+    padding: 12px;
+    min-width: 200px;
+}
+
+.remove-favorites-confirm-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.remove-favorites-confirm-body {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.remove-favorites-confirm-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.remove-favorites-confirm-actions button {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.remove-favorites-confirm-actions button.btn-danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.remove-favorites-confirm-actions button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.remove-favorites-confirm-actions button.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+/* Server settings profile */
+.settings-monospace {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8125rem;
+    background: var(--bg-input, rgba(0, 0, 0, 0.2));
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text-secondary);
+}
+
+.settings-saved-badge {
+    font-size: 0.75rem;
+    color: #4ade80;
+    margin-left: 8px;
+}
+
+/* ===========================
+ * Server Overview Settings
+ * (icon + banner preview panels)
+ * =========================== */
+
+.settings-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+/* Square server icon preview — 64×64 with circular clip */
+.settings-icon-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-primary);
+    background: var(--bg-surface);
+    flex-shrink: 0;
+}
+
+/* Wide server banner preview */
+.settings-banner-preview {
+    width: 100%;
+    max-width: 360px;
+    height: 90px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    border: 2px solid var(--border-primary);
+    background: var(--bg-surface);
+    display: block;
+}
+
+/* Hint text variant for local-override note (slightly more prominent) */
+.settings-local-only-note {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-style: italic;
+    margin-top: 6px;
+}
+
+/* Checkbox + label row used in the local-override gate */
+.settings-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    padding: 6px 0;
+}
+
+.settings-checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent-primary);
+}
+
+/* ===========================
+ * Diagnostics Settings Page
+ * =========================== */
+
+.diagnostics-summary {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.diagnostics-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.diagnostics-row:last-child {
+    border-bottom: none;
+}
+
+.diagnostics-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.diagnostics-value {
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.diagnostics-value.value-ok {
+    color: #22c55e;
+}
+
+.diagnostics-value.value-off {
+    color: var(--text-muted);
+}
+
+.diagnostics-empty {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    padding: 12px 0;
+}
+
+/* Per-account table */
+.diagnostics-accounts-table {
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.diagnostics-table-header,
+.diagnostics-table-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 8px 12px;
+    gap: 8px;
+    align-items: center;
+}
+
+.diagnostics-table-header {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.diagnostics-table-row {
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-primary);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.diagnostics-account-id {
+    font-family: 'Courier New', Courier, monospace;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+.diagnostics-connection-status.connected {
+    color: #22c55e;
+}
+
+.diagnostics-connection-status.connecting {
+    color: #eab308;
+}
+
+.diagnostics-connection-status.disconnected {
+    color: var(--text-muted);
+}
+
+.diagnostics-connection-status.error {
+    color: #ef4444;
+}
+
+.diagnostics-presence-status.online {
+    color: #22c55e;
+}
+
+.diagnostics-presence-status.away {
+    color: #f97316;
+}
+
+.diagnostics-presence-status.dnd {
+    color: #ef4444;
+}
+
+.diagnostics-presence-status.appear-offline {
+    color: var(--text-muted);
+}
+
+.diagnostics-presence-status.offline {
+    color: var(--text-muted);
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Banner overlay, avatar polish, and inline utility rail */
+/* ───────────────────────────────────────────────────────────────────────── */
+
+.server-banner-img {
+    height: 108px;
+}
+
+.server-banner-hero {
+    position: relative;
+    overflow: hidden;
+}
+
+.server-banner-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px 12px 12px;
+    background: linear-gradient(180deg, rgba(6, 8, 18, 0.22) 0%, rgba(6, 8, 18, 0.08) 35%, rgba(6, 8, 18, 0.56) 100%);
+}
+
+.server-banner-header-overlay {
+    padding: 0;
+    min-height: auto;
+}
+
+.server-banner-overlay .server-name-trigger {
+    background: rgba(10, 12, 24, 0.28);
+    backdrop-filter: blur(8px);
+}
+
+.server-banner-overlay .server-name-trigger:hover {
+    background: rgba(10, 12, 24, 0.42);
+}
+
+.server-banner-secondary-action {
+    padding: 0 12px 12px;
+}
+
+.server-channels-roles-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    background: rgba(10, 12, 24, 0.62);
+    color: white;
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+}
+
+.server-channels-roles-btn:hover {
+    background: rgba(10, 12, 24, 0.78);
+}
+
+.server-channels-roles-btn-flat {
+    width: calc(100% - 8px);
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.server-channels-roles-icon {
+    font-size: 16px;
+}
+
+.server-channels-roles-panel {
+    margin: 0 12px 12px;
+    padding: 12px;
+    background: rgba(17, 24, 39, 0.92);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.server-channels-roles-panel-header h4 {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.server-channels-roles-subtitle {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.server-channels-roles-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.server-channels-role-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.server-channels-role-row input {
+    accent-color: var(--accent-primary);
+}
+
+.server-channels-role-copy {
+    display: flex;
+    flex-direction: column;
+}
+
+.server-channels-role-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.server-channels-role-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.user-avatar {
+    overflow: hidden;
+}
+
+.user-avatar-image,
+.user-popup-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.user-avatar-fallback,
+.user-popup-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.user-popup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.48);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+}
+
+.user-popup {
+    width: 320px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.36);
+}
+
+.user-popup-banner {
+    height: 92px;
+    background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 25%, #0f172a));
+}
+
+.user-popup-avatar {
+    width: 88px;
+    height: 88px;
+    margin: -44px 0 0 16px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 6px solid var(--bg-secondary);
+    background: var(--bg-tertiary);
+}
+
+.user-popup-info {
+    padding: 12px 16px 16px;
+}
+
+.user-popup-name {
+    margin: 0 0 8px;
+    color: var(--text-primary);
+}
+
+.user-popup-status,
+.user-popup-backend {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.user-popup-close {
+    margin: 0 16px 16px;
+}
+

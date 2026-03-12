@@ -1,0 +1,625 @@
+/* Poly — Voice Preview Panel, Voice Settings Popup/Page, Voice Controls, Toggle Switch, Account Footer
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE PREVIEW PANEL — floating video preview above the dock
+   DECISION(V-3): Always-rendered, CSS-hidden when no active streams.
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-preview-panel {
+    display: none;
+    /* hidden when no active streams */
+    position: absolute;
+    bottom: 100%;
+    /* just above the voice-bar dock */
+    right: 0.75rem;
+    flex-direction: row;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-floating, #1a1a2e);
+    border: 1px solid var(--border-color);
+    border-radius: 10px 10px 0 0;
+    border-bottom: none;
+    z-index: 50;
+    max-width: 700px;
+}
+
+/* extra .voice-bar rule removed — now handled by single definition above */
+
+.voice-preview-panel.visible {
+    display: flex;
+}
+
+.voice-preview-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.voice-preview-item.hidden {
+    display: none;
+}
+
+.voice-preview-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin: 0;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.voice-preview-video {
+    width: 320px;
+    max-width: 320px;
+    height: 180px;
+    border-radius: 8px;
+    background: #000;
+    object-fit: contain;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE SETTINGS POPUP — audio settings overlay above the dock
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-settings-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    width: 320px;
+    background: var(--bg-floating, #2c2f33);
+    border: 1px solid var(--border-color);
+    border-radius: 10px 10px 0 0;
+    border-bottom: none;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    z-index: 60;
+    box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.5));
+}
+
+.voice-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.voice-settings-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.voice-settings-close {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.875rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.voice-settings-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.voice-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.voice-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.voice-settings-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.voice-settings-select {
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.voice-settings-select:focus {
+    border-color: var(--accent-primary);
+}
+
+.voice-settings-desc {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.voice-settings-test-btn {
+    width: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE SETTINGS PAGE — account settings section for audio devices
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-settings-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+
+/* Re-use .voice-settings-section, .voice-settings-label, .voice-settings-select,
+   .voice-settings-row, .voice-settings-desc, .voice-settings-test-btn above */
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE ICON SVG HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-icon-svg {
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.voice-icon-svg--label {
+    width: 14px;
+    height: 14px;
+}
+
+.voice-icon-svg--screenshare-label {
+    width: 16px;
+    height: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE LATENCY BAR — CSS signal-quality stripes with hover popup
+   DECISION(V-5): Four vertical bars growing in height; good = all lit.
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-latency-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    cursor: default;
+}
+
+.voice-latency-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 22px;
+    padding: 2px 0;
+}
+
+.voice-latency-stripe {
+    width: 4px;
+    border-radius: 1px;
+    background: var(--text-muted, #72767d);
+    opacity: 0.3;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+.voice-latency-stripe.active {
+    background: #43b581;
+    opacity: 1;
+}
+
+/* Popup — shown on hover */
+.voice-latency-popup {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-floating, #18191c);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-width: 180px;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+}
+
+.voice-latency-container:hover .voice-latency-popup {
+    display: block;
+}
+
+.voice-latency-popup-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.78rem;
+    padding: 2px 0;
+}
+
+.voice-latency-popup-label {
+    color: var(--text-secondary, #b9bbbe);
+    white-space: nowrap;
+}
+
+.voice-latency-popup-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.voice-latency-good {
+    color: #43b581 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE SCREENSHARE AREA — full-width screen share in the voice view
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-screenshare-area {
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.voice-screenshare-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-secondary, #2c2f33);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary, #b9bbbe);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.voice-screenshare-video {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    background: #000;
+    display: block;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE CHAT BAR — floating control bar (Discord-style bottom center)
+   DECISION(V-6): Absolute-positioned bar; parent .voice-view is relative.
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-chat-bar {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-floating, #18191c);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 8px 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    pointer-events: all;
+    white-space: nowrap;
+}
+
+.voice-chat-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: var(--bg-secondary, #2c2f33);
+    color: var(--text-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+    flex-shrink: 0;
+}
+
+.voice-chat-btn:hover {
+    background: var(--bg-hover, #36393f);
+    transform: scale(1.08);
+}
+
+.voice-chat-btn.active {
+    background: var(--accent-primary, #5865f2);
+    color: #fff;
+}
+
+.voice-chat-btn.active:hover {
+    background: var(--accent-primary-hover, #4752c4);
+}
+
+.voice-chat-btn-hangup {
+    background: #ed4245 !important;
+    color: #fff !important;
+}
+
+.voice-chat-btn-hangup:hover {
+    background: #c0392b !important;
+    transform: scale(1.1);
+}
+
+.voice-chat-bar-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border-color);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOGGLE SWITCH — used for noise cancel in voice settings page
+   ═══════════════════════════════════════════════════════════════ */
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--bg-secondary, #2c2f33);
+    border-radius: 22px;
+    transition: background 0.2s;
+}
+
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.toggle-switch input:checked+.toggle-slider {
+    background: var(--accent-primary, #5865f2);
+}
+
+.toggle-switch input:checked+.toggle-slider::before {
+    transform: translateX(18px);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE + ACCOUNT FOOTER
+   Shared wrapper at the bottom of channel-list-wrapper that covers the
+   favourites sidebar column via the -72px margin trick.
+   VoiceBar stacks on top of AccountBar inside this container.
+   ═══════════════════════════════════════════════════════════════ */
+
+.voice-account-footer {
+    display: flex;
+    flex-direction: column;
+    width: calc(100% + 72px);
+    margin-left: -72px;
+    flex-shrink: 0;
+    position: relative;
+    /* anchor for voice-preview-panel + voice-settings-popup */
+    z-index: 2;
+}
+
+.account-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary, var(--bg-secondary));
+    border-top: 1px solid var(--border-color);
+    min-height: 52px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.account-bar-user {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.account-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #fff;
+    flex-shrink: 0;
+    overflow: visible;
+    /* allow corner badges to overflow the circle */
+    position: relative;
+    /* anchor for corner status badges */
+}
+
+.account-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.account-avatar-fallback {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #fff;
+    overflow: hidden;
+}
+
+/* Clickable cursor on the avatar when an account is active */
+.account-avatar-clickable {
+    cursor: pointer;
+}
+
+.account-avatar-clickable:hover {
+    opacity: 0.88;
+}
+
+/* The image inside the account avatar must clip to the circle */
+.account-avatar .account-avatar-image,
+.account-avatar .account-avatar-fallback {
+    overflow: hidden;
+    border-radius: 50%;
+}
+
+/* Bottom-right presence dot — override the absolute-position values set for
+   Bar 1 sidebar dots (.presence-dot top:-2px right:-2px) so the account bar
+   dot sits in the bottom-right corner instead of top-right. */
+.account-avatar .status-dot.presence-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    top: auto;
+    /* cancel the bar-1 top:-2px override */
+    left: auto;
+}
+
+/* ── Account bar: connection-status icon (bottom-left corner) ── */
+/* Distinct from a plain dot so users can tell connectivity vs. presence */
+.account-conn-icon {
+    position: absolute;
+    bottom: -3px;
+    left: -3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 900;
+    line-height: 1;
+    border: 2px solid var(--account-bar-bg, #1e1f22);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.account-conn-icon--connected {
+    background: #23a55a;
+    color: #fff;
+}
+
+.account-conn-icon--connecting {
+    background: #f0b232;
+    color: #fff;
+}
+
+.account-conn-icon--disconnected {
+    background: #717171;
+    color: #fff;
+}
+
+.account-conn-icon--error {
+    background: #ed4245;
+    color: #fff;
+}
+
+/* Small variant used inside the profile popup info row */
+.account-conn-icon.small {
+    position: static;
+    width: 12px;
+    height: 12px;
+    font-size: 7px;
+    border: none;
+    display: inline-flex;
+    vertical-align: middle;
+}
+
+.account-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.account-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    position: relative;
+    /* Relative so the presence-picker-popup absolute child anchors here */
+    border-radius: 4px;
+}
+
+/* Clickable variant — shown when an active account is selected */
+.account-status-clickable {
+    cursor: pointer;
+    padding: 2px 4px;
+    margin: -2px -4px;
+}
+
+.account-status-clickable:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.account-status-text {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
