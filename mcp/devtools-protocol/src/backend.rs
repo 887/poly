@@ -235,8 +235,8 @@ impl RollingBuildLog {
             "SIGSEGV",
             "signal: 6",
             "signal: 11",
-            "exit status: 134",  // SIGABRT
-            "exit status: 139",  // SIGSEGV
+            "exit status: 134", // SIGABRT
+            "exit status: 139", // SIGSEGV
         ];
         for (_, line) in self.lines.iter().rev().take(30) {
             for pattern in CRASH_PATTERNS {
@@ -781,9 +781,7 @@ mod tests {
     fn crash_detection_catches_undefined_symbol() {
         let mut log = RollingBuildLog::default();
         log.push_line("[dx-stdout] Build completed successfully");
-        log.push_line(
-            "./poly-desktop-devtools: symbol lookup error: undefined symbol: _ZN70_foo",
-        );
+        log.push_line("./poly-desktop-devtools: symbol lookup error: undefined symbol: _ZN70_foo");
         let crash = log.check_for_app_crash();
         assert!(crash.is_some(), "should detect undefined symbol");
     }

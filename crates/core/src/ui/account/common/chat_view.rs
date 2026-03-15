@@ -1044,7 +1044,7 @@ fn use_composer_focus_effect(signals: &ChatViewSignals) {
             "setTimeout(() => { \
                 const el = document.getElementById('poly-message-composer'); \
                 if (el) el.focus(); \
-            }, 80)"
+            }, 80)",
         );
     });
 }

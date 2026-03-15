@@ -346,6 +346,8 @@ action-search = Search
 action-copy = Copy
 action-back = Back
 action-confirm = Confirm
+mobile-nav-open = Open navigation menu
+mobile-nav-close = Close navigation menu
 
 # Errors
 error-generic = Something went wrong. Please try again.

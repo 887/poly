@@ -19,9 +19,133 @@ use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
 use crate::client_manager::ClientManager;
+use crate::i18n::t;
 use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
+
+fn init_mobile_drawer_runtime() {
+    let _ = document::eval(
+        r#"if (!window.__polyMobileDrawerInit) {
+            window.__polyMobileDrawerInit = true;
+            window.__polySetMobileDrawerOpen = function(open) {
+                const root = document.querySelector('.poly-app');
+                if (!root) return;
+                root.classList.toggle('poly-mobile-drawer-open', Boolean(open));
+
+                const server = document.querySelector('.server-sidebar');
+                const account = document.querySelector('.account-server-bar');
+                const channel = document.querySelector('.channel-list-wrapper');
+                const backdrop = document.querySelector('.mobile-drawer-backdrop');
+                const openBtn = document.querySelector('.mobile-drawer-open-btn');
+                const closeBtn = document.querySelector('.mobile-drawer-close-btn');
+
+                if (server) {
+                    server.style.setProperty('left', '-72px', 'important');
+                    server.style.setProperty('inset-inline-start', '-72px', 'important');
+                    server.style.setProperty('margin-left', open ? '72px' : '0px', 'important');
+                    server.style.removeProperty('transform');
+                }
+
+                if (account) {
+                    account.style.setProperty('left', '-72px', 'important');
+                    account.style.setProperty('inset-inline-start', '-72px', 'important');
+                    account.style.setProperty('margin-left', open ? '144px' : '0px', 'important');
+                    account.style.removeProperty('transform');
+                }
+
+                if (channel) {
+                    channel.style.setProperty('left', '-100vw', 'important');
+                    channel.style.setProperty('inset-inline-start', '-100vw', 'important');
+                    channel.style.setProperty('margin-left', open ? 'calc(100vw + 144px)' : '0px', 'important');
+                    channel.style.removeProperty('transform');
+                }
+
+                if (backdrop) {
+                    backdrop.style.setProperty('display', open ? 'block' : 'none', 'important');
+                    backdrop.style.setProperty('visibility', open ? 'visible' : 'hidden', 'important');
+                    backdrop.style.setProperty('opacity', open ? '1' : '0', 'important');
+                    backdrop.style.setProperty('pointer-events', open ? 'auto' : 'none', 'important');
+                    backdrop.style.setProperty('background', open ? 'rgba(0, 0, 0, 0.34)' : 'transparent', 'important');
+                }
+
+                if (openBtn) {
+                    openBtn.style.setProperty('opacity', open ? '0' : '0.94', 'important');
+                    openBtn.style.setProperty('pointer-events', open ? 'none' : 'auto', 'important');
+                }
+
+                if (closeBtn) {
+                    closeBtn.style.setProperty('opacity', open ? '1' : '0', 'important');
+                    closeBtn.style.setProperty('pointer-events', open ? 'auto' : 'none', 'important');
+                }
+            };
+
+            let tracking = null;
+
+            document.addEventListener('touchstart', function(e) {
+                const root = document.querySelector('.poly-app');
+                if (!root) return;
+                const isMobileUi = root.classList.contains('poly-force-mobile') || window.innerWidth <= 640;
+                if (!isMobileUi || !e.touches || e.touches.length !== 1) {
+                    tracking = null;
+                    return;
+                }
+
+                const touch = e.touches[0];
+                const drawerOpen = root.classList.contains('poly-mobile-drawer-open');
+                const x = touch.clientX;
+                const y = touch.clientY;
+
+                if (!drawerOpen && x <= 24) {
+                    tracking = { mode: 'open', startX: x, startY: y };
+                    return;
+                }
+
+                if (drawerOpen && x <= Math.min(window.innerWidth, 360)) {
+                    tracking = { mode: 'close', startX: x, startY: y };
+                    return;
+                }
+
+                tracking = null;
+            }, { passive: true });
+
+            document.addEventListener('touchend', function(e) {
+                if (!tracking || !e.changedTouches || e.changedTouches.length !== 1) {
+                    tracking = null;
+                    return;
+                }
+
+                const root = document.querySelector('.poly-app');
+                if (!root) {
+                    tracking = null;
+                    return;
+                }
+
+                const touch = e.changedTouches[0];
+                const dx = touch.clientX - tracking.startX;
+                const dy = Math.abs(touch.clientY - tracking.startY);
+
+                if (dy <= 80) {
+                    if (tracking.mode === 'open' && dx >= 60) {
+                        window.__polySetMobileDrawerOpen(true);
+                    } else if (tracking.mode === 'close' && dx <= -60) {
+                        window.__polySetMobileDrawerOpen(false);
+                    }
+                }
+
+                tracking = null;
+            }, { passive: true });
+        }"#,
+    );
+}
+
+fn open_mobile_drawer() {
+    let _ = document::eval("window.__polySetMobileDrawerOpen?.(true);");
+}
+
+fn close_mobile_drawer() {
+    let _ = document::eval("window.__polySetMobileDrawerOpen?.(false);");
+}
 
 /// Navigation bar component — only renders on native platforms (desktop/mobile).
 /// On web, the browser's native back/forward buttons handle navigation.
@@ -94,6 +218,16 @@ pub fn MainLayout() -> Element {
     sync_route_to_app_state(&route, app_state);
 
     use_effect(move || {
+        init_mobile_drawer_runtime();
+    });
+
+    let route_key = format!("{route}");
+    use_effect(move || {
+        let _ = &route_key;
+        close_mobile_drawer();
+    });
+
+    use_effect(move || {
         if route_targets_unknown_account(&route, &client_manager.read()) {
             app_state.write().settings_section = SettingsSection::Accounts;
             navigator().replace(Route::SettingsRoute);
@@ -158,6 +292,22 @@ pub fn MainLayout() -> Element {
             },
             // Floating server right-click context menu (position: fixed, above sidebars)
             ServerContextMenu {}
+            button {
+                class: "mobile-drawer-open-btn",
+                title: t("mobile-nav-open"),
+                onclick: move |_| open_mobile_drawer(),
+                "☰"
+            }
+            button {
+                class: "mobile-drawer-close-btn",
+                title: t("mobile-nav-close"),
+                onclick: move |_| close_mobile_drawer(),
+                "✕"
+            }
+            div {
+                class: "mobile-drawer-backdrop",
+                onclick: move |_| close_mobile_drawer(),
+            }
             // Voice connection banner — spans full width when connected
             VoiceBanner {}
             // Main body: nav + sidebar + route content

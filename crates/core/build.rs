@@ -16,25 +16,26 @@ use std::path::Path;
 /// The order matches how they were originally laid out in tailwind.css:
 /// reset/variables first, then structural layout, then component-specific styles.
 const PARTIALS: &[&str] = &[
-    "variables.css",       // CSS custom properties — theme tokens
-    "layout.css",          // Base styles, layout grid, window chrome, voice banner
-    "sidebar.css",         // Server sidebar, account server bar, status dots
-    "channel-list.css",    // Channel list
-    "chat.css",            // Chat view (messages, input, attachments, reactions)
-    "user-sidebar.css",    // User/member sidebar, DM header, notification indicators
-    "settings-layout.css", // Settings page layout shell
-    "settings-content.css",// Settings pages (accounts, plugins, profile, language)
-    "search.css",          // Global search page
-    "wizard.css",          // Setup wizard, buttons, forms, reply UI
-    "theme-utils.css",     // Backup wizard, scrollbar, theme settings, responsive
-    "voice-channel.css",   // Voice/video channel view, voice bar
-    "voice-settings.css",  // Voice settings popup/page, voice controls, account footer
-    "account-shell.css",   // Presence picker, account switcher, view shell
-    "toolbar.css",         // Emoji picker, hover actions, input toolbar, file drag
-    "dm-pages.css",        // DM nav, search bars, voice+notif settings, friends panel
-    "server-settings.css", // Context menu, server settings, diagnostics
-    "account-profile.css", // Account profile popup, slash command autocomplete
-    "account-forms.css",   // Add account, create server / channel forms
+    "variables.css",        // CSS custom properties — theme tokens
+    "layout.css",           // Base styles, layout grid, window chrome, voice banner
+    "sidebar.css",          // Server sidebar, account server bar, status dots
+    "channel-list.css",     // Channel list
+    "chat.css",             // Chat view (messages, input, attachments, reactions)
+    "user-sidebar.css",     // User/member sidebar, DM header, notification indicators
+    "settings-layout.css",  // Settings page layout shell
+    "settings-content.css", // Settings pages (accounts, plugins, profile, language)
+    "search.css",           // Global search page
+    "wizard.css",           // Setup wizard, buttons, forms, reply UI
+    "theme-utils.css",      // Backup wizard, scrollbar, theme settings, responsive
+    "voice-channel.css",    // Voice/video channel view, voice bar
+    "voice-settings.css",   // Voice settings popup/page, voice controls, account footer
+    "account-shell.css",    // Presence picker, account switcher, view shell
+    "toolbar.css",          // Emoji picker, hover actions, input toolbar, file drag
+    "dm-pages.css",         // DM nav, search bars, voice+notif settings, friends panel
+    "server-settings.css",  // Context menu, server settings, diagnostics
+    "account-profile.css",  // Account profile popup, slash command autocomplete
+    "account-forms.css",    // Add account, create server / channel forms
+    "mobile-shell.css",     // Force-mobile / narrow-viewport shell overrides
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -45,10 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Tell Cargo to re-run this build script if any partial changes.
     for partial in PARTIALS {
-        println!(
-            "cargo:rerun-if-changed=assets/styling/{}",
-            partial
-        );
+        println!("cargo:rerun-if-changed=assets/styling/{}", partial);
     }
     // Also re-run if the build script itself changes.
     println!("cargo:rerun-if-changed=build.rs");
@@ -66,13 +64,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for partial in PARTIALS {
         output.push_str(&format!("     assets/styling/{partial}\n"));
     }
-    output.push_str("   ======================================================================= */\n\n");
+    output.push_str(
+        "   ======================================================================= */\n\n",
+    );
 
     for partial in PARTIALS {
         let path = styling_dir.join(partial);
-        let content = std::fs::read_to_string(&path).map_err(|e| {
-            format!("build.rs: failed to read {}: {e}", path.display())
-        })?;
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("build.rs: failed to read {}: {e}", path.display()))?;
         output.push_str(&content);
         output.push('\n');
     }
@@ -83,9 +82,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => true,
     };
     if write_needed {
-        std::fs::write(&out_path, &output).map_err(|e| {
-            format!("build.rs: failed to write tailwind.css: {e}")
-        })?;
+        std::fs::write(&out_path, &output)
+            .map_err(|e| format!("build.rs: failed to write tailwind.css: {e}"))?;
     }
 
     Ok(())

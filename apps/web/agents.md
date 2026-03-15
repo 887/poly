@@ -43,6 +43,31 @@ The MCP automatically manages:
 - Auto-restart on crash
 - Stale process cleanup
 
+### Mobile UI Test Mode
+
+Poly web supports a forced mobile layout via the URL query parameter:
+
+```text
+/?mobile=1
+```
+
+Use this when visually testing the responsive/mobile shell in Chromium.
+
+Current mobile-shell behavior:
+- chat/content routes are the only visible full-width content by default
+- server/menu chrome lives in a left-side drawer
+- the drawer can be opened from the left edge or the floating menu button
+- the drawer auto-closes when navigation changes to a channel / DM / settings route
+
+Recommended MCP flow:
+1. `launch_app`
+2. poll `get_last_build_status` until `Succeeded`
+3. `connect_cdp`
+4. navigate/evaluate to `http://127.0.0.1:3000/?mobile=1`
+5. `set_viewport` with a phone-sized viewport (for example 393×852)
+
+If the MCP supports it, prefer `set_viewport` with mobile emulation enabled.
+
 ### ⚠️ Manual Development (If Needed)
 
 **Do NOT use `--hotpatch`** — Dioxus 0.7.3 WASM support is incomplete.

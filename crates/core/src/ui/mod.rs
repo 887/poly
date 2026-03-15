@@ -91,6 +91,95 @@ use routes::{route_targets_unknown_account, sync_route_to_app_state};
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
 const CSS: Asset = asset!("assets/tailwind.css");
 
+#[cfg(target_arch = "wasm32")]
+fn force_mobile_query_override() -> Option<bool> {
+    let Some(window) = web_sys::window() else {
+        return None;
+    };
+    let Ok(search) = window.location().search() else {
+        return None;
+    };
+
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .filter(|segment| !segment.is_empty())
+        .filter_map(|segment| {
+            let mut parts = segment.splitn(2, '=');
+            let key = parts.next()?;
+            let value = parts.next().unwrap_or_default();
+            Some((key, value))
+        })
+        .find_map(|(key, value)| {
+            if !matches!(key, "mobile" | "polyMobile" | "forceMobile") {
+                return None;
+            }
+
+            if matches!(value, "1" | "true" | "yes" | "on") {
+                return Some(true);
+            }
+
+            if matches!(value, "0" | "false" | "no" | "off") {
+                return Some(false);
+            }
+
+            None
+        })
+}
+
+#[cfg(target_arch = "wasm32")]
+fn stored_force_mobile_ui_enabled() -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+    let Ok(Some(storage)) = window.local_storage() else {
+        return false;
+    };
+
+    storage
+        .get_item("poly.forceMobileUi")
+        .ok()
+        .flatten()
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn sync_force_mobile_ui_storage() {
+    let Some(override_value) = force_mobile_query_override() else {
+        return;
+    };
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(Some(storage)) = window.local_storage() else {
+        return;
+    };
+
+    let storage_value = if override_value { "1" } else { "0" };
+    let _ = storage.set_item("poly.forceMobileUi", storage_value);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn force_mobile_ui_enabled() -> bool {
+    force_mobile_query_override().unwrap_or_else(stored_force_mobile_ui_enabled)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn force_mobile_ui_enabled() -> bool {
+    false
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn sync_force_mobile_ui_storage() {}
+
+fn app_root_class() -> &'static str {
+    if force_mobile_ui_enabled() {
+        "poly-app poly-force-mobile"
+    } else {
+        "poly-app"
+    }
+}
+
 // ── App — startup registration helpers ──────────────────────────────────────
 
 /// Register all native backend signup entries into `ClientManager`.
@@ -406,6 +495,10 @@ async fn init_storage(
                     }
                     app_state.write().nav.right_sidebar_visible = settings.server_member_list_open;
                     app_state.write().nav.dm_right_sidebar_visible = settings.dm_member_list_open;
+                    if force_mobile_ui_enabled() {
+                        app_state.write().nav.right_sidebar_visible = false;
+                        app_state.write().nav.dm_right_sidebar_visible = false;
+                    }
                     // Restore per-account last-visited routes so account-switching
                     // returns to the correct page even after a page reload.
                     match storage.get_account_last_routes().await {
@@ -597,6 +690,10 @@ pub fn App() -> Element {
         register_native_plugin_settings(&mut client_manager);
     });
 
+    use_effect(move || {
+        sync_force_mobile_ui_storage();
+    });
+
     let chat_data: Signal<ChatData> = use_signal(ChatData::default);
     provide_context(chat_data);
 
@@ -623,7 +720,7 @@ pub fn App() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }
         style { id: "poly-theme", "{theme_css}" }
-        div { class: "poly-app",
+        div { class: app_root_class(),
             ElectronTitleBar {}
             AppBody {
                 storage_ready: storage_ready_now,

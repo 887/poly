@@ -6198,6 +6198,7 @@ dependencies = [
  "poly-core",
  "tracing",
  "tracing-subscriber",
+ "web-sys",
 ]
 
 [[package]]

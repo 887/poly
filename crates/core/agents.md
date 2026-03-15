@@ -351,6 +351,19 @@ onchange: move |e: Event<FormData>| {
 - `chat_history.rs` is the shared helper module for these rules; do not reintroduce raw
   `MessageQuery::default()` initial loads for chat entry points.
 
+## Mobile Shell Rule (2026-03-15)
+
+- In force-mobile web mode (`?mobile=1` / `.poly-force-mobile`), chat/content routes must remain the
+  only full-width visible page by default.
+- Do **not** convert the favorites rail or account/server rail into a horizontal top bar on mobile.
+- The favorites rail, account/server rail, and channel list belong in a **left-side drawer** that can
+  be opened from the left edge or via the floating menu button.
+- On mobile route navigation, close the drawer automatically so the newly selected chat / DM /
+  settings view becomes the only visible primary content again.
+- If you change `MainLayout` or `mobile-shell.css`, visually verify both states:
+  1. closed drawer = chat/content only
+  2. open drawer = left menu chrome fully visible onscreen
+
 ## MANDATORY: Visual Testing with MCP desktop-devtools
 
 **After every change that touches `rsx!` blocks** (UI layout, component structure, new

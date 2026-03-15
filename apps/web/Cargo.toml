@@ -21,6 +21,7 @@ tracing-subscriber = { workspace = true }
 # getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom04-wasm = { workspace = true }
+web-sys = { workspace = true }
 
 [lints]
 workspace = true

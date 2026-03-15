@@ -23,8 +23,8 @@ mod profile;
 
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
-use dioxus::prelude::*;
 use content_social::ContentSocialSettings;
+use dioxus::prelude::*;
 use notifications::NotificationsSettings;
 
 #[cfg(feature = "server")]

@@ -504,13 +504,14 @@ impl DevtoolsBackend for DesktopHttpBackend {
         {
             let guard = self.build_task.lock().await;
             if let Some(handle) = guard.as_ref()
-                && !handle.is_finished() {
-                    return Ok(
+                && !handle.is_finished()
+            {
+                return Ok(
                         "A build is already in progress.\n\
                          Poll get_last_build_status \u{2014} state will change Running \u{2192} Succeeded/Failed."
                             .to_string(),
                     );
-                }
+            }
         }
 
         // ── Step 1: Kill any stale dx serve / app instance synchronously ──────
@@ -548,13 +549,11 @@ impl DevtoolsBackend for DesktopHttpBackend {
         });
         *self.build_task.lock().await = Some(handle);
 
-        Ok(
-            "\u{1f527} Build started in background (state: Running).\n\
+        Ok("\u{1f527} Build started in background (state: Running).\n\
              \u{25b6} Poll `get_last_build_status` until state = Succeeded or Failed.\n\
              \u{1f4cb} On Succeeded: app is running \u{2014} call `connect_cdp`.\n\
              \u{274c} On Failed: call `get_last_build_log` for the exact compiler error."
-                .to_string(),
-        )
+            .to_string())
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {

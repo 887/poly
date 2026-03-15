@@ -147,8 +147,13 @@ fn do_create_channel(
     signals: CreateChannelSignals,
 ) {
     info!("do_create_channel: name={name:?} server_id={server_id:?}");
-    let CreateChannelSignals { client_manager, mut app_state, mut chat_data, mut creating, mut error_msg } =
-        signals;
+    let CreateChannelSignals {
+        client_manager,
+        mut app_state,
+        mut chat_data,
+        mut creating,
+        mut error_msg,
+    } = signals;
     let backend_opt = client_manager.read().get_backend_for_server(&server_id);
     let Some((_acct_id, backend_arc)) = backend_opt else {
         let msg = format!("No backend found for server {server_id:?}");
@@ -163,7 +168,10 @@ fn do_create_channel(
         info!("do_create_channel: async task started");
         let guard = backend_arc.read().await;
         info!("do_create_channel: backend lock acquired, calling create_channel");
-        match guard.create_channel(&server_id, &name, ChannelType::Text).await {
+        match guard
+            .create_channel(&server_id, &name, ChannelType::Text)
+            .await
+        {
             Ok(channel) => {
                 info!("do_create_channel: channel created id={:?}", channel.id);
                 let channel_id = channel.id.clone();

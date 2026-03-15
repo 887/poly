@@ -73,10 +73,8 @@ fn install_unhandled_rejection_listener() {
         report_crash("unhandled-rejection", &message, None);
     }));
 
-    let _ = window.add_event_listener_with_callback(
-        "unhandledrejection",
-        closure.as_ref().unchecked_ref(),
-    );
+    let _ = window
+        .add_event_listener_with_callback("unhandledrejection", closure.as_ref().unchecked_ref());
     closure.forget();
 }
 
@@ -112,10 +110,7 @@ fn clear_previous_crash_state() {
         return;
     };
 
-    let _ = Reflect::delete_property(
-        &window,
-        &wasm_bindgen::JsValue::from_str(CRASH_STATE_KEY),
-    );
+    let _ = Reflect::delete_property(&window, &wasm_bindgen::JsValue::from_str(CRASH_STATE_KEY));
 
     let Some(document) = window.document() else {
         return;
@@ -307,13 +302,7 @@ fn clear_children(node: &Element) {
     }
 }
 
-fn append_text_block(
-    document: &Document,
-    parent: &Element,
-    tag: &str,
-    text: &str,
-    style: &str,
-) {
+fn append_text_block(document: &Document, parent: &Element, tag: &str, text: &str, style: &str) {
     let Some(child) = element(document, tag) else {
         return;
     };

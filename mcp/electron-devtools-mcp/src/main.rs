@@ -385,9 +385,8 @@ impl ElectronCdpBackend {
             );
         }
 
-        let response = tokio::time::timeout(
-            Duration::from_secs(CDP_RESPONSE_TIMEOUT_SECS),
-            async {
+        let response =
+            tokio::time::timeout(Duration::from_secs(CDP_RESPONSE_TIMEOUT_SECS), async {
                 // Read messages until we get our response (matching id).
                 // Other messages (CDP events) are skipped.
                 loop {
@@ -418,9 +417,8 @@ impl ElectronCdpBackend {
                     }
                     // Not our response — CDP event or another command's response, skip.
                 }
-            },
-        )
-        .await;
+            })
+            .await;
 
         match response {
             Ok(Ok(result)) => Ok(result),
@@ -519,7 +517,11 @@ impl ElectronCdpBackend {
     ///
     /// Runs `dx build --platform web`, installs npm deps, launches Electron,
     /// and updates build diagnostics.  Called from a `tokio::spawn`.
-    async fn bg_build_and_launch_electron(self, dx_build_dir: String, electron_devtools_dir: String) {
+    async fn bg_build_and_launch_electron(
+        self,
+        dx_build_dir: String,
+        electron_devtools_dir: String,
+    ) {
         tracing::info!("[bg] dx build --platform web  in {dx_build_dir}");
 
         // ── dx build ──────────────────────────────────────────────────────
@@ -558,7 +560,10 @@ impl ElectronCdpBackend {
                 build_output.status.code(),
             )
             .await;
-            tracing::error!("[bg] dx build failed (exit {:?})", build_output.status.code());
+            tracing::error!(
+                "[bg] dx build failed (exit {:?})",
+                build_output.status.code()
+            );
             return;
         }
 
@@ -679,7 +684,10 @@ impl ElectronCdpBackend {
                 build_output.status.code(),
             )
             .await;
-            tracing::error!("[bg] Rebuild failed (exit {:?})", build_output.status.code());
+            tracing::error!(
+                "[bg] Rebuild failed (exit {:?})",
+                build_output.status.code()
+            );
             return;
         }
 
@@ -726,18 +734,15 @@ impl DevtoolsBackend for ElectronCdpBackend {
             if let Some(handle) = guard.as_ref()
                 && !handle.is_finished()
             {
-                return Ok(
-                    "A build is already in progress.\n\
+                return Ok("A build is already in progress.\n\
                      Poll get_last_build_status until state = \"Succeeded\" or \"Failed\"."
-                        .to_string(),
-                );
+                    .to_string());
             }
         }
 
         *self.workspace.lock().await = Some(workspace.to_string());
         let dx_build_dir = format!("{workspace}/apps/desktop-electron");
-        let electron_devtools_dir =
-            format!("{workspace}/apps/desktop-electron-devtools/electron");
+        let electron_devtools_dir = format!("{workspace}/apps/desktop-electron-devtools/electron");
 
         // Kill any existing Electron synchronously (~1.3 s).
         let _ = tokio::process::Command::new("pkill")
@@ -838,11 +843,9 @@ impl DevtoolsBackend for ElectronCdpBackend {
             if let Some(handle) = guard.as_ref()
                 && !handle.is_finished()
             {
-                return Ok(
-                    "A build is already in progress.\n\
+                return Ok("A build is already in progress.\n\
                      Poll get_last_build_status until state = \"Succeeded\" or \"Failed\"."
-                        .to_string(),
-                );
+                    .to_string());
             }
         }
 

@@ -15,8 +15,8 @@
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::chat_data::user_color;
 use crate::state::ChatData;
+use crate::state::chat_data::user_color;
 use dioxus::prelude::*;
 use poly_client::AccountPresence;
 

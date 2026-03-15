@@ -165,11 +165,8 @@ struct ChromeCdpBackend {
 ///
 /// Spawns a detached tokio task that reads until EOF, tagging each line with
 /// `[stream_name]` so stdout and stderr are distinguishable in the log.
-fn spawn_log_reader<R>(
-    reader: R,
-    stream_name: &'static str,
-    buffer: Arc<Mutex<RollingBuildLog>>,
-) where
+fn spawn_log_reader<R>(reader: R, stream_name: &'static str, buffer: Arc<Mutex<RollingBuildLog>>)
+where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
 {
     tokio::spawn(async move {
@@ -178,7 +175,10 @@ fn spawn_log_reader<R>(
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
-                    buffer.lock().await.push_line(format!("[{stream_name}] {line}"));
+                    buffer
+                        .lock()
+                        .await
+                        .push_line(format!("[{stream_name}] {line}"));
                 }
                 Ok(None) => break,
                 Err(err) => {
@@ -816,9 +816,7 @@ impl ChromeCdpBackend {
         self.finish_build_record(
             BuildLifecycleState::Succeeded,
             "WASM compiled \u{2713} \u{2014} dx serve is up. Launching Chrome.",
-            format!(
-                "dx serve answered on port {WEB_SERVER_PORT}. Launching Chrome with CDP."
-            ),
+            format!("dx serve answered on port {WEB_SERVER_PORT}. Launching Chrome with CDP."),
             None,
         )
         .await;
@@ -828,9 +826,8 @@ impl ChromeCdpBackend {
         if let Err(e) = self.spawn_chrome_with_watchdog().await
             && let Some(rec) = self.last_build.lock().await.as_mut()
         {
-            rec.diagnostics.summary = format!(
-                "WASM compiled and dx serve started, but Chrome failed to launch: {e}"
-            );
+            rec.diagnostics.summary =
+                format!("WASM compiled and dx serve started, but Chrome failed to launch: {e}");
         }
     }
 
@@ -944,13 +941,14 @@ impl DevtoolsBackend for ChromeCdpBackend {
         {
             let guard = self.build_task.lock().await;
             if let Some(handle) = guard.as_ref()
-                && !handle.is_finished() {
-                    return Ok(
+                && !handle.is_finished()
+            {
+                return Ok(
                         "A build is already in progress.\n\
                          Poll get_last_build_status \u{2014} state will change Running \u{2192} Succeeded/Failed."
                             .to_string(),
                     );
-                }
+            }
         }
 
         // ── Step 0: Kill Chrome / static server synchronously (fast) ─────────
@@ -998,13 +996,11 @@ impl DevtoolsBackend for ChromeCdpBackend {
         });
         *self.build_task.lock().await = Some(handle);
 
-        Ok(
-            "\u{1f527} Build started in background (state: Running).\n\
+        Ok("\u{1f527} Build started in background (state: Running).\n\
              \u{25b6} Poll `get_last_build_status` until state = Succeeded or Failed.\n\
              \u{1f4cb} On Succeeded: Chrome is already running \u{2014} call `connect_cdp`.\n\
              \u{274c} On Failed: call `get_last_build_log` for the exact compiler error."
-                .to_string(),
-        )
+            .to_string())
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {
@@ -1373,13 +1369,14 @@ impl DevtoolsBackend for ChromeCdpBackend {
         {
             let guard = self.build_task.lock().await;
             if let Some(handle) = guard.as_ref()
-                && !handle.is_finished() {
-                    return Ok(
+                && !handle.is_finished()
+            {
+                return Ok(
                         "A build is already in progress.\n\
                          Poll get_last_build_status \u{2014} state will change Running \u{2192} Succeeded/Failed."
                             .to_string(),
                     );
-                }
+            }
         }
 
         // Increment counter before build so build_id advances on every rebuild_app call.
@@ -1436,11 +1433,27 @@ impl DevtoolsBackend for ChromeCdpBackend {
             }),
             json!({
                 "name": "set_viewport",
-                "description": "Set the browser viewport size.",
+                "description": "Set the browser viewport size, optionally enabling mobile-style emulation and touch input.",
                 "inputSchema": { "type": "object",
                     "properties": {
                         "width": { "type": "integer" },
-                        "height": { "type": "integer" }
+                        "height": { "type": "integer" },
+                        "mobile": {
+                            "type": "boolean",
+                            "description": "If true, enable Chromium mobile device metrics emulation"
+                        },
+                        "deviceScaleFactor": {
+                            "type": "number",
+                            "description": "Optional device pixel ratio override (use 2-3 for modern phones)"
+                        },
+                        "touch": {
+                            "type": "boolean",
+                            "description": "If true, enable touch emulation (defaults to the mobile value)"
+                        },
+                        "userAgent": {
+                            "type": "string",
+                            "description": "Optional user-agent override for mobile browser testing"
+                        }
                     },
                     "required": ["width", "height"] }
             }),
@@ -1495,18 +1508,67 @@ impl DevtoolsBackend for ChromeCdpBackend {
             "set_viewport" => {
                 let width = args.get("width").and_then(|v| v.as_i64()).unwrap_or(1440);
                 let height = args.get("height").and_then(|v| v.as_i64()).unwrap_or(900);
+                let mobile = args
+                    .get("mobile")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let device_scale_factor = args
+                    .get("deviceScaleFactor")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(if mobile { 3.0 } else { 1.0 });
+                let touch = args
+                    .get("touch")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(mobile);
+                let user_agent = args
+                    .get("userAgent")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(ToOwned::to_owned);
+
                 Some(
-                    self.cdp_send(
-                        "Emulation.setDeviceMetricsOverride",
-                        json!({
-                            "width": width,
-                            "height": height,
-                            "deviceScaleFactor": 1,
-                            "mobile": false,
-                        }),
-                    )
-                    .await
-                    .map(|_| format!("Viewport set to {width}×{height}")),
+                    async move {
+                        self.cdp_send(
+                            "Emulation.setDeviceMetricsOverride",
+                            json!({
+                                "width": width,
+                                "height": height,
+                                "deviceScaleFactor": device_scale_factor,
+                                "mobile": mobile,
+                            }),
+                        )
+                        .await?;
+
+                        self.cdp_send(
+                            "Emulation.setTouchEmulationEnabled",
+                            json!({
+                                "enabled": touch,
+                                "maxTouchPoints": if touch { 5 } else { 1 },
+                            }),
+                        )
+                        .await?;
+
+                        if let Some(user_agent) = user_agent {
+                            self.cdp_send(
+                                "Emulation.setUserAgentOverride",
+                                json!({
+                                    "userAgent": user_agent,
+                                }),
+                            )
+                            .await?;
+                        }
+
+                        Ok(format!(
+                            "Viewport set to {width}×{height} ({})",
+                            if mobile {
+                                "mobile emulation"
+                            } else {
+                                "desktop emulation"
+                            }
+                        ))
+                    }
+                    .await,
                 )
             }
             "get_generation" => {

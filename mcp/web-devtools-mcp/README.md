@@ -94,6 +94,26 @@ VS Code tasks for the most common CLI commands are defined in `.vscode/tasks.jso
 | `type_text` | Type text via CDP `Input.dispatchKeyEvent` |
 | `reset_app` | Navigate to `/` to reset app state |
 
+### Mobile Emulation Workflow
+
+For Poly's mobile UI testing flow:
+
+1. open `http://127.0.0.1:3000/?mobile=1`
+2. call `set_viewport` with a phone-sized viewport
+3. optionally enable Chromium mobile metrics / touch emulation through the same tool
+
+Example:
+
+```json
+{
+        "width": 393,
+        "height": 852,
+        "mobile": true,
+        "deviceScaleFactor": 3,
+        "touch": true
+}
+```
+
 ## VS Code Integration
 
 - **MCP (Copilot agent):** configured in `.vscode/mcp.json` as `poly-web`

@@ -161,6 +161,28 @@ page_reload { ignoreCache: true }
 set_viewport { width: 1440, height: 900 }
 ```
 
+For mobile web testing, combine Poly's forced mobile UI route with mobile emulation:
+
+```text
+http://127.0.0.1:3000/?mobile=1
+```
+
+Recommended phone preset:
+
+```json
+set_viewport {
+  "width": 393,
+  "height": 852,
+  "mobile": true,
+  "deviceScaleFactor": 3,
+  "touch": true
+}
+```
+
+This does two separate things:
+- `?mobile=1` forces Poly's shared UI into mobile layout mode
+- `set_viewport(... mobile=true ...)` tells Chromium to emulate mobile device metrics
+
 ### 6. Reset
 
 ```

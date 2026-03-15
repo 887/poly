@@ -72,7 +72,11 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
             t("user-offline")
         };
         return AccountBarUserState {
-            first_char: name.chars().next().map(|c| c.to_string()).unwrap_or_default(),
+            first_char: name
+                .chars()
+                .next()
+                .map(|c| c.to_string())
+                .unwrap_or_default(),
             user_name: name,
             status_text,
             color: user_color(&id).to_string(),
@@ -267,7 +271,6 @@ fn AccountProfilePopup(
         }
     }
 }
-
 
 #[rustfmt::skip]
 #[component]

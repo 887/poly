@@ -44,6 +44,24 @@ dx build --release --platform web
 
 The built output lands in `target/dx/poly-web/release/web/` and can be served from any static host.
 
+## Mobile UI Test Mode
+
+Poly web now supports a **forced mobile UI mode** for browser-based testing.
+
+Use the normal web app URL with the `?mobile=1` query parameter:
+
+```text
+http://127.0.0.1:3000/?mobile=1
+```
+
+What this does:
+- forces the shared `poly-core` shell into its mobile layout,
+- starts with right-side member/contact rails collapsed,
+- lets you test the phone layout deterministically even on a desktop machine.
+
+For the best approximation of a phone in Chromium, combine this with MCP mobile viewport emulation,
+for example a 393×852 viewport with mobile metrics enabled.
+
 ## Key Dependencies
 
 | Crate | Role |
