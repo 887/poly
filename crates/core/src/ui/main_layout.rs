@@ -28,10 +28,9 @@ fn init_mobile_drawer_runtime() {
     let _ = document::eval(
         r#"if (!window.__polyMobileDrawerInit) {
             window.__polyMobileDrawerInit = true;
-            window.__polySetMobileDrawerOpen = function(open) {
+            window.__polySyncMobileDrawerMode = function() {
                 const root = document.querySelector('.poly-app');
                 if (!root) return;
-                root.classList.toggle('poly-mobile-drawer-open', Boolean(open));
 
                 const server = document.querySelector('.server-sidebar');
                 const account = document.querySelector('.account-server-bar');
@@ -39,6 +38,54 @@ fn init_mobile_drawer_runtime() {
                 const backdrop = document.querySelector('.mobile-drawer-backdrop');
                 const openBtn = document.querySelector('.mobile-drawer-open-btn');
                 const closeBtn = document.querySelector('.mobile-drawer-close-btn');
+
+                const isMobileUi = root.classList.contains('poly-force-mobile') || window.innerWidth <= 640;
+                if (!isMobileUi) {
+                    root.classList.remove('poly-mobile-drawer-open');
+
+                    if (server) {
+                        server.style.removeProperty('left');
+                        server.style.removeProperty('inset-inline-start');
+                        server.style.removeProperty('margin-left');
+                        server.style.removeProperty('transform');
+                    }
+
+                    if (account) {
+                        account.style.removeProperty('left');
+                        account.style.removeProperty('inset-inline-start');
+                        account.style.removeProperty('margin-left');
+                        account.style.removeProperty('transform');
+                    }
+
+                    if (channel) {
+                        channel.style.removeProperty('left');
+                        channel.style.removeProperty('inset-inline-start');
+                        channel.style.removeProperty('margin-left');
+                        channel.style.removeProperty('transform');
+                    }
+
+                    if (backdrop) {
+                        backdrop.style.removeProperty('display');
+                        backdrop.style.removeProperty('visibility');
+                        backdrop.style.removeProperty('opacity');
+                        backdrop.style.removeProperty('pointer-events');
+                        backdrop.style.removeProperty('background');
+                    }
+
+                    if (openBtn) {
+                        openBtn.style.removeProperty('opacity');
+                        openBtn.style.removeProperty('pointer-events');
+                    }
+
+                    if (closeBtn) {
+                        closeBtn.style.removeProperty('opacity');
+                        closeBtn.style.removeProperty('pointer-events');
+                    }
+
+                    return;
+                }
+
+                const open = root.classList.contains('poly-mobile-drawer-open');
 
                 if (server) {
                     server.style.setProperty('left', '-72px', 'important');
@@ -79,6 +126,26 @@ fn init_mobile_drawer_runtime() {
                     closeBtn.style.setProperty('pointer-events', open ? 'auto' : 'none', 'important');
                 }
             };
+
+            window.__polySetMobileDrawerOpen = function(open) {
+                const root = document.querySelector('.poly-app');
+                if (!root) return;
+                root.classList.toggle('poly-mobile-drawer-open', Boolean(open));
+                window.__polySyncMobileDrawerMode?.();
+            };
+
+            let resizeFrame = null;
+            window.addEventListener('resize', function() {
+                if (resizeFrame !== null) {
+                    window.cancelAnimationFrame(resizeFrame);
+                }
+                resizeFrame = window.requestAnimationFrame(function() {
+                    resizeFrame = null;
+                    window.__polySyncMobileDrawerMode?.();
+                });
+            });
+
+            window.__polySyncMobileDrawerMode?.();
 
             let tracking = null;
 
