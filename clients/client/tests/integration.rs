@@ -123,6 +123,10 @@ fn random_key() -> [u8; 32] {
 // Tests — HTTP client layer
 // ---------------------------------------------------------------------------
 
+fn test_email(username: &str) -> String {
+    format!("{username}@example.test")
+}
+
 #[tokio::test]
 async fn test_signup_and_server_info() {
     let srv = TestServer::start().await;
@@ -139,7 +143,10 @@ async fn test_signup_and_server_info() {
     assert!(!info.invite_only);
 
     // Signup.
-    let auth = client.signup("alice", Some("Alice")).await.expect("signup");
+    let auth = client
+        .signup("alice", &test_email("alice"), Some("Alice"))
+        .await
+        .expect("signup");
     assert!(!auth.token.is_empty());
     assert!(!auth.user_id.is_empty());
     assert!(!auth.device_id.is_empty());
@@ -165,11 +172,14 @@ async fn test_signin_challenge_response() {
 
     // First signup.
     let client1 = PolyServerHttpClient::new(config.clone());
-    client1.signup("bob", None).await.expect("signup");
+    client1
+        .signup("bob", &test_email("bob"), None)
+        .await
+        .expect("signup");
 
     // Now signin with the same key on a fresh client.
     let client2 = PolyServerHttpClient::new(config);
-    let auth = client2.signin().await.expect("signin");
+    let auth = client2.signin(None).await.expect("signin");
     assert!(!auth.token.is_empty());
     assert!(client2.is_authenticated().await);
 
@@ -187,7 +197,7 @@ async fn test_create_server_invite_join() {
         private_key_bytes: random_key(),
     });
     alice_client
-        .signup("alice", Some("Alice"))
+        .signup("alice", &test_email("alice"), Some("Alice"))
         .await
         .expect("alice signup");
 
@@ -221,7 +231,7 @@ async fn test_create_server_invite_join() {
         private_key_bytes: random_key(),
     });
     bob_client
-        .signup("bob", Some("Bob"))
+        .signup("bob", &test_email("bob"), Some("Bob"))
         .await
         .expect("bob signup");
 
@@ -252,7 +262,7 @@ async fn test_send_and_read_messages() {
         private_key_bytes: random_key(),
     });
     alice_client
-        .signup("alice", Some("Alice"))
+        .signup("alice", &test_email("alice"), Some("Alice"))
         .await
         .expect("signup");
 
@@ -309,7 +319,7 @@ async fn test_friend_requests() {
         private_key_bytes: random_key(),
     });
     alice_client
-        .signup("alice", Some("Alice"))
+        .signup("alice", &test_email("alice"), Some("Alice"))
         .await
         .expect("signup");
 
@@ -317,7 +327,10 @@ async fn test_friend_requests() {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });
-    bob_client.signup("bob", Some("Bob")).await.expect("signup");
+    bob_client
+        .signup("bob", &test_email("bob"), Some("Bob"))
+        .await
+        .expect("signup");
 
     // Alice sends a friend request to Bob (by username).
     let fr = alice_client
@@ -351,7 +364,7 @@ async fn test_websocket_message_event() {
         private_key_bytes: alice_key,
     });
     alice_http
-        .signup("alice", Some("Alice"))
+        .signup("alice", &test_email("alice"), Some("Alice"))
         .await
         .expect("signup");
 
@@ -376,7 +389,10 @@ async fn test_websocket_message_event() {
         base_url: srv.base_url(),
         private_key_bytes: bob_key,
     });
-    bob_http.signup("bob", Some("Bob")).await.expect("signup");
+    bob_http
+        .signup("bob", &test_email("bob"), Some("Bob"))
+        .await
+        .expect("signup");
     bob_http.join_server(&invite_code).await.expect("join");
 
     // Bob connects a WebSocket and subscribes to events.
@@ -437,7 +453,9 @@ async fn test_backend_full_flow() {
             server_url: srv.base_url(),
             private_key_bytes: alice_key.to_vec(),
             username: Some("alice".into()),
+            email: Some("alice@example.test".into()),
             display_name: Some("Alice Backend".into()),
+            selected_user_id: None,
             is_signup: true,
         })
         .await
@@ -513,7 +531,9 @@ async fn test_backend_two_users_communicate() {
             server_url: srv.base_url(),
             private_key_bytes: alice_key.to_vec(),
             username: Some("alice".into()),
+            email: Some("alice@example.test".into()),
             display_name: Some("Alice".into()),
+            selected_user_id: None,
             is_signup: true,
         })
         .await
@@ -526,7 +546,9 @@ async fn test_backend_two_users_communicate() {
         server_url: srv.base_url(),
         private_key_bytes: bob_key.to_vec(),
         username: Some("bob".into()),
+        email: Some("bob@example.test".into()),
         display_name: Some("Bob".into()),
+        selected_user_id: None,
         is_signup: true,
     })
     .await
@@ -607,7 +629,10 @@ async fn test_debug_raw_server_response() {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });
-    let auth = client.signup("dbguser", None).await.expect("signup");
+    let auth = client
+        .signup("dbguser", &test_email("dbguser"), None)
+        .await
+        .expect("signup");
 
     // Create a server.
     let server = client.create_server("Debug Guild").await.expect("create");

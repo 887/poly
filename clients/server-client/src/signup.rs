@@ -14,10 +14,12 @@
 //! ## UX flow (key-first)
 //!
 //! 1. **URL step**: User enters a server URL and clicks "Connect".
-//!    - Poly tries a silent sign-in using the device Ed25519 key.
-//!    - If the key is registered → `on_complete` is called immediately.
-//!    - If not registered → user is moved to the sign-up name step.
-//! 2. **Sign-up step**: User chooses username + display name, clicks "Create Account".
+//!    - Poly looks up all existing accounts using the device Ed25519 key.
+//!    - If one or more accounts are found → user is shown an account picker.
+//!    - If none are found → user is moved to the sign-up name step.
+//! 2. **Existing account step**: User picks a previous account or chooses
+//!    to create another account on that same server.
+//! 3. **Sign-up step**: User chooses username + display name, clicks "Create Account".
 //!    - Server registers the key and returns a session.
 //!
 //! ## i18n
@@ -42,7 +44,7 @@
 use dioxus::prelude::*;
 use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
 
-use crate::PolyServerBackend;
+use crate::{PolyServerBackend, models::IdentityAccount};
 
 // ── Public render entry-point ────────────────────────────────────────────────
 
@@ -64,9 +66,17 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
 enum ConnectStep {
     /// Initial state — user enters a server URL.
     Url,
+    /// Existing server accounts were found for this identity key.
+    ExistingAccounts {
+        server_url: String,
+        accounts: Vec<IdentityAccount>,
+    },
     /// Server was reachable but the device key is not registered.
     /// The URL that was probed is carried here so Step 2 can show it.
-    Signup { server_url: String },
+    Signup {
+        server_url: String,
+        existing_accounts: Vec<IdentityAccount>,
+    },
 }
 
 // ── Top-level page ───────────────────────────────────────────────────────────
@@ -94,13 +104,25 @@ fn PolySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) ->
                 UrlConnectForm {
                     step,
                     ctx,
+                }
+            },
+            ConnectStep::ExistingAccounts { server_url, accounts } => rsx! {
+                ExistingAccountsForm {
+                    step,
+                    server_url,
+                    accounts,
+                    ctx,
                     on_complete,
                 }
             },
-            ConnectStep::Signup { server_url } => rsx! {
+            ConnectStep::Signup {
+                server_url,
+                existing_accounts,
+            } => rsx! {
                 SignupDetailsForm {
                     step,
                     server_url,
+                    existing_accounts,
                     ctx,
                     on_complete,
                 }
@@ -113,15 +135,12 @@ fn PolySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) ->
 
 /// URL entry form — step 1 of the connect flow.
 ///
-/// Tries a silent sign-in with the device key.  On success calls `on_complete`
-/// immediately (user already has a registered key on that server).
-/// On auth failure transitions to the sign-up name step.
+/// Looks up all existing accounts bound to the device identity key.
 #[rustfmt::skip]
 #[component]
 fn UrlConnectForm(
     mut step: Signal<ConnectStep>,
     ctx: SignupContext,
-    on_complete: Callback<SignupCompleted>,
 ) -> Element {
     let mut server_url = use_signal(|| "http://127.0.0.1:7080".to_string());
     let mut connecting = use_signal(|| false);
@@ -153,15 +172,22 @@ fn UrlConnectForm(
                     connecting.set(true);
                     error_msg.set(None);
                     spawn(async move {
-                        match try_signin(&url, key, &no_key).await {
-                            TrySigninResult::LoggedIn(session, backend) => {
-                                on_complete.call(SignupCompleted { session, backend });
-                            }
-                            TrySigninResult::NeedsSignup => {
-                                step.set(ConnectStep::Signup { server_url: url });
+                        match discover_accounts(&url, key, &no_key).await {
+                            AccountDiscoveryResult::ExistingAccounts(accounts) => {
+                                step.set(ConnectStep::ExistingAccounts {
+                                    server_url: url,
+                                    accounts,
+                                });
                                 connecting.set(false);
                             }
-                            TrySigninResult::Error(e) => {
+                            AccountDiscoveryResult::NeedsSignup => {
+                                step.set(ConnectStep::Signup {
+                                    server_url: url,
+                                    existing_accounts: Vec::new(),
+                                });
+                                connecting.set(false);
+                            }
+                            AccountDiscoveryResult::Error(e) => {
                                 error_msg.set(Some(e));
                                 connecting.set(false);
                             }
@@ -172,6 +198,97 @@ fn UrlConnectForm(
                     "{t(\"plugin-poly-signup-connecting\")}"
                 } else {
                     "{t(\"plugin-poly-connect-btn\")}"
+                }
+            }
+        }
+    }
+}
+
+/// Existing-account picker shown when this identity key is already registered.
+#[rustfmt::skip]
+#[component]
+fn ExistingAccountsForm(
+    mut step: Signal<ConnectStep>,
+    server_url: String,
+    accounts: Vec<IdentityAccount>,
+    ctx: SignupContext,
+    on_complete: Callback<SignupCompleted>,
+) -> Element {
+    let mut connecting = use_signal(|| false);
+    let mut error_msg: Signal<Option<String>> = use_signal(|| None);
+    let t = ctx.t;
+
+    rsx! {
+        div { class: "signup-form",
+            p { class: "settings-hint",
+                "{t(\"plugin-poly-existing-accounts-desc\")}"
+            }
+            p { class: "signup-server-badge", code { "{server_url}" } }
+
+            div { class: "settings-list",
+                for account in accounts.iter().cloned() {
+                    {
+                        let account_id = account.user_id.clone();
+                        let label = if account.display_name == account.username {
+                            account.display_name.clone()
+                        } else {
+                            format!("{} (@{})", account.display_name, account.username)
+                        };
+                        let url = server_url.clone();
+                        let key = ctx.private_key.clone();
+                        let no_key = t("plugin-poly-signup-no-identity").to_string();
+                        rsx! {
+                            button {
+                                class: "profile-status-option",
+                                disabled: *connecting.read(),
+                                onclick: move |_| {
+                                    let selected_user_id = account_id.clone();
+                                    let url = url.clone();
+                                    let key = key.clone();
+                                    let no_key = no_key.clone();
+                                    connecting.set(true);
+                                    error_msg.set(None);
+                                    spawn(async move {
+                                        match do_signin(&url, Some(selected_user_id), key, &no_key).await {
+                                            Ok((session, backend)) => {
+                                                on_complete.call(SignupCompleted { session, backend });
+                                            }
+                                            Err(e) => {
+                                                error_msg.set(Some(e));
+                                                connecting.set(false);
+                                            }
+                                        }
+                                    });
+                                },
+                                span { class: "status-dot online" }
+                                span { "{label}" }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(err) = error_msg.read().as_ref() {
+                p { class: "settings-error", "{err}" }
+            }
+
+            div { class: "signup-form-actions",
+                button {
+                    class: "btn btn-secondary",
+                    disabled: *connecting.read(),
+                    onclick: move |_| step.set(ConnectStep::Url),
+                    "{t(\"plugin-poly-signup-back-btn\")}"
+                }
+                button {
+                    class: "btn btn-primary",
+                    disabled: *connecting.read(),
+                    onclick: move |_| {
+                        step.set(ConnectStep::Signup {
+                            server_url: server_url.clone(),
+                            existing_accounts: accounts.clone(),
+                        });
+                    },
+                    "{t(\"plugin-poly-create-another-account-btn\")}"
                 }
             }
         }
@@ -189,10 +306,12 @@ fn UrlConnectForm(
 fn SignupDetailsForm(
     mut step: Signal<ConnectStep>,
     server_url: String,
+    existing_accounts: Vec<IdentityAccount>,
     ctx: SignupContext,
     on_complete: Callback<SignupCompleted>,
 ) -> Element {
     let mut username           = use_signal(String::new);
+    let mut email_input        = use_signal(String::new);
     let mut display_name_input = use_signal(String::new);
     let mut connecting         = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
@@ -201,7 +320,11 @@ fn SignupDetailsForm(
     rsx! {
         div { class: "signup-form",
             p { class: "settings-hint",
-                "{t(\"plugin-poly-signup-no-account-desc\")}"
+                if existing_accounts.is_empty() {
+                    "{t(\"plugin-poly-signup-no-account-desc\")}"
+                } else {
+                    "{t(\"plugin-poly-signup-another-account-desc\")}"
+                }
             }
             p { class: "signup-server-badge", code { "{server_url}" } }
 
@@ -214,6 +337,17 @@ fn SignupDetailsForm(
                 placeholder: "{t(\"plugin-poly-signup-username-placeholder\")}",
                 disabled: *connecting.read(),
                 oninput: move |e: Event<FormData>| username.set(e.value()),
+            }
+            label { class: "settings-label",
+                "{t(\"plugin-poly-signup-email-label\")}"
+            }
+            input {
+                class: "settings-input",
+                r#type: "email",
+                value: "{email_input}",
+                placeholder: "{t(\"plugin-poly-signup-email-placeholder\")}",
+                disabled: *connecting.read(),
+                oninput: move |e: Event<FormData>| email_input.set(e.value()),
             }
             label { class: "settings-label",
                 "{t(\"plugin-poly-signup-displayname-label\")}"
@@ -229,18 +363,36 @@ fn SignupDetailsForm(
                 p { class: "settings-error", "{err}" }
             }
             div { class: "signup-form-actions",
+                {
+                    let back_server_url = server_url.clone();
+                    let back_accounts = existing_accounts.clone();
+                    rsx! {
                 button {
                     class: "btn btn-secondary",
                     disabled: *connecting.read(),
-                    onclick: move |_| step.set(ConnectStep::Url),
+                    onclick: move |_| {
+                        if back_accounts.is_empty() {
+                            step.set(ConnectStep::Url);
+                        } else {
+                            step.set(ConnectStep::ExistingAccounts {
+                                server_url: back_server_url.clone(),
+                                accounts: back_accounts.clone(),
+                            });
+                        }
+                    },
                     "{t(\"plugin-poly-signup-back-btn\")}"
+                }
+                    }
                 }
                 button {
                     class: "btn btn-primary",
-                    disabled: *connecting.read() || username.read().trim().is_empty(),
+                    disabled: *connecting.read()
+                        || username.read().trim().is_empty()
+                        || email_input.read().trim().is_empty(),
                     onclick: move |_| {
                         let url   = server_url.clone();
                         let user  = username.read().trim().to_string();
+                        let email = email_input.read().trim().to_string();
                         let dname = {
                             let d = display_name_input.read().trim().to_string();
                             if d.is_empty() { user.clone() } else { d }
@@ -250,7 +402,7 @@ fn SignupDetailsForm(
                         connecting.set(true);
                         error_msg.set(None);
                         spawn(async move {
-                            match do_signup(&url, &user, &dname, key, &no_key).await {
+                            match do_signup(&url, &user, &email, &dname, key, &no_key).await {
                                 Ok((session, backend)) => {
                                     on_complete.call(SignupCompleted { session, backend });
                                 }
@@ -275,57 +427,67 @@ fn SignupDetailsForm(
 // ── Authentication logic ─────────────────────────────────────────────────────
 
 /// Result of a silent sign-in probe.
-enum TrySigninResult {
-    /// Key is registered — session is ready.
-    LoggedIn(
-        poly_client::Session,
-        Box<dyn poly_client::ClientBackend + Send + Sync>,
-    ),
+enum AccountDiscoveryResult {
+    /// Existing accounts were found for this identity key.
+    ExistingAccounts(Vec<IdentityAccount>),
     /// Key is unknown on this server — user needs to sign up.
     NeedsSignup,
     /// Non-auth failure (network error, bad URL, etc.).
     Error(String),
 }
 
-/// Attempt silent sign-in with the device key.
+/// Discover all existing accounts for this identity key.
 ///
 /// Pure logic — no Dioxus, no poly-core.
-async fn try_signin(
+async fn discover_accounts(
     server_url: &str,
     private_key: Option<Vec<u8>>,
     no_key_msg: &str,
-) -> TrySigninResult {
+) -> AccountDiscoveryResult {
     let Ok(key_bytes) = resolve_key(private_key, no_key_msg) else {
-        return TrySigninResult::Error(no_key_msg.to_string());
+        return AccountDiscoveryResult::Error(no_key_msg.to_string());
     };
+
+    let backend = PolyServerBackend::new(server_url, key_bytes);
+    match backend.http().list_accounts().await {
+        Ok(accounts) if accounts.is_empty() => AccountDiscoveryResult::NeedsSignup,
+        Ok(accounts) => AccountDiscoveryResult::ExistingAccounts(accounts),
+        Err(e) => AccountDiscoveryResult::Error(format!("{e}")),
+    }
+}
+
+/// Sign in to an existing Poly Server account selected for this identity key.
+async fn do_signin(
+    server_url: &str,
+    selected_user_id: Option<String>,
+    private_key: Option<Vec<u8>>,
+    no_key_msg: &str,
+) -> Result<
+    (
+        poly_client::Session,
+        Box<dyn poly_client::ClientBackend + Send + Sync>,
+    ),
+    String,
+> {
+    let key_bytes = resolve_key(private_key, no_key_msg).map_err(|_| no_key_msg.to_string())?;
 
     let mut backend = PolyServerBackend::new(server_url, key_bytes);
     let credentials = AuthCredentials::PolyServer {
         server_url: server_url.to_string(),
         private_key_bytes: key_bytes.to_vec(),
         username: None,
+        email: None,
         display_name: None,
+        selected_user_id,
         is_signup: false,
     };
 
-    match backend.authenticate(credentials).await {
-        Ok(session) => TrySigninResult::LoggedIn(session, Box::new(backend)),
-        Err(e) => {
-            let msg = format!("{e}");
-            // Treat any auth/server error as "not registered" and show signup form.
-            // Network-level errors contain "error sending request" / "Connection refused".
-            if msg.contains("Connection refused")
-                || msg.contains("error sending request")
-                || msg.contains("failed to lookup address")
-                || msg.contains("os error")
-            {
-                TrySigninResult::Error(msg)
-            } else {
-                // Auth-level failure → assume key not registered.
-                TrySigninResult::NeedsSignup
-            }
-        }
-    }
+    let session = backend
+        .authenticate(credentials)
+        .await
+        .map_err(|e| format!("{e}"))?;
+
+    Ok((session, Box::new(backend)))
 }
 
 /// Perform new-account signup against the poly server.
@@ -334,6 +496,7 @@ async fn try_signin(
 async fn do_signup(
     server_url: &str,
     username: &str,
+    email: &str,
     display_name: &str,
     private_key: Option<Vec<u8>>,
     no_key_msg: &str,
@@ -351,7 +514,9 @@ async fn do_signup(
         server_url: server_url.to_string(),
         private_key_bytes: key_bytes.to_vec(),
         username: Some(username.to_string()),
+        email: Some(email.to_string()),
         display_name: Some(display_name.to_string()),
+        selected_user_id: None,
         is_signup: true,
     };
 

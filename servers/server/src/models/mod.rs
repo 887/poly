@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct User {
     pub id: Option<String>,
     pub username: String,
+    pub email: String,
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -18,6 +19,7 @@ pub struct User {
 pub struct UserProfile {
     pub id: String,
     pub username: String,
+    pub email: Option<String>,
     pub display_name: String,
     pub avatar_url: Option<String>,
 }
@@ -27,6 +29,7 @@ pub struct UserProfile {
 pub struct UserRecord {
     pub id: Option<String>,
     pub username: String,
+    pub email: String,
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub public_key: String,

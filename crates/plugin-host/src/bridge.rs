@@ -293,13 +293,17 @@ pub fn to_wit_auth_credentials(creds: pc::AuthCredentials) -> wit::AuthCredentia
             server_url,
             private_key_bytes,
             username,
+            email,
             display_name,
+            selected_user_id,
             is_signup,
         } => wit::AuthCredentials::PolyServer(wit::PolyServerCreds {
             server_url,
             private_key_bytes,
             username,
+            email,
             display_name,
+            selected_user_id,
             is_signup,
         }),
     }

@@ -7,7 +7,7 @@ plugin-poly-signup-desc = Connect to a self-hosted Poly server.
 
 # --- Signup page ---
 plugin-poly-signup-title = Add Poly Server Account
-plugin-poly-signup-description = Enter your server URL to connect. If your key is already registered you will be logged in automatically.
+plugin-poly-signup-description = Enter your server URL to connect. Poly will use your device identity key to sign in, and new Poly Server accounts also require an email address.
 plugin-poly-signup-back = ← Choose Backend
 plugin-poly-signup-url-label = Server URL
 plugin-poly-signup-url-placeholder = http://127.0.0.1:7080
@@ -16,17 +16,22 @@ plugin-poly-signup-url-placeholder = http://127.0.0.1:7080
 plugin-poly-connect-btn = Connect
 
 # --- Step 2: Sign-up form ---
-plugin-poly-signup-no-account-desc = No account was found for your device key on this server. Choose a username to create a new account.
+plugin-poly-signup-no-account-desc = No account was found for your identity key on this server. Choose a username and email address to create a new account.
+plugin-poly-existing-accounts-desc = This server already has one or more accounts linked to your identity key. Pick one to sign in, or create another account on this server.
+plugin-poly-signup-another-account-desc = This identity key is already linked to other accounts on this server. Choose a username and email address to create an additional account.
 plugin-poly-signup-username-label = Username
 plugin-poly-signup-username-placeholder = alice
+plugin-poly-signup-email-label = Email Address
+plugin-poly-signup-email-placeholder = alice@example.com
 plugin-poly-signup-displayname-label = Display Name
 plugin-poly-signup-displayname-placeholder = Alice
 plugin-poly-create-account-btn = Create Account
+plugin-poly-create-another-account-btn = Create Another Account
 plugin-poly-signup-back-btn = ← Back
 
 # --- Shared ---
 plugin-poly-signup-connecting = Connecting…
-plugin-poly-signup-no-identity = No identity key found. Create one in Identity settings first.
+plugin-poly-signup-no-identity = Poly could not prepare an identity key for signup.
 
 # --- Plugin settings page ---
 plugin-poly-title = Poly Server

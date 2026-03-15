@@ -22,6 +22,7 @@ use crate::{
 pub fn public_router() -> Router<AppState> {
     Router::new()
         .route("/auth/signup", post(signup))
+        .route("/auth/accounts", post(list_accounts))
         .route("/auth/challenge", post(challenge))
         .route("/auth/verify", post(verify))
         .route("/server-info", get(server_info))
@@ -43,6 +44,7 @@ pub struct SignupRequest {
     /// Hex-encoded Ed25519 public key (64 hex chars = 32 bytes).
     pub public_key: String,
     pub username: String,
+    pub email: String,
     pub display_name: Option<String>,
     pub device_name: Option<String>,
 }
@@ -52,6 +54,30 @@ pub struct SignupRequest {
 pub struct ChallengeRequest {
     /// Hex-encoded Ed25519 public key.
     pub public_key: String,
+    /// Optional target account when multiple server accounts share one key.
+    pub user_id: Option<String>,
+}
+
+/// Request all accounts linked to an Ed25519 public key.
+#[derive(Debug, Deserialize)]
+pub struct AccountsRequest {
+    /// Hex-encoded Ed25519 public key.
+    pub public_key: String,
+}
+
+/// Public summary of an account linked to an identity key.
+#[derive(Debug, Serialize)]
+pub struct IdentityAccount {
+    pub user_id: String,
+    pub username: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+}
+
+/// Response for account lookup by public key.
+#[derive(Debug, Serialize)]
+pub struct AccountsResponse {
+    pub accounts: Vec<IdentityAccount>,
 }
 
 /// Challenge response from the server.
@@ -68,6 +94,8 @@ pub struct ChallengeResponse {
 pub struct VerifyRequest {
     /// Hex-encoded Ed25519 public key.
     pub public_key: String,
+    /// Optional target account when multiple server accounts share one key.
+    pub user_id: Option<String>,
     /// Hex-encoded challenge nonce (received from /auth/challenge).
     pub challenge: String,
     /// Hex-encoded Ed25519 signature over the raw challenge bytes.
@@ -110,6 +138,62 @@ fn random_nonce() -> String {
     let mut rng = rand::rng();
     let buf: [u8; 32] = rng.random();
     hex::encode(buf)
+}
+
+/// Fetch every user record linked to a public key.
+async fn users_for_public_key(state: &AppState, public_key: &str) -> Result<Vec<UserRecord>> {
+    take_many(
+        &mut state
+            .db
+            .query("SELECT * FROM user WHERE public_key = $pk ORDER BY created_at ASC")
+            .bind(("pk", public_key.to_owned()))
+            .await?,
+        0,
+    )
+}
+
+/// Resolve the target user for signin based on the supplied key and user ID.
+async fn resolve_user_for_signin(
+    state: &AppState,
+    public_key: &str,
+    requested_user_id: Option<&str>,
+) -> Result<UserRecord> {
+    let users = users_for_public_key(state, public_key).await?;
+    if users.is_empty() {
+        return Err(AppError::NotFound);
+    }
+
+    if let Some(user_id) = requested_user_id {
+        let Some(user) = users
+            .into_iter()
+            .find(|user| user.id.as_deref() == Some(user_id))
+        else {
+            return Err(AppError::Unauthorized);
+        };
+        return Ok(user);
+    }
+
+    if users.len() > 1 {
+        return Err(AppError::BadRequest(
+            "multiple accounts found for this identity key; user_id required".into(),
+        ));
+    }
+
+    users.into_iter().next().ok_or(AppError::NotFound)
+}
+
+/// Small signup sanity check for email addresses.
+fn is_valid_email(email: &str) -> bool {
+    let trimmed = email.trim();
+    let Some((local, domain)) = trimmed.split_once('@') else {
+        return false;
+    };
+
+    !local.is_empty()
+        && !domain.is_empty()
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
 }
 
 /// Insert a new `device` record and return its string ID.
@@ -162,8 +246,14 @@ async fn signup(
     if req.username.trim().is_empty() {
         return Err(AppError::BadRequest("username required".into()));
     }
+    if req.email.trim().is_empty() {
+        return Err(AppError::BadRequest("email required".into()));
+    }
     if req.public_key.trim().is_empty() {
         return Err(AppError::BadRequest("public_key required".into()));
+    }
+    if !is_valid_email(&req.email) {
+        return Err(AppError::BadRequest("invalid email address".into()));
     }
 
     // Validate the public key is well-formed.
@@ -182,17 +272,17 @@ async fn signup(
         return Err(AppError::Conflict("username already taken".into()));
     }
 
-    // Check public key uniqueness.
-    let existing_key: Option<UserRecord> = take_one(
+    // Check email uniqueness.
+    let existing_email: Option<UserRecord> = take_one(
         &mut state
             .db
-            .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
-            .bind(("pk", req.public_key.clone()))
+            .query("SELECT * FROM user WHERE email = $e LIMIT 1")
+            .bind(("e", req.email.trim().to_owned()))
             .await?,
         0,
     )?;
-    if existing_key.is_some() {
-        return Err(AppError::Conflict("public key already registered".into()));
+    if existing_email.is_some() {
+        return Err(AppError::Conflict("email already registered".into()));
     }
 
     let display_name = req.display_name.unwrap_or_else(|| req.username.clone());
@@ -203,11 +293,12 @@ async fn signup(
             .db
             .query(
                 "CREATE user CONTENT { \
-                  username: $u, display_name: $d, \
+                                    username: $u, email: $e, display_name: $d, \
                   public_key: $pk, created_at: time::now() \
                 } RETURN *",
             )
             .bind(("u", req.username.clone()))
+            .bind(("e", req.email.trim().to_owned()))
             .bind(("d", display_name))
             .bind(("pk", req.public_key.clone()))
             .await?,
@@ -238,6 +329,32 @@ async fn signup(
     }))
 }
 
+/// `POST /auth/accounts` — list all existing accounts for an Ed25519 key.
+async fn list_accounts(
+    State(state): State<AppState>,
+    Json(req): Json<AccountsRequest>,
+) -> Result<Json<AccountsResponse>> {
+    if req.public_key.trim().is_empty() {
+        return Err(AppError::BadRequest("public_key required".into()));
+    }
+
+    let _vk = decode_public_key(&req.public_key)?;
+    let users = users_for_public_key(&state, &req.public_key).await?;
+    let accounts = users
+        .into_iter()
+        .filter_map(|user| {
+            let user_id = user.id?;
+            Some(IdentityAccount {
+                user_id,
+                username: user.username,
+                display_name: user.display_name,
+                avatar_url: user.avatar_url,
+            })
+        })
+        .collect();
+    Ok(Json(AccountsResponse { accounts }))
+}
+
 /// `POST /auth/challenge` — request a random nonce for Ed25519 signin.
 ///
 /// The client must sign this nonce and submit it to `/auth/verify`.
@@ -253,18 +370,7 @@ async fn challenge(
     // Validate the public key format.
     let _vk = decode_public_key(&req.public_key)?;
 
-    // Check the public key is registered.
-    let existing: Option<UserRecord> = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
-            .bind(("pk", req.public_key.clone()))
-            .await?,
-        0,
-    )?;
-    if existing.is_none() {
-        return Err(AppError::NotFound);
-    }
+    let _user = resolve_user_for_signin(&state, &req.public_key, req.user_id.as_deref()).await?;
 
     let nonce = random_nonce();
 
@@ -356,16 +462,8 @@ async fn verify(
         .check()
         .map_err(AppError::Db)?;
 
-    // Look up the user by public key.
-    let user: UserRecord = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM user WHERE public_key = $pk LIMIT 1")
-            .bind(("pk", req.public_key.clone()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::Unauthorized)?;
+    // Look up the user by public key + optional selected account.
+    let user = resolve_user_for_signin(&state, &req.public_key, req.user_id.as_deref()).await?;
 
     let user_id = user
         .id

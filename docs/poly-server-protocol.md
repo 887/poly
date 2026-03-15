@@ -3,7 +3,7 @@
 > Reference document for the poly-server HTTP + WebSocket protocol.  
 > This document is the authoritative specification for client implementors.  
 > See `phase-2.2-plan.md` for the implementation checklist.  
-> **Last Updated:** 2026-03-01
+> **Last Updated:** 2026-03-15
 
 ---
 
@@ -24,13 +24,23 @@ marked `No Auth`) require an `Authorization: Bearer <token>` header.
 ```
 Client                                Server
   │                                     │
+  │  POST /auth/accounts                │
+  │  { public_key }                     │
+  │ ─────────────────────────────────► │
+  │ ◄──────────────────────────────── │ 200 { accounts: [{ user_id, username, display_name, avatar_url }] }
+  │                                     │
   │  POST /auth/signup                  │
-  │  { username, password, display_name }
+  │  { public_key, email, username, display_name, device_name? }
   │ ─────────────────────────────────► │
   │ ◄──────────────────────────────── │ 201 { token, device_id, user_id }
   │                                     │
-  │  POST /auth/signin                  │
-  │  { username, password }             │
+  │  POST /auth/challenge               │
+  │  { public_key, user_id? }           │
+  │ ─────────────────────────────────► │
+  │ ◄──────────────────────────────── │ 200 { challenge, expires_at }
+  │                                     │
+  │  POST /auth/verify                  │
+  │  { public_key, user_id?, challenge, signature, device_name? }
   │ ─────────────────────────────────► │
   │ ◄──────────────────────────────── │ 200 { token, device_id, user_id }
   │                                     │
@@ -38,6 +48,15 @@ Client                                Server
   │  Authorization: Bearer <token>      │
   │ ─────────────────────────────────► │
 ```
+
+### Signup semantics
+
+- **Email is required** for Poly Server account creation.
+- **Ed25519 identity key is also required** and becomes the cryptographic identity for that account.
+- **One identity key may own multiple Poly Server accounts on the same server.** Clients should call `POST /auth/accounts` first, let the user choose an existing account if any are returned, and still offer creating another account.
+- If multiple accounts exist for one key, `POST /auth/challenge` / `POST /auth/verify` require `user_id` so the server knows which account to sign in.
+- Public profile endpoints do **not** expose the email address. Only `GET /users/me` returns the caller's own email.
+- Poly clients may create the local identity during signup if one does not already exist.
 
 **Token structure** (JWT, HS256):
 ```json

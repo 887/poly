@@ -60,6 +60,13 @@ pub async fn authenticate_with_token(
 }
 
 /// Verify that authenticate returns an error for stubs that are not implemented.
+#[cfg(any(
+    feature = "test-stoat",
+    feature = "test-matrix",
+    feature = "test-discord",
+    feature = "test-teams",
+    feature = "test-server"
+))]
 pub async fn authenticate_returns_error(backend: &mut PluginBackend) {
     let creds = AuthCredentials::Token("test-token".to_string());
     let result = backend.authenticate(creds).await;
@@ -70,6 +77,13 @@ pub async fn authenticate_returns_error(backend: &mut PluginBackend) {
 }
 
 /// Verify logout succeeds (or is a no-op for stubs).
+#[cfg(any(
+    feature = "test-stoat",
+    feature = "test-matrix",
+    feature = "test-discord",
+    feature = "test-teams",
+    feature = "test-server"
+))]
 pub async fn logout_succeeds(backend: &mut PluginBackend) {
     let result = backend.logout().await;
     // Both Ok(()) and Err(Internal("not implemented")) are acceptable
@@ -323,6 +337,13 @@ pub fn event_stream_is_valid(backend: &PluginBackend) {
 // ─── Stub Convenience: verify empty-list methods ───────────────────
 
 /// For stub backends: verify all list-returning methods return empty lists.
+#[cfg(any(
+    feature = "test-stoat",
+    feature = "test-matrix",
+    feature = "test-discord",
+    feature = "test-teams",
+    feature = "test-server"
+))]
 pub async fn assert_stub_returns_empty_lists(backend: &PluginBackend) {
     let servers = backend.get_servers().await.expect("get_servers ok");
     assert!(servers.is_empty(), "Stub get_servers() should be empty");

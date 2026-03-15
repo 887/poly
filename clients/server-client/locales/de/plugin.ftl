@@ -7,7 +7,7 @@ plugin-poly-signup-desc = Verbinde dich mit einem selbst gehosteten Poly-Server.
 
 # --- Signup page ---
 plugin-poly-signup-title = Poly-Server-Konto hinzufügen
-plugin-poly-signup-description = Gib deine Server-URL ein. Wenn dein Schlüssel bereits registriert ist, wirst du automatisch angemeldet.
+plugin-poly-signup-description = Gib deine Server-URL ein. Poly verwendet deinen Geräte-Identitätsschlüssel zur Anmeldung, und neue Poly-Server-Konten benötigen zusätzlich eine E-Mail-Adresse.
 plugin-poly-signup-back = ← Backend wählen
 plugin-poly-signup-url-label = Server-URL
 plugin-poly-signup-url-placeholder = http://127.0.0.1:7080
@@ -16,17 +16,22 @@ plugin-poly-signup-url-placeholder = http://127.0.0.1:7080
 plugin-poly-connect-btn = Verbinden
 
 # --- Schritt 2: Registrierungsformular ---
-plugin-poly-signup-no-account-desc = Für deinen Geräteschlüssel wurde auf diesem Server kein Konto gefunden. Wähle einen Benutzernamen, um ein neues Konto zu erstellen.
+plugin-poly-signup-no-account-desc = Für deinen Identitätsschlüssel wurde auf diesem Server kein Konto gefunden. Wähle einen Benutzernamen und eine E-Mail-Adresse, um ein neues Konto zu erstellen.
+plugin-poly-existing-accounts-desc = Auf diesem Server sind bereits ein oder mehrere Konten mit deinem Identitätsschlüssel verknüpft. Wähle eines zum Anmelden oder erstelle ein weiteres Konto auf diesem Server.
+plugin-poly-signup-another-account-desc = Dieser Identitätsschlüssel ist auf diesem Server bereits mit anderen Konten verknüpft. Wähle einen Benutzernamen und eine E-Mail-Adresse, um ein zusätzliches Konto zu erstellen.
 plugin-poly-signup-username-label = Benutzername
 plugin-poly-signup-username-placeholder = alice
+plugin-poly-signup-email-label = E-Mail-Adresse
+plugin-poly-signup-email-placeholder = alice@example.com
 plugin-poly-signup-displayname-label = Anzeigename
 plugin-poly-signup-displayname-placeholder = Alice
 plugin-poly-create-account-btn = Konto erstellen
+plugin-poly-create-another-account-btn = Weiteres Konto erstellen
 plugin-poly-signup-back-btn = ← Zurück
 
 # --- Gemeinsam ---
 plugin-poly-signup-connecting = Verbinde…
-plugin-poly-signup-no-identity = Kein Identitätsschlüssel gefunden. Erstelle zuerst einen unter Einstellungen → Identität.
+plugin-poly-signup-no-identity = Poly konnte keinen Identitätsschlüssel für die Registrierung vorbereiten.
 
 # --- Plugin-Einstellungsseite ---
 plugin-poly-title = Poly Server

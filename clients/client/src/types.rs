@@ -179,7 +179,9 @@ pub enum AuthCredentials {
     ///
     /// The `server_url` is the base URL of the poly-server instance.
     /// `private_key_bytes` are the raw 32-byte Ed25519 signing key.
-    /// On signup, `username` and `display_name` are also provided.
+    /// On signup, `username`, `email`, and `display_name` are also provided.
+    /// On signin, `selected_user_id` optionally selects which server account to
+    /// authenticate when multiple accounts share the same identity key.
     PolyServer {
         /// Base URL of the poly-server instance (e.g. `http://127.0.0.1:7080`).
         server_url: String,
@@ -187,8 +189,13 @@ pub enum AuthCredentials {
         private_key_bytes: Vec<u8>,
         /// Username (used for signup only).
         username: Option<String>,
+        /// Email address (used for signup only).
+        email: Option<String>,
         /// Display name (used for signup only).
         display_name: Option<String>,
+        /// Selected server account ID for signin when one identity key maps to
+        /// multiple Poly Server accounts.
+        selected_user_id: Option<String>,
         /// Whether this is a signup (true) or signin (false).
         is_signup: bool,
     },

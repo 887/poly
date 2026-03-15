@@ -137,6 +137,10 @@ fn make_client_with_key(srv: &TestServer, key: [u8; 32]) -> PolyServerHttpClient
     PolyServerHttpClient::new(config)
 }
 
+fn test_email(username: &str) -> String {
+    format!("{username}@example.test")
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -158,7 +162,10 @@ async fn test_signup_and_signin() {
     let client = make_client_with_key(&srv, key);
 
     // Sign up.
-    let auth1 = client.signup("alice", Some("Alice")).await.expect("signup");
+    let auth1 = client
+        .signup("alice", &test_email("alice"), Some("Alice"))
+        .await
+        .expect("signup");
     assert!(!auth1.token.is_empty());
     assert!(!auth1.user_id.is_empty());
     assert!(client.is_authenticated().await);
@@ -173,17 +180,68 @@ async fn test_signup_and_signin() {
     assert!(!client.is_authenticated().await);
 
     // Sign back in with the same key via challenge-response.
-    let auth2 = client.signin().await.expect("signin");
+    let auth2 = client.signin(None).await.expect("signin");
     assert!(!auth2.token.is_empty());
     assert_eq!(auth2.user_id, auth1.user_id);
     assert!(client.is_authenticated().await);
 }
 
 #[tokio::test]
+async fn test_list_accounts_and_sign_in_selected_account() {
+    let srv = TestServer::start().await;
+    let key = random_key();
+
+    let first = make_client_with_key(&srv, key);
+    let auth1 = first
+        .signup(
+            "alice_multi",
+            &test_email("alice_multi"),
+            Some("Alice Multi"),
+        )
+        .await
+        .expect("first signup");
+    first.signout().await.expect("first signout");
+
+    let second = make_client_with_key(&srv, key);
+    let auth2 = second
+        .signup(
+            "alice_multi_two",
+            &test_email("alice_multi_two"),
+            Some("Alice Multi Two"),
+        )
+        .await
+        .expect("second signup");
+    second.signout().await.expect("second signout");
+
+    let chooser = make_client_with_key(&srv, key);
+    let accounts = chooser.list_accounts().await.expect("list accounts");
+    assert_eq!(accounts.len(), 2);
+    assert!(
+        accounts
+            .iter()
+            .any(|account| account.user_id == auth1.user_id)
+    );
+    assert!(
+        accounts
+            .iter()
+            .any(|account| account.user_id == auth2.user_id)
+    );
+
+    let selected = chooser
+        .signin(Some(&auth2.user_id))
+        .await
+        .expect("signin selected");
+    assert_eq!(selected.user_id, auth2.user_id);
+}
+
+#[tokio::test]
 async fn test_create_server_and_channels() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("bob", None).await.expect("signup");
+    client
+        .signup("bob", &test_email("bob"), None)
+        .await
+        .expect("signup");
 
     // Create a server.
     let server = client
@@ -225,7 +283,10 @@ async fn test_create_server_and_channels() {
 async fn test_send_and_list_messages() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("charlie", None).await.expect("signup");
+    client
+        .signup("charlie", &test_email("charlie"), None)
+        .await
+        .expect("signup");
 
     // Create server + channel.
     let server = client
@@ -276,7 +337,10 @@ async fn test_send_and_list_messages() {
 async fn test_edit_and_delete_message() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("dave", None).await.expect("signup");
+    client
+        .signup("dave", &test_email("dave"), None)
+        .await
+        .expect("signup");
 
     let server = client
         .create_server("Edit Guild")
@@ -326,13 +390,16 @@ async fn test_friend_request_and_dm() {
     let key_alice = random_key();
     let alice = make_client_with_key(&srv, key_alice);
     let _alice_auth = alice
-        .signup("alice_fr", Some("Alice"))
+        .signup("alice_fr", &test_email("alice_fr"), Some("Alice"))
         .await
         .expect("signup alice");
 
     let key_bob = random_key();
     let bob = make_client_with_key(&srv, key_bob);
-    let bob_auth = bob.signup("bob_fr", Some("Bob")).await.expect("signup bob");
+    let bob_auth = bob
+        .signup("bob_fr", &test_email("bob_fr"), Some("Bob"))
+        .await
+        .expect("signup bob");
 
     // Alice sends friend request to Bob (by username).
     let fr = alice
@@ -394,7 +461,10 @@ async fn test_invite_and_join_server() {
 
     // Alice creates a server.
     let alice = make_client(&srv);
-    alice.signup("alice_inv", None).await.expect("signup");
+    alice
+        .signup("alice_inv", &test_email("alice_inv"), None)
+        .await
+        .expect("signup");
     let server = alice
         .create_server("Invite Guild")
         .await
@@ -410,7 +480,9 @@ async fn test_invite_and_join_server() {
 
     // Bob joins via invite.
     let bob = make_client(&srv);
-    bob.signup("bob_inv", None).await.expect("signup");
+    bob.signup("bob_inv", &test_email("bob_inv"), None)
+        .await
+        .expect("signup");
     bob.join_server(&invite.code).await.expect("join_server");
 
     // Bob should now see the server in his list.
@@ -428,7 +500,10 @@ async fn test_websocket_events() {
     // Sign up and create a server + channel.
     let key = random_key();
     let client = make_client_with_key(&srv, key);
-    let _auth = client.signup("eve_ws", None).await.expect("signup");
+    let _auth = client
+        .signup("eve_ws", &test_email("eve_ws"), None)
+        .await
+        .expect("signup");
 
     let server = client
         .create_server("WS Guild")
@@ -484,7 +559,10 @@ async fn test_websocket_events() {
 async fn test_reactions() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("frank_rx", None).await.expect("signup");
+    client
+        .signup("frank_rx", &test_email("frank_rx"), None)
+        .await
+        .expect("signup");
 
     let server = client
         .create_server("React Guild")
@@ -526,7 +604,10 @@ async fn test_reactions() {
 async fn test_server_detail() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("gina_detail", None).await.expect("signup");
+    client
+        .signup("gina_detail", &test_email("gina_detail"), None)
+        .await
+        .expect("signup");
 
     let server = client
         .create_server("Detail Guild")
@@ -551,7 +632,10 @@ async fn test_server_detail() {
 async fn test_devices() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("henry_dev", None).await.expect("signup");
+    client
+        .signup("henry_dev", &test_email("henry_dev"), None)
+        .await
+        .expect("signup");
 
     let devices = client.get_devices().await.expect("get_devices");
     // At least one device (the current session).
@@ -564,7 +648,10 @@ async fn test_devices() {
 async fn test_reply_message() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("irene_reply", None).await.expect("signup");
+    client
+        .signup("irene_reply", &test_email("irene_reply"), None)
+        .await
+        .expect("signup");
 
     let server = client
         .create_server("Reply Guild")
@@ -600,7 +687,10 @@ async fn test_reply_message() {
 async fn test_update_and_delete_server() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("jake_server", None).await.expect("signup");
+    client
+        .signup("jake_server", &test_email("jake_server"), None)
+        .await
+        .expect("signup");
 
     // Create a server.
     let server = client
@@ -636,7 +726,10 @@ async fn test_kick_member() {
 
     // Alice creates a server.
     let alice = make_client(&srv);
-    alice.signup("alice_kick", None).await.expect("signup");
+    alice
+        .signup("alice_kick", &test_email("alice_kick"), None)
+        .await
+        .expect("signup");
     let server = alice
         .create_server("Kick Guild")
         .await
@@ -651,7 +744,10 @@ async fn test_kick_member() {
 
     // Bob joins.
     let bob = make_client(&srv);
-    let bob_auth = bob.signup("bob_kick", None).await.expect("signup bob");
+    let bob_auth = bob
+        .signup("bob_kick", &test_email("bob_kick"), None)
+        .await
+        .expect("signup bob");
     bob.join_server(&invite.code).await.expect("join_server");
 
     // Bob should be a member.
@@ -679,7 +775,10 @@ async fn test_kick_member() {
 async fn test_update_and_delete_channel() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("kate_ch", None).await.expect("signup");
+    client
+        .signup("kate_ch", &test_email("kate_ch"), None)
+        .await
+        .expect("signup");
 
     let server = client
         .create_server("Channel Guild")
@@ -713,7 +812,10 @@ async fn test_update_and_delete_channel() {
 async fn test_category_crud() {
     let srv = TestServer::start().await;
     let client = make_client(&srv);
-    client.signup("leo_cat", None).await.expect("signup");
+    client
+        .signup("leo_cat", &test_email("leo_cat"), None)
+        .await
+        .expect("signup");
 
     let server = client
         .create_server("Category Guild")
@@ -769,10 +871,16 @@ async fn test_remove_friend() {
     let srv = TestServer::start().await;
 
     let alice = make_client(&srv);
-    alice.signup("alice_unfriend", None).await.expect("signup");
+    alice
+        .signup("alice_unfriend", &test_email("alice_unfriend"), None)
+        .await
+        .expect("signup");
 
     let bob = make_client(&srv);
-    let bob_auth = bob.signup("bob_unfriend", None).await.expect("signup bob");
+    let bob_auth = bob
+        .signup("bob_unfriend", &test_email("bob_unfriend"), None)
+        .await
+        .expect("signup bob");
 
     // Alice sends a friend request.
     let fr = alice

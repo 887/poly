@@ -153,12 +153,18 @@ impl PolyServerHttpClient {
         Ok(resp.json().await?)
     }
 
-    /// `POST /auth/signup` — register with Ed25519 public key.
-    pub async fn signup(&self, username: &str, display_name: Option<&str>) -> Result<AuthResponse> {
+    /// `POST /auth/signup` — register with Ed25519 public key + email.
+    pub async fn signup(
+        &self,
+        username: &str,
+        email: &str,
+        display_name: Option<&str>,
+    ) -> Result<AuthResponse> {
         let pk_hex = self.public_key_hex();
         let body = json!({
             "public_key": pk_hex,
             "username": username,
+            "email": email,
             "display_name": display_name.unwrap_or(username),
         });
         let resp = self
@@ -180,15 +186,34 @@ impl PolyServerHttpClient {
         Ok(auth)
     }
 
+    /// `POST /auth/accounts` — list accounts linked to this identity key.
+    pub async fn list_accounts(&self) -> Result<Vec<IdentityAccount>> {
+        let pk_hex = self.public_key_hex();
+        let resp = self
+            .http
+            .post(self.url("/auth/accounts"))
+            .json(&json!({ "public_key": pk_hex }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        let lookup: AccountLookupResponse = resp.json().await?;
+        Ok(lookup.accounts)
+    }
+
     /// `POST /auth/challenge` + `POST /auth/verify` — Ed25519 challenge-response signin.
-    pub async fn signin(&self) -> Result<AuthResponse> {
+    pub async fn signin(&self, selected_user_id: Option<&str>) -> Result<AuthResponse> {
         let pk_hex = self.public_key_hex();
 
         // Step 1: Request challenge nonce.
         let challenge_resp = self
             .http
             .post(self.url("/auth/challenge"))
-            .json(&json!({ "public_key": pk_hex }))
+            .json(&json!({
+                "public_key": pk_hex,
+                "user_id": selected_user_id,
+            }))
             .send()
             .await?;
         if !challenge_resp.status().is_success() {
@@ -208,6 +233,7 @@ impl PolyServerHttpClient {
             .post(self.url("/auth/verify"))
             .json(&json!({
                 "public_key": pk_hex,
+                "user_id": selected_user_id,
                 "challenge": challenge.challenge,
                 "signature": sig_hex,
             }))

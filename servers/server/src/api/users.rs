@@ -60,7 +60,7 @@ async fn me(
         0,
     )?
     .ok_or(AppError::NotFound)?;
-    Ok(Json(user_to_profile(user)?))
+    Ok(Json(user_to_self_profile(user)?))
 }
 
 async fn update_me(
@@ -135,6 +135,7 @@ async fn list_friends(
             Some(UserProfile {
                 id: side.get("id")?.as_str()?.to_owned(),
                 username: side.get("username")?.as_str()?.to_owned(),
+                email: None,
                 display_name: side.get("display_name")?.as_str()?.to_owned(),
                 avatar_url: side
                     .get("avatar_url")
@@ -253,6 +254,21 @@ pub fn user_to_profile(user: UserRecord) -> Result<UserProfile> {
     Ok(UserProfile {
         id,
         username: user.username,
+        email: None,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url,
+    })
+}
+
+/// Convert a `UserRecord` to the private `UserProfile` shape returned by `/users/me`.
+pub fn user_to_self_profile(user: UserRecord) -> Result<UserProfile> {
+    let id = user
+        .id
+        .ok_or_else(|| AppError::Internal("missing user id".into()))?;
+    Ok(UserProfile {
+        id,
+        username: user.username,
+        email: Some(user.email),
         display_name: user.display_name,
         avatar_url: user.avatar_url,
     })

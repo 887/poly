@@ -17,6 +17,13 @@
 use crate::i18n::t;
 use dioxus::prelude::*;
 
+#[derive(Clone, PartialEq)]
+struct LinkedPolyAccount {
+    account_id: String,
+    display_name: String,
+    server_url: Option<String>,
+}
+
 /// Generate a brand-new identity and store it. Returns (account_id, words).
 async fn create_identity() -> Result<(String, Vec<String>), String> {
     let s = crate::STORAGE
@@ -231,7 +238,7 @@ fn IdentityCard(
     on_delete: EventHandler<String>,
 ) -> Element {
     let mut servers: Signal<Vec<crate::storage::BackupServerRecord>> = use_signal(Vec::new);
-    let mut poly_accounts: Signal<Vec<String>> = use_signal(Vec::new);
+    let mut poly_accounts: Signal<Vec<LinkedPolyAccount>> = use_signal(Vec::new);
     let mut show_delete_confirm = use_signal(|| false);
 
     use_future(move || async move {
@@ -242,18 +249,23 @@ fn IdentityCard(
         }
     });
 
-    // Load Poly server accounts from ClientManager
-    {
-        let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
-        let cm = client_manager.read();
-        let poly_ids: Vec<String> = cm
-            .sessions
-            .iter()
-            .filter(|(_, session)| session.backend == poly_client::BackendType::Poly)
-            .map(|(id, _)| id.clone())
-            .collect();
-        poly_accounts.set(poly_ids);
-    }
+    use_future(move || async move {
+        if let Some(s) = crate::STORAGE.get()
+            && let Ok(tokens) = s.get_account_tokens().await
+        {
+            poly_accounts.set(
+                tokens
+                    .into_iter()
+                    .filter(|token| token.backend == "poly")
+                    .map(|token| LinkedPolyAccount {
+                        account_id: token.account_id,
+                        display_name: token.display_name,
+                        server_url: token.instance_id,
+                    })
+                    .collect(),
+            );
+        }
+    });
 
     rsx! {
         div { class: "identity-card",
@@ -294,10 +306,19 @@ fn IdentityCard(
                     }
                 }
             }
+
+            div { class: "settings-description",
+                p { "{t(\"settings-identity-purpose\")}" }
+                ul { class: "settings-list",
+                    li { "{t(\"settings-identity-purpose-poly\")}" }
+                    li { "{t(\"settings-identity-purpose-backup\")}" }
+                }
+            }
             
             if !servers.read().is_empty() {
                 div { class: "identity-card-usage",
                     h4 { class: "settings-subsection-title", "{t(\"settings-identity-backup-servers\")}" }
+                    p { class: "settings-hint", "{t(\"settings-identity-backup-servers-description\")}" }
                     div { class: "identity-server-list",
                         for server in servers.read().iter() {
                             div { class: "identity-server-row",
@@ -307,25 +328,49 @@ fn IdentityCard(
                                 }
                                 span {
                                     class: if server.enabled { "identity-server-status status-ok" } else { "identity-server-status status-off" },
-                                    if server.enabled { "Active" } else { "Disabled" }
+                                    if server.enabled {
+                                        "{t(\"settings-identity-status-active\")}" 
+                                    } else {
+                                        "{t(\"settings-identity-status-disabled\")}" 
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+            else {
+                div { class: "identity-card-usage",
+                    h4 { class: "settings-subsection-title", "{t(\"settings-identity-backup-servers\")}" }
+                    p { class: "settings-hint", "{t(\"settings-identity-backup-servers-description\")}" }
+                    p { class: "settings-info", "{t(\"settings-identity-no-servers\")}" }
+                }
+            }
             
             if !poly_accounts.read().is_empty() {
                 div { class: "identity-card-usage",
                     h4 { class: "settings-subsection-title", "{t(\"settings-identity-poly-accounts\")}" }
+                    p { class: "settings-hint", "{t(\"settings-identity-poly-accounts-description\")}" }
                     div { class: "identity-server-list",
                         for acct in poly_accounts.read().iter() {
                             div { class: "identity-server-row",
-                                span { class: "identity-server-label", "{acct}" }
-                                span { class: "identity-server-status status-ok", "Active" }
+                                div { class: "identity-server-info",
+                                    span { class: "identity-server-label", "{acct.display_name}" }
+                                    span { class: "identity-server-url",
+                                        "{acct.server_url.clone().unwrap_or_else(|| acct.account_id.clone())}"
+                                    }
+                                }
+                                span { class: "identity-server-status status-ok", "{t(\"settings-identity-status-active\")}" }
                             }
                         }
                     }
+                }
+            }
+            else {
+                div { class: "identity-card-usage",
+                    h4 { class: "settings-subsection-title", "{t(\"settings-identity-poly-accounts\")}" }
+                    p { class: "settings-hint", "{t(\"settings-identity-poly-accounts-description\")}" }
+                    p { class: "settings-info", "{t(\"settings-identity-no-poly-accounts\")}" }
                 }
             }
             

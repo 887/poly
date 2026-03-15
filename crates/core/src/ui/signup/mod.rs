@@ -40,6 +40,27 @@ use poly_client::{SignupCompleted, SignupContext};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Ensure the Poly signup flow always has an identity key available.
+async fn ensure_poly_signup_identity(client: &str) -> Option<Vec<u8>> {
+    let storage = crate::STORAGE.get()?;
+    let existing = storage.get_identity_key().await.ok().flatten();
+    if existing.is_some() || client != "poly" {
+        return existing.map(|key| key.to_vec());
+    }
+
+    let identity = crate::crypto::Identity::generate();
+    let account_id = identity.public_identity().account_id;
+    let key_bytes = identity.private_key_bytes();
+    storage.set_identity_key(&key_bytes).await.ok()?;
+
+    if let Ok(mut settings) = storage.get_app_settings().await {
+        settings.account_id = account_id;
+        let _ = storage.set_app_settings(&settings).await;
+    }
+
+    Some(key_bytes.to_vec())
+}
+
 // ── Navigation helper ────────────────────────────────────────────────────────
 
 /// Navigate back to Settings.
@@ -137,9 +158,12 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
     let mut chat_data      = use_context::<Signal<ChatData>>();
 
     // Load private key async — hooks must run unconditionally before any returns.
-    let key_resource = use_resource(move || async move {
-        let storage = crate::STORAGE.get()?;
-        storage.get_identity_key().await.ok().flatten()
+    let key_resource = use_resource({
+        let client_slug = client.clone();
+        move || {
+            let client_slug = client_slug.clone();
+            async move { ensure_poly_signup_identity(&client_slug).await }
+        }
     });
 
     // Find the render fn pointer — copy before releasing the borrow.
@@ -152,11 +176,11 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
 
     let right_content: Element = if let Some(render) = render_fn {
         // Blank content while the key resource is still loading (usually < 1 frame).
-        match *key_resource.read() {
+        match key_resource.read().clone() {
             None => rsx! { div { class: "signup-content" } },
             Some(opt_key) => {
                 let ctx = SignupContext {
-                    private_key: opt_key.map(|k| k.to_vec()),
+                    private_key: opt_key,
                     t: crate::i18n::t,
                     navigate_back: navigate_back_to_settings,
                 };

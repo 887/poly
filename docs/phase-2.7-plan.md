@@ -32,7 +32,7 @@ Build a full `ClientBackend` implementation for our own `poly-server`, proving t
 │  Client                                   Server                   │
 │    │                                        │                      │
 │    │  POST /auth/signup                     │                      │
-│    │  { public_key, username, display_name } │                      │
+│    │  { public_key, email, username, display_name } │              │
 │    │ ─────────────────────────────────────► │                      │
 │    │   (server stores public_key + user)    │                      │
 │    │ ◄──────────────────────────────────── │                      │
@@ -68,7 +68,7 @@ Build a full `ClientBackend` implementation for our own `poly-server`, proving t
 - [ ] **2.7.0.4** Add `rand` to poly-server dependencies (for challenge nonce generation)
 - [ ] **2.7.0.5** Update `user` DB schema — add `public_key: String` field, remove `password_hash` requirement (make optional for migration)
 - [ ] **2.7.0.6** Create `challenge` DB table — `{ id, public_key, nonce, expires_at, used }`
-- [ ] **2.7.0.7** Implement `POST /auth/signup` (key-based) — accept `{ public_key, username, display_name }`, store hex-encoded public key, reject duplicates on both username and public_key
+- [ ] **2.7.0.7** Implement `POST /auth/signup` (key-based) — accept `{ public_key, email, username, display_name }`, store hex-encoded public key, reject duplicates on username, email, and public_key
 - [ ] **2.7.0.8** Implement `POST /auth/challenge` — accept `{ public_key }`, look up user, generate 32-byte random nonce, store in `challenge` table with 60s TTL, return `{ challenge: hex_nonce, expires_at }`
 - [ ] **2.7.0.9** Implement `POST /auth/verify` — accept `{ public_key, challenge, signature }`, verify Ed25519 signature of the challenge bytes using stored public key, invalidate challenge, create device, return `{ token, user_id, device_id }`
 - [ ] **2.7.0.10** Remove old password fields from `SignupRequest`/`SigninRequest` (or keep as optional for migration path)
@@ -88,7 +88,7 @@ Build a full `ClientBackend` implementation for our own `poly-server`, proving t
 - [ ] **2.7.1.2** Dependencies: `reqwest` (JSON + multipart), `tokio-tungstenite` (native-tls), `ed25519-dalek`, `hex`, `serde`, `serde_json`, `thiserror`, `tracing`, `tokio`, `futures`, `tokio-stream` 
 - [ ] **2.7.1.3** Define `PolyServerConfig` — `{ base_url: String, public_key: [u8; 32], private_key: [u8; 32] }`
 - [ ] **2.7.1.4** Implement `PolyServerHttpClient` — reqwest-based HTTP client with `Authorization: Bearer` header injection
-- [ ] **2.7.1.5** Implement `signup(username, display_name)` — POST /auth/signup with public_key
+- [ ] **2.7.1.5** Implement `signup(username, email, display_name)` — POST /auth/signup with public_key
 - [ ] **2.7.1.6** Implement `signin()` — POST /auth/challenge → sign nonce → POST /auth/verify
 - [ ] **2.7.1.7** Implement `signout()` — POST /auth/signout
 - [ ] **2.7.1.8** Implement `server_info()` — GET /server-info

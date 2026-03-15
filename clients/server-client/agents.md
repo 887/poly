@@ -1,7 +1,7 @@
 # poly-server-client — Agent Instructions
 
 > **Read the root `agents.md` first.**
-> **Last updated:** 2026-03-06
+> **Last updated:** 2026-03-15
 
 ---
 
@@ -60,6 +60,14 @@ cargo component build -p poly-server-client --target wasm32-wasip2 --no-default-
 - Future: HTTP calls will be routed through the WIT `host-api` imports instead of reqwest
 
 ## Development notes
+
+### Multi-account identity flow (2026-03-15)
+
+- Poly Server no longer assumes `public_key -> exactly one user`.
+- The client must call `POST /auth/accounts` to discover all existing server accounts for the current Ed25519 identity key.
+- If accounts exist, the signup UI must present an account picker **and** a "Create Another Account" path.
+- `PolyServerHttpClient::signin` now takes `selected_user_id: Option<&str>` and must forward it to both `/auth/challenge` and `/auth/verify`.
+- Thread this through `AuthCredentials::PolyServer.selected_user_id` and keep the WIT bridge in sync.
 
 - **Tests:** The integration suite (`tests/integration.rs`) boots an in-process
   `poly-server` with a temporary SurrealKV database. Run as

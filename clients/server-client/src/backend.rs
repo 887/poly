@@ -189,18 +189,23 @@ impl ClientBackend for PolyServerBackend {
                 server_url: _,
                 private_key_bytes: _,
                 username,
+                email,
                 display_name,
+                selected_user_id,
                 is_signup,
             } => {
                 let auth = if is_signup {
                     let uname = username.as_deref().unwrap_or("user");
+                    let signup_email = email.as_deref().ok_or_else(|| {
+                        ClientError::AuthFailed("email required for Poly Server signup".to_string())
+                    })?;
                     self.http
-                        .signup(uname, display_name.as_deref())
+                        .signup(uname, signup_email, display_name.as_deref())
                         .await
                         .map_err(|e| ClientError::AuthFailed(e.to_string()))?
                 } else {
                     self.http
-                        .signin()
+                        .signin(selected_user_id.as_deref())
                         .await
                         .map_err(|e| ClientError::AuthFailed(e.to_string()))?
                 };
@@ -242,7 +247,7 @@ impl ClientBackend for PolyServerBackend {
                 let _ = token;
                 let auth = self
                     .http
-                    .signin()
+                    .signin(None)
                     .await
                     .map_err(|e| ClientError::AuthFailed(e.to_string()))?;
                 self.account_id = Some(auth.user_id.clone());

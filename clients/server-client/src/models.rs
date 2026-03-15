@@ -23,6 +23,21 @@ pub struct ChallengeResponse {
     pub expires_at: String,
 }
 
+/// Summary of an existing Poly Server account linked to an identity key.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct IdentityAccount {
+    pub user_id: String,
+    pub username: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+}
+
+/// Response from `POST /auth/accounts`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AccountLookupResponse {
+    pub accounts: Vec<IdentityAccount>,
+}
+
 /// Response from `GET /server-info`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServerInfo {
@@ -38,6 +53,8 @@ pub struct ServerInfo {
 pub struct UserProfile {
     pub id: String,
     pub username: String,
+    #[serde(default)]
+    pub email: Option<String>,
     pub display_name: String,
     pub avatar_url: Option<String>,
 }

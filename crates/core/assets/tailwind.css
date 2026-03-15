@@ -626,7 +626,7 @@ body {
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    position: absolute;
+    display: inline-block;
 }
 
 /* ---- Inline (account bar) status dot colours ----

@@ -136,10 +136,16 @@ fn gen_keypair() -> (SigningKey, String) {
 /// Sign up with a fresh keypair.
 async fn signup(srv: &TestServer, username: &str) -> (SigningKey, Value) {
     let (sk, pk_hex) = gen_keypair();
+    let email = format!("{username}@example.test");
     let resp = srv
         .client
         .post(srv.url("/auth/signup"))
-        .json(&json!({ "public_key": pk_hex, "username": username, "display_name": username }))
+        .json(&json!({
+            "public_key": pk_hex,
+            "username": username,
+            "email": email,
+            "display_name": username
+        }))
         .send()
         .await
         .expect("signup request");
@@ -149,29 +155,37 @@ async fn signup(srv: &TestServer, username: &str) -> (SigningKey, Value) {
     (sk, body)
 }
 
-/// Sign up with a specific keypair (for key-reuse scenarios).
+/// Sign up another account reusing an existing keypair.
 async fn signup_with_key(srv: &TestServer, sk: &SigningKey, username: &str) -> Value {
     let pk_hex = hex::encode(sk.verifying_key().to_bytes());
-    srv.client
+    let email = format!("{username}@example.test");
+    let resp = srv
+        .client
         .post(srv.url("/auth/signup"))
-        .json(&json!({ "public_key": pk_hex, "username": username, "display_name": username }))
+        .json(&json!({
+            "public_key": pk_hex,
+            "username": username,
+            "email": email,
+            "display_name": username
+        }))
         .send()
         .await
-        .expect("signup request")
-        .json()
-        .await
-        .expect("signup json")
+        .expect("signup request");
+    let status = resp.status();
+    let body: Value = resp.json().await.expect("signup json");
+    assert!(status.is_success(), "signup failed: {status} — {body}");
+    body
 }
 
 /// Challenge-response signin. Returns the JWT token.
-async fn signin(srv: &TestServer, sk: &SigningKey) -> String {
+async fn signin(srv: &TestServer, sk: &SigningKey, user_id: Option<&str>) -> String {
     let pk_hex = hex::encode(sk.verifying_key().to_bytes());
 
     // Step 1: Request challenge.
     let challenge_resp: Value = srv
         .client
         .post(srv.url("/auth/challenge"))
-        .json(&json!({ "public_key": pk_hex }))
+        .json(&json!({ "public_key": pk_hex, "user_id": user_id }))
         .send()
         .await
         .expect("challenge request")
@@ -193,6 +207,7 @@ async fn signin(srv: &TestServer, sk: &SigningKey) -> String {
         .post(srv.url("/auth/verify"))
         .json(&json!({
             "public_key": pk_hex,
+            "user_id": user_id,
             "challenge": challenge_hex,
             "signature": sig_hex,
         }))
@@ -245,14 +260,34 @@ async fn test_auth_flow() {
     let dup = srv
         .client
         .post(srv.url("/auth/signup"))
-        .json(&json!({ "public_key": dup_pk, "username": "alice", "display_name": "a" }))
+        .json(&json!({
+            "public_key": dup_pk,
+            "username": "alice",
+            "email": "alice-dup@example.test",
+            "display_name": "a"
+        }))
         .send()
         .await
         .expect("dup req");
     assert_eq!(dup.status().as_u16(), 409);
 
+    let (_, dup_email_pk) = gen_keypair();
+    let dup_email = srv
+        .client
+        .post(srv.url("/auth/signup"))
+        .json(&json!({
+            "public_key": dup_email_pk,
+            "username": "alice-two",
+            "email": "alice@example.test",
+            "display_name": "Alice Two"
+        }))
+        .send()
+        .await
+        .expect("dup email req");
+    assert_eq!(dup_email.status().as_u16(), 409);
+
     // Signin via challenge-response.
-    let token = signin(&srv, &sk).await;
+    let token = signin(&srv, &sk, None).await;
     assert!(!token.is_empty());
 
     // Wrong key should fail challenge (unregistered key → 404).
@@ -301,11 +336,60 @@ async fn test_auth_flow() {
 }
 
 #[tokio::test]
+async fn test_multi_account_identity_key_requires_selection() {
+    let srv = TestServer::start().await;
+
+    let (sk, first_signup) = signup(&srv, "alice_multi").await;
+    let second_signup = signup_with_key(&srv, &sk, "alice_multi_two").await;
+
+    let pk_hex = hex::encode(sk.verifying_key().to_bytes());
+    let accounts: Value = srv
+        .client
+        .post(srv.url("/auth/accounts"))
+        .json(&json!({ "public_key": pk_hex }))
+        .send()
+        .await
+        .expect("accounts request")
+        .json()
+        .await
+        .expect("accounts json");
+
+    let listed = accounts["accounts"].as_array().expect("accounts array");
+    assert_eq!(listed.len(), 2);
+
+    let ambiguous = srv
+        .client
+        .post(srv.url("/auth/challenge"))
+        .json(&json!({ "public_key": pk_hex }))
+        .send()
+        .await
+        .expect("ambiguous challenge");
+    assert_eq!(ambiguous.status().as_u16(), 400);
+
+    let first_user_id = first_signup["user_id"].as_str().expect("first user id");
+    let second_user_id = second_signup["user_id"].as_str().expect("second user id");
+    assert_ne!(first_user_id, second_user_id);
+
+    let token = signin(&srv, &sk, Some(second_user_id)).await;
+    let me: Value = srv
+        .client
+        .get(srv.url("/users/me"))
+        .header("Authorization", auth_header(&token))
+        .send()
+        .await
+        .expect("me req")
+        .json()
+        .await
+        .expect("me json");
+    assert_eq!(me["username"], "alice_multi_two");
+}
+
+#[tokio::test]
 async fn test_device_management() {
     let srv = TestServer::start().await;
     let (sk, _) = signup(&srv, "bob").await;
-    let token1 = signin(&srv, &sk).await;
-    let token2 = signin(&srv, &sk).await;
+    let token1 = signin(&srv, &sk, None).await;
+    let token2 = signin(&srv, &sk, None).await;
 
     // Both tokens work.
     for t in [&token1, &token2] {
@@ -354,7 +438,7 @@ async fn test_device_management() {
 async fn test_server_and_channels() {
     let srv = TestServer::start().await;
     let (sk, _) = signup(&srv, "carol").await;
-    let token = signin(&srv, &sk).await;
+    let token = signin(&srv, &sk, None).await;
     let hdr = auth_header(&token);
 
     // Create a server.
@@ -446,7 +530,7 @@ async fn test_server_and_channels() {
 async fn test_reactions() {
     let srv = TestServer::start().await;
     let (sk, _) = signup(&srv, "dan").await;
-    let token = signin(&srv, &sk).await;
+    let token = signin(&srv, &sk, None).await;
     let hdr = auth_header(&token);
 
     // Minimal setup.
@@ -536,11 +620,11 @@ async fn test_direct_messages() {
     let srv = TestServer::start().await;
     let (eve_sk, _) = signup(&srv, "eve").await;
     let (frank_sk, _) = signup(&srv, "frank").await;
-    let eve_token = signin(&srv, &eve_sk).await;
+    let eve_token = signin(&srv, &eve_sk, None).await;
     let eve_hdr = auth_header(&eve_token);
 
     let frank_me: Value = {
-        let ft = signin(&srv, &frank_sk).await;
+        let ft = signin(&srv, &frank_sk, None).await;
         srv.client
             .get(srv.url("/users/me"))
             .header("Authorization", auth_header(&ft))
@@ -601,9 +685,9 @@ async fn test_file_upload_and_access() {
     let srv = TestServer::start().await;
     let (grace_sk, _) = signup(&srv, "grace").await;
     let (heidi_sk, _) = signup(&srv, "heidi").await;
-    let grace_token = signin(&srv, &grace_sk).await;
+    let grace_token = signin(&srv, &grace_sk, None).await;
     let grace_hdr = auth_header(&grace_token);
-    let heidi_token = signin(&srv, &heidi_sk).await;
+    let heidi_token = signin(&srv, &heidi_sk, None).await;
     let heidi_hdr = auth_header(&heidi_token);
 
     // Grace uploads a file.
@@ -718,9 +802,9 @@ async fn test_friend_requests() {
     let srv = TestServer::start().await;
     let (ivan_sk, _) = signup(&srv, "ivan").await;
     let (judy_sk, _) = signup(&srv, "judy").await;
-    let ivan_token = signin(&srv, &ivan_sk).await;
+    let ivan_token = signin(&srv, &ivan_sk, None).await;
     let ivan_hdr = auth_header(&ivan_token);
-    let judy_token = signin(&srv, &judy_sk).await;
+    let judy_token = signin(&srv, &judy_sk, None).await;
     let judy_hdr = auth_header(&judy_token);
 
     // Ivan sends friend request.
@@ -775,7 +859,7 @@ async fn test_websocket_event_delivery() {
 
     let srv = TestServer::start().await;
     let (kate_sk, _) = signup(&srv, "kate").await;
-    let kate_token = signin(&srv, &kate_sk).await;
+    let kate_token = signin(&srv, &kate_sk, None).await;
     let kate_hdr = auth_header(&kate_token);
 
     // Create server + channel.

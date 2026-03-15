@@ -1,7 +1,7 @@
 # poly-server — Agent Instructions
 
 > Read this file at the start of every session working on `poly-server`.
-> Last Updated: 2026-03-01
+> Last Updated: 2026-03-15
 
 ---
 
@@ -80,6 +80,20 @@ the Dockerfile may need review. Specifically:
 **Context**: `Router::route_layer()` requires the state type to already be known, so middleware cannot be applied inside sub-module router functions before `AppState` is constructed.
 
 **Decision**: `auth::routes` exposes `public_router()` and `protected_router()`. The `route_layer(auth_middleware)` is applied to `protected_router()` + `api::router()` in `main.rs` after `AppState` is built.
+
+---
+
+### DECISION(DX-S06): Multiple accounts may share one Ed25519 identity key
+
+**Context**: Poly's device identity key is not the same thing as a single server account. A user may want to reuse one identity key while creating or selecting multiple accounts on the same Poly Server.
+
+**Decision**:
+- `user.public_key` is indexed but **not unique**.
+- `POST /auth/accounts` returns all accounts linked to a public key.
+- `POST /auth/challenge` and `POST /auth/verify` accept optional `user_id`.
+- If a key maps to multiple users and `user_id` is omitted, signin is rejected with `400 BadRequest` so the client must ask the user which account to use.
+
+**Trade-off**: Slightly more complex auth flow, but it matches Poly's identity model and supports "use existing account or create another" UX.
 
 ---
 

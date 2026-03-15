@@ -231,7 +231,9 @@ interface types {
         server-url: string,
         private-key-bytes: list<u8>,
         username: option<string>,
+        email: option<string>,
         display-name: option<string>,
+        selected-user-id: option<string>,
         is-signup: bool,
     }
 
