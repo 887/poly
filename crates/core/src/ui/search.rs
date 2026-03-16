@@ -12,6 +12,7 @@
 
 use crate::i18n::{t, t_args};
 use crate::state::ChatData;
+use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::BackendType;
@@ -290,6 +291,7 @@ fn ServerNode(
                                         label: ch_name,
                                         sublabel: String::new(),
                                         on_click: move |_| {
+                                            close_mobile_drawer();
                                             navigator().push(Route::ServerChat {
                                                 backend: bs.clone(),
                                                 instance_id: iid.clone(),
@@ -555,6 +557,7 @@ pub fn SearchPage() -> Element {
                                     label: name,
                                     sublabel: attribution,
                                     on_click: move |_| {
+                                        close_mobile_drawer();
                                         navigator().push(Route::DmChat {
                                             backend: bs.clone(),
                                             instance_id: iid.clone(),
@@ -625,6 +628,7 @@ pub fn SearchPage() -> Element {
                                     label: name,
                                     sublabel: attribution,
                                     on_click: move |_| {
+                                        close_mobile_drawer();
                                         navigator().push(Route::DmChat {
                                             backend: bs.clone(),
                                             instance_id: iid.clone(),

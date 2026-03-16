@@ -23,6 +23,7 @@ mod profile;
 
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::main_layout::close_mobile_drawer;
 use content_social::ContentSocialSettings;
 use dioxus::prelude::*;
 use notifications::NotificationsSettings;
@@ -52,6 +53,7 @@ fn profile_nav_element(
             onclick: move |_| {
                 *search_text.write() = String::new();
                 active_section.set("profile".to_string());
+                close_mobile_drawer();
             },
             {t("plugin-poly-profile-title")}
         }
@@ -214,6 +216,7 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                                 onclick: move |_| {
                                     *search_text.write() = String::new();
                                     active_section.set(slug_s.clone());
+                                    close_mobile_drawer();
                                 },
                                 "{label}"
                             }

@@ -44,6 +44,7 @@ mod voice_video;
 
 use crate::i18n::t;
 use crate::state::{AppState, SettingsSection};
+use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 
@@ -222,7 +223,10 @@ fn SettingsNavigation(
                     rsx! {
                         div {
                             class,
-                            onclick: move |_| on_select.call(section),
+                            onclick: move |_| {
+                                on_select.call(section);
+                                close_mobile_drawer();
+                            },
                             "{label}"
                         }
                     }
@@ -249,6 +253,7 @@ fn SettingsNavigation(
                                 // Reuse scroll_to_section_anchor with "plugin-{slug}" so
                                 // the generated ID matches "settings-section-plugin-{slug}".
                                 scroll_to_section_anchor(&format!("plugin-{slug}"));
+                                close_mobile_drawer();
                             },
                             span { class: "settings-nav-plugin-icon", "{entry.nav_icon}" }
                             "{label}"
@@ -418,14 +423,16 @@ pub fn SettingsPage() -> Element {
 
     rsx! {
         div { class: "settings-page",
-            SettingsNavigation {
-                current: section,
-                search_text,
-                on_select: move |next: SettingsSection| {
-                    *search_text.write() = String::new();
-                    app_state.write().settings_section = next;
-                    nav.push(Route::SettingsSectionRoute { section: next.to_slug().to_string() });
-                },
+            div { class: "settings-page-sidebar",
+                SettingsNavigation {
+                    current: section,
+                    search_text,
+                    on_select: move |next: SettingsSection| {
+                        *search_text.write() = String::new();
+                        app_state.write().settings_section = next;
+                        nav.push(Route::SettingsSectionRoute { section: next.to_slug().to_string() });
+                    },
+                }
             }
             div { class: "settings-content",
                 SettingsAllSections { search_query: query }

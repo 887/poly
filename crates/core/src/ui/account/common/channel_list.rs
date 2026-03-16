@@ -17,6 +17,7 @@ use super::chat_history::{
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
+use crate::ui::main_layout::close_mobile_drawer;
 use dioxus::prelude::*;
 use poly_client::{BackendType, Channel, ChannelType, Server, User, VoiceParticipant};
 
@@ -495,6 +496,7 @@ fn DMFriendsView() -> Element {
                         instance_id,
                         account_id,
                     });
+                close_mobile_drawer();
             },
             span { class: "dm-friends-row-icon", "👥" }
             span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }
@@ -759,6 +761,7 @@ fn DMChannelItem(
                         account_id: account_id.clone(),
                         dm_id: channel_id.clone(),
                     });
+                close_mobile_drawer();
             },
             div { class: "dm-avatar-small", style: "background-color: {color};",
                 if let Some(ref url) = avatar_url {
@@ -838,6 +841,7 @@ fn GroupChannelItem(
                         account_id: account_id.clone(),
                         dm_id: group_id.clone(),
                     });
+                close_mobile_drawer();
             },
             span { class: "channel-icon", "👥" }
             span { class: "channel-name", "{display_name}" }
@@ -993,6 +997,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
                         server_id,
                         channel_id: ch_id.clone(),
                     });
+                close_mobile_drawer();
             },
             span { class: "channel-icon", "{type_icon}" }
             span { class: "channel-name", "{ch_name}" }

@@ -21,18 +21,24 @@
     height: 100dvh;
 }
 
+.poly-app.poly-force-mobile {
+    --poly-mobile-rail-offset: 72px;
+}
+
 .poly-app.poly-force-mobile .main-layout-body {
     min-height: 0;
 }
 
 .poly-app.poly-force-mobile .server-sidebar,
 .poly-app.poly-force-mobile .account-server-bar,
-.poly-app.poly-force-mobile .channel-list-wrapper {
+.poly-app.poly-force-mobile .channel-list-wrapper,
+.poly-app.poly-force-mobile .settings-page-sidebar,
+.poly-app.poly-force-mobile .search-page-sidebar {
     position: fixed;
     top: 0;
     bottom: 0;
     z-index: 430;
-    transition: margin-left 0.22s ease, box-shadow 0.22s ease;
+    transition: left 0.22s ease, box-shadow 0.22s ease;
 }
 
 .poly-app.poly-force-mobile .server-sidebar {
@@ -40,29 +46,29 @@
     min-width: 72px;
     border-right: 1px solid var(--border-primary);
     left: -72px;
-    margin-left: 0;
     box-shadow: none;
 }
 
 .poly-app.poly-force-mobile .account-server-bar {
-    left: -72px;
+    left: 0;
     width: 72px;
     min-width: 72px;
     padding-bottom: 64px;
     scroll-padding-bottom: 64px;
-    margin-left: 0;
     box-shadow: none;
 }
 
-.poly-app.poly-force-mobile .channel-list-wrapper {
-    left: -100vw;
-    width: calc(100vw - 144px);
+.poly-app.poly-force-mobile .channel-list-wrapper,
+.poly-app.poly-force-mobile .settings-page-sidebar,
+.poly-app.poly-force-mobile .search-page-sidebar {
+    left: auto;
+    right: 100vw;
+    width: calc(100vw - var(--poly-mobile-rail-offset));
     min-width: 0;
     max-width: none;
     height: 100dvh;
     border-right: 1px solid var(--border-primary);
     background: var(--bg-secondary);
-    margin-left: 0;
     box-shadow: none;
 }
 
@@ -78,26 +84,42 @@
     min-height: 0;
 }
 
+.poly-app.poly-force-mobile .settings-page-sidebar .settings-nav {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    border-right: none;
+}
+
+.poly-app.poly-force-mobile .search-page-sidebar {
+    overflow-y: auto;
+}
+
 .poly-app.poly-force-mobile .voice-account-footer {
     z-index: 2;
 }
 
 .poly-app.poly-force-mobile.poly-mobile-drawer-open .server-sidebar,
 .poly-app.poly-force-mobile.poly-mobile-drawer-open .account-server-bar,
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .channel-list-wrapper {
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .channel-list-wrapper,
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .settings-page-sidebar,
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .search-page-sidebar {
     box-shadow: 0 0 0 1px rgb(255 255 255 / 4%), 0 16px 48px rgb(0 0 0 / 42%);
 }
 
 .poly-app.poly-force-mobile.poly-mobile-drawer-open .server-sidebar {
-    margin-left: 72px;
+    left: 0;
 }
 
 .poly-app.poly-force-mobile.poly-mobile-drawer-open .account-server-bar {
-    margin-left: 144px;
+    left: 72px;
 }
 
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .channel-list-wrapper {
-    margin-left: calc(100vw + 144px);
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .channel-list-wrapper,
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .settings-page-sidebar,
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .search-page-sidebar {
+    right: 0;
 }
 
 .poly-app.poly-force-mobile .mobile-drawer-backdrop {
@@ -242,12 +264,14 @@
 
     .server-sidebar,
     .account-server-bar,
-    .channel-list-wrapper {
+    .channel-list-wrapper,
+    .settings-page-sidebar,
+    .search-page-sidebar {
         position: fixed;
         top: 0;
         bottom: 0;
         z-index: 430;
-        transition: margin-left 0.22s ease, box-shadow 0.22s ease;
+        transition: left 0.22s ease, box-shadow 0.22s ease;
     }
 
     .server-sidebar {
@@ -255,29 +279,29 @@
         min-width: 72px;
         border-right: 1px solid var(--border-primary);
         left: -72px;
-        margin-left: 0;
         box-shadow: none;
     }
 
     .account-server-bar {
-        left: -72px;
+        left: 0;
         width: 72px;
         min-width: 72px;
         padding-bottom: 64px;
         scroll-padding-bottom: 64px;
-        margin-left: 0;
         box-shadow: none;
     }
 
-    .channel-list-wrapper {
-        left: -100vw;
-        width: calc(100vw - 144px);
+    .channel-list-wrapper,
+    .settings-page-sidebar,
+    .search-page-sidebar {
+        left: auto;
+        right: 100vw;
+        width: calc(100vw - var(--poly-mobile-rail-offset, 72px));
         min-width: 0;
         max-width: none;
         height: 100dvh;
         border-right: 1px solid var(--border-primary);
         background: var(--bg-secondary);
-        margin-left: 0;
         box-shadow: none;
     }
 
@@ -293,22 +317,38 @@
         min-height: 0;
     }
 
+    .settings-page-sidebar .settings-nav {
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        overflow-y: auto;
+        border-right: none;
+    }
+
+    .search-page-sidebar {
+        overflow-y: auto;
+    }
+
     .poly-app.poly-mobile-drawer-open .server-sidebar,
     .poly-app.poly-mobile-drawer-open .account-server-bar,
-    .poly-app.poly-mobile-drawer-open .channel-list-wrapper {
+    .poly-app.poly-mobile-drawer-open .channel-list-wrapper,
+    .poly-app.poly-mobile-drawer-open .settings-page-sidebar,
+    .poly-app.poly-mobile-drawer-open .search-page-sidebar {
         box-shadow: 0 0 0 1px rgb(255 255 255 / 4%), 0 16px 48px rgb(0 0 0 / 42%);
     }
 
     .poly-app.poly-mobile-drawer-open .server-sidebar {
-        margin-left: 72px;
+        left: 0;
     }
 
     .poly-app.poly-mobile-drawer-open .account-server-bar {
-        margin-left: 144px;
+        left: 72px;
     }
 
-    .poly-app.poly-mobile-drawer-open .channel-list-wrapper {
-        margin-left: calc(100vw + 144px);
+    .poly-app.poly-mobile-drawer-open .channel-list-wrapper,
+    .poly-app.poly-mobile-drawer-open .settings-page-sidebar,
+    .poly-app.poly-mobile-drawer-open .search-page-sidebar {
+        right: 0;
     }
 
     .mobile-drawer-backdrop {

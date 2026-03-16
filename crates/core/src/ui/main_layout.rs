@@ -32,99 +32,16 @@ fn init_mobile_drawer_runtime() {
                 const root = document.querySelector('.poly-app');
                 if (!root) return;
 
-                const server = document.querySelector('.server-sidebar');
                 const account = document.querySelector('.account-server-bar');
-                const channel = document.querySelector('.channel-list-wrapper');
-                const backdrop = document.querySelector('.mobile-drawer-backdrop');
-                const openBtn = document.querySelector('.mobile-drawer-open-btn');
-                const closeBtn = document.querySelector('.mobile-drawer-close-btn');
-
                 const isMobileUi = root.classList.contains('poly-force-mobile') || window.innerWidth <= 640;
                 if (!isMobileUi) {
                     root.classList.remove('poly-mobile-drawer-open');
-
-                    if (server) {
-                        server.style.removeProperty('left');
-                        server.style.removeProperty('inset-inline-start');
-                        server.style.removeProperty('margin-left');
-                        server.style.removeProperty('transform');
-                    }
-
-                    if (account) {
-                        account.style.removeProperty('left');
-                        account.style.removeProperty('inset-inline-start');
-                        account.style.removeProperty('margin-left');
-                        account.style.removeProperty('transform');
-                    }
-
-                    if (channel) {
-                        channel.style.removeProperty('left');
-                        channel.style.removeProperty('inset-inline-start');
-                        channel.style.removeProperty('margin-left');
-                        channel.style.removeProperty('transform');
-                    }
-
-                    if (backdrop) {
-                        backdrop.style.removeProperty('display');
-                        backdrop.style.removeProperty('visibility');
-                        backdrop.style.removeProperty('opacity');
-                        backdrop.style.removeProperty('pointer-events');
-                        backdrop.style.removeProperty('background');
-                    }
-
-                    if (openBtn) {
-                        openBtn.style.removeProperty('opacity');
-                        openBtn.style.removeProperty('pointer-events');
-                    }
-
-                    if (closeBtn) {
-                        closeBtn.style.removeProperty('opacity');
-                        closeBtn.style.removeProperty('pointer-events');
-                    }
-
+                    root.style.removeProperty('--poly-mobile-rail-offset');
                     return;
                 }
 
-                const open = root.classList.contains('poly-mobile-drawer-open');
-
-                if (server) {
-                    server.style.setProperty('left', '-72px', 'important');
-                    server.style.setProperty('inset-inline-start', '-72px', 'important');
-                    server.style.setProperty('margin-left', open ? '72px' : '0px', 'important');
-                    server.style.removeProperty('transform');
-                }
-
-                if (account) {
-                    account.style.setProperty('left', '-72px', 'important');
-                    account.style.setProperty('inset-inline-start', '-72px', 'important');
-                    account.style.setProperty('margin-left', open ? '144px' : '0px', 'important');
-                    account.style.removeProperty('transform');
-                }
-
-                if (channel) {
-                    channel.style.setProperty('left', '-100vw', 'important');
-                    channel.style.setProperty('inset-inline-start', '-100vw', 'important');
-                    channel.style.setProperty('margin-left', open ? 'calc(100vw + 144px)' : '0px', 'important');
-                    channel.style.removeProperty('transform');
-                }
-
-                if (backdrop) {
-                    backdrop.style.setProperty('display', open ? 'block' : 'none', 'important');
-                    backdrop.style.setProperty('visibility', open ? 'visible' : 'hidden', 'important');
-                    backdrop.style.setProperty('opacity', open ? '1' : '0', 'important');
-                    backdrop.style.setProperty('pointer-events', open ? 'auto' : 'none', 'important');
-                    backdrop.style.setProperty('background', open ? 'rgba(0, 0, 0, 0.34)' : 'transparent', 'important');
-                }
-
-                if (openBtn) {
-                    openBtn.style.setProperty('opacity', open ? '0' : '0.94', 'important');
-                    openBtn.style.setProperty('pointer-events', open ? 'none' : 'auto', 'important');
-                }
-
-                if (closeBtn) {
-                    closeBtn.style.setProperty('opacity', open ? '1' : '0', 'important');
-                    closeBtn.style.setProperty('pointer-events', open ? 'auto' : 'none', 'important');
-                }
+                const railOffset = 72 + (account ? 72 : 0);
+                root.style.setProperty('--poly-mobile-rail-offset', `${railOffset}px`);
             };
 
             window.__polySetMobileDrawerOpen = function(open) {
@@ -210,7 +127,7 @@ fn open_mobile_drawer() {
     let _ = document::eval("window.__polySetMobileDrawerOpen?.(true);");
 }
 
-fn close_mobile_drawer() {
+pub(crate) fn close_mobile_drawer() {
     let _ = document::eval("window.__polySetMobileDrawerOpen?.(false);");
 }
 

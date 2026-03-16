@@ -28,6 +28,7 @@ use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
     request_restore_scroll_position_or_bottom,
 };
+use crate::ui::main_layout::close_mobile_drawer;
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 
@@ -175,6 +176,7 @@ pub fn FavoritesBar() -> Element {
                 div {
                     class: "server-icon",
                     onclick: move |_| {
+                        close_mobile_drawer();
                         navigator().push(Route::SearchRoute);
                     },
                     title: "{t(\"nav-search\")}",
@@ -188,6 +190,7 @@ pub fn FavoritesBar() -> Element {
                         div {
                             class: if is_app_settings { "server-icon active" } else { "server-icon" },
                             onclick: move |_| {
+                                close_mobile_drawer();
                                 navigator().push(Route::SettingsRoute);
                             },
                             title: "{t(\"nav-settings\")}",
@@ -309,6 +312,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 if let Some(url) = last_route_url
                     && let Ok(route) = url.parse::<Route>()
                 {
+                    close_mobile_drawer();
                     navigator().push(route);
                     return;
                 }
@@ -339,6 +343,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         instance_id,
                         account_id: aid,
                     });
+                close_mobile_drawer();
             },
             title: "{display_name}",
             // Render image avatar if available (avatar_url is set by the client;
@@ -486,6 +491,7 @@ fn FavoriteServerIcon(
                             account_id: aid.clone(),
                             server_id: sid.clone(),
                         });
+                    close_mobile_drawer();
                 }
             },
             // Right-click → open context menu at cursor position

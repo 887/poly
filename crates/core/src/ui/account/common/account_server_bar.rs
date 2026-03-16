@@ -26,6 +26,7 @@ use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
+use crate::ui::main_layout::close_mobile_drawer;
 use dioxus::prelude::*;
 use poly_client::BackendType;
 
@@ -332,6 +333,7 @@ fn AccountServerIcon(
             account_id: aid_click.clone(),
             server_id: sid_click.clone(),
         });
+        close_mobile_drawer();
     };
 
     rsx! {
@@ -429,6 +431,7 @@ fn AccountBarDmsButton(
                         instance_id: instance_id.clone(),
                         account_id: account_id.clone(),
                     });
+                close_mobile_drawer();
             },
             title: "{t(\"nav-dms\")}",
             div { class: "icon-dms", "💬" }
@@ -455,6 +458,7 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                 cd.messages.clear();
                 cd.members.clear();
                 navigator().push(Route::NotificationsRoute);
+                close_mobile_drawer();
             },
             title: "{t(\"nav-notifications\")}",
             div { class: "icon-notifications", "🔔" }
@@ -497,6 +501,7 @@ fn CreateServerButton(account_id: String) -> Element {
                     instance_id: instance_id.clone(),
                     account_id:  account_id.clone(),
                 });
+                close_mobile_drawer();
             },
             "+"
         }
