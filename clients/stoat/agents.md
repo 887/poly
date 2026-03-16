@@ -1,7 +1,7 @@
 # poly-stoat — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-06
+> **Last Updated:** 2026-03-16
 
 ---
 
@@ -43,6 +43,11 @@ cargo component build -p poly-stoat --target wasm32-wasip2
 - All methods return `Err(ClientError::Internal("not yet implemented"))` or empty collections
 - `get_backend_type()` returns `BackendType::Stoat`, `get_backend_name()` returns `"Stoat"`
 - When implementing the real client, the guest bridge must convert between native types and WIT types
+- Because `wit_bindgen::generate!` lives in `src/wit_bindings.rs`, the guest export must use:
+	`export!(StoatPlugin with_types_in crate::wit_bindings)`
+	rather than plain `export!(StoatPlugin)`.
+- The `messenger-plugin` world also requires `plugin_metadata::Guest`; even stub plugins must implement
+	`get_translations`, `get_settings_schema`, `get_display_name_key`, and `get_icon`.
 
 ## Implementation Phase
 
@@ -111,12 +116,27 @@ Must build from scratch:
 ```
 src/
 ├── lib.rs           # StoatClient struct + ClientBackend impl (native-only)
+├── config.rs        # Base URL normalization + credential extraction
+├── http.rs          # reqwest transport/session scaffolding
 ├── guest.rs         # WIT guest bridge (WASI-only, stub)
 ├── api/             # REST API client (TODO)
 ├── ws/              # WebSocket event handling (TODO)
 ├── types/           # Stoat-specific type definitions (TODO)
 └── voice/           # WebRTC voice/video (TODO)
 ```
+
+## Current Implementation Status (2026-03-16)
+
+Completed the first Phase 3.1 native isolation slice:
+
+- `src/config.rs` now owns Stoat-specific base URL normalization and derives:
+	- REST root
+	- Bonfire websocket URL
+	- route-safe `instance_id`
+- `StoatAuthInput` now cleanly extracts only supported Stoat credential shapes from `poly-client::AuthCredentials`
+- `src/http.rs` now owns the isolated reqwest transport and `x-session-token` request scaffolding
+- `StoatClient` exposes transport metadata helpers without leaking Stoat protocol logic into app crates
+- WASM component build now succeeds again after fixing the guest export syntax and adding required plugin metadata stubs
 
 ## E2E Test Coverage (2026-03-06)
 

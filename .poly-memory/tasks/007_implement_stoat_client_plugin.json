@@ -1,0 +1,13 @@
+{
+  "id": 7,
+  "slug": "implement-stoat-client-plugin",
+  "title": "Implement Stoat client plugin",
+  "description": "Incrementally implement the Stoat (Revolt) client as an isolated WASM component plugin, following project plans, client-plugin WIT boundary rules, and per-crate agents.md guidance. Work in small resumable steps with memories/findings recorded throughout.",
+  "status": "todo",
+  "created_at": "2026-03-16T20:41:57.053308379Z",
+  "updated_at": "2026-03-16T20:54:03.492629833Z",
+  "completed_at": null,
+  "memory_count": 2,
+  "finding_count": 0,
+  "checklist": []
+}

@@ -3,7 +3,14 @@
 //! Stub implementation — all methods return "not yet implemented" errors.
 //! DECISION(D21): WASM Plugin Backends.
 
-use crate::wit_bindings::{Guest, wit};
+#![allow(unsafe_code)]
+
+use crate::wit_bindings::{Guest, PluginMetadataGuest, SettingDescriptor, export, wit};
+
+const FTL_EN: &str = "plugin-stoat-title = Stoat\n";
+const FTL_DE: &str = "plugin-stoat-title = Stoat\n";
+const FTL_FR: &str = "plugin-stoat-title = Stoat\n";
+const FTL_ES: &str = "plugin-stoat-title = Stoat\n";
 
 struct StoatPlugin;
 
@@ -153,7 +160,29 @@ impl Guest for StoatPlugin {
     }
 }
 
-// EXCEPTION: unsafe_code is allowed here only because the export!() macro
-// produces unsafe FFI stubs. This is unavoidable for WIT component registration.
-#[allow(unsafe_code)]
-export!(StoatPlugin);
+impl PluginMetadataGuest for StoatPlugin {
+    fn get_translations(locale: String) -> String {
+        match locale.as_str() {
+            "en" => FTL_EN.to_string(),
+            "de" => FTL_DE.to_string(),
+            "fr" => FTL_FR.to_string(),
+            "es" => FTL_ES.to_string(),
+            _ => FTL_EN.to_string(),
+        }
+    }
+
+    fn get_settings_schema() -> Vec<SettingDescriptor> {
+        vec![]
+    }
+
+    fn get_display_name_key() -> String {
+        "plugin-stoat-title".to_string()
+    }
+
+    fn get_icon() -> String {
+        "S".to_string()
+    }
+}
+
+// Register the component export.
+export!(StoatPlugin with_types_in crate::wit_bindings);

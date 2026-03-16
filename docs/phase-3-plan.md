@@ -35,7 +35,10 @@
 - [ ] **3.1.1.7** Update `clients/stoat/agents.md` with all findings
 
 ### 3.1.2 Core Stoat Client
-- [ ] **3.1.2.1** HTTP client setup (reqwest or similar) with base URL configuration
+- [x] **3.1.2.1** HTTP client setup (reqwest or similar) with base URL configuration
+	- Implemented 2026-03-16 in `clients/stoat/src/config.rs` + `src/http.rs`
+	- Added normalized base URL / websocket URL / instance ID derivation
+	- Added token-header request scaffolding and native/WASM validation
 - [ ] **3.1.2.2** Authentication (email/password login, token storage)
 - [ ] **3.1.2.3** Implement `ClientBackend` trait for `StoatClient`
 - [ ] **3.1.2.4** Server list retrieval
