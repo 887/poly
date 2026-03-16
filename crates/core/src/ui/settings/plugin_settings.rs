@@ -98,6 +98,35 @@ pub fn demo_settings_render_fn() -> Element {
     }
 }
 
+// ── Stoat plugin settings ────────────────────────────────────────────────────
+
+/// Settings content for the Stoat backend.
+#[cfg(feature = "stoat")]
+#[rustfmt::skip]
+#[component]
+pub fn StoatPluginSettings() -> Element {
+    rsx! {
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🦦" }
+                h2 { class: "plugin-section-title", "{t(\"plugin-stoat-title\")}" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
+                "{t(\"plugin-stoat-settings-description\")}"
+            }
+        }
+    }
+}
+
+/// Plain `fn() -> Element` wrapper for [`StoatPluginSettings`].
+#[cfg(feature = "stoat")]
+pub fn stoat_settings_render_fn() -> Element {
+    rsx! {
+        StoatPluginSettings {}
+    }
+}
+
 // ── Poly Server plugin settings ───────────────────────────────────────────────
 
 /// Settings content for the Poly Server backend.

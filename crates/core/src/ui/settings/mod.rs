@@ -35,6 +35,8 @@ mod plugin_settings;
 // via ClientManager::register_plugin_settings without knowing UI module internals.
 #[cfg(feature = "demo")]
 pub(crate) use plugin_settings::demo_settings_render_fn;
+#[cfg(feature = "stoat")]
+pub(crate) use plugin_settings::stoat_settings_render_fn;
 // Re-export the poly server render function so ui/mod.rs can register it at startup.
 #[cfg(feature = "server")]
 pub(crate) use plugin_settings::poly_settings_render_fn;

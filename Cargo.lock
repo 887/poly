@@ -6160,6 +6160,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "dioxus",
  "futures",
  "poly-client",
  "reqwest 0.13.2",

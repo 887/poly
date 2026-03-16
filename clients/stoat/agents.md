@@ -201,6 +201,25 @@ Completed the fourth Phase 3.1 retrieval slice:
 	- reply preview mapping
 	- reaction mapping
 
+Completed the fifth Phase 3.1 send slice:
+
+- Native message sending now supports:
+	- `send_message(channel_id, MessageContent::Text(...))`
+	- `send_reply_message(channel_id, reply_to_message_id, MessageContent::Text(...))`
+	- reply preview hydration by fetching the referenced Stoat message and mapping it into Poly's `MessageReplyPreview`
+- Stoat send requests currently use `POST /channels/{target}/messages` with:
+	- `content`
+	- generated `nonce`
+	- optional `replies: [{ id, mention: false, fail_if_not_exists: true }]`
+- Attachment upload is **still pending**.
+	- `MessageContent::WithAttachments` currently returns `ClientError::NotSupported("Stoat attachment upload is not implemented yet")`
+	- this is intentional until the upload/attachment-id lifecycle is implemented against Stoat's file APIs
+- Native test coverage now additionally includes:
+	- verifying the outbound JSON payload for text sends
+	- verifying reply intent payloads for reply sends
+	- verifying reply preview hydration on the returned Poly message
+	- verifying the current explicit attachment-upload `NotSupported` behavior
+
 ## E2E Test Coverage (2026-03-06)
 
 **10 tests** in `crates/plugin-host-tests/tests/client_e2e/stoat.rs` — stub behavior verification through WASM plugin host:

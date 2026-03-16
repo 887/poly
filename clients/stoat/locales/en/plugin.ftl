@@ -1,0 +1,20 @@
+# Stoat client plugin — English translations
+# All keys MUST be prefixed with "plugin-stoat-"
+
+plugin-stoat-title = Stoat
+plugin-stoat-description = Connect to Stoat or compatible self-hosted Revolt instances.
+plugin-stoat-settings-description = Stoat accounts are configured through the Add Account flow. Use the plugin toggle in Settings → Plugins to enable or disable Stoat in this build.
+
+plugin-stoat-signup-name = Stoat
+plugin-stoat-signup-desc = Connect to Stoat with email and password.
+plugin-stoat-signup-title = Add Stoat Account
+plugin-stoat-signup-description = Enter your Stoat server URL and account credentials to sign in.
+plugin-stoat-signup-back = ← Choose Backend
+plugin-stoat-signup-url-label = Server URL
+plugin-stoat-signup-url-placeholder = https://api.stoat.chat
+plugin-stoat-signup-email-label = Email Address
+plugin-stoat-signup-email-placeholder = alice@example.com
+plugin-stoat-signup-password-label = Password
+plugin-stoat-signup-password-placeholder = Enter your password
+plugin-stoat-signup-connect-btn = Sign In
+plugin-stoat-signup-connecting = Signing in…

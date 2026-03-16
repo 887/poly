@@ -71,6 +71,8 @@ pub(crate) mod signup;
 // ClientManager::plugin_settings without a pub(crate) path through private modules.
 #[cfg(feature = "demo")]
 pub(crate) use settings::demo_settings_render_fn;
+#[cfg(feature = "stoat")]
+pub(crate) use settings::stoat_settings_render_fn;
 // Re-export the poly server settings render function for the same reason.
 #[cfg(feature = "server")]
 pub(crate) use settings::poly_settings_render_fn;
@@ -191,6 +193,15 @@ fn app_root_class() -> &'static str {
 /// This mirrors the WIT `plugin-metadata` pattern: the host has zero
 /// compile-time knowledge of specific backends — each plugin registers itself.
 fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
+    #[cfg(feature = "stoat")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "stoat",
+        icon: "🦦",
+        name_key: "plugin-stoat-signup-name",
+        desc_key: "plugin-stoat-signup-desc",
+        render: poly_stoat::signup::signup_render_fn,
+    });
+
     // Register the Poly Server backend when compiled with the `server` feature.
     // The render fn lives in poly-server-client — core has no knowledge of the form.
     #[cfg(feature = "server")]
@@ -226,6 +237,16 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
             nav_label_key: "plugin-demo-title",
             nav_icon: "🧪",
             render: demo_settings_render_fn,
+        });
+
+    #[cfg(feature = "stoat")]
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "stoat",
+            nav_label_key: "plugin-stoat-title",
+            nav_icon: "🦦",
+            render: stoat_settings_render_fn,
         });
 
     #[cfg(feature = "server")]
@@ -457,7 +478,7 @@ async fn init_storage(
     mut storage_ready: Signal<bool>,
     mut app_state: Signal<AppState>,
     mut locale_sig: Signal<String>,
-    client_manager: Signal<ClientManager>,
+    mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
 ) {
     match crate::storage::Storage::init().await {
@@ -476,6 +497,9 @@ async fn init_storage(
                     crate::i18n::set_locale(&settings.locale);
                     *locale_sig.write() = settings.locale.clone();
                     app_state.write().is_setup_complete = true;
+                    client_manager
+                        .write()
+                        .set_disabled_native_backends(settings.disabled_native_backends.clone());
                     app_state.write().nav.view = View::DmsFriends;
                     // Restore favorited servers so Bar 1 repopulates immediately
                     // on launch — before the server list is fetched from the network.

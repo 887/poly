@@ -6,7 +6,8 @@
 
 use crate::api::{
     StoatAuthenticatedSession, StoatBulkMessageResponse, StoatChannel, StoatChannelUnread,
-    StoatLoginResponse, StoatPasswordLoginRequest, StoatRootConfig, StoatServer, StoatUser,
+    StoatLoginResponse, StoatMessage, StoatPasswordLoginRequest, StoatRootConfig,
+    StoatSendMessageRequest, StoatServer, StoatUser,
 };
 use crate::config::StoatConfig;
 use poly_client::{ClientError, ClientResult, MessageQuery};
@@ -308,6 +309,48 @@ impl StoatHttpClient {
 
         let response = self
             .authenticated_request(Method::GET, &path)?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Fetch a single Stoat message by channel and message ID.
+    pub async fn fetch_message(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<StoatMessage> {
+        let response = self
+            .authenticated_request(
+                Method::GET,
+                &format!("/channels/{channel_id}/messages/{message_id}"),
+            )?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Send a text/reply message to a Stoat channel.
+    pub async fn send_message(
+        &self,
+        channel_id: &str,
+        payload: &StoatSendMessageRequest,
+    ) -> ClientResult<StoatMessage> {
+        let response = self
+            .authenticated_request(Method::POST, &format!("/channels/{channel_id}/messages"))?
+            .json(payload)
             .send()
             .await
             .map_err(Self::network_error)?;

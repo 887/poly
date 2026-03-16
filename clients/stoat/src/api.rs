@@ -64,6 +64,70 @@ pub struct StoatPasswordLoginRequest {
     pub friendly_name: Option<String>,
 }
 
+/// Reply target metadata for `POST /channels/{target}/messages`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StoatReplyIntent {
+    /// Referenced message ID.
+    pub id: String,
+    /// Whether sending this reply should mention the original author.
+    pub mention: bool,
+    /// Whether the request should fail when the referenced message is missing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fail_if_not_exists: Option<bool>,
+}
+
+/// Minimal message-send payload for Stoat text and reply sends.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StoatSendMessageRequest {
+    /// Optional client-provided nonce/idempotency hint.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
+    /// Plain text message content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    /// Pre-uploaded attachment IDs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<String>>,
+    /// Optional reply target list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replies: Option<Vec<StoatReplyIntent>>,
+}
+
+impl StoatSendMessageRequest {
+    /// Convert Poly's backend-agnostic message content into Stoat's send shape.
+    pub fn from_poly_content(
+        content: MessageContent,
+        reply_to_message_id: Option<String>,
+        nonce: String,
+    ) -> ClientResult<Self> {
+        let text = match content {
+            MessageContent::Text(text) => text,
+            MessageContent::WithAttachments { text, attachments } => {
+                if attachments.is_empty() {
+                    text
+                } else {
+                    return Err(ClientError::NotSupported(
+                        "Stoat attachment upload is not implemented yet".to_string(),
+                    ));
+                }
+            }
+        };
+
+        Ok(Self {
+            nonce: Some(nonce),
+            content: Some(text),
+            attachments: None,
+            replies: reply_to_message_id.map(|id| {
+                vec![StoatReplyIntent {
+                    id,
+                    mention: false,
+                    fail_if_not_exists: Some(true),
+                }]
+            }),
+        })
+    }
+}
+
 /// Session login response returned by Stoat.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "result")]

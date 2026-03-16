@@ -72,6 +72,12 @@
 	- Uses Stoat ULID message IDs to derive stable message timestamps for chronological ordering
 	- Added mock-backed integration coverage for expanded and plain-array message responses
 - [ ] **3.1.2.7** Send messages (text, with attachments)
+	- 2026-03-16 update: `clients/stoat/src/api.rs`, `src/http.rs`, and `src/lib.rs` now support:
+		- text `send_message(channel_id, MessageContent::Text(...))`
+		- text `send_reply_message(channel_id, reply_to_message_id, MessageContent::Text(...))`
+		- Stoat `POST /channels/{target}/messages` request mapping with generated nonce and reply intents
+		- reply preview hydration via `GET /channels/{target}/messages/{message_id}` for sent replies
+	- Attachment upload is still pending, so this checklist item remains open until Stoat file upload + attachment-id send flow is implemented.
 - [ ] **3.1.2.8** User profiles and presence
 - [ ] **3.1.2.9** Friend list and friend requests
 - [ ] **3.1.2.10** Group DMs / multi-user chats

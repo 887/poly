@@ -109,6 +109,8 @@ pub struct ClientManager {
     /// The settings nav sidebar and content area iterate this list to render
     /// plugin settings — nothing is hardcoded in the host.
     pub plugin_settings: Vec<PluginSettingsEntry>,
+    /// Native backends currently disabled by the user in Settings → Plugins.
+    pub disabled_native_backends: Vec<String>,
     /// Signup entries registered by compiled-in or WASM plugins at startup.
     ///
     /// The signup picker (`/signup` route) reads this list at runtime to
@@ -145,6 +147,7 @@ impl ClientManager {
             connection_statuses: HashMap::new(),
             presence_statuses: HashMap::new(),
             plugin_settings: Vec::new(),
+            disabled_native_backends: Vec::new(),
             signup_entries: Vec::new(),
         }
     }
@@ -414,6 +417,11 @@ impl ClientManager {
         tracing::debug!("Signup entry registered: {}", entry.slug);
     }
 
+    /// Replace the in-memory disabled native backend list.
+    pub fn set_disabled_native_backends(&mut self, disabled: Vec<String>) {
+        self.disabled_native_backends = disabled;
+    }
+
     /// Get the backend type for a given account ID.
     pub async fn backend_type_for_account(&self, account_id: &str) -> Option<BackendType> {
         let backend = self.backends.get(account_id)?;
@@ -459,6 +467,17 @@ impl ClientManager {
         backend: BackendHandle,
         server_map: HashMap<String, String>,
     ) {
+        self.commit_backend_account(account_id, session, backend, server_map);
+    }
+
+    /// Commit a pre-authenticated backend account synchronously.
+    pub fn commit_backend_account(
+        &mut self,
+        account_id: String,
+        session: Session,
+        backend: BackendHandle,
+        server_map: HashMap<String, String>,
+    ) {
         self.sessions.insert(account_id.clone(), session);
         self.backends.insert(account_id.clone(), backend);
         self.connection_statuses
@@ -467,7 +486,7 @@ impl ClientManager {
             .entry(account_id)
             .or_insert(AccountPresence::Online);
         self.server_account_map.extend(server_map);
-        tracing::info!("Poly server account committed to ClientManager");
+        tracing::info!("Backend account committed to ClientManager");
     }
 
     /// Remove a poly-server account by account ID.

@@ -82,10 +82,12 @@ fn navigate_back_to_settings() {
 fn AddAccountNav(selected_slug: Option<String>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let client_manager = use_context::<Signal<ClientManager>>();
-    let entries: Vec<(String, String, String)> = client_manager
-        .read()
+    let manager = client_manager.read();
+    let disabled = manager.disabled_native_backends.clone();
+    let entries: Vec<(String, String, String)> = manager
         .signup_entries
         .iter()
+        .filter(|entry| !disabled.iter().any(|slug| slug == entry.slug))
         .map(|e| (e.slug.to_string(), t(e.name_key), e.icon.to_string()))
         .collect();
 
@@ -167,12 +169,22 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
     });
 
     // Find the render fn pointer — copy before releasing the borrow.
-    let render_fn = client_manager
-        .read()
-        .signup_entries
-        .iter()
-        .find(|e| e.slug == client.as_str())
-        .map(|e| e.render);
+    let render_fn = {
+        let manager = client_manager.read();
+        if manager
+            .disabled_native_backends
+            .iter()
+            .any(|slug| slug == &client)
+        {
+            None
+        } else {
+            manager
+                .signup_entries
+                .iter()
+                .find(|e| e.slug == client.as_str())
+                .map(|e| e.render)
+        }
+    };
 
     let right_content: Element = if let Some(render) = render_fn {
         // Blank content while the key resource is still loading (usually < 1 frame).
@@ -191,6 +203,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                         Arc::new(tokio::sync::RwLock::new(completed.backend));
                     let session = completed.session;
                     spawn(async move {
+                        let backend_slug = session.backend.slug().to_string();
                         let account_id  = session.id.clone();
                         let instance_id = session.instance_id.clone();
                         // Capture display name before session is moved into account_sessions.
@@ -199,14 +212,14 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                         // Persist the account token so it survives app restarts.
                         if let Some(storage) = crate::STORAGE.get() {
                             let at = crate::storage::AccountToken {
-                                backend: "poly".to_string(),
+                                backend: backend_slug.clone(),
                                 account_id: account_id.clone(),
                                 token: session.token.clone(),
                                 display_name: session.user.display_name.clone(),
                                 instance_id: session.backend_url.clone(),
                             };
                             if let Err(e) = storage.upsert_account_token(&at).await {
-                                tracing::warn!("Failed to persist poly account token: {e}");
+                                tracing::warn!("Failed to persist backend account token: {e}");
                             }
                         }
 
@@ -221,7 +234,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                             }
                         }
                         // Phase 2: sync Signal writes — no await while lock is held.
-                        client_manager.write().commit_poly_server(
+                        client_manager.write().commit_backend_account(
                             account_id.clone(),
                             session.clone(),
                             backend_handle.clone(),
@@ -242,7 +255,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                                             name: srv.name.clone(),
                                             icon_url: srv.icon_url.clone(),
                                             banner_url: srv.banner_url.clone(),
-                                            backend: "poly".to_string(),
+                                                backend: backend_slug.clone(),
                                             account_id: account_id.clone(),
                                             account_display_name: display_name.clone(),
                                         })
@@ -293,7 +306,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                             }
                         }
                         navigator().push(Route::DmsHome {
-                            backend: "poly".to_string(),
+                            backend: backend_slug,
                             instance_id,
                             account_id,
                         });

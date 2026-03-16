@@ -128,6 +128,17 @@ fn register_native_plugin_ftl() {
         tracing::debug!("Native demo plugin FTL registered for all locales");
     }
 
+    #[cfg(feature = "stoat")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_stoat::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("stoat", locale, src);
+            }
+        }
+        tracing::debug!("Native stoat plugin FTL registered for all locales");
+    }
+
     // poly-server-client translations (feature-gated on "server" feature)
     #[cfg(feature = "server")]
     {

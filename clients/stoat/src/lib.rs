@@ -23,6 +23,9 @@ mod config;
 #[cfg(feature = "native")]
 mod http;
 
+#[cfg(feature = "native")]
+pub mod signup;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
 #[cfg(target_os = "wasi")]
@@ -35,7 +38,7 @@ mod guest;
 #[cfg(feature = "native")]
 pub use api::StoatRootConfig;
 #[cfg(feature = "native")]
-use api::{StoatChannelUnread, reply_preview_from_message};
+use api::{StoatChannelUnread, StoatSendMessageRequest, reply_preview_from_message};
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
@@ -55,6 +58,22 @@ use reqwest::{Method, RequestBuilder};
 use std::collections::HashMap;
 #[cfg(feature = "native")]
 use std::pin::Pin;
+#[cfg(feature = "native")]
+use uuid::Uuid;
+
+/// Return the raw FTL translation source for the Stoat client plugin.
+///
+/// Mirrors the WIT `plugin-metadata.get-translations(locale)` export used by
+/// the WASM plugin host.
+pub fn plugin_translations(locale: &str) -> String {
+    match locale {
+        "de" => include_str!("../locales/de/plugin.ftl").to_string(),
+        "fr" => include_str!("../locales/fr/plugin.ftl").to_string(),
+        "es" => include_str!("../locales/es/plugin.ftl").to_string(),
+        "en" => include_str!("../locales/en/plugin.ftl").to_string(),
+        _ => String::new(),
+    }
+}
 
 /// Stoat (Revolt) messenger client.
 #[cfg(feature = "native")]
@@ -169,6 +188,61 @@ impl StoatClient {
     fn current_user_id(&self) -> Option<String> {
         self.http.session().and_then(|session| session.user_id)
     }
+
+    async fn send_message_internal(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+        reply_to_message_id: Option<&str>,
+    ) -> ClientResult<Message> {
+        let request = StoatSendMessageRequest::from_poly_content(
+            content,
+            reply_to_message_id.map(std::string::ToString::to_string),
+            Uuid::new_v4().simple().to_string(),
+        )?;
+
+        let reply_lookup = async {
+            if let Some(reply_id) = reply_to_message_id {
+                self.http
+                    .fetch_message(channel_id, reply_id)
+                    .await
+                    .map(Some)
+            } else {
+                Ok(None)
+            }
+        };
+
+        let (raw_message, root_config, reply_message) = future::try_join3(
+            self.http.send_message(channel_id, &request),
+            self.http.fetch_server_config(),
+            reply_lookup,
+        )
+        .await?;
+
+        let autumn_base_url = root_config.autumn_base_url().map(str::to_string);
+        let current_user_id = self.current_user_id();
+        let bundled_users = HashMap::new();
+        let bundled_members = HashMap::new();
+
+        let mut message = raw_message.into_poly_message(
+            &bundled_users,
+            &bundled_members,
+            current_user_id.as_deref(),
+            autumn_base_url.as_deref(),
+        );
+
+        if let Some(reply_message) = reply_message {
+            let reply_preview_source = reply_message.into_poly_message(
+                &bundled_users,
+                &bundled_members,
+                current_user_id.as_deref(),
+                autumn_base_url.as_deref(),
+            );
+            message.reply_to = Some(reply_preview_from_message(&reply_preview_source));
+        }
+
+        Ok(message)
+    }
 }
 
 #[cfg(feature = "native")]
@@ -282,12 +356,20 @@ impl ClientBackend for StoatClient {
 
     async fn send_message(
         &self,
-        _channel_id: &str,
-        _content: MessageContent,
+        channel_id: &str,
+        content: MessageContent,
     ) -> ClientResult<Message> {
-        Err(ClientError::Internal(
-            "Stoat client not yet implemented".into(),
-        ))
+        self.send_message_internal(channel_id, content, None).await
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        self.send_message_internal(channel_id, content, Some(reply_to_message_id))
+            .await
     }
 
     async fn get_messages(
@@ -397,9 +479,121 @@ impl ClientBackend for StoatClient {
 #[cfg(all(test, feature = "native"))]
 mod tests {
     use super::{OFFICIAL_STOAT_BASE_URL, StoatClient};
-    use poly_client::{BackendType, PresenceStatus};
+    use crate::http::StoatSessionState;
+    use axum::{
+        Json, Router,
+        extract::State,
+        http::HeaderMap,
+        response::IntoResponse,
+        routing::{get, post},
+    };
+    use poly_client::{BackendType, ClientBackend, PresenceStatus};
     use reqwest::Method;
     use serde_json::json;
+    use std::sync::{Arc, Mutex};
+    use tokio::net::TcpListener;
+
+    #[derive(Clone, Default)]
+    struct TestServerState {
+        captured_requests: Arc<Mutex<Vec<serde_json::Value>>>,
+        captured_tokens: Arc<Mutex<Vec<String>>>,
+    }
+
+    async fn launch_test_server(
+        state: TestServerState,
+    ) -> Result<(String, tokio::task::JoinHandle<()>), Box<dyn std::error::Error>> {
+        async fn root_config() -> impl IntoResponse {
+            Json(json!({
+                "revolt": "0.11.5",
+                "ws": "wss://ws.example.test",
+                "features": {}
+            }))
+        }
+
+        async fn send_message(
+            State(state): State<TestServerState>,
+            headers: HeaderMap,
+            Json(payload): Json<serde_json::Value>,
+        ) -> impl IntoResponse {
+            let response_content = payload
+                .get("content")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let response_replies = payload.get("replies").cloned();
+
+            if let Ok(mut requests) = state.captured_requests.lock() {
+                requests.push(payload);
+            }
+
+            if let Some(token) = headers
+                .get("x-session-token")
+                .and_then(|value| value.to_str().ok())
+                .map(std::string::ToString::to_string)
+                && let Ok(mut tokens) = state.captured_tokens.lock()
+            {
+                tokens.push(token);
+            }
+
+            Json(json!({
+                "_id": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+                "channel": "channel_1",
+                "author": "user_1",
+                "content": response_content,
+                "user": {
+                    "_id": "user_1",
+                    "username": "stoaty",
+                    "discriminator": "0001",
+                    "display_name": "Stoaty",
+                    "online": true
+                },
+                "replies": response_replies.map(|replies| {
+                    replies
+                        .as_array()
+                        .map(|entries| {
+                            entries
+                                .iter()
+                                .filter_map(|entry| entry.get("id").cloned())
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                })
+            }))
+        }
+
+        async fn fetch_message() -> impl IntoResponse {
+            Json(json!({
+                "_id": "01HYYYYYYYYYYYYYYYYYYYYYYY",
+                "channel": "channel_1",
+                "author": "user_2",
+                "content": "Original reply target",
+                "user": {
+                    "_id": "user_2",
+                    "username": "other",
+                    "discriminator": "0002",
+                    "display_name": "Other User",
+                    "online": false
+                }
+            }))
+        }
+
+        let app = Router::new()
+            .route("/", get(root_config))
+            .route("/channels/{channel_id}/messages", post(send_message))
+            .route(
+                "/channels/{channel_id}/messages/{message_id}",
+                get(fetch_message),
+            )
+            .with_state(state);
+
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let addr = listener.local_addr()?;
+        let handle = tokio::spawn(async move {
+            let _ignored = axum::serve(listener, app).await;
+        });
+
+        Ok((format!("http://{addr}"), handle))
+    }
 
     #[test]
     fn default_client_uses_official_instance() {
@@ -487,5 +681,134 @@ mod tests {
             }) if instance_id == "chat.example.test~api"
                 && backend_url == Some("https://chat.example.test/api".to_string())
         ));
+    }
+
+    #[tokio::test]
+    async fn send_message_posts_text_payload_and_maps_response()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let state = TestServerState::default();
+        let (base_url, server_handle) = launch_test_server(state.clone()).await?;
+        let client = StoatClient::with_base_url(base_url)?;
+
+        client.http.set_session(StoatSessionState {
+            token: "token_123".to_string(),
+            session_id: Some("session_1".to_string()),
+            user_id: Some("user_1".to_string()),
+            user_display_name: Some("Stoaty".to_string()),
+        })?;
+
+        let sent = client
+            .send_message(
+                "channel_1",
+                poly_client::MessageContent::Text("Hello Stoat".to_string()),
+            )
+            .await?;
+
+        server_handle.abort();
+
+        let requests = state
+            .captured_requests
+            .lock()
+            .map_err(|_| "captured request lock poisoned")?;
+        let first_request = requests.first().ok_or("missing captured request")?;
+        let nonce_present = first_request
+            .get("nonce")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|nonce| !nonce.is_empty());
+
+        assert!(nonce_present);
+        assert_eq!(first_request.get("content"), Some(&json!("Hello Stoat")));
+        assert_eq!(sent.author.display_name, "Stoaty");
+        assert_eq!(
+            sent.content,
+            poly_client::MessageContent::Text("Hello Stoat".to_string())
+        );
+
+        let tokens = state
+            .captured_tokens
+            .lock()
+            .map_err(|_| "captured token lock poisoned")?;
+        assert_eq!(tokens.first().map(String::as_str), Some("token_123"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_reply_message_includes_reply_intent_and_preview()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let state = TestServerState::default();
+        let (base_url, server_handle) = launch_test_server(state.clone()).await?;
+        let client = StoatClient::with_base_url(base_url)?;
+
+        client.http.set_session(StoatSessionState {
+            token: "token_123".to_string(),
+            session_id: Some("session_1".to_string()),
+            user_id: Some("user_1".to_string()),
+            user_display_name: Some("Stoaty".to_string()),
+        })?;
+
+        let sent = poly_client::ClientBackend::send_reply_message(
+            &client,
+            "channel_1",
+            "01HYYYYYYYYYYYYYYYYYYYYYYY",
+            poly_client::MessageContent::Text("Reply text".to_string()),
+        )
+        .await?;
+
+        server_handle.abort();
+
+        let requests = state
+            .captured_requests
+            .lock()
+            .map_err(|_| "captured request lock poisoned")?;
+        let first_request = requests.first().ok_or("missing captured request")?;
+        assert_eq!(first_request.get("content"), Some(&json!("Reply text")));
+        assert_eq!(
+            first_request.get("replies"),
+            Some(&json!([{
+                "id": "01HYYYYYYYYYYYYYYYYYYYYYYY",
+                "mention": false,
+                "fail_if_not_exists": true
+            }]))
+        );
+
+        assert!(matches!(
+            sent.reply_to,
+            Some(poly_client::MessageReplyPreview { ref message_id, ref author_display_name, ref snippet, .. })
+                if message_id == "01HYYYYYYYYYYYYYYYYYYYYYYY"
+                    && author_display_name == "Other User"
+                    && snippet == "Original reply target"
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_message_rejects_unuploaded_attachments() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let client = StoatClient::new();
+        let result = client
+            .send_message(
+                "channel_1",
+                poly_client::MessageContent::WithAttachments {
+                    text: "Hello Stoat".to_string(),
+                    attachments: vec![poly_client::Attachment {
+                        id: "attachment_1".to_string(),
+                        filename: "hello.txt".to_string(),
+                        content_type: "text/plain".to_string(),
+                        url: "https://example.test/hello.txt".to_string(),
+                        size: 5,
+                    }],
+                },
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(poly_client::ClientError::NotSupported(message))
+                if message == "Stoat attachment upload is not implemented yet"
+        ));
+
+        Ok(())
     }
 }

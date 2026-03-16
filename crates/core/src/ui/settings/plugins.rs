@@ -401,6 +401,9 @@ pub fn PluginsSettings() -> Element {
                                                 // instant UI feedback.
                                                 disabled.write().push(toggled.clone());
                                                 let new_disabled = disabled.read().clone();
+                                                client_manager
+                                                    .write()
+                                                    .set_disabled_native_backends(new_disabled.clone());
                                                 let wasm = wasm_plugins.read().clone();
                                                 spawn(async move {
                                                     // Phase 2: async logout (no signal lock).
@@ -471,6 +474,9 @@ pub fn PluginsSettings() -> Element {
                                             // Toggling ON — re-enable the backend option.
                                             disabled.write().retain(|s| s != &toggled);
                                             let new_disabled = disabled.read().clone();
+                                            client_manager
+                                                .write()
+                                                .set_disabled_native_backends(new_disabled.clone());
                                             let wasm = wasm_plugins.read().clone();
                                             spawn(async move {
                                                 let mut s = load_settings().await;
