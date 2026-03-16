@@ -45,6 +45,9 @@ cargo component build -p poly-discord --target wasm32-wasip2
 - All methods return `Err(ClientError::Internal("not yet implemented"))` or empty collections
 - `get_backend_type()` returns `BackendType::Discord`, `get_backend_name()` returns `"Discord"`
 - When implementing the real client, the guest bridge must convert between native types and WIT types
+- Because `wit_bindgen::generate!` lives in `src/wit_bindings.rs`, the export must use:
+	`export!(DiscordPlugin with_types_in crate::wit_bindings)`
+- The `messenger-plugin` world also requires a minimal `plugin_metadata::Guest` implementation even for stub plugins
 
 ## Implementation Phase
 

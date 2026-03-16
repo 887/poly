@@ -35,6 +35,21 @@ async fn stoat_authenticate_returns_error() {
 }
 
 #[tokio::test]
+async fn stoat_authenticate_email_password_returns_error() {
+    let mut backend = load_stoat().await;
+    let result = backend
+        .authenticate(poly_client::AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "secret".to_string(),
+        })
+        .await;
+    assert!(
+        result.is_err(),
+        "Stub Stoat guest authenticate(email/password) should return an error"
+    );
+}
+
+#[tokio::test]
 async fn stoat_is_not_authenticated() {
     let backend = load_stoat().await;
     assert!(!backend.is_authenticated());

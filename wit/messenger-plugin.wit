@@ -78,6 +78,7 @@ interface types {
         id: string,
         name: string,
         icon-url: option<string>,
+        banner-url: option<string>,
         categories: list<category>,
         backend: backend-type,
         unread-count: u32,
@@ -209,6 +210,7 @@ interface types {
         backend: backend-type,
         icon-emoji: option<string>,
         instance-id: string,
+        backend-url: option<string>,
     }
 
     /// Authentication credentials for logging in.

@@ -29,11 +29,28 @@ The crate is no longer just an empty shell:
 	- REST base URL
 	- Bonfire websocket URL
 	- route-safe `instance_id`
+- `src/api.rs` contains typed Stoat login/root-config/user/server/channel/message models and Poly mapping helpers
 - `src/http.rs` provides isolated reqwest transport/session scaffolding using Stoat's `x-session-token` header
 - `StoatAuthInput` extracts supported Stoat credential types from `poly-client::AuthCredentials`
+- Native auth now supports email/password login, token resume, fetch-self mapping, and logout
+- Native server/channel retrieval now supports:
+	- `get_server(id)` via `GET /servers/{id}`
+	- `get_channels(server_id)` via server channel IDs + `GET /channels/{id}` fanout
+	- `get_channel(id)` for server channels
+	- `/sync/unreads` enrichment for mention counts and conservative unread badges
+- Native message retrieval now supports:
+	- `get_messages(channel_id, query)` via `GET /channels/{target}/messages`
+	- `before`, `after`, and `around`/`nearby` pagination windows
+	- Stoat reply previews when the referenced message is present in the returned window
+	- bundled user/member display-name mapping plus reaction state
+	- best-effort Autumn attachment URLs using the instance `GET /` file-service config
+- `get_servers()` is still intentionally unsupported because the published Stoat REST schema does not currently expose an obvious authenticated joined-server collection endpoint
+- `clients/stoat/tests/integration.rs` provides mock-backed native end-to-end tests for the implemented auth slice
+- `clients/stoat/tests/integration.rs` now also covers server detail, channel list/detail, unread mapping, DM-channel rejection, and both Stoat bulk-message response variants
 - `src/guest.rs` still behaves as a stub for backend operations, but the WASM component build is wired correctly and now includes required plugin metadata exports
+- The shared WIT/plugin boundary is now aligned with `poly-client::Session.backend_url` and `poly-client::Server.banner_url`
 
-Full auth/server/channel/message implementation is still upcoming in Phase 3.1.
+Send/edit/delete, DMs/groups, realtime, and voice/video implementation are still upcoming in Phase 3.1.
 
 ## Features
 
@@ -63,12 +80,24 @@ Built from scratch using the Stoat REST API + WebSocket protocol. No existing Ru
 cargo test -p poly-plugin-loader-tests --features test-stoat --test client_e2e -- --nocapture
 ```
 
+Native auth/integration coverage:
+
+```sh
+cargo test -p poly-stoat
+```
+
+Complete plugin-host contract coverage after the WIT update:
+
+```sh
+cargo test -p poly-plugin-loader-tests --all-features
+```
+
 
 ## API Source
 
-the file api-1.json
-downloaded from
-https://developers.stoat.chat/api-reference/
+- Local OpenAPI snapshot: `api-1.json`
+- Download source: `https://developers.stoat.chat/api-reference/`
+- Protocol/feature spec: [`SPEC.md`](./SPEC.md)
 
 
 ## License

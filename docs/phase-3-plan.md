@@ -26,24 +26,51 @@
 > **Goal:** Full chat + voice + video with Stoat servers. WebRTC infrastructure built here is reused by all other backends.
 
 ### 3.1.1 Research & Planning
-- [ ] **3.1.1.1** Deep-dive Stoat REST API (developer docs at `developers.stoat.chat`)
-- [ ] **3.1.1.2** Document all REST endpoints needed: auth, servers, channels, messages, users, voice
+- [x] **3.1.1.1** Deep-dive Stoat REST API (developer docs at `developers.stoat.chat`)
+	- Documented from `clients/stoat/api-1.json`, Stoat docs, and `stoatchat/javascript-client-api`
+- [x] **3.1.1.2** Document all REST endpoints needed: auth, servers, channels, messages, users, voice
+	- Captured in `clients/stoat/SPEC.md` feature matrix and endpoint map
 - [ ] **3.1.1.3** Document WebSocket event protocol
-- [ ] **3.1.1.4** Document Stoat auth flow (email/password, OAuth if available)
+- [x] **3.1.1.4** Document Stoat auth flow (email/password, OAuth if available)
+	- Current login/session flow, token resume, and deferred MFA/onboarding notes captured in `clients/stoat/SPEC.md`
 - [ ] **3.1.1.5** Document Stoat voice/video protocol (WebRTC specifics)
 - [ ] **3.1.1.6** Test against official Stoat server and a self-hosted instance
-- [ ] **3.1.1.7** Update `clients/stoat/agents.md` with all findings
+- [x] **3.1.1.7** Update `clients/stoat/agents.md` with all findings
+	- Updated 2026-03-16 with auth slice, WASM guest export rules, spec doc, and native integration coverage
 
 ### 3.1.2 Core Stoat Client
 - [x] **3.1.2.1** HTTP client setup (reqwest or similar) with base URL configuration
 	- Implemented 2026-03-16 in `clients/stoat/src/config.rs` + `src/http.rs`
 	- Added normalized base URL / websocket URL / instance ID derivation
 	- Added token-header request scaffolding and native/WASM validation
-- [ ] **3.1.2.2** Authentication (email/password login, token storage)
+- [x] **3.1.2.2** Authentication (email/password login, token storage)
+	- Implemented 2026-03-16 in `clients/stoat/src/api.rs`, `src/http.rs`, and `src/lib.rs`
+	- Added email/password login, token resume, fetch-self mapping, logout, and typed MFA/disabled auth failures
+	- Added mock-backed native integration tests in `clients/stoat/tests/integration.rs`
 - [ ] **3.1.2.3** Implement `ClientBackend` trait for `StoatClient`
 - [ ] **3.1.2.4** Server list retrieval
-- [ ] **3.1.2.5** Channel list per server (with categories)
-- [ ] **3.1.2.6** Message retrieval (paginated)
+	- 2026-03-16 research/update: `clients/stoat/api-1.json` exposes `GET /servers/{id}` but no obvious authenticated joined-server collection endpoint
+	- Current `get_servers()` therefore remains explicitly `NotSupported` pending Bonfire ready-state / sync-cache integration or discovery of a dedicated REST list endpoint
+- [x] **3.1.2.5** Channel list per server (with categories)
+	- Implemented 2026-03-16 in `clients/stoat/src/api.rs`, `src/http.rs`, and `src/lib.rs`
+	- `get_server(id)` now maps Stoat server/category payloads into Poly `Server`
+	- `get_channels(server_id)` now fetches server channel IDs then resolves each channel with `GET /channels/{id}`
+	- `get_channel(id)` now resolves a single server channel directly and rejects DM/group channels
+	- `GET /sync/unreads` now enriches server/channel mention counts and conservative unread badges
+	- Added mock-backed integration coverage for server detail, channel list/detail, unread mapping, and DM-channel rejection
+- [x] **3.1.2.6** Message retrieval (paginated)
+	- Implemented 2026-03-16 in `clients/stoat/src/api.rs`, `src/http.rs`, and `src/lib.rs`
+	- `get_messages(channel_id, query)` now uses `GET /channels/{target}/messages` with support for:
+		- `before`
+		- `after`
+		- `around` → Stoat `nearby`
+		- `limit`
+	- Handles both Stoat `BulkMessageResponse` shapes:
+		- plain `array<Message>`
+		- expanded `{ messages, users, members? }`
+	- Maps bundled users/member nicknames, reactions, replies, edited state, and Autumn-backed attachment URLs into Poly `Message`
+	- Uses Stoat ULID message IDs to derive stable message timestamps for chronological ordering
+	- Added mock-backed integration coverage for expanded and plain-array message responses
 - [ ] **3.1.2.7** Send messages (text, with attachments)
 - [ ] **3.1.2.8** User profiles and presence
 - [ ] **3.1.2.9** Friend list and friend requests

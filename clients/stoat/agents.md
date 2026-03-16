@@ -138,6 +138,69 @@ Completed the first Phase 3.1 native isolation slice:
 - `StoatClient` exposes transport metadata helpers without leaking Stoat protocol logic into app crates
 - WASM component build now succeeds again after fixing the guest export syntax and adding required plugin metadata stubs
 
+Completed the second Phase 3.1 auth slice:
+
+- `src/api.rs` now contains typed Stoat API models for:
+	- `RevoltConfig`
+	- login request / response
+	- user + presence mapping
+- `StoatClient::authenticate()` now supports:
+	- `AuthCredentials::EmailPassword`
+	- `AuthCredentials::Token`
+- Native auth uses:
+	- `POST /auth/session/login`
+	- `GET /users/@me`
+	- `POST /auth/session/logout`
+- `Focus` and `Busy` currently map to `PresenceStatus::DoNotDisturb` because Poly does not yet expose Stoat's exact focus-mode semantics.
+- Native end-to-end-style coverage lives in `clients/stoat/tests/integration.rs` with a mock Stoat HTTP server.
+- Full Stoat protocol/feature reference now lives in `clients/stoat/SPEC.md`.
+
+Completed the third Phase 3.1 retrieval slice:
+
+- `src/api.rs` now contains typed models and Poly mapping helpers for:
+	- servers
+	- categories
+	- channels
+	- `/sync/unreads` payloads
+- Native retrieval now supports:
+	- `GET /servers/{id}` → `get_server(id)`
+	- `GET /channels/{id}` → `get_channel(id)`
+	- `GET /servers/{id}` + per-channel fetch fanout → `get_channels(server_id)`
+	- `GET /sync/unreads` → mention counts + conservative unread badges
+- Important protocol finding: the published Stoat REST schema still does **not** show an obvious joined-server collection endpoint for the authenticated account.
+	- `get_servers()` therefore remains explicit `NotSupported(...)` until Bonfire ready-state / sync caching is wired or a dedicated REST endpoint is confirmed.
+- `get_channel(id)` intentionally rejects DM/group channels because Poly models those through `DmChannel` / `Group`, not shared server-channel `Channel`.
+- Native integration coverage now also includes:
+	- server detail mapping
+	- channel list retrieval
+	- single-channel retrieval
+	- unread/mention enrichment
+	- DM-channel rejection
+
+Completed the fourth Phase 3.1 retrieval slice:
+
+- `src/api.rs` now also contains typed models and mapping helpers for:
+	- `GET /channels/{target}/messages`
+	- Stoat `BulkMessageResponse` array/envelope variants
+	- bundled message users / members / webhook metadata
+	- file-service (`Autumn`) URL derivation from `GET /`
+- Native retrieval now also supports:
+	- `get_messages(channel_id, query)`
+	- `before`, `after`, and `around`/`nearby` pagination windows
+	- reply preview hydration when the referenced message is in the current batch
+	- reaction mapping with `me` detection from the authenticated user id
+	- chronologically sorted Poly messages using timestamps derived from Stoat ULID message IDs
+- The shared WIT/plugin ABI was also realigned in this slice:
+	- `wit/messenger-plugin.wit` `session` now includes `backend-url`
+	- `wit/messenger-plugin.wit` `server` now includes `banner-url`
+	- `crates/plugin-host/src/bridge.rs` and `clients/demo/src/guest.rs` were updated to preserve those fields across the WIT boundary
+- Native integration coverage now additionally includes:
+	- expanded-envelope message fetches with bundled users/members
+	- plain-array `BulkMessageResponse` handling
+	- attachment URL mapping
+	- reply preview mapping
+	- reaction mapping
+
 ## E2E Test Coverage (2026-03-06)
 
 **10 tests** in `crates/plugin-host-tests/tests/client_e2e/stoat.rs` — stub behavior verification through WASM plugin host:
@@ -153,6 +216,20 @@ Completed the first Phase 3.1 native isolation slice:
 ```sh
 cargo test -p poly-plugin-loader-tests --features test-stoat --test client_e2e -- --nocapture
 ```
+
+Additional native transport E2E-style tests (2026-03-16):
+
+```sh
+cargo test -p poly-stoat
+```
+
+These cover the implemented auth slice end-to-end over a mock HTTP server:
+- root config fetch
+- email/password login
+- token restore
+- MFA error branch
+- disabled-account error branch
+- logout
 
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 

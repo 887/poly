@@ -5,9 +5,30 @@
   "description": "Incrementally implement the Stoat (Revolt) client as an isolated WASM component plugin, following project plans, client-plugin WIT boundary rules, and per-crate agents.md guidance. Work in small resumable steps with memories/findings recorded throughout.",
   "status": "todo",
   "created_at": "2026-03-16T20:41:57.053308379Z",
-  "updated_at": "2026-03-16T20:54:03.492629833Z",
+  "updated_at": "2026-03-16T22:05:06.662709508Z",
   "completed_at": null,
-  "memory_count": 2,
-  "finding_count": 0,
-  "checklist": []
+  "memory_count": 7,
+  "finding_count": 2,
+  "checklist": [
+    {
+      "id": 1,
+      "text": "Implement Stoat auth transport models and login flow",
+      "done": false
+    },
+    {
+      "id": 2,
+      "text": "Add Stoat auth spec and feature matrix docs",
+      "done": false
+    },
+    {
+      "id": 3,
+      "text": "Add native auth and E2E-style tests",
+      "done": false
+    },
+    {
+      "id": 4,
+      "text": "Update WASM/plugin tests for new behavior",
+      "done": false
+    }
+  ]
 }

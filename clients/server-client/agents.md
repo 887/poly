@@ -58,6 +58,9 @@ cargo component build -p poly-server-client --target wasm32-wasip2 --no-default-
 - All methods return `Err(ClientError::Internal("not yet implemented"))` or empty collections
 - `get_backend_type()` returns `BackendType::Poly`, `get_backend_name()` returns `"Poly Server"`
 - Future: HTTP calls will be routed through the WIT `host-api` imports instead of reqwest
+- Because `wit_bindgen::generate!` lives in `src/wit_bindings.rs`, the export must use:
+  `export!(PolyServerPlugin with_types_in crate::wit_bindings)`
+- The `messenger-plugin` world also requires a minimal `plugin_metadata::Guest` implementation even for stub plugins
 
 ## Development notes
 

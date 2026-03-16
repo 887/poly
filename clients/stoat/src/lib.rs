@@ -15,6 +15,9 @@
 // TODO(phase-3.1): Implement Stoat client
 
 #[cfg(feature = "native")]
+mod api;
+
+#[cfg(feature = "native")]
 mod config;
 
 #[cfg(feature = "native")]
@@ -30,17 +33,26 @@ mod wit_bindings;
 mod guest;
 
 #[cfg(feature = "native")]
+pub use api::StoatRootConfig;
+#[cfg(feature = "native")]
+use api::{StoatChannelUnread, reply_preview_from_message};
+#[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
 pub use config::{OFFICIAL_STOAT_BASE_URL, StoatAuthInput, StoatConfig, StoatConfigError};
 #[cfg(feature = "native")]
-use futures::stream::{self, Stream};
+use futures::{
+    future,
+    stream::{self, Stream},
+};
 #[cfg(feature = "native")]
 use http::StoatHttpClient;
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
 use reqwest::{Method, RequestBuilder};
+#[cfg(feature = "native")]
+use std::collections::HashMap;
 #[cfg(feature = "native")]
 use std::pin::Pin;
 
@@ -113,6 +125,50 @@ impl StoatClient {
     ) -> ClientResult<RequestBuilder> {
         self.http.authenticated_request(method, path)
     }
+
+    /// Fetch Stoat instance configuration from `GET /`.
+    pub async fn fetch_server_config(&self) -> ClientResult<StoatRootConfig> {
+        self.http.fetch_server_config().await
+    }
+
+    fn build_session(&self, authenticated: api::StoatAuthenticatedSession) -> Session {
+        Session {
+            id: authenticated.session_id,
+            user: authenticated.user,
+            token: authenticated.token,
+            backend: BackendType::Stoat,
+            icon_emoji: Some("🦦".to_string()),
+            instance_id: self.instance_id(),
+            backend_url: Some(self.base_url().to_string()),
+        }
+    }
+
+    fn current_account_metadata(&self) -> ClientResult<(String, String)> {
+        let session = self.http.session().ok_or_else(|| {
+            ClientError::AuthFailed("Stoat client is not authenticated".to_string())
+        })?;
+
+        let account_id = session.user_id.ok_or_else(|| {
+            ClientError::Internal("Stoat session is missing the authenticated user id".to_string())
+        })?;
+
+        let account_display_name = session
+            .user_display_name
+            .unwrap_or_else(|| account_id.clone());
+
+        Ok((account_id, account_display_name))
+    }
+
+    fn index_unreads(unreads: Vec<StoatChannelUnread>) -> HashMap<String, StoatChannelUnread> {
+        unreads
+            .into_iter()
+            .map(|unread| (unread.key.channel.clone(), unread))
+            .collect()
+    }
+
+    fn current_user_id(&self) -> Option<String> {
+        self.http.session().and_then(|session| session.user_id)
+    }
 }
 
 #[cfg(feature = "native")]
@@ -127,15 +183,20 @@ impl Default for StoatClient {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl ClientBackend for StoatClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
-        let _auth = StoatAuthInput::try_from(credentials)?;
-        Err(ClientError::Internal(
-            "Stoat auth transport is configured, but the login/session flow is not implemented yet"
-                .into(),
-        ))
+        let authenticated = match StoatAuthInput::try_from(credentials)? {
+            StoatAuthInput::SessionToken(token) => self.http.authenticate_with_token(token).await?,
+            StoatAuthInput::EmailPassword { email, password } => {
+                self.http
+                    .login_with_password(&email, &password, Some("Poly"))
+                    .await?
+            }
+        };
+
+        Ok(self.build_session(authenticated))
     }
 
     async fn logout(&mut self) -> ClientResult<()> {
-        self.http.clear_session()
+        self.http.logout().await
     }
 
     fn is_authenticated(&self) -> bool {
@@ -143,19 +204,80 @@ impl ClientBackend for StoatClient {
     }
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        Ok(vec![])
+        Err(ClientError::NotSupported(
+            "Stoat joined-server discovery requires websocket ready-state or a dedicated collection endpoint".to_string(),
+        ))
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        Err(ClientError::NotFound(format!("Server {id}")))
+        let (server, unreads, root_config) = future::try_join3(
+            self.http.fetch_server(id),
+            self.http.fetch_unreads(),
+            self.http.fetch_server_config(),
+        )
+        .await?;
+        let (account_id, account_display_name) = self.current_account_metadata()?;
+        let unread_index = Self::index_unreads(unreads);
+        let autumn_base_url = root_config.autumn_base_url();
+
+        let (unread_count, mention_count) = server
+            .channels
+            .iter()
+            .filter_map(|channel_id| unread_index.get(channel_id))
+            .fold((0_u32, 0_u32), |(unreads_acc, mentions_acc), unread| {
+                (
+                    unreads_acc.saturating_add(unread.approximate_unread_count()),
+                    mentions_acc.saturating_add(unread.mention_count()),
+                )
+            });
+
+        Ok(server.into_poly_server(
+            account_id,
+            account_display_name,
+            unread_count,
+            mention_count,
+            autumn_base_url,
+        ))
     }
 
-    async fn get_channels(&self, _server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(vec![])
+    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
+        let (server, unreads) =
+            future::try_join(self.http.fetch_server(server_id), self.http.fetch_unreads()).await?;
+        let unread_index = Self::index_unreads(unreads);
+
+        let channels = future::try_join_all(
+            server
+                .channels
+                .iter()
+                .map(|channel_id| self.http.fetch_channel(channel_id)),
+        )
+        .await?;
+
+        channels
+            .into_iter()
+            .map(|channel| {
+                let unread = unread_index.get(&channel.id);
+                let unread_count = unread
+                    .map(StoatChannelUnread::approximate_unread_count)
+                    .unwrap_or(0);
+                let mention_count = unread.map(StoatChannelUnread::mention_count).unwrap_or(0);
+
+                channel.into_poly_server_channel(unread_count, mention_count)
+            })
+            .collect()
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        Err(ClientError::NotFound(format!("Channel {id}")))
+        let (channel, unreads) =
+            future::try_join(self.http.fetch_channel(id), self.http.fetch_unreads()).await?;
+        let unread_index = Self::index_unreads(unreads);
+        let unread = unread_index.get(&channel.id);
+        let unread_count = unread
+            .map(StoatChannelUnread::approximate_unread_count)
+            .unwrap_or(0);
+        let mention_count = unread.map(StoatChannelUnread::mention_count).unwrap_or(0);
+
+        channel.into_poly_server_channel(unread_count, mention_count)
     }
 
     async fn send_message(
@@ -170,10 +292,53 @@ impl ClientBackend for StoatClient {
 
     async fn get_messages(
         &self,
-        _channel_id: &str,
-        _query: MessageQuery,
+        channel_id: &str,
+        query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        Ok(vec![])
+        let (response, root_config) = future::try_join(
+            self.http.fetch_messages(channel_id, &query),
+            self.http.fetch_server_config(),
+        )
+        .await?;
+        let autumn_base_url = root_config.autumn_base_url().map(str::to_string);
+        let current_user_id = self.current_user_id();
+        let (raw_messages, bundled_users, bundled_members) = response.into_parts();
+
+        let mut messages_with_replies: Vec<(Message, Option<String>)> = raw_messages
+            .into_iter()
+            .map(|raw| {
+                let reply_id = raw.primary_reply_id().map(str::to_string);
+                let message = raw.into_poly_message(
+                    &bundled_users,
+                    &bundled_members,
+                    current_user_id.as_deref(),
+                    autumn_base_url.as_deref(),
+                );
+                (message, reply_id)
+            })
+            .collect();
+
+        let preview_index: HashMap<String, MessageReplyPreview> = messages_with_replies
+            .iter()
+            .map(|(message, _)| (message.id.clone(), reply_preview_from_message(message)))
+            .collect();
+
+        let mut messages: Vec<Message> = messages_with_replies
+            .drain(..)
+            .map(|(mut message, reply_id)| {
+                message.reply_to =
+                    reply_id.and_then(|reply_id| preview_index.get(&reply_id).cloned());
+                message
+            })
+            .collect();
+
+        messages.sort_by(|left, right| {
+            left.timestamp
+                .cmp(&right.timestamp)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+
+        Ok(messages)
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
@@ -232,7 +397,9 @@ impl ClientBackend for StoatClient {
 #[cfg(all(test, feature = "native"))]
 mod tests {
     use super::{OFFICIAL_STOAT_BASE_URL, StoatClient};
+    use poly_client::{BackendType, PresenceStatus};
     use reqwest::Method;
+    use serde_json::json;
 
     #[test]
     fn default_client_uses_official_instance() {
@@ -276,5 +443,49 @@ mod tests {
             }),
             Ok("https://chat.example.test/api/servers".to_string())
         );
+    }
+
+    #[test]
+    fn server_config_deserializes_through_public_type() {
+        let config: Result<super::StoatRootConfig, _> = serde_json::from_value(json!({
+            "revolt": "0.11.5",
+            "ws": "wss://ws.example.test",
+        }));
+
+        assert!(matches!(
+            config,
+            Ok(super::StoatRootConfig { revolt, ws, .. })
+                if revolt == "0.11.5" && ws == "wss://ws.example.test"
+        ));
+    }
+
+    #[test]
+    fn build_session_uses_stoat_backend_identity() {
+        let session = StoatClient::with_base_url("https://chat.example.test/api").map(|client| {
+            client.build_session(super::api::StoatAuthenticatedSession {
+                session_id: "session_1".to_string(),
+                user_id: "user_1".to_string(),
+                token: "token_1".to_string(),
+                user: poly_client::User {
+                    id: "user_1".to_string(),
+                    display_name: "Stoaty".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::Stoat,
+                },
+                session_name: Some("Poly".to_string()),
+            })
+        });
+
+        assert!(matches!(
+            session,
+            Ok(poly_client::Session {
+                backend: BackendType::Stoat,
+                instance_id,
+                backend_url,
+                ..
+            }) if instance_id == "chat.example.test~api"
+                && backend_url == Some("https://chat.example.test/api".to_string())
+        ));
     }
 }

@@ -4,7 +4,9 @@
 //! calls through host-api imports. For now, returns "not yet implemented".
 //! DECISION(D21): WASM Plugin Backends.
 
-use crate::wit_bindings::{Guest, wit};
+#![allow(unsafe_code)]
+
+use crate::wit_bindings::{Guest, PluginMetadataGuest, SettingDescriptor, export, wit};
 
 struct PolyServerPlugin;
 
@@ -154,7 +156,22 @@ impl Guest for PolyServerPlugin {
     }
 }
 
-// EXCEPTION: unsafe_code is allowed here only because the export!() macro
-// produces unsafe FFI stubs. This is unavoidable for WIT component registration.
-#[allow(unsafe_code)]
-export!(PolyServerPlugin);
+impl PluginMetadataGuest for PolyServerPlugin {
+    fn get_translations(_locale: String) -> String {
+        String::new()
+    }
+
+    fn get_settings_schema() -> Vec<SettingDescriptor> {
+        vec![]
+    }
+
+    fn get_display_name_key() -> String {
+        "plugin-poly-server-title".to_string()
+    }
+
+    fn get_icon() -> String {
+        "🔐".to_string()
+    }
+}
+
+export!(PolyServerPlugin with_types_in crate::wit_bindings);

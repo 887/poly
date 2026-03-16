@@ -6,12 +6,14 @@
 //!
 //! DECISION(D21): WASM Plugin Backends.
 
+#![allow(unsafe_code)]
+
 use std::cell::RefCell;
 
 use poly_client as pc;
 
 use crate::wit_bindings::{
-    MessengerClientGuest, PluginMetadataGuest, SettingDescriptor, SettingKind, wit,
+    MessengerClientGuest, PluginMetadataGuest, SettingDescriptor, SettingKind, export, wit,
 };
 
 // ─── State Management ──────────────────────────────────────────────
@@ -83,6 +85,7 @@ fn to_wit_server(s: pc::Server) -> wit::Server {
         id: s.id,
         name: s.name,
         icon_url: s.icon_url,
+        banner_url: s.banner_url,
         categories: s.categories.iter().map(to_wit_category).collect(),
         backend: to_wit_backend_type(s.backend),
         unread_count: s.unread_count,
@@ -199,6 +202,7 @@ fn to_wit_session(s: pc::Session) -> wit::Session {
         backend: to_wit_backend_type(s.backend),
         icon_emoji: s.icon_emoji,
         instance_id: s.instance_id,
+        backend_url: s.backend_url,
     }
 }
 
@@ -602,7 +606,4 @@ impl PluginMetadataGuest for DemoPlugin {
 }
 
 // Register the component export.
-// EXCEPTION: unsafe_code is allowed here only because the export!() macro
-// produces unsafe FFI stubs. This is unavoidable for WIT component registration.
-#[allow(unsafe_code)]
-export!(DemoPlugin);
+export!(DemoPlugin with_types_in crate::wit_bindings);
