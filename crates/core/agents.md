@@ -1,7 +1,7 @@
 # poly-core — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-06 (Phase 2.14 — WASM Plugin System + E2E Tests)
+> **Last Updated:** 2026-03-17 (web-first verification default)
 
 ---
 
@@ -376,20 +376,20 @@ onchange: move |e: Event<FormData>| {
   4. right wing open = member/contact/utility rail overlays from the right without shrinking chat
   5. desktop right rail still docks as a normal side column for DM contact/member views and server member views
 
-## MANDATORY: Visual Testing with MCP desktop-devtools
+## MANDATORY: Visual Testing with MCP (Web First)
 
 **After every change that touches `rsx!` blocks** (UI layout, component structure, new
-components, theme changes, etc.), you MUST visually verify the result using the
-desktop-devtools MCP:
+components, theme changes, etc.), you MUST visually verify the result in a running app.
+**Default to the web-devtools MCP / `poly-web`.** Only use desktop-devtools or electron-devtools
+when the user explicitly asks for those platforms or when the bug is platform-specific.
 
 ```
-1. Ensure desktop app is running (hot-reload or launch fresh via MCP)
-2. Call mcp_poly-desktop_screenshot() to capture the current state
-3. Inspect the screenshot for correctness (layout, text, colors)
-4. If resetting to a clean state is useful: call mcp_poly-desktop_reset_app()
-   then mcp_poly-desktop_launch_app() to walk through the setup wizard fresh
-5. Navigate to the changed area: mcp_poly-desktop_navigate("/path")
-6. Take another screenshot to confirm the change looks correct
+1. Ensure poly-web is running via the Web MCP
+2. Poll build status until Succeeded, then connect CDP
+3. Call mcp_poly-web_take_screenshot() to capture the current state
+4. Inspect the screenshot for correctness (layout, text, colors)
+5. If resetting to a clean state is useful: use the web reset/relaunch flow
+6. Navigate to the changed area and take another screenshot to confirm the change looks correct
 ```
 
 **Inline-first rule:** take screenshots **without** a save path by default so they appear inline in chat/tool output.
@@ -397,6 +397,11 @@ Only save a screenshot file when the user explicitly wants an artifact on disk o
 
 **If the visual test reveals problems**: fix them before declaring the task complete.
 A change is only "done" when it looks correct in the actual running app.
+
+**Escalate to desktop/electron only when needed:**
+- desktop-native windowing/system-webview behavior,
+- Electron-specific WASM shell behavior,
+- or the user explicitly requests desktop/electron verification.
 
 This applies especially to:
 - New settings pages / merged pages
@@ -581,20 +586,27 @@ fails. **Always run both checks after editing settings.rs.**
 When fixing brace issues, prefer `.map()` over `if let Some(x) = ...` + `drop(x)` when
 you need to mutate a vec element and then move the vec.
 
-## MANDATORY: Visual Verification with Desktop DevTools MCP
+## MANDATORY: Visual Verification with Web DevTools MCP by Default
 
-**After EVERY change to this crate**, you MUST verify the changes using the Desktop DevTools MCP.
+**After EVERY change to this crate**, you MUST verify the changes visually in a running app.
+**By default, use the Web DevTools MCP with `poly-web`.** Do NOT switch to Desktop or Electron
+unless the user explicitly asks for that platform or the issue is platform-specific.
 Do NOT declare any change complete without visual confirmation.
 
 **Verification checklist:**
 1. `cargo check --workspace` — error-free
 2. `cargo cranky --workspace` — zero warnings
 3. `cargo check -p poly-web --target wasm32-unknown-unknown` — WASM compat
-4. `dx build --platform desktop` in `apps/desktop-devtools/` — build must succeed
-5. `mcp_poly-desktop_launch_app` → `mcp_poly-desktop_connect_cdp`
-6. `mcp_poly-desktop_screenshot` — enable 🧪 demo, navigate to affected views
+4. `mcp_poly-web_launch_app` → poll build status → `mcp_poly-web_connect_cdp`
+5. `mcp_poly-web_take_screenshot` — enable 🧪 demo when relevant, navigate to affected views
+6. Verify the real route/components render correctly
 7. Click interactive elements (buttons, pickers, navigation) to verify behavior
 8. Fix any visual/layout issues before declaring done
+
+**Only add Desktop/Electron verification when needed:**
+- the user asked for desktop/electron,
+- the change affects native windowing/system integration,
+- or web cannot exercise the code path.
 
 **Lesson learned (2025-03-01):** RSX macro syntax errors cause misleading Rust diagnostics.
 Two syntax bugs (a `},` instead of `;` and a misplaced closing brace before `else`) passed

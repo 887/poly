@@ -7,7 +7,8 @@
 use crate::api::{
     StoatAllMemberResponse, StoatAuthenticatedSession, StoatAutumnUploadResponse,
     StoatBulkMessageResponse, StoatChannel, StoatChannelUnread, StoatLoginResponse, StoatMessage,
-    StoatPasswordLoginRequest, StoatRootConfig, StoatSendMessageRequest, StoatServer, StoatUser,
+    StoatPasswordLoginRequest, StoatRootConfig, StoatSendFriendRequest, StoatSendMessageRequest,
+    StoatServer, StoatUser,
 };
 use crate::config::StoatConfig;
 use poly_client::{Attachment, ClientError, ClientResult, MessageQuery};
@@ -330,6 +331,54 @@ impl StoatHttpClient {
     pub async fn fetch_user(&self, user_id: &str) -> ClientResult<StoatUser> {
         let response = self
             .authenticated_request(Method::GET, &format!("/users/{user_id}"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Send a Stoat friend request by username/discriminator.
+    pub async fn send_friend_request(&self, username: &str) -> ClientResult<StoatUser> {
+        let response = self
+            .authenticated_request(Method::POST, "/users/friend")?
+            .json(&StoatSendFriendRequest {
+                username: username.to_string(),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Accept a pending Stoat friend request.
+    pub async fn accept_friend_request(&self, user_id: &str) -> ClientResult<StoatUser> {
+        let response = self
+            .authenticated_request(Method::PUT, &format!("/users/{user_id}/friend"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Deny a pending Stoat friend request or remove an existing friend.
+    pub async fn remove_friend(&self, user_id: &str) -> ClientResult<StoatUser> {
+        let response = self
+            .authenticated_request(Method::DELETE, &format!("/users/{user_id}/friend"))?
             .send()
             .await
             .map_err(Self::network_error)?;

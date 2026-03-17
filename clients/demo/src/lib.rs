@@ -230,6 +230,12 @@ impl ClientBackend for DemoClient {
         Ok(data::demo_notifications())
     }
 
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        // Demo client: accept/deny is handled by host-side state updates after a successful
+        // backend response. Return success so the notifications UI can exercise that flow.
+        Ok(())
+    }
+
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
         Ok(PresenceStatus::Online)
     }
@@ -610,6 +616,12 @@ impl ClientBackend for DemoClient2 {
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
         Ok(data::demo2_notifications())
+    }
+
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        // Demo client: accept/deny is handled by host-side state updates after a successful
+        // backend response. Return success so the notifications UI can exercise that flow.
+        Ok(())
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {

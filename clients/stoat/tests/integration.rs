@@ -15,7 +15,7 @@ use axum::{
     Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post},
+    routing::{get, post, put},
 };
 use poly_client::{
     AuthCredentials, BackendType, ChannelType, ClientBackend, ClientError, MessageContent,
@@ -36,6 +36,27 @@ enum LoginMode {
 struct TestState {
     mode: LoginMode,
     addr: String,
+}
+
+fn stoat_user_json(
+    user_id: &str,
+    username: &str,
+    discriminator: &str,
+    display_name: Option<&str>,
+    relationship: &str,
+    presence: &str,
+    online: bool,
+) -> Value {
+    json!({
+        "_id": user_id,
+        "username": username,
+        "discriminator": discriminator,
+        "display_name": display_name,
+        "avatar": null,
+        "relationship": relationship,
+        "status": { "presence": presence },
+        "online": online
+    })
 }
 
 struct TestServer {
@@ -62,7 +83,9 @@ impl TestServer {
             .route("/auth/session/logout", post(logout))
             .route("/users/@me", get(fetch_self))
             .route("/users/dms", get(fetch_dms))
+            .route("/users/friend", post(send_friend_request))
             .route("/users/{target}/dm", get(open_dm))
+            .route("/users/{target}/friend", put(accept_or_remove_friend).delete(accept_or_remove_friend))
             .route("/users/{target}", get(fetch_user))
             .route("/servers/{target}", get(fetch_server))
             .route("/servers/{target}/members", get(fetch_server_members))
@@ -183,12 +206,87 @@ async fn fetch_self(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json
         "avatar": null,
         "relations": [
             { "_id": "user_2", "status": "Friend" },
-            { "_id": "user_3", "status": "Outgoing" }
+            { "_id": "user_3", "status": "Outgoing" },
+            { "_id": "user_4", "status": "Incoming" }
         ],
         "status": { "presence": "Focus" },
         "relationship": "User",
         "online": true
     })))
+}
+
+async fn send_friend_request(
+    headers: HeaderMap,
+    Json(payload): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    let username = payload
+        .get("username")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    match username {
+        "otterpal#0002" => Ok(Json(stoat_user_json(
+            "user_2",
+            "otterpal",
+            "0002",
+            None,
+            "Outgoing",
+            "Idle",
+            true,
+        ))),
+        _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
+    }
+}
+
+async fn accept_or_remove_friend(
+    headers: HeaderMap,
+    Path(target): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    match target.as_str() {
+        "user_4" => Ok(Json(stoat_user_json(
+            "user_4",
+            "ferretfriend",
+            "0004",
+            Some("Ferret Friend"),
+            "Friend",
+            "Online",
+            true,
+        ))),
+        "user_2" => Ok(Json(stoat_user_json(
+            "user_2",
+            "otterpal",
+            "0002",
+            None,
+            "None",
+            "Idle",
+            true,
+        ))),
+        _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
+    }
 }
 
 async fn fetch_dms(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
@@ -332,6 +430,16 @@ async fn fetch_user(
             "display_name": "Beaver Buddy",
             "avatar": null,
             "relationship": "Outgoing",
+            "status": { "presence": "Online" },
+            "online": true
+        }))),
+        "user_4" => Ok(Json(json!({
+            "_id": "user_4",
+            "username": "ferretfriend",
+            "discriminator": "0004",
+            "display_name": "Ferret Friend",
+            "avatar": null,
+            "relationship": "Incoming",
             "status": { "presence": "Online" },
             "online": true
         }))),
@@ -986,6 +1094,70 @@ async fn stoat_get_friends_uses_self_relationships() {
     assert_eq!(friends[0].id, "user_2");
     assert_eq!(friends[0].display_name, "otterpal");
     assert_eq!(friends[0].presence, PresenceStatus::Idle);
+}
+
+#[tokio::test]
+async fn stoat_get_notifications_maps_incoming_friend_requests() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let notifications = client
+        .get_notifications()
+        .await
+        .expect("notifications fetch succeeds");
+
+    assert_eq!(notifications.len(), 1);
+    let notif = &notifications[0];
+    assert_eq!(notif.account_id, "user_1");
+    assert!(matches!(
+        &notif.kind,
+        poly_client::NotificationKind::FriendRequest { from_user_id }
+            if from_user_id == "user_4"
+    ));
+    assert!(notif.preview.contains("Ferret Friend"));
+}
+
+#[tokio::test]
+async fn stoat_respond_to_friend_request_accepts_request() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    client
+        .respond_to_friend_request("user_4", true)
+        .await
+        .expect("accept succeeds");
+}
+
+#[tokio::test]
+async fn stoat_respond_to_friend_request_rejects_request() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    client
+        .respond_to_friend_request("user_4", false)
+        .await
+        .expect("reject succeeds");
 }
 
 #[tokio::test]

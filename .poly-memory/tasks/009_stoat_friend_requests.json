@@ -1,0 +1,13 @@
+{
+  "id": 9,
+  "slug": "stoat-friend-requests",
+  "title": "Stoat friend requests",
+  "description": "Native Stoat friend requests, notifications wiring, validation, and documentation.",
+  "status": "completed",
+  "created_at": "2026-03-17T12:15:40.977642008Z",
+  "updated_at": "2026-03-17T12:21:55.566821562Z",
+  "completed_at": "2026-03-17T12:21:55.566822142Z",
+  "memory_count": 1,
+  "finding_count": 2,
+  "checklist": []
+}

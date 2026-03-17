@@ -1,7 +1,7 @@
 # Poly — Root Agent Instructions
 
 > **READ THIS FILE FIRST** before any work on this project.  
-> **Last Updated:** 2026-03-03
+> **Last Updated:** 2026-03-17
 
 ---
 
@@ -161,24 +161,29 @@ When making architectural decisions:
 
 ### 9. poly-core Changes — MANDATORY DevTools Visual Verification
 
-**Every time you make changes to `poly-core` (or `crates/core`) you MUST verify the changes work correctly using the Desktop DevTools MCP.** This is non-negotiable — code that compiles but renders broken UI is a bug.
+**Every time you make changes to `poly-core` (or `crates/core`) you MUST visually verify the changes in a running app. By default, use the Web DevTools MCP (`poly-web`). Only switch to Desktop or Electron when the user explicitly asks for that platform or when the bug is clearly desktop/electron-specific.**
 
-**Required verification steps after ANY change to poly-core:**
+**Default verification steps after ANY change to poly-core:**
 
 1. `cargo check --workspace` — must be error-free
 2. `cargo cranky --workspace` — must be zero warnings/errors
 3. `cargo check -p poly-web --target wasm32-unknown-unknown` — verify WASM compat
-4. `dx build --platform desktop` in `apps/desktop-devtools/` — full build must succeed
-5. Launch the app via `mcp_poly-desktop_launch_app`
-6. Connect via `mcp_poly-desktop_connect_cdp`
-7. Take screenshots via `mcp_poly-desktop_screenshot` and verify:
-   - Enable demo data (click the 🧪 toggle)
-   - Navigate to affected views/components
-   - Confirm UI renders correctly with no missing elements
-   - Test interactive elements (buttons, pickers, navigation)
+4. Launch `poly-web` via the Web DevTools MCP
+5. Poll `get_last_build_status` until `Succeeded`
+6. Connect via `mcp_poly-web_connect_cdp`
+7. Take screenshots via `mcp_poly-web_take_screenshot` and verify:
+  - Enable demo data (click the 🧪 toggle) when relevant
+  - Navigate to affected views/components
+  - Confirm UI renders correctly with no missing elements
+  - Test interactive elements (buttons, pickers, navigation)
 8. Document any visual issues found and fix before declaring done
 
-**Why this rule exists:** RSX macro syntax errors produce misleading Rust error messages. A build that passes `cargo check` may still have component logic bugs that only appear visually. The DevTools MCP is the ground truth for "does the UI work".
+**Escalate to Desktop/Electron only when needed:**
+- the user explicitly asks for desktop or electron verification,
+- the change is platform-specific (native windowing, desktop-only integration, Electron/WASM-shell behavior), or
+- web verification cannot exercise the affected code path.
+
+**Why this rule exists:** RSX macro syntax errors produce misleading Rust error messages. A build that passes `cargo check` may still have component logic bugs that only appear visually. `poly-web` is the fastest, most reliable default ground truth for routine verification.
 
 ### 9d. Screenshots in Chat Are the Default (DECISION, 2026-03-17)
 

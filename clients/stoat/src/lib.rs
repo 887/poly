@@ -153,6 +153,17 @@ impl StoatClient {
         self.http.fetch_server_config().await
     }
 
+    /// Send a Stoat friend request by `username#discriminator`.
+    pub async fn send_friend_request(&self, username: &str) -> ClientResult<User> {
+        let (user, root_config) = future::try_join(
+            self.http.send_friend_request(username),
+            self.http.fetch_server_config(),
+        )
+        .await?;
+
+        Ok(user.into_poly_user_with_autumn(root_config.autumn_base_url()))
+    }
+
     fn build_session(&self, authenticated: api::StoatAuthenticatedSession) -> Session {
         Session {
             id: authenticated.session_id,
@@ -782,7 +793,49 @@ impl ClientBackend for StoatClient {
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
-        Ok(vec![])
+        let self_user = self.http.fetch_self().await?;
+        let account_id = self.current_account_metadata()?.0;
+
+        let mut notifications = future::try_join_all(
+            self_user
+                .relations
+                .into_iter()
+                .filter(|relation| relation.status == StoatRelationshipStatus::Incoming)
+                .map(|relation| {
+                    let account_id = account_id.clone();
+                    async move {
+                        let user = self.http.fetch_user(&relation.user_id).await?;
+                        Ok(Notification {
+                            id: format!("stoat-friend-request-{}", user.id),
+                            kind: NotificationKind::FriendRequest {
+                                from_user_id: user.id.clone(),
+                            },
+                            backend: BackendType::Stoat,
+                            account_id: account_id.clone(),
+                            timestamp: chrono::Utc::now(),
+                            read: false,
+                            preview: format!(
+                                "{} sent you a friend request",
+                                user.display_name.unwrap_or(user.username)
+                            ),
+                        })
+                    }
+                }),
+        )
+        .await?;
+
+        notifications.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
+        Ok(notifications)
+    }
+
+    async fn respond_to_friend_request(&self, user_id: &str, accept: bool) -> ClientResult<()> {
+        if accept {
+            let _user = self.http.accept_friend_request(user_id).await?;
+        } else {
+            let _user = self.http.remove_friend(user_id).await?;
+        }
+
+        Ok(())
     }
 
     async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
@@ -842,6 +895,16 @@ mod tests {
     async fn launch_test_server(
         state: TestServerState,
     ) -> Result<(String, tokio::task::JoinHandle<()>), Box<dyn std::error::Error>> {
+        async fn send_friend_request() -> impl IntoResponse {
+            Json(json!({
+                "_id": "user_2",
+                "username": "otterpal",
+                "discriminator": "0002",
+                "display_name": "Otter Pal",
+                "online": true
+            }))
+        }
+
         async fn upload_attachment(
             State(state): State<TestServerState>,
             headers: HeaderMap,
@@ -956,6 +1019,7 @@ mod tests {
                     }
                 }),
             )
+                            .route("/users/friend", post(send_friend_request))
             .route("/autumn/attachments", post(upload_attachment))
             .route("/channels/{channel_id}/messages", post(send_message))
             .route(
@@ -1258,6 +1322,30 @@ mod tests {
             Err(poly_client::ClientError::NotSupported(message))
                 if message == "Stoat attachment send requires raw upload bytes"
         ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_friend_request_maps_returned_user() -> Result<(), Box<dyn std::error::Error>> {
+        let state = TestServerState::default();
+        let (base_url, server_handle) = launch_test_server(state).await?;
+        let client = StoatClient::with_base_url(base_url)?;
+
+        client.http.set_session(StoatSessionState {
+            token: "token_123".to_string(),
+            session_id: Some("session_1".to_string()),
+            user_id: Some("user_1".to_string()),
+            user_display_name: Some("Stoaty".to_string()),
+        })?;
+
+        let user = client.send_friend_request("otterpal#0002").await?;
+
+        server_handle.abort();
+
+        assert_eq!(user.id, "user_2");
+        assert_eq!(user.display_name, "Otter Pal");
+        assert_eq!(user.backend, BackendType::Stoat);
 
         Ok(())
     }

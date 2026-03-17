@@ -286,6 +286,20 @@ Completed the ninth Phase 3.1 native social slice:
 	- group-channel member lookup
 	- open/create-DM endpoint mapping for existing DMs and Saved Messages
 
+Completed the tenth Phase 3.1 friend-request slice:
+
+- Native Stoat social mutation support now also includes:
+	- friend-request notifications synthesized from incoming Stoat relationship metadata
+	- `respond_to_friend_request(user_id, accept)` via Stoat friend endpoints
+	- public native send-friend-request helper by `username#discriminator`
+- `crates/core` notifications UI is now wired to backend friend-request actions instead of only mutating local state.
+- Live verification used `poly-web` as the default runtime target.
+- During that verification, a separate demo-fixture bug was found and fixed: demo notifications still used stale `account_id = "demo"` instead of the real `demo-cat` key, which broke backend lookup for notification actions.
+- Native integration coverage now additionally includes:
+	- incoming friend-request notification mapping
+	- accept friend request
+	- reject friend request
+
 ## E2E Test Coverage (2026-03-17)
 
 `crates/plugin-host-tests/tests/client_e2e/stoat.rs` now validates the **real WASM guest auth path** through the plugin host with mocked host HTTP fixtures, including:
@@ -321,6 +335,7 @@ These native tests now cover the implemented native slices end-to-end over a moc
 - friend list retrieval
 - DM list retrieval
 - group DM retrieval and group-member lookup
+- friend-request notifications + accept/reject flows
 
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 

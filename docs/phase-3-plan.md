@@ -95,7 +95,13 @@
 - [ ] **3.1.2.9** Friend list and friend requests
 	- 2026-03-17 update: native `get_friends()` now uses `GET /users/@me` relationship metadata and hydrates `Friend` entries through `GET /users/{id}` with Autumn-backed avatars/presence.
 	- Added mock-backed integration coverage for friend-list retrieval.
-	- This item remains open until friend-request / accept / remove mutations are implemented.
+	- 2026-03-17 later update: native Stoat now also supports:
+		- incoming friend-request notifications synthesized from relationship metadata
+		- `respond_to_friend_request(user_id, accept)` via Stoat friend endpoints
+		- send-friend-request helper support by `username#discriminator`
+	- Poly notifications UI is now wired to backend friend-request actions.
+	- Live `poly-web` verification confirmed the notifications page renders correctly and that accepting a demo friend request removes the card and decrements the visible count.
+	- During verification, a separate demo-fixture bug was fixed: demo notifications used stale `account_id = "demo"` instead of `demo-cat`, which broke backend lookup for notification actions.
 - [ ] **3.1.2.10** Group DMs / multi-user chats
 	- 2026-03-17 update: native `get_dm_channels()` and `get_groups()` now use `GET /users/dms` to split Stoat `DirectMessage` vs `Group` channels.
 	- DMs now map unread badges from `GET /sync/unreads` and hydrate last-message previews from one-message `GET /channels/{target}/messages` fetches.

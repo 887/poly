@@ -72,6 +72,13 @@ pub struct StoatPasswordLoginRequest {
     pub friendly_name: Option<String>,
 }
 
+/// Friend-request payload for `POST /users/friend`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StoatSendFriendRequest {
+    /// Username and discriminator, e.g. `alice#1234`.
+    pub username: String,
+}
+
 /// Reply target metadata for `POST /channels/{target}/messages`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct StoatReplyIntent {

@@ -1,7 +1,7 @@
 # Web — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-07
+> **Last Updated:** 2026-03-17
 
 ## Purpose
 
@@ -30,6 +30,9 @@ If MCP methods start returning timeout errors, treat that as evidence that the r
 ## Development & Testing
 
 ### ✅ Recommended: Use the Web MCP
+
+**This is the default validation target for Poly unless the user explicitly asks for Desktop or Electron.**
+If a change touches shared UI / `poly-core`, prefer verifying it here first.
 
 ```bash
 # VS Code: Run task "Serve: web (MCP + Chromium)"

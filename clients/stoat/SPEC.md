@@ -51,6 +51,10 @@ The most important architectural rule remains unchanged:
   - `GET /users/@me` relationship list → friend roster
   - `GET /users/dms` → DM and group discovery
   - `GET /channels/{target}/members` → group DM roster
+- Native social mutation / notification support:
+  - incoming relationship metadata → `NotificationKind::FriendRequest`
+  - `POST /users/friend` → send friend request by `username#discriminator`
+  - `PUT /users/{target}/friend` / `DELETE /users/{target}/friend` → accept / reject-remove friend request
 - Native server member lookup:
   - `GET /servers/{target}/members`
   - server-member nickname/avatar overrides applied on top of user records
@@ -76,12 +80,14 @@ The most important architectural rule remains unchanged:
   - DM list mapping with unread counts and last-message previews
   - group DM mapping with member rosters and last-message previews
   - group member lookup through the dedicated group-members endpoint
+  - incoming friend-request notification mapping
+  - friend-request accept / reject mutations
 
 ### 2.2 Not implemented yet
 
 - Actual WASM guest parity for auth/data operations
 - realtime websocket handling
-- friend-request mutations / DM creation flows
+- broader DM/group mutation flows
 - reactions/pins/search
 - unread sync / ack integration
 - voice/video / Vortex integration
@@ -256,7 +262,6 @@ Current Poly implementation for Stoat social surfaces:
 
 Still pending in this area:
 
-- friend-request mutations
 - add/remove group member mutations
 - broader UI polish for distinguishing self-DM / Saved Messages presentation if Poly later adds a dedicated saved-notes concept
 

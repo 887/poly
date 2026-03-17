@@ -13,6 +13,7 @@
 // TODO(phase-2.5.8): Wire notifications to backend data
 
 use crate::i18n::t;
+use crate::client_manager::ClientManager;
 use crate::state::ChatData;
 use crate::state::chat_data::backend_badge;
 use dioxus::prelude::*;
@@ -143,6 +144,7 @@ fn NotificationFilter(
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
     let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
 
     rsx! {
         div { class: "notification-list",
@@ -167,12 +169,14 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
                         div { class: "{item_class}",
                             NotificationItemContent {
                                 notif_id: notif_id.clone(),
+                                account_id: notif.account_id.clone(),
                                 kind: notif.kind.clone(),
                                 badge: badge.to_string(),
                                 preview,
                                 time_ago,
                                 is_unread,
                                 chat_data,
+                                client_manager,
                             }
                         }
                     }
@@ -187,12 +191,14 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
 #[component]
 fn NotificationItemContent(
     notif_id: String,
+    account_id: String,
     kind: NotificationKind,
     badge: String,
     preview: String,
     time_ago: String,
     is_unread: bool,
     mut chat_data: Signal<ChatData>,
+    client_manager: Signal<ClientManager>,
 ) -> Element {
     let (kind_icon, kind_label) = match &kind {
         NotificationKind::Mention { .. } => ("💬", "Mention"),
@@ -227,16 +233,25 @@ fn NotificationItemContent(
                                 onclick: {
                                     let uid = user_id.clone();
                                     let nid = accept_id.clone();
+                                    let aid = account_id.clone();
+                                    let cm = client_manager;
                                     move |_| {
-                                        let mut cd = chat_data.write();
-                                        // Remove the notification
-                                        cd.notifications.retain(|n| n.id != nid);
-                                        // Optimistically add to friends if we know the user
-                                        if let Some(user) = cd.members.iter().find(|u| u.id == uid).cloned()
-                                            && !cd.friends.iter().any(|f| f.id == user.id)
-                                        {
-                                            cd.friends.push(user);
-                                        }
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        let uid = uid.clone();
+                                        let nid = nid.clone();
+                                        let aid = aid.clone();
+                                        let chat_data = chat_data;
+                                        spawn(async move {
+                                            handle_friend_request_action(
+                                                cm,
+                                                chat_data,
+                                                aid,
+                                                uid,
+                                                nid,
+                                                true,
+                                            )
+                                            .await;
+                                        });
                                     }
                                 },
                                 "{t(\"notifications-accept\")}"
@@ -245,8 +260,26 @@ fn NotificationItemContent(
                                 class: "btn btn-ghost btn-sm notif-action-deny",
                                 onclick: {
                                     let nid = dismiss_id.clone();
+                                    let uid = user_id.clone();
+                                    let aid = account_id.clone();
+                                    let cm = client_manager;
                                     move |_| {
                                         chat_data.write().notifications.retain(|n| n.id != nid);
+                                        let uid = uid.clone();
+                                        let nid = nid.clone();
+                                        let aid = aid.clone();
+                                        let chat_data = chat_data;
+                                        spawn(async move {
+                                            handle_friend_request_action(
+                                                cm,
+                                                chat_data,
+                                                aid,
+                                                uid,
+                                                nid,
+                                                false,
+                                            )
+                                            .await;
+                                        });
                                     }
                                 },
                                 "{t(\"notifications-deny\")}"
@@ -360,6 +393,62 @@ fn format_time_ago(ts: chrono::DateTime<chrono::Utc>) -> String {
             t("time-one-day-ago")
         } else {
             t_args("time-days-ago", &[("count", &d.to_string())])
+        }
+    }
+}
+
+async fn handle_friend_request_action(
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+    account_id: String,
+    user_id: String,
+    notif_id: String,
+    accept: bool,
+) {
+    let Some(backend) = client_manager.read().get_backend(&account_id) else {
+        tracing::warn!(
+            "No backend found for friend-request notification account {}",
+            account_id
+        );
+        return;
+    };
+
+    let guard = backend.read().await;
+    if let Err(err) = guard.respond_to_friend_request(&user_id, accept).await {
+        tracing::warn!(
+            "respond_to_friend_request failed for account {} user {}: {}",
+            account_id,
+            user_id,
+            err
+        );
+        return;
+    }
+
+    let refreshed_friends = if accept {
+        match guard.get_friends().await {
+            Ok(friends) => Some(friends),
+            Err(err) => {
+                tracing::warn!(
+                    "get_friends failed after accepting friend request for account {}: {}",
+                    account_id,
+                    err
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+    drop(guard);
+
+    let mut cd = chat_data.write();
+    cd.notifications.retain(|notification| notification.id != notif_id);
+
+    if let Some(friends) = refreshed_friends {
+        for friend in friends {
+            if !cd.friends.iter().any(|existing| existing.id == friend.id) {
+                cd.friends.push(friend);
+            }
         }
     }
 }
