@@ -1173,10 +1173,9 @@ body {
 }
 
 /* Prevent user from scrolling or interacting while a history page is loading.
-   Uses pointer-events instead of overflow-y:hidden so layout stays stable (no
-   scrollbar-gutter reflow that would corrupt scroll-position math). */
+    Keep overflow mode stable so the native scrollbar thumb does not disappear
+    or jump just because a page load started. */
 .message-list.loading-history {
-    overflow-y: hidden;
     pointer-events: none;
 }
 
