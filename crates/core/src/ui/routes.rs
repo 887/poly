@@ -47,7 +47,7 @@
 // DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
 use super::account::{
-    AccountSettingsPage, ChannelList, ChatView, FriendsPanel, NotificationsView,
+    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, FriendsPanel, NewConversationView, NotificationsView, SavedItemsView,
     ServerSettingsPage, VoiceChannelView,
 };
 use super::main_layout::MainLayout;
@@ -66,19 +66,22 @@ use poly_client::{BackendType, Channel, ChannelType};
 pub fn route_account_id(route: &Route) -> Option<&str> {
     match route {
         Route::DmsHome { account_id, .. }
+        | Route::ConversationSearchRoute { account_id, .. }
+        | Route::NewConversationRoute { account_id, .. }
         | Route::DmChat { account_id, .. }
         | Route::ServerHome { account_id, .. }
         | Route::ServerChat { account_id, .. }
         | Route::ServerSettingsRoute { account_id, .. }
         | Route::CreateChannelRoute { account_id, .. }
         | Route::FriendsRoute { account_id, .. }
+        | Route::NotificationsRoute { account_id, .. }
+        | Route::SavedItemsRoute { account_id, .. }
         | Route::AccountSettingsRoute { account_id, .. }
         | Route::CreateServerRoute { account_id, .. } => Some(account_id.as_str()),
         Route::Root
         | Route::SettingsRoute
         | Route::SettingsSectionRoute { .. }
         | Route::SearchRoute
-        | Route::NotificationsRoute
         | Route::SignupPicker
         | Route::ClientSignup { .. }
         | Route::PageNotFound { .. } => None,
@@ -123,6 +126,12 @@ pub enum Route {
             #[route("/:backend/:instance_id/:account_id/dms")]
             DmsHome { backend: String, instance_id: String, account_id: String },
 
+            #[route("/:backend/:instance_id/:account_id/dms/search")]
+            ConversationSearchRoute { backend: String, instance_id: String, account_id: String },
+
+            #[route("/:backend/:instance_id/:account_id/dms/new")]
+            NewConversationRoute { backend: String, instance_id: String, account_id: String },
+
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id")]
             DmChat { backend: String, instance_id: String, account_id: String, dm_id: String },
         #[end_layout]
@@ -166,10 +175,13 @@ pub enum Route {
         #[route("/:backend/:instance_id/:account_id/friends")]
         FriendsRoute { backend: String, instance_id: String, account_id: String },
 
-        // ── App-level (not account-scoped) ───────────────────────────
-        #[route("/notifications")]
-        NotificationsRoute,
+        #[route("/:backend/:instance_id/:account_id/notifications")]
+        NotificationsRoute { backend: String, instance_id: String, account_id: String },
 
+        #[route("/:backend/:instance_id/:account_id/saved")]
+        SavedItemsRoute { backend: String, instance_id: String, account_id: String },
+
+        // ── App-level (not account-scoped) ───────────────────────────
         #[route("/settings")]
         SettingsRoute,
 
@@ -258,6 +270,33 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
+            s.nav
+                .account_last_dm_routes
+                .insert(account_id.clone(), format!("{route}"));
+        }
+        Route::NewConversationRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
+            s.nav.view = View::DmsFriends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::ConversationSearchRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
+            s.nav.view = View::DmsFriends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
         }
         Route::ServerHome {
             backend,
@@ -305,9 +344,35 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
         }
-        Route::NotificationsRoute => {
+        Route::NotificationsRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
             s.nav.view = View::Notifications;
-            // App-level — don't change active_account_id / active_backend
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::SavedItemsRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
+            s.nav.view = View::DmsFriends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::SettingsRoute => {
             s.nav.view = View::Settings;
@@ -570,6 +635,43 @@ fn ServerLayout() -> Element {
 #[rustfmt::skip]
 #[component]
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
+    let app_state: Signal<AppState> = use_context();
+    let nav = navigator();
+    let current_route = Route::DmsHome {
+        backend: backend.clone(),
+        instance_id: instance_id.clone(),
+        account_id: account_id.clone(),
+    };
+
+    use_effect(move || {
+        let Some(last_dm_url) = app_state
+            .read()
+            .nav
+            .account_last_dm_routes
+            .get(&account_id)
+            .cloned()
+        else {
+            return;
+        };
+
+        if last_dm_url == format!("{current_route}") {
+            return;
+        }
+
+        let Ok(route) = last_dm_url.parse::<Route>() else {
+            return;
+        };
+
+        if let Route::DmChat {
+            account_id: route_account_id,
+            ..
+        } = &route
+            && route_account_id == &account_id
+        {
+            nav.replace(route);
+        }
+    });
+
     rsx! {
         main { class: "chat-view",
             div { class: "chat-header",
@@ -605,6 +707,22 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
 
     rsx! {
         ChatView {}
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn NewConversationRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    rsx! {
+        NewConversationView {}
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn ConversationSearchRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    rsx! {
+        ConversationSearchView {}
     }
 }
 
@@ -752,10 +870,19 @@ fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Ele
     }
 }
 
-/// Notifications feed — aggregated across all accounts.
 #[rustfmt::skip]
 #[component]
-fn NotificationsRoute() -> Element {
+fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    rsx! {
+        SavedItemsView {}
+    }
+}
+
+/// Notifications feed — account-scoped route that preserves Bar 2 context.
+#[rustfmt::skip]
+#[component]
+fn NotificationsRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let _route_identity = (backend, instance_id, account_id);
     rsx! {
         NotificationsView {}
     }

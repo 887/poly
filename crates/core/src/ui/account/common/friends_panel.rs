@@ -1,56 +1,54 @@
-//! Friends browser panel — tiled grid view of friends with filtering.
-//!
-//! Supports filtering by:
-//! - Account/backend (Discord, Matrix, etc.)
-//! - Server/community they're known from
-//! - Search by username
-//! - Favorite servers
-//!
-//! # 150-line component rule
-//! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
-//! Extract sub-components rather than growing this file.
+//! Friends management panel — special account-social management surface.
 
+use super::VoiceAccountFooter;
 use super::channel_list::open_direct_message_from_active_account;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::chat_data::backend_badge;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
+use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 
-/// Friends browser panel with tiled grid display and filtering options.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FriendsManagementTab {
+    Friends,
+    Ignored,
+    Blocked,
+}
+
 #[rustfmt::skip]
 #[component]
 pub fn FriendsPanel() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let friends = chat_data.read().friends.clone();
-    let servers = chat_data.read().servers.clone();
+    let blocked_users = chat_data.read().blocked_users.clone();
 
-    // Filter state
     let search_filter = use_signal(String::new);
     let account_filter = use_signal(|| None::<String>);
-    let server_filter = use_signal(|| None::<String>);
+    let mut active_tab = use_signal(|| FriendsManagementTab::Friends);
 
     let search_lower = search_filter.read().to_lowercase();
+    let friends_management_title = t("friends-management-title");
+    let friends_management_description = t("friends-management-description");
+    let friends_title = t("friends-title");
+    let ignored_title = t("friends-ignored-title");
+    let blocked_title = t("content-social-blocked");
 
-    // Collect distinct backends from friends for the account filter
-    let mut backend_names: Vec<String> =
-        friends.iter().map(|f| format!("{:?}", f.backend)).collect();
+    let mut backend_names: Vec<String> = friends
+        .iter()
+        .map(|friend| format!("{:?}", friend.backend))
+        .collect();
     backend_names.sort();
     backend_names.dedup();
 
-    // Filter friends based on current filters
     let filtered_friends = friends
         .iter()
         .filter(|friend| {
-            // Search by name
-            if !search_lower.is_empty()
-                && !friend.display_name.to_lowercase().contains(&search_lower)
-            {
+            if !search_lower.is_empty() && !friend.display_name.to_lowercase().contains(&search_lower) {
                 return false;
             }
-            // Filter by account (backend) if selected
+
             if account_filter
                 .read()
                 .as_ref()
@@ -58,51 +56,97 @@ pub fn FriendsPanel() -> Element {
             {
                 return false;
             }
-            // Server filter is informational — requires mutual server data
-            // which is a phase-3 feature
+
             true
         })
+        .cloned()
         .collect::<Vec<_>>();
 
-    let back_onclick = move |_| {
-        navigator().go_back();
-    };
+    let filtered_blocked = blocked_users
+        .iter()
+        .filter(|user| search_lower.is_empty() || user.display_name.to_lowercase().contains(&search_lower))
+        .cloned()
+        .collect::<Vec<_>>();
 
     rsx! {
-        div { class: "friends-panel",
-            // Header with back button and title
-            div { class: "friends-header",
-                button { class: "friends-back-btn", onclick: back_onclick, "← {t(\"nav-back\")}" }
-                h2 { "{t(\"friends-title\")}" }
-            }
-
-            // Filter bar
-            FriendsFilterBar {
-                search_filter,
-                account_filter,
-                server_filter,
-                backend_names,
-                servers,
-            }
-
-            // Friends grid
-            FriendsGrid { friends: filtered_friends.into_iter().cloned().collect() }
+        SplitMenuShell {
+            root_class: "friends-panel-shell".to_string(),
+            sidebar_class: "special-page-sidebar friends-panel-sidebar".to_string(),
+            content_class: "special-page-content friends-panel-content".to_string(),
+            sidebar: rsx! {
+                div { class: "special-page-sidebar-header",
+                    h2 { class: "special-page-sidebar-title", "{friends_management_title}" }
+                    p { class: "special-page-sidebar-description", "{friends_management_description}" }
+                }
+                div { class: "special-page-sidebar-nav",
+                    SidebarMenuButton {
+                        label: friends_title.clone(),
+                        active: *active_tab.read() == FriendsManagementTab::Friends,
+                        onclick: move |_| active_tab.set(FriendsManagementTab::Friends),
+                    }
+                    SidebarMenuButton {
+                        label: ignored_title.clone(),
+                        active: *active_tab.read() == FriendsManagementTab::Ignored,
+                        onclick: move |_| active_tab.set(FriendsManagementTab::Ignored),
+                    }
+                    SidebarMenuButton {
+                        label: blocked_title.clone(),
+                        active: *active_tab.read() == FriendsManagementTab::Blocked,
+                        onclick: move |_| active_tab.set(FriendsManagementTab::Blocked),
+                    }
+                }
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                div { class: "special-page-panel",
+                    div { class: "special-page-header",
+                        h2 { class: "special-page-title", "{friends_management_title}" }
+                    }
+                    FriendsFilterBar {
+                        search_filter,
+                        account_filter,
+                        backend_names,
+                    }
+                    if *active_tab.read() == FriendsManagementTab::Friends {
+                        FriendsGrid { friends: filtered_friends }
+                    } else if *active_tab.read() == FriendsManagementTab::Blocked {
+                        BlockedUsersGrid { blocked_users: filtered_blocked }
+                    } else {
+                        IgnoredUsersPlaceholder {}
+                    }
+                }
+            },
         }
     }
 }
 
-/// Filter bar for the friends panel: search, account, and server dropdowns.
+#[rustfmt::skip]
+#[component]
+fn SidebarMenuButton(label: String, active: bool, onclick: EventHandler<MouseEvent>) -> Element {
+    let class = if active {
+        "special-page-sidebar-button active"
+    } else {
+        "special-page-sidebar-button"
+    };
+
+    rsx! {
+        button {
+            class: "{class}",
+            onclick: move |evt| onclick.call(evt),
+            "{label}"
+        }
+    }
+}
+
 #[rustfmt::skip]
 #[component]
 fn FriendsFilterBar(
     search_filter: Signal<String>,
     account_filter: Signal<Option<String>>,
-    server_filter: Signal<Option<String>>,
     backend_names: Vec<String>,
-    servers: Vec<poly_client::Server>,
 ) -> Element {
     rsx! {
-        div { class: "friends-filters",
+        div { class: "friends-filters special-page-toolbar",
             input {
                 class: "friends-search",
                 placeholder: "{t(\"friends-search-placeholder\")}",
@@ -121,30 +165,10 @@ fn FriendsFilterBar(
                     option { value: "{name}", "{name}" }
                 }
             }
-            select {
-                class: "friends-filter-select",
-                value: "{server_filter.read().as_deref().unwrap_or(\"all\")}",
-                onchange: move |evt| {
-                    let val = evt.value();
-                    server_filter.set(if val == "all" { None } else { Some(val) });
-                },
-                option { value: "all", "{t(\"filter-all-servers\")}" }
-                for srv in &servers {
-                    {
-                        let badge = backend_badge(&srv.backend);
-                        let label = format!("{badge} {}", srv.name);
-                        let sid = srv.id.clone();
-                        rsx! {
-                            option { value: "{sid}", "{label}" }
-                        }
-                    }
-                }
-            }
         }
     }
 }
 
-/// Grid of friend cards.
 #[rustfmt::skip]
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
@@ -152,6 +176,7 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
+    let message_label = t("friends-management-message");
 
     rsx! {
         div { class: "friends-grid",
@@ -164,45 +189,86 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                         let display_name = friend.display_name.clone();
                         let backend = friend.backend;
                         let color = user_color(&friend.id);
-                        let first_char: String = display_name
-                            .chars()
-                            .next()
-                            .map(|c| c.to_string())
-                            .unwrap_or_default();
+                        let avatar_url = friend.avatar_url.clone();
+                        let first_char = display_name.chars().next().map(|ch| ch.to_string()).unwrap_or_default();
                         rsx! {
-                            div {
+                            button {
                                 class: "friend-card",
-                                onclick: {
-                                    let fid = friend_id.clone();
-                                    move |_| {
-                                        if let Some(previous_channel_id) = app_state
-                                            .read()
-                                            .nav
-                                            .selected_channel
-                                            .clone()
-                                        {
-                                            remember_message_list_scroll_position(&previous_channel_id);
-                                        }
-                                        open_direct_message_from_active_account(
-                                            fid.clone(),
-                                            app_state,
-                                            chat_data,
-                                            client_manager,
-                                            nav,
-                                        );
+                                onclick: move |_| {
+                                    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
+                                        remember_message_list_scroll_position(&previous_channel_id);
                                     }
+                                    open_direct_message_from_active_account(
+                                        friend_id.clone(),
+                                        app_state,
+                                        chat_data,
+                                        client_manager,
+                                        nav,
+                                    );
                                 },
-                                div { class: "friend-avatar", style: "background-color: {color};", "{first_char}" }
                                 div { class: "friend-info",
+                                    if let Some(ref url) = avatar_url {
+                                        img { class: "friend-avatar friend-avatar-image", src: "{url}", alt: "{display_name}" }
+                                    } else {
+                                        div { class: "friend-avatar", style: "background-color: {color};", "{first_char}" }
+                                    }
                                     div { class: "friend-name", "{display_name}" }
                                     div { class: "friend-account", "{backend.display_name()}" }
-                                    // TODO(phase-3): mutual servers list (2.6.6.3)
+                                    span { class: "friend-card-action btn btn-secondary btn-sm", "{message_label}" }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn BlockedUsersGrid(blocked_users: Vec<poly_client::BlockedUser>) -> Element {
+    let no_blocked_label = t("content-social-no-blocked");
+    let blocked_label = t("content-social-blocked");
+
+    rsx! {
+        div { class: "friends-grid",
+            if blocked_users.is_empty() {
+                div { class: "empty-state", "{no_blocked_label}" }
+            } else {
+                for user in &blocked_users {
+                    {
+                        let fallback = user.display_name.chars().next().unwrap_or('?').to_string();
+                        rsx! {
+                            div { class: "friend-card friend-card-static",
+                                if let Some(url) = &user.avatar_url {
+                                    img { class: "friend-avatar friend-avatar-image", src: "{url}", alt: "{user.display_name}" }
+                                } else {
+                                    div { class: "friend-avatar", "{fallback}" }
+                                }
+                                div { class: "friend-info",
+                                    div { class: "friend-name", "{user.display_name}" }
+                                    div { class: "friend-account", "{blocked_label}" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn IgnoredUsersPlaceholder() -> Element {
+    let ignored_title = t("friends-ignored-title");
+    let ignored_empty = t("friends-ignored-empty");
+
+    rsx! {
+        div { class: "empty-state special-page-empty-state",
+            h3 { "{ignored_title}" }
+            p { "{ignored_empty}" }
         }
     }
 }

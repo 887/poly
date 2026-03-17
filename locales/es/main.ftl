@@ -448,13 +448,38 @@ notif-no-accounts = Sin cuentas activas. Agrega una cuenta en Ajustes → Cuenta
 
 # DM list
 dm-saved-messages = Mensajes guardados
+dm-new-conversation = Nueva conversación
+dm-search-conversations = Buscar conversaciones
 dm-search-placeholder = Encuentra o inicia una conversación
+saved-items-title = Mensajes guardados
+saved-items-description = Vuelve a los mensajes fijados de tus mensajes directos y grupos.
+saved-items-empty = Aún no hay mensajes fijados.
+saved-items-all-sources = Todas las fuentes
+saved-items-filter-placeholder = Filtrar fuentes guardadas...
+saved-items-sources-empty = No se encontraron fuentes guardadas
 dm-no-results = No se encontraron conversaciones
 
 # Friends panel
 friends-title = Amigos
+friends-management-title = Personas
+friends-management-description = Administra amigos, usuarios ignorados y usuarios bloqueados para esta cuenta.
+friends-management-message = Enviar mensaje
+friends-ignored-title = Ignorados
+friends-ignored-empty = Todavía no hay usuarios ignorados.
+new-conversation-description = Elige un amigo para iniciar una conversación directa. Las conversaciones con varias personas usarán este compositor cuando la creación de grupos compartida esté conectada.
+new-conversation-start-dm = Iniciar conversación
+new-conversation-group-pending = Las conversaciones con varias personas llegarán enseguida.
+conversation-search-title = Buscar conversaciones
+conversation-search-description = Busca en los mensajes directos y grupos de { $account }.
 friends-search-placeholder = Buscar amigos...
 friends-none = No se encontraron amigos
+notifications-filter-all-types = Todas las notificaciones
+notifications-filter-mentions = Menciones
+notifications-filter-friend-requests = Solicitudes de amistad
+notifications-filter-server-invites = Invitaciones al servidor
+notifications-filter-voice-invites = Invitaciones de voz
+notifications-filter-other = Otras
+notifications-unread-count = sin leer
 filter-all = Todas las cuentas
 filter-all-servers = Todos los servidores
 

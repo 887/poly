@@ -73,6 +73,12 @@ pub struct NavigationState {
     /// Used by `FavoritesBar` to restore the account's previous page when switching.
     /// Persisted to storage so it survives page reloads.
     pub account_last_routes: std::collections::HashMap<String, String>,
+    /// Last selected DM/group route per account.
+    ///
+    /// Unlike `account_last_routes`, this only tracks DM conversation routes so
+    /// `/dms` can reopen the most recent conversation instead of the empty DM home.
+    /// Persisted to storage so it survives restarts.
+    pub account_last_dm_routes: std::collections::HashMap<String, String>,
 }
 
 impl Default for NavigationState {
@@ -87,6 +93,7 @@ impl Default for NavigationState {
             right_sidebar_visible: true,
             dm_right_sidebar_visible: true,
             account_last_routes: std::collections::HashMap::new(),
+            account_last_dm_routes: std::collections::HashMap::new(),
         }
     }
 }
@@ -193,6 +200,11 @@ pub struct AppState {
     pub settings_section: SettingsSection,
     /// Whether the mobile shell should be forced regardless of viewport width.
     pub force_mobile_layout: bool,
+    /// One-shot seed for the next visit to the global search page.
+    ///
+    /// Used by account-scoped views to open the shared search route with a
+    /// narrowed initial type filter (for example DMs + Groups only).
+    pub search_type_seed: Option<Vec<String>>,
     /// Active right-click context menu, if any.
     ///
     /// Set by `oncontextmenu` on server icons; cleared by a global
@@ -207,6 +219,7 @@ impl Default for AppState {
             nav: NavigationState::default(),
             settings_section: SettingsSection::Accounts,
             force_mobile_layout: false,
+            search_type_seed: None,
             context_menu: None,
         }
     }

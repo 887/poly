@@ -211,11 +211,17 @@ pub fn MainLayout() -> Element {
         if routes_snapshot.is_empty() {
             return;
         }
+        let dm_routes_snapshot = app_state.read().nav.account_last_dm_routes.clone();
         spawn(async move {
             if let Some(storage) = crate::STORAGE.get()
                 && let Err(e) = storage.set_account_last_routes(&routes_snapshot).await
             {
                 tracing::warn!("Failed to persist account last routes: {e}");
+            }
+            if let Some(storage) = crate::STORAGE.get()
+                && let Err(e) = storage.set_account_last_dm_routes(&dm_routes_snapshot).await
+            {
+                tracing::warn!("Failed to persist account last DM routes: {e}");
             }
         });
     });

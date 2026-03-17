@@ -447,13 +447,38 @@ notif-no-accounts = Keine Konten aktiv. Konto unter Einstellungen → Konten hin
 
 # DM list
 dm-saved-messages = Gespeicherte Nachrichten
+dm-new-conversation = Neue Unterhaltung
+dm-search-conversations = Unterhaltungen suchen
 dm-search-placeholder = Gespräch suchen oder starten
+saved-items-title = Gespeicherte Nachrichten
+saved-items-description = Springe zurück zu angehefteten Nachrichten aus deinen Direktnachrichten und Gruppenchats.
+saved-items-empty = Noch keine angehefteten Nachrichten.
+saved-items-all-sources = Alle Quellen
+saved-items-filter-placeholder = Gespeicherte Quellen filtern...
+saved-items-sources-empty = Keine gespeicherten Quellen gefunden
 dm-no-results = Kein Gespräch gefunden
 
 # Friends panel
 friends-title = Freunde
+friends-management-title = Personen
+friends-management-description = Verwalte Freunde, ignorierte Nutzer und blockierte Nutzer für dieses Konto.
+friends-management-message = Nachricht senden
+friends-ignored-title = Ignoriert
+friends-ignored-empty = Noch keine ignorierten Nutzer.
+new-conversation-description = Wähle einen Freund aus, um eine Direktunterhaltung zu starten. Mehrpersonen-Unterhaltungen nutzen diesen Composer, sobald die gemeinsame Gruppenerstellung angebunden ist.
+new-conversation-start-dm = Unterhaltung starten
+new-conversation-group-pending = Unterhaltungen mit mehreren Personen kommen als Nächstes.
+conversation-search-title = Unterhaltungen suchen
+conversation-search-description = Durchsuche Direktnachrichten und Gruppenchats für { $account }.
 friends-search-placeholder = Freunde durchsuchen...
 friends-none = Keine Freunde gefunden
+notifications-filter-all-types = Alle Benachrichtigungen
+notifications-filter-mentions = Erwähnungen
+notifications-filter-friend-requests = Freundschaftsanfragen
+notifications-filter-server-invites = Servereinladungen
+notifications-filter-voice-invites = Spracheinladungen
+notifications-filter-other = Andere
+notifications-unread-count = ungelesen
 filter-all = Alle Konten
 filter-all-servers = Alle Server
 

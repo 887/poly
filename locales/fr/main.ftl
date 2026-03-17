@@ -447,13 +447,38 @@ notif-no-accounts = Aucun compte actif. Ajoutez un compte dans Paramètres → C
 
 # DM list
 dm-saved-messages = Messages enregistrés
+dm-new-conversation = Nouvelle conversation
+dm-search-conversations = Rechercher des conversations
 dm-search-placeholder = Trouver ou démarrer une conversation
+saved-items-title = Messages enregistrés
+saved-items-description = Revenez aux messages épinglés de vos messages privés et groupes.
+saved-items-empty = Aucun message épinglé pour le moment.
+saved-items-all-sources = Toutes les sources
+saved-items-filter-placeholder = Filtrer les sources enregistrées...
+saved-items-sources-empty = Aucune source enregistrée trouvée
 dm-no-results = Aucune conversation trouvée
 
 # Friends panel
 friends-title = Amis
+friends-management-title = Personnes
+friends-management-description = Gérez les amis, les utilisateurs ignorés et les utilisateurs bloqués pour ce compte.
+friends-management-message = Envoyer un message
+friends-ignored-title = Ignorés
+friends-ignored-empty = Aucun utilisateur ignoré pour le moment.
+new-conversation-description = Choisissez un ami pour démarrer une conversation directe. Les conversations à plusieurs utiliseront ce composeur dès que la création de groupe partagée sera connectée.
+new-conversation-start-dm = Démarrer la conversation
+new-conversation-group-pending = Les conversations à plusieurs arrivent ensuite.
+conversation-search-title = Rechercher des conversations
+conversation-search-description = Recherchez les messages privés et groupes pour { $account }.
 friends-search-placeholder = Rechercher des amis...
 friends-none = Aucun ami trouvé
+notifications-filter-all-types = Toutes les notifications
+notifications-filter-mentions = Mentions
+notifications-filter-friend-requests = Demandes d'ami
+notifications-filter-server-invites = Invitations au serveur
+notifications-filter-voice-invites = Invitations vocales
+notifications-filter-other = Autres
+notifications-unread-count = non lues
 filter-all = Tous les comptes
 filter-all-servers = Tous les serveurs
 

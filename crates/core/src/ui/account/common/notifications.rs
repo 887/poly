@@ -16,8 +16,44 @@ use crate::i18n::t;
 use crate::client_manager::ClientManager;
 use crate::state::ChatData;
 use crate::state::chat_data::backend_badge;
+use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{BackendType, NotificationKind};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NotificationMenuFilter {
+    All,
+    Mentions,
+    FriendRequests,
+    ServerInvites,
+    VoiceInvites,
+    Other,
+}
+
+impl NotificationMenuFilter {
+    fn matches(self, kind: &NotificationKind) -> bool {
+        match self {
+            Self::All => true,
+            Self::Mentions => matches!(kind, NotificationKind::Mention { .. }),
+            Self::FriendRequests => matches!(kind, NotificationKind::FriendRequest { .. }),
+            Self::ServerInvites => matches!(kind, NotificationKind::ServerInvite { .. }),
+            Self::VoiceInvites => matches!(kind, NotificationKind::VoiceChannelInvite { .. }),
+            Self::Other => matches!(kind, NotificationKind::Other(_)),
+        }
+    }
+
+    fn label_key(self) -> &'static str {
+        match self {
+            Self::All => "notifications-filter-all-types",
+            Self::Mentions => "notifications-filter-mentions",
+            Self::FriendRequests => "notifications-filter-friend-requests",
+            Self::ServerInvites => "notifications-filter-server-invites",
+            Self::VoiceInvites => "notifications-filter-voice-invites",
+            Self::Other => "notifications-filter-other",
+        }
+    }
+}
 
 /// Notifications view component.
 ///
@@ -29,7 +65,14 @@ pub fn NotificationsView() -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
     let mut filter_backend = use_signal(|| None::<BackendType>);
     let mut show_unread_only = use_signal(|| false);
+    let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
     let notifications = chat_data.read().notifications.clone();
+    let notifications_title = t("notifications-title");
+    let notifications_empty = t("notifications-empty");
+    let notifications_unread_label = t("notifications-unread-count");
+    let notifications_show_all = t("notifications-show-all");
+    let notifications_show_unread = t("notifications-show-unread");
+    let notifications_mark_read = t("notifications-mark-read");
 
     // Collect distinct backends present in notifications for filter
     let mut backends: Vec<BackendType> = notifications.iter().map(|n| n.backend).collect();
@@ -40,66 +83,128 @@ pub fn NotificationsView() -> Element {
     let filtered: Vec<_> = notifications
         .iter()
         .filter(|n| filter_backend.read().is_none_or(|f| n.backend == f))
+        .filter(|n| kind_filter.read().matches(&n.kind))
         .filter(|n| !*show_unread_only.read() || !n.read)
         .cloned()
         .collect();
 
     let has_unread = notifications.iter().any(|n| !n.read);
     let unread_count = notifications.iter().filter(|n| !n.read).count();
+    let sidebar_filters = [
+        NotificationMenuFilter::All,
+        NotificationMenuFilter::Mentions,
+        NotificationMenuFilter::FriendRequests,
+        NotificationMenuFilter::ServerInvites,
+        NotificationMenuFilter::VoiceInvites,
+        NotificationMenuFilter::Other,
+    ];
 
     rsx! {
-        div { class: "notifications-view",
-            div { class: "notifications-header",
-                div { class: "notifications-title-row",
-                    h2 { class: "notifications-title",
-                        "{t(\"notifications-title\")}"
-                        if unread_count > 0 {
-                            span { class: "notif-badge", " {unread_count}" }
-                        }
+        SplitMenuShell {
+            root_class: "notifications-shell".to_string(),
+            sidebar_class: "special-page-sidebar notifications-sidebar".to_string(),
+            content_class: "special-page-content notifications-content".to_string(),
+            sidebar: rsx! {
+                div { class: "special-page-sidebar-header",
+                    h2 { class: "special-page-sidebar-title", "{notifications_title}" }
+                    if unread_count > 0 {
+                        p { class: "special-page-sidebar-description", "{unread_count} {notifications_unread_label}" }
+                    } else {
+                        p { class: "special-page-sidebar-description", "{notifications_empty}" }
                     }
-                    div { class: "notif-header-actions",
-                        // Unread-only toggle
-                        button {
-                            class: if *show_unread_only.read() { "btn btn-sm notif-filter-btn active" } else { "btn btn-sm notif-filter-btn" },
-                            onclick: move |_| {
-                                let current = *show_unread_only.read();
-                                show_unread_only.set(!current);
-                            },
-                            if *show_unread_only.read() {
-                                "{t(\"notifications-show-all\")}"
-                            } else {
-                                "{t(\"notifications-show-unread\")}"
-                            }
-                        }
-                        // Mark all as read
-                        if has_unread {
-                            button {
-                                class: "btn btn-secondary btn-sm notif-mark-all",
-                                onclick: move |_| {
-                                    let filter = *filter_backend.read();
-                                    let mut cd = chat_data.write();
-                                    for notif in &mut cd.notifications {
-                                        if filter.is_none_or(|f| notif.backend == f) {
-                                            notif.read = true;
-                                        }
-                                    }
-                                },
-                                "{t(\"notifications-mark-read\")}"
-                            }
+                }
+                div { class: "special-page-sidebar-nav",
+                    for filter in sidebar_filters {
+                        NotificationSidebarButton {
+                            key: "{filter.label_key()}",
+                            label: t(filter.label_key()),
+                            count: notifications.iter().filter(|notification| filter.matches(&notification.kind)).count(),
+                            active: *kind_filter.read() == filter,
+                            onclick: move |_| kind_filter.set(filter),
                         }
                     }
                 }
-                // Backend filter (only shown when multiple backends present)
-                if backends.len() > 1 {
-                    NotificationFilter {
-                        backends: backends.clone(),
-                        selected: *filter_backend.read(),
-                        on_change: move |b| filter_backend.set(b),
+                div { class: "special-page-sidebar-section notifications-sidebar-actions",
+                    button {
+                        class: if *show_unread_only.read() { "special-page-sidebar-button active" } else { "special-page-sidebar-button" },
+                        onclick: move |_| {
+                            let current = *show_unread_only.read();
+                            show_unread_only.set(!current);
+                        },
+                        if *show_unread_only.read() {
+                            "{notifications_show_all}"
+                        } else {
+                            "{notifications_show_unread}"
+                        }
                     }
+                    if has_unread {
+                        button {
+                            class: "special-page-sidebar-button",
+                            onclick: move |_| {
+                                let backend_filter = *filter_backend.read();
+                                let active_kind = *kind_filter.read();
+                                let mut cd = chat_data.write();
+                                for notif in &mut cd.notifications {
+                                    if backend_filter.is_none_or(|backend| notif.backend == backend)
+                                        && active_kind.matches(&notif.kind)
+                                    {
+                                        notif.read = true;
+                                    }
+                                }
+                            },
+                            "{notifications_mark_read}"
+                        }
+                    }
+                }
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                div { class: "notifications-view notifications-view-embedded",
+                    div { class: "notifications-header special-page-header",
+                        div { class: "notifications-title-row",
+                            h2 { class: "notifications-title",
+                                "{notifications_title}"
+                                if unread_count > 0 {
+                                    span { class: "notif-badge", " {unread_count}" }
+                                }
+                            }
+                        }
+                        if backends.len() > 1 {
+                            NotificationFilter {
+                                backends: backends.clone(),
+                                selected: *filter_backend.read(),
+                                on_change: move |b| filter_backend.set(b),
+                            }
+                        }
+                    }
+
+                    NotificationList { notifications: filtered }
                 }
             }
+        }
+    }
+}
 
-            NotificationList { notifications: filtered }
+#[rustfmt::skip]
+#[component]
+fn NotificationSidebarButton(
+    label: String,
+    count: usize,
+    active: bool,
+    onclick: EventHandler<MouseEvent>,
+) -> Element {
+    let class = if active {
+        "special-page-sidebar-button special-page-sidebar-button-with-count active"
+    } else {
+        "special-page-sidebar-button special-page-sidebar-button-with-count"
+    };
+
+    rsx! {
+        button {
+            class: "{class}",
+            onclick: move |evt| onclick.call(evt),
+            span { class: "special-page-sidebar-button-label", "{label}" }
+            span { class: "special-page-sidebar-count", "{count}" }
         }
     }
 }

@@ -18,8 +18,24 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use crate::ui::main_layout::close_mobile_drawer;
+use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::{BackendType, Channel, ChannelType, DmChannel, Server, User, VoiceParticipant};
+
+fn dm_last_incoming_timestamp(dm: &DmChannel) -> Option<DateTime<Utc>> {
+    dm.last_message
+        .as_ref()
+        .filter(|message| message.author.id == dm.user.id)
+        .map(|message| message.timestamp)
+}
+
+fn group_last_incoming_timestamp(group: &poly_client::Group, active_user_id: Option<&str>) -> Option<DateTime<Utc>> {
+    group
+        .last_message
+        .as_ref()
+        .filter(|message| active_user_id.is_none_or(|user_id| message.author.id != user_id))
+        .map(|message| message.timestamp)
+}
 
 /// Main channel list component — delegates to sub-views based on current view.
 /// Load messages, members, and voice participants for a channel.
@@ -246,90 +262,6 @@ pub(crate) fn open_direct_message_from_active_account(
         chat_data_write
             .dm_channels
             .retain(|dm| !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == user_id)));
-        chat_data_write.dm_channels.push(opened_dm.clone());
-        drop(chat_data_write);
-
-        activate_dm_channel(
-            opened_dm,
-            instance_id,
-            app_state,
-            chat_data,
-            client_manager,
-            nav,
-        );
-    });
-}
-
-pub(crate) fn open_saved_messages_from_active_account(
-    app_state: Signal<AppState>,
-    mut chat_data: Signal<ChatData>,
-    client_manager: Signal<ClientManager>,
-    nav: crate::ui::dioxus_router::Navigator,
-) {
-    let Some((account_id, instance_id)) = active_account_context(app_state, chat_data) else {
-        tracing::warn!("open_saved_messages_from_active_account: no active account");
-        return;
-    };
-
-    let active_user_id = {
-        let chat_data_read = chat_data.read();
-        chat_data_read
-            .account_sessions
-            .get(&account_id)
-            .map(|session| session.user.id.clone())
-    };
-
-    if let Some(active_user_id) = active_user_id {
-        let existing_saved_dm = {
-            let chat_data_read = chat_data.read();
-            chat_data_read
-                .dm_channels
-                .iter()
-                .find(|dm| dm.account_id == account_id && dm.user.id == active_user_id)
-                .cloned()
-        };
-
-        if let Some(existing_saved_dm) = existing_saved_dm {
-            activate_dm_channel(
-                existing_saved_dm,
-                instance_id,
-                app_state,
-                chat_data,
-                client_manager,
-                nav,
-            );
-            return;
-        }
-    }
-
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!(
-            "open_saved_messages_from_active_account: no backend found for account {}",
-            account_id
-        );
-        return;
-    };
-
-    spawn(async move {
-        let opened_dm = {
-            let guard = backend.read().await;
-            match guard.open_saved_messages_channel().await {
-                Ok(dm) => dm,
-                Err(err) => {
-                    tracing::warn!(
-                        "open_saved_messages_from_active_account: failed on account {}: {}",
-                        account_id,
-                        err
-                    );
-                    return;
-                }
-            }
-        };
-
-        let mut chat_data_write = chat_data.write();
-        chat_data_write
-            .dm_channels
-            .retain(|dm| !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == opened_dm.user.id)));
         chat_data_write.dm_channels.push(opened_dm.clone());
         drop(chat_data_write);
 
@@ -579,14 +511,12 @@ fn ServerBanner(
     }
 }
 
-/// DMs and Friends view — search, unified list of DMs + groups + friend contacts.
+/// DMs and Friends view — action shortcuts plus unified list of DMs + groups.
 #[rustfmt::skip]
 #[component]
 fn DMFriendsView() -> Element {
     let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
-    let nav = navigator();
 
     // Only show DMs and groups belonging to the currently active account.
     let active_account_id = app_state.read().nav.active_account_id.clone();
@@ -597,6 +527,9 @@ fn DMFriendsView() -> Element {
             .get(account_id)
             .map(|session| session.user.id.clone())
     });
+    let new_conversation_label = t("dm-new-conversation");
+    let search_conversations_label = t("dm-search-conversations");
+    let saved_messages_label = t("dm-saved-messages");
     let dm_channels: Vec<_> = chat_data
         .read()
         .dm_channels
@@ -614,78 +547,28 @@ fn DMFriendsView() -> Element {
         .filter(|g| active_account_id.as_deref() == Some(&g.account_id))
         .cloned()
         .collect();
-    let active_backend = app_state.read().nav.active_backend;
-    let friends = chat_data.read().friends.clone();
     let selected_channel = app_state.read().nav.selected_channel.clone();
-    let mut dm_filter = use_signal(String::new);
 
-    let filter_val = dm_filter.read().clone();
-    let filter_lower = filter_val.to_lowercase();
-
-    // Sort DMs by unread + recency
+    // Sort DMs by the latest incoming message from the other participant.
     let mut sorted_dms = dm_channels.clone();
     sorted_dms.sort_by(|a, b| {
-        b.unread_count.cmp(&a.unread_count).then_with(|| {
-            b.last_message
-                .as_ref()
-                .map(|m| m.timestamp)
-                .cmp(&a.last_message.as_ref().map(|m| m.timestamp))
-        })
+        dm_last_incoming_timestamp(b)
+            .cmp(&dm_last_incoming_timestamp(a))
+            .then_with(|| b.last_message.as_ref().map(|m| m.timestamp).cmp(&a.last_message.as_ref().map(|m| m.timestamp)))
+            .then_with(|| a.user.display_name.cmp(&b.user.display_name))
     });
 
-    // Sort groups by recency
+    // Sort groups by the latest incoming message from another member.
     let mut sorted_groups = groups.clone();
     sorted_groups.sort_by(|a, b| {
-        b.last_message
-            .as_ref()
-            .map(|m| m.timestamp)
-            .cmp(&a.last_message.as_ref().map(|m| m.timestamp))
+        group_last_incoming_timestamp(b, active_user_id.as_deref())
+            .cmp(&group_last_incoming_timestamp(a, active_user_id.as_deref()))
+            .then_with(|| b.last_message.as_ref().map(|m| m.timestamp).cmp(&a.last_message.as_ref().map(|m| m.timestamp)))
+            .then_with(|| a.name.cmp(&b.name))
     });
 
-    // Apply filter
-    let filtered_dms: Vec<_> = sorted_dms
-        .into_iter()
-        .filter(|dm| {
-            filter_lower.is_empty() || dm.user.display_name.to_lowercase().contains(&filter_lower)
-        })
-        .collect();
-
-    let filtered_groups: Vec<_> = sorted_groups
-        .into_iter()
-        .filter(|g| {
-            if filter_lower.is_empty() {
-                return true;
-            }
-            let name = g.name.clone().unwrap_or_else(|| {
-                g.members
-                    .iter()
-                    .map(|m| m.display_name.clone())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            });
-            name.to_lowercase().contains(&filter_lower)
-        })
-        .collect();
-
-    let show_friends: Vec<_> = if filter_lower.is_empty() {
-        vec![]
-    } else {
-        friends
-            .iter()
-            .filter(|f| {
-                f.display_name.to_lowercase().contains(&filter_lower)
-                    && active_backend.is_none_or(|backend| backend == f.backend)
-            })
-            .collect()
-    };
-
-    let no_filter_results = !filter_lower.is_empty()
-        && filtered_dms.is_empty()
-        && filtered_groups.is_empty()
-        && show_friends.is_empty();
-
     // Pre-compute instance_ids for DMs and groups (cannot use let inside RSX for-loops)
-    let dm_instance_ids: Vec<String> = filtered_dms
+    let dm_instance_ids: Vec<String> = sorted_dms
         .iter()
         .map(|dm| {
             chat_data
@@ -696,7 +579,7 @@ fn DMFriendsView() -> Element {
                 .unwrap_or_default()
         })
         .collect();
-    let group_instance_ids: Vec<String> = filtered_groups
+    let group_instance_ids: Vec<String> = sorted_groups
         .iter()
         .map(|g| {
             chat_data
@@ -709,11 +592,10 @@ fn DMFriendsView() -> Element {
         .collect();
 
     rsx! {
-        // Friends button
+        // New conversation button
         button {
             class: "dm-friends-row-btn",
             onclick: move |_| {
-                // Navigate to Friends for the currently active account.
                 let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
                     match (
@@ -726,52 +608,70 @@ fn DMFriendsView() -> Element {
                     }
                 };
                 navigator()
-                    .push(Route::FriendsRoute {
+                    .push(Route::NewConversationRoute {
                         backend: backend_slug,
                         instance_id,
                         account_id,
                     });
                 close_mobile_drawer();
             },
-            span { class: "dm-friends-row-icon", "👥" }
-            span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }
+            span { class: "dm-friends-row-icon", "✚" }
+            span { class: "dm-friends-row-label", "{new_conversation_label}" }
         }
 
         button {
             class: "dm-friends-row-btn",
             onclick: move |_| {
-                open_saved_messages_from_active_account(
-                    app_state,
-                    chat_data,
-                    client_manager,
-                    nav,
-                );
+                let (backend_slug, instance_id, account_id) = {
+                    let nav = &app_state.read().nav;
+                    match (
+                        nav.active_backend,
+                        nav.active_instance_id.clone(),
+                        nav.active_account_id.clone(),
+                    ) {
+                        (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
+                        _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
+                    }
+                };
+                navigator().push(Route::ConversationSearchRoute {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id,
+                });
+                close_mobile_drawer();
             },
-            span { class: "dm-friends-row-icon", "🔖" }
-            span { class: "dm-friends-row-label", "{t(\"dm-saved-messages\")}" }
+            span { class: "dm-friends-row-icon", "🔎" }
+            span { class: "dm-friends-row-label", "{search_conversations_label}" }
         }
 
-        // Search bar
-        div { class: "dm-search-bar",
-            input {
-                r#type: "text",
-                class: "dm-search-input",
-                placeholder: "{t(\"dm-search-placeholder\")}",
-                value: "{filter_val}",
-                oninput: move |e| dm_filter.set(e.value()),
-            }
-            if !filter_val.is_empty() {
-                button {
-                    class: "dm-search-clear",
-                    onclick: move |_| dm_filter.set(String::new()),
-                    "×"
-                }
-            }
+        button {
+            class: "dm-friends-row-btn",
+            onclick: move |_| {
+                let (backend_slug, instance_id, account_id) = {
+                    let nav = &app_state.read().nav;
+                    match (
+                        nav.active_backend,
+                        nav.active_instance_id.clone(),
+                        nav.active_account_id.clone(),
+                    ) {
+                        (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
+                        _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
+                    }
+                };
+                navigator().push(Route::SavedItemsRoute {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id,
+                });
+                close_mobile_drawer();
+            },
+            span { class: "dm-friends-row-icon", "🔖" }
+            span { class: "dm-friends-row-label", "{saved_messages_label}" }
         }
 
         // Unified DM + Group list
         div { class: "dm-unified-list",
-            for (dm , dm_iid) in filtered_dms.iter().zip(dm_instance_ids.iter()) {
+            for (dm , dm_iid) in sorted_dms.iter().zip(dm_instance_ids.iter()) {
                 DMChannelItem {
                     channel_id: dm.id.clone(),
                     display_name: dm.user.display_name.clone(),
@@ -785,7 +685,7 @@ fn DMFriendsView() -> Element {
                 }
             }
 
-            for (group , group_iid) in filtered_groups.iter().zip(group_instance_ids.iter()) {
+            for (group , group_iid) in sorted_groups.iter().zip(group_instance_ids.iter()) {
                 GroupChannelItem {
                     group_id: group.id.clone(),
                     group_name: group.name.clone(),
@@ -795,20 +695,6 @@ fn DMFriendsView() -> Element {
                     backend_slug: group.backend.slug().to_string(),
                     instance_id: group_iid.clone(),
                 }
-            }
-
-            if !show_friends.is_empty() {
-                div { class: "dm-section-header", "{t(\"nav-friends\")}" }
-                for friend in &show_friends {
-                    FriendItem {
-                        display_name: friend.display_name.clone(),
-                        user_id: friend.id.clone(),
-                    }
-                }
-            }
-
-            if no_filter_results {
-                div { class: "dm-no-results", "{t(\"dm-no-results\")}" }
             }
         }
     }

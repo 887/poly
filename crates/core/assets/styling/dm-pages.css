@@ -110,6 +110,130 @@
     color: var(--text-muted);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   SPECIAL PAGE SPLIT SHELLS (People, Saved Messages, Notifications)
+   ═══════════════════════════════════════════════════════════════ */
+
+.special-page-sidebar {
+    width: 260px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    position: relative;
+    z-index: 20;
+}
+
+.special-page-sidebar .voice-account-footer {
+    width: 100%;
+    margin-left: 0;
+    z-index: 40;
+}
+
+.special-page-sidebar .account-bar {
+    z-index: 41;
+}
+
+.special-page-sidebar-header,
+.special-page-header {
+    padding: 20px 20px 12px;
+}
+
+.special-page-sidebar-title,
+.special-page-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.special-page-sidebar-description {
+    margin-top: 6px;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.special-page-sidebar-section {
+    padding: 0 12px 12px;
+}
+
+.special-page-sidebar-search {
+    width: 100%;
+}
+
+.special-page-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 12px 12px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.special-page-sidebar-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.special-page-sidebar-button:hover,
+.special-page-sidebar-button.active {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.special-page-sidebar-button-label {
+    min-width: 0;
+    flex: 1;
+}
+
+.special-page-sidebar-count {
+    flex: 0 0 auto;
+    min-width: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.special-page-sidebar-empty {
+    padding: 8px 12px;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.special-page-content {
+    background: var(--bg-primary);
+}
+
+.special-page-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+
+.special-page-toolbar {
+    padding: 0 20px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.special-page-empty-state {
+    margin: auto;
+}
+
 .dm-search-clear {
     background: none;
     border: none;
@@ -535,18 +659,20 @@
 
 .friends-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
     gap: 12px;
-    padding: 16px;
+    padding: 16px 20px 20px;
     overflow-y: auto;
     flex: 1;
+    align-content: start;
 }
 
 .friend-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 10px;
     padding: 12px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
@@ -554,12 +680,23 @@
     cursor: pointer;
     text-align: center;
     transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    appearance: none;
 }
 
 .friend-card:hover {
     background: var(--bg-hover);
     border-color: var(--accent-primary);
     transform: translateY(-2px);
+}
+
+.friend-card-static {
+    cursor: default;
+}
+
+.friend-card-static:hover {
+    transform: none;
 }
 
 .friend-avatar {
@@ -574,11 +711,19 @@
     color: #fff;
 }
 
+.friend-avatar-image {
+    object-fit: cover;
+    overflow: hidden;
+}
+
 .friend-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     width: 100%;
+    flex: 1;
 }
 
 .friend-name {
@@ -588,6 +733,17 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.friend-card-action {
+    width: 100%;
+    pointer-events: none;
+}
+
+.saved-items-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px 20px;
 }
 
 .friend-account {

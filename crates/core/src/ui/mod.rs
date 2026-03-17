@@ -500,6 +500,14 @@ async fn init_storage(
                         Ok(_) => {}
                         Err(e) => tracing::warn!("Failed to read account last routes: {e}"),
                     }
+                    match storage.get_account_last_dm_routes().await {
+                        Ok(stored_routes) if !stored_routes.is_empty() => {
+                            app_state.write().nav.account_last_dm_routes = stored_routes;
+                            tracing::info!("Restored per-account last DM routes from storage");
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!("Failed to read account last DM routes: {e}"),
+                    }
 
                     // Restore poly server accounts from persisted tokens.
                     // This runs after demo restore so both can coexist.

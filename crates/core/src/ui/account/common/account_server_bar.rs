@@ -4,15 +4,17 @@
 //! is active (`active_account_id` is set in `NavigationState`).
 //!
 //! Shows:
-//! 1. DMs/Friends button (account-scoped)
-//! 2. Notifications button (account-scoped, with unread badge)
-//! 3. Separator
-//! 4. All servers for the active account (drag-and-drop reorderable)
+//! 1. Conversations button (account-scoped)
+//! 2. Friends/Ignore/Blocks management button (account-scoped)
+//! 3. Notifications button (account-scoped, with unread badge)
+//! 4. Separator
+//! 5. All servers for the active account (drag-and-drop reorderable)
 //! 5. Spacer
 //!
 //! ## Components
 //! - [`AccountServerBar`] — root, orchestrates the column
-//! - [`AccountBarDmsButton`] — DMs/Friends nav button
+//! - [`AccountBarDmsButton`] — conversations nav button
+//! - [`AccountBarFriendsButton`] — friends/blocked management nav button
 //! - [`AccountBarNotifsButton`] — Notifications nav button with badge
 //! - [`AccountServerIcon`] — single draggable server icon with full DnD logic
 //!
@@ -150,6 +152,13 @@ pub fn AccountServerBar() -> Element {
         nav { class: "account-server-bar",
             // DMs / Friends button — account-scoped
             AccountBarDmsButton {
+                current_view,
+                backend_slug: backend_slug.clone(),
+                instance_id: instance_id.clone(),
+                account_id: account_id.clone(),
+            }
+
+            AccountBarFriendsButton {
                 current_view,
                 backend_slug: backend_slug.clone(),
                 instance_id: instance_id.clone(),
@@ -403,7 +412,7 @@ fn ServerIconDisplay(
     }
 }
 
-/// DMs/Friends button for the account server bar.
+/// Conversations button for the account server bar.
 #[rustfmt::skip]
 #[component]
 fn AccountBarDmsButton(
@@ -437,12 +446,64 @@ fn AccountBarDmsButton(
     }
 }
 
+/// Friends / ignore / blocked management button for the account server bar.
+#[rustfmt::skip]
+#[component]
+fn AccountBarFriendsButton(
+    current_view: View,
+    backend_slug: String,
+    instance_id: String,
+    account_id: String,
+) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let mut chat_data: Signal<ChatData> = use_context();
+
+    rsx! {
+        div {
+            class: if current_view == View::Friends { "server-icon active" } else { "server-icon" },
+            onclick: move |_| {
+                app_state.write().nav.view = View::Friends;
+                chat_data.write().current_server = None;
+                chat_data.write().current_channel = None;
+                chat_data.write().channels.clear();
+                chat_data.write().messages.clear();
+                chat_data.write().members.clear();
+                navigator().push(Route::FriendsRoute {
+                    backend: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                });
+                close_mobile_drawer();
+            },
+            title: "{t(\"nav-friends\")}",
+            div { class: "icon-dms", "👥" }
+        }
+    }
+}
+
 /// Notifications button for the account server bar.
 #[rustfmt::skip]
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
+    let backend_slug = app_state
+        .read()
+        .nav
+        .active_backend
+        .map_or_else(|| "demo".to_string(), |backend| backend.slug().to_string());
+    let instance_id = app_state
+        .read()
+        .nav
+        .active_instance_id
+        .clone()
+        .unwrap_or_else(|| "demo".to_string());
+    let account_id = app_state
+        .read()
+        .nav
+        .active_account_id
+        .clone()
+        .unwrap_or_default();
 
     rsx! {
         div {
@@ -455,7 +516,11 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                 cd.channels.clear();
                 cd.messages.clear();
                 cd.members.clear();
-                navigator().push(Route::NotificationsRoute);
+                navigator().push(Route::NotificationsRoute {
+                    backend: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                });
                 close_mobile_drawer();
             },
             title: "{t(\"nav-notifications\")}",

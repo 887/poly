@@ -505,13 +505,38 @@ notif-no-accounts = No accounts are active. Add an account in Settings → Accou
 
 # DM list
 dm-saved-messages = Saved Messages
+dm-new-conversation = New Conversation
+dm-search-conversations = Search Conversations
 dm-search-placeholder = Find or start a conversation
+saved-items-title = Saved Messages
+saved-items-description = Jump back to pinned messages from your DMs and group chats.
+saved-items-empty = No pinned messages yet.
+saved-items-all-sources = All sources
+saved-items-filter-placeholder = Filter saved sources...
+saved-items-sources-empty = No saved sources found
 dm-no-results = No conversations found
 
 # Friends panel
 friends-title = Friends
+friends-management-title = People
+friends-management-description = Manage friends, ignored users, and blocked users for this account.
+friends-management-message = Message
+friends-ignored-title = Ignored
+friends-ignored-empty = No ignored users yet.
+new-conversation-description = Choose one friend to start a direct conversation. Multi-person conversations will use this composer once shared group creation is wired.
+new-conversation-start-dm = Start Conversation
+new-conversation-group-pending = Multi-person conversations are coming next.
+conversation-search-title = Search Conversations
+conversation-search-description = Search DMs and group chats for { $account }.
 friends-search-placeholder = Search friends...
 friends-none = No friends found
+notifications-filter-all-types = All notifications
+notifications-filter-mentions = Mentions
+notifications-filter-friend-requests = Friend requests
+notifications-filter-server-invites = Server invites
+notifications-filter-voice-invites = Voice invites
+notifications-filter-other = Other
+notifications-unread-count = unread
 filter-all = All Accounts
 filter-all-servers = All Servers
 

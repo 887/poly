@@ -11,10 +11,11 @@
 //! Extract sub-components rather than growing this file.
 
 use crate::i18n::{t, t_args};
-use crate::state::ChatData;
+use crate::state::{AppState, ChatData};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
+use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::BackendType;
 
@@ -62,6 +63,24 @@ fn account_attribution(
     } else {
         format!("{display_name} · {backend_name}")
     }
+}
+
+fn dm_last_incoming_timestamp(dm: &poly_client::DmChannel) -> Option<DateTime<Utc>> {
+    dm.last_message
+        .as_ref()
+        .filter(|message| message.author.id == dm.user.id)
+        .map(|message| message.timestamp)
+}
+
+fn group_last_incoming_timestamp(
+    group: &poly_client::Group,
+    active_user_id: Option<&str>,
+) -> Option<DateTime<Utc>> {
+    group
+        .last_message
+        .as_ref()
+        .filter(|message| active_user_id.is_none_or(|user_id| message.author.id != user_id))
+        .map(|message| message.timestamp)
 }
 
 // ── UI Components ─────────────────────────────────────────────────────────────
@@ -372,27 +391,64 @@ fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Elem
 #[rustfmt::skip]
 #[component]
 pub fn SearchPage() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let query = use_signal(String::new);
+    let initial_type_seed = app_state.read().search_type_seed.clone();
     let mut enabled_accounts: Signal<std::collections::HashSet<String>> = use_signal(|| {
         client_manager.read().active_account_ids().into_iter().collect()
     });
-    let enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
-        ["servers", "dms", "groups"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+    let mut enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
+        initial_type_seed
+            .clone()
+            .map(|seed| seed.into_iter().collect::<std::collections::HashSet<_>>())
+            .unwrap_or_else(|| {
+                ["servers", "dms", "groups"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<std::collections::HashSet<_>>()
+            })
     });
     // Infinite-scroll visible counts (incremented on scroll near bottom)
     let mut dm_visible: Signal<usize> = use_signal(|| 20_usize);
     let mut grp_visible: Signal<usize> = use_signal(|| 20_usize);
 
+    use_effect(move || {
+        let seed = app_state.read().search_type_seed.clone();
+        if let Some(seed) = seed {
+            enabled_types.set(seed.into_iter().collect());
+            app_state.write().search_type_seed = None;
+        }
+    });
+
     let account_ids = client_manager.read().active_account_ids();
     let q_lower = query.read().to_lowercase();
     let servers = chat_data.read().servers.clone();
-    let dm_channels = chat_data.read().dm_channels.clone();
-    let groups = chat_data.read().groups.clone();
+    let mut dm_channels = chat_data.read().dm_channels.clone();
+    let mut groups = chat_data.read().groups.clone();
+    let account_user_ids: std::collections::HashMap<String, String> = chat_data
+        .read()
+        .account_sessions
+        .iter()
+        .map(|(account_id, session)| (account_id.clone(), session.user.id.clone()))
+        .collect();
+
+    dm_channels.sort_by(|a, b| {
+        dm_last_incoming_timestamp(b)
+            .cmp(&dm_last_incoming_timestamp(a))
+            .then_with(|| b.last_message.as_ref().map(|m| m.timestamp).cmp(&a.last_message.as_ref().map(|m| m.timestamp)))
+            .then_with(|| a.user.display_name.cmp(&b.user.display_name))
+    });
+
+    groups.sort_by(|a, b| {
+        let a_active_user_id = account_user_ids.get(&a.account_id).map(String::as_str);
+        let b_active_user_id = account_user_ids.get(&b.account_id).map(String::as_str);
+        group_last_incoming_timestamp(b, b_active_user_id)
+            .cmp(&group_last_incoming_timestamp(a, a_active_user_id))
+            .then_with(|| b.last_message.as_ref().map(|m| m.timestamp).cmp(&a.last_message.as_ref().map(|m| m.timestamp)))
+            .then_with(|| a.name.cmp(&b.name))
+    });
 
     // Collect filtered DM/group lists to know total counts for the counter badge.
     let visible_dms: Vec<_> = dm_channels

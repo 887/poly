@@ -532,7 +532,7 @@ fn build_search_query(
     query
 }
 
-fn highlight_message(message_id: &str) {
+pub(crate) fn highlight_message(message_id: &str) {
     let dom_id = format!("message-{message_id}");
     document::eval(&format!(
         "setTimeout(() => {{ const el = document.getElementById('{dom_id}'); if (el) {{ el.scrollIntoView({{behavior: 'smooth', block: 'center'}}); el.classList.add('message-search-hit'); setTimeout(() => el.classList.remove('message-search-hit'), 1400); }} }}, 80);"
@@ -645,7 +645,7 @@ fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id: &str) -> u
     unread_count
 }
 
-async fn open_message_hit(
+pub(crate) async fn open_message_hit(
     hit: MessageSearchHit,
     current_channel_id: Option<String>,
     current_server_id: Option<String>,
