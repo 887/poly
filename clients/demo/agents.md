@@ -63,6 +63,18 @@ The demo data module (`data.rs`) was modified to work without Dioxus:
 - **Demo groups**: Multi-user group chats
 - **Demo notifications**: Friend requests, mentions, DM notifications
 
+### DM-open Behavior (2026-03-17)
+
+- `open_direct_message_channel(user_id)` must work for **both**:
+	- already-seeded demo DM fixtures, and
+	- known demo friend users who do **not** already have a DM fixture.
+- For non-DM friends, the demo backend now synthesizes a deterministic empty DM
+	(`id = "dm-{user_id}"`, `last_message = None`, `unread_count = 0`) instead of
+	returning `NotFound`.
+- Keep native `src/lib.rs` and WASM guest `src/guest.rs` behavior aligned here.
+- This behavior exists so shared host/core UI flows can treat demo like a real
+	backend that can start a new DM from the friends list.
+
 ## Rich History Load-Test Channel (2026-03-08)
 
 - Dog account / Open Source Hub now includes `#general` (`ch2-general`) as the primary

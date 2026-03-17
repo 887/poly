@@ -504,6 +504,7 @@ notif-badge-unread = Enable Unread Message Badge
 notif-no-accounts = No accounts are active. Add an account in Settings → Accounts.
 
 # DM list
+dm-saved-messages = Saved Messages
 dm-search-placeholder = Find or start a conversation
 dm-no-results = No conversations found
 

@@ -19,7 +19,7 @@ use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use crate::ui::main_layout::close_mobile_drawer;
 use dioxus::prelude::*;
-use poly_client::{BackendType, Channel, ChannelType, Server, User, VoiceParticipant};
+use poly_client::{BackendType, Channel, ChannelType, DmChannel, Server, User, VoiceParticipant};
 
 /// Main channel list component — delegates to sub-views based on current view.
 /// Load messages, members, and voice participants for a channel.
@@ -123,6 +123,225 @@ async fn load_dm_messages(
     }
 
     chat_data.write().loading = false;
+}
+
+fn activate_dm_channel(
+    dm: DmChannel,
+    instance_id: String,
+    mut app_state: Signal<AppState>,
+    mut chat_data: Signal<ChatData>,
+    client_manager: Signal<ClientManager>,
+    nav: crate::ui::dioxus_router::Navigator,
+) {
+    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
+        remember_message_list_scroll_position(&previous_channel_id);
+    }
+
+    app_state.write().nav.selected_server = None;
+    app_state.write().nav.selected_channel = Some(dm.id.clone());
+    app_state.write().nav.dm_right_sidebar_visible = false;
+    chat_data.write().active_group_members = Vec::new();
+    chat_data.write().current_channel = Some(Channel {
+        id: dm.id.clone(),
+        name: dm.user.display_name.clone(),
+        channel_type: ChannelType::Text,
+        server_id: String::new(),
+        unread_count: dm.unread_count,
+        mention_count: 0,
+        last_message_id: dm.last_message.as_ref().map(|message| message.id.clone()),
+    });
+    chat_data.write().current_server = None;
+
+    let channel_id = dm.id.clone();
+    let account_id = dm.account_id.clone();
+    spawn(async move {
+        load_dm_messages(channel_id, account_id, client_manager, chat_data).await;
+    });
+
+    nav.push(Route::DmChat {
+        backend: dm.backend.slug().to_string(),
+        instance_id,
+        account_id: dm.account_id.clone(),
+        dm_id: dm.id.clone(),
+    });
+    close_mobile_drawer();
+}
+
+fn active_account_context(
+    app_state: Signal<AppState>,
+    chat_data: Signal<ChatData>,
+) -> Option<(String, String)> {
+    let account_id = app_state.read().nav.active_account_id.clone()?;
+    let instance_id = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .map(|session| session.instance_id.clone())
+        .or_else(|| app_state.read().nav.active_instance_id.clone())
+        .unwrap_or_default();
+    Some((account_id, instance_id))
+}
+
+/// Open or create a direct message for the current active account, then
+/// navigate using the real DM channel ID returned by the backend.
+pub(crate) fn open_direct_message_from_active_account(
+    user_id: String,
+    app_state: Signal<AppState>,
+    mut chat_data: Signal<ChatData>,
+    client_manager: Signal<ClientManager>,
+    nav: crate::ui::dioxus_router::Navigator,
+) {
+    let Some((account_id, instance_id)) = active_account_context(app_state, chat_data) else {
+        tracing::warn!("open_direct_message_from_active_account: no active account");
+        return;
+    };
+
+    let existing_dm = {
+        let chat_data_read = chat_data.read();
+        chat_data_read
+            .dm_channels
+            .iter()
+            .find(|dm| dm.account_id == account_id && dm.user.id == user_id)
+            .cloned()
+    };
+
+    if let Some(existing_dm) = existing_dm {
+        activate_dm_channel(
+            existing_dm,
+            instance_id,
+            app_state,
+            chat_data,
+            client_manager,
+            nav,
+        );
+        return;
+    }
+
+    let Some(backend) = client_manager.read().get_backend(&account_id) else {
+        tracing::warn!(
+            "open_direct_message_from_active_account: no backend found for account {}",
+            account_id
+        );
+        return;
+    };
+
+    spawn(async move {
+        let opened_dm = {
+            let guard = backend.read().await;
+            match guard.open_direct_message_channel(&user_id).await {
+                Ok(dm) => dm,
+                Err(err) => {
+                    tracing::warn!(
+                        "open_direct_message_from_active_account: failed to open DM for user {} on account {}: {}",
+                        user_id,
+                        account_id,
+                        err
+                    );
+                    return;
+                }
+            }
+        };
+
+        let mut chat_data_write = chat_data.write();
+        chat_data_write
+            .dm_channels
+            .retain(|dm| !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == user_id)));
+        chat_data_write.dm_channels.push(opened_dm.clone());
+        drop(chat_data_write);
+
+        activate_dm_channel(
+            opened_dm,
+            instance_id,
+            app_state,
+            chat_data,
+            client_manager,
+            nav,
+        );
+    });
+}
+
+pub(crate) fn open_saved_messages_from_active_account(
+    app_state: Signal<AppState>,
+    mut chat_data: Signal<ChatData>,
+    client_manager: Signal<ClientManager>,
+    nav: crate::ui::dioxus_router::Navigator,
+) {
+    let Some((account_id, instance_id)) = active_account_context(app_state, chat_data) else {
+        tracing::warn!("open_saved_messages_from_active_account: no active account");
+        return;
+    };
+
+    let active_user_id = {
+        let chat_data_read = chat_data.read();
+        chat_data_read
+            .account_sessions
+            .get(&account_id)
+            .map(|session| session.user.id.clone())
+    };
+
+    if let Some(active_user_id) = active_user_id {
+        let existing_saved_dm = {
+            let chat_data_read = chat_data.read();
+            chat_data_read
+                .dm_channels
+                .iter()
+                .find(|dm| dm.account_id == account_id && dm.user.id == active_user_id)
+                .cloned()
+        };
+
+        if let Some(existing_saved_dm) = existing_saved_dm {
+            activate_dm_channel(
+                existing_saved_dm,
+                instance_id,
+                app_state,
+                chat_data,
+                client_manager,
+                nav,
+            );
+            return;
+        }
+    }
+
+    let Some(backend) = client_manager.read().get_backend(&account_id) else {
+        tracing::warn!(
+            "open_saved_messages_from_active_account: no backend found for account {}",
+            account_id
+        );
+        return;
+    };
+
+    spawn(async move {
+        let opened_dm = {
+            let guard = backend.read().await;
+            match guard.open_saved_messages_channel().await {
+                Ok(dm) => dm,
+                Err(err) => {
+                    tracing::warn!(
+                        "open_saved_messages_from_active_account: failed on account {}: {}",
+                        account_id,
+                        err
+                    );
+                    return;
+                }
+            }
+        };
+
+        let mut chat_data_write = chat_data.write();
+        chat_data_write
+            .dm_channels
+            .retain(|dm| !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == opened_dm.user.id)));
+        chat_data_write.dm_channels.push(opened_dm.clone());
+        drop(chat_data_write);
+
+        activate_dm_channel(
+            opened_dm,
+            instance_id,
+            app_state,
+            chat_data,
+            client_manager,
+            nav,
+        );
+    });
 }
 
 /// Single connected voice participant entry.
@@ -366,14 +585,26 @@ fn ServerBanner(
 fn DMFriendsView() -> Element {
     let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let nav = navigator();
 
     // Only show DMs and groups belonging to the currently active account.
     let active_account_id = app_state.read().nav.active_account_id.clone();
+    let active_user_id = active_account_id.as_ref().and_then(|account_id| {
+        chat_data
+            .read()
+            .account_sessions
+            .get(account_id)
+            .map(|session| session.user.id.clone())
+    });
     let dm_channels: Vec<_> = chat_data
         .read()
         .dm_channels
         .iter()
-        .filter(|dm| active_account_id.as_deref() == Some(&dm.account_id))
+        .filter(|dm| {
+            active_account_id.as_deref() == Some(&dm.account_id)
+                && active_user_id.as_deref() != Some(dm.user.id.as_str())
+        })
         .cloned()
         .collect();
     let groups: Vec<_> = chat_data
@@ -383,6 +614,7 @@ fn DMFriendsView() -> Element {
         .filter(|g| active_account_id.as_deref() == Some(&g.account_id))
         .cloned()
         .collect();
+    let active_backend = app_state.read().nav.active_backend;
     let friends = chat_data.read().friends.clone();
     let selected_channel = app_state.read().nav.selected_channel.clone();
     let mut dm_filter = use_signal(String::new);
@@ -440,7 +672,10 @@ fn DMFriendsView() -> Element {
     } else {
         friends
             .iter()
-            .filter(|f| f.display_name.to_lowercase().contains(&filter_lower))
+            .filter(|f| {
+                f.display_name.to_lowercase().contains(&filter_lower)
+                    && active_backend.is_none_or(|backend| backend == f.backend)
+            })
             .collect()
     };
 
@@ -500,6 +735,20 @@ fn DMFriendsView() -> Element {
             },
             span { class: "dm-friends-row-icon", "👥" }
             span { class: "dm-friends-row-label", "{t(\"friends-title\")}" }
+        }
+
+        button {
+            class: "dm-friends-row-btn",
+            onclick: move |_| {
+                open_saved_messages_from_active_account(
+                    app_state,
+                    chat_data,
+                    client_manager,
+                    nav,
+                );
+            },
+            span { class: "dm-friends-row-icon", "🔖" }
+            span { class: "dm-friends-row-label", "{t(\"dm-saved-messages\")}" }
         }
 
         // Search bar
@@ -856,6 +1105,11 @@ fn GroupChannelItem(
 fn FriendItem(display_name: String, user_id: String) -> Element {
     use crate::state::chat_data::user_color;
 
+    let app_state: Signal<AppState> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let nav = navigator();
+
     let color = user_color(&user_id);
     let first_char: String = display_name
         .chars()
@@ -864,7 +1118,20 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
         .unwrap_or_default();
 
     rsx! {
-        div { class: "channel-item",
+        div {
+            class: "channel-item",
+            onclick: {
+                let target_user_id = user_id.clone();
+                move |_| {
+                    open_direct_message_from_active_account(
+                        target_user_id.clone(),
+                        app_state,
+                        chat_data,
+                        client_manager,
+                        nav,
+                    );
+                }
+            },
             div { class: "dm-avatar-small", style: "background-color: {color};", "{first_char}" }
             span { class: "channel-name", "{display_name}" }
         }

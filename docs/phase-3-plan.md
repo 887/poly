@@ -111,6 +111,13 @@
 	- 2026-03-17 latest update: native `add_group_member(group_id, user_id)` now uses `PUT /channels/{group}/recipients/{member}`.
 	- 2026-03-17 later-later update: native `remove_group_member(group_id, user_id)` now uses `DELETE /channels/{group}/recipients/{member}` so the existing shared trait + core UI group-member removal flow works for Stoat.
 	- The shared `ClientBackend`/WIT surface now also exposes `open_direct_message_channel(user_id)` and `open_saved_messages_channel()`; native Stoat adopts both directly instead of keeping them native-only helpers.
+	- 2026-03-17 UI adoption update: core `FriendsPanel` cards and `DMFriendsView` friend-search rows now route through the shared `open_direct_message_channel(user_id)` path instead of pushing `Route::DmChat` with a raw user ID.
+	- `poly-web` verification confirmed that clicking the Friends-grid Alice card now lands on a real DM route (`/demo/demo/demo-cat/dms/dm-user-alice`) without crashing; the sidebar friend-search row also reaches the shared backend-open path.
+	- 2026-03-17 demo follow-up: native demo + demo WASM guest now synthesize deterministic empty DMs for known friend users who do not already have a pre-seeded DM fixture, so non-DM friends like Grace open cleanly through the shared UI path.
+	- `poly-web` verification confirmed Grace now opens at `/demo/demo/demo-cat/dms/dm-user-grace` as an empty conversation, appears in the DM list, and logs no console errors.
+	- 2026-03-17 Saved Messages UI adoption: the DM sidebar now exposes a localized Saved Messages row wired to the shared `open_saved_messages_channel()` method for the active account.
+	- The regular DM list now filters out self-DM entries so the Saved Messages shortcut does not duplicate the current user in the ordinary DM list.
+	- `poly-web` verification confirmed the Saved Messages row opens `/demo/demo/demo-cat/dms/dm-demo-saved-self`, renders the self-DM conversation, and logs no console errors.
 	- The Stoat WASM guest now has real mocked-E2E coverage for DM open/saved and add/remove group-member mutations through `poly-plugin-loader-tests`.
 	- Added mock-backed integration coverage for DM list retrieval, group list retrieval, group-member lookup, group-member add, and group-member removal.
 	- This item remains open until richer guest-side DM enrichment (for example unread/last-message parity in open-DM flows) and broader UI adoption of the new shared methods are implemented.

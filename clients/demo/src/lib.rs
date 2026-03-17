@@ -234,7 +234,10 @@ impl ClientBackend for DemoClient {
         data::demo_dm_channels()
             .into_iter()
             .find(|dm| dm.user.id == user_id)
-            .ok_or_else(|| ClientError::NotFound(format!("DM user {user_id}")))
+            .map_or_else(
+                || data::demo_empty_dm_channel_for_user(user_id, data::DEMO_ACCOUNT_ID),
+                Ok,
+            )
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
@@ -646,7 +649,10 @@ impl ClientBackend for DemoClient2 {
             .await?
             .into_iter()
             .find(|dm| dm.user.id == user_id)
-            .ok_or_else(|| ClientError::NotFound(format!("DM user {user_id}")))
+            .map_or_else(
+                || data::demo_empty_dm_channel_for_user(user_id, data::DEMO2_ACCOUNT_ID),
+                Ok,
+            )
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {

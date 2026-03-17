@@ -446,6 +446,7 @@ notif-badge-unread = Ungelesene-Nachrichten-Badge aktivieren
 notif-no-accounts = Keine Konten aktiv. Konto unter Einstellungen → Konten hinzufügen.
 
 # DM list
+dm-saved-messages = Gespeicherte Nachrichten
 dm-search-placeholder = Gespräch suchen oder starten
 dm-no-results = Kein Gespräch gefunden
 

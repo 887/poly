@@ -10,7 +10,8 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::super::super::routes::Route;
+use super::channel_list::open_direct_message_from_active_account;
+use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::backend_badge;
 use crate::state::chat_data::user_color;
@@ -147,7 +148,10 @@ fn FriendsFilterBar(
 #[rustfmt::skip]
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: Signal<AppState> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let nav = navigator();
 
     rsx! {
         div { class: "friends-grid",
@@ -179,26 +183,13 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                         {
                                             remember_message_list_scroll_position(&previous_channel_id);
                                         }
-                                        app_state.write().nav.selected_channel = Some(fid.clone());
-                                        let account_id = app_state
-                                            .read()
-                                            .nav
-                                            .active_account_id
-                                            .clone()
-                                            .unwrap_or_else(|| backend.slug().to_string());
-                                        let instance_id = app_state // TODO(phase-3): mutual servers list (2.6.6.3)
-                                            .read()
-                                            .nav
-                                            .active_instance_id
-                                            .clone()
-                                            .unwrap_or_else(|| "demo".to_string());
-                                        navigator()
-                                            .push(Route::DmChat {
-                                                backend: backend.slug().to_string(),
-                                                instance_id,
-                                                account_id,
-                                                dm_id: fid.clone(),
-                                            });
+                                        open_direct_message_from_active_account(
+                                            fid.clone(),
+                                            app_state,
+                                            chat_data,
+                                            client_manager,
+                                            nav,
+                                        );
                                     }
                                 },
                                 div { class: "friend-avatar", style: "background-color: {color};", "{first_char}" }

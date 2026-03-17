@@ -532,7 +532,10 @@ impl MessengerClientGuest for DemoPlugin {
             crate::data::demo_dm_channels()
                 .into_iter()
                 .find(|dm| dm.user.id == user_id)
-                .ok_or_else(|| pc::ClientError::NotFound(format!("DM user {user_id}"))),
+                .map_or_else(
+                    || crate::data::demo_empty_dm_channel_for_user(&user_id, crate::data::DEMO_ACCOUNT_ID),
+                    Ok,
+                ),
             to_wit_dm_channel,
         )
     }

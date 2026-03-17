@@ -447,6 +447,7 @@ notif-badge-unread = Activar insignia de mensajes no leídos
 notif-no-accounts = Sin cuentas activas. Agrega una cuenta en Ajustes → Cuentas.
 
 # DM list
+dm-saved-messages = Mensajes guardados
 dm-search-placeholder = Encuentra o inicia una conversación
 dm-no-results = No se encontraron conversaciones
 

@@ -446,6 +446,7 @@ notif-badge-unread = Activer le badge messages non lus
 notif-no-accounts = Aucun compte actif. Ajoutez un compte dans Paramètres → Comptes.
 
 # DM list
+dm-saved-messages = Messages enregistrés
 dm-search-placeholder = Trouver ou démarrer une conversation
 dm-no-results = Aucune conversation trouvée
 

@@ -1283,6 +1283,28 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
     channels
 }
 
+/// Construct a deterministic empty DM channel for a known demo user.
+///
+/// Used when the UI opens a friend contact who does not already have a
+/// pre-seeded demo DM fixture. This keeps the shared DM-open flow working
+/// across native and WASM demo backends while still rendering a sensible
+/// empty-state conversation.
+pub fn demo_empty_dm_channel_for_user(user_id: &str, account_id: &str) -> ClientResult<DmChannel> {
+    let user = demo_users()
+        .into_iter()
+        .find(|candidate| candidate.id == user_id)
+        .ok_or_else(|| ClientError::NotFound(format!("DM user {user_id}")))?;
+
+    Ok(DmChannel {
+        id: format!("dm-{}", user.id),
+        user,
+        last_message: None,
+        unread_count: 0,
+        backend: BackendType::Demo,
+        account_id: account_id.to_string(),
+    })
+}
+
 /// Generate demo notifications.
 pub fn demo_notifications() -> Vec<Notification> {
     let now = Utc::now();

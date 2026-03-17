@@ -268,6 +268,19 @@ async fn demo_open_direct_message_channel() {
 }
 
 #[tokio::test]
+async fn demo_open_direct_message_channel_for_non_dm_friend() {
+    let backend = load_demo().await;
+
+    let dm = harness::open_direct_message_channel(&backend, "user-grace").await;
+    assert_eq!(dm.id, "dm-user-grace");
+    assert_eq!(dm.user.id, "user-grace");
+    assert_eq!(dm.user.display_name, "Grace");
+    assert_eq!(dm.account_id, "demo-cat");
+    assert!(dm.last_message.is_none(), "new fallback demo DMs should start empty");
+    assert_eq!(dm.unread_count, 0);
+}
+
+#[tokio::test]
 async fn demo_open_saved_messages_channel() {
     let backend = load_demo().await;
     let saved = harness::open_saved_messages_channel(&backend).await;
