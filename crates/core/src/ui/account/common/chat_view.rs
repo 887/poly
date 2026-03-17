@@ -13,9 +13,9 @@
 
 use super::super::super::routes::Route;
 use super::chat_history::{
-    ChatHistoryUiState, OLDER_MESSAGES_PAGE_SIZE, read_message_list_scroll_metrics,
+    ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE,
     remember_message_list_scroll_position, request_preserve_scroll_position,
-    unread_marker_message_id,
+    request_preserve_scroll_position_from_bottom, unread_marker_message_id,
 };
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
@@ -33,6 +33,25 @@ use poly_client::{
     MessageContent, MessageQuery, MessageReplyPreview, MessageSearchHit, MessageSearchQuery,
     PresenceStatus,
 };
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+};
+
+const MESSAGE_VIRTUALIZATION_THRESHOLD: usize = 10_000;
+const MESSAGE_VIRTUALIZATION_OVERSCAN_PX: f64 = 1200.0;
+const MESSAGE_VIRTUALIZATION_MIN_RENDERED: usize = 96;
+const MESSAGE_HISTORY_EDGE_THRESHOLD_PX: f64 = 140.0;
+const MESSAGE_HISTORY_EDGE_REARM_PX: f64 = 280.0;
+const MESSAGE_SCROLL_SETTLE_DELAY_MS: u64 = 180;
+const ESTIMATED_FULL_MESSAGE_HEIGHT: f64 = 92.0;
+const ESTIMATED_GROUPED_MESSAGE_HEIGHT: f64 = 34.0;
+const ESTIMATED_DATE_SEPARATOR_HEIGHT: f64 = 28.0;
+const ESTIMATED_UNREAD_DIVIDER_HEIGHT: f64 = 20.0;
+const ESTIMATED_REPLY_PREVIEW_HEIGHT: f64 = 22.0;
+const ESTIMATED_REACTION_BAR_HEIGHT: f64 = 28.0;
+const ESTIMATED_IMAGE_ATTACHMENT_HEIGHT: f64 = 180.0;
+const ESTIMATED_FILE_ATTACHMENT_HEIGHT: f64 = 52.0;
 
 #[derive(Debug, Clone)]
 struct MsgContextMenu {
@@ -41,6 +60,22 @@ struct MsgContextMenu {
     message_id: String,
     message_text: String,
     is_own: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct MessageVirtualWindowState {
+    enabled: bool,
+    start_idx: usize,
+    end_idx: usize,
+    top_spacer_px: f64,
+    bottom_spacer_px: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MessageListViewportMetrics {
+    scroll_top: f64,
+    client_height: f64,
+    scroll_height: f64,
 }
 
 const GROUP_THRESHOLD_MINUTES: i64 = 7;
@@ -826,6 +861,7 @@ struct ChatViewSignals {
     reply_target: Signal<Option<MessageReplyPreview>>,
     history_state: Signal<ChatHistoryUiState>,
     unread_marker_on_screen: Signal<bool>,
+    virtual_window: Signal<MessageVirtualWindowState>,
 }
 
 fn use_chat_view_signals() -> ChatViewSignals {
@@ -855,6 +891,7 @@ fn use_chat_view_signals() -> ChatViewSignals {
         reply_target: use_signal(|| None::<MessageReplyPreview>),
         history_state: use_signal(ChatHistoryUiState::default),
         unread_marker_on_screen: use_signal(|| false),
+        virtual_window: use_signal(MessageVirtualWindowState::default),
     }
 }
 
@@ -964,6 +1001,7 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         reply_target: signals.reply_target,
         history_state: signals.history_state,
         unread_marker_on_screen: signals.unread_marker_on_screen,
+        virtual_window: signals.virtual_window,
     }
 }
 
@@ -1287,6 +1325,10 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             channel_id: Some(active_channel_id),
             has_more_before: !messages.is_empty(),
             loading_before: false,
+            has_more_after: false,
+            loading_after: false,
+            before_spacer_px: 0.0,
+            after_spacer_px: 0.0,
             unread_count,
             unread_marker_message_id: unread_marker_message_id(&messages, unread_count),
         });
@@ -1436,6 +1478,323 @@ struct ChatViewMarkupCtx {
     reply_target: Signal<Option<MessageReplyPreview>>,
     history_state: Signal<ChatHistoryUiState>,
     unread_marker_on_screen: Signal<bool>,
+    virtual_window: Signal<MessageVirtualWindowState>,
+}
+
+fn should_virtualize_messages(message_count: usize, search_query_value: &str) -> bool {
+    message_count > MESSAGE_VIRTUALIZATION_THRESHOLD && search_query_value.is_empty()
+}
+
+fn estimate_message_row_height(
+    messages: &[Message],
+    idx: usize,
+    unread_marker_id: Option<&str>,
+    unread_count: u32,
+) -> f64 {
+    let Some(msg) = messages.get(idx) else {
+        return ESTIMATED_FULL_MESSAGE_HEIGHT;
+    };
+    let show_date_sep = if idx == 0 {
+        true
+    } else {
+        messages
+            .get(idx.saturating_sub(1))
+            .is_none_or(|prev| msg.timestamp.date_naive() != prev.timestamp.date_naive())
+    };
+    let is_grouped = if idx == 0 {
+        false
+    } else {
+        messages.get(idx.saturating_sub(1)).is_some_and(|prev| {
+            prev.author.id == msg.author.id
+                && !show_date_sep
+                && (msg.timestamp - prev.timestamp).num_minutes() < GROUP_THRESHOLD_MINUTES
+        })
+    };
+
+    let mut height = if is_grouped {
+        ESTIMATED_GROUPED_MESSAGE_HEIGHT
+    } else {
+        ESTIMATED_FULL_MESSAGE_HEIGHT
+    };
+
+    if show_date_sep {
+        height += ESTIMATED_DATE_SEPARATOR_HEIGHT;
+    }
+    if unread_count > 0 && unread_marker_id == Some(msg.id.as_str()) {
+        height += ESTIMATED_UNREAD_DIVIDER_HEIGHT;
+    }
+    if msg.reply_to.is_some() {
+        height += ESTIMATED_REPLY_PREVIEW_HEIGHT;
+    }
+    if !msg.reactions.is_empty() {
+        height += ESTIMATED_REACTION_BAR_HEIGHT;
+    }
+
+    for attachment in &msg.attachments {
+        let attachment_height = if attachment.content_type.starts_with("image/") {
+            ESTIMATED_IMAGE_ATTACHMENT_HEIGHT
+        } else {
+            ESTIMATED_FILE_ATTACHMENT_HEIGHT
+        };
+        height += attachment_height;
+    }
+
+    height
+}
+
+fn estimate_message_block_height(
+    messages: &[Message],
+    start_idx: usize,
+    end_idx: usize,
+    unread_marker_id: Option<&str>,
+    unread_count: u32,
+) -> f64 {
+    if start_idx >= end_idx || start_idx >= messages.len() {
+        return 0.0;
+    }
+
+    let capped_end = end_idx.min(messages.len());
+    let mut total = 0.0;
+    for idx in start_idx..capped_end {
+        total += estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
+    }
+    total
+}
+
+fn subtract_spacer_height(current_px: f64, delta_px: f64) -> f64 {
+    (current_px - delta_px).max(0.0)
+}
+
+fn compute_message_virtual_window(
+    messages: &[Message],
+    unread_marker_id: Option<&str>,
+    unread_count: u32,
+    metrics: MessageListViewportMetrics,
+) -> MessageVirtualWindowState {
+    if messages.is_empty() {
+        return MessageVirtualWindowState::default();
+    }
+
+    let mut prefix_heights = Vec::with_capacity(messages.len() + 1);
+    prefix_heights.push(0.0);
+    for idx in 0..messages.len() {
+        let next = prefix_heights.last().copied().unwrap_or(0.0)
+            + estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
+        prefix_heights.push(next);
+    }
+
+    let viewport_start = (metrics.scroll_top - MESSAGE_VIRTUALIZATION_OVERSCAN_PX).max(0.0);
+    let viewport_end =
+        metrics.scroll_top + metrics.client_height + MESSAGE_VIRTUALIZATION_OVERSCAN_PX;
+
+    let mut start_idx = 0_usize;
+    while start_idx < messages.len()
+        && prefix_heights
+            .get(start_idx + 1)
+            .copied()
+            .is_some_and(|height| height < viewport_start)
+    {
+        start_idx += 1;
+    }
+
+    let mut end_idx = start_idx;
+    while end_idx < messages.len()
+        && prefix_heights
+            .get(end_idx)
+            .copied()
+            .is_some_and(|height| height <= viewport_end)
+    {
+        end_idx += 1;
+    }
+
+    if end_idx.saturating_sub(start_idx) < MESSAGE_VIRTUALIZATION_MIN_RENDERED {
+        let extra = MESSAGE_VIRTUALIZATION_MIN_RENDERED - end_idx.saturating_sub(start_idx);
+        let extra_before = extra / 2;
+        start_idx = start_idx.saturating_sub(extra_before);
+        end_idx = (start_idx + MESSAGE_VIRTUALIZATION_MIN_RENDERED).min(messages.len());
+        start_idx = end_idx.saturating_sub(MESSAGE_VIRTUALIZATION_MIN_RENDERED);
+    }
+
+    let total_height = prefix_heights.last().copied().unwrap_or(0.0);
+    let top_spacer_px = prefix_heights.get(start_idx).copied().unwrap_or(0.0);
+    let bottom_spacer_px =
+        total_height - prefix_heights.get(end_idx).copied().unwrap_or(total_height);
+
+    MessageVirtualWindowState {
+        enabled: true,
+        start_idx,
+        end_idx,
+        top_spacer_px,
+        bottom_spacer_px,
+    }
+}
+
+async fn read_message_list_viewport_metrics() -> Option<MessageListViewportMetrics> {
+    let mut eval = document::eval(
+        r#"
+            const el = document.getElementById('message-list-scroll');
+            if (!el) {
+                dioxus.send('');
+            } else {
+                dioxus.send(`${el.scrollTop}|${el.clientHeight}|${el.scrollHeight}`);
+            }
+        "#,
+    );
+
+    let Ok(raw) = eval.recv::<String>().await else {
+        return None;
+    };
+    let mut parts = raw.split('|');
+    let scroll_top = parts.next()?.parse::<f64>().ok()?;
+    let client_height = parts.next()?.parse::<f64>().ok()?;
+    let scroll_height = parts.next()?.parse::<f64>().ok()?;
+    Some(MessageListViewportMetrics {
+        scroll_top,
+        client_height,
+        scroll_height,
+    })
+}
+
+fn trim_message_window_from_bottom(messages: &mut Vec<Message>) -> bool {
+    if messages.len() <= MAX_LOADED_MESSAGES {
+        return false;
+    }
+    messages.truncate(MAX_LOADED_MESSAGES);
+    true
+}
+
+fn trim_message_window_from_top(messages: &mut Vec<Message>) -> bool {
+    if messages.len() <= MAX_LOADED_MESSAGES {
+        return false;
+    }
+    let overflow = messages.len().saturating_sub(MAX_LOADED_MESSAGES);
+    messages.drain(0..overflow);
+    true
+}
+
+fn set_message_virtual_window(
+    mut virtual_window: Signal<MessageVirtualWindowState>,
+    messages: &[Message],
+    unread_marker_id: Option<&str>,
+    unread_count: u32,
+    metrics: MessageListViewportMetrics,
+) {
+    let next = compute_message_virtual_window(messages, unread_marker_id, unread_count, metrics);
+    if *virtual_window.read() != next {
+        virtual_window.set(next);
+    }
+}
+
+#[derive(Clone)]
+struct MessageListScrollWorkCtx {
+    loading: bool,
+    history_state: Signal<ChatHistoryUiState>,
+    scroll_work_in_flight: Arc<AtomicBool>,
+    messages_for_window: Vec<Message>,
+    unread_marker_id: Option<String>,
+    unread_count: u32,
+    search_query_value: String,
+    virtual_window: Signal<MessageVirtualWindowState>,
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+    top_edge_armed: Arc<AtomicBool>,
+    bottom_edge_armed: Arc<AtomicBool>,
+}
+
+async fn wait_for_message_list_scroll_settle(seq: u64) -> bool {
+    let mut eval = document::eval(&format!(
+        r#"
+            const wanted = {seq};
+            setTimeout(() => {{
+                dioxus.send((window.__polyMessageScrollSettleSeq ?? 0) === wanted);
+            }}, {MESSAGE_SCROLL_SETTLE_DELAY_MS});
+        "#,
+    ));
+
+    eval.recv::<bool>().await.unwrap_or(false)
+}
+
+fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repeat_edge: bool) {
+    if ctx.loading || ctx.scroll_work_in_flight.load(Ordering::Relaxed) {
+        return;
+    }
+
+    spawn(async move {
+        ctx.scroll_work_in_flight.store(true, Ordering::Relaxed);
+        let Some(metrics) = read_message_list_viewport_metrics().await else {
+            ctx.scroll_work_in_flight.store(false, Ordering::Relaxed);
+            return;
+        };
+        let history_snapshot = ctx.history_state.read().clone();
+        if should_virtualize_messages(ctx.messages_for_window.len(), &ctx.search_query_value) {
+            set_message_virtual_window(
+                ctx.virtual_window,
+                &ctx.messages_for_window,
+                ctx.unread_marker_id.as_deref(),
+                ctx.unread_count,
+                metrics,
+            );
+        }
+        // History paging must key off the *loaded content* bounds, not the total
+        // scroll height. Once we introduce large fake spacers for unloaded history,
+        // using the total scroll height allows the user to scroll through blank
+        // spacer space before the next page request fires.
+        let loaded_content_top = history_snapshot.before_spacer_px;
+        let loaded_content_bottom =
+            (metrics.scroll_height - history_snapshot.after_spacer_px).max(loaded_content_top);
+        let viewport_bottom = metrics.scroll_top + metrics.client_height;
+
+        let near_top = metrics.scroll_top <= loaded_content_top + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+        let near_bottom = viewport_bottom >= loaded_content_bottom - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+
+        if !near_top {
+            ctx.top_edge_armed.store(
+                metrics.scroll_top > loaded_content_top + MESSAGE_HISTORY_EDGE_REARM_PX,
+                Ordering::Relaxed,
+            );
+        }
+        if !near_bottom {
+            ctx.bottom_edge_armed.store(
+                viewport_bottom < loaded_content_bottom - MESSAGE_HISTORY_EDGE_REARM_PX,
+                Ordering::Relaxed,
+            );
+        }
+
+        if near_top
+            && history_snapshot.has_more_before
+            && !history_snapshot.loading_before
+            && (allow_repeat_edge || ctx.top_edge_armed.swap(false, Ordering::Relaxed))
+        {
+            ctx.history_state.write().loading_before = true;
+            load_older_messages(
+                ctx.app_state,
+                ctx.client_manager,
+                ctx.chat_data,
+                ctx.history_state,
+                metrics.scroll_top,
+                metrics.scroll_height,
+            )
+            .await;
+        }
+        if near_bottom
+            && history_snapshot.has_more_after
+            && !history_snapshot.loading_after
+            && (allow_repeat_edge || ctx.bottom_edge_armed.swap(false, Ordering::Relaxed))
+        {
+            ctx.history_state.write().loading_after = true;
+            load_newer_messages(
+                ctx.app_state,
+                ctx.client_manager,
+                ctx.chat_data,
+                ctx.history_state,
+                metrics.scroll_top,
+                metrics.scroll_height,
+            )
+            .await;
+        }
+        ctx.scroll_work_in_flight.store(false, Ordering::Relaxed);
+    });
 }
 
 fn render_chat_view_markup(ctx: ChatViewMarkupCtx) -> Element {
@@ -1887,25 +2246,135 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let app_state = ctx.app_state;
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
-    let mut history_state = ctx.history_state;
+    let history_state = ctx.history_state;
+    let scroll_work_in_flight = use_hook(|| Arc::new(AtomicBool::new(false)));
+    let settled_scroll_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
+    let top_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
+    let bottom_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
+    let virtualize_messages =
+        should_virtualize_messages(ctx.messages.len(), &ctx.search_query_value);
+    // Lock the message list scroll during a history load so the user cannot drag
+    // the scrollbar mid-load and so our JS position-restore sees a stable DOM.
+    let is_loading_history = {
+        let hs = ctx.history_state.read();
+        hs.loading_before || hs.loading_after
+    };
+    let unread_count = ctx.history_state.read().unread_count;
+    let unread_marker_id = ctx.unread_marker_id.clone();
+    let messages_for_window = ctx.messages.clone();
+    let search_query_value = ctx.search_query_value.clone();
+    let mut virtual_window = ctx.virtual_window;
+
+    let wheel_scroll_work_in_flight = Arc::clone(&scroll_work_in_flight);
+    let wheel_messages_for_window = ctx.messages.clone();
+    let wheel_unread_marker_id = ctx.unread_marker_id.clone();
+    let wheel_unread_count = ctx.history_state.read().unread_count;
+    let wheel_search_query_value = search_query_value.clone();
+    let wheel_virtual_window = virtual_window;
+    let wheel_history_state = history_state;
+    let wheel_app_state = app_state;
+    let wheel_client_manager = client_manager;
+    let wheel_chat_data = chat_data;
+    let wheel_top_edge_armed = Arc::clone(&top_edge_armed);
+    let wheel_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
+
+    let scroll_messages_for_window = ctx.messages.clone();
+    let scroll_unread_marker_id = ctx.unread_marker_id.clone();
+    let scroll_unread_count = ctx.history_state.read().unread_count;
+    let scroll_search_query_value = search_query_value.clone();
+    let scroll_virtual_window = virtual_window;
+    let scroll_history_state = history_state;
+    let scroll_app_state = app_state;
+    let scroll_client_manager = client_manager;
+    let scroll_chat_data = chat_data;
+    let scroll_top_edge_armed = Arc::clone(&top_edge_armed);
+    let scroll_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
+    let scroll_settled_seq = Arc::clone(&settled_scroll_seq);
+
+    use_effect(move || {
+        if !virtualize_messages {
+            if virtual_window.read().enabled {
+                virtual_window.set(MessageVirtualWindowState::default());
+            }
+            return;
+        }
+
+        let messages_for_window = messages_for_window.clone();
+        let unread_marker_id = unread_marker_id.clone();
+        spawn(async move {
+            if let Some(metrics) = read_message_list_viewport_metrics().await {
+                set_message_virtual_window(
+                    virtual_window,
+                    &messages_for_window,
+                    unread_marker_id.as_deref(),
+                    unread_count,
+                    metrics,
+                );
+            }
+        });
+    });
 
     rsx! {
         div {
-            class: "message-list",
+            class: if is_loading_history { "message-list loading-history" } else { "message-list" },
             id: "message-list-scroll",
-            onscroll: move |_| {
-                if loading || !history_state.read().has_more_before
-                    || history_state.read().loading_before
-                {
+            onwheel: move |evt| {
+                if evt.delta().strip_units().y >= 0.0 {
                     return;
                 }
-                history_state.write().loading_before = true;
+                spawn_message_list_scroll_work(
+                    MessageListScrollWorkCtx {
+                        loading,
+                        history_state: wheel_history_state,
+                        scroll_work_in_flight: Arc::clone(&wheel_scroll_work_in_flight),
+                        messages_for_window: wheel_messages_for_window.clone(),
+                        unread_marker_id: wheel_unread_marker_id.clone(),
+                        unread_count: wheel_unread_count,
+                        search_query_value: wheel_search_query_value.clone(),
+                        virtual_window: wheel_virtual_window,
+                        app_state: wheel_app_state,
+                        client_manager: wheel_client_manager,
+                        chat_data: wheel_chat_data,
+                        top_edge_armed: Arc::clone(&wheel_top_edge_armed),
+                        bottom_edge_armed: Arc::clone(&wheel_bottom_edge_armed),
+                    },
+                    true,
+                );
+            },
+            onscroll: move |_| {
+                let seq = scroll_settled_seq.fetch_add(1, Ordering::Relaxed) + 1;
+                document::eval(&format!("window.__polyMessageScrollSettleSeq = {seq};"));
+                let scroll_work_in_flight = Arc::clone(&scroll_work_in_flight);
+                let scroll_top_edge_armed = Arc::clone(&scroll_top_edge_armed);
+                let scroll_bottom_edge_armed = Arc::clone(&scroll_bottom_edge_armed);
+                let messages_for_window = scroll_messages_for_window.clone();
+                let unread_marker_id = scroll_unread_marker_id.clone();
+                let search_query_value = scroll_search_query_value.clone();
                 spawn(async move {
-                    load_older_messages(app_state, client_manager, chat_data, history_state)
-                        .await;
+                    if !wait_for_message_list_scroll_settle(seq).await {
+                        return;
+                    }
+                    spawn_message_list_scroll_work(
+                        MessageListScrollWorkCtx {
+                            loading,
+                            history_state: scroll_history_state,
+                            scroll_work_in_flight,
+                            messages_for_window,
+                            unread_marker_id,
+                            unread_count: scroll_unread_count,
+                            search_query_value,
+                            virtual_window: scroll_virtual_window,
+                            app_state: scroll_app_state,
+                            client_manager: scroll_client_manager,
+                            chat_data: scroll_chat_data,
+                            top_edge_armed: scroll_top_edge_armed,
+                            bottom_edge_armed: scroll_bottom_edge_armed,
+                        },
+                        false,
+                    );
                 });
             },
-            {render_message_list_content(ctx)}
+            {render_message_list_content(ctx.clone())}
         }
     }
 }
@@ -1915,23 +2384,11 @@ async fn load_older_messages(
     client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
+    // Scroll metrics captured BEFORE loading_before was set to true — this snapshot
+    // has no loading-indicator height contamination.
+    previous_scroll_top: f64,
+    previous_scroll_height: f64,
 ) {
-    let mut eval = document::eval(
-        r#"
-            let el = document.getElementById('message-list-scroll');
-            if (el && el.scrollTop < 100) { dioxus.send(true); }
-            else { dioxus.send(false); }
-        "#,
-    );
-    let Ok(near_top) = eval.recv::<bool>().await else {
-        history_state.write().loading_before = false;
-        return;
-    };
-    if !near_top {
-        history_state.write().loading_before = false;
-        return;
-    }
-
     let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
         history_state.write().loading_before = false;
         return;
@@ -1944,12 +2401,6 @@ async fn load_older_messages(
     else {
         history_state.write().loading_before = false;
         history_state.write().has_more_before = false;
-        return;
-    };
-    let Some((previous_scroll_top, previous_scroll_height)) =
-        read_message_list_scroll_metrics().await
-    else {
-        history_state.write().loading_before = false;
         return;
     };
     let backend = if let Some(server_id) = app_state.read().nav.selected_server.clone() {
@@ -1987,13 +2438,153 @@ async fn load_older_messages(
         return;
     }
 
-    let mut merged_messages = older_messages.clone();
-    merged_messages.extend(chat_data.read().messages.clone());
-    chat_data.write().messages = merged_messages;
+    let history_snapshot = history_state.read().clone();
+    let unread_marker_id = history_snapshot.unread_marker_message_id.clone();
+    let unread_count = history_snapshot.unread_count;
+
+    {
+        let mut chat = chat_data.write();
+        let existing_messages = std::mem::take(&mut chat.messages);
+        let mut merged_messages = older_messages.clone();
+        merged_messages.extend(existing_messages);
+
+        let loaded_older_height = estimate_message_block_height(
+            &merged_messages,
+            0,
+            older_messages.len(),
+            unread_marker_id.as_deref(),
+            unread_count,
+        );
+        let trimmed_bottom_height = if merged_messages.len() > MAX_LOADED_MESSAGES {
+            estimate_message_block_height(
+                &merged_messages,
+                MAX_LOADED_MESSAGES,
+                merged_messages.len(),
+                unread_marker_id.as_deref(),
+                unread_count,
+            )
+        } else {
+            0.0
+        };
+        let dropped_newer_messages = trim_message_window_from_bottom(&mut merged_messages);
+        chat.messages = merged_messages;
+
+        let mut history = history_state.write();
+        history.has_more_after = dropped_newer_messages || history.has_more_after;
+        history.before_spacer_px =
+            subtract_spacer_height(history.before_spacer_px, loaded_older_height);
+        history.after_spacer_px += trimmed_bottom_height;
+    }
+    // Restore scroll using the pre-load snapshot (no loading-indicator height contamination).
+    // setTimeout-based restore fires after Dioxus renders the new DOM (Dioxus renders via
+    // microtasks which complete before setTimeout callbacks fire).
     request_preserve_scroll_position(previous_scroll_top, previous_scroll_height);
     history_state.write().loading_before = false;
     history_state.write().has_more_before =
         u32::try_from(older_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
+}
+
+async fn load_newer_messages(
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+    mut history_state: Signal<ChatHistoryUiState>,
+    // Scroll metrics captured BEFORE loading_after was set to true.
+    previous_scroll_top: f64,
+    previous_scroll_height: f64,
+) {
+    let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
+        history_state.write().loading_after = false;
+        return;
+    };
+    let Some(after_message_id) = chat_data
+        .read()
+        .messages
+        .last()
+        .map(|message| message.id.clone())
+    else {
+        history_state.write().loading_after = false;
+        history_state.write().has_more_after = false;
+        return;
+    };
+    let backend = if let Some(server_id) = app_state.read().nav.selected_server.clone() {
+        client_manager
+            .read()
+            .get_backend_for_server(&server_id)
+            .map(|(_, handle)| handle)
+    } else if let Some(account_id) = app_state.read().nav.active_account_id.clone() {
+        client_manager.read().get_backend(&account_id)
+    } else {
+        None
+    };
+    let Some(backend) = backend else {
+        history_state.write().loading_after = false;
+        return;
+    };
+
+    let newer_messages = {
+        let guard = backend.read().await;
+        guard
+            .get_messages(
+                &active_channel_id,
+                MessageQuery {
+                    after: Some(after_message_id),
+                    limit: Some(OLDER_MESSAGES_PAGE_SIZE),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap_or_default()
+    };
+    if newer_messages.is_empty() {
+        history_state.write().loading_after = false;
+        history_state.write().has_more_after = false;
+        return;
+    }
+
+    let history_snapshot = history_state.read().clone();
+    let unread_marker_id = history_snapshot.unread_marker_message_id.clone();
+    let unread_count = history_snapshot.unread_count;
+
+    {
+        let mut chat = chat_data.write();
+        let existing_len = chat.messages.len();
+        let mut merged_messages = std::mem::take(&mut chat.messages);
+        merged_messages.extend(newer_messages.clone());
+
+        let loaded_newer_height = estimate_message_block_height(
+            &merged_messages,
+            existing_len,
+            merged_messages.len(),
+            unread_marker_id.as_deref(),
+            unread_count,
+        );
+        let overflow = merged_messages.len().saturating_sub(MAX_LOADED_MESSAGES);
+        let trimmed_top_height = if overflow > 0 {
+            estimate_message_block_height(
+                &merged_messages,
+                0,
+                overflow,
+                unread_marker_id.as_deref(),
+                unread_count,
+            )
+        } else {
+            0.0
+        };
+        let dropped_older_messages = trim_message_window_from_top(&mut merged_messages);
+        chat.messages = merged_messages;
+
+        let mut history = history_state.write();
+        history.has_more_before = dropped_older_messages || history.has_more_before;
+        history.before_spacer_px += trimmed_top_height;
+        history.after_spacer_px =
+            subtract_spacer_height(history.after_spacer_px, loaded_newer_height);
+    }
+    // Use the pre-load scroll snapshot (no loading-indicator contamination).
+    request_preserve_scroll_position_from_bottom(previous_scroll_top, previous_scroll_height);
+    history_state.write().loading_after = false;
+    history_state.write().has_more_after =
+        u32::try_from(newer_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
 }
 
 fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
@@ -2012,15 +2603,67 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
         };
     }
 
+    let history_snapshot = ctx.history_state.read().clone();
+    let virtual_window = ctx.virtual_window.read().clone();
+    let render_start = if virtual_window.enabled {
+        virtual_window.start_idx.min(ctx.messages.len())
+    } else {
+        0
+    };
+    let render_end = if virtual_window.enabled {
+        virtual_window.end_idx.min(ctx.messages.len())
+    } else {
+        ctx.messages.len()
+    };
+    let top_spacer_px = history_snapshot.before_spacer_px
+        + if virtual_window.enabled {
+            virtual_window.top_spacer_px
+        } else {
+            0.0
+        };
+    let bottom_spacer_px = history_snapshot.after_spacer_px
+        + if virtual_window.enabled {
+            virtual_window.bottom_spacer_px
+        } else {
+            0.0
+        };
+
     rsx! {
-        if ctx.history_state.read().loading_before {
-            div { class: "message-history-loader", "{t(\"chat-loading-earlier\")}" }
+        if history_snapshot.loading_before {
+            div { class: "message-history-loader-overlay message-history-loader-overlay-top",
+                "{t(\"chat-loading-earlier\")}"
+            }
+        }
+        if history_snapshot.loading_after {
+            div { class: "message-history-loader-overlay message-history-loader-overlay-bottom",
+                "{t(\"chat-loading-earlier\")}"
+            }
+        }
+        if top_spacer_px > 0.5 {
+            div {
+                class: "message-virtual-spacer",
+                style: "height: {top_spacer_px}px;",
+            }
         }
         {render_unread_banner(ctx.clone())}
-        for (idx , msg) in ctx.messages.iter().enumerate() {
+        for idx in render_start..render_end {
             {
-                let prev_msg = if idx > 0 { ctx.messages.get(idx - 1).cloned() } else { None };
-                render_message_row(ctx.clone(), msg.clone(), prev_msg)
+                if let Some(msg) = ctx.messages.get(idx).cloned() {
+                    let prev_msg = if idx > 0 {
+                        ctx.messages.get(idx - 1).cloned()
+                    } else {
+                        None
+                    };
+                    render_message_row(ctx.clone(), msg, prev_msg)
+                } else {
+                    rsx! {}
+                }
+            }
+        }
+        if bottom_spacer_px > 0.5 {
+            div {
+                class: "message-virtual-spacer",
+                style: "height: {bottom_spacer_px}px;",
             }
         }
     }

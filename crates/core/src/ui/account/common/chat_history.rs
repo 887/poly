@@ -8,11 +8,13 @@ use serde_json::to_string as json_string;
 pub const INITIAL_MESSAGE_PAGE_SIZE: u32 = 36;
 /// Older-history page size fetched when scrolling near the top.
 pub const OLDER_MESSAGES_PAGE_SIZE: u32 = 48;
+/// Maximum number of chat messages kept in memory for the active channel window.
+pub const MAX_LOADED_MESSAGES: usize = 96;
 /// Extra context messages to include above the unread boundary on first open.
 pub const UNREAD_CONTEXT_MESSAGE_COUNT: u32 = 12;
 
 /// Local UI state for the active chat history window.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChatHistoryUiState {
     /// Channel currently associated with this history state.
     pub channel_id: Option<String>,
@@ -20,6 +22,14 @@ pub struct ChatHistoryUiState {
     pub has_more_before: bool,
     /// Whether an older-history request is currently in flight.
     pub loading_before: bool,
+    /// Whether newer messages may still be available after the loaded window.
+    pub has_more_after: bool,
+    /// Whether a newer-history request is currently in flight.
+    pub loading_after: bool,
+    /// Estimated spacer height for unloaded older messages above the loaded DOM window.
+    pub before_spacer_px: f64,
+    /// Estimated spacer height for unloaded newer messages below the loaded DOM window.
+    pub after_spacer_px: f64,
     /// Unread message count for the active channel.
     pub unread_count: u32,
     /// Message ID where the unread divider should be rendered.
@@ -153,15 +163,55 @@ pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
 }
 
 /// Preserve the user's viewport after prepending older messages.
+///
+/// Uses `setTimeout(0)` rather than `requestAnimationFrame` so the adjustment fires
+/// **after** Dioxus's own RAF render pass (Dioxus renders via RAF; our RAF would fire
+/// first, seeing stale scrollHeight and computing a wrong position).
+/// Multiple retries with increasing delays guarantee the DOM is fully laid out.
+/// Requires `overflow-anchor: none` on the container so Chrome's automatic scroll
+/// anchoring does not double-correct our adjustment.
+///
+/// A monotonic sequence guard (`window.__polyPosRestoreSeq`) cancels stale retry
+/// callbacks when a newer restore is scheduled (e.g. two loads in quick succession).
 pub fn request_preserve_scroll_position(previous_scroll_top: f64, previous_scroll_height: f64) {
     document::eval(&format!(
         r#"
             const el = document.getElementById('message-list-scroll');
             if (el) {{
-                requestAnimationFrame(() => {{
+                const seq = (window.__polyPosRestoreSeq = (window.__polyPosRestoreSeq || 0) + 1);
+                const apply = () => {{
+                    if (window.__polyPosRestoreSeq !== seq || !el.isConnected) return;
                     const nextTop = (el.scrollHeight - {previous_scroll_height}) + {previous_scroll_top};
                     el.scrollTop = Math.max(0, nextTop);
-                }});
+                }};
+                // setTimeout(0) fires after Dioxus's RAF render so we always see the
+                // final scrollHeight.  Extra retries cover edge cases where layout
+                // is still in progress at the 0ms checkpoint.
+                [0, 32, 90, 240].forEach(d => setTimeout(apply, d));
+            }}
+        "#,
+    ));
+}
+
+/// Preserve the user's viewport after appending newer messages / trimming older ones.
+///
+/// Same timing strategy as `request_preserve_scroll_position`: setTimeout over RAF,
+/// with a sequence guard to cancel stale retries.
+pub fn request_preserve_scroll_position_from_bottom(
+    previous_scroll_top: f64,
+    previous_scroll_height: f64,
+) {
+    document::eval(&format!(
+        r#"
+            const el = document.getElementById('message-list-scroll');
+            if (el) {{
+                const seq = (window.__polyPosRestoreSeq = (window.__polyPosRestoreSeq || 0) + 1);
+                const apply = () => {{
+                    if (window.__polyPosRestoreSeq !== seq || !el.isConnected) return;
+                    const nextTop = el.scrollHeight - ({previous_scroll_height} - {previous_scroll_top});
+                    el.scrollTop = Math.max(0, nextTop);
+                }};
+                [0, 32, 90, 240].forEach(d => setTimeout(apply, d));
             }}
         "#,
     ));

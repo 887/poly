@@ -1160,21 +1160,51 @@ body {
 .message-list {
     flex: 1;
     overflow-y: auto;
+    overflow-anchor: none;
+    /* disable Chrome auto-anchor: prevents double-correction with JS scroll restore */
+    /* Reserve gutter for the scrollbar even when hidden so toggling overflow-y
+       does NOT reflow text and change scrollHeight. */
+    scrollbar-gutter: stable;
+    position: relative;
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.message-history-loader {
+/* Prevent user from scrolling or interacting while a history page is loading.
+   Uses pointer-events instead of overflow-y:hidden so layout stays stable (no
+   scrollbar-gutter reflow that would corrupt scroll-position math). */
+.message-list.loading-history {
+    overflow-y: hidden;
+    pointer-events: none;
+}
+
+.message-history-loader-overlay {
+    position: sticky;
+    z-index: 3;
     align-self: center;
     padding: 6px 12px;
-    margin-bottom: 8px;
     border-radius: 999px;
     background-color: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 600;
+    pointer-events: none;
+}
+
+.message-history-loader-overlay-top {
+    top: 8px;
+}
+
+.message-history-loader-overlay-bottom {
+    bottom: 8px;
+}
+
+.message-virtual-spacer {
+    flex: 0 0 auto;
+    width: 100%;
+    pointer-events: none;
 }
 
 .chat-unread-banner {
