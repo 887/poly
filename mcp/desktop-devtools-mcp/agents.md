@@ -352,6 +352,11 @@ For MCP automation and visual verification:
 **Prefer:** account list, setup wizard text, channel title, settings headings, composer placeholder,
 or other route-specific content that proves the intended screen is actually ready.
 
+Backend behavior update (2026-03-17): when connect/screenshot/JS-eval runs and the real Poly
+app root `#main` is already present, the desktop MCP now auto-hides the transient `#__dx-toast`
+overlay before inspection. This reduces screenshot/snapshot noise, but build counters and real
+app markers remain the source of truth.
+
 See the tool descriptions in `src/main.rs:extension_tools()` for full cross-platform semantics.
 
 ---

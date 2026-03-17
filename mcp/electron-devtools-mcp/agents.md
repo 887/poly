@@ -163,6 +163,11 @@ Agents should instead:
 
 Do not report failure solely because the rebuild toast appeared in a screenshot or DOM snapshot.
 
+Backend behavior update (2026-03-17): when connect/screenshot/JS-eval runs and the real Poly
+app root `#main` is already present, the Electron MCP now auto-hides the transient `#__dx-toast`
+overlay before inspection. This reduces screenshot/snapshot noise, but agents must still use
+build counters and real UI markers as the readiness source of truth.
+
 ## Key Differences from `web-devtools-mcp`
 
 | Feature | `web-devtools-mcp` | `electron-devtools-mcp` |

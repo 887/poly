@@ -509,6 +509,29 @@ impl ElectronCdpBackend {
             .unwrap_or(0)
     }
 
+    /// Hide the transient Dioxus rebuild toast when the real app root is already visible.
+    async fn suppress_rebuild_toast_if_app_ready(&self) {
+        let _ignored = self
+            .cdp_send(
+                "Runtime.evaluate",
+                json!({
+                    "expression": r#"(function(){
+                        var appRoot = document.querySelector('#main');
+                        var toast = document.querySelector('#__dx-toast');
+                        if (appRoot && toast) {
+                            toast.style.display = 'none';
+                            toast.setAttribute('data-poly-hidden-rebuild-toast', 'true');
+                            return JSON.stringify({ hidden: true, reason: 'app-root-present' });
+                        }
+                        return JSON.stringify({ hidden: false, appRoot: !!appRoot, toast: !!toast });
+                    })()"#,
+                    "returnByValue": true,
+                    "awaitPromise": true,
+                }),
+            )
+            .await;
+    }
+
     // ── Background task helpers ─────────────────────────────────────────────
     // These take `self` by value (via `self.clone()` at the call site) so they
     // can be dropped into `tokio::spawn` without lifetime issues.
@@ -963,6 +986,7 @@ impl DevtoolsBackend for ElectronCdpBackend {
         let generation_num = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
         tracing::info!("Electron CDP connected (generation {generation_num}): {ws_url}");
         self.note_successful_connect().await;
+        self.suppress_rebuild_toast_if_app_ready().await;
 
         Ok(format!(
             "Connected to Electron CDP ✓  (session #{generation_num})\n\
@@ -973,6 +997,8 @@ impl DevtoolsBackend for ElectronCdpBackend {
     // ── Core primitives ─────────────────────────────────────────────────────
 
     async fn take_screenshot(&self, params: &ScreenshotParams) -> anyhow::Result<ScreenshotResult> {
+        self.suppress_rebuild_toast_if_app_ready().await;
+
         let format = match params.format.as_str() {
             "jpeg" => "jpeg",
             "webp" => "webp",
@@ -1048,6 +1074,8 @@ impl DevtoolsBackend for ElectronCdpBackend {
     }
 
     async fn js_eval(&self, expression: &str) -> anyhow::Result<String> {
+        self.suppress_rebuild_toast_if_app_ready().await;
+
         let result = self
             .cdp_send(
                 "Runtime.evaluate",

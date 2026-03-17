@@ -350,6 +350,24 @@ impl DesktopHttpBackend {
         })
     }
 
+    /// Hide the transient Dioxus rebuild toast when the real app root is already visible.
+    async fn suppress_rebuild_toast_if_app_ready(&self) {
+        let _ignored = http_eval(
+            &self.client,
+            r#"return (function(){
+                var appRoot = document.querySelector('#main');
+                var toast = document.querySelector('#__dx-toast');
+                if (appRoot && toast) {
+                    toast.style.display = 'none';
+                    toast.setAttribute('data-poly-hidden-rebuild-toast', 'true');
+                    return JSON.stringify({ hidden: true, reason: 'app-root-present' });
+                }
+                return JSON.stringify({ hidden: false, appRoot: !!appRoot, toast: !!toast });
+            })()"#,
+        )
+        .await;
+    }
+
     /// Check if the eval bridge is currently responding.
     async fn is_bridge_alive(&self) -> bool {
         self.client
@@ -590,6 +608,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
                 )
             })?;
         let ok = resp.text().await?;
+        self.suppress_rebuild_toast_if_app_ready().await;
         Ok(format!("Eval-bridge connected ✓  ({BASE}/status → {ok})"))
     }
 
@@ -597,6 +616,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
         &self,
         _params: &ScreenshotParams,
     ) -> anyhow::Result<ScreenshotResult> {
+        self.suppress_rebuild_toast_if_app_ready().await;
         // Desktop Wry only supports PNG — format/quality params are ignored.
         let image_bytes = http_get(&self.client, "/screenshot").await?;
         Ok(ScreenshotResult {
@@ -606,6 +626,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn js_eval(&self, expression: &str) -> anyhow::Result<String> {
+        self.suppress_rebuild_toast_if_app_ready().await;
         http_eval(&self.client, expression).await
     }
 
