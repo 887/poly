@@ -259,10 +259,11 @@ Current Poly implementation for Stoat social surfaces:
 - `get_channel_members(channel_id)` now supports both:
   - server channels via `GET /servers/{server}/members`
   - group DMs via `GET /channels/{target}/members`
+- `remove_group_member(group_id, user_id)` now uses `DELETE /channels/{group}/recipients/{member}` for native Stoat group-member removal.
 
 Still pending in this area:
 
-- add/remove group member mutations
+- add-group-member mutation
 - broader UI polish for distinguishing self-DM / Saved Messages presentation if Poly later adds a dedicated saved-notes concept
 
 ### 4.5 Interaction polish

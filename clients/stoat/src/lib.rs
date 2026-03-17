@@ -838,6 +838,10 @@ impl ClientBackend for StoatClient {
         Ok(())
     }
 
+    async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        self.http.remove_group_member(group_id, user_id).await
+    }
+
     async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
         let user = self.http.fetch_user(user_id).await?;
         Ok(user.into_poly_user().presence)

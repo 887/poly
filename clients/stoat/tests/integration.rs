@@ -15,7 +15,7 @@ use axum::{
     Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use poly_client::{
     AuthCredentials, BackendType, ChannelType, ClientBackend, ClientError, MessageContent,
@@ -91,6 +91,10 @@ impl TestServer {
             .route("/servers/{target}/members", get(fetch_server_members))
             .route("/channels/{target}", get(fetch_channel))
             .route("/channels/{target}/members", get(fetch_group_members))
+            .route(
+                "/channels/{group_id}/recipients/{member_id}",
+                delete(remove_group_member),
+            )
             .route("/channels/{target}/messages", get(fetch_messages))
             .route("/sync/unreads", get(fetch_unreads))
             .with_state(state);
@@ -675,6 +679,29 @@ async fn fetch_group_members(
         ]))),
         _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
     }
+}
+
+async fn remove_group_member(
+    headers: HeaderMap,
+    Path((group_id, member_id)): Path<(String, String)>,
+) -> Result<StatusCode, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    if group_id == "group_1" && member_id == "user_3" {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" }))))
 }
 
 async fn fetch_unreads(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
@@ -1320,6 +1347,24 @@ async fn stoat_get_channel_members_supports_group_chats() {
     assert!(members.iter().any(|member| member.id == "user_1"));
     assert!(members.iter().any(|member| member.id == "user_2"));
     assert!(members.iter().any(|member| member.id == "user_3"));
+}
+
+#[tokio::test]
+async fn stoat_remove_group_member_uses_native_recipients_endpoint() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    client
+        .remove_group_member("group_1", "user_3")
+        .await
+        .expect("remove group member succeeds");
 }
 
 #[tokio::test]

@@ -1,0 +1,13 @@
+{
+  "id": 10,
+  "slug": "stoat-group-member-removal",
+  "title": "Stoat group member removal",
+  "description": "Implement and document native Stoat remove_group_member support via the group recipients endpoint, validate with tests and workspace checks, and confirm poly-web remains healthy as the default verification target.",
+  "status": "todo",
+  "created_at": "2026-03-17T12:52:29.235629159Z",
+  "updated_at": "2026-03-17T12:52:36.057540048Z",
+  "completed_at": null,
+  "memory_count": 1,
+  "finding_count": 0,
+  "checklist": []
+}

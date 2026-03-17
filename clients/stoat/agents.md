@@ -300,6 +300,14 @@ Completed the tenth Phase 3.1 friend-request slice:
 	- accept friend request
 	- reject friend request
 
+Completed the eleventh Phase 3.1 group-mutation slice:
+
+- Native Stoat group management now also supports:
+	- `remove_group_member(group_id, user_id)` via `DELETE /channels/{group}/recipients/{member}`
+- This matches the existing shared `ClientBackend` surface and the existing `crates/core` group-member removal UI path in `dm_user_sidebar.rs`, so Stoat no longer falls back to `NotSupported` for that mutation.
+- Native integration coverage now additionally includes:
+	- successful group-member removal against the Stoat recipients endpoint
+
 ## E2E Test Coverage (2026-03-17)
 
 `crates/plugin-host-tests/tests/client_e2e/stoat.rs` now validates the **real WASM guest auth path** through the plugin host with mocked host HTTP fixtures, including:

@@ -327,6 +327,24 @@ impl StoatHttpClient {
         response.json().await.map_err(Self::network_error)
     }
 
+    /// Remove a member from a Stoat group DM.
+    pub async fn remove_group_member(&self, group_id: &str, member_id: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::DELETE,
+                &format!("/channels/{group_id}/recipients/{member_id}"),
+            )?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        Ok(())
+    }
+
     /// Fetch a Stoat user by ID.
     pub async fn fetch_user(&self, user_id: &str) -> ClientResult<StoatUser> {
         let response = self
