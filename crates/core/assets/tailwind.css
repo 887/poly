@@ -7863,8 +7863,6 @@ select {
     text-align: center;
     color: var(--text-tertiary);
 }
-
-
 /* Poly — Context Menu, Drag-over, Server Settings, Server Overview, Diagnostics Settings
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
    ===================================================================== */
