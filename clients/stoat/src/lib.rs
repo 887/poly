@@ -842,6 +842,18 @@ impl ClientBackend for StoatClient {
         self.http.remove_group_member(group_id, user_id).await
     }
 
+    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        self.http.add_group_member(group_id, user_id).await
+    }
+
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        StoatClient::open_direct_message_channel(self, user_id).await
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        StoatClient::open_saved_messages_channel(self).await
+    }
+
     async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
         let user = self.http.fetch_user(user_id).await?;
         Ok(user.into_poly_user().presence)

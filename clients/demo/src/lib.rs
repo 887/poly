@@ -222,8 +222,31 @@ impl ClientBackend for DemoClient {
         Ok(())
     }
 
+    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
         Ok(data::demo_dm_channels())
+    }
+
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        data::demo_dm_channels()
+            .into_iter()
+            .find(|dm| dm.user.id == user_id)
+            .ok_or_else(|| ClientError::NotFound(format!("DM user {user_id}")))
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        let session = self.session.clone().unwrap_or_else(data::demo_session);
+        Ok(DmChannel {
+            id: "dm-demo-saved-self".to_string(),
+            user: session.user,
+            last_message: None,
+            unread_count: 0,
+            backend: BackendType::Demo,
+            account_id: data::DEMO_ACCOUNT_ID.to_string(),
+        })
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
@@ -566,6 +589,10 @@ impl ClientBackend for DemoClient2 {
         Ok(())
     }
 
+    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
         // A subset of DMs from a different perspective
         let mut dms: Vec<DmChannel> = data::demo_dm_channels()
@@ -612,6 +639,26 @@ impl ClientBackend for DemoClient2 {
         });
 
         Ok(dms)
+    }
+
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        self.get_dm_channels()
+            .await?
+            .into_iter()
+            .find(|dm| dm.user.id == user_id)
+            .ok_or_else(|| ClientError::NotFound(format!("DM user {user_id}")))
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        let session = self.session.clone().unwrap_or_else(data::demo2_session);
+        Ok(DmChannel {
+            id: "dm-demo2-saved-self".to_string(),
+            user: session.user,
+            last_message: None,
+            unread_count: 0,
+            backend: BackendType::Demo,
+            account_id: data::DEMO2_ACCOUNT_ID.to_string(),
+        })
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {

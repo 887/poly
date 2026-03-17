@@ -50,6 +50,71 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
                 }))
                 .unwrap(),
             }),
+        )
+        .with_mock_http_response(
+            "GET",
+            "https://api.stoat.chat/users/user_2",
+            Ok(MockHttpResponse {
+                status: 200,
+                headers: vec![("content-type".to_string(), "application/json".to_string())],
+                body: serde_json::to_vec(&serde_json::json!({
+                    "_id": "user_2",
+                    "username": "otterpal",
+                    "display_name": "Otter Pal",
+                    "online": true,
+                    "status": { "presence": "Idle" }
+                }))
+                .unwrap(),
+            }),
+        )
+        .with_mock_http_response(
+            "GET",
+            "https://api.stoat.chat/users/user_2/dm",
+            Ok(MockHttpResponse {
+                status: 200,
+                headers: vec![("content-type".to_string(), "application/json".to_string())],
+                body: serde_json::to_vec(&serde_json::json!({
+                    "channel_type": "DirectMessage",
+                    "_id": "dm_1",
+                    "active": true,
+                    "recipients": ["user_1", "user_2"],
+                    "last_message_id": "msg_dm_1"
+                }))
+                .unwrap(),
+            }),
+        )
+        .with_mock_http_response(
+            "GET",
+            "https://api.stoat.chat/users/user_1/dm",
+            Ok(MockHttpResponse {
+                status: 200,
+                headers: vec![("content-type".to_string(), "application/json".to_string())],
+                body: serde_json::to_vec(&serde_json::json!({
+                    "channel_type": "SavedMessages",
+                    "_id": "saved_1",
+                    "user": "user_1",
+                    "last_message_id": "msg_saved_1"
+                }))
+                .unwrap(),
+            }),
+        )
+        .with_mock_http_response(
+            "PUT",
+            "https://api.stoat.chat/channels/group_1/recipients/user_4",
+            Ok(MockHttpResponse {
+                status: 204,
+                headers: vec![],
+                body: vec![],
+            }),
+        )
+        .with_mock_http_response(
+            "DELETE",
+            "https://api.stoat.chat/channels/group_1/recipients/user_3",
+            Ok(MockHttpResponse {
+                status: 204,
+                headers: vec![],
+                body: vec![],
+            }),
         );
 
     poly_plugin_loader_tests::load_plugin_with_host_state("stoat", "poly_stoat.wasm", host_state)
@@ -157,4 +222,56 @@ async fn stoat_logout() {
         .await
         .expect("mocked token auth succeeds");
     harness::logout_succeeds(&mut backend).await;
+}
+
+#[tokio::test]
+async fn stoat_open_direct_message_channel_uses_real_guest_path() {
+    let mut backend = load_stoat_with_auth_mocks().await;
+    backend
+        .authenticate(poly_client::AuthCredentials::Token(
+            "test-session-token".to_string(),
+        ))
+        .await
+        .expect("mocked token auth succeeds");
+
+    let dm = harness::open_direct_message_channel(&backend, "user_2").await;
+    assert_eq!(dm.id, "dm_1");
+    assert_eq!(dm.user.id, "user_2");
+    assert_eq!(dm.user.display_name, "Otter Pal");
+}
+
+#[tokio::test]
+async fn stoat_open_saved_messages_channel_uses_real_guest_path() {
+    let mut backend = load_stoat_with_auth_mocks().await;
+    backend
+        .authenticate(poly_client::AuthCredentials::Token(
+            "test-session-token".to_string(),
+        ))
+        .await
+        .expect("mocked token auth succeeds");
+
+    let dm = harness::open_saved_messages_channel(&backend).await;
+    assert_eq!(dm.id, "saved_1");
+    assert_eq!(dm.user.id, "user_1");
+    assert_eq!(dm.user.display_name, "Stoaty McStoat");
+}
+
+#[tokio::test]
+async fn stoat_group_member_mutations_use_real_guest_path() {
+    let mut backend = load_stoat_with_auth_mocks().await;
+    backend
+        .authenticate(poly_client::AuthCredentials::Token(
+            "test-session-token".to_string(),
+        ))
+        .await
+        .expect("mocked token auth succeeds");
+
+    backend
+        .add_group_member("group_1", "user_4")
+        .await
+        .expect("guest add_group_member succeeds");
+    backend
+        .remove_group_member("group_1", "user_3")
+        .await
+        .expect("guest remove_group_member succeeds");
 }

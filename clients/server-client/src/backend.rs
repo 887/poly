@@ -519,6 +519,13 @@ impl ClientBackend for PolyServerBackend {
         Ok(groups)
     }
 
+    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        self.http
+            .add_group_member(group_id, user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
     // ── DMs ──────────────────────────────────────────────────────────────────
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {

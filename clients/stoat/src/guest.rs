@@ -1,6 +1,6 @@
 //! WASM Component Model guest implementation for the Stoat messenger plugin.
 //!
-//! Stub implementation — all methods return "not yet implemented" errors.
+//! Partial real implementation using host-mediated HTTP requests.
 //! DECISION(D21): WASM Plugin Backends.
 
 #![allow(unsafe_code)]
@@ -16,6 +16,8 @@ const STOAT_SESSION_TOKEN_HEADER: &str = "x-session-token";
 #[derive(Debug, Clone)]
 struct StoredSession {
     session_id: String,
+    token: String,
+    user_id: String,
 }
 
 thread_local! {
@@ -52,6 +54,17 @@ struct StoatGuestUser {
     online: bool,
     #[serde(default)]
     status: Option<StoatGuestStatus>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoatGuestChannel {
+    channel_type: String,
+    #[serde(rename = "_id")]
+    id: String,
+    #[serde(default)]
+    user: Option<String>,
+    #[serde(default)]
+    recipients: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,6 +141,8 @@ fn to_session(
     STATE.with(|state| {
         state.replace(Some(StoredSession {
             session_id: session_id.clone(),
+            token: token.clone(),
+            user_id: user.id.clone(),
         }));
     });
 
@@ -182,6 +197,137 @@ fn fetch_self(base_url: &str, token: &str) -> Result<StoatGuestUser, wit::Client
     }
 
     parse_json(&response)
+}
+
+fn current_session() -> Result<StoredSession, wit::ClientError> {
+    STATE.with(|state| {
+        state
+            .borrow()
+            .clone()
+            .ok_or_else(|| wit::ClientError::AuthFailed("Stoat guest is not authenticated".to_string()))
+    })
+}
+
+fn stoat_auth_headers(token: &str) -> Vec<(String, String)> {
+    vec![(STOAT_SESSION_TOKEN_HEADER.to_string(), token.to_string())]
+}
+
+fn fetch_user(base_url: &str, token: &str, user_id: &str) -> Result<StoatGuestUser, wit::ClientError> {
+    let response = host_http_request(
+        "GET",
+        &format!("{base_url}/users/{user_id}"),
+        stoat_auth_headers(token),
+        None,
+    )?;
+
+    if !matches!(response.status, 200..=299) {
+        return Err(match response.status {
+            401 => wit::ClientError::AuthFailed("Stoat token rejected".to_string()),
+            404 => wit::ClientError::NotFound(format!("Stoat user {user_id} not found")),
+            status => wit::ClientError::Network(format!("Stoat /users/{user_id} returned HTTP {status}")),
+        });
+    }
+
+    parse_json(&response)
+}
+
+fn fetch_open_dm_channel(
+    base_url: &str,
+    token: &str,
+    user_id: &str,
+) -> Result<StoatGuestChannel, wit::ClientError> {
+    let response = host_http_request(
+        "GET",
+        &format!("{base_url}/users/{user_id}/dm"),
+        stoat_auth_headers(token),
+        None,
+    )?;
+
+    if !matches!(response.status, 200..=299) {
+        return Err(match response.status {
+            401 => wit::ClientError::AuthFailed("Stoat token rejected".to_string()),
+            404 => wit::ClientError::NotFound(format!("Stoat DM target {user_id} not found")),
+            status => wit::ClientError::Network(format!("Stoat /users/{user_id}/dm returned HTTP {status}")),
+        });
+    }
+
+    parse_json(&response)
+}
+
+fn mutate_group_member(
+    method: &str,
+    group_id: &str,
+    user_id: &str,
+) -> Result<(), wit::ClientError> {
+    let session = current_session()?;
+    let response = host_http_request(
+        method,
+        &format!(
+            "{OFFICIAL_STOAT_BASE_URL}/channels/{group_id}/recipients/{user_id}"
+        ),
+        stoat_auth_headers(&session.token),
+        None,
+    )?;
+
+    if !matches!(response.status, 200..=299) {
+        return Err(match response.status {
+            401 => wit::ClientError::AuthFailed("Stoat token rejected".to_string()),
+            404 => wit::ClientError::NotFound(format!(
+                "Stoat group/member path {group_id}/{user_id} not found"
+            )),
+            status => wit::ClientError::Network(format!(
+                "Stoat {method} /channels/{group_id}/recipients/{user_id} returned HTTP {status}"
+            )),
+        });
+    }
+
+    Ok(())
+}
+
+fn to_wit_user(user: &StoatGuestUser) -> wit::User {
+    wit::User {
+        id: user.id.clone(),
+        display_name: user
+            .display_name
+            .clone()
+            .unwrap_or_else(|| user.username.clone()),
+        avatar_url: None,
+        presence: map_presence(user),
+        backend: wit::BackendType::Stoat,
+    }
+}
+
+fn open_dm_like_channel(user_id: &str) -> Result<wit::DmChannel, wit::ClientError> {
+    let session = current_session()?;
+    let channel = fetch_open_dm_channel(OFFICIAL_STOAT_BASE_URL, &session.token, user_id)?;
+
+    let dm_user = if channel.channel_type == "SavedMessages" {
+        fetch_self(OFFICIAL_STOAT_BASE_URL, &session.token)?
+    } else {
+        let other_user_id = channel
+            .recipients
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .find(|candidate| candidate != &session.user_id)
+            .or(channel.user.clone())
+            .ok_or_else(|| {
+                wit::ClientError::Internal(format!(
+                    "Stoat DM channel {} is missing the other participant",
+                    channel.id
+                ))
+            })?;
+        fetch_user(OFFICIAL_STOAT_BASE_URL, &session.token, &other_user_id)?
+    };
+
+    Ok(wit::DmChannel {
+        id: channel.id,
+        user: to_wit_user(&dm_user),
+        last_message: None,
+        unread_count: 0,
+        backend: wit::BackendType::Stoat,
+        account_id: session.user_id,
+    })
 }
 
 const FTL_EN: &str = "plugin-stoat-title = Stoat\n";
@@ -365,12 +511,25 @@ impl Guest for StoatPlugin {
         Ok(vec![])
     }
 
-    fn remove_group_member(_group_id: String, _user_id: String) -> Result<(), wit::ClientError> {
-        Ok(())
+    fn remove_group_member(group_id: String, user_id: String) -> Result<(), wit::ClientError> {
+        mutate_group_member("DELETE", &group_id, &user_id)
+    }
+
+    fn add_group_member(group_id: String, user_id: String) -> Result<(), wit::ClientError> {
+        mutate_group_member("PUT", &group_id, &user_id)
     }
 
     fn get_dm_channels() -> Result<Vec<wit::DmChannel>, wit::ClientError> {
         Ok(vec![])
+    }
+
+    fn open_direct_message_channel(user_id: String) -> Result<wit::DmChannel, wit::ClientError> {
+        open_dm_like_channel(&user_id)
+    }
+
+    fn open_saved_messages_channel() -> Result<wit::DmChannel, wit::ClientError> {
+        let session = current_session()?;
+        open_dm_like_channel(&session.user_id)
     }
 
     fn get_notifications() -> Result<Vec<wit::Notification>, wit::ClientError> {

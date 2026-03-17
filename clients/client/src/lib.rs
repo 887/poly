@@ -206,10 +206,34 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("remove_group_member".to_string()))
     }
 
+    /// Add a user to a group DM.
+    ///
+    /// Backends that do not support adding members should return the
+    /// default `Err(ClientError::NotSupported(...))` provided below.
+    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        let _ = (group_id, user_id);
+        Err(ClientError::NotSupported("add_group_member".to_string()))
+    }
+
     // --- Direct Messages ---
 
     /// Get all DM channels.
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>>;
+
+    /// Open or create a DM channel with the target user.
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        let _ = user_id;
+        Err(ClientError::NotSupported(
+            "open_direct_message_channel".to_string(),
+        ))
+    }
+
+    /// Open the authenticated user's Saved Messages / self-DM channel.
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported(
+            "open_saved_messages_channel".to_string(),
+        ))
+    }
 
     // --- Notifications ---
 

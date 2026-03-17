@@ -233,6 +233,15 @@ async fn demo_remove_group_member() {
         .expect("remove_group_member should succeed in demo");
 }
 
+#[tokio::test]
+async fn demo_add_group_member() {
+    let backend = load_demo().await;
+    backend
+        .add_group_member("group-1", "user-9")
+        .await
+        .expect("add_group_member should succeed in demo");
+}
+
 // ─── DM Channels ───────────────────────────────────────────────────
 
 #[tokio::test]
@@ -245,6 +254,26 @@ async fn demo_get_dm_channels() {
         assert!(!dm.id.is_empty());
         assert!(!dm.user.id.is_empty());
     }
+}
+
+#[tokio::test]
+async fn demo_open_direct_message_channel() {
+    let backend = load_demo().await;
+    let dms = harness::get_dm_channels(&backend).await;
+    let expected = dms.first().expect("demo dms present");
+
+    let dm = harness::open_direct_message_channel(&backend, &expected.user.id).await;
+    assert_eq!(dm.id, expected.id);
+    assert_eq!(dm.user.id, expected.user.id);
+}
+
+#[tokio::test]
+async fn demo_open_saved_messages_channel() {
+    let backend = load_demo().await;
+    let saved = harness::open_saved_messages_channel(&backend).await;
+    assert_eq!(saved.id, "dm-demo-saved-self");
+    assert_eq!(saved.account_id, "demo-cat");
+    assert_eq!(saved.user.display_name, "Cat (demo)");
 }
 
 #[tokio::test]

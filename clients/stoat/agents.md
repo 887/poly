@@ -303,21 +303,41 @@ Completed the tenth Phase 3.1 friend-request slice:
 Completed the eleventh Phase 3.1 group-mutation slice:
 
 - Native Stoat group management now also supports:
+	- `add_group_member(group_id, user_id)` via `PUT /channels/{group}/recipients/{member}`
 	- `remove_group_member(group_id, user_id)` via `DELETE /channels/{group}/recipients/{member}`
 - This matches the existing shared `ClientBackend` surface and the existing `crates/core` group-member removal UI path in `dm_user_sidebar.rs`, so Stoat no longer falls back to `NotSupported` for that mutation.
 - Native integration coverage now additionally includes:
+	- successful group-member add against the Stoat recipients endpoint
 	- successful group-member removal against the Stoat recipients endpoint
+
+Completed the twelfth Phase 3.1 shared-DM / guest-parity slice:
+
+- The shared `poly-client::ClientBackend` + WIT contract now also exposes:
+	- `open_direct_message_channel(user_id)`
+	- `open_saved_messages_channel()`
+	- `add_group_member(group_id, user_id)`
+- Native Stoat now adopts that shared surface directly instead of keeping DM open/save only as native helper methods.
+- The Stoat WASM guest (`src/guest.rs`) now has real host-HTTP implementations for:
+	- `open_direct_message_channel(user_id)`
+	- `open_saved_messages_channel()`
+	- `add_group_member(group_id, user_id)`
+	- `remove_group_member(group_id, user_id)`
+- `crates/plugin-host-tests/tests/client_e2e/stoat.rs` now validates those guest-path flows with mocked `host-api.http-request` fixtures.
+- Full client-plugin rebuild note: `poly-demo`, `poly-stoat`, `poly-matrix`, `poly-discord`, and `poly-teams` rebuilt successfully after the WIT expansion, but `poly-server-client` component build is currently blocked by cross-target OpenSSL discovery in `openssl-sys` for `wasm32-wasip2`.
 
 ## E2E Test Coverage (2026-03-17)
 
-`crates/plugin-host-tests/tests/client_e2e/stoat.rs` now validates the **real WASM guest auth path** through the plugin host with mocked host HTTP fixtures, including:
+`crates/plugin-host-tests/tests/client_e2e/stoat.rs` now validates the **real WASM guest path** through the plugin host with mocked host HTTP fixtures, including:
 
 - backend identity (type=Stoat, name="Stoat")
 - email/password guest auth through `host-api.http-request`
 - token guest auth through `host-api.http-request`
 - logout + `is_authenticated()` state transitions
+- open/create DM through `GET /users/{target}/dm`
+- Saved Messages open through Stoat's self-targeted DM behavior
+- add/remove group member through `PUT`/`DELETE /channels/{group}/recipients/{member}`
 - guard coverage that the guest no longer returns the old stub-auth marker path
-- existing empty/stub coverage for still-unimplemented non-auth guest methods
+- remaining empty/stub coverage for still-unimplemented guest methods outside this slice
 
 ```sh
 cargo test -p poly-plugin-loader-tests --features test-stoat --test client_e2e -- --nocapture

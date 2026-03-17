@@ -663,6 +663,17 @@ impl ClientBackend for PluginBackend {
         convert_result_unit(result)
     }
 
+    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_add_group_member(&mut *store, group_id, user_id)
+            .await;
+        convert_result_unit(result)
+    }
+
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
         refuel(&self.store).await;
         let mut store = self.store.lock().await;
@@ -673,6 +684,36 @@ impl ClientBackend for PluginBackend {
             .await;
         match result {
             Ok(Ok(dms)) => Ok(dms.into_iter().map(bridge::from_wit_dm_channel).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_open_direct_message_channel(&mut *store, user_id)
+            .await;
+        match result {
+            Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_open_saved_messages_channel(&mut *store)
+            .await;
+        match result {
+            Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }

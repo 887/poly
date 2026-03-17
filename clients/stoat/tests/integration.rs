@@ -15,7 +15,7 @@ use axum::{
     Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
 };
 use poly_client::{
     AuthCredentials, BackendType, ChannelType, ClientBackend, ClientError, MessageContent,
@@ -93,7 +93,7 @@ impl TestServer {
             .route("/channels/{target}/members", get(fetch_group_members))
             .route(
                 "/channels/{group_id}/recipients/{member_id}",
-                delete(remove_group_member),
+                put(add_group_member).delete(remove_group_member),
             )
             .route("/channels/{target}/messages", get(fetch_messages))
             .route("/sync/unreads", get(fetch_unreads))
@@ -698,6 +698,29 @@ async fn remove_group_member(
     }
 
     if group_id == "group_1" && member_id == "user_3" {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" }))))
+}
+
+async fn add_group_member(
+    headers: HeaderMap,
+    Path((group_id, member_id)): Path<(String, String)>,
+) -> Result<StatusCode, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    if group_id == "group_1" && member_id == "user_4" {
         return Ok(StatusCode::NO_CONTENT);
     }
 
@@ -1365,6 +1388,24 @@ async fn stoat_remove_group_member_uses_native_recipients_endpoint() {
         .remove_group_member("group_1", "user_3")
         .await
         .expect("remove group member succeeds");
+}
+
+#[tokio::test]
+async fn stoat_add_group_member_uses_native_recipients_endpoint() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    client
+        .add_group_member("group_1", "user_4")
+        .await
+        .expect("add group member succeeds");
 }
 
 #[tokio::test]

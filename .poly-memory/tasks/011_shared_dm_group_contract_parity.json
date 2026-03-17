@@ -1,0 +1,13 @@
+{
+  "id": 11,
+  "slug": "shared-dm-group-contract-parity",
+  "title": "Shared DM/group contract parity",
+  "description": "Extend the shared client/WIT/plugin-host contract with add-group-member and DM open/save methods, implement native Stoat adoption plus Stoat guest parity, add demo and Stoat plugin E2E coverage, and record any remaining WASI build blockers.",
+  "status": "todo",
+  "created_at": "2026-03-17T13:11:21.369044989Z",
+  "updated_at": "2026-03-17T13:11:38.371891836Z",
+  "completed_at": null,
+  "memory_count": 1,
+  "finding_count": 0,
+  "checklist": []
+}

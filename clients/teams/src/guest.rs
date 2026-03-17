@@ -120,8 +120,24 @@ impl Guest for TeamsPlugin {
         Ok(())
     }
 
+    fn add_group_member(_group_id: String, _user_id: String) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
     fn get_dm_channels() -> Result<Vec<wit::DmChannel>, wit::ClientError> {
         Ok(vec![])
+    }
+
+    fn open_direct_message_channel(_user_id: String) -> Result<wit::DmChannel, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "Teams WASM open DM not yet implemented".to_string(),
+        ))
+    }
+
+    fn open_saved_messages_channel() -> Result<wit::DmChannel, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "Teams WASM saved messages not yet implemented".to_string(),
+        ))
     }
 
     fn get_notifications() -> Result<Vec<wit::Notification>, wit::ClientError> {

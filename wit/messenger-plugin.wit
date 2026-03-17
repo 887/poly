@@ -557,8 +557,17 @@ interface messenger-client {
     /// Remove a user from a group DM.
     remove-group-member: func(group-id: string, user-id: string) -> result<_, client-error>;
 
+    /// Add a user to a group DM.
+    add-group-member: func(group-id: string, user-id: string) -> result<_, client-error>;
+
     /// Get all DM channels.
     get-dm-channels: func() -> result<list<dm-channel>, client-error>;
+
+    /// Open or create a DM channel with the target user.
+    open-direct-message-channel: func(user-id: string) -> result<dm-channel, client-error>;
+
+    /// Open the authenticated user's Saved Messages / self-DM channel.
+    open-saved-messages-channel: func() -> result<dm-channel, client-error>;
 
     /// Get the user's notifications.
     get-notifications: func() -> result<list<notification>, client-error>;

@@ -154,7 +154,11 @@ These mirror the `ClientBackend` trait exactly:
 | `get-friends` | `result<list<user>, client-error>` | `ClientBackend::get_friends()` |
 | `get-channel-members` | `result<list<user>, client-error>` | `ClientBackend::get_channel_members()` |
 | `get-groups` | `result<list<group>, client-error>` | `ClientBackend::get_groups()` |
+| `add-group-member` | `result<_, client-error>` | `ClientBackend::add_group_member()` |
+| `remove-group-member` | `result<_, client-error>` | `ClientBackend::remove_group_member()` |
 | `get-dm-channels` | `result<list<dm-channel>, client-error>` | `ClientBackend::get_dm_channels()` |
+| `open-direct-message-channel` | `result<dm-channel, client-error>` | `ClientBackend::open_direct_message_channel()` |
+| `open-saved-messages-channel` | `result<dm-channel, client-error>` | `ClientBackend::open_saved_messages_channel()` |
 | `get-notifications` | `result<list<notification>, client-error>` | `ClientBackend::get_notifications()` |
 | `get-voice-participants` | `result<list<voice-participant>, client-error>` | `ClientBackend::get_voice_participants()` |
 | `get-presence` | `result<presence-status, client-error>` | `ClientBackend::get_presence()` |

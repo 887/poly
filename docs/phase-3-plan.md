@@ -108,9 +108,12 @@
 	- 2026-03-17 later update: Stoat `SavedMessages` is now surfaced through the DM list as a self-DM entry using the authenticated user's own profile, and native helper methods now support `GET /users/{target}/dm` for open/create-DM flows.
 	- Group DMs now hydrate member rosters through `GET /channels/{target}/members` and last-message previews through `GET /channels/{target}/messages`.
 	- `get_channel_members(channel_id)` now supports group chats in addition to server channels.
+	- 2026-03-17 latest update: native `add_group_member(group_id, user_id)` now uses `PUT /channels/{group}/recipients/{member}`.
 	- 2026-03-17 later-later update: native `remove_group_member(group_id, user_id)` now uses `DELETE /channels/{group}/recipients/{member}` so the existing shared trait + core UI group-member removal flow works for Stoat.
-	- Added mock-backed integration coverage for DM list retrieval, group list retrieval, group-member lookup, and group-member removal.
-	- This item remains open until add-group-member support is implemented and/or the shared `ClientBackend` surface grows first-class DM create/open support.
+	- The shared `ClientBackend`/WIT surface now also exposes `open_direct_message_channel(user_id)` and `open_saved_messages_channel()`; native Stoat adopts both directly instead of keeping them native-only helpers.
+	- The Stoat WASM guest now has real mocked-E2E coverage for DM open/saved and add/remove group-member mutations through `poly-plugin-loader-tests`.
+	- Added mock-backed integration coverage for DM list retrieval, group list retrieval, group-member lookup, group-member add, and group-member removal.
+	- This item remains open until richer guest-side DM enrichment (for example unread/last-message parity in open-DM flows) and broader UI adoption of the new shared methods are implemented.
 - [ ] **3.1.2.11** Self-hosted instance support (configurable base URL, API version detection)
 
 ### 3.1.3 Real-Time Events

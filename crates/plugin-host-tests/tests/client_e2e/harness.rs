@@ -9,7 +9,7 @@
 //! - **Identity** — `backend_type()`, `backend_name()`
 //! - **Lifecycle** — `authenticate()`, `is_authenticated()`, `logout()`
 //! - **Data Retrieval** — `get_servers()`, `get_channels()`, `get_messages()`, etc.
-//! - **Mutations** — `send_message()`, `set_presence()`, `remove_group_member()`
+//! - **Mutations** — `send_message()`, `set_presence()`, `remove_group_member()`, `add_group_member()`
 //! - **Events** — `event_stream()` returns a valid stream
 
 use poly_client::{
@@ -311,6 +311,25 @@ pub async fn get_dm_channels(backend: &PluginBackend) -> Vec<poly_client::DmChan
         .get_dm_channels()
         .await
         .expect("get_dm_channels() should not error")
+}
+
+/// Open or create a DM channel with the target user.
+pub async fn open_direct_message_channel(
+    backend: &PluginBackend,
+    user_id: &str,
+) -> poly_client::DmChannel {
+    backend
+        .open_direct_message_channel(user_id)
+        .await
+        .expect("open_direct_message_channel() should not error")
+}
+
+/// Open the Saved Messages / self-DM channel.
+pub async fn open_saved_messages_channel(backend: &PluginBackend) -> poly_client::DmChannel {
+    backend
+        .open_saved_messages_channel()
+        .await
+        .expect("open_saved_messages_channel() should not error")
 }
 
 // ─── Data Retrieval: Notifications ─────────────────────────────────

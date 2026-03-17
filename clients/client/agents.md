@@ -64,10 +64,17 @@ The `ClientBackend` trait covers:
 - **Messages**: send/receive, paginated history, edit, delete
 - **Users**: profiles, friends, presence, channel members
 - **Groups**: multi-user DMs/group chats
-- **DMs**: direct message channels
+- **DMs**: direct message channels plus first-class DM open/create and Saved Messages open hooks
 - **Notifications**: cross-account notification stream
 - **Events**: real-time event stream for all state changes
 - **Backend info**: `backend_type()` → `BackendType` enum, `backend_name()` → display string
+
+Recent shared-surface additions (2026-03-17):
+- `add_group_member(group_id, user_id)`
+- `open_direct_message_channel(user_id)`
+- `open_saved_messages_channel()`
+
+These must stay mirrored in `wit/messenger-plugin.wit`, `crates/plugin-host/src/registry.rs`, and every client guest implementation.
 
 ## Type Mapping Strategy
 

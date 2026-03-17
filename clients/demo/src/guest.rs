@@ -516,11 +516,37 @@ impl MessengerClientGuest for DemoPlugin {
         Ok(())
     }
 
+    fn add_group_member(_group_id: String, _user_id: String) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
     fn get_dm_channels() -> Result<Vec<wit::DmChannel>, wit::ClientError> {
         Ok(crate::data::demo_dm_channels()
             .into_iter()
             .map(to_wit_dm_channel)
             .collect())
+    }
+
+    fn open_direct_message_channel(user_id: String) -> Result<wit::DmChannel, wit::ClientError> {
+        convert_result(
+            crate::data::demo_dm_channels()
+                .into_iter()
+                .find(|dm| dm.user.id == user_id)
+                .ok_or_else(|| pc::ClientError::NotFound(format!("DM user {user_id}"))),
+            to_wit_dm_channel,
+        )
+    }
+
+    fn open_saved_messages_channel() -> Result<wit::DmChannel, wit::ClientError> {
+        let session = crate::data::demo_session();
+        Ok(to_wit_dm_channel(pc::DmChannel {
+            id: "dm-demo-saved-self".to_string(),
+            user: session.user,
+            last_message: None,
+            unread_count: 0,
+            backend: pc::BackendType::Demo,
+            account_id: crate::data::DEMO_ACCOUNT_ID.to_string(),
+        }))
     }
 
     fn get_notifications() -> Result<Vec<wit::Notification>, wit::ClientError> {

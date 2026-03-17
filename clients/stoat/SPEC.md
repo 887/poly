@@ -259,11 +259,17 @@ Current Poly implementation for Stoat social surfaces:
 - `get_channel_members(channel_id)` now supports both:
   - server channels via `GET /servers/{server}/members`
   - group DMs via `GET /channels/{target}/members`
+- `add_group_member(group_id, user_id)` now uses `PUT /channels/{group}/recipients/{member}` for native Stoat group-member adds.
 - `remove_group_member(group_id, user_id)` now uses `DELETE /channels/{group}/recipients/{member}` for native Stoat group-member removal.
+
+Current guest/plugin-path parity in this area:
+
+- the Stoat WASM guest now implements `open_direct_message_channel(user_id)` and `open_saved_messages_channel()` via host-mediated `GET /users/{target}/dm`
+- the Stoat WASM guest now implements `add_group_member(group_id, user_id)` and `remove_group_member(group_id, user_id)` via host-mediated `PUT`/`DELETE /channels/{group}/recipients/{member}`
+- guest DM mapping in this slice is intentionally lightweight: `last_message = None` and `unread_count = 0` until the broader DM-list/message enrichment guest work lands
 
 Still pending in this area:
 
-- add-group-member mutation
 - broader UI polish for distinguishing self-DM / Saved Messages presentation if Poly later adds a dedicated saved-notes concept
 
 ### 4.5 Interaction polish
