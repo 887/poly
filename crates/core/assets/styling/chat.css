@@ -71,6 +71,16 @@
     pointer-events: none;
 }
 
+.message-list-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+
+.message-list-content-swapping {
+    visibility: hidden;
+}
+
 .message-history-loader-overlay {
     position: sticky;
     z-index: 3;
@@ -104,6 +114,12 @@
 
 .message-window-slot-empty {
     display: none;
+}
+
+.message-history-spacer {
+    flex: 0 0 auto;
+    width: 100%;
+    pointer-events: none;
 }
 
 .chat-unread-banner {

@@ -35,26 +35,31 @@ use poly_client::{
     PresenceStatus,
 };
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 const MESSAGE_VIRTUALIZATION_THRESHOLD: usize = 10_000;
 const MESSAGE_VIRTUALIZATION_OVERSCAN_PX: f64 = 1200.0;
 const MESSAGE_VIRTUALIZATION_MIN_RENDERED: usize = 96;
-const MESSAGE_HISTORY_EDGE_THRESHOLD_PX: f64 = 140.0;
+/// Treat history paging as an exact-edge action: only trigger when the scroll
+/// position has actually reached the top/bottom boundary (with a tiny epsilon
+/// for floating-point/browser rounding noise).
+const MESSAGE_HISTORY_EDGE_THRESHOLD_PX: f64 = 1.0;
 const MESSAGE_HISTORY_EDGE_REARM_PX: f64 = 280.0;
 /// Settle delay for `onscroll` events (trackpad inertia, scrollbar drag, text-selection autoscroll).
 const MESSAGE_SCROLL_SETTLE_DELAY_MS: u64 = 180;
-/// Shorter settle delay used exclusively for physical mousewheel ticks.
-/// Because `onscroll` animation frames are suppressed during active wheeling
-/// (see `wheel_active` below), only real wheel events bump this counter, so a
-/// 60 ms window is long enough to detect the end of a fast spin without being
-/// noticeable to the user.
-const WHEEL_SETTLE_DELAY_MS: u64 = 60;
-/// How long after the last wheel tick before the "active wheeling" suppression
-/// on `onscroll` is lifted.  Must be >= WHEEL_SETTLE_DELAY_MS.
-const WHEEL_ACTIVE_CLEAR_DELAY_MS: &str = "350";
+/// Unloaded-history spacer guards are only sentinels that trigger paging when
+/// they become visible; they must stay modest so the scrollbar thumb does not
+/// collapse into a tiny sliver after a single 50-message page swap.
+const MESSAGE_HISTORY_GUARD_MIN_PX: f64 = 140.0;
+const MESSAGE_HISTORY_GUARD_MAX_PX: f64 = 320.0;
+const MESSAGE_HISTORY_GUARD_ROW_MULTIPLIER: f64 = 2.5;
+/// When the user re-enters the bottom sentinel, fetch multiple newer pages in a
+/// single async burst and swap the final 200-message working set only once.
+/// This avoids visibly "attaching" rows page-by-page and clears the bottom
+/// spacer once the real latest message has been reached.
+const MAX_CHAINED_NEWER_HISTORY_PAGES: usize = 20;
 const ESTIMATED_FULL_MESSAGE_HEIGHT: f64 = 92.0;
 const ESTIMATED_GROUPED_MESSAGE_HEIGHT: f64 = 34.0;
 const ESTIMATED_DATE_SEPARATOR_HEIGHT: f64 = 28.0;
@@ -1332,7 +1337,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             chat_snapshot.current_channel.as_ref(),
             &chat_snapshot.dm_channels,
         );
-        history_state.set(ChatHistoryUiState {
+        let mut next_history = ChatHistoryUiState {
             channel_id: Some(active_channel_id),
             has_more_before: !messages.is_empty(),
             loading_before: false,
@@ -1342,7 +1347,9 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             after_spacer_px: 0.0,
             unread_count,
             unread_marker_message_id: unread_marker_message_id(&messages, unread_count),
-        });
+        };
+        recompute_history_spacers(&mut next_history, &messages);
+        history_state.set(next_history);
     });
 }
 
@@ -1572,6 +1579,57 @@ fn estimate_message_block_height(
     total
 }
 
+fn estimate_history_boundary_placeholder_height(
+    messages: &[Message],
+    unread_marker_id: Option<&str>,
+    unread_count: u32,
+    from_start: bool,
+) -> f64 {
+    if messages.is_empty() {
+        return ESTIMATED_FULL_MESSAGE_HEIGHT
+            .clamp(MESSAGE_HISTORY_GUARD_MIN_PX, MESSAGE_HISTORY_GUARD_MAX_PX);
+    }
+
+    let page_len = usize::try_from(OLDER_MESSAGES_PAGE_SIZE).unwrap_or(50);
+    let sample_len = page_len.min(messages.len()).max(1);
+    let (sample_start, sample_end) = if from_start {
+        (0, sample_len)
+    } else {
+        (messages.len().saturating_sub(sample_len), messages.len())
+    };
+    let sample_height = estimate_message_block_height(
+        messages,
+        sample_start,
+        sample_end,
+        unread_marker_id,
+        unread_count,
+    );
+    let average_row_height = sample_height / sample_len as f64;
+
+    (average_row_height * MESSAGE_HISTORY_GUARD_ROW_MULTIPLIER)
+        .clamp(MESSAGE_HISTORY_GUARD_MIN_PX, MESSAGE_HISTORY_GUARD_MAX_PX)
+}
+
+fn recompute_history_spacers(history: &mut ChatHistoryUiState, messages: &[Message]) {
+    let unread_marker_id = history.unread_marker_message_id.as_deref();
+    let unread_count = history.unread_count;
+    history.before_spacer_px = if history.has_more_before {
+        estimate_history_boundary_placeholder_height(messages, unread_marker_id, unread_count, true)
+    } else {
+        0.0
+    };
+    history.after_spacer_px = if history.has_more_after {
+        estimate_history_boundary_placeholder_height(
+            messages,
+            unread_marker_id,
+            unread_count,
+            false,
+        )
+    } else {
+        0.0
+    };
+}
+
 fn compute_message_virtual_window(
     messages: &[Message],
     unread_marker_id: Option<&str>,
@@ -1709,31 +1767,26 @@ struct MessageListScrollWorkCtx {
     bottom_edge_armed: Arc<AtomicBool>,
 }
 
-async fn wait_for_message_list_scroll_settle(seq: u64) -> bool {
-    let mut eval = document::eval(&format!(
-        r#"
-            const wanted = {seq};
-            setTimeout(() => {{
-                dioxus.send((window.__polyMessageScrollSettleSeq ?? 0) === wanted);
-            }}, {MESSAGE_SCROLL_SETTLE_DELAY_MS});
-        "#,
-    ));
-
-    eval.recv::<bool>().await.unwrap_or(false)
+#[derive(Clone, Default)]
+struct MessageListScrollSnapshot {
+    messages_for_window: Vec<Message>,
+    unread_marker_id: Option<String>,
+    unread_count: u32,
+    search_query_value: String,
 }
 
-/// Like [`wait_for_message_list_scroll_settle`] but uses the **wheel-only**
-/// JS sequence variable and the shorter [`WHEEL_SETTLE_DELAY_MS`].  Because
-/// `onscroll` animation frames are suppressed while wheeling, incrementing
-/// `window.__polyWheelSettleSeq` is done exclusively by `onwheel`, so this
-/// settle fires within `WHEEL_SETTLE_DELAY_MS` of the last physical wheel tick.
-async fn wait_for_wheel_settle(seq: u64) -> bool {
+fn clone_message_list_scroll_snapshot(
+    snapshot_ref: &Arc<Mutex<MessageListScrollSnapshot>>,
+) -> Option<MessageListScrollSnapshot> {
+    snapshot_ref.lock().ok().map(|snapshot| snapshot.clone())
+}
+
+async fn wait_for_message_list_scroll_settle_delay() -> bool {
     let mut eval = document::eval(&format!(
         r#"
-            const wanted = {seq};
             setTimeout(() => {{
-                dioxus.send((window.__polyWheelSettleSeq ?? 0) === wanted);
-            }}, {WHEEL_SETTLE_DELAY_MS});
+                dioxus.send(true);
+            }}, {MESSAGE_SCROLL_SETTLE_DELAY_MS});
         "#,
     ));
 
@@ -1760,29 +1813,45 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repea
                 metrics,
             );
         }
+        let history_snapshot = ctx.history_state.read().clone();
         let viewport_bottom = metrics.scroll_top + metrics.client_height;
-
-        let near_top = metrics.scroll_top <= MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
-        let near_bottom =
+        let top_spacer_boundary = history_snapshot.before_spacer_px.max(0.0);
+        let bottom_spacer_boundary =
+            (metrics.scroll_height - history_snapshot.after_spacer_px).max(0.0);
+        let at_absolute_top = metrics.scroll_top <= MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+        let at_absolute_bottom =
             viewport_bottom >= metrics.scroll_height - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
 
+        let near_top = history_snapshot.has_more_before
+            && metrics.scroll_top <= top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+        let near_bottom = history_snapshot.has_more_after
+            && viewport_bottom >= bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+
         if !near_top {
-            ctx.top_edge_armed.store(
-                metrics.scroll_top > MESSAGE_HISTORY_EDGE_REARM_PX,
-                Ordering::Relaxed,
-            );
+            let top_rearm_threshold = if history_snapshot.before_spacer_px > 0.0 {
+                top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX
+            } else {
+                MESSAGE_HISTORY_EDGE_REARM_PX
+            };
+            ctx.top_edge_armed
+                .store(metrics.scroll_top > top_rearm_threshold, Ordering::Relaxed);
         }
         if !near_bottom {
-            ctx.bottom_edge_armed.store(
-                viewport_bottom < metrics.scroll_height - MESSAGE_HISTORY_EDGE_REARM_PX,
-                Ordering::Relaxed,
-            );
+            let bottom_rearm_threshold = if history_snapshot.after_spacer_px > 0.0 {
+                bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX
+            } else {
+                metrics.scroll_height - MESSAGE_HISTORY_EDGE_REARM_PX
+            };
+            ctx.bottom_edge_armed
+                .store(viewport_bottom < bottom_rearm_threshold, Ordering::Relaxed);
         }
 
         if near_top
-            && ctx.history_state.read().has_more_before
-            && !ctx.history_state.read().loading_before
-            && (allow_repeat_edge || ctx.top_edge_armed.swap(false, Ordering::Relaxed))
+            && history_snapshot.has_more_before
+            && !history_snapshot.loading_before
+            && (allow_repeat_edge
+                || at_absolute_top
+                || ctx.top_edge_armed.swap(false, Ordering::Relaxed))
         {
             ctx.top_edge_armed.store(false, Ordering::Relaxed);
             ctx.history_state.write().loading_before = true;
@@ -1797,9 +1866,11 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repea
             .await;
         }
         if near_bottom
-            && ctx.history_state.read().has_more_after
-            && !ctx.history_state.read().loading_after
-            && (allow_repeat_edge || ctx.bottom_edge_armed.swap(false, Ordering::Relaxed))
+            && history_snapshot.has_more_after
+            && !history_snapshot.loading_after
+            && (allow_repeat_edge
+                || at_absolute_bottom
+                || ctx.bottom_edge_armed.swap(false, Ordering::Relaxed))
         {
             ctx.bottom_edge_armed.store(false, Ordering::Relaxed);
             ctx.history_state.write().loading_after = true;
@@ -2269,19 +2340,13 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let history_state = ctx.history_state;
     let scroll_work_in_flight = use_hook(|| Arc::new(AtomicBool::new(false)));
     let settled_scroll_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
+    let scroll_settle_waiting = use_hook(|| Arc::new(AtomicBool::new(false)));
     let top_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
     let bottom_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
-    // Separate sequence counter used only by `onwheel`.  Because smooth-scroll
-    // animation frames (fired by the browser after each wheel tick) are
-    // suppressed via `wheel_active`, only real wheel ticks bump this counter.
-    let wheel_settle_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
-    // Set to `true` by `onwheel` and cleared ~350ms after the last tick.
-    // While true, `onscroll` returns immediately, preventing up to 60 WASM
-    // futures/evals per second from being spawned for animation frames.
-    let wheel_active = use_hook(|| Arc::new(AtomicBool::new(false)));
-    // Monotonic counter used to deduplicate the clear-timer spawn so only the
-    // spawn for the latest wheel tick actually clears the flag.
-    let wheel_timer_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
+    // Latest render snapshot used by scroll handlers so we do not clone the
+    // current message window on every scroll frame. The heavy clone happens
+    // only once after the settle delay actually elapses.
+    let scroll_snapshot = use_hook(|| Arc::new(Mutex::new(MessageListScrollSnapshot::default())));
     let virtualize_messages =
         should_virtualize_messages(ctx.messages.len(), &ctx.search_query_value);
     // Lock the message list scroll during a history load so the user cannot drag
@@ -2293,14 +2358,17 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let unread_count = ctx.history_state.read().unread_count;
     let unread_marker_id = ctx.unread_marker_id.clone();
     let messages_for_window = ctx.messages.clone();
-    let search_query_value = ctx.search_query_value.clone();
     let mut virtual_window = ctx.virtual_window;
 
-    let wheel_scroll_work_in_flight = Arc::clone(&scroll_work_in_flight);
-    let scroll_messages_for_window = ctx.messages.clone();
-    let scroll_unread_marker_id = ctx.unread_marker_id.clone();
-    let scroll_unread_count = ctx.history_state.read().unread_count;
-    let scroll_search_query_value = search_query_value.clone();
+    if let Ok(mut snapshot) = scroll_snapshot.lock() {
+        *snapshot = MessageListScrollSnapshot {
+            messages_for_window: ctx.messages.clone(),
+            unread_marker_id: ctx.unread_marker_id.clone(),
+            unread_count,
+            search_query_value: ctx.search_query_value.clone(),
+        };
+    }
+
     let scroll_virtual_window = virtual_window;
     let scroll_history_state = history_state;
     let scroll_app_state = app_state;
@@ -2309,24 +2377,8 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let scroll_top_edge_armed = Arc::clone(&top_edge_armed);
     let scroll_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
     let scroll_settled_seq = Arc::clone(&settled_scroll_seq);
-    // Checked at the top of `onscroll`: if the wheel is active, return immediately.
-    let scroll_wheel_active_flag = Arc::clone(&wheel_active);
-
-    let wheel_messages_for_window = ctx.messages.clone();
-    let wheel_unread_marker_id = ctx.unread_marker_id.clone();
-    let wheel_unread_count = ctx.history_state.read().unread_count;
-    let wheel_search_query_value = search_query_value.clone();
-    let wheel_virtual_window = virtual_window;
-    let wheel_history_state = history_state;
-    let wheel_app_state = app_state;
-    let wheel_client_manager = client_manager;
-    let wheel_chat_data = chat_data;
-    let wheel_top_edge_armed = Arc::clone(&top_edge_armed);
-    let wheel_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
-    // Uses the wheel-only counter, NOT the shared scroll counter.
-    let wheel_settled_seq = Arc::clone(&wheel_settle_seq);
-    let wheel_active_flag = Arc::clone(&wheel_active);
-    let wheel_timer_seq_flag = Arc::clone(&wheel_timer_seq);
+    let scroll_settle_waiting = Arc::clone(&scroll_settle_waiting);
+    let scroll_snapshot_ref = Arc::clone(&scroll_snapshot);
 
     use_effect(move || {
         if !virtualize_messages {
@@ -2355,97 +2407,42 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
         div {
             class: if is_loading_history { "message-list loading-history" } else { "message-list" },
             id: "message-list-scroll",
-            onwheel: move |evt| {
-                let delta_y = evt.delta().strip_units().y;
-                if delta_y == 0.0 {
-                    return;
-                }
-                // --- Suppress onscroll during this wheel gesture ---
-                // The browser generates smooth-scroll animation frames (onscroll
-                // at ~60fps) after every wheel tick.  By marking the wheel as
-                // active, `onscroll` returns immediately for those frames instead
-                // of spawning WASM futures and extending the effective debounce.
-                wheel_active_flag.store(true, Ordering::Relaxed);
-                // Schedule a clear of the flag ~350ms after the last wheel tick.
-                // Each new tick bumps the timer sequence so stale tasks do nothing.
-                let timer_seq = wheel_timer_seq_flag.fetch_add(1, Ordering::Relaxed) + 1;
-                {
-                    let clear_flag = Arc::clone(&wheel_active_flag);
-                    let clear_seq_ref = Arc::clone(&wheel_timer_seq_flag);
-                    spawn(async move {
-                        let mut eval = document::eval(
-                            &format!(
-                                "setTimeout(() => dioxus.send(true), {WHEEL_ACTIVE_CLEAR_DELAY_MS});",
-                            ),
-                        );
-                        let _ = eval.recv::<bool>().await;
-                        if clear_seq_ref.load(Ordering::Relaxed) == timer_seq { // --- Wheel-specific short settle (60 ms) ---
-                            clear_flag.store(false, Ordering::Relaxed);
-                        }
-                    });
-                }
-                let seq = wheel_settled_seq.fetch_add(1, Ordering::Relaxed) + 1;
-                document::eval(&format!("window.__polyWheelSettleSeq = {seq};"));
-                let scroll_work_in_flight = Arc::clone(&wheel_scroll_work_in_flight);
-                let top_edge_armed = Arc::clone(&wheel_top_edge_armed);
-                let bottom_edge_armed = Arc::clone(&wheel_bottom_edge_armed);
-                let messages_for_window = wheel_messages_for_window.clone();
-                let unread_marker_id = wheel_unread_marker_id.clone();
-                let search_query_value = wheel_search_query_value.clone();
-                spawn(async move {
-                    if !wait_for_wheel_settle(seq).await {
-                        return;
-                    }
-                    spawn_message_list_scroll_work(
-                        MessageListScrollWorkCtx {
-                            loading,
-                            history_state: wheel_history_state,
-                            scroll_work_in_flight,
-                            messages_for_window,
-                            unread_marker_id,
-                            unread_count: wheel_unread_count,
-                            search_query_value,
-                            virtual_window: wheel_virtual_window,
-                            app_state: wheel_app_state,
-                            client_manager: wheel_client_manager,
-                            chat_data: wheel_chat_data,
-                            top_edge_armed,
-                            bottom_edge_armed,
-                        },
-                        true,
-                    );
-                });
-            },
             onscroll: move |_| {
-                // The browser fires onscroll for every smooth-scroll animation
-                // frame (up to 60/s) after a wheel tick.  While the wheel is
-                // active those frames are handled by the onwheel settle path;
-                // processing them here would spawn ~60 WASM futures/second and
-                // artificially extend the scroll debounce window, causing lag.
-                if scroll_wheel_active_flag.load(Ordering::Relaxed) {
+                let _seq = scroll_settled_seq.fetch_add(1, Ordering::Relaxed) + 1;
+                if scroll_settle_waiting.swap(true, Ordering::Relaxed) {
                     return;
                 }
-                let seq = scroll_settled_seq.fetch_add(1, Ordering::Relaxed) + 1;
-                document::eval(&format!("window.__polyMessageScrollSettleSeq = {seq};"));
                 let scroll_work_in_flight = Arc::clone(&scroll_work_in_flight);
                 let scroll_top_edge_armed = Arc::clone(&scroll_top_edge_armed);
                 let scroll_bottom_edge_armed = Arc::clone(&scroll_bottom_edge_armed);
-                let messages_for_window = scroll_messages_for_window.clone();
-                let unread_marker_id = scroll_unread_marker_id.clone();
-                let search_query_value = scroll_search_query_value.clone();
+                let scroll_settled_seq = Arc::clone(&scroll_settled_seq);
+                let scroll_settle_waiting = Arc::clone(&scroll_settle_waiting);
+                let snapshot_ref = Arc::clone(&scroll_snapshot_ref);
                 spawn(async move {
-                    if !wait_for_message_list_scroll_settle(seq).await {
-                        return;
+                    loop {
+                        let wanted_seq = scroll_settled_seq.load(Ordering::Relaxed);
+                        if !wait_for_message_list_scroll_settle_delay().await {
+                            scroll_settle_waiting.store(false, Ordering::Relaxed);
+                            return;
+                        }
+                        if scroll_settled_seq.load(Ordering::Relaxed) == wanted_seq {
+                            break;
+                        }
                     }
+
+                    scroll_settle_waiting.store(false, Ordering::Relaxed);
+                    let Some(snapshot) = clone_message_list_scroll_snapshot(&snapshot_ref) else {
+                        return;
+                    };
                     spawn_message_list_scroll_work(
                         MessageListScrollWorkCtx {
                             loading,
                             history_state: scroll_history_state,
                             scroll_work_in_flight,
-                            messages_for_window,
-                            unread_marker_id,
-                            unread_count: scroll_unread_count,
-                            search_query_value,
+                            messages_for_window: snapshot.messages_for_window,
+                            unread_marker_id: snapshot.unread_marker_id,
+                            unread_count: snapshot.unread_count,
+                            search_query_value: snapshot.search_query_value,
                             virtual_window: scroll_virtual_window,
                             app_state: scroll_app_state,
                             client_manager: scroll_client_manager,
@@ -2457,7 +2454,27 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
                     );
                 });
             },
-            {render_message_list_content(ctx.clone())}
+            {render_message_list_loading_overlays(ctx.clone())}
+            div { class: if is_loading_history { "message-list-content message-list-content-swapping" } else { "message-list-content" },
+                {render_message_list_content(ctx.clone())}
+            }
+        }
+    }
+}
+
+fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
+    let history_snapshot = ctx.history_state.read().clone();
+
+    rsx! {
+        if history_snapshot.loading_before {
+            div { class: "message-history-loader-overlay message-history-loader-overlay-top",
+                "{t(\"chat-loading-earlier\")}"
+            }
+        }
+        if history_snapshot.loading_after {
+            div { class: "message-history-loader-overlay message-history-loader-overlay-bottom",
+                "{t(\"chat-loading-earlier\")}"
+            }
         }
     }
 }
@@ -2517,8 +2534,10 @@ async fn load_older_messages(
             .unwrap_or_default()
     };
     if older_messages.is_empty() {
-        history_state.write().loading_before = false;
-        history_state.write().has_more_before = false;
+        let mut history = history_state.write();
+        history.loading_before = false;
+        history.has_more_before = false;
+        history.before_spacer_px = 0.0;
         return;
     }
 
@@ -2538,18 +2557,21 @@ async fn load_older_messages(
         )
     };
 
+    let has_more_before =
+        u32::try_from(older_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
+
     {
         let mut chat = chat_data.write();
         let existing_messages = std::mem::take(&mut chat.messages);
         let mut merged_messages = older_messages.clone();
         merged_messages.extend(existing_messages);
         let dropped_newer_messages = trim_message_window_from_bottom(&mut merged_messages);
-        chat.messages = merged_messages;
+        chat.messages = merged_messages.clone();
 
         let mut history = history_state.write();
+        history.has_more_before = has_more_before;
         history.has_more_after = dropped_newer_messages || history.has_more_after;
-        history.before_spacer_px = 0.0;
-        history.after_spacer_px = 0.0;
+        recompute_history_spacers(&mut history, &merged_messages);
     }
     // Prefer exact DOM-anchor restoration so the same visible message stays pinned to the
     // same pixel. Fall back to estimated delta math if no anchor row was available.
@@ -2559,8 +2581,6 @@ async fn load_older_messages(
         request_preserve_scroll_position(previous_scroll_top, prepended_height_px);
     }
     history_state.write().loading_before = false;
-    history_state.write().has_more_before =
-        u32::try_from(older_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
 }
 
 async fn load_newer_messages(
@@ -2602,23 +2622,53 @@ async fn load_newer_messages(
     };
     let anchor_snapshot = read_message_list_anchor().await;
 
-    let newer_messages = {
+    let (newer_messages, reached_latest_message) = {
         let guard = backend.read().await;
-        guard
-            .get_messages(
-                &active_channel_id,
-                MessageQuery {
-                    after: Some(after_message_id),
-                    limit: Some(OLDER_MESSAGES_PAGE_SIZE),
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap_or_default()
+        let mut collected_messages = Vec::new();
+        let mut next_after_message_id = after_message_id;
+        let mut reached_latest_message = false;
+
+        for _ in 0..MAX_CHAINED_NEWER_HISTORY_PAGES {
+            let batch = guard
+                .get_messages(
+                    &active_channel_id,
+                    MessageQuery {
+                        after: Some(next_after_message_id.clone()),
+                        limit: Some(OLDER_MESSAGES_PAGE_SIZE),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap_or_default();
+
+            if batch.is_empty() {
+                reached_latest_message = true;
+                break;
+            }
+
+            let batch_len = batch.len();
+            let last_batch_message_id = batch.last().map(|message| message.id.clone());
+            collected_messages.extend(batch);
+
+            if u32::try_from(batch_len).unwrap_or(0) < OLDER_MESSAGES_PAGE_SIZE {
+                reached_latest_message = true;
+                break;
+            }
+
+            let Some(last_batch_message_id) = last_batch_message_id else {
+                reached_latest_message = true;
+                break;
+            };
+            next_after_message_id = last_batch_message_id;
+        }
+
+        (collected_messages, reached_latest_message)
     };
     if newer_messages.is_empty() {
-        history_state.write().loading_after = false;
-        history_state.write().has_more_after = false;
+        let mut history = history_state.write();
+        history.loading_after = false;
+        history.has_more_after = !reached_latest_message;
+        history.after_spacer_px = 0.0;
         return;
     }
 
@@ -2640,17 +2690,19 @@ async fn load_newer_messages(
         )
     };
 
+    let has_more_after = !reached_latest_message;
+
     {
         let mut chat = chat_data.write();
         let mut merged_messages = std::mem::take(&mut chat.messages);
         merged_messages.extend(newer_messages.clone());
         let dropped_older_messages = trim_message_window_from_top(&mut merged_messages);
-        chat.messages = merged_messages;
+        chat.messages = merged_messages.clone();
 
         let mut history = history_state.write();
         history.has_more_before = dropped_older_messages || history.has_more_before;
-        history.before_spacer_px = 0.0;
-        history.after_spacer_px = 0.0;
+        history.has_more_after = has_more_after;
+        recompute_history_spacers(&mut history, &merged_messages);
     }
     // Prefer exact DOM-anchor restoration so the same visible message stays pinned to the
     // same pixel. Fall back to estimated delta math if no anchor row was available.
@@ -2660,8 +2712,6 @@ async fn load_newer_messages(
         request_preserve_scroll_position_from_bottom(previous_scroll_top, trimmed_top_height_px);
     }
     history_state.write().loading_after = false;
-    history_state.write().has_more_after =
-        u32::try_from(newer_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
 }
 
 fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
@@ -2692,16 +2742,26 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
         ctx.messages.len()
     };
     let history_snapshot = ctx.history_state.read().clone();
+    let top_history_spacer_px = history_snapshot.before_spacer_px;
+    let bottom_history_spacer_px = history_snapshot.after_spacer_px;
+    let top_virtual_spacer_px = if virtual_window.enabled {
+        virtual_window.top_spacer_px
+    } else {
+        0.0
+    };
+    let bottom_virtual_spacer_px = if virtual_window.enabled {
+        virtual_window.bottom_spacer_px
+    } else {
+        0.0
+    };
+    let total_top_spacer_px = top_history_spacer_px + top_virtual_spacer_px;
+    let total_bottom_spacer_px = bottom_history_spacer_px + bottom_virtual_spacer_px;
 
     rsx! {
-        if history_snapshot.loading_before {
-            div { class: "message-history-loader-overlay message-history-loader-overlay-top",
-                "{t(\"chat-loading-earlier\")}"
-            }
-        }
-        if history_snapshot.loading_after {
-            div { class: "message-history-loader-overlay message-history-loader-overlay-bottom",
-                "{t(\"chat-loading-earlier\")}"
+        if total_top_spacer_px > 0.0 {
+            div {
+                class: "message-history-spacer message-history-spacer-top",
+                style: "height: {total_top_spacer_px}px;",
             }
         }
         {render_unread_banner(ctx.clone())}
@@ -2736,6 +2796,12 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
                         }
                     }
                 }
+            }
+        }
+        if total_bottom_spacer_px > 0.0 {
+            div {
+                class: "message-history-spacer message-history-spacer-bottom",
+                style: "height: {total_bottom_spacer_px}px;",
             }
         }
     }
