@@ -3968,8 +3968,6 @@ body {
     text-overflow: ellipsis;
     overflow: hidden;
 }
-
-
 /* Poly — Setup Wizard, Buttons, Forms / Custom Select, Reply UI
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
    ===================================================================== */
