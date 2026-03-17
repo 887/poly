@@ -36,7 +36,7 @@ use poly_client::{
 };
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, Ordering},
 };
 
 const MESSAGE_VIRTUALIZATION_THRESHOLD: usize = 10_000;
@@ -47,8 +47,6 @@ const MESSAGE_VIRTUALIZATION_MIN_RENDERED: usize = 96;
 /// for floating-point/browser rounding noise).
 const MESSAGE_HISTORY_EDGE_THRESHOLD_PX: f64 = 1.0;
 const MESSAGE_HISTORY_EDGE_REARM_PX: f64 = 280.0;
-/// Settle delay for `onscroll` events (trackpad inertia, scrollbar drag, text-selection autoscroll).
-const MESSAGE_SCROLL_SETTLE_DELAY_MS: u64 = 180;
 /// Unloaded-history spacer guards are only sentinels that trigger paging when
 /// they become visible; they must stay modest so the scrollbar thumb does not
 /// collapse into a tiny sliver after a single 50-message page swap.
@@ -1755,10 +1753,8 @@ struct MessageListScrollWorkCtx {
     loading: bool,
     history_state: Signal<ChatHistoryUiState>,
     scroll_work_in_flight: Arc<AtomicBool>,
-    messages_for_window: Vec<Message>,
-    unread_marker_id: Option<String>,
-    unread_count: u32,
-    search_query_value: String,
+    scroll_work_requested: Arc<AtomicBool>,
+    snapshot_ref: Arc<Mutex<MessageListScrollSnapshot>>,
     virtual_window: Signal<MessageVirtualWindowState>,
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
@@ -1781,110 +1777,129 @@ fn clone_message_list_scroll_snapshot(
     snapshot_ref.lock().ok().map(|snapshot| snapshot.clone())
 }
 
-async fn wait_for_message_list_scroll_settle_delay() -> bool {
-    let mut eval = document::eval(&format!(
+async fn wait_for_next_animation_frame() -> bool {
+    let mut eval = document::eval(
         r#"
-            setTimeout(() => {{
+            requestAnimationFrame(() => {
                 dioxus.send(true);
-            }}, {MESSAGE_SCROLL_SETTLE_DELAY_MS});
+            });
         "#,
-    ));
+    );
 
     eval.recv::<bool>().await.unwrap_or(false)
 }
 
 fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repeat_edge: bool) {
-    if ctx.loading || ctx.scroll_work_in_flight.load(Ordering::Relaxed) {
+    ctx.scroll_work_requested.store(true, Ordering::Relaxed);
+    if ctx.loading || ctx.scroll_work_in_flight.swap(true, Ordering::Acquire) {
         return;
     }
 
     spawn(async move {
-        ctx.scroll_work_in_flight.store(true, Ordering::Relaxed);
-        let Some(metrics) = read_message_list_viewport_metrics().await else {
-            ctx.scroll_work_in_flight.store(false, Ordering::Relaxed);
-            return;
-        };
-        if should_virtualize_messages(ctx.messages_for_window.len(), &ctx.search_query_value) {
-            set_message_virtual_window(
-                ctx.virtual_window,
-                &ctx.messages_for_window,
-                ctx.unread_marker_id.as_deref(),
-                ctx.unread_count,
-                metrics,
-            );
-        }
-        let history_snapshot = ctx.history_state.read().clone();
-        let viewport_bottom = metrics.scroll_top + metrics.client_height;
-        let top_spacer_boundary = history_snapshot.before_spacer_px.max(0.0);
-        let bottom_spacer_boundary =
-            (metrics.scroll_height - history_snapshot.after_spacer_px).max(0.0);
-        let at_absolute_top = metrics.scroll_top <= MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
-        let at_absolute_bottom =
-            viewport_bottom >= metrics.scroll_height - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+        loop {
+            ctx.scroll_work_requested.store(false, Ordering::Relaxed);
 
-        let near_top = history_snapshot.has_more_before
-            && metrics.scroll_top <= top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
-        let near_bottom = history_snapshot.has_more_after
-            && viewport_bottom >= bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
-
-        if !near_top {
-            let top_rearm_threshold = if history_snapshot.before_spacer_px > 0.0 {
-                top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX
-            } else {
-                MESSAGE_HISTORY_EDGE_REARM_PX
+            let Some(snapshot) = clone_message_list_scroll_snapshot(&ctx.snapshot_ref) else {
+                break;
             };
-            ctx.top_edge_armed
-                .store(metrics.scroll_top > top_rearm_threshold, Ordering::Relaxed);
-        }
-        if !near_bottom {
-            let bottom_rearm_threshold = if history_snapshot.after_spacer_px > 0.0 {
-                bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX
-            } else {
-                metrics.scroll_height - MESSAGE_HISTORY_EDGE_REARM_PX
+            let Some(metrics) = read_message_list_viewport_metrics().await else {
+                break;
             };
-            ctx.bottom_edge_armed
-                .store(viewport_bottom < bottom_rearm_threshold, Ordering::Relaxed);
+
+            if should_virtualize_messages(
+                snapshot.messages_for_window.len(),
+                &snapshot.search_query_value,
+            ) {
+                set_message_virtual_window(
+                    ctx.virtual_window,
+                    &snapshot.messages_for_window,
+                    snapshot.unread_marker_id.as_deref(),
+                    snapshot.unread_count,
+                    metrics,
+                );
+            }
+
+            let history_snapshot = ctx.history_state.read().clone();
+            let viewport_bottom = metrics.scroll_top + metrics.client_height;
+            let top_spacer_boundary = history_snapshot.before_spacer_px.max(0.0);
+            let bottom_spacer_boundary =
+                (metrics.scroll_height - history_snapshot.after_spacer_px).max(0.0);
+            let at_absolute_top = metrics.scroll_top <= MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+            let at_absolute_bottom =
+                viewport_bottom >= metrics.scroll_height - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+
+            let near_top = history_snapshot.has_more_before
+                && metrics.scroll_top <= top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+            let near_bottom = history_snapshot.has_more_after
+                && viewport_bottom >= bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+
+            if !near_top {
+                let top_rearm_threshold = if history_snapshot.before_spacer_px > 0.0 {
+                    top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX
+                } else {
+                    MESSAGE_HISTORY_EDGE_REARM_PX
+                };
+                ctx.top_edge_armed
+                    .store(metrics.scroll_top > top_rearm_threshold, Ordering::Relaxed);
+            }
+            if !near_bottom {
+                let bottom_rearm_threshold = if history_snapshot.after_spacer_px > 0.0 {
+                    bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX
+                } else {
+                    metrics.scroll_height - MESSAGE_HISTORY_EDGE_REARM_PX
+                };
+                ctx.bottom_edge_armed
+                    .store(viewport_bottom < bottom_rearm_threshold, Ordering::Relaxed);
+            }
+
+            if near_top
+                && history_snapshot.has_more_before
+                && !history_snapshot.loading_before
+                && (allow_repeat_edge
+                    || at_absolute_top
+                    || ctx.top_edge_armed.swap(false, Ordering::Relaxed))
+            {
+                ctx.top_edge_armed.store(false, Ordering::Relaxed);
+                ctx.history_state.write().loading_before = true;
+                load_older_messages(
+                    ctx.app_state,
+                    ctx.client_manager,
+                    ctx.chat_data,
+                    ctx.history_state,
+                    metrics.scroll_top,
+                    metrics.scroll_height,
+                )
+                .await;
+            }
+            if near_bottom
+                && history_snapshot.has_more_after
+                && !history_snapshot.loading_after
+                && (allow_repeat_edge
+                    || at_absolute_bottom
+                    || ctx.bottom_edge_armed.swap(false, Ordering::Relaxed))
+            {
+                ctx.bottom_edge_armed.store(false, Ordering::Relaxed);
+                ctx.history_state.write().loading_after = true;
+                load_newer_messages(
+                    ctx.app_state,
+                    ctx.client_manager,
+                    ctx.chat_data,
+                    ctx.history_state,
+                    metrics.scroll_top,
+                    metrics.scroll_height,
+                )
+                .await;
+            }
+
+            if !ctx.scroll_work_requested.load(Ordering::Relaxed) {
+                break;
+            }
         }
 
-        if near_top
-            && history_snapshot.has_more_before
-            && !history_snapshot.loading_before
-            && (allow_repeat_edge
-                || at_absolute_top
-                || ctx.top_edge_armed.swap(false, Ordering::Relaxed))
-        {
-            ctx.top_edge_armed.store(false, Ordering::Relaxed);
-            ctx.history_state.write().loading_before = true;
-            load_older_messages(
-                ctx.app_state,
-                ctx.client_manager,
-                ctx.chat_data,
-                ctx.history_state,
-                metrics.scroll_top,
-                metrics.scroll_height,
-            )
-            .await;
+        ctx.scroll_work_in_flight.store(false, Ordering::Release);
+        if ctx.scroll_work_requested.load(Ordering::Relaxed) {
+            spawn_message_list_scroll_work(ctx, allow_repeat_edge);
         }
-        if near_bottom
-            && history_snapshot.has_more_after
-            && !history_snapshot.loading_after
-            && (allow_repeat_edge
-                || at_absolute_bottom
-                || ctx.bottom_edge_armed.swap(false, Ordering::Relaxed))
-        {
-            ctx.bottom_edge_armed.store(false, Ordering::Relaxed);
-            ctx.history_state.write().loading_after = true;
-            load_newer_messages(
-                ctx.app_state,
-                ctx.client_manager,
-                ctx.chat_data,
-                ctx.history_state,
-                metrics.scroll_top,
-                metrics.scroll_height,
-            )
-            .await;
-        }
-        ctx.scroll_work_in_flight.store(false, Ordering::Relaxed);
     });
 }
 
@@ -2339,8 +2354,8 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let chat_data = ctx.chat_data;
     let history_state = ctx.history_state;
     let scroll_work_in_flight = use_hook(|| Arc::new(AtomicBool::new(false)));
-    let settled_scroll_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
-    let scroll_settle_waiting = use_hook(|| Arc::new(AtomicBool::new(false)));
+    let scroll_work_requested = use_hook(|| Arc::new(AtomicBool::new(false)));
+    let scroll_frame_pending = use_hook(|| Arc::new(AtomicBool::new(false)));
     let top_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
     let bottom_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
     // Latest render snapshot used by scroll handlers so we do not clone the
@@ -2376,8 +2391,8 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let scroll_chat_data = chat_data;
     let scroll_top_edge_armed = Arc::clone(&top_edge_armed);
     let scroll_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
-    let scroll_settled_seq = Arc::clone(&settled_scroll_seq);
-    let scroll_settle_waiting = Arc::clone(&scroll_settle_waiting);
+    let scroll_work_requested = Arc::clone(&scroll_work_requested);
+    let scroll_frame_pending = Arc::clone(&scroll_frame_pending);
     let scroll_snapshot_ref = Arc::clone(&scroll_snapshot);
 
     use_effect(move || {
@@ -2408,41 +2423,31 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
             class: if is_loading_history { "message-list loading-history" } else { "message-list" },
             id: "message-list-scroll",
             onscroll: move |_| {
-                let _seq = scroll_settled_seq.fetch_add(1, Ordering::Relaxed) + 1;
-                if scroll_settle_waiting.swap(true, Ordering::Relaxed) {
+                if scroll_frame_pending.swap(true, Ordering::AcqRel) {
                     return;
                 }
+
+                let scroll_frame_pending = Arc::clone(&scroll_frame_pending);
                 let scroll_work_in_flight = Arc::clone(&scroll_work_in_flight);
+                let scroll_work_requested = Arc::clone(&scroll_work_requested);
+                let scroll_snapshot_ref = Arc::clone(&scroll_snapshot_ref);
                 let scroll_top_edge_armed = Arc::clone(&scroll_top_edge_armed);
                 let scroll_bottom_edge_armed = Arc::clone(&scroll_bottom_edge_armed);
-                let scroll_settled_seq = Arc::clone(&scroll_settled_seq);
-                let scroll_settle_waiting = Arc::clone(&scroll_settle_waiting);
-                let snapshot_ref = Arc::clone(&scroll_snapshot_ref);
+
                 spawn(async move {
-                    loop {
-                        let wanted_seq = scroll_settled_seq.load(Ordering::Relaxed);
-                        if !wait_for_message_list_scroll_settle_delay().await {
-                            scroll_settle_waiting.store(false, Ordering::Relaxed);
-                            return;
-                        }
-                        if scroll_settled_seq.load(Ordering::Relaxed) == wanted_seq {
-                            break;
-                        }
+                    if !wait_for_next_animation_frame().await {
+                        scroll_frame_pending.store(false, Ordering::Release);
+                        return;
                     }
 
-                    scroll_settle_waiting.store(false, Ordering::Relaxed);
-                    let Some(snapshot) = clone_message_list_scroll_snapshot(&snapshot_ref) else {
-                        return;
-                    };
+                    scroll_frame_pending.store(false, Ordering::Release);
                     spawn_message_list_scroll_work(
                         MessageListScrollWorkCtx {
                             loading,
                             history_state: scroll_history_state,
                             scroll_work_in_flight,
-                            messages_for_window: snapshot.messages_for_window,
-                            unread_marker_id: snapshot.unread_marker_id,
-                            unread_count: snapshot.unread_count,
-                            search_query_value: snapshot.search_query_value,
+                            scroll_work_requested,
+                            snapshot_ref: scroll_snapshot_ref,
                             virtual_window: scroll_virtual_window,
                             app_state: scroll_app_state,
                             client_manager: scroll_client_manager,
