@@ -44,7 +44,17 @@ const MESSAGE_VIRTUALIZATION_OVERSCAN_PX: f64 = 1200.0;
 const MESSAGE_VIRTUALIZATION_MIN_RENDERED: usize = 96;
 const MESSAGE_HISTORY_EDGE_THRESHOLD_PX: f64 = 140.0;
 const MESSAGE_HISTORY_EDGE_REARM_PX: f64 = 280.0;
+/// Settle delay for `onscroll` events (trackpad inertia, scrollbar drag, text-selection autoscroll).
 const MESSAGE_SCROLL_SETTLE_DELAY_MS: u64 = 180;
+/// Shorter settle delay used exclusively for physical mousewheel ticks.
+/// Because `onscroll` animation frames are suppressed during active wheeling
+/// (see `wheel_active` below), only real wheel events bump this counter, so a
+/// 60 ms window is long enough to detect the end of a fast spin without being
+/// noticeable to the user.
+const WHEEL_SETTLE_DELAY_MS: u64 = 60;
+/// How long after the last wheel tick before the "active wheeling" suppression
+/// on `onscroll` is lifted.  Must be >= WHEEL_SETTLE_DELAY_MS.
+const WHEEL_ACTIVE_CLEAR_DELAY_MS: &str = "350";
 const ESTIMATED_FULL_MESSAGE_HEIGHT: f64 = 92.0;
 const ESTIMATED_GROUPED_MESSAGE_HEIGHT: f64 = 34.0;
 const ESTIMATED_DATE_SEPARATOR_HEIGHT: f64 = 28.0;
@@ -1712,6 +1722,24 @@ async fn wait_for_message_list_scroll_settle(seq: u64) -> bool {
     eval.recv::<bool>().await.unwrap_or(false)
 }
 
+/// Like [`wait_for_message_list_scroll_settle`] but uses the **wheel-only**
+/// JS sequence variable and the shorter [`WHEEL_SETTLE_DELAY_MS`].  Because
+/// `onscroll` animation frames are suppressed while wheeling, incrementing
+/// `window.__polyWheelSettleSeq` is done exclusively by `onwheel`, so this
+/// settle fires within `WHEEL_SETTLE_DELAY_MS` of the last physical wheel tick.
+async fn wait_for_wheel_settle(seq: u64) -> bool {
+    let mut eval = document::eval(&format!(
+        r#"
+            const wanted = {seq};
+            setTimeout(() => {{
+                dioxus.send((window.__polyWheelSettleSeq ?? 0) === wanted);
+            }}, {WHEEL_SETTLE_DELAY_MS});
+        "#,
+    ));
+
+    eval.recv::<bool>().await.unwrap_or(false)
+}
+
 fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repeat_edge: bool) {
     if ctx.loading || ctx.scroll_work_in_flight.load(Ordering::Relaxed) {
         return;
@@ -2243,6 +2271,17 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let settled_scroll_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
     let top_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
     let bottom_edge_armed = use_hook(|| Arc::new(AtomicBool::new(true)));
+    // Separate sequence counter used only by `onwheel`.  Because smooth-scroll
+    // animation frames (fired by the browser after each wheel tick) are
+    // suppressed via `wheel_active`, only real wheel ticks bump this counter.
+    let wheel_settle_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
+    // Set to `true` by `onwheel` and cleared ~350ms after the last tick.
+    // While true, `onscroll` returns immediately, preventing up to 60 WASM
+    // futures/evals per second from being spawned for animation frames.
+    let wheel_active = use_hook(|| Arc::new(AtomicBool::new(false)));
+    // Monotonic counter used to deduplicate the clear-timer spawn so only the
+    // spawn for the latest wheel tick actually clears the flag.
+    let wheel_timer_seq = use_hook(|| Arc::new(AtomicU64::new(0)));
     let virtualize_messages =
         should_virtualize_messages(ctx.messages.len(), &ctx.search_query_value);
     // Lock the message list scroll during a history load so the user cannot drag
@@ -2258,18 +2297,6 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let mut virtual_window = ctx.virtual_window;
 
     let wheel_scroll_work_in_flight = Arc::clone(&scroll_work_in_flight);
-    let wheel_messages_for_window = ctx.messages.clone();
-    let wheel_unread_marker_id = ctx.unread_marker_id.clone();
-    let wheel_unread_count = ctx.history_state.read().unread_count;
-    let wheel_search_query_value = search_query_value.clone();
-    let wheel_virtual_window = virtual_window;
-    let wheel_history_state = history_state;
-    let wheel_app_state = app_state;
-    let wheel_client_manager = client_manager;
-    let wheel_chat_data = chat_data;
-    let wheel_top_edge_armed = Arc::clone(&top_edge_armed);
-    let wheel_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
-
     let scroll_messages_for_window = ctx.messages.clone();
     let scroll_unread_marker_id = ctx.unread_marker_id.clone();
     let scroll_unread_count = ctx.history_state.read().unread_count;
@@ -2282,6 +2309,24 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let scroll_top_edge_armed = Arc::clone(&top_edge_armed);
     let scroll_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
     let scroll_settled_seq = Arc::clone(&settled_scroll_seq);
+    // Checked at the top of `onscroll`: if the wheel is active, return immediately.
+    let scroll_wheel_active_flag = Arc::clone(&wheel_active);
+
+    let wheel_messages_for_window = ctx.messages.clone();
+    let wheel_unread_marker_id = ctx.unread_marker_id.clone();
+    let wheel_unread_count = ctx.history_state.read().unread_count;
+    let wheel_search_query_value = search_query_value.clone();
+    let wheel_virtual_window = virtual_window;
+    let wheel_history_state = history_state;
+    let wheel_app_state = app_state;
+    let wheel_client_manager = client_manager;
+    let wheel_chat_data = chat_data;
+    let wheel_top_edge_armed = Arc::clone(&top_edge_armed);
+    let wheel_bottom_edge_armed = Arc::clone(&bottom_edge_armed);
+    // Uses the wheel-only counter, NOT the shared scroll counter.
+    let wheel_settled_seq = Arc::clone(&wheel_settle_seq);
+    let wheel_active_flag = Arc::clone(&wheel_active);
+    let wheel_timer_seq_flag = Arc::clone(&wheel_timer_seq);
 
     use_effect(move || {
         if !virtualize_messages {
@@ -2311,29 +2356,75 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
             class: if is_loading_history { "message-list loading-history" } else { "message-list" },
             id: "message-list-scroll",
             onwheel: move |evt| {
-                if evt.delta().strip_units().y >= 0.0 {
+                let delta_y = evt.delta().strip_units().y;
+                if delta_y == 0.0 {
                     return;
                 }
-                spawn_message_list_scroll_work(
-                    MessageListScrollWorkCtx {
-                        loading,
-                        history_state: wheel_history_state,
-                        scroll_work_in_flight: Arc::clone(&wheel_scroll_work_in_flight),
-                        messages_for_window: wheel_messages_for_window.clone(),
-                        unread_marker_id: wheel_unread_marker_id.clone(),
-                        unread_count: wheel_unread_count,
-                        search_query_value: wheel_search_query_value.clone(),
-                        virtual_window: wheel_virtual_window,
-                        app_state: wheel_app_state,
-                        client_manager: wheel_client_manager,
-                        chat_data: wheel_chat_data,
-                        top_edge_armed: Arc::clone(&wheel_top_edge_armed),
-                        bottom_edge_armed: Arc::clone(&wheel_bottom_edge_armed),
-                    },
-                    true,
-                );
+                // --- Suppress onscroll during this wheel gesture ---
+                // The browser generates smooth-scroll animation frames (onscroll
+                // at ~60fps) after every wheel tick.  By marking the wheel as
+                // active, `onscroll` returns immediately for those frames instead
+                // of spawning WASM futures and extending the effective debounce.
+                wheel_active_flag.store(true, Ordering::Relaxed);
+                // Schedule a clear of the flag ~350ms after the last wheel tick.
+                // Each new tick bumps the timer sequence so stale tasks do nothing.
+                let timer_seq = wheel_timer_seq_flag.fetch_add(1, Ordering::Relaxed) + 1;
+                {
+                    let clear_flag = Arc::clone(&wheel_active_flag);
+                    let clear_seq_ref = Arc::clone(&wheel_timer_seq_flag);
+                    spawn(async move {
+                        let mut eval = document::eval(
+                            &format!(
+                                "setTimeout(() => dioxus.send(true), {WHEEL_ACTIVE_CLEAR_DELAY_MS});",
+                            ),
+                        );
+                        let _ = eval.recv::<bool>().await;
+                        if clear_seq_ref.load(Ordering::Relaxed) == timer_seq { // --- Wheel-specific short settle (60 ms) ---
+                            clear_flag.store(false, Ordering::Relaxed);
+                        }
+                    });
+                }
+                let seq = wheel_settled_seq.fetch_add(1, Ordering::Relaxed) + 1;
+                document::eval(&format!("window.__polyWheelSettleSeq = {seq};"));
+                let scroll_work_in_flight = Arc::clone(&wheel_scroll_work_in_flight);
+                let top_edge_armed = Arc::clone(&wheel_top_edge_armed);
+                let bottom_edge_armed = Arc::clone(&wheel_bottom_edge_armed);
+                let messages_for_window = wheel_messages_for_window.clone();
+                let unread_marker_id = wheel_unread_marker_id.clone();
+                let search_query_value = wheel_search_query_value.clone();
+                spawn(async move {
+                    if !wait_for_wheel_settle(seq).await {
+                        return;
+                    }
+                    spawn_message_list_scroll_work(
+                        MessageListScrollWorkCtx {
+                            loading,
+                            history_state: wheel_history_state,
+                            scroll_work_in_flight,
+                            messages_for_window,
+                            unread_marker_id,
+                            unread_count: wheel_unread_count,
+                            search_query_value,
+                            virtual_window: wheel_virtual_window,
+                            app_state: wheel_app_state,
+                            client_manager: wheel_client_manager,
+                            chat_data: wheel_chat_data,
+                            top_edge_armed,
+                            bottom_edge_armed,
+                        },
+                        true,
+                    );
+                });
             },
             onscroll: move |_| {
+                // The browser fires onscroll for every smooth-scroll animation
+                // frame (up to 60/s) after a wheel tick.  While the wheel is
+                // active those frames are handled by the onwheel settle path;
+                // processing them here would spawn ~60 WASM futures/second and
+                // artificially extend the scroll debounce window, causing lag.
+                if scroll_wheel_active_flag.load(Ordering::Relaxed) {
+                    return;
+                }
                 let seq = scroll_settled_seq.fetch_add(1, Ordering::Relaxed) + 1;
                 document::eval(&format!("window.__polyMessageScrollSettleSeq = {seq};"));
                 let scroll_work_in_flight = Arc::clone(&scroll_work_in_flight);
