@@ -736,6 +736,34 @@ impl ChromeCdpBackend {
             .unwrap_or(0)
     }
 
+    /// Hide the transient Dioxus rebuild toast when the real app root is already visible.
+    ///
+    /// The dev runtime may briefly leave `#__dx-toast` mounted even after the real
+    /// application content is already present. That overlay is not ground truth for
+    /// agent verification, so suppress it before screenshots/snapshots once `#main`
+    /// exists.
+    async fn suppress_rebuild_toast_if_app_ready(&self) {
+        let _ignored = self
+            .cdp_send(
+                "Runtime.evaluate",
+                json!({
+                    "expression": r#"(function(){
+                        var appRoot = document.querySelector('#main');
+                        var toast = document.querySelector('#__dx-toast');
+                        if (appRoot && toast) {
+                            toast.style.display = 'none';
+                            toast.setAttribute('data-poly-hidden-rebuild-toast', 'true');
+                            return JSON.stringify({ hidden: true, reason: 'app-root-present' });
+                        }
+                        return JSON.stringify({ hidden: false, appRoot: !!appRoot, toast: !!toast });
+                    })()"#,
+                    "returnByValue": true,
+                    "awaitPromise": true,
+                }),
+            )
+            .await;
+    }
+
     /// Background task body for `launch_app`.
     ///
     /// Spawns `dx serve --platform web --port {WEB_SERVER_PORT}` as a long-running
@@ -1122,10 +1150,14 @@ impl DevtoolsBackend for ChromeCdpBackend {
             }
         }
 
+        self.suppress_rebuild_toast_if_app_ready().await;
+
         Ok(format!("Connected to Chrome CDP ✓  (ws: {ws_url})"))
     }
 
     async fn take_screenshot(&self, params: &ScreenshotParams) -> anyhow::Result<ScreenshotResult> {
+        self.suppress_rebuild_toast_if_app_ready().await;
+
         // Use CDP format/quality parameters.
         let format = match params.format.as_str() {
             "jpeg" => "jpeg",
@@ -1178,6 +1210,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
     }
 
     async fn js_eval(&self, expression: &str) -> anyhow::Result<String> {
+        self.suppress_rebuild_toast_if_app_ready().await;
+
         let result = self
             .cdp_send(
                 "Runtime.evaluate",

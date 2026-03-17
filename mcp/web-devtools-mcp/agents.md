@@ -330,6 +330,11 @@ Use this order instead:
 6. **Note:** The toast DOM element may still appear in the snapshot even after successful rebuild —
    its presence does not indicate failure
 
+Backend behavior update (2026-03-17): when `connect_cdp`, screenshot capture, or JS evaluation
+runs and the real Poly app root `#main` is already present, the MCP now auto-hides the transient
+`#__dx-toast` rebuild overlay before inspection. This reduces screenshot/snapshot noise, but the
+agent must still treat build counters and app-specific UI markers as the real source of truth.
+
 Avoid `wait_for` on rebuild-toast strings. Wait for stable app content instead.
 
 ### Counter File
