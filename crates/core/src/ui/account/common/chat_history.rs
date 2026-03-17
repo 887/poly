@@ -7,9 +7,9 @@ use serde_json::to_string as json_string;
 /// Number of messages to load on first open when there is no unread context.
 pub const INITIAL_MESSAGE_PAGE_SIZE: u32 = 36;
 /// Older-history page size fetched when scrolling near the top.
-pub const OLDER_MESSAGES_PAGE_SIZE: u32 = 48;
+pub const OLDER_MESSAGES_PAGE_SIZE: u32 = 50;
 /// Maximum number of chat messages kept in memory for the active channel window.
-pub const MAX_LOADED_MESSAGES: usize = 96;
+pub const MAX_LOADED_MESSAGES: usize = 200;
 /// Extra context messages to include above the unread boundary on first open.
 pub const UNREAD_CONTEXT_MESSAGE_COUNT: u32 = 12;
 
@@ -81,6 +81,41 @@ pub async fn read_message_list_scroll_metrics() -> Option<(f64, f64)> {
     let scroll_top = parts.next()?.parse::<f64>().ok()?;
     let scroll_height = parts.next()?.parse::<f64>().ok()?;
     Some((scroll_top, scroll_height))
+}
+
+/// Read the first visible message element and its pixel offset from the top of the
+/// scroll container. This is used to preserve the exact visual anchor across fixed-
+/// window page swaps.
+pub async fn read_message_list_anchor() -> Option<(String, f64)> {
+    let mut eval = document::eval(
+        r#"
+            const host = document.getElementById('message-list-scroll');
+            if (!host) {
+                dioxus.send('');
+            } else {
+                const hostRect = host.getBoundingClientRect();
+                const rows = [...host.querySelectorAll('[id^="message-"]')];
+                const anchor = rows.find((row) => {
+                    const rect = row.getBoundingClientRect();
+                    return rect.bottom > hostRect.top + 1 && rect.top < hostRect.bottom;
+                });
+                if (!anchor) {
+                    dioxus.send('');
+                } else {
+                    const offset = anchor.getBoundingClientRect().top - hostRect.top;
+                    dioxus.send(`${anchor.id}|${offset}`);
+                }
+            }
+        "#,
+    );
+
+    let Ok(raw) = eval.recv::<String>().await else {
+        return None;
+    };
+    let mut parts = raw.split('|');
+    let element_id = parts.next()?.to_string();
+    let offset = parts.next()?.parse::<f64>().ok()?;
+    Some((element_id, offset))
 }
 
 fn encoded_channel_id(channel_id: &str) -> Option<String> {
@@ -162,18 +197,13 @@ pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
     ));
 }
 
-/// Preserve the user's viewport after prepending older messages.
+/// Adjust the message-list scrollTop by an explicit pixel delta after the next render.
 ///
-/// Uses `setTimeout(0)` rather than `requestAnimationFrame` so the adjustment fires
-/// **after** Dioxus's own RAF render pass (Dioxus renders via RAF; our RAF would fire
-/// first, seeing stale scrollHeight and computing a wrong position).
-/// Multiple retries with increasing delays guarantee the DOM is fully laid out.
-/// Requires `overflow-anchor: none` on the container so Chrome's automatic scroll
-/// anchoring does not double-correct our adjustment.
-///
-/// A monotonic sequence guard (`window.__polyPosRestoreSeq`) cancels stale retry
-/// callbacks when a newer restore is scheduled (e.g. two loads in quick succession).
-pub fn request_preserve_scroll_position(previous_scroll_top: f64, previous_scroll_height: f64) {
+/// This is used for fixed-window message swapping where the DOM can both prepend and
+/// trim content in the same update. In that model, preserving by *net scroll height*
+/// is wrong: to keep the same anchor message visible we must preserve by the exact
+/// inserted/removed height near the active edge.
+fn request_adjust_scroll_top_by(delta_px: f64, previous_scroll_top: f64) {
     document::eval(&format!(
         r#"
             const el = document.getElementById('message-list-scroll');
@@ -181,38 +211,57 @@ pub fn request_preserve_scroll_position(previous_scroll_top: f64, previous_scrol
                 const seq = (window.__polyPosRestoreSeq = (window.__polyPosRestoreSeq || 0) + 1);
                 const apply = () => {{
                     if (window.__polyPosRestoreSeq !== seq || !el.isConnected) return;
-                    const nextTop = (el.scrollHeight - {previous_scroll_height}) + {previous_scroll_top};
+                    const nextTop = {previous_scroll_top} + ({delta_px});
                     el.scrollTop = Math.max(0, nextTop);
                 }};
-                // setTimeout(0) fires after Dioxus's RAF render so we always see the
-                // final scrollHeight.  Extra retries cover edge cases where layout
-                // is still in progress at the 0ms checkpoint.
                 [0, 32, 90, 240].forEach(d => setTimeout(apply, d));
             }}
         "#,
     ));
 }
 
-/// Preserve the user's viewport after appending newer messages / trimming older ones.
+/// Preserve the user's viewport after prepending older messages.
 ///
-/// Same timing strategy as `request_preserve_scroll_position`: setTimeout over RAF,
-/// with a sequence guard to cancel stale retries.
+/// `prepended_height_px` should be the estimated pixel height of the messages inserted
+/// above the current viewport. We add that exact delta to scrollTop so the same anchor
+/// message remains under the user's eyes even if another page is simultaneously trimmed
+/// from the bottom of the fixed working set.
+pub fn request_preserve_scroll_position(previous_scroll_top: f64, prepended_height_px: f64) {
+    request_adjust_scroll_top_by(prepended_height_px, previous_scroll_top);
+}
+
+/// Preserve the user's viewport after appending newer messages while trimming older ones.
+///
+/// `trimmed_top_height_px` should be the estimated pixel height removed from the top of
+/// the working set. We subtract that exact amount from scrollTop so the same anchor
+/// message remains visible while newer content is swapped in below.
 pub fn request_preserve_scroll_position_from_bottom(
     previous_scroll_top: f64,
-    previous_scroll_height: f64,
+    trimmed_top_height_px: f64,
 ) {
+    request_adjust_scroll_top_by(-trimmed_top_height_px, previous_scroll_top);
+}
+
+/// Preserve the exact visible anchor message at the same pixel offset after the next render.
+pub fn request_preserve_message_anchor(anchor_element_id: &str, offset_px: f64) {
+    let Ok(encoded_anchor_id) = json_string(anchor_element_id) else {
+        return;
+    };
+
     document::eval(&format!(
         r#"
-            const el = document.getElementById('message-list-scroll');
-            if (el) {{
-                const seq = (window.__polyPosRestoreSeq = (window.__polyPosRestoreSeq || 0) + 1);
-                const apply = () => {{
-                    if (window.__polyPosRestoreSeq !== seq || !el.isConnected) return;
-                    const nextTop = el.scrollHeight - ({previous_scroll_height} - {previous_scroll_top});
-                    el.scrollTop = Math.max(0, nextTop);
-                }};
-                [0, 32, 90, 240].forEach(d => setTimeout(apply, d));
-            }}
+            const seq = (window.__polyAnchorRestoreSeq = (window.__polyAnchorRestoreSeq || 0) + 1);
+            const apply = () => {{
+                if (window.__polyAnchorRestoreSeq !== seq) return;
+                const host = document.getElementById('message-list-scroll');
+                const anchor = document.getElementById({encoded_anchor_id});
+                if (!host || !anchor || !host.isConnected || !anchor.isConnected) return;
+                const hostRect = host.getBoundingClientRect();
+                const anchorRect = anchor.getBoundingClientRect();
+                const currentOffset = anchorRect.top - hostRect.top;
+                host.scrollTop = Math.max(0, host.scrollTop + currentOffset - ({offset_px}));
+            }};
+            [0, 32, 90, 240].forEach(d => setTimeout(apply, d));
         "#,
     ));
 }

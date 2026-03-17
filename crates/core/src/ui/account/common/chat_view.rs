@@ -13,9 +13,10 @@
 
 use super::super::super::routes::Route;
 use super::chat_history::{
-    ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE,
-    remember_message_list_scroll_position, request_preserve_scroll_position,
-    request_preserve_scroll_position_from_bottom, unread_marker_message_id,
+    ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE, read_message_list_anchor,
+    remember_message_list_scroll_position, request_preserve_message_anchor,
+    request_preserve_scroll_position, request_preserve_scroll_position_from_bottom,
+    unread_marker_message_id,
 };
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
@@ -1561,10 +1562,6 @@ fn estimate_message_block_height(
     total
 }
 
-fn subtract_spacer_height(current_px: f64, delta_px: f64) -> f64 {
-    (current_px - delta_px).max(0.0)
-}
-
 fn compute_message_virtual_window(
     messages: &[Message],
     unread_marker_id: Option<&str>,
@@ -1726,7 +1723,6 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repea
             ctx.scroll_work_in_flight.store(false, Ordering::Relaxed);
             return;
         };
-        let history_snapshot = ctx.history_state.read().clone();
         if should_virtualize_messages(ctx.messages_for_window.len(), &ctx.search_query_value) {
             set_message_virtual_window(
                 ctx.virtual_window,
@@ -1736,37 +1732,31 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repea
                 metrics,
             );
         }
-        // History paging must key off the *loaded content* bounds, not the total
-        // scroll height. Once we introduce large fake spacers for unloaded history,
-        // using the total scroll height allows the user to scroll through blank
-        // spacer space before the next page request fires.
-        let loaded_content_top = history_snapshot.before_spacer_px;
-        let loaded_content_bottom =
-            (metrics.scroll_height - history_snapshot.after_spacer_px).max(loaded_content_top);
         let viewport_bottom = metrics.scroll_top + metrics.client_height;
 
-        let near_top = metrics.scroll_top <= loaded_content_top + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+        let near_top = metrics.scroll_top <= MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
         let near_bottom =
-            viewport_bottom >= loaded_content_bottom - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+            viewport_bottom >= metrics.scroll_height - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
 
         if !near_top {
             ctx.top_edge_armed.store(
-                metrics.scroll_top > loaded_content_top + MESSAGE_HISTORY_EDGE_REARM_PX,
+                metrics.scroll_top > MESSAGE_HISTORY_EDGE_REARM_PX,
                 Ordering::Relaxed,
             );
         }
         if !near_bottom {
             ctx.bottom_edge_armed.store(
-                viewport_bottom < loaded_content_bottom - MESSAGE_HISTORY_EDGE_REARM_PX,
+                viewport_bottom < metrics.scroll_height - MESSAGE_HISTORY_EDGE_REARM_PX,
                 Ordering::Relaxed,
             );
         }
 
         if near_top
-            && history_snapshot.has_more_before
-            && !history_snapshot.loading_before
+            && ctx.history_state.read().has_more_before
+            && !ctx.history_state.read().loading_before
             && (allow_repeat_edge || ctx.top_edge_armed.swap(false, Ordering::Relaxed))
         {
+            ctx.top_edge_armed.store(false, Ordering::Relaxed);
             ctx.history_state.write().loading_before = true;
             load_older_messages(
                 ctx.app_state,
@@ -1779,10 +1769,11 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repea
             .await;
         }
         if near_bottom
-            && history_snapshot.has_more_after
-            && !history_snapshot.loading_after
+            && ctx.history_state.read().has_more_after
+            && !ctx.history_state.read().loading_after
             && (allow_repeat_edge || ctx.bottom_edge_armed.swap(false, Ordering::Relaxed))
         {
+            ctx.bottom_edge_armed.store(false, Ordering::Relaxed);
             ctx.history_state.write().loading_after = true;
             load_newer_messages(
                 ctx.app_state,
@@ -2388,7 +2379,7 @@ async fn load_older_messages(
     // Scroll metrics captured BEFORE loading_before was set to true — this snapshot
     // has no loading-indicator height contamination.
     previous_scroll_top: f64,
-    previous_scroll_height: f64,
+    _previous_scroll_height: f64,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
         history_state.write().loading_before = false;
@@ -2418,6 +2409,7 @@ async fn load_older_messages(
         history_state.write().loading_before = false;
         return;
     };
+    let anchor_snapshot = read_message_list_anchor().await;
 
     let older_messages = {
         let guard = backend.read().await;
@@ -2443,43 +2435,38 @@ async fn load_older_messages(
     let unread_marker_id = history_snapshot.unread_marker_message_id.clone();
     let unread_count = history_snapshot.unread_count;
 
+    let prepended_height_px = {
+        let mut synthetic = older_messages.clone();
+        synthetic.extend(chat_data.read().messages.iter().cloned());
+        estimate_message_block_height(
+            &synthetic,
+            0,
+            older_messages.len(),
+            unread_marker_id.as_deref(),
+            unread_count,
+        )
+    };
+
     {
         let mut chat = chat_data.write();
         let existing_messages = std::mem::take(&mut chat.messages);
         let mut merged_messages = older_messages.clone();
         merged_messages.extend(existing_messages);
-
-        let loaded_older_height = estimate_message_block_height(
-            &merged_messages,
-            0,
-            older_messages.len(),
-            unread_marker_id.as_deref(),
-            unread_count,
-        );
-        let trimmed_bottom_height = if merged_messages.len() > MAX_LOADED_MESSAGES {
-            estimate_message_block_height(
-                &merged_messages,
-                MAX_LOADED_MESSAGES,
-                merged_messages.len(),
-                unread_marker_id.as_deref(),
-                unread_count,
-            )
-        } else {
-            0.0
-        };
         let dropped_newer_messages = trim_message_window_from_bottom(&mut merged_messages);
         chat.messages = merged_messages;
 
         let mut history = history_state.write();
         history.has_more_after = dropped_newer_messages || history.has_more_after;
-        history.before_spacer_px =
-            subtract_spacer_height(history.before_spacer_px, loaded_older_height);
-        history.after_spacer_px += trimmed_bottom_height;
+        history.before_spacer_px = 0.0;
+        history.after_spacer_px = 0.0;
     }
-    // Restore scroll using the pre-load snapshot (no loading-indicator height contamination).
-    // setTimeout-based restore fires after Dioxus renders the new DOM (Dioxus renders via
-    // microtasks which complete before setTimeout callbacks fire).
-    request_preserve_scroll_position(previous_scroll_top, previous_scroll_height);
+    // Prefer exact DOM-anchor restoration so the same visible message stays pinned to the
+    // same pixel. Fall back to estimated delta math if no anchor row was available.
+    if let Some((anchor_element_id, anchor_offset_px)) = anchor_snapshot {
+        request_preserve_message_anchor(&anchor_element_id, anchor_offset_px);
+    } else {
+        request_preserve_scroll_position(previous_scroll_top, prepended_height_px);
+    }
     history_state.write().loading_before = false;
     history_state.write().has_more_before =
         u32::try_from(older_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
@@ -2492,7 +2479,7 @@ async fn load_newer_messages(
     mut history_state: Signal<ChatHistoryUiState>,
     // Scroll metrics captured BEFORE loading_after was set to true.
     previous_scroll_top: f64,
-    previous_scroll_height: f64,
+    _previous_scroll_height: f64,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
         history_state.write().loading_after = false;
@@ -2522,6 +2509,7 @@ async fn load_newer_messages(
         history_state.write().loading_after = false;
         return;
     };
+    let anchor_snapshot = read_message_list_anchor().await;
 
     let newer_messages = {
         let guard = backend.read().await;
@@ -2547,42 +2535,39 @@ async fn load_newer_messages(
     let unread_marker_id = history_snapshot.unread_marker_message_id.clone();
     let unread_count = history_snapshot.unread_count;
 
-    {
-        let mut chat = chat_data.write();
-        let existing_len = chat.messages.len();
-        let mut merged_messages = std::mem::take(&mut chat.messages);
-        merged_messages.extend(newer_messages.clone());
-
-        let loaded_newer_height = estimate_message_block_height(
-            &merged_messages,
-            existing_len,
-            merged_messages.len(),
+    let trimmed_top_height_px = {
+        let existing_messages = chat_data.read().messages.clone();
+        let mut synthetic = existing_messages.clone();
+        synthetic.extend(newer_messages.iter().cloned());
+        let overflow = synthetic.len().saturating_sub(MAX_LOADED_MESSAGES);
+        estimate_message_block_height(
+            &synthetic,
+            0,
+            overflow,
             unread_marker_id.as_deref(),
             unread_count,
-        );
-        let overflow = merged_messages.len().saturating_sub(MAX_LOADED_MESSAGES);
-        let trimmed_top_height = if overflow > 0 {
-            estimate_message_block_height(
-                &merged_messages,
-                0,
-                overflow,
-                unread_marker_id.as_deref(),
-                unread_count,
-            )
-        } else {
-            0.0
-        };
+        )
+    };
+
+    {
+        let mut chat = chat_data.write();
+        let mut merged_messages = std::mem::take(&mut chat.messages);
+        merged_messages.extend(newer_messages.clone());
         let dropped_older_messages = trim_message_window_from_top(&mut merged_messages);
         chat.messages = merged_messages;
 
         let mut history = history_state.write();
         history.has_more_before = dropped_older_messages || history.has_more_before;
-        history.before_spacer_px += trimmed_top_height;
-        history.after_spacer_px =
-            subtract_spacer_height(history.after_spacer_px, loaded_newer_height);
+        history.before_spacer_px = 0.0;
+        history.after_spacer_px = 0.0;
     }
-    // Use the pre-load scroll snapshot (no loading-indicator contamination).
-    request_preserve_scroll_position_from_bottom(previous_scroll_top, previous_scroll_height);
+    // Prefer exact DOM-anchor restoration so the same visible message stays pinned to the
+    // same pixel. Fall back to estimated delta math if no anchor row was available.
+    if let Some((anchor_element_id, anchor_offset_px)) = anchor_snapshot {
+        request_preserve_message_anchor(&anchor_element_id, anchor_offset_px);
+    } else {
+        request_preserve_scroll_position_from_bottom(previous_scroll_top, trimmed_top_height_px);
+    }
     history_state.write().loading_after = false;
     history_state.write().has_more_after =
         u32::try_from(newer_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
@@ -2604,7 +2589,6 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
         };
     }
 
-    let history_snapshot = ctx.history_state.read().clone();
     let virtual_window = ctx.virtual_window.read().clone();
     let render_start = if virtual_window.enabled {
         virtual_window.start_idx.min(ctx.messages.len())
@@ -2616,18 +2600,7 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
     } else {
         ctx.messages.len()
     };
-    let top_spacer_px = history_snapshot.before_spacer_px
-        + if virtual_window.enabled {
-            virtual_window.top_spacer_px
-        } else {
-            0.0
-        };
-    let bottom_spacer_px = history_snapshot.after_spacer_px
-        + if virtual_window.enabled {
-            virtual_window.bottom_spacer_px
-        } else {
-            0.0
-        };
+    let history_snapshot = ctx.history_state.read().clone();
 
     rsx! {
         if history_snapshot.loading_before {
@@ -2640,31 +2613,38 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
                 "{t(\"chat-loading-earlier\")}"
             }
         }
-        if top_spacer_px > 0.5 {
-            div {
-                class: "message-virtual-spacer",
-                style: "height: {top_spacer_px}px;",
-            }
-        }
         {render_unread_banner(ctx.clone())}
-        for idx in render_start..render_end {
+        for slot_idx in 0..MAX_LOADED_MESSAGES {
             {
-                if let Some(msg) = ctx.messages.get(idx).cloned() {
-                    let prev_msg = if idx > 0 {
-                        ctx.messages.get(idx - 1).cloned()
+                let actual_idx = render_start + slot_idx;
+                if actual_idx < render_end {
+                    if let Some(msg) = ctx.messages.get(actual_idx).cloned() {
+                        let prev_msg = if actual_idx > 0 {
+                            ctx.messages.get(actual_idx - 1).cloned()
+                        } else {
+                            None
+                        };
+                        rsx! {
+                            div { key: "message-slot-{slot_idx}", class: "message-window-slot",
+                                {render_message_row(ctx.clone(), msg, prev_msg)}
+                            }
+                        }
                     } else {
-                        None
-                    };
-                    render_message_row(ctx.clone(), msg, prev_msg)
+                        rsx! {
+                            div {
+                                key: "message-slot-{slot_idx}",
+                                class: "message-window-slot message-window-slot-empty",
+                            }
+                        }
+                    }
                 } else {
-                    rsx! {}
+                    rsx! {
+                        div {
+                            key: "message-slot-{slot_idx}",
+                            class: "message-window-slot message-window-slot-empty",
+                        }
+                    }
                 }
-            }
-        }
-        if bottom_spacer_px > 0.5 {
-            div {
-                class: "message-virtual-spacer",
-                style: "height: {bottom_spacer_px}px;",
             }
         }
     }

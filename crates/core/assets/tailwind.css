@@ -1207,6 +1207,14 @@ body {
     pointer-events: none;
 }
 
+.message-window-slot {
+    display: contents;
+}
+
+.message-window-slot-empty {
+    display: none;
+}
+
 .chat-unread-banner {
     position: sticky;
     top: 0;
