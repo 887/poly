@@ -21,12 +21,14 @@ CLI subcommands are available for testing or scripting when MCP server is not ne
 ```bash
 cargo run --bin poly-electron-devtools-mcp -- status
 cargo run --bin poly-electron-devtools-mcp -- launch  # polls background build
-cargo run --bin poly-electron-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
+cargo run --bin poly-electron-devtools-mcp -- screenshot
 cargo run --bin poly-electron-devtools-mcp -- snapshot
 cargo run --bin poly-electron-devtools-mcp -- build-status
 cargo run --bin poly-electron-devtools-mcp -- build-log
 cargo run --bin poly-electron-devtools-mcp -- help
 ```
+
+Default screenshot policy: **prefer inline screenshot output**. Use `--save ...` only when you explicitly need a file artifact.
 
 VS Code CLI tasks under **"CLI: electron — *"** exist but are not recommended for regular development.
 
@@ -88,6 +90,14 @@ Background steps performed by `launch_app`:
    brings the page to the foreground before capturing.
 - `launch_app` performs both graceful and SIGKILL cleanup for stale Electron
    devtools processes before building and launching a fresh instance.
+
+## Screenshot Policy (2026-03-17)
+
+For agent-driven verification, screenshots should be **inline-first**:
+
+- MCP screenshot calls should normally omit a file path so the image appears directly in chat.
+- CLI `screenshot` without `--save` is the preferred example.
+- Use saved files only for explicit archival evidence, stable path references, or when the user asks for them.
 
 ## Rebuild Flow (NON-BLOCKING)
 

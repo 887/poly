@@ -180,6 +180,22 @@ When making architectural decisions:
 
 **Why this rule exists:** RSX macro syntax errors produce misleading Rust error messages. A build that passes `cargo check` may still have component logic bugs that only appear visually. The DevTools MCP is the ground truth for "does the UI work".
 
+### 9d. Screenshots in Chat Are the Default (DECISION, 2026-03-17)
+
+For MCP/browser/devtools visual verification, **prefer inline screenshots that are visible directly in chat/tool output**.
+
+Default rule:
+- call screenshot tools **without** a save path whenever possible so the image is attached inline,
+- save screenshot files only when there is a specific need for an on-disk artifact.
+
+Valid reasons to save a screenshot file:
+- the user explicitly asks for a saved file,
+- a plan/doc/memory entry needs a durable artifact path,
+- later tooling needs a deterministic file path.
+
+Do **not** treat saving to `devtools-screenshots/` as the normal verification workflow.
+Interpret screenshot instructions as **inline-first, file-save optional** unless the doc explicitly says to archive the image.
+
 ### 9a. DevTools MCP Rebuild Detection — `build_id` (DECISION, 2026-03-03)
 
 ### ⭐ NON-BLOCKING BUILDS — Mandatory Polling Workflow (DECISION, 2026-03-12)

@@ -23,13 +23,15 @@ CLI subcommands are available for testing or scripting when MCP server is not ne
 ```bash
 cargo run --bin poly-web-devtools-mcp -- status
 cargo run --bin poly-web-devtools-mcp -- launch  # polls background build
-cargo run --bin poly-web-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
+cargo run --bin poly-web-devtools-mcp -- screenshot
 cargo run --bin poly-web-devtools-mcp -- snapshot
 cargo run --bin poly-web-devtools-mcp -- build-status
 cargo run --bin poly-web-devtools-mcp -- build-log
-cargo run --bin poly-web-devtools-mcp -- --headless screenshot --save snap.png
+cargo run --bin poly-web-devtools-mcp -- --headless screenshot
 cargo run --bin poly-web-devtools-mcp -- help
 ```
+
+Default screenshot policy: **prefer inline screenshot output**. Use `--save ...` only when you explicitly need a persistent file.
 
 VS Code CLI tasks under **"CLI: web — *"** exist but are not recommended for regular development.
 
@@ -144,6 +146,8 @@ screenshot {}
 
 Uses `Page.captureScreenshot` — real browser rendering, not JS canvas hacks.
 
+Prefer calling screenshot tools without a save path so the screenshot is shown inline in chat. Save to disk only for explicit archival/debug artifacts.
+
 ### 4. Interact
 
 ```
@@ -182,6 +186,14 @@ set_viewport {
 This does two separate things:
 - `?mobile=1` forces Poly's shared UI into mobile layout mode
 - `set_viewport(... mobile=true ...)` tells Chromium to emulate mobile device metrics
+
+## Screenshot Policy (2026-03-17)
+
+For agent workflows, screenshots are **inline-first**:
+
+- MCP screenshot calls should normally omit a file path.
+- CLI examples should omit `--save` unless a durable artifact is needed.
+- Save files only when the user explicitly requests them or when documentation/evidence needs a stable on-disk path.
 
 ### 6. Reset
 

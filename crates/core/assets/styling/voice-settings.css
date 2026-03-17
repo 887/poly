@@ -443,7 +443,7 @@
     flex-shrink: 0;
     position: relative;
     /* anchor for voice-preview-panel + voice-settings-popup */
-    z-index: 2;
+    z-index: 4;
 }
 
 .account-bar {
@@ -456,6 +456,8 @@
     min-height: 52px;
     width: 100%;
     box-sizing: border-box;
+    position: relative;
+    z-index: 5;
 }
 
 .account-bar-user {
@@ -622,4 +624,3 @@
     color: var(--text-muted);
     font-size: 0.7rem;
 }
-

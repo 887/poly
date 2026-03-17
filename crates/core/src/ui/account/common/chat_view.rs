@@ -24,6 +24,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::{t, t_args};
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
 use crate::state::{AppState, ChatData};
+use crate::ui::split_shell::RightWingShell;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
@@ -43,6 +44,10 @@ struct MsgContextMenu {
 }
 
 const GROUP_THRESHOLD_MINUTES: i64 = 7;
+#[cfg(target_arch = "wasm32")]
+const MOBILE_RIGHT_WING_OPEN_JS: &str = "window.__polySetMobileRightWingOpen?.(true);";
+#[cfg(target_arch = "wasm32")]
+const MOBILE_RIGHT_WING_CLOSE_JS: &str = "window.__polySetMobileRightWingOpen?.(false);";
 
 /// Built-in slash commands always available in every channel.
 ///
@@ -1023,9 +1028,68 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     use_pinned_messages_effect(signals);
     use_history_state_effect(signals);
     use_member_list_preferences_effect(signals.app_state);
+    use_mobile_side_column_effect(signals, ctx);
     use_command_preload_effect(signals, &ctx.channel_id);
     use_unread_marker_visibility_effect(signals);
     use_composer_focus_effect(signals);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn runtime_mobile_ui_active() -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+
+    let forced_mobile = window
+        .document()
+        .and_then(|document| document.query_selector(".poly-app").ok().flatten())
+        .and_then(|root| root.get_attribute("class"))
+        .is_some_and(|classes| {
+            classes
+                .split_whitespace()
+                .any(|class| class == "poly-force-mobile")
+        });
+    let narrow_viewport = window
+        .inner_width()
+        .ok()
+        .and_then(|value| value.as_f64())
+        .is_some_and(|width| width <= 640.0);
+
+    forced_mobile || narrow_viewport
+}
+
+#[cfg(target_arch = "wasm32")]
+fn sync_mobile_side_column_open(open: bool) {
+    if !runtime_mobile_ui_active() {
+        let _ = document::eval(MOBILE_RIGHT_WING_CLOSE_JS);
+        return;
+    }
+
+    let _ = document::eval(if open {
+        MOBILE_RIGHT_WING_OPEN_JS
+    } else {
+        MOBILE_RIGHT_WING_CLOSE_JS
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn sync_mobile_side_column_open(_open: bool) {}
+
+fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
+    let app_state = signals.app_state;
+    let utility_panel = signals.utility_panel;
+    let is_dm_channel = ctx.is_dm_channel;
+    let is_group_channel = ctx.is_group_channel;
+
+    use_effect(move || {
+        let member_list_open = if is_dm_channel || is_group_channel {
+            app_state.read().nav.dm_right_sidebar_visible
+        } else {
+            app_state.read().nav.right_sidebar_visible
+        };
+        let right_wing_open = member_list_open || utility_panel.read().is_some();
+        sync_mobile_side_column_open(right_wing_open);
+    });
 }
 
 /// Auto-focus the message composer input whenever the selected channel or DM changes.
@@ -1579,7 +1643,7 @@ fn render_member_toggle_button(
     if is_group_channel {
         return rsx! {
             button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
+                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
                 title: t("chat-toggle-members"),
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -1595,7 +1659,7 @@ fn render_member_toggle_button(
     if is_dm_channel {
         return rsx! {
             button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
+                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
                 title: t("chat-toggle-contact"),
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -1610,7 +1674,7 @@ fn render_member_toggle_button(
 
     rsx! {
         button {
-            class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active" } else { "header-btn" },
+            class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
             title: t("chat-toggle-members"),
             onclick: move |_| {
                 let current = app_state.read().nav.right_sidebar_visible;
@@ -2673,16 +2737,19 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
     let panel = *ctx.utility_panel.read();
 
     rsx! {
-        div { class: "chat-side-column",
-            if let Some(panel) = panel {
-                {render_chat_utility_rail(ctx, panel, current_channel_name)}
-            } else if ctx.is_dm_channel {
-                DmContactPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
-            } else if ctx.is_group_channel {
-                DmUserSidebar {}
-            } else {
-                UserSidebar {}
-            }
+        RightWingShell {
+            panel_class: String::new(),
+            content: rsx! {
+                if let Some(panel) = panel {
+                    {render_chat_utility_rail(ctx, panel, current_channel_name)}
+                } else if ctx.is_dm_channel {
+                    DmContactPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
+                } else if ctx.is_group_channel {
+                    DmUserSidebar {}
+                } else {
+                    UserSidebar {}
+                }
+            },
         }
     }
 }

@@ -14,6 +14,7 @@ use crate::i18n::{t, t_args};
 use crate::state::ChatData;
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
+use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::BackendType;
 
@@ -253,6 +254,20 @@ fn ServerNode(
     let name_matches = q_lower.is_empty() || server_name.to_lowercase().contains(&q_lower);
     let server_color = user_color(&server_id);
 
+    // Check if there are any matching channels before rendering the server
+    if let Some(channels) = server_channels.read().as_ref() {
+        let has_matching_channels = channels.iter().any(|ch| {
+            let ch_name = ch.name.clone();
+            q_lower.is_empty()
+                || ch_name.to_lowercase().contains(&q_lower)
+                || name_matches
+        });
+
+        if !has_matching_channels {
+            return rsx! {};
+        }
+    }
+
     rsx! {
         div { class: "search-server-node",
             div { class: "search-server-header",
@@ -405,12 +420,11 @@ pub fn SearchPage() -> Element {
     let grp_total = visible_grps.len();
 
     rsx! {
-        div { class: "search-page",
-            // ── Sidebar ──
-            div { class: "search-page-sidebar",
-                h2 { "{t(\"search-page-title\")}" }
-                SearchInput { query }
-                TypeFilters { enabled_types }
+        SplitMenuShell {
+            root_class: "search-page".to_string(),
+            sidebar_class: "search-page-sidebar".to_string(),
+            content_class: "search-page-results".to_string(),
+            sidebar: rsx! {
                 div { class: "search-page-filters",
                     h3 { "{t(\"search-page-accounts\")}" }
                     for aid in &account_ids {
@@ -452,11 +466,16 @@ pub fn SearchPage() -> Element {
                         }
                     }
                 }
-            }
+            },
 
             // ── Results tree — scrollable, infinite-loads DMs+Groups ──
-            div {
-                class: "search-page-results",
+            content: rsx! {
+                div { class: "search-page-header",
+                    h2 { "{t(\"search-page-title\")}" }
+                    SearchInput { query }
+                    TypeFilters { enabled_types }
+                }
+                div { class: "search-page-results-tree",
                 onscroll: move |_| {
                     // Spawn async to evaluate scroll position and load more if near bottom.
                     spawn(async move {
@@ -646,7 +665,8 @@ pub fn SearchPage() -> Element {
                         }
                     }
                 }
-            }
+                }
+            },
         }
     }
 }

@@ -48,6 +48,7 @@ use crate::i18n::t;
 use crate::state::{AppState, SettingsSection};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
+use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 
 use accounts::AccountsSettings;
@@ -424,8 +425,11 @@ pub fn SettingsPage() -> Element {
     let query = search_text.read().clone();
 
     rsx! {
-        div { class: "settings-page",
-            div { class: "settings-page-sidebar",
+        SplitMenuShell {
+            root_class: "settings-page".to_string(),
+            sidebar_class: "settings-page-sidebar".to_string(),
+            content_class: "settings-content".to_string(),
+            sidebar: rsx! {
                 SettingsNavigation {
                     current: section,
                     search_text,
@@ -435,10 +439,10 @@ pub fn SettingsPage() -> Element {
                         nav.push(Route::SettingsSectionRoute { section: next.to_slug().to_string() });
                     },
                 }
-            }
-            div { class: "settings-content",
+            },
+            content: rsx! {
                 SettingsAllSections { search_query: query }
-            }
+            },
         }
     }
 }

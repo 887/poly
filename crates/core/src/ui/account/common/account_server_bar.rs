@@ -333,7 +333,6 @@ fn AccountServerIcon(
             account_id: aid_click.clone(),
             server_id: sid_click.clone(),
         });
-        close_mobile_drawer();
     };
 
     rsx! {
@@ -431,7 +430,6 @@ fn AccountBarDmsButton(
                         instance_id: instance_id.clone(),
                         account_id: account_id.clone(),
                     });
-                close_mobile_drawer();
             },
             title: "{t(\"nav-dms\")}",
             div { class: "icon-dms", "💬" }

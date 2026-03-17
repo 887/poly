@@ -78,3 +78,81 @@ Create a dedicated Poly web mobile-testing flow that lets developers:
 - Added route-change auto-close behavior in `MainLayout` and captured verification screenshots:
   - `devtools-screenshots/web-mobile-drawer-closed-2026-03-15.png`
   - `devtools-screenshots/web-mobile-drawer-open-2026-03-15-fixed.png`
+
+### 2026-03-16
+- Replaced the repeated left split-pane shells with a shared `SplitMenuShell` wrapper used by:
+  - DM/server route shells
+  - app settings
+  - global search
+  - account settings
+  - server settings
+- Added the matching shared `RightWingShell` wrapper for chat-side member/contact/utility rails so the
+  desktop right column and mobile right-wing overlay share one structural entry point.
+- Moved the `MainLayout` browser runtime scripts out of inline Rust strings into checked files:
+  - `crates/core/assets/scripts/mobile_drawer_runtime.js`
+  - `crates/core/assets/scripts/drag_bridge_runtime.js`
+- Added an explicit native renderer stub path in `MainLayout` so the browser-only split-shell runtime
+  is no longer assumed to exist for non-WASM renderers.
+- Fixed the under-640 account/server rail leak: the account bar now stays fully offscreen until the
+  left drawer opens, and both the left drawer closed/open states were re-verified in web MCP.
+- Reworked the chat-side member/contact/utility rail into a true mobile right-side wing controlled by
+  `.poly-mobile-right-wing-open` instead of stacking below the chat body.
+- Mobile route changes now auto-close both wings:
+  - left drawer closes in `MainLayout`
+  - right member/contact wing closes in `MainLayout` + `ChatView` sync logic
+- Verified live in poly-web with runtime viewport resizing on 2026-03-16:
+  - desktop `/settings` at 1200×900
+  - desktop `/settings` at 700×900
+  - desktop `/search` at 700×900
+  - mobile `/settings` at 372×1268 (drawer closed + open)
+  - mobile `/demo/demo/demo-cat/settings` at 372×1268 (drawer closed + open geometry)
+  - mobile `/demo/demo/demo-cat/channels/server-gaming` at 372×1268 (right member wing closed by default, opens as overlay, closes on navigation)
+  - mobile `/demo/demo/demo-cat/dms/dm-user-alice` at 372×1268 (right contact wing opens as overlay, clears on navigation)
+- Verification screenshots captured:
+  - `devtools-screenshots/web-settings-shared-split-2026-03-16.png`
+  - `devtools-screenshots/web-mobile-account-settings-closed-2026-03-16.png`
+  - `devtools-screenshots/web-mobile-account-settings-open-2026-03-16.png`
+  - `devtools-screenshots/web-mobile-server-members-open-2026-03-16.png`
+
+### 2026-03-17
+- Added `docs/desktop-mobile-shell-regression-test-plan.md` as the rerunnable verification plan for:
+  - desktop DMs / DM contact rail
+  - desktop server channel / member rail
+  - desktop notifications
+  - desktop global settings + identity
+  - desktop account settings
+  - desktop server settings
+  - desktop Poly signup
+  - desktop demo-data disable + re-enable
+  - web desktop-width resize checks
+  - web forced-mobile drawer + right-wing checks
+- Verified live in **desktop-devtools** after rebuilding `apps/desktop-devtools` and launching the built
+  binary as a background process:
+  - DM shell screenshot: `devtools-screenshots/desktop-dms-shell-2026-03-16.png`
+  - DM chat: `devtools-screenshots/desktop-dm-alice-2026-03-16.png`
+  - DM contact rail open: `devtools-screenshots/desktop-dm-alice-contact-open-2026-03-16.png`
+  - server chat: `devtools-screenshots/desktop-server-gaming-2026-03-16.png`
+  - server member rail open: `devtools-screenshots/desktop-server-gaming-members-open-2026-03-16.png`
+  - notifications: `devtools-screenshots/desktop-notifications-2026-03-16.png`
+  - settings: `devtools-screenshots/desktop-settings-2026-03-16.png`
+  - identity settings: `devtools-screenshots/desktop-settings-identity-2026-03-16.png`
+  - account settings: `devtools-screenshots/desktop-account-settings-2026-03-16.png`
+  - server settings: `devtools-screenshots/desktop-server-settings-2026-03-16.png`
+  - Poly signup: `devtools-screenshots/desktop-poly-signup-2026-03-16.png`
+  - demo toggle restored: `devtools-screenshots/desktop-demo-toggle-restored-2026-03-16.png`
+- Re-verified live in **poly-web** after a fresh rebuild with runtime viewport resizing:
+  - desktop settings wide: `devtools-screenshots/web-desktop-settings-wide-2026-03-16.png`
+  - desktop search narrow: `devtools-screenshots/web-desktop-search-narrow-2026-03-16.png`
+  - mobile settings closed/open:
+    - `devtools-screenshots/web-mobile-settings-closed-2026-03-16.png`
+    - `devtools-screenshots/web-mobile-settings-open-2026-03-16.png`
+  - mobile account settings closed/open:
+    - `devtools-screenshots/web-mobile-account-settings-closed-2026-03-16-rerun.png`
+    - `devtools-screenshots/web-mobile-account-settings-open-2026-03-16-rerun.png`
+  - mobile server right wing open: `devtools-screenshots/web-mobile-server-right-wing-open-2026-03-16-rerun.png`
+  - mobile notifications after route-change cleanup: `devtools-screenshots/web-mobile-notifications-after-route-change-2026-03-16.png`
+  - mobile DM right wing open: `devtools-screenshots/web-mobile-dm-right-wing-open-2026-03-16-rerun.png`
+- Validation status:
+  - `cargo check --workspace` ✅
+  - `cargo check -p poly-web --target wasm32-unknown-unknown` ✅
+  - `cargo cranky --workspace` ✅

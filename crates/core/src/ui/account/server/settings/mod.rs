@@ -21,6 +21,7 @@ mod profile;
 use crate::i18n::t;
 use crate::state::AppState;
 use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use general::ServerGeneralSettings;
 use notifications::ServerNotificationsSettings;
@@ -188,23 +189,30 @@ pub fn ServerSettingsPage(
     });
 
     rsx! {
-        div { class: "channel-list-wrapper",
-            nav { class: "settings-nav",
-                ServerSettingsNavigation {
-                    active_section: section(),
-                    search_text,
-                    on_select: move |next| section.set(next),
+        SplitMenuShell {
+            root_class: "account-view-main".to_string(),
+            sidebar_class: "channel-list-wrapper".to_string(),
+            content_class: String::new(),
+            sidebar: rsx! {
+                nav { class: "settings-nav",
+                    ServerSettingsNavigation {
+                        active_section: section(),
+                        search_text,
+                        on_select: move |next| section.set(next),
+                    }
                 }
-            }
-            VoiceAccountFooter {}
-        }
-        ServerSettingsContent {
-            section: section(),
-            backend,
-            instance_id,
-            account_id,
-            server_id,
-            server_name,
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                ServerSettingsContent {
+                    section: section(),
+                    backend,
+                    instance_id,
+                    account_id,
+                    server_id,
+                    server_name,
+                }
+            },
         }
     }
 }

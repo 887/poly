@@ -9,15 +9,27 @@
 .settings-page {
     flex: 1;
     display: flex;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
+}
+
+.settings-page-sidebar {
+    display: flex;
+    min-height: 0;
 }
 
 .settings-nav {
     width: 220px;
     min-width: 220px;
     background-color: var(--bg-secondary);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
     padding: 16px 8px;
     border-right: 1px solid var(--border-primary);
+    overflow-y: auto;
 }
 
 /* Strip default anchor link styling inside settings nav (Dioxus Link renders as <a>) */
@@ -317,8 +329,15 @@
 
 .settings-content {
     flex: 1;
+    min-width: 0;
+    min-height: 0;
     padding: 24px 32px;
     overflow-y: auto;
+}
+
+.settings-content>* {
+    flex: 0 0 auto;
+    min-height: auto;
 }
 
 .settings-section h2 {
@@ -332,4 +351,3 @@
     font-size: 14px;
     margin-bottom: 16px;
 }
-

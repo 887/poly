@@ -7,7 +7,82 @@
 
 use crate::i18n::t;
 use crate::state::AppState;
+use crate::storage::AppSettings;
 use dioxus::prelude::*;
+
+async fn persist_force_mobile_layout(enabled: bool) {
+    let Some(storage) = crate::STORAGE.get() else {
+        return;
+    };
+    let Ok(mut settings) = storage.get_app_settings().await else {
+        return;
+    };
+    if settings.force_mobile_layout == enabled {
+        return;
+    }
+    settings.force_mobile_layout = enabled;
+    if let Err(err) = storage.set_app_settings(&settings).await {
+        tracing::warn!("Failed to persist force-mobile layout setting: {err}");
+    }
+}
+
+fn load_general_settings(mut settings_sig: Signal<AppSettings>) {
+    spawn(async move {
+        let Some(storage) = crate::STORAGE.get() else {
+            return;
+        };
+        match storage.get_app_settings().await {
+            Ok(settings) => settings_sig.set(settings),
+            Err(err) => tracing::warn!("Failed to load general settings: {err}"),
+        }
+    });
+}
+
+#[rustfmt::skip]
+#[component]
+fn MobileLayoutToggle() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let mut settings_sig = use_signal(AppSettings::default);
+    let mut loaded = use_signal(|| false);
+
+    use_effect(move || {
+        if *loaded.read() {
+            return;
+        }
+        loaded.set(true);
+        load_general_settings(settings_sig);
+    });
+
+    let enabled = settings_sig.read().force_mobile_layout;
+
+    rsx! {
+        div { class: "settings-toggle-row",
+            div { class: "settings-toggle-label-group",
+                label { class: "settings-toggle-label",
+                    "{t(\"settings-force-mobile-layout\")}"
+                }
+                p { class: "settings-toggle-desc",
+                    "{t(\"settings-force-mobile-layout-description\")}"
+                }
+            }
+            label { class: "toggle-switch",
+                input {
+                    r#type: "checkbox",
+                    checked: enabled,
+                    onchange: move |evt| {
+                        let next = evt.checked();
+                        settings_sig.write().force_mobile_layout = next;
+                        app_state.write().force_mobile_layout = next;
+                        spawn(async move {
+                            persist_force_mobile_layout(next).await;
+                        });
+                    },
+                }
+                span { class: "toggle-slider" }
+            }
+        }
+    }
+}
 
 /// Controls which data to wipe in the reset flow.
 #[derive(Clone, Copy, PartialEq)]
@@ -164,6 +239,7 @@ pub(super) fn GeneralSettings() -> Element {
         div { class: "settings-section",
             h2 { "{t(\"settings-general\")}" }
             p { class: "settings-description", "{t(\"settings-general-description\")}" }
+            MobileLayoutToggle {}
             ResetSection {}
         }
     }

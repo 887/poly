@@ -22,12 +22,14 @@ CLI subcommands are available for testing or scripting when MCP server is not ne
 ```bash
 cargo run --bin poly-desktop-devtools-mcp -- status
 cargo run --bin poly-desktop-devtools-mcp -- launch  # polls background build
-cargo run --bin poly-desktop-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
+cargo run --bin poly-desktop-devtools-mcp -- screenshot
 cargo run --bin poly-desktop-devtools-mcp -- snapshot
 cargo run --bin poly-desktop-devtools-mcp -- build-status
 cargo run --bin poly-desktop-devtools-mcp -- build-log
 cargo run --bin poly-desktop-devtools-mcp -- help
 ```
+
+Default screenshot policy: **prefer inline screenshot output**. Use `--save ...` only when you explicitly need a file artifact on disk.
 
 VS Code CLI tasks under **"CLI: desktop — *"** exist but are not recommended for regular development.
 
@@ -138,7 +140,7 @@ Verifies the HTTP eval-bridge at `http://127.0.0.1:9223/status` is reachable.
 All functions now work with the MCP and app isolated:
 
 ```
-screenshot {}              → PNG screenshot of desktop app
+screenshot {}              → PNG screenshot of desktop app (prefer inline output; save only when needed)
 get_dom {}                 → HTML of current UI
 js_eval { expression: "..." }  → evaluate JavaScript in the app
 click { x: 100, y: 200 }   → simulate mouse click
@@ -147,6 +149,14 @@ kill_app {}                → kill ONLY the app, NOT the MCP
 launch_app { workspace: "..." } → relaunch the app
 reset_app {}               → kill app + wipe data + docs for setup wizard
 ```
+
+## Screenshot Policy (2026-03-17)
+
+For agent-driven UI verification, screenshots should be **inline-first**:
+
+- MCP screenshot calls should normally be made without a file path so the image is shown directly in chat.
+- CLI `screenshot` without `--save` is the preferred terminal example.
+- Use saved files only for explicit archival evidence, reproducible file-path references, or when the user asks for a saved image.
 
 ---
 

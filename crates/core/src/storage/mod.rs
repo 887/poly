@@ -213,6 +213,9 @@ pub struct AppSettings {
     /// Changing this setting requires reconnecting or restarting the app.
     #[serde(default = "default_true")]
     pub poly_use_websocket: bool,
+    /// Whether the mobile shell should be forced regardless of viewport width.
+    #[serde(default)]
+    pub force_mobile_layout: bool,
 }
 
 /// Minimal server metadata cached for offline display.

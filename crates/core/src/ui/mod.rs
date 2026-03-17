@@ -67,6 +67,7 @@ pub mod routes;
 pub(crate) mod search;
 mod settings;
 pub(crate) mod signup;
+mod split_shell;
 // Re-export the demo settings render function so demo.rs can register it in
 // ClientManager::plugin_settings without a pub(crate) path through private modules.
 #[cfg(feature = "demo")]
@@ -130,52 +131,17 @@ fn force_mobile_query_override() -> Option<bool> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn stored_force_mobile_ui_enabled() -> bool {
-    let Some(window) = web_sys::window() else {
-        return false;
-    };
-    let Ok(Some(storage)) = window.local_storage() else {
-        return false;
-    };
-
-    storage
-        .get_item("poly.forceMobileUi")
-        .ok()
-        .flatten()
-        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
-}
-
-#[cfg(target_arch = "wasm32")]
-fn sync_force_mobile_ui_storage() {
-    let Some(override_value) = force_mobile_query_override() else {
-        return;
-    };
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    let Ok(Some(storage)) = window.local_storage() else {
-        return;
-    };
-
-    let storage_value = if override_value { "1" } else { "0" };
-    let _ = storage.set_item("poly.forceMobileUi", storage_value);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn force_mobile_ui_enabled() -> bool {
-    force_mobile_query_override().unwrap_or_else(stored_force_mobile_ui_enabled)
+fn force_mobile_ui_enabled(force_mobile_layout: bool) -> bool {
+    force_mobile_query_override().unwrap_or(force_mobile_layout)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn force_mobile_ui_enabled() -> bool {
-    false
+const fn force_mobile_ui_enabled(force_mobile_layout: bool) -> bool {
+    force_mobile_layout
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn sync_force_mobile_ui_storage() {}
-
-fn app_root_class() -> &'static str {
-    if force_mobile_ui_enabled() {
+fn app_root_class(force_mobile_layout: bool) -> &'static str {
+    if force_mobile_ui_enabled(force_mobile_layout) {
         "poly-app poly-force-mobile"
     } else {
         "poly-app"
@@ -500,6 +466,7 @@ async fn init_storage(
                     client_manager
                         .write()
                         .set_disabled_native_backends(settings.disabled_native_backends.clone());
+                    app_state.write().force_mobile_layout = settings.force_mobile_layout;
                     app_state.write().nav.view = View::DmsFriends;
                     // Restore favorited servers so Bar 1 repopulates immediately
                     // on launch — before the server list is fetched from the network.
@@ -519,7 +486,7 @@ async fn init_storage(
                     }
                     app_state.write().nav.right_sidebar_visible = settings.server_member_list_open;
                     app_state.write().nav.dm_right_sidebar_visible = settings.dm_member_list_open;
-                    if force_mobile_ui_enabled() {
+                    if force_mobile_ui_enabled(settings.force_mobile_layout) {
                         app_state.write().nav.right_sidebar_visible = false;
                         app_state.write().nav.dm_right_sidebar_visible = false;
                     }
@@ -576,6 +543,7 @@ async fn persist_setup_completion(account_id: String) {
         wasm_plugins: Vec::new(),
         // Use WebSocket for real-time events by default.
         poly_use_websocket: true,
+        force_mobile_layout: false,
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");
@@ -714,10 +682,6 @@ pub fn App() -> Element {
         register_native_plugin_settings(&mut client_manager);
     });
 
-    use_effect(move || {
-        sync_force_mobile_ui_storage();
-    });
-
     let chat_data: Signal<ChatData> = use_signal(ChatData::default);
     provide_context(chat_data);
 
@@ -739,12 +703,14 @@ pub fn App() -> Element {
     });
     let theme_css = crate::theme::generate_css(&theme_config.read());
     let storage_ready_now = *storage_ready.read();
-    let setup_complete = app_state.read().is_setup_complete;
+    let app_state_snapshot = app_state.read().clone();
+    let setup_complete = app_state_snapshot.is_setup_complete;
+    let root_class = app_root_class(app_state_snapshot.force_mobile_layout);
 
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }
         style { id: "poly-theme", "{theme_css}" }
-        div { class: app_root_class(),
+        div { class: root_class,
             ElectronTitleBar {}
             AppBody {
                 storage_ready: storage_ready_now,

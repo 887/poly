@@ -40,7 +40,7 @@ cargo run --bin poly-electron-devtools-mcp -- launch /path/to/workspace
 # Stop Electron
 cargo run --bin poly-electron-devtools-mcp -- kill
 
-# Take a screenshot
+# Take a screenshot (inline by default; save only if you need a file)
 cargo run --bin poly-electron-devtools-mcp -- screenshot
 cargo run --bin poly-electron-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
 
@@ -68,6 +68,8 @@ cargo run --bin poly-electron-devtools-mcp -- help
 ```
 
 The workspace root is auto-detected from the `POLY_WORKSPACE` env var or the current working directory. VS Code tasks for the most common CLI commands are defined in `.vscode/tasks.json` under "CLI: electron — *".
+
+**Screenshot policy:** prefer screenshot commands **without** `--save` so the image is returned inline. Use `--save` only when you explicitly want a saved artifact.
 
 ## MCP Tools Exposed
 

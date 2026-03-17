@@ -181,6 +181,8 @@
     border-right: 1px solid var(--border-primary);
     padding-bottom: 64px;
     scroll-padding-bottom: 64px;
+    position: relative;
+    z-index: 1;
 }
 
 /* Account icon extra styling — ring indicator for active account */

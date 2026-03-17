@@ -24,6 +24,7 @@ mod profile;
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::main_layout::close_mobile_drawer;
+use crate::ui::split_shell::SplitMenuShell;
 use content_social::ContentSocialSettings;
 use dioxus::prelude::*;
 use notifications::NotificationsSettings;
@@ -170,77 +171,82 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     let is_profile_active = active == "profile";
 
     rsx! {
-        div { class: "channel-list-wrapper",
-            nav { class: "settings-nav",
-                // Header: shows which account's settings we're viewing
-                div { class: "settings-nav-header",
-                    h3 { class: "settings-nav-title", "{t(\"account-settings-title\")}" }
-                    p { class: "settings-nav-subtitle", "{acct_id_upper}" }
-                }
-                // Search bar
-                div { class: "settings-search-bar",
-                    input {
-                        r#type: "text",
-                        class: "settings-search-input",
-                        placeholder: "{t(\"settings-search\")}",
-                        value: "{sf_raw}",
-                        oninput: move |e| {
-                            search_text.set(e.value());
-                        },
+        SplitMenuShell {
+            root_class: "account-view-main".to_string(),
+            sidebar_class: "channel-list-wrapper".to_string(),
+            content_class: "settings-content".to_string(),
+            sidebar: rsx! {
+                nav { class: "settings-nav",
+                    // Header: shows which account's settings we're viewing
+                    div { class: "settings-nav-header",
+                        h3 { class: "settings-nav-title", "{t(\"account-settings-title\")}" }
+                        p { class: "settings-nav-subtitle", "{acct_id_upper}" }
                     }
-                    if !sf_raw.is_empty() {
-                        button {
-                            class: "settings-search-clear",
-                            onclick: move |_| search_text.set(String::new()),
-                            "×"
+                    // Search bar
+                    div { class: "settings-search-bar",
+                        input {
+                            r#type: "text",
+                            class: "settings-search-input",
+                            placeholder: "{t(\"settings-search\")}",
+                            value: "{sf_raw}",
+                            oninput: move |e| {
+                                search_text.set(e.value());
+                            },
+                        }
+                        if !sf_raw.is_empty() {
+                            button {
+                                class: "settings-search-clear",
+                                onclick: move |_| search_text.set(String::new()),
+                                "×"
+                            }
                         }
                     }
-                }
-                // Profile nav item — only shown for poly-server accounts.
-                { profile_nav_element(show_profile, is_profile_active, search_text, active_section) }
-                // Nav items — one per section
-                for (label_key, slug) in ACCT_NAV_SECTIONS {
-                    {
-                        let label = t(label_key);
-                        let has_match = acct_section_has_match(slug, &sf);
-                        let is_active = active == *slug;
-                        let class = match (is_active, has_match) {
-                            (true, _) => "settings-nav-item active",
-                            (false, true) => "settings-nav-item",
-                            (false, false) => "settings-nav-item settings-nav-item-dimmed",
-                        };
-                        let slug_s = slug.to_string();
-                        rsx! {
-                            div {
-                                class,
-                                onclick: move |_| {
-                                    *search_text.write() = String::new();
-                                    active_section.set(slug_s.clone());
-                                    close_mobile_drawer();
-                                },
-                                "{label}"
+                    // Profile nav item — only shown for poly-server accounts.
+                    { profile_nav_element(show_profile, is_profile_active, search_text, active_section) }
+                    // Nav items — one per section
+                    for (label_key, slug) in ACCT_NAV_SECTIONS {
+                        {
+                            let label = t(label_key);
+                            let has_match = acct_section_has_match(slug, &sf);
+                            let is_active = active == *slug;
+                            let class = match (is_active, has_match) {
+                                (true, _) => "settings-nav-item active",
+                                (false, true) => "settings-nav-item",
+                                (false, false) => "settings-nav-item settings-nav-item-dimmed",
+                            };
+                            let slug_s = slug.to_string();
+                            rsx! {
+                                div {
+                                    class,
+                                    onclick: move |_| {
+                                        *search_text.write() = String::new();
+                                        active_section.set(slug_s.clone());
+                                        close_mobile_drawer();
+                                    },
+                                    "{label}"
+                                }
                             }
                         }
                     }
                 }
-            }
-            VoiceAccountFooter {}
-        }
-        div { class: "settings-content",
-            // Profile section — poly-server only (shown first, above notifications).
-            { profile_section_element(show_profile, account_id.clone()) }
-            // Notifications section
-            div {
-                id: "acct-section-notifications",
-                class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
-                NotificationsSettings { account_id: account_id.clone() }
-            }
-            // Content & Social section
-            div {
-                id: "acct-section-content-social",
-                class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
-                ContentSocialSettings { _account_id: account_id.clone() }
-            }
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                // Profile section — poly-server only (shown first, above notifications).
+                { profile_section_element(show_profile, account_id.clone()) }
+                // Notifications section
+                div {
+                    id: "acct-section-notifications",
+                    class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                    NotificationsSettings { account_id: account_id.clone() }
+                }
+                // Content & Social section
+                div {
+                    id: "acct-section-content-social",
+                    class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                    ContentSocialSettings { _account_id: account_id.clone() }
+                }
+            },
         }
     }
 }

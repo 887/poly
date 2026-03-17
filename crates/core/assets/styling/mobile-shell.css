@@ -31,9 +31,7 @@
 
 .poly-app.poly-force-mobile .server-sidebar,
 .poly-app.poly-force-mobile .account-server-bar,
-.poly-app.poly-force-mobile .channel-list-wrapper,
-.poly-app.poly-force-mobile .settings-page-sidebar,
-.poly-app.poly-force-mobile .search-page-sidebar {
+.poly-app.poly-force-mobile .poly-left-drawer-panel {
     position: fixed;
     top: 0;
     bottom: 0;
@@ -50,7 +48,7 @@
 }
 
 .poly-app.poly-force-mobile .account-server-bar {
-    left: 0;
+    left: -72px;
     width: 72px;
     min-width: 72px;
     padding-bottom: 64px;
@@ -58,9 +56,7 @@
     box-shadow: none;
 }
 
-.poly-app.poly-force-mobile .channel-list-wrapper,
-.poly-app.poly-force-mobile .settings-page-sidebar,
-.poly-app.poly-force-mobile .search-page-sidebar {
+.poly-app.poly-force-mobile .poly-left-drawer-panel {
     left: auto;
     right: 100vw;
     width: calc(100vw - var(--poly-mobile-rail-offset));
@@ -102,9 +98,7 @@
 
 .poly-app.poly-force-mobile.poly-mobile-drawer-open .server-sidebar,
 .poly-app.poly-force-mobile.poly-mobile-drawer-open .account-server-bar,
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .channel-list-wrapper,
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .settings-page-sidebar,
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .search-page-sidebar {
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .poly-left-drawer-panel {
     box-shadow: 0 0 0 1px rgb(255 255 255 / 4%), 0 16px 48px rgb(0 0 0 / 42%);
 }
 
@@ -116,9 +110,7 @@
     left: 72px;
 }
 
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .channel-list-wrapper,
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .settings-page-sidebar,
-.poly-app.poly-force-mobile.poly-mobile-drawer-open .search-page-sidebar {
+.poly-app.poly-force-mobile.poly-mobile-drawer-open .poly-left-drawer-panel {
     right: 0;
 }
 
@@ -222,12 +214,30 @@
     min-width: 0;
 }
 
+.poly-app.poly-force-mobile .chat-body-shell {
+    position: relative;
+    overflow: hidden;
+}
+
 .poly-app.poly-force-mobile .chat-side-column {
-    width: 100%;
-    min-width: 0;
-    max-height: 38vh;
-    border-left: none;
-    border-top: 1px solid var(--border-primary);
+    position: fixed;
+    top: 0;
+    right: calc(-1 * min(320px, calc(100vw - 44px)));
+    z-index: 435;
+    width: min(320px, calc(100vw - 44px));
+    min-width: min(320px, calc(100vw - 44px));
+    max-width: calc(100vw - 44px);
+    height: 100dvh;
+    max-height: 100dvh;
+    border-left: 1px solid var(--border-primary);
+    border-top: none;
+    box-shadow: none;
+    transition: right 0.22s ease, box-shadow 0.22s ease;
+}
+
+.poly-app.poly-force-mobile.poly-mobile-right-wing-open .chat-side-column {
+    right: 0;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 4%), -16px 0 48px rgb(0 0 0 / 42%);
 }
 
 .poly-app.poly-force-mobile .message-list {
@@ -251,6 +261,19 @@
     padding: 10px 12px;
 }
 
+.poly-app.poly-force-mobile .message-input-row {
+    flex-wrap: wrap;
+    align-items: stretch;
+}
+
+.poly-app.poly-force-mobile .message-input-shell {
+    width: 100%;
+}
+
+.poly-app.poly-force-mobile .chat-send-inline {
+    width: 100%;
+}
+
 @media (max-width: 640px) {
 
     .poly-app,
@@ -264,9 +287,7 @@
 
     .server-sidebar,
     .account-server-bar,
-    .channel-list-wrapper,
-    .settings-page-sidebar,
-    .search-page-sidebar {
+    .poly-left-drawer-panel {
         position: fixed;
         top: 0;
         bottom: 0;
@@ -283,7 +304,7 @@
     }
 
     .account-server-bar {
-        left: 0;
+        left: -72px;
         width: 72px;
         min-width: 72px;
         padding-bottom: 64px;
@@ -291,9 +312,7 @@
         box-shadow: none;
     }
 
-    .channel-list-wrapper,
-    .settings-page-sidebar,
-    .search-page-sidebar {
+    .poly-left-drawer-panel {
         left: auto;
         right: 100vw;
         width: calc(100vw - var(--poly-mobile-rail-offset, 72px));
@@ -331,9 +350,7 @@
 
     .poly-app.poly-mobile-drawer-open .server-sidebar,
     .poly-app.poly-mobile-drawer-open .account-server-bar,
-    .poly-app.poly-mobile-drawer-open .channel-list-wrapper,
-    .poly-app.poly-mobile-drawer-open .settings-page-sidebar,
-    .poly-app.poly-mobile-drawer-open .search-page-sidebar {
+    .poly-app.poly-mobile-drawer-open .poly-left-drawer-panel {
         box-shadow: 0 0 0 1px rgb(255 255 255 / 4%), 0 16px 48px rgb(0 0 0 / 42%);
     }
 
@@ -345,9 +362,7 @@
         left: 72px;
     }
 
-    .poly-app.poly-mobile-drawer-open .channel-list-wrapper,
-    .poly-app.poly-mobile-drawer-open .settings-page-sidebar,
-    .poly-app.poly-mobile-drawer-open .search-page-sidebar {
+    .poly-app.poly-mobile-drawer-open .poly-left-drawer-panel {
         right: 0;
     }
 
@@ -449,12 +464,30 @@
         min-width: 0;
     }
 
+    .chat-body-shell {
+        position: relative;
+        overflow: hidden;
+    }
+
     .chat-side-column {
-        width: 100%;
-        min-width: 0;
-        max-height: 38vh;
-        border-left: none;
-        border-top: 1px solid var(--border-primary);
+        position: fixed;
+        top: 0;
+        right: calc(-1 * min(320px, calc(100vw - 44px)));
+        z-index: 435;
+        width: min(320px, calc(100vw - 44px));
+        min-width: min(320px, calc(100vw - 44px));
+        max-width: calc(100vw - 44px);
+        height: 100dvh;
+        max-height: 100dvh;
+        border-left: 1px solid var(--border-primary);
+        border-top: none;
+        box-shadow: none;
+        transition: right 0.22s ease, box-shadow 0.22s ease;
+    }
+
+    .poly-app.poly-mobile-right-wing-open .chat-side-column {
+        right: 0;
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 4%), -16px 0 48px rgb(0 0 0 / 42%);
     }
 
     .message-list {
@@ -476,5 +509,18 @@
 
     .message-input-area {
         padding: 10px 12px;
+    }
+
+    .message-input-row {
+        flex-wrap: wrap;
+        align-items: stretch;
+    }
+
+    .message-input-shell {
+        width: 100%;
+    }
+
+    .chat-send-inline {
+        width: 100%;
     }
 }

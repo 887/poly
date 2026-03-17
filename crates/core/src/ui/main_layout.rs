@@ -24,111 +24,90 @@ use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
 
+const MOBILE_DRAWER_RUNTIME_JS: &str =
+    include_str!("../../assets/scripts/mobile_drawer_runtime.js");
+const MOBILE_DRAWER_OPEN_JS: &str = "window.__polySetMobileDrawerOpen?.(true);";
+const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
+const MOBILE_RIGHT_WING_CLOSE_JS: &str = "window.__polySetMobileRightWingOpen?.(false);";
+const DRAG_BRIDGE_RUNTIME_JS: &str = include_str!("../../assets/scripts/drag_bridge_runtime.js");
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BrowserRuntime {
+    WasmDom,
+    #[cfg(not(target_arch = "wasm32"))]
+    NativeStub,
+}
+
+const fn browser_runtime() -> BrowserRuntime {
+    #[cfg(target_arch = "wasm32")]
+    {
+        BrowserRuntime::WasmDom
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        BrowserRuntime::NativeStub
+    }
+}
+
 fn init_mobile_drawer_runtime() {
-    let _ = document::eval(
-        r#"if (!window.__polyMobileDrawerInit) {
-            window.__polyMobileDrawerInit = true;
-            window.__polySyncMobileDrawerMode = function() {
-                const root = document.querySelector('.poly-app');
-                if (!root) return;
-
-                const account = document.querySelector('.account-server-bar');
-                const isMobileUi = root.classList.contains('poly-force-mobile') || window.innerWidth <= 640;
-                if (!isMobileUi) {
-                    root.classList.remove('poly-mobile-drawer-open');
-                    root.style.removeProperty('--poly-mobile-rail-offset');
-                    return;
-                }
-
-                const railOffset = 72 + (account ? 72 : 0);
-                root.style.setProperty('--poly-mobile-rail-offset', `${railOffset}px`);
-            };
-
-            window.__polySetMobileDrawerOpen = function(open) {
-                const root = document.querySelector('.poly-app');
-                if (!root) return;
-                root.classList.toggle('poly-mobile-drawer-open', Boolean(open));
-                window.__polySyncMobileDrawerMode?.();
-            };
-
-            let resizeFrame = null;
-            window.addEventListener('resize', function() {
-                if (resizeFrame !== null) {
-                    window.cancelAnimationFrame(resizeFrame);
-                }
-                resizeFrame = window.requestAnimationFrame(function() {
-                    resizeFrame = null;
-                    window.__polySyncMobileDrawerMode?.();
-                });
-            });
-
-            window.__polySyncMobileDrawerMode?.();
-
-            let tracking = null;
-
-            document.addEventListener('touchstart', function(e) {
-                const root = document.querySelector('.poly-app');
-                if (!root) return;
-                const isMobileUi = root.classList.contains('poly-force-mobile') || window.innerWidth <= 640;
-                if (!isMobileUi || !e.touches || e.touches.length !== 1) {
-                    tracking = null;
-                    return;
-                }
-
-                const touch = e.touches[0];
-                const drawerOpen = root.classList.contains('poly-mobile-drawer-open');
-                const x = touch.clientX;
-                const y = touch.clientY;
-
-                if (!drawerOpen && x <= 24) {
-                    tracking = { mode: 'open', startX: x, startY: y };
-                    return;
-                }
-
-                if (drawerOpen && x <= Math.min(window.innerWidth, 360)) {
-                    tracking = { mode: 'close', startX: x, startY: y };
-                    return;
-                }
-
-                tracking = null;
-            }, { passive: true });
-
-            document.addEventListener('touchend', function(e) {
-                if (!tracking || !e.changedTouches || e.changedTouches.length !== 1) {
-                    tracking = null;
-                    return;
-                }
-
-                const root = document.querySelector('.poly-app');
-                if (!root) {
-                    tracking = null;
-                    return;
-                }
-
-                const touch = e.changedTouches[0];
-                const dx = touch.clientX - tracking.startX;
-                const dy = Math.abs(touch.clientY - tracking.startY);
-
-                if (dy <= 80) {
-                    if (tracking.mode === 'open' && dx >= 60) {
-                        window.__polySetMobileDrawerOpen(true);
-                    } else if (tracking.mode === 'close' && dx <= -60) {
-                        window.__polySetMobileDrawerOpen(false);
-                    }
-                }
-
-                tracking = null;
-            }, { passive: true });
-        }"#,
-    );
+    match browser_runtime() {
+        BrowserRuntime::WasmDom => {
+            let _ = document::eval(MOBILE_DRAWER_RUNTIME_JS);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        // DECISION(DX-MOBILE-1): poly-core cannot yet distinguish Wry from
+        // Blitz at this layer, so native renderers get an explicit no-op stub
+        // until a renderer-specific split-shell runtime exists.
+        BrowserRuntime::NativeStub => {}
+    }
 }
 
 fn open_mobile_drawer() {
-    let _ = document::eval("window.__polySetMobileDrawerOpen?.(true);");
+    if browser_runtime() == BrowserRuntime::WasmDom {
+        let _ = document::eval(MOBILE_DRAWER_OPEN_JS);
+    }
 }
 
 pub(crate) fn close_mobile_drawer() {
-    let _ = document::eval("window.__polySetMobileDrawerOpen?.(false);");
+    if browser_runtime() == BrowserRuntime::WasmDom {
+        let _ = document::eval(MOBILE_DRAWER_CLOSE_JS);
+    }
+}
+
+fn close_mobile_right_wing() {
+    if browser_runtime() == BrowserRuntime::WasmDom {
+        let _ = document::eval(MOBILE_RIGHT_WING_CLOSE_JS);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn runtime_mobile_ui_active() -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+
+    let forced_mobile = window
+        .document()
+        .and_then(|document| document.query_selector(".poly-app").ok().flatten())
+        .and_then(|root| root.get_attribute("class"))
+        .is_some_and(|classes| {
+            classes
+                .split_whitespace()
+                .any(|class| class == "poly-force-mobile")
+        });
+    let narrow_viewport = window
+        .inner_width()
+        .ok()
+        .and_then(|value| value.as_f64())
+        .is_some_and(|width| width <= 640.0);
+
+    forced_mobile || narrow_viewport
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn runtime_mobile_ui_active() -> bool {
+    false
 }
 
 /// Navigation bar component — only renders on native platforms (desktop/mobile).
@@ -208,7 +187,12 @@ pub fn MainLayout() -> Element {
     let route_key = format!("{route}");
     use_effect(move || {
         let _ = &route_key;
-        close_mobile_drawer();
+        close_mobile_right_wing();
+        if runtime_mobile_ui_active() {
+            let mut state = app_state.write();
+            state.nav.right_sidebar_visible = false;
+            state.nav.dm_right_sidebar_visible = false;
+        }
     });
 
     use_effect(move || {
@@ -247,22 +231,9 @@ pub fn MainLayout() -> Element {
     // satisfying the WebKit requirements. Dioxus's own ondragstart / ondragover / ondrop
     // handlers still fire afterwards and update ChatData state correctly.
     use_effect(move || {
-        let _ = document::eval(
-            "if (!window.__polyDragInit) {\
-                window.__polyDragInit = true;\
-                document.addEventListener('dragstart', function(e) {\
-                    if (e.dataTransfer) {\
-                        try { e.dataTransfer.setData('text/plain', 'poly-drag'); } catch(_) {}\
-                    }\
-                }, true);\
-                document.addEventListener('dragover', function(e) {\
-                    e.preventDefault();\
-                }, true);\
-                document.addEventListener('drop', function(e) {\
-                    e.preventDefault();\
-                }, true);\
-            }",
-        );
+        if browser_runtime() == BrowserRuntime::WasmDom {
+            let _ = document::eval(DRAG_BRIDGE_RUNTIME_JS);
+        }
     });
 
     rsx! {

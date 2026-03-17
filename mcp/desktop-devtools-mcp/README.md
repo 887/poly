@@ -39,7 +39,7 @@ cargo run --bin poly-desktop-devtools-mcp -- launch
 # Stop the devtools app
 cargo run --bin poly-desktop-devtools-mcp -- kill
 
-# Take a screenshot (prints base64 or saves file)
+# Take a screenshot (inline by default; save only if you need a file)
 cargo run --bin poly-desktop-devtools-mcp -- screenshot
 cargo run --bin poly-desktop-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
 
@@ -67,6 +67,8 @@ cargo run --bin poly-desktop-devtools-mcp -- help
 ```
 
 VS Code tasks for the most common CLI commands are defined in `.vscode/tasks.json` under "CLI: desktop — *".
+
+**Screenshot policy:** prefer screenshot commands **without** `--save` so the image is returned inline. Use `--save` only when you explicitly want an artifact on disk.
 
 ## MCP Tools Exposed
 

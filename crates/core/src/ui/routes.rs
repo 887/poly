@@ -52,6 +52,7 @@ use super::account::{
 };
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
+use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, SettingsSection, View};
@@ -518,11 +519,18 @@ fn restore_dm_chat(
 #[component]
 fn DmsLayout() -> Element {
     rsx! {
-        div { class: "channel-list-wrapper",
-            ChannelList {}
-            VoiceAccountFooter {}
+        SplitMenuShell {
+            root_class: "account-view-main".to_string(),
+            sidebar_class: "channel-list-wrapper".to_string(),
+            content_class: String::new(),
+            sidebar: rsx! {
+                ChannelList {}
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                Outlet::<Route> {}
+            },
         }
-        Outlet::<Route> {}
     }
 }
 
@@ -541,11 +549,18 @@ fn DmsLayout() -> Element {
 #[component]
 fn ServerLayout() -> Element {
     rsx! {
-        div { class: "channel-list-wrapper",
-            ChannelList {}
-            VoiceAccountFooter {}
+        SplitMenuShell {
+            root_class: "account-view-main".to_string(),
+            sidebar_class: "channel-list-wrapper".to_string(),
+            content_class: String::new(),
+            sidebar: rsx! {
+                ChannelList {}
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                Outlet::<Route> {}
+            },
         }
-        Outlet::<Route> {}
     }
 }
 

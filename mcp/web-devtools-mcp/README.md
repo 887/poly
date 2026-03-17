@@ -44,7 +44,7 @@ cargo run --bin poly-web-devtools-mcp -- launch
 # Stop processes
 cargo run --bin poly-web-devtools-mcp -- kill
 
-# Take a screenshot
+# Take a screenshot (inline by default; save only if you need a file)
 cargo run --bin poly-web-devtools-mcp -- screenshot
 cargo run --bin poly-web-devtools-mcp -- screenshot --save devtools-screenshots/snap.png
 
@@ -74,8 +74,10 @@ cargo run --bin poly-web-devtools-mcp -- help
 Add `--headless` before the subcommand to run Chromium headlessly:
 
 ```bash
-cargo run --bin poly-web-devtools-mcp -- --headless screenshot --save snap.png
+cargo run --bin poly-web-devtools-mcp -- --headless screenshot
 ```
+
+**Screenshot policy:** prefer screenshot commands **without** `--save` so the image is returned inline. Use `--save` only when you explicitly want a saved artifact.
 
 VS Code tasks for the most common CLI commands are defined in `.vscode/tasks.json` under "CLI: web — *".
 

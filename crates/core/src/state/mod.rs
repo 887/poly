@@ -191,6 +191,8 @@ pub struct AppState {
     pub nav: NavigationState,
     /// Active settings section.
     pub settings_section: SettingsSection,
+    /// Whether the mobile shell should be forced regardless of viewport width.
+    pub force_mobile_layout: bool,
     /// Active right-click context menu, if any.
     ///
     /// Set by `oncontextmenu` on server icons; cleared by a global
@@ -204,6 +206,7 @@ impl Default for AppState {
             is_setup_complete: false,
             nav: NavigationState::default(),
             settings_section: SettingsSection::Accounts,
+            force_mobile_layout: false,
             context_menu: None,
         }
     }

@@ -301,9 +301,10 @@
 
 .message-input-row {
     display: flex;
-    align-items: flex-end;
+    align-items: stretch;
     gap: 0.5rem;
     flex: 1;
+    min-width: 0;
     position: relative;
 }
 
@@ -460,4 +461,3 @@
     opacity: 0.4;
     cursor: default;
 }
-

@@ -109,7 +109,7 @@ and other MCP-compatible AI clients.
 | DX-MCP-2 | Shared `DevtoolsBackend` trait | Avoid duplicating MCP protocol handling. Backends differ only in transport. |
 | DX-MCP-3 | `dx build` required for desktop-devtools | The `asset!()` macro needs dx's linker to resolve; `cargo build` leaves a placeholder URL. |
 | DX-MCP-4 | `webkit2gtk::WebViewExt::snapshot()` for desktop screenshots | GDK pixbuf captures window chrome only — WebKit renders GPU-accelerated, producing blank captures. `webkit2gtk::snapshot()` is WebKit's own native capture pipeline and produces pixel-perfect results. cairo::Surface → PNG via `cairo-rs`. |
-| DX-MCP-6 | Screenshots saved to `devtools-screenshots/` dir + returned inline | Like Blender MCP — both disk persistence and inline base64 image response for VS Code chat history. Added to `.gitignore`. |
+| DX-MCP-6 | Screenshots are inline-first; saving to `devtools-screenshots/` is optional | Default verification should show the image directly in chat/tool output. Save to disk only when a durable artifact or stable filepath is explicitly needed. |
 | DX-MCP-5 | `Page.captureScreenshot` for web screenshots | Real CDP provides pixel-perfect screenshots — superior to the SVG foreignObject approach. |
 
 ---

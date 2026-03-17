@@ -358,11 +358,23 @@ onchange: move |e: Event<FormData>| {
 - Do **not** convert the favorites rail or account/server rail into a horizontal top bar on mobile.
 - The favorites rail, account/server rail, and channel list belong in a **left-side drawer** that can
   be opened from the left edge or via the floating menu button.
+- All left split-menu pages (`SettingsPage`, `SearchPage`, account settings, server settings, DM/server
+  route shells) should share the same `SplitMenuShell` structural wrapper so narrow/mobile drawer fixes
+  land in one place instead of being reimplemented per page.
+- The chat-side member/contact/utility rail should use the matching shared `RightWingShell` wrapper so
+  desktop right-column sizing and mobile overlay behavior stay centralized the same way the left drawer
+  layout now is.
+- The chat member/contact/utility rail is the matching **right-side mobile wing**. On narrow/mobile UI
+  it must overlay from the right (`.poly-mobile-right-wing-open`) instead of stacking below the chat,
+  and mobile route changes must close it automatically.
 - On mobile route navigation, close the drawer automatically so the newly selected chat / DM /
   settings view becomes the only visible primary content again.
 - If you change `MainLayout` or `mobile-shell.css`, visually verify both states:
   1. closed drawer = chat/content only
   2. open drawer = left menu chrome fully visible onscreen
+  3. right wing closed = chat remains full width
+  4. right wing open = member/contact/utility rail overlays from the right without shrinking chat
+  5. desktop right rail still docks as a normal side column for DM contact/member views and server member views
 
 ## MANDATORY: Visual Testing with MCP desktop-devtools
 
@@ -379,6 +391,9 @@ desktop-devtools MCP:
 5. Navigate to the changed area: mcp_poly-desktop_navigate("/path")
 6. Take another screenshot to confirm the change looks correct
 ```
+
+**Inline-first rule:** take screenshots **without** a save path by default so they appear inline in chat/tool output.
+Only save a screenshot file when the user explicitly wants an artifact on disk or when docs/plans/memories require durable evidence.
 
 **If the visual test reveals problems**: fix them before declaring the task complete.
 A change is only "done" when it looks correct in the actual running app.

@@ -1,0 +1,13 @@
+{
+  "id": 8,
+  "slug": "stabilize-shared-desktop-mobile-shell-and-split-panel-behavior",
+  "title": "Stabilize shared desktop/mobile shell and split-panel behavior",
+  "description": "Fix desktop settings cutoff, hide account bar below 640px, unify split-menu/mobile wing behavior, extract inline JS into checked files, verify desktop and mobile resizing via poly web, and update docs/memories.",
+  "status": "todo",
+  "created_at": "2026-03-16T22:38:57.496534437Z",
+  "updated_at": "2026-03-16T23:10:21.474491106Z",
+  "completed_at": null,
+  "memory_count": 1,
+  "finding_count": 0,
+  "checklist": []
+}

@@ -312,7 +312,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 if let Some(url) = last_route_url
                     && let Ok(route) = url.parse::<Route>()
                 {
-                    close_mobile_drawer();
                     navigator().push(route);
                     return;
                 }
@@ -343,7 +342,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         instance_id,
                         account_id: aid,
                     });
-                close_mobile_drawer();
             },
             title: "{display_name}",
             // Render image avatar if available (avatar_url is set by the client;
@@ -491,7 +489,6 @@ fn FavoriteServerIcon(
                             account_id: aid.clone(),
                             server_id: sid.clone(),
                         });
-                    close_mobile_drawer();
                 }
             },
             // Right-click → open context menu at cursor position
