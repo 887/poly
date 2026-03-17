@@ -220,6 +220,15 @@ impl StoatHttpClient {
         Ok(session)
     }
 
+    /// Fetch the authenticated user's full Stoat profile.
+    pub async fn fetch_self(&self) -> ClientResult<StoatUser> {
+        let token = self.session().map(|session| session.token).ok_or_else(|| {
+            ClientError::AuthFailed("Stoat client is not authenticated".to_string())
+        })?;
+
+        self.fetch_self_with_token(&token).await
+    }
+
     /// Fetch a Stoat server by ID.
     pub async fn fetch_server(&self, server_id: &str) -> ClientResult<StoatServer> {
         let response = self
@@ -257,6 +266,55 @@ impl StoatHttpClient {
     pub async fn fetch_channel(&self, channel_id: &str) -> ClientResult<StoatChannel> {
         let response = self
             .authenticated_request(Method::GET, &format!("/channels/{channel_id}"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Fetch the authenticated account's DM and group channels.
+    pub async fn fetch_direct_message_channels(&self) -> ClientResult<Vec<StoatChannel>> {
+        let response = self
+            .authenticated_request(Method::GET, "/users/dms")?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Open or create a direct-message-like channel with the target user.
+    ///
+    /// Stoat returns a normal one-to-one DM for another user, and returns the
+    /// personal Saved Messages channel when the target is the authenticated
+    /// user themself.
+    pub async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<StoatChannel> {
+        let response = self
+            .authenticated_request(Method::GET, &format!("/users/{user_id}/dm"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Fetch all members in a Stoat group DM.
+    pub async fn fetch_group_members(&self, channel_id: &str) -> ClientResult<Vec<StoatUser>> {
+        let response = self
+            .authenticated_request(Method::GET, &format!("/channels/{channel_id}/members"))?
             .send()
             .await
             .map_err(Self::network_error)?;

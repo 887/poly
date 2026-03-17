@@ -1,7 +1,7 @@
 # poly-stoat — Agent Instructions
 
 > **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-03-16
+> **Last Updated:** 2026-03-17
 
 ---
 
@@ -46,13 +46,16 @@ cargo component build -p poly-stoat --target wasm32-wasip2
 | File | Purpose |
 |---|---|
 | `src/lib.rs` | Native `StoatClient` stub, cfg-gated behind `feature = "native"` |
-| `src/guest.rs` | WIT guest stub — returns errors for all operations, reports `BackendType::Stoat` |
+| `src/guest.rs` | WIT guest implementation — auth is real via imported `host-api`, most non-auth methods remain stubbed |
 | `Cargo.toml` | Dual crate-type, feature-gated deps, WASI wit-bindgen dep |
 
 ### guest.rs Notes
 
 - `#![allow(unsafe_code)]` — required for wit-bindgen FFI
-- All methods return `Err(ClientError::Internal("not yet implemented"))` or empty collections
+- Auth is now a real guest slice using imported `host-api.http-request`
+	- token auth: `GET /users/@me`
+	- email/password auth: `POST /auth/session/login` + `GET /users/@me`
+- Most non-auth methods still return empty collections or not-yet-implemented errors and must not be mistaken for feature parity
 - `get_backend_type()` returns `BackendType::Stoat`, `get_backend_name()` returns `"Stoat"`
 - When implementing the real client, the guest bridge must convert between native types and WIT types
 - Because `wit_bindgen::generate!` lives in `src/wit_bindings.rs`, the guest export must use:
@@ -137,7 +140,7 @@ src/
 └── voice/           # WebRTC voice/video (TODO)
 ```
 
-## Current Implementation Status (2026-03-16)
+## Current Implementation Status (2026-03-17)
 
 Completed the first Phase 3.1 native isolation slice:
 
@@ -264,17 +267,35 @@ Completed the eighth Phase 3.1 WASM-guest slice:
 - This guest implementation intentionally uses the Component Model host imports, not native `reqwest`, because direct network access is not the plugin execution model.
 - `poly-plugin-loader-tests` now exercises this path with deterministic mocked host HTTP fixtures, so Stoat plugin tests no longer only validate stub behavior.
 
-## E2E Test Coverage (2026-03-06)
+Completed the ninth Phase 3.1 native social slice:
 
-**10 tests** in `crates/plugin-host-tests/tests/client_e2e/stoat.rs` — stub behavior verification through WASM plugin host:
+- Native social retrieval now also supports:
+	- `get_friends()` via `GET /users/@me` relationship metadata + `GET /users/{id}` hydration
+	- `get_dm_channels()` via `GET /users/dms` with unread counts from `GET /sync/unreads`
+	- `get_groups()` via `GET /users/dms` + `GET /channels/{group}/members`
+	- `get_channel_members(channel_id)` for Stoat group DMs via `GET /channels/{group}/members`
+	- `open_direct_message_channel(user_id)` via `GET /users/{target}/dm`
+	- `open_saved_messages_channel()` via Stoat's self-targeted open-DM behavior
+- DM and group list entries now hydrate last-message previews from one-message `GET /channels/{target}/messages` fetches so Poly receives bundled author metadata instead of a bare message id.
+- `SavedMessages` is now surfaced as a Poly self-DM using the authenticated user's own `User` record because `poly_client::DmChannel` currently requires a `user`.
+- Current intentional limitations: friend-request and group-member mutation flows are still pending, and the UI does not yet have a dedicated saved-notes presentation separate from ordinary DMs.
+- Native integration coverage now additionally includes:
+	- friend list retrieval
+	- DM list retrieval with unread counts + last message
+	- group DM retrieval with member roster + last message
+	- group-channel member lookup
+	- open/create-DM endpoint mapping for existing DMs and Saved Messages
 
-- Backend identity (type=Stoat, name="Stoat")
-- `authenticate()` returns `Err(Internal("not yet implemented"))`
-- `is_authenticated()` returns false
-- All list methods return empty `Ok(vec![])`
-- `get_server()` / `get_channel()` return `Err(NotFound(...))`
-- `set_presence()`, `logout()` return `Ok(())`
-- Event stream returns valid (empty) stream
+## E2E Test Coverage (2026-03-17)
+
+`crates/plugin-host-tests/tests/client_e2e/stoat.rs` now validates the **real WASM guest auth path** through the plugin host with mocked host HTTP fixtures, including:
+
+- backend identity (type=Stoat, name="Stoat")
+- email/password guest auth through `host-api.http-request`
+- token guest auth through `host-api.http-request`
+- logout + `is_authenticated()` state transitions
+- guard coverage that the guest no longer returns the old stub-auth marker path
+- existing empty/stub coverage for still-unimplemented non-auth guest methods
 
 ```sh
 cargo test -p poly-plugin-loader-tests --features test-stoat --test client_e2e -- --nocapture
@@ -286,13 +307,20 @@ Additional native transport E2E-style tests (2026-03-16):
 cargo test -p poly-stoat
 ```
 
-These cover the implemented auth slice end-to-end over a mock HTTP server:
+These native tests now cover the implemented native slices end-to-end over a mock HTTP server:
 - root config fetch
 - email/password login
 - token restore
 - MFA error branch
 - disabled-account error branch
 - logout
+- server/channel/unread retrieval
+- paginated message retrieval
+- user/presence lookup
+- server member lookup
+- friend list retrieval
+- DM list retrieval
+- group DM retrieval and group-member lookup
 
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 

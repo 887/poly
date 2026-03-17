@@ -1,6 +1,6 @@
 # poly-stoat Specification
 
-> **Last Updated:** 2026-03-16  
+> **Last Updated:** 2026-03-17  
 > **Sources:**
 > - Local OpenAPI snapshot: `clients/stoat/api-1.json`
 > - Stoat developer docs: `https://developers.stoat.chat/api-reference`
@@ -47,6 +47,10 @@ The most important architectural rule remains unchanged:
 - Native user/presence lookup:
   - `GET /users/{target}`
   - avatar URL resolution through Autumn when available
+- Native social retrieval:
+  - `GET /users/@me` relationship list → friend roster
+  - `GET /users/dms` → DM and group discovery
+  - `GET /channels/{target}/members` → group DM roster
 - Native server member lookup:
   - `GET /servers/{target}/members`
   - server-member nickname/avatar overrides applied on top of user records
@@ -68,12 +72,16 @@ The most important architectural rule remains unchanged:
   - message retrieval with bundled users/members, replies, reactions, and attachment mapping
   - user lookup, avatar URL mapping, and presence lookup
   - server member roster lookup for server-backed channel member lists
+  - friend list hydration from Stoat relationship metadata
+  - DM list mapping with unread counts and last-message previews
+  - group DM mapping with member rosters and last-message previews
+  - group member lookup through the dedicated group-members endpoint
 
 ### 2.2 Not implemented yet
 
 - Actual WASM guest parity for auth/data operations
 - realtime websocket handling
-- friends/DMs/groups
+- friend-request mutations / DM creation flows
 - reactions/pins/search
 - unread sync / ack integration
 - voice/video / Vortex integration
@@ -222,6 +230,35 @@ Current Poly implementation for Stoat message history:
 | Create group | `POST /channels/create` | group DM creation | P2 |
 | Group members | `GET /channels/{target}/members` | group roster | P2 |
 | Add/remove group member | `PUT`/`DELETE /channels/.../recipients/...` | group management | P2 |
+
+### 4.4a Current social / DM / group mapping notes
+
+Current Poly implementation for Stoat social surfaces:
+
+- `get_friends()` uses `GET /users/@me` and reads the returned `relations` array.
+  - only entries with status `Friend` are hydrated into Poly users
+  - each friend user record is resolved through `GET /users/{id}` so avatars/presence use the same mapping as standalone user lookups
+- `get_dm_channels()` uses `GET /users/dms` and keeps only Stoat `DirectMessage` channels.
+  - Stoat `SavedMessages` is now surfaced as a Poly `DmChannel` using the authenticated user's own `User` record, because Poly's current `DmChannel` model requires a `user`
+  - the other participant is chosen from the channel `recipients` array by excluding the authenticated user id
+  - unread badges come from `GET /sync/unreads`
+  - last-message previews are hydrated with a one-message `GET /channels/{target}/messages` fetch so bundled user metadata is preserved
+- `open_direct_message_channel(user_id)` uses `GET /users/{target}/dm`.
+  - targeting another user returns the one-to-one DM
+  - targeting the authenticated user returns the Saved Messages channel
+- `open_saved_messages_channel()` is a convenience wrapper around the self-targeted open-DM flow
+- `get_groups()` uses `GET /users/dms` and keeps only Stoat `Group` channels.
+  - members are resolved through `GET /channels/{target}/members`
+  - last-message previews are hydrated from `GET /channels/{target}/messages`
+- `get_channel_members(channel_id)` now supports both:
+  - server channels via `GET /servers/{server}/members`
+  - group DMs via `GET /channels/{target}/members`
+
+Still pending in this area:
+
+- friend-request mutations
+- add/remove group member mutations
+- broader UI polish for distinguishing self-DM / Saved Messages presentation if Poly later adds a dedicated saved-notes concept
 
 ### 4.5 Interaction polish
 

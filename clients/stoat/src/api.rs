@@ -236,6 +236,12 @@ pub struct StoatUser {
     /// Optional avatar attachment.
     #[serde(default)]
     pub avatar: Option<StoatFile>,
+    /// All known relationships from the authenticated user to other users.
+    #[serde(default)]
+    pub relations: Vec<StoatRelationship>,
+    /// Relationship between the authenticated account and this user.
+    #[serde(default)]
+    pub relationship: Option<StoatRelationshipStatus>,
     /// Optional active status.
     #[serde(default)]
     pub status: Option<StoatUserStatus>,
@@ -339,12 +345,27 @@ pub struct StoatChannel {
     /// Server ID for server channels.
     #[serde(default)]
     pub server: Option<String>,
+    /// Saved-messages owner when this is a personal notes channel.
+    #[serde(default)]
+    pub user: Option<String>,
+    /// Whether a DM is currently open on both sides.
+    #[serde(default)]
+    pub active: Option<bool>,
+    /// DM/group recipient user IDs.
+    #[serde(default)]
+    pub recipients: Option<Vec<String>>,
+    /// Owner user ID for group chats.
+    #[serde(default)]
+    pub owner: Option<String>,
     /// Channel display name.
     #[serde(default)]
     pub name: Option<String>,
     /// Optional description.
     #[serde(default)]
     pub description: Option<String>,
+    /// Optional group icon.
+    #[serde(default)]
+    pub icon: Option<StoatFile>,
     /// Last message ID when present.
     #[serde(default)]
     pub last_message_id: Option<String>,
@@ -354,6 +375,24 @@ pub struct StoatChannel {
 }
 
 impl StoatChannel {
+    /// Whether this channel is a one-to-one DM.
+    #[must_use]
+    pub fn is_direct_message(&self) -> bool {
+        self.channel_type == "DirectMessage"
+    }
+
+    /// Whether this channel is a multi-user group DM.
+    #[must_use]
+    pub fn is_group(&self) -> bool {
+        self.channel_type == "Group"
+    }
+
+    /// Whether this channel is the user's personal saved-messages room.
+    #[must_use]
+    pub fn is_saved_messages(&self) -> bool {
+        self.channel_type == "SavedMessages"
+    }
+
     /// Convert the Stoat channel model into a Poly server-channel.
     pub fn into_poly_server_channel(
         self,
@@ -390,6 +429,35 @@ impl StoatChannel {
             last_message_id: self.last_message_id,
         })
     }
+}
+
+/// Relationship entry exposed on `GET /users/@me` and other user payloads.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatRelationship {
+    /// Other user's ID.
+    #[serde(rename = "_id")]
+    pub user_id: String,
+    /// Current relationship status.
+    pub status: StoatRelationshipStatus,
+}
+
+/// Stoat/Revolt relationship status values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum StoatRelationshipStatus {
+    /// No relationship with the user.
+    None,
+    /// The referenced user is the authenticated user.
+    User,
+    /// The users are friends.
+    Friend,
+    /// Outgoing pending friend request.
+    Outgoing,
+    /// Incoming pending friend request.
+    Incoming,
+    /// Authenticated user blocked the other user.
+    Blocked,
+    /// Other user blocked the authenticated user.
+    BlockedOther,
 }
 
 /// Voice metadata for voice-enabled server channels.
@@ -928,6 +996,8 @@ mod tests {
             discriminator: "0001".to_string(),
             display_name: None,
             avatar: None,
+            relations: vec![],
+            relationship: None,
             status: Some(StoatUserStatus { presence: None }),
             online: false,
         };

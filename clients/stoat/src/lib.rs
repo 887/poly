@@ -38,7 +38,10 @@ mod guest;
 #[cfg(feature = "native")]
 pub use api::StoatRootConfig;
 #[cfg(feature = "native")]
-use api::{StoatChannelUnread, StoatSendMessageRequest, reply_preview_from_message};
+use api::{
+    StoatBulkMessageResponse, StoatChannelUnread, StoatRelationshipStatus, StoatSendMessageRequest,
+    reply_preview_from_message,
+};
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
@@ -185,8 +188,183 @@ impl StoatClient {
             .collect()
     }
 
+    fn unread_count_for_channel(
+        unread_index: &HashMap<String, StoatChannelUnread>,
+        channel_id: &str,
+    ) -> u32 {
+        unread_index
+            .get(channel_id)
+            .map(StoatChannelUnread::approximate_unread_count)
+            .unwrap_or(0)
+    }
+
     fn current_user_id(&self) -> Option<String> {
         self.http.session().and_then(|session| session.user_id)
+    }
+
+    fn map_messages_response(
+        &self,
+        response: StoatBulkMessageResponse,
+        autumn_base_url: Option<&str>,
+    ) -> Vec<Message> {
+        let current_user_id = self.current_user_id();
+        let (raw_messages, bundled_users, bundled_members) = response.into_parts();
+
+        let mut messages_with_replies: Vec<(Message, Option<String>)> = raw_messages
+            .into_iter()
+            .map(|raw| {
+                let reply_id = raw.primary_reply_id().map(str::to_string);
+                let message = raw.into_poly_message(
+                    &bundled_users,
+                    &bundled_members,
+                    current_user_id.as_deref(),
+                    autumn_base_url,
+                );
+                (message, reply_id)
+            })
+            .collect();
+
+        let preview_index: HashMap<String, MessageReplyPreview> = messages_with_replies
+            .iter()
+            .map(|(message, _)| (message.id.clone(), reply_preview_from_message(message)))
+            .collect();
+
+        let mut messages: Vec<Message> = messages_with_replies
+            .drain(..)
+            .map(|(mut message, reply_id)| {
+                message.reply_to =
+                    reply_id.and_then(|reply_id| preview_index.get(&reply_id).cloned());
+                message
+            })
+            .collect();
+
+        messages.sort_by(|left, right| {
+            left.timestamp
+                .cmp(&right.timestamp)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+
+        messages
+    }
+
+    async fn fetch_last_message_preview(
+        &self,
+        channel_id: &str,
+        last_message_id: Option<&str>,
+        autumn_base_url: Option<&str>,
+    ) -> ClientResult<Option<Message>> {
+        if last_message_id.is_none() {
+            return Ok(None);
+        }
+
+        let response = self
+            .http
+            .fetch_messages(
+                channel_id,
+                &MessageQuery {
+                    limit: Some(1),
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        Ok(self
+            .map_messages_response(response, autumn_base_url)
+            .into_iter()
+            .last())
+    }
+
+    async fn map_dm_like_channel(
+        &self,
+        channel: api::StoatChannel,
+        unread_count: u32,
+        autumn_base_url: Option<&str>,
+        account_id: &str,
+        self_user: Option<&api::StoatUser>,
+    ) -> ClientResult<DmChannel> {
+        let last_message = self
+            .fetch_last_message_preview(
+                &channel.id,
+                channel.last_message_id.as_deref(),
+                autumn_base_url,
+            )
+            .await?;
+
+        let user = if channel.is_saved_messages() {
+            self_user
+                .cloned()
+                .ok_or_else(|| {
+                    ClientError::Internal(
+                        "Stoat Saved Messages mapping requires the current user profile"
+                            .to_string(),
+                    )
+                })?
+                .into_poly_user_with_autumn(autumn_base_url)
+        } else {
+            let current_user_id = self.current_user_id().ok_or_else(|| {
+                ClientError::AuthFailed("Stoat client is not authenticated".to_string())
+            })?;
+            let other_user_id = channel
+                .recipients
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .find(|user_id| user_id != &current_user_id)
+                .ok_or_else(|| {
+                    ClientError::NotSupported(format!(
+                        "Stoat DM channel {} is missing the other participant",
+                        channel.id
+                    ))
+                })?;
+
+            self.http
+                .fetch_user(&other_user_id)
+                .await?
+                .into_poly_user_with_autumn(autumn_base_url)
+        };
+
+        Ok(DmChannel {
+            id: channel.id,
+            user,
+            last_message,
+            unread_count,
+            backend: BackendType::Stoat,
+            account_id: account_id.to_string(),
+        })
+    }
+
+    /// Open or create a Stoat direct-message-like channel for the target user.
+    ///
+    /// When `user_id` refers to the authenticated user, Stoat returns the
+    /// Saved Messages channel. Because Poly's current `DmChannel` model always
+    /// carries a `user`, Saved Messages is represented as a self-DM using the
+    /// authenticated user's own profile.
+    pub async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        let (channel, unreads, root_config, self_user) = future::try_join4(
+            self.http.open_direct_message_channel(user_id),
+            self.http.fetch_unreads(),
+            self.http.fetch_server_config(),
+            self.http.fetch_self(),
+        )
+        .await?;
+        let unread_index = Self::index_unreads(unreads);
+        let unread_count = Self::unread_count_for_channel(&unread_index, &channel.id);
+        let account_id = self.current_account_metadata()?.0;
+
+        self.map_dm_like_channel(
+            channel,
+            unread_count,
+            root_config.autumn_base_url(),
+            &account_id,
+            Some(&self_user),
+        )
+        .await
+    }
+
+    /// Convenience wrapper for the authenticated user's Saved Messages channel.
+    pub async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        let self_user_id = self.current_account_metadata()?.0;
+        self.open_direct_message_channel(&self_user_id).await
     }
 
     async fn send_message_internal(
@@ -405,45 +583,7 @@ impl ClientBackend for StoatClient {
             self.http.fetch_server_config(),
         )
         .await?;
-        let autumn_base_url = root_config.autumn_base_url().map(str::to_string);
-        let current_user_id = self.current_user_id();
-        let (raw_messages, bundled_users, bundled_members) = response.into_parts();
-
-        let mut messages_with_replies: Vec<(Message, Option<String>)> = raw_messages
-            .into_iter()
-            .map(|raw| {
-                let reply_id = raw.primary_reply_id().map(str::to_string);
-                let message = raw.into_poly_message(
-                    &bundled_users,
-                    &bundled_members,
-                    current_user_id.as_deref(),
-                    autumn_base_url.as_deref(),
-                );
-                (message, reply_id)
-            })
-            .collect();
-
-        let preview_index: HashMap<String, MessageReplyPreview> = messages_with_replies
-            .iter()
-            .map(|(message, _)| (message.id.clone(), reply_preview_from_message(message)))
-            .collect();
-
-        let mut messages: Vec<Message> = messages_with_replies
-            .drain(..)
-            .map(|(mut message, reply_id)| {
-                message.reply_to =
-                    reply_id.and_then(|reply_id| preview_index.get(&reply_id).cloned());
-                message
-            })
-            .collect();
-
-        messages.sort_by(|left, right| {
-            left.timestamp
-                .cmp(&right.timestamp)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-
-        Ok(messages)
+        Ok(self.map_messages_response(response, root_config.autumn_base_url()))
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
@@ -453,68 +593,192 @@ impl ClientBackend for StoatClient {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(vec![])
+        let (self_user, root_config) =
+            future::try_join(self.http.fetch_self(), self.http.fetch_server_config()).await?;
+        let autumn_base_url = root_config.autumn_base_url();
+
+        let mut friends: Vec<User> = future::try_join_all(
+            self_user
+                .relations
+                .into_iter()
+                .filter(|relation| relation.status == StoatRelationshipStatus::Friend)
+                .map(|relation| async move { self.http.fetch_user(&relation.user_id).await }),
+        )
+        .await?
+        .into_iter()
+        .map(|user| user.into_poly_user_with_autumn(autumn_base_url))
+        .collect();
+
+        friends.sort_by(|left, right| {
+            left.display_name
+                .cmp(&right.display_name)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+
+        Ok(friends)
     }
 
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
-        let (channel, members_response, root_config) = future::try_join3(
+        let (channel, root_config) = future::try_join(
             self.http.fetch_channel(channel_id),
-            async {
-                let channel = self.http.fetch_channel(channel_id).await?;
-                let server_id = channel.server.ok_or_else(|| {
-                    ClientError::NotSupported(format!(
-                        "Stoat channel {channel_id} is not a server channel"
-                    ))
-                })?;
-                self.http.fetch_server_members(&server_id).await
-            },
             self.http.fetch_server_config(),
         )
         .await?;
-
-        let server_id = channel.server.ok_or_else(|| {
-            ClientError::NotSupported(format!(
-                "Stoat channel {channel_id} is not a server channel"
-            ))
-        })?;
         let autumn_base_url = root_config.autumn_base_url();
-        let user_index: HashMap<String, api::StoatUser> = members_response
-            .users
-            .into_iter()
-            .map(|user| (user.id.clone(), user))
-            .collect();
 
-        Ok(members_response
-            .members
-            .into_iter()
-            .filter(|member| member.key.server == server_id)
-            .filter_map(|member| {
-                let mut user = user_index
-                    .get(&member.key.user)
-                    .cloned()?
-                    .into_poly_user_with_autumn(autumn_base_url);
+        if let Some(server_id) = channel.server.clone() {
+            let members_response = self.http.fetch_server_members(&server_id).await?;
+            let user_index: HashMap<String, api::StoatUser> = members_response
+                .users
+                .into_iter()
+                .map(|user| (user.id.clone(), user))
+                .collect();
 
-                if let Some(nickname) = member.nickname {
-                    user.display_name = nickname;
-                }
-                if let Some(avatar_url) = member
-                    .avatar
-                    .and_then(|avatar| avatar.download_url(autumn_base_url))
-                {
-                    user.avatar_url = Some(avatar_url);
-                }
+            return Ok(members_response
+                .members
+                .into_iter()
+                .filter(|member| member.key.server == server_id)
+                .filter_map(|member| {
+                    let mut user = user_index
+                        .get(&member.key.user)
+                        .cloned()?
+                        .into_poly_user_with_autumn(autumn_base_url);
 
-                Some(user)
-            })
-            .collect())
+                    if let Some(nickname) = member.nickname {
+                        user.display_name = nickname;
+                    }
+                    if let Some(avatar_url) = member
+                        .avatar
+                        .and_then(|avatar| avatar.download_url(autumn_base_url))
+                    {
+                        user.avatar_url = Some(avatar_url);
+                    }
+
+                    Some(user)
+                })
+                .collect());
+        }
+
+        if channel.is_group() {
+            return Ok(self
+                .http
+                .fetch_group_members(channel_id)
+                .await?
+                .into_iter()
+                .map(|user| user.into_poly_user_with_autumn(autumn_base_url))
+                .collect());
+        }
+
+        if channel.is_direct_message() || channel.is_saved_messages() {
+            let recipient_ids = channel
+                .recipients
+                .clone()
+                .unwrap_or_else(|| channel.user.into_iter().collect());
+
+            return future::try_join_all(
+                recipient_ids
+                    .iter()
+                    .map(|user_id| self.http.fetch_user(user_id)),
+            )
+            .await
+            .map(|users| {
+                users
+                    .into_iter()
+                    .map(|user| user.into_poly_user_with_autumn(autumn_base_url))
+                    .collect()
+            });
+        }
+
+        Err(ClientError::NotSupported(format!(
+            "Stoat channel {channel_id} does not expose member lists"
+        )))
     }
 
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(vec![])
+        let (channels, root_config) = future::try_join(
+            self.http.fetch_direct_message_channels(),
+            self.http.fetch_server_config(),
+        )
+        .await?;
+        let autumn_base_url = root_config.autumn_base_url().map(str::to_string);
+        let account_id = self.current_account_metadata()?.0;
+
+        future::try_join_all(
+            channels
+                .into_iter()
+                .filter(|channel| channel.is_group())
+                .map(|channel| {
+                    let autumn_base_url = autumn_base_url.clone();
+                    let account_id = account_id.clone();
+
+                    async move {
+                        let members = self.http.fetch_group_members(&channel.id).await?;
+                        let last_message = self
+                            .fetch_last_message_preview(
+                                &channel.id,
+                                channel.last_message_id.as_deref(),
+                                autumn_base_url.as_deref(),
+                            )
+                            .await?;
+
+                        Ok(Group {
+                            id: channel.id,
+                            members: members
+                                .into_iter()
+                                .map(|user| {
+                                    user.into_poly_user_with_autumn(autumn_base_url.as_deref())
+                                })
+                                .collect(),
+                            name: channel.name,
+                            last_message,
+                            backend: BackendType::Stoat,
+                            account_id: account_id.clone(),
+                        })
+                    }
+                }),
+        )
+        .await
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(vec![])
+        let ((channels, unreads, root_config), self_user) = future::try_join(
+            future::try_join3(
+                self.http.fetch_direct_message_channels(),
+                self.http.fetch_unreads(),
+                self.http.fetch_server_config(),
+            ),
+            self.http.fetch_self(),
+        )
+        .await?;
+        let unread_index = Self::index_unreads(unreads);
+        let autumn_base_url = root_config.autumn_base_url().map(str::to_string);
+        let account_id = self.current_account_metadata()?.0;
+
+        future::try_join_all(
+            channels
+                .into_iter()
+                .filter(|channel| channel.is_direct_message() || channel.is_saved_messages())
+                .map(|channel| {
+                    let unread_index = unread_index.clone();
+                    let autumn_base_url = autumn_base_url.clone();
+                    let account_id = account_id.clone();
+                    let self_user = self_user.clone();
+
+                    async move {
+                        let unread_count =
+                            Self::unread_count_for_channel(&unread_index, &channel.id);
+                        self.map_dm_like_channel(
+                            channel,
+                            unread_count,
+                            autumn_base_url.as_deref(),
+                            &account_id,
+                            Some(&self_user),
+                        )
+                        .await
+                    }
+                }),
+        )
+        .await
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {

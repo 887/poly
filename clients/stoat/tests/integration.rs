@@ -61,10 +61,13 @@ impl TestServer {
             .route("/auth/session/login", post(login))
             .route("/auth/session/logout", post(logout))
             .route("/users/@me", get(fetch_self))
+            .route("/users/dms", get(fetch_dms))
+            .route("/users/{target}/dm", get(open_dm))
             .route("/users/{target}", get(fetch_user))
             .route("/servers/{target}", get(fetch_server))
             .route("/servers/{target}/members", get(fetch_server_members))
             .route("/channels/{target}", get(fetch_channel))
+            .route("/channels/{target}/members", get(fetch_group_members))
             .route("/channels/{target}/messages", get(fetch_messages))
             .route("/sync/unreads", get(fetch_unreads))
             .with_state(state);
@@ -178,10 +181,90 @@ async fn fetch_self(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json
         "discriminator": "0001",
         "display_name": "Stoaty McStoat",
         "avatar": null,
+        "relations": [
+            { "_id": "user_2", "status": "Friend" },
+            { "_id": "user_3", "status": "Outgoing" }
+        ],
         "status": { "presence": "Focus" },
         "relationship": "User",
         "online": true
     })))
+}
+
+async fn fetch_dms(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    Ok(Json(json!([
+        {
+            "channel_type": "DirectMessage",
+            "_id": "dm_1",
+            "active": true,
+            "recipients": ["user_1", "user_2"],
+            "last_message_id": "msg_dm_1"
+        },
+        {
+            "channel_type": "Group",
+            "_id": "group_1",
+            "name": "Stoat Crew",
+            "owner": "user_1",
+            "description": "Mock group chat",
+            "recipients": ["user_1", "user_2", "user_3"],
+            "icon": null,
+            "last_message_id": "msg_group_1"
+        },
+        {
+            "channel_type": "SavedMessages",
+            "_id": "saved_1",
+            "user": "user_1",
+            "last_message_id": "msg_saved_1"
+        }
+    ])))
+}
+
+async fn open_dm(
+    headers: HeaderMap,
+    Path(target): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    let body = match target.as_str() {
+        "user_1" => json!({
+            "channel_type": "SavedMessages",
+            "_id": "saved_1",
+            "user": "user_1",
+            "last_message_id": "msg_saved_1"
+        }),
+        "user_2" => json!({
+            "channel_type": "DirectMessage",
+            "_id": "dm_1",
+            "active": true,
+            "recipients": ["user_1", "user_2"],
+            "last_message_id": "msg_dm_1"
+        }),
+        _ => return Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
+    };
+
+    Ok(Json(body))
 }
 
 async fn logout(headers: HeaderMap) -> Result<StatusCode, (StatusCode, Json<Value>)> {
@@ -238,7 +321,18 @@ async fn fetch_user(
             "discriminator": "0002",
             "display_name": null,
             "avatar": null,
+            "relationship": "Friend",
             "status": { "presence": "Idle" },
+            "online": true
+        }))),
+        "user_3" => Ok(Json(json!({
+            "_id": "user_3",
+            "username": "beaverbuddy",
+            "discriminator": "0003",
+            "display_name": "Beaver Buddy",
+            "avatar": null,
+            "relationship": "Outgoing",
+            "status": { "presence": "Online" },
             "online": true
         }))),
         _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
@@ -398,12 +492,81 @@ async fn fetch_channel(
             "recipients": ["user_1", "user_2"],
             "last_message_id": "msg_dm_1"
         }),
+        "group_1" => json!({
+            "channel_type": "Group",
+            "_id": "group_1",
+            "name": "Stoat Crew",
+            "owner": "user_1",
+            "description": "Mock group chat",
+            "recipients": ["user_1", "user_2", "user_3"],
+            "icon": null,
+            "last_message_id": "msg_group_1"
+        }),
+        "saved_1" => json!({
+            "channel_type": "SavedMessages",
+            "_id": "saved_1",
+            "user": "user_1",
+            "last_message_id": "msg_saved_1"
+        }),
         _ => {
             return Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" }))));
         }
     };
 
     Ok(Json(body))
+}
+
+async fn fetch_group_members(
+    headers: HeaderMap,
+    Path(target): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    match target.as_str() {
+        "group_1" => Ok(Json(json!([
+            {
+                "_id": "user_1",
+                "username": "stoaty",
+                "discriminator": "0001",
+                "display_name": "Stoaty McStoat",
+                "avatar": null,
+                "relationship": "User",
+                "status": { "presence": "Focus" },
+                "online": true
+            },
+            {
+                "_id": "user_2",
+                "username": "otterpal",
+                "discriminator": "0002",
+                "display_name": "Otter Pal",
+                "avatar": null,
+                "relationship": "Friend",
+                "status": { "presence": "Idle" },
+                "online": true
+            },
+            {
+                "_id": "user_3",
+                "username": "beaverbuddy",
+                "discriminator": "0003",
+                "display_name": "Beaver Buddy",
+                "avatar": null,
+                "relationship": "Outgoing",
+                "status": { "presence": "Online" },
+                "online": true
+            }
+        ]))),
+        _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
+    }
 }
 
 async fn fetch_unreads(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
@@ -429,6 +592,16 @@ async fn fetch_unreads(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, J
             "_id": { "channel": "ch_voice", "user": "user_1" },
             "last_id": "voice_ping",
             "mentions": []
+        },
+        {
+            "_id": { "channel": "dm_1", "user": "user_1" },
+            "last_id": "msg_dm_1",
+            "mentions": []
+        },
+        {
+            "_id": { "channel": "group_1", "user": "user_1" },
+            "last_id": "msg_group_1",
+            "mentions": ["msg_group_1"]
         }
     ])))
 }
@@ -544,6 +717,87 @@ async fn fetch_messages(
                 "reactions": {}
             }
         ]),
+        "dm_1" => json!({
+            "messages": [
+                {
+                    "_id": "01ARZ3NDF0DMDMDMDMDMDM0001",
+                    "channel": "dm_1",
+                    "author": "user_2",
+                    "content": "Hey from DM",
+                    "user": {
+                        "_id": "user_2",
+                        "username": "otterpal",
+                        "discriminator": "0002",
+                        "display_name": "Otter Pal",
+                        "avatar": null,
+                        "relationship": "Friend",
+                        "status": { "presence": "Idle" },
+                        "online": true
+                    },
+                    "member": null,
+                    "attachments": [],
+                    "edited": null,
+                    "replies": [],
+                    "reactions": {}
+                }
+            ],
+            "users": [],
+            "members": []
+        }),
+        "group_1" => json!({
+            "messages": [
+                {
+                    "_id": "01ARZ3NDF0GROUPGROUP000001",
+                    "channel": "group_1",
+                    "author": "user_3",
+                    "content": "Group hello",
+                    "user": {
+                        "_id": "user_3",
+                        "username": "beaverbuddy",
+                        "discriminator": "0003",
+                        "display_name": "Beaver Buddy",
+                        "avatar": null,
+                        "relationship": "Outgoing",
+                        "status": { "presence": "Online" },
+                        "online": true
+                    },
+                    "member": null,
+                    "attachments": [],
+                    "edited": null,
+                    "replies": [],
+                    "reactions": {}
+                }
+            ],
+            "users": [],
+            "members": []
+        }),
+        "saved_1" => json!({
+            "messages": [
+                {
+                    "_id": "01ARZ3NDFSAVEDSAVED000001",
+                    "channel": "saved_1",
+                    "author": "user_1",
+                    "content": "Remember to ship it",
+                    "user": {
+                        "_id": "user_1",
+                        "username": "stoaty",
+                        "discriminator": "0001",
+                        "display_name": "Stoaty McStoat",
+                        "avatar": null,
+                        "relationship": "User",
+                        "status": { "presence": "Focus" },
+                        "online": true
+                    },
+                    "member": null,
+                    "attachments": [],
+                    "edited": null,
+                    "replies": [],
+                    "reactions": {}
+                }
+            ],
+            "users": [],
+            "members": []
+        }),
         _ => {
             return Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" }))));
         }
@@ -712,6 +966,188 @@ async fn stoat_get_channel_members_uses_server_member_overrides() {
             && user.display_name == "otterpal"
             && user.presence == PresenceStatus::Idle
     }));
+}
+
+#[tokio::test]
+async fn stoat_get_friends_uses_self_relationships() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let friends = client.get_friends().await.expect("friends fetch succeeds");
+
+    assert_eq!(friends.len(), 1);
+    assert_eq!(friends[0].id, "user_2");
+    assert_eq!(friends[0].display_name, "otterpal");
+    assert_eq!(friends[0].presence, PresenceStatus::Idle);
+}
+
+#[tokio::test]
+async fn stoat_get_dm_channels_maps_other_participant_last_message_and_unreads() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let dms = client
+        .get_dm_channels()
+        .await
+        .expect("dm list fetch succeeds");
+
+    assert_eq!(dms.len(), 2);
+    let dm = dms.iter().find(|dm| dm.id == "dm_1").expect("dm present");
+    assert_eq!(dm.id, "dm_1");
+    assert_eq!(dm.user.id, "user_2");
+    assert_eq!(dm.user.display_name, "otterpal");
+    assert_eq!(dm.unread_count, 1);
+    assert!(matches!(
+        dm.last_message.as_ref().map(|message| &message.content),
+        Some(MessageContent::Text(text)) if text == "Hey from DM"
+    ));
+}
+
+#[tokio::test]
+async fn stoat_get_dm_channels_includes_saved_messages_as_self_dm() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let dms = client
+        .get_dm_channels()
+        .await
+        .expect("dm list fetch succeeds");
+
+    let saved = dms
+        .iter()
+        .find(|dm| dm.id == "saved_1")
+        .expect("saved messages present");
+    assert_eq!(saved.user.id, "user_1");
+    assert_eq!(saved.user.display_name, "Stoaty McStoat");
+    assert_eq!(saved.unread_count, 0);
+    assert!(matches!(
+        saved.last_message.as_ref().map(|message| &message.content),
+        Some(MessageContent::Text(text)) if text == "Remember to ship it"
+    ));
+}
+
+#[tokio::test]
+async fn stoat_open_direct_message_channel_returns_existing_dm() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let dm = client
+        .open_direct_message_channel("user_2")
+        .await
+        .expect("open dm succeeds");
+
+    assert_eq!(dm.id, "dm_1");
+    assert_eq!(dm.user.id, "user_2");
+    assert!(matches!(
+        dm.last_message.as_ref().map(|message| &message.content),
+        Some(MessageContent::Text(text)) if text == "Hey from DM"
+    ));
+}
+
+#[tokio::test]
+async fn stoat_open_saved_messages_channel_returns_self_dm_entry() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let saved = client
+        .open_saved_messages_channel()
+        .await
+        .expect("open saved messages succeeds");
+
+    assert_eq!(saved.id, "saved_1");
+    assert_eq!(saved.user.id, "user_1");
+    assert_eq!(saved.user.display_name, "Stoaty McStoat");
+    assert!(matches!(
+        saved.last_message.as_ref().map(|message| &message.content),
+        Some(MessageContent::Text(text)) if text == "Remember to ship it"
+    ));
+}
+
+#[tokio::test]
+async fn stoat_get_groups_maps_members_and_last_message() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let groups = client
+        .get_groups()
+        .await
+        .expect("group list fetch succeeds");
+
+    assert_eq!(groups.len(), 1);
+    let group = &groups[0];
+    assert_eq!(group.id, "group_1");
+    assert_eq!(group.name.as_deref(), Some("Stoat Crew"));
+    assert_eq!(group.members.len(), 3);
+    assert!(group.members.iter().any(|member| member.id == "user_3"));
+    assert!(matches!(
+        group.last_message.as_ref().map(|message| &message.content),
+        Some(MessageContent::Text(text)) if text == "Group hello"
+    ));
+}
+
+#[tokio::test]
+async fn stoat_get_channel_members_supports_group_chats() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let members = client
+        .get_channel_members("group_1")
+        .await
+        .expect("group members fetch succeeds");
+
+    assert_eq!(members.len(), 3);
+    assert!(members.iter().any(|member| member.id == "user_1"));
+    assert!(members.iter().any(|member| member.id == "user_2"));
+    assert!(members.iter().any(|member| member.id == "user_3"));
 }
 
 #[tokio::test]

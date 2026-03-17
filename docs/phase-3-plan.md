@@ -53,6 +53,7 @@
 	- `poly-plugin-loader-tests` now validates this through mocked host I/O instead of only stub guest expectations.
 - [ ] **3.1.2.3** Implement `ClientBackend` trait for `StoatClient`
 	- 2026-03-17 update: native trait coverage continues to lead overall functionality, but the WASM guest is no longer fully stubbed — auth now has a real first slice through the plugin host boundary.
+	- 2026-03-17 later update: native `StoatClient` coverage now also includes friend list, DM list, group DM list, group-member lookup, user/presence lookup, message retrieval, and text/reply send. Remaining major gaps are joined-server discovery, realtime sync, friend/group mutations, and broader WASM guest parity.
 - [ ] **3.1.2.4** Server list retrieval
 	- 2026-03-16 research/update: `clients/stoat/api-1.json` exposes `GET /servers/{id}` but no obvious authenticated joined-server collection endpoint
 	- Current `get_servers()` therefore remains explicitly `NotSupported` pending Bonfire ready-state / sync-cache integration or discovery of a dedicated REST list endpoint
@@ -92,7 +93,17 @@
 	- Added mock-backed integration coverage for user fetch + presence lookup.
 	- This item remains open until the broader Stoat profile surface is reviewed (for example `/users/{id}/profile` if needed by Poly's richer profile UI).
 - [ ] **3.1.2.9** Friend list and friend requests
+	- 2026-03-17 update: native `get_friends()` now uses `GET /users/@me` relationship metadata and hydrates `Friend` entries through `GET /users/{id}` with Autumn-backed avatars/presence.
+	- Added mock-backed integration coverage for friend-list retrieval.
+	- This item remains open until friend-request / accept / remove mutations are implemented.
 - [ ] **3.1.2.10** Group DMs / multi-user chats
+	- 2026-03-17 update: native `get_dm_channels()` and `get_groups()` now use `GET /users/dms` to split Stoat `DirectMessage` vs `Group` channels.
+	- DMs now map unread badges from `GET /sync/unreads` and hydrate last-message previews from one-message `GET /channels/{target}/messages` fetches.
+	- 2026-03-17 later update: Stoat `SavedMessages` is now surfaced through the DM list as a self-DM entry using the authenticated user's own profile, and native helper methods now support `GET /users/{target}/dm` for open/create-DM flows.
+	- Group DMs now hydrate member rosters through `GET /channels/{target}/members` and last-message previews through `GET /channels/{target}/messages`.
+	- `get_channel_members(channel_id)` now supports group chats in addition to server channels.
+	- Added mock-backed integration coverage for DM list retrieval, group list retrieval, and group-member lookup.
+	- This item remains open until the shared `ClientBackend` surface grows first-class DM create/open support and group mutation flows are implemented.
 - [ ] **3.1.2.11** Self-hosted instance support (configurable base URL, API version detection)
 
 ### 3.1.3 Real-Time Events
