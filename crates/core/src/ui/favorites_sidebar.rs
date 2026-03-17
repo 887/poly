@@ -173,14 +173,19 @@ pub fn FavoritesBar() -> Element {
             // Footer: search + settings buttons float at bottom
             div { class: "sidebar-footer",
                 // Global Search button
-                div {
-                    class: "server-icon",
-                    onclick: move |_| {
-                        close_mobile_drawer();
-                        navigator().push(Route::SearchRoute);
-                    },
-                    title: "{t(\"nav-search\")}",
-                    div { class: "icon-search", "🔍" }
+                {
+                    let is_search = current_view == View::Search;
+                    rsx! {
+                        div {
+                            class: if is_search { "server-icon active" } else { "server-icon" },
+                            onclick: move |_| {
+                                close_mobile_drawer();
+                                navigator().push(Route::SearchRoute);
+                            },
+                            title: "{t(\"nav-search\")}",
+                            div { class: "icon-search", "🔍" }
+                        }
+                    }
                 }
 
                 // App Settings button — only "active" for app-level settings (no account scoped)
