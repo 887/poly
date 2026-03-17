@@ -1746,7 +1746,8 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx, allow_repea
         let viewport_bottom = metrics.scroll_top + metrics.client_height;
 
         let near_top = metrics.scroll_top <= loaded_content_top + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
-        let near_bottom = viewport_bottom >= loaded_content_bottom - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+        let near_bottom =
+            viewport_bottom >= loaded_content_bottom - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
 
         if !near_top {
             ctx.top_edge_armed.store(
