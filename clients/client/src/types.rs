@@ -344,6 +344,34 @@ pub struct Attachment {
     pub url: String,
     /// File size in bytes.
     pub size: u64,
+    /// Native-only raw file bytes for outbound upload flows.
+    ///
+    /// This is populated by host-side composers before a backend send so
+    /// native backends can upload files to their remote media services.
+    /// Persisted / inbound attachments leave this as `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload_bytes: Option<Vec<u8>>,
+}
+
+impl Attachment {
+    /// Construct an attachment that already exists on a remote backend.
+    #[must_use]
+    pub fn remote(
+        id: String,
+        filename: String,
+        content_type: String,
+        url: String,
+        size: u64,
+    ) -> Self {
+        Self {
+            id,
+            filename,
+            content_type,
+            url,
+            size,
+            upload_bytes: None,
+        }
+    }
 }
 
 /// Lightweight preview metadata for a replied-to message.

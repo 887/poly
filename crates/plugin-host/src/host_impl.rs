@@ -13,6 +13,17 @@ use wasmtime::component::ResourceTable;
 use super::engine::poly::messenger::host_api;
 use super::engine::poly::messenger::types;
 
+/// Deterministic mocked HTTP response used by plugin-host tests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MockHttpResponse {
+    /// HTTP status code.
+    pub status: u16,
+    /// Response headers.
+    pub headers: Vec<(String, String)>,
+    /// Raw response body bytes.
+    pub body: Vec<u8>,
+}
+
 /// Per-plugin instance state stored in the wasmtime [`Store`].
 ///
 /// Each plugin gets its own isolated state with separate storage namespace,
@@ -44,6 +55,13 @@ pub struct PluginHostState {
 
     /// Remaining fuel for this invocation (prevents infinite loops).
     pub fuel_limit: u64,
+
+    /// Optional deterministic HTTP fixtures keyed by `(method, url)`.
+    ///
+    /// When present, `http_request` returns these fixtures instead of touching
+    /// the real network. This is used by plugin-host tests to exercise real
+    /// guest logic through the WASM path without depending on external services.
+    pub mock_http_responses: HashMap<(String, String), Result<MockHttpResponse, String>>,
 }
 
 /// Represents an active WebSocket connection managed by the host.
@@ -68,7 +86,21 @@ impl PluginHostState {
             resource_table: ResourceTable::new(),
             wasi_ctx,
             fuel_limit: 1_000_000_000, // 1 billion fuel units per invocation
+            mock_http_responses: HashMap::new(),
         }
+    }
+
+    /// Register a deterministic mocked HTTP response for plugin tests.
+    #[must_use]
+    pub fn with_mock_http_response(
+        mut self,
+        method: impl Into<String>,
+        url: impl Into<String>,
+        response: Result<MockHttpResponse, String>,
+    ) -> Self {
+        self.mock_http_responses
+            .insert((method.into(), url.into()), response);
+        self
     }
 }
 
@@ -100,6 +132,18 @@ impl host_api::Host for PluginHostState {
         headers: Vec<(String, String)>,
         body: Option<Vec<u8>>,
     ) -> Result<types::HttpResponse, String> {
+        if let Some(mock) = self
+            .mock_http_responses
+            .get(&(method.clone(), url.clone()))
+            .cloned()
+        {
+            return mock.map(|response| types::HttpResponse {
+                status: response.status,
+                headers: response.headers,
+                body: response.body,
+            });
+        }
+
         let client = reqwest::Client::new();
 
         let req_method = method

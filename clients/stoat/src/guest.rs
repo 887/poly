@@ -5,7 +5,184 @@
 
 #![allow(unsafe_code)]
 
+use std::cell::RefCell;
+
 use crate::wit_bindings::{Guest, PluginMetadataGuest, SettingDescriptor, export, wit};
+use serde::{Deserialize, Serialize};
+
+const OFFICIAL_STOAT_BASE_URL: &str = "https://api.stoat.chat";
+const STOAT_SESSION_TOKEN_HEADER: &str = "x-session-token";
+
+#[derive(Debug, Clone)]
+struct StoredSession {
+    session_id: String,
+}
+
+thread_local! {
+    static STATE: RefCell<Option<StoredSession>> = const { RefCell::new(None) };
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "result")]
+enum StoatLoginResponse {
+    Success {
+        #[serde(rename = "_id")]
+        id: String,
+        user_id: String,
+        token: String,
+        name: String,
+    },
+    #[serde(rename = "MFA")]
+    Mfa {
+        allowed_methods: Vec<String>,
+    },
+    Disabled {
+        user_id: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+struct StoatGuestUser {
+    #[serde(rename = "_id")]
+    id: String,
+    username: String,
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    online: bool,
+    #[serde(default)]
+    status: Option<StoatGuestStatus>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoatGuestStatus {
+    #[serde(default)]
+    presence: Option<StoatGuestPresence>,
+}
+
+#[derive(Debug, Deserialize)]
+enum StoatGuestPresence {
+    Online,
+    Idle,
+    Focus,
+    Busy,
+    Invisible,
+}
+
+#[derive(Debug, Serialize)]
+struct StoatGuestPasswordLoginRequest {
+    email: String,
+    password: String,
+    friendly_name: Option<String>,
+}
+
+fn map_presence(user: &StoatGuestUser) -> wit::PresenceStatus {
+    match user
+        .status
+        .as_ref()
+        .and_then(|status| status.presence.as_ref())
+    {
+        Some(StoatGuestPresence::Online) => wit::PresenceStatus::Online,
+        Some(StoatGuestPresence::Idle) => wit::PresenceStatus::Idle,
+        Some(StoatGuestPresence::Focus) | Some(StoatGuestPresence::Busy) => {
+            wit::PresenceStatus::DoNotDisturb
+        }
+        Some(StoatGuestPresence::Invisible) => wit::PresenceStatus::Invisible,
+        None => {
+            if user.online {
+                wit::PresenceStatus::Online
+            } else {
+                wit::PresenceStatus::Offline
+            }
+        }
+    }
+}
+
+fn instance_id_for_base_url(base_url: &str) -> String {
+    base_url
+        .trim_end_matches('/')
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .replace('/', "~")
+}
+
+fn to_session(
+    user: StoatGuestUser,
+    token: String,
+    session_id: String,
+    base_url: &str,
+) -> wit::Session {
+    let display_name = user
+        .display_name
+        .clone()
+        .unwrap_or_else(|| user.username.clone());
+    let wit_user = wit::User {
+        id: user.id.clone(),
+        display_name,
+        avatar_url: None,
+        presence: map_presence(&user),
+        backend: wit::BackendType::Stoat,
+    };
+
+    let instance_id = instance_id_for_base_url(base_url);
+    STATE.with(|state| {
+        state.replace(Some(StoredSession {
+            session_id: session_id.clone(),
+        }));
+    });
+
+    wit::Session {
+        id: session_id,
+        user: wit_user,
+        token,
+        backend: wit::BackendType::Stoat,
+        icon_emoji: Some("🦦".to_string()),
+        instance_id,
+        backend_url: Some(base_url.to_string()),
+    }
+}
+
+fn host_http_request(
+    method: &str,
+    url: &str,
+    headers: Vec<(String, String)>,
+    body: Option<Vec<u8>>,
+) -> Result<crate::wit_bindings::poly::messenger::types::HttpResponse, wit::ClientError> {
+    Ok(
+        crate::wit_bindings::poly::messenger::host_api::http_request(
+            method,
+            url,
+            &headers,
+            body.as_deref(),
+        )
+        .map_err(wit::ClientError::Internal)?,
+    )
+}
+
+fn parse_json<T: for<'de> Deserialize<'de>>(
+    response: &crate::wit_bindings::poly::messenger::types::HttpResponse,
+) -> Result<T, wit::ClientError> {
+    serde_json::from_slice(&response.body)
+        .map_err(|err| wit::ClientError::Internal(format!("invalid Stoat guest JSON: {err}")))
+}
+
+fn fetch_self(base_url: &str, token: &str) -> Result<StoatGuestUser, wit::ClientError> {
+    let response = host_http_request(
+        "GET",
+        &format!("{base_url}/users/@me"),
+        vec![(STOAT_SESSION_TOKEN_HEADER.to_string(), token.to_string())],
+        None,
+    )?;
+
+    if !matches!(response.status, 200..=299) {
+        return Err(match response.status {
+            401 => wit::ClientError::AuthFailed("Stoat token rejected".to_string()),
+            status => wit::ClientError::Network(format!("Stoat /users/@me returned HTTP {status}")),
+        });
+    }
+
+    parse_json(&response)
+}
 
 const FTL_EN: &str = "plugin-stoat-title = Stoat\n";
 const FTL_DE: &str = "plugin-stoat-title = Stoat\n";
@@ -15,20 +192,87 @@ const FTL_ES: &str = "plugin-stoat-title = Stoat\n";
 struct StoatPlugin;
 
 impl Guest for StoatPlugin {
-    fn authenticate(_credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
-        Err(wit::ClientError::Internal(
-            "Stoat client not yet implemented".into(),
-        ))
+    fn authenticate(credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
+        match credentials {
+            wit::AuthCredentials::Token(token) => {
+                let user = fetch_self(OFFICIAL_STOAT_BASE_URL, &token)?;
+                Ok(to_session(
+                    user,
+                    token,
+                    STATE.with(|state| {
+                        state.borrow().as_ref().map_or_else(
+                            || "stoat-token-session".to_string(),
+                            |stored| stored.session_id.clone(),
+                        )
+                    }),
+                    OFFICIAL_STOAT_BASE_URL,
+                ))
+            }
+            wit::AuthCredentials::EmailPassword(creds) => {
+                let response = host_http_request(
+                    "POST",
+                    &format!("{OFFICIAL_STOAT_BASE_URL}/auth/session/login"),
+                    vec![("content-type".to_string(), "application/json".to_string())],
+                    Some(
+                        serde_json::to_vec(&StoatGuestPasswordLoginRequest {
+                            email: creds.email,
+                            password: creds.password,
+                            friendly_name: Some("Poly".to_string()),
+                        })
+                        .map_err(|err| {
+                            wit::ClientError::Internal(format!(
+                                "failed to encode Stoat login body: {err}"
+                            ))
+                        })?,
+                    ),
+                )?;
+
+                if !matches!(response.status, 200..=299) {
+                    return Err(match response.status {
+                        401 => wit::ClientError::AuthFailed(
+                            "Stoat email/password rejected".to_string(),
+                        ),
+                        status => {
+                            wit::ClientError::Network(format!("Stoat login returned HTTP {status}"))
+                        }
+                    });
+                }
+
+                let login: StoatLoginResponse = parse_json(&response)?;
+                match login {
+                    StoatLoginResponse::Success {
+                        id,
+                        user_id: _user_id,
+                        token,
+                        name: _name,
+                    } => {
+                        let user = fetch_self(OFFICIAL_STOAT_BASE_URL, &token)?;
+                        Ok(to_session(user, token, id, OFFICIAL_STOAT_BASE_URL))
+                    }
+                    StoatLoginResponse::Mfa { allowed_methods } => {
+                        Err(wit::ClientError::AuthFailed(format!(
+                            "Stoat requires MFA before login can continue (allowed methods: {})",
+                            allowed_methods.join(", ")
+                        )))
+                    }
+                    StoatLoginResponse::Disabled { user_id } => Err(wit::ClientError::AuthFailed(
+                        format!("Stoat account is disabled for user {user_id}"),
+                    )),
+                }
+            }
+            _ => Err(wit::ClientError::NotSupported(
+                "Stoat guest currently supports token and email/password auth only".into(),
+            )),
+        }
     }
 
     fn logout() -> Result<(), wit::ClientError> {
-        Err(wit::ClientError::Internal(
-            "Stoat client not yet implemented".into(),
-        ))
+        STATE.with(|state| state.replace(None));
+        Ok(())
     }
 
     fn is_authenticated() -> bool {
-        false
+        STATE.with(|state| state.borrow().is_some())
     }
 
     fn get_servers() -> Result<Vec<wit::Server>, wit::ClientError> {

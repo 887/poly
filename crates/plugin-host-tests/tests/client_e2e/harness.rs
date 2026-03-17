@@ -18,6 +18,37 @@ use poly_client::{
 };
 use poly_plugin_host::PluginBackend;
 
+fn is_stub_error(error: &ClientError) -> bool {
+    let message = match error {
+        ClientError::AuthFailed(message)
+        | ClientError::Network(message)
+        | ClientError::NotFound(message)
+        | ClientError::PermissionDenied(message)
+        | ClientError::Internal(message)
+        | ClientError::NotSupported(message) => message,
+        ClientError::RateLimited { .. } => return false,
+    };
+
+    let lowercase = message.to_ascii_lowercase();
+    lowercase.contains("not yet implemented")
+        || lowercase.contains("wasm impl not yet complete")
+        || lowercase.contains("stub")
+}
+
+/// Verify a plugin-path auth call does not fall back to a stub guest error.
+pub async fn authenticate_does_not_use_stub_path(
+    backend: &mut PluginBackend,
+    credentials: AuthCredentials,
+) {
+    let result = backend.authenticate(credentials).await;
+    if let Err(error) = &result {
+        assert!(
+            !is_stub_error(error),
+            "Expected real plugin-path behavior, but guest returned a stub error: {error}"
+        );
+    }
+}
+
 // ─── Identity Tests ────────────────────────────────────────────────
 
 /// Verify the plugin reports the expected backend type.
@@ -61,7 +92,6 @@ pub async fn authenticate_with_token(
 
 /// Verify that authenticate returns an error for stubs that are not implemented.
 #[cfg(any(
-    feature = "test-stoat",
     feature = "test-matrix",
     feature = "test-discord",
     feature = "test-teams",
@@ -338,7 +368,6 @@ pub fn event_stream_is_valid(backend: &PluginBackend) {
 
 /// For stub backends: verify all list-returning methods return empty lists.
 #[cfg(any(
-    feature = "test-stoat",
     feature = "test-matrix",
     feature = "test-discord",
     feature = "test-teams",

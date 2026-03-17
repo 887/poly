@@ -61,7 +61,9 @@ impl TestServer {
             .route("/auth/session/login", post(login))
             .route("/auth/session/logout", post(logout))
             .route("/users/@me", get(fetch_self))
+            .route("/users/{target}", get(fetch_user))
             .route("/servers/{target}", get(fetch_server))
+            .route("/servers/{target}/members", get(fetch_server_members))
             .route("/channels/{target}", get(fetch_channel))
             .route("/channels/{target}/messages", get(fetch_messages))
             .route("/sync/unreads", get(fetch_unreads))
@@ -198,6 +200,51 @@ async fn logout(headers: HeaderMap) -> Result<StatusCode, (StatusCode, Json<Valu
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn fetch_user(
+    headers: HeaderMap,
+    Path(target): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    match target.as_str() {
+        "user_1" => Ok(Json(json!({
+            "_id": "user_1",
+            "username": "stoaty",
+            "discriminator": "0001",
+            "display_name": "Stoaty McStoat",
+            "avatar": {
+                "_id": "avatar-user-1",
+                "tag": "avatars",
+                "filename": "avatar.png",
+                "content_type": "image/png",
+                "size": 1234
+            },
+            "status": { "presence": "Focus" },
+            "online": true
+        }))),
+        "user_2" => Ok(Json(json!({
+            "_id": "user_2",
+            "username": "otterpal",
+            "discriminator": "0002",
+            "display_name": null,
+            "avatar": null,
+            "status": { "presence": "Idle" },
+            "online": true
+        }))),
+        _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
+    }
+}
+
 async fn fetch_server(
     headers: HeaderMap,
     Path(target): Path<String>,
@@ -231,6 +278,73 @@ async fn fetch_server(
             "default_permissions": 0,
             "icon": null,
             "banner": null
+        }))),
+        _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
+    }
+}
+
+async fn fetch_server_members(
+    headers: HeaderMap,
+    Path(target): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    match target.as_str() {
+        "server_1" => Ok(Json(json!({
+            "members": [
+                {
+                    "_id": { "server": "server_1", "user": "user_1" },
+                    "nickname": "Captain Stoat",
+                    "avatar": {
+                        "_id": "member-avatar-1",
+                        "tag": "avatars",
+                        "filename": "member.png",
+                        "content_type": "image/png",
+                        "size": 2345
+                    }
+                },
+                {
+                    "_id": { "server": "server_1", "user": "user_2" },
+                    "nickname": null,
+                    "avatar": null
+                }
+            ],
+            "users": [
+                {
+                    "_id": "user_1",
+                    "username": "stoaty",
+                    "discriminator": "0001",
+                    "display_name": "Stoaty McStoat",
+                    "avatar": {
+                        "_id": "avatar-user-1",
+                        "tag": "avatars",
+                        "filename": "avatar.png",
+                        "content_type": "image/png",
+                        "size": 1234
+                    },
+                    "status": { "presence": "Focus" },
+                    "online": true
+                },
+                {
+                    "_id": "user_2",
+                    "username": "otterpal",
+                    "discriminator": "0002",
+                    "display_name": null,
+                    "avatar": null,
+                    "status": { "presence": "Idle" },
+                    "online": true
+                }
+            ]
         }))),
         _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
     }
@@ -515,6 +629,89 @@ async fn stoat_authenticate_mfa_response_returns_auth_failed() {
         Err(ClientError::AuthFailed(message)) if message.contains("requires MFA")
     ));
     assert!(!client.is_authenticated());
+}
+
+#[tokio::test]
+async fn stoat_get_user_maps_avatar_and_presence() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let user = client
+        .get_user("user_1")
+        .await
+        .expect("user fetch succeeds");
+
+    assert_eq!(user.id, "user_1");
+    assert_eq!(user.display_name, "Stoaty McStoat");
+    assert_eq!(user.presence, PresenceStatus::DoNotDisturb);
+    assert_eq!(
+        user.avatar_url,
+        Some(format!(
+            "{}/autumn/avatars/avatar-user-1",
+            client.base_url()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn stoat_get_presence_uses_user_status() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let presence = client
+        .get_presence("user_2")
+        .await
+        .expect("presence fetch succeeds");
+
+    assert_eq!(presence, PresenceStatus::Idle);
+}
+
+#[tokio::test]
+async fn stoat_get_channel_members_uses_server_member_overrides() {
+    let server = TestServer::start(LoginMode::Success).await;
+    let mut client = StoatClient::with_base_url(server.base_url).expect("valid client");
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "alice@example.test".to_string(),
+            password: "correct horse battery staple".to_string(),
+        })
+        .await
+        .expect("login succeeds");
+
+    let members = client
+        .get_channel_members("ch_text")
+        .await
+        .expect("channel members fetch succeeds");
+
+    assert_eq!(members.len(), 2);
+    assert!(members.iter().any(|user| {
+        user.id == "user_1"
+            && user.display_name == "Captain Stoat"
+            && user.avatar_url
+                == Some(format!(
+                    "{}/autumn/avatars/member-avatar-1",
+                    client.base_url()
+                ))
+    }));
+    assert!(members.iter().any(|user| {
+        user.id == "user_2"
+            && user.display_name == "otterpal"
+            && user.presence == PresenceStatus::Idle
+    }));
 }
 
 #[tokio::test]

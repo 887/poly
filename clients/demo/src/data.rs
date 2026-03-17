@@ -839,13 +839,13 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::days(1) - Duration::hours(5),
                 attachments: vec![
-                    Attachment {
-                        id: "att-screenshot-1".to_string(),
-                        filename: "theme-preview.png".to_string(),
-                        content_type: "image/png".to_string(),
-                        url: "https://picsum.photos/seed/theme/400/250".to_string(),
-                        size: 245_760,
-                    },
+                    Attachment::remote(
+                        "att-screenshot-1".to_string(),
+                        "theme-preview.png".to_string(),
+                        "image/png".to_string(),
+                        "https://picsum.photos/seed/theme/400/250".to_string(),
+                        245_760,
+                    ),
                 ],
                 reactions: vec![
                     Reaction { emoji: "😍".to_string(), count: 3, me: false },
@@ -863,13 +863,13 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::days(1) - Duration::hours(4),
                 attachments: vec![
-                    Attachment {
-                        id: "att-diagram-1".to_string(),
-                        filename: "architecture.png".to_string(),
-                        content_type: "image/png".to_string(),
-                        url: "https://picsum.photos/seed/arch/500/300".to_string(),
-                        size: 512_000,
-                    },
+                    Attachment::remote(
+                        "att-diagram-1".to_string(),
+                        "architecture.png".to_string(),
+                        "image/png".to_string(),
+                        "https://picsum.photos/seed/arch/500/300".to_string(),
+                        512_000,
+                    ),
                 ],
                 reactions: vec![],
                 reply_to: None,
@@ -937,13 +937,13 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::hours(1) - Duration::minutes(28),
                 attachments: vec![
-                    Attachment {
-                        id: "att-doc-1".to_string(),
-                        filename: "surrealkv-mobile-notes.pdf".to_string(),
-                        content_type: "application/pdf".to_string(),
-                        url: "https://example.com/surrealkv-notes.pdf".to_string(),
-                        size: 1_048_576,
-                    },
+                    Attachment::remote(
+                        "att-doc-1".to_string(),
+                        "surrealkv-mobile-notes.pdf".to_string(),
+                        "application/pdf".to_string(),
+                        "https://example.com/surrealkv-notes.pdf".to_string(),
+                        1_048_576,
+                    ),
                 ],
                 reactions: vec![],
                 reply_to: None,
@@ -959,13 +959,13 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::hours(8),
                 attachments: vec![
-                    Attachment {
-                        id: "att-sunset".to_string(),
-                        filename: "sunset.jpg".to_string(),
-                        content_type: "image/jpeg".to_string(),
-                        url: "https://picsum.photos/seed/sunset/600/400".to_string(),
-                        size: 2_097_152,
-                    },
+                    Attachment::remote(
+                        "att-sunset".to_string(),
+                        "sunset.jpg".to_string(),
+                        "image/jpeg".to_string(),
+                        "https://picsum.photos/seed/sunset/600/400".to_string(),
+                        2_097_152,
+                    ),
                 ],
                 reactions: vec![
                     Reaction { emoji: "😍".to_string(), count: 4, me: true },
@@ -1043,13 +1043,13 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::hours(10),
                 attachments: vec![
-                    Attachment {
-                        id: "att-minecraft".to_string(),
-                        filename: "redstone-build.png".to_string(),
-                        content_type: "image/png".to_string(),
-                        url: "https://picsum.photos/seed/minecraft/400/300".to_string(),
-                        size: 384_000,
-                    },
+                    Attachment::remote(
+                        "att-minecraft".to_string(),
+                        "redstone-build.png".to_string(),
+                        "image/png".to_string(),
+                        "https://picsum.photos/seed/minecraft/400/300".to_string(),
+                        384_000,
+                    ),
                 ],
                 reactions: vec![
                     Reaction { emoji: "🤯".to_string(), count: 5, me: true },
@@ -1765,13 +1765,13 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::hours(10),
                 attachments: vec![
-                    Attachment {
-                        id: "att-theme-preview".to_string(),
-                        filename: "purple-theme-preview.png".to_string(),
-                        content_type: "image/png".to_string(),
-                        url: "https://picsum.photos/seed/purple-theme/400/250".to_string(),
-                        size: 275_000,
-                    },
+                    Attachment::remote(
+                        "att-theme-preview".to_string(),
+                        "purple-theme-preview.png".to_string(),
+                        "image/png".to_string(),
+                        "https://picsum.photos/seed/purple-theme/400/250".to_string(),
+                        275_000,
+                    ),
                 ],
                 reactions: vec![],
                 reply_to: None,
@@ -2619,13 +2619,13 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::days(1) - Duration::hours(12),
                 attachments: vec![
-                    Attachment {
-                        id: "att-meal-prep".to_string(),
-                        filename: "meal-prep-sunday.jpg".to_string(),
-                        content_type: "image/jpeg".to_string(),
-                        url: "https://picsum.photos/seed/mealprep/400/300".to_string(),
-                        size: 320_000,
-                    },
+                    Attachment::remote(
+                        "att-meal-prep".to_string(),
+                        "meal-prep-sunday.jpg".to_string(),
+                        "image/jpeg".to_string(),
+                        "https://picsum.photos/seed/mealprep/400/300".to_string(),
+                        320_000,
+                    ),
                 ],
                 reactions: vec![
                     Reaction { emoji: "😍".to_string(), count: 2, me: true },
@@ -2685,13 +2685,13 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
 /// These supplement/override the sparse data in `demo2_messages` for channels that
 /// previously returned only minimal content.
 fn demo2_general_attachment(index: usize) -> Attachment {
-    Attachment {
-        id: format!("att-general-{index}"),
-        filename: format!("screenshot-{index}.jpg"),
-        content_type: "image/jpeg".to_string(),
-        url: format!("https://picsum.photos/seed/poly-general-{index}/640/420"),
-        size: 320_000 + (index as u64 * 37),
-    }
+    Attachment::remote(
+        format!("att-general-{index}"),
+        format!("screenshot-{index}.jpg"),
+        "image/jpeg".to_string(),
+        format!("https://picsum.photos/seed/poly-general-{index}/640/420"),
+        320_000 + (index as u64 * 37),
+    )
 }
 
 fn demo2_opensource_general_messages() -> Vec<Message> {
@@ -2887,13 +2887,13 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::days(2) - Duration::hours(6),
                 attachments: vec![
-                    Attachment {
-                        id: "att-pasta".to_string(),
-                        filename: "carbonara.jpg".to_string(),
-                        content_type: "image/jpeg".to_string(),
-                        url: "https://picsum.photos/seed/pasta/500/350".to_string(),
-                        size: 450_000,
-                    },
+                    Attachment::remote(
+                        "att-pasta".to_string(),
+                        "carbonara.jpg".to_string(),
+                        "image/jpeg".to_string(),
+                        "https://picsum.photos/seed/pasta/500/350".to_string(),
+                        450_000,
+                    ),
                 ],
                 reactions: vec![
                     Reaction { emoji: "😍".to_string(), count: 5, me: true },
@@ -3204,13 +3204,13 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 ),
                 timestamp: now - Duration::days(2) - Duration::hours(6),
                 attachments: vec![
-                    Attachment {
-                        id: "att-synth".to_string(),
-                        filename: "mininova.jpg".to_string(),
-                        content_type: "image/jpeg".to_string(),
-                        url: "https://picsum.photos/seed/synth/400/280".to_string(),
-                        size: 380_000,
-                    },
+                    Attachment::remote(
+                        "att-synth".to_string(),
+                        "mininova.jpg".to_string(),
+                        "image/jpeg".to_string(),
+                        "https://picsum.photos/seed/synth/400/280".to_string(),
+                        380_000,
+                    ),
                 ],
                 reactions: vec![
                     Reaction { emoji: "🎹".to_string(), count: 4, me: true },

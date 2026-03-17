@@ -47,7 +47,12 @@
 	- Implemented 2026-03-16 in `clients/stoat/src/api.rs`, `src/http.rs`, and `src/lib.rs`
 	- Added email/password login, token resume, fetch-self mapping, logout, and typed MFA/disabled auth failures
 	- Added mock-backed native integration tests in `clients/stoat/tests/integration.rs`
+	- 2026-03-17 update: the WASM guest now has an initial real plugin-path auth slice in `clients/stoat/src/guest.rs` using imported `host-api.http-request` for:
+		- token auth (`GET /users/@me`)
+		- email/password auth (`POST /auth/session/login` + `GET /users/@me`)
+	- `poly-plugin-loader-tests` now validates this through mocked host I/O instead of only stub guest expectations.
 - [ ] **3.1.2.3** Implement `ClientBackend` trait for `StoatClient`
+	- 2026-03-17 update: native trait coverage continues to lead overall functionality, but the WASM guest is no longer fully stubbed — auth now has a real first slice through the plugin host boundary.
 - [ ] **3.1.2.4** Server list retrieval
 	- 2026-03-16 research/update: `clients/stoat/api-1.json` exposes `GET /servers/{id}` but no obvious authenticated joined-server collection endpoint
 	- Current `get_servers()` therefore remains explicitly `NotSupported` pending Bonfire ready-state / sync-cache integration or discovery of a dedicated REST list endpoint
@@ -56,6 +61,7 @@
 	- `get_server(id)` now maps Stoat server/category payloads into Poly `Server`
 	- `get_channels(server_id)` now fetches server channel IDs then resolves each channel with `GET /channels/{id}`
 	- `get_channel(id)` now resolves a single server channel directly and rejects DM/group channels
+	- 2026-03-17 update: `get_channel_members(channel_id)` now resolves server-backed member lists via `GET /channels/{id}` + `GET /servers/{server}/members`, including nickname/avatar overrides
 	- `GET /sync/unreads` now enriches server/channel mention counts and conservative unread badges
 	- Added mock-backed integration coverage for server detail, channel list/detail, unread mapping, and DM-channel rejection
 - [x] **3.1.2.6** Message retrieval (paginated)
@@ -79,6 +85,12 @@
 		- reply preview hydration via `GET /channels/{target}/messages/{message_id}` for sent replies
 	- Attachment upload is still pending, so this checklist item remains open until Stoat file upload + attachment-id send flow is implemented.
 - [ ] **3.1.2.8** User profiles and presence
+	- 2026-03-17 update: `clients/stoat/src/http.rs` + `src/lib.rs` now support:
+		- `get_user(id)` via `GET /users/{id}`
+		- `get_presence(user_id)` via Stoat user status mapping
+		- Autumn-backed avatar URL resolution for fetched users
+	- Added mock-backed integration coverage for user fetch + presence lookup.
+	- This item remains open until the broader Stoat profile surface is reviewed (for example `/users/{id}/profile` if needed by Poly's richer profile UI).
 - [ ] **3.1.2.9** Friend list and friend requests
 - [ ] **3.1.2.10** Group DMs / multi-user chats
 - [ ] **3.1.2.11** Self-hosted instance support (configurable base URL, API version detection)

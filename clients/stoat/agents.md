@@ -9,13 +9,25 @@
 
 `poly-stoat` implements the `ClientBackend` trait for **Stoat** (formerly Revolt) messenger. Supports both the official Stoat server and self-hosted instances.
 
+## CRITICAL WORKFLOW RULE (2026-03-17)
+
+For `poly-stoat`, **native-only success is not sufficient proof that the plugin works**.
+The authoritative execution path for plugin support is the real WASM Component Model
+guest (`src/guest.rs`) running through `poly-plugin-host` and its imported `host-api`.
+
+Rules:
+- Always check whether `src/guest.rs` is still stubbed before claiming Stoat plugin support.
+- Prefer guest/plugin-path tests over native-only tests when the task is about plugin behavior.
+- For future plugin work, use mocked `host-api` fixtures in `poly-plugin-loader-tests` to validate the guest path early.
+- Do not assume native `reqwest`/Tokio code proves anything about the WASM guest.
+
 ## WASM Plugin Architecture (DECISION D21, 2026-03-06)
 
 This crate builds as **both** a native Rust library AND a WASM Component Model plugin.
 
 - **Crate type**: `["cdylib", "rlib"]`
 - **Feature gate**: `native` feature (default) enables reqwest, tokio-tungstenite, serde, async-trait, tokio, futures
-- **WASM guest**: `src/guest.rs` — currently a **stub** returning errors/empty results. Must be completed when the native implementation is done.
+- **WASM guest**: `src/guest.rs` — no longer fully stubbed; auth now has an initial real guest implementation via imported `host-api.http-request`, but most non-auth methods are still stubbed and must be completed.
 - **cfg pattern**: `#[cfg(feature = "native")]` for native code, `#[cfg(target_os = "wasi")]` for WASI plugin code. **NEVER** use `target_arch = "wasm32"`.
 
 ### Building
@@ -219,6 +231,38 @@ Completed the fifth Phase 3.1 send slice:
 	- verifying reply intent payloads for reply sends
 	- verifying reply preview hydration on the returned Poly message
 	- verifying the current explicit attachment-upload `NotSupported` behavior
+
+Completed the sixth Phase 3.1 user/presence slice:
+
+- Native user lookups now support:
+	- `get_user(id)` via `GET /users/{id}`
+	- `get_presence(user_id)` via `GET /users/{id}` presence mapping
+- Stoat user mapping now resolves avatar URLs through Autumn when the instance config exposes `features.autumn.url`.
+- Message-author mapping also now reuses the avatar-aware user conversion so bundled Stoat users can carry avatar URLs into Poly `User` values.
+- Native integration coverage now additionally includes:
+	- verifying `get_user(id)` display name / presence / avatar URL mapping
+	- verifying `get_presence(user_id)` from Stoat status payloads
+
+Completed the seventh Phase 3.1 membership slice:
+
+- Native channel member lookup now supports:
+	- `get_channel_members(channel_id)` for server channels
+	- `GET /channels/{id}` to resolve the backing server id
+	- `GET /servers/{server}/members` to resolve the server roster
+- Member mapping applies server-member overrides on top of user records:
+	- nickname overrides user display name
+	- member avatar overrides user avatar
+- Native integration coverage now additionally includes:
+	- verifying `get_channel_members(channel_id)` returns avatar-aware users with member nickname/avatar overrides
+
+Completed the eighth Phase 3.1 WASM-guest slice:
+
+- The Stoat WASM guest (`src/guest.rs`) now has an initial **real plugin-path auth implementation** instead of returning only stub errors:
+	- token auth via imported `host-api.http-request` → `GET /users/@me`
+	- email/password auth via imported `host-api.http-request` → `POST /auth/session/login` + `GET /users/@me`
+	- in-guest auth state for `is_authenticated()` / `logout()`
+- This guest implementation intentionally uses the Component Model host imports, not native `reqwest`, because direct network access is not the plugin execution model.
+- `poly-plugin-loader-tests` now exercises this path with deterministic mocked host HTTP fixtures, so Stoat plugin tests no longer only validate stub behavior.
 
 ## E2E Test Coverage (2026-03-06)
 

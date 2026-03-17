@@ -150,12 +150,14 @@ impl PolyServerBackend {
         let attachments = msg
             .attachments
             .iter()
-            .map(|att| Attachment {
-                id: att.id.clone(),
-                filename: att.filename.clone(),
-                content_type: att.mime_type.clone(),
-                url: format!("{base_url}/attachments/{}", att.id),
-                size: att.size_bytes,
+            .map(|att| {
+                Attachment::remote(
+                    att.id.clone(),
+                    att.filename.clone(),
+                    att.mime_type.clone(),
+                    format!("{base_url}/attachments/{}", att.id),
+                    att.size_bytes,
+                )
             })
             .collect();
 

@@ -31,7 +31,7 @@ dioxus = { workspace = true, optional = true }
 # Native-only dependencies (feature-gated)
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true, features = ["multipart"] }
 tokio = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["js"] }
@@ -43,6 +43,8 @@ async-trait = { workspace = true, optional = true }
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]
 wit-bindgen = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true }

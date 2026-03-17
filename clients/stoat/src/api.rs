@@ -11,6 +11,14 @@ use poly_client::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Minimal Autumn upload response for newly uploaded files.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatAutumnUploadResponse {
+    /// Uploaded file ID used in later message-send payloads.
+    #[serde(rename = "id")]
+    pub file_id: String,
+}
+
 /// Root server configuration returned by `GET /`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub struct StoatRootConfig {
@@ -94,29 +102,18 @@ pub struct StoatSendMessageRequest {
 }
 
 impl StoatSendMessageRequest {
-    /// Convert Poly's backend-agnostic message content into Stoat's send shape.
-    pub fn from_poly_content(
-        content: MessageContent,
+    /// Build a Stoat send request from already-uploaded attachment IDs.
+    #[must_use]
+    pub fn new(
+        text: String,
+        attachment_ids: Vec<String>,
         reply_to_message_id: Option<String>,
         nonce: String,
-    ) -> ClientResult<Self> {
-        let text = match content {
-            MessageContent::Text(text) => text,
-            MessageContent::WithAttachments { text, attachments } => {
-                if attachments.is_empty() {
-                    text
-                } else {
-                    return Err(ClientError::NotSupported(
-                        "Stoat attachment upload is not implemented yet".to_string(),
-                    ));
-                }
-            }
-        };
-
-        Ok(Self {
+    ) -> Self {
+        Self {
             nonce: Some(nonce),
             content: Some(text),
-            attachments: None,
+            attachments: (!attachment_ids.is_empty()).then_some(attachment_ids),
             replies: reply_to_message_id.map(|id| {
                 vec![StoatReplyIntent {
                     id,
@@ -124,7 +121,7 @@ impl StoatSendMessageRequest {
                     fail_if_not_exists: Some(true),
                 }]
             }),
-        })
+        }
     }
 }
 
@@ -417,6 +414,15 @@ pub struct StoatChannelUnread {
     pub mentions: Option<Vec<String>>,
 }
 
+/// All-members response returned by `GET /servers/{target}/members`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatAllMemberResponse {
+    /// Server member records.
+    pub members: Vec<StoatMember>,
+    /// Matching user records for those members.
+    pub users: Vec<StoatUser>,
+}
+
 impl StoatChannelUnread {
     /// Mention count derived from the unread payload.
     #[must_use]
@@ -626,7 +632,7 @@ impl StoatMessage {
             .clone()
             .or_else(|| bundled_users.get(&self.author).cloned())
         {
-            let mut author = user.into_poly_user();
+            let mut author = user.into_poly_user_with_autumn(autumn_base_url);
             if let Some(member) = self
                 .member
                 .clone()
@@ -705,6 +711,13 @@ impl StoatUser {
     /// Convert the Stoat user model into Poly's backend-agnostic user shape.
     #[must_use]
     pub fn into_poly_user(self) -> User {
+        self.into_poly_user_with_autumn(None)
+    }
+
+    /// Convert the Stoat user model into Poly's backend-agnostic user shape
+    /// with optional Autumn avatar resolution.
+    #[must_use]
+    pub fn into_poly_user_with_autumn(self, autumn_base_url: Option<&str>) -> User {
         let presence = self
             .status
             .and_then(|status| status.presence)
@@ -718,7 +731,9 @@ impl StoatUser {
         User {
             id: self.id,
             display_name: self.display_name.unwrap_or(self.username),
-            avatar_url: None,
+            avatar_url: self
+                .avatar
+                .and_then(|avatar| avatar.download_url(autumn_base_url)),
             presence,
             backend: BackendType::Stoat,
         }
@@ -765,6 +780,7 @@ impl StoatFile {
             content_type: self.content_type?,
             url,
             size: self.size?,
+            upload_bytes: None,
         })
     }
 }

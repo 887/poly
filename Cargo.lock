@@ -6093,6 +6093,7 @@ version = "0.1.0"
 dependencies = [
  "poly-client",
  "poly-plugin-host",
+ "serde_json",
  "tokio",
 ]
 

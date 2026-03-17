@@ -44,6 +44,12 @@ The most important architectural rule remains unchanged:
   - `GET /channels/{target}/messages`
   - supports `before`, `after`, `around`/`nearby`, and `limit`
   - supports both `BulkMessageResponse` shapes (`array<Message>` and expanded envelope)
+- Native user/presence lookup:
+  - `GET /users/{target}`
+  - avatar URL resolution through Autumn when available
+- Native server member lookup:
+  - `GET /servers/{target}/members`
+  - server-member nickname/avatar overrides applied on top of user records
 - Stored token resume using `X-Session-Token`
 - Typed handling of Stoat login result variants:
   - `Success`
@@ -60,6 +66,8 @@ The most important architectural rule remains unchanged:
   - channel list/detail retrieval
   - DM-channel rejection for server-only channel APIs
   - message retrieval with bundled users/members, replies, reactions, and attachment mapping
+  - user lookup, avatar URL mapping, and presence lookup
+  - server member roster lookup for server-backed channel member lists
 
 ### 2.2 Not implemented yet
 
@@ -141,12 +149,36 @@ reference JS client as relevant for a full Discord-like implementation.
 | Fetch user | `GET /users/{target}` | user cards/profile popouts | P1 |
 | Fetch user profile | `GET /users/{target}/profile` | extended profile panel | P2 |
 
+### 4.1a Current user/presence mapping notes
+
+Current Poly implementation for Stoat user identity and presence:
+
+- `get_user(id)` uses `GET /users/{id}` plus `GET /` to resolve `features.autumn.url` for avatars
+- Stoat `status.presence` currently maps as:
+  - `Online` → `PresenceStatus::Online`
+  - `Idle` → `PresenceStatus::Idle`
+  - `Focus` / `Busy` → `PresenceStatus::DoNotDisturb`
+  - `Invisible` → `PresenceStatus::Invisible`
+- when `status.presence` is absent, Poly falls back to Stoat's `online: bool`
+- bundled users inside message payloads now reuse the same avatar-aware user mapping
+
 ### 4.2 Servers and channels
 
 | Capability | Stoat API | Poly mapping | Priority |
 |---|---|---|---|
 | Fetch server | `GET /servers/{target}` | `Server` details | P1 |
 | Fetch members | `GET /servers/{target}/members` | server member list | P1 |
+### 4.2a Current member-list mapping notes
+
+Current Poly implementation for Stoat server/channel member lists:
+
+- `get_channel_members(channel_id)` first resolves the channel via `GET /channels/{id}`
+- for server channels, Poly then calls `GET /servers/{server_id}/members`
+- returned Stoat `members` and `users` arrays are joined on user id
+- member-level overrides currently win over user-level identity fields when present:
+  - member `nickname` overrides user `display_name`
+  - member `avatar` overrides user `avatar`
+
 | Fetch channel | `GET /channels/{target}` | `Channel` details | P1 |
 | Create server channel | `POST /servers/{server}/channels` | future mutation UI | P3 |
 | Channel permissions | `/channels/{target}/permissions/*` | moderation/admin | P3 |

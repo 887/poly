@@ -111,12 +111,24 @@ impl PluginRegistry {
     /// The wrapper implements `ClientBackend` so it can be used in the
     /// existing `ClientManager` infrastructure.
     pub async fn instantiate(&self, plugin_id: &str) -> Result<PluginBackend, String> {
+        self.instantiate_with_host_state(plugin_id, PluginHostState::new(plugin_id))
+            .await
+    }
+
+    /// Instantiate a loaded plugin using a caller-provided host state.
+    ///
+    /// This is primarily used by plugin-host tests so they can inject mocked
+    /// host I/O while still exercising the real WASM guest code path.
+    pub async fn instantiate_with_host_state(
+        &self,
+        plugin_id: &str,
+        host_state: PluginHostState,
+    ) -> Result<PluginBackend, String> {
         let component = self
             .components
             .get(plugin_id)
             .ok_or_else(|| format!("Plugin '{plugin_id}' not loaded"))?;
 
-        let host_state = PluginHostState::new(plugin_id);
         let mut store = Store::new(&self.engine, host_state);
 
         // Give the plugin some fuel to work with

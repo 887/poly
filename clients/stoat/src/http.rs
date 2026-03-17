@@ -5,13 +5,13 @@
 //! resume after interruptions.
 
 use crate::api::{
-    StoatAuthenticatedSession, StoatBulkMessageResponse, StoatChannel, StoatChannelUnread,
-    StoatLoginResponse, StoatMessage, StoatPasswordLoginRequest, StoatRootConfig,
-    StoatSendMessageRequest, StoatServer, StoatUser,
+    StoatAllMemberResponse, StoatAuthenticatedSession, StoatAutumnUploadResponse,
+    StoatBulkMessageResponse, StoatChannel, StoatChannelUnread, StoatLoginResponse, StoatMessage,
+    StoatPasswordLoginRequest, StoatRootConfig, StoatSendMessageRequest, StoatServer, StoatUser,
 };
 use crate::config::StoatConfig;
-use poly_client::{ClientError, ClientResult, MessageQuery};
-use reqwest::{Client, Method, RequestBuilder};
+use poly_client::{Attachment, ClientError, ClientResult, MessageQuery};
+use reqwest::{Client, Method, RequestBuilder, multipart};
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
 
@@ -235,10 +235,43 @@ impl StoatHttpClient {
         response.json().await.map_err(Self::network_error)
     }
 
+    /// Fetch all members for a Stoat server.
+    pub async fn fetch_server_members(
+        &self,
+        server_id: &str,
+    ) -> ClientResult<StoatAllMemberResponse> {
+        let response = self
+            .authenticated_request(Method::GET, &format!("/servers/{server_id}/members"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
     /// Fetch a Stoat channel by ID.
     pub async fn fetch_channel(&self, channel_id: &str) -> ClientResult<StoatChannel> {
         let response = self
             .authenticated_request(Method::GET, &format!("/channels/{channel_id}"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Fetch a Stoat user by ID.
+    pub async fn fetch_user(&self, user_id: &str) -> ClientResult<StoatUser> {
+        let response = self
+            .authenticated_request(Method::GET, &format!("/users/{user_id}"))?
             .send()
             .await
             .map_err(Self::network_error)?;
@@ -360,6 +393,49 @@ impl StoatHttpClient {
         }
 
         response.json().await.map_err(Self::network_error)
+    }
+
+    /// Upload one outbound attachment to the Stoat Autumn file service.
+    pub async fn upload_attachment(
+        &self,
+        autumn_base_url: &str,
+        attachment: &Attachment,
+    ) -> ClientResult<String> {
+        let token = self.session().map(|session| session.token).ok_or_else(|| {
+            ClientError::AuthFailed("Stoat client is not authenticated".to_string())
+        })?;
+        let upload_bytes = attachment.upload_bytes.clone().ok_or_else(|| {
+            ClientError::NotSupported("Stoat attachment send requires raw upload bytes".to_string())
+        })?;
+
+        let part = multipart::Part::bytes(upload_bytes)
+            .file_name(attachment.filename.clone())
+            .mime_str(&attachment.content_type)
+            .map_err(|err| {
+                ClientError::Internal(format!("invalid Stoat attachment MIME type: {err}"))
+            })?;
+
+        let response = self
+            .http
+            .post(format!(
+                "{}/attachments",
+                autumn_base_url.trim_end_matches('/')
+            ))
+            .header(STOAT_SESSION_TOKEN_HEADER, token)
+            .multipart(multipart::Form::new().part("file", part))
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response
+            .json::<StoatAutumnUploadResponse>()
+            .await
+            .map(|upload| upload.file_id)
+            .map_err(Self::network_error)
     }
 
     async fn fetch_self_with_token(&self, token: &str) -> ClientResult<StoatUser> {

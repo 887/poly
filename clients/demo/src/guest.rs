@@ -311,6 +311,7 @@ fn from_wit_message_content(mc: wit::MessageContent) -> pc::MessageContent {
                     content_type: a.content_type,
                     url: a.url,
                     size: a.size,
+                    upload_bytes: None,
                 })
                 .collect(),
         },

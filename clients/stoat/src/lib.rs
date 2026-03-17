@@ -195,11 +195,39 @@ impl StoatClient {
         content: MessageContent,
         reply_to_message_id: Option<&str>,
     ) -> ClientResult<Message> {
-        let request = StoatSendMessageRequest::from_poly_content(
-            content,
+        let root_config = self.http.fetch_server_config().await?;
+        let autumn_base_url = root_config.autumn_base_url().map(str::to_string);
+
+        let (text, attachment_ids) = match &content {
+            MessageContent::Text(text) => (text.clone(), Vec::new()),
+            MessageContent::WithAttachments { text, attachments } => {
+                let attachment_ids =
+                    if attachments.is_empty() {
+                        Vec::new()
+                    } else {
+                        let autumn_base_url = autumn_base_url.as_deref().ok_or_else(|| {
+                            ClientError::NotSupported(
+                                "Stoat instance does not expose Autumn for attachment upload"
+                                    .to_string(),
+                            )
+                        })?;
+
+                        future::try_join_all(attachments.iter().map(|attachment| {
+                            self.http.upload_attachment(autumn_base_url, attachment)
+                        }))
+                        .await?
+                    };
+
+                (text.clone(), attachment_ids)
+            }
+        };
+
+        let request = StoatSendMessageRequest::new(
+            text,
+            attachment_ids,
             reply_to_message_id.map(std::string::ToString::to_string),
             Uuid::new_v4().simple().to_string(),
-        )?;
+        );
 
         let reply_lookup = async {
             if let Some(reply_id) = reply_to_message_id {
@@ -212,14 +240,9 @@ impl StoatClient {
             }
         };
 
-        let (raw_message, root_config, reply_message) = future::try_join3(
-            self.http.send_message(channel_id, &request),
-            self.http.fetch_server_config(),
-            reply_lookup,
-        )
-        .await?;
+        let (raw_message, reply_message) =
+            future::try_join(self.http.send_message(channel_id, &request), reply_lookup).await?;
 
-        let autumn_base_url = root_config.autumn_base_url().map(str::to_string);
         let current_user_id = self.current_user_id();
         let bundled_users = HashMap::new();
         let bundled_members = HashMap::new();
@@ -424,15 +447,66 @@ impl ClientBackend for StoatClient {
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
-        Err(ClientError::NotFound(format!("User {id}")))
+        let (user, root_config) =
+            future::try_join(self.http.fetch_user(id), self.http.fetch_server_config()).await?;
+        Ok(user.into_poly_user_with_autumn(root_config.autumn_base_url()))
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
         Ok(vec![])
     }
 
-    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
-        Ok(vec![])
+    async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
+        let (channel, members_response, root_config) = future::try_join3(
+            self.http.fetch_channel(channel_id),
+            async {
+                let channel = self.http.fetch_channel(channel_id).await?;
+                let server_id = channel.server.ok_or_else(|| {
+                    ClientError::NotSupported(format!(
+                        "Stoat channel {channel_id} is not a server channel"
+                    ))
+                })?;
+                self.http.fetch_server_members(&server_id).await
+            },
+            self.http.fetch_server_config(),
+        )
+        .await?;
+
+        let server_id = channel.server.ok_or_else(|| {
+            ClientError::NotSupported(format!(
+                "Stoat channel {channel_id} is not a server channel"
+            ))
+        })?;
+        let autumn_base_url = root_config.autumn_base_url();
+        let user_index: HashMap<String, api::StoatUser> = members_response
+            .users
+            .into_iter()
+            .map(|user| (user.id.clone(), user))
+            .collect();
+
+        Ok(members_response
+            .members
+            .into_iter()
+            .filter(|member| member.key.server == server_id)
+            .filter_map(|member| {
+                let mut user = user_index
+                    .get(&member.key.user)
+                    .cloned()?
+                    .into_poly_user_with_autumn(autumn_base_url);
+
+                if let Some(nickname) = member.nickname {
+                    user.display_name = nickname;
+                }
+                if let Some(avatar_url) = member
+                    .avatar
+                    .and_then(|avatar| avatar.download_url(autumn_base_url))
+                {
+                    user.avatar_url = Some(avatar_url);
+                }
+
+                Some(user)
+            })
+            .collect())
     }
 
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
@@ -447,8 +521,9 @@ impl ClientBackend for StoatClient {
         Ok(vec![])
     }
 
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
+    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
+        let user = self.http.fetch_user(user_id).await?;
+        Ok(user.into_poly_user().presence)
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
@@ -497,17 +572,30 @@ mod tests {
     struct TestServerState {
         captured_requests: Arc<Mutex<Vec<serde_json::Value>>>,
         captured_tokens: Arc<Mutex<Vec<String>>>,
+        captured_uploads: Arc<Mutex<Vec<serde_json::Value>>>,
     }
 
     async fn launch_test_server(
         state: TestServerState,
     ) -> Result<(String, tokio::task::JoinHandle<()>), Box<dyn std::error::Error>> {
-        async fn root_config() -> impl IntoResponse {
-            Json(json!({
-                "revolt": "0.11.5",
-                "ws": "wss://ws.example.test",
-                "features": {}
-            }))
+        async fn upload_attachment(
+            State(state): State<TestServerState>,
+            headers: HeaderMap,
+        ) -> impl IntoResponse {
+            if let Some(token) = headers
+                .get("x-session-token")
+                .and_then(|value| value.to_str().ok())
+                .map(std::string::ToString::to_string)
+                && let Ok(mut tokens) = state.captured_tokens.lock()
+            {
+                tokens.push(token);
+            }
+
+            if let Ok(mut uploads) = state.captured_uploads.lock() {
+                uploads.push(json!({ "ok": true }));
+            }
+
+            Json(json!({ "id": "uploaded-file-1" }))
         }
 
         async fn send_message(
@@ -577,8 +665,34 @@ mod tests {
             }))
         }
 
+        let addr_holder = Arc::new(Mutex::new(String::new()));
+        let root_addr_holder = addr_holder.clone();
+
         let app = Router::new()
-            .route("/", get(root_config))
+            .route(
+                "/",
+                get(move || {
+                    let root_addr_holder = root_addr_holder.clone();
+                    async move {
+                        let addr = root_addr_holder
+                            .lock()
+                            .ok()
+                            .map(|value| value.clone())
+                            .unwrap_or_default();
+                        Json(json!({
+                            "revolt": "0.11.5",
+                            "ws": "wss://ws.example.test",
+                            "features": {
+                                "autumn": {
+                                    "enabled": true,
+                                    "url": format!("http://{addr}/autumn")
+                                }
+                            }
+                        }))
+                    }
+                }),
+            )
+            .route("/autumn/attachments", post(upload_attachment))
             .route("/channels/{channel_id}/messages", post(send_message))
             .route(
                 "/channels/{channel_id}/messages/{message_id}",
@@ -588,6 +702,9 @@ mod tests {
 
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
+        if let Ok(mut stored_addr) = addr_holder.lock() {
+            *stored_addr = addr.to_string();
+        }
         let handle = tokio::spawn(async move {
             let _ignored = axum::serve(listener, app).await;
         });
@@ -784,9 +901,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn send_message_rejects_unuploaded_attachments() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let client = StoatClient::new();
+    async fn send_message_with_attachments_uploads_to_autumn_and_sends_attachment_ids()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let state = TestServerState::default();
+        let (base_url, server_handle) = launch_test_server(state.clone()).await?;
+        let client = StoatClient::with_base_url(base_url)?;
+
+        client.http.set_session(StoatSessionState {
+            token: "token_123".to_string(),
+            session_id: Some("session_1".to_string()),
+            user_id: Some("user_1".to_string()),
+            user_display_name: Some("Stoaty".to_string()),
+        })?;
+
+        let result = client
+            .send_message(
+                "channel_1",
+                poly_client::MessageContent::WithAttachments {
+                    text: "Hello Stoat".to_string(),
+                    attachments: vec![poly_client::Attachment {
+                        id: "attachment_1".to_string(),
+                        filename: "hello.txt".to_string(),
+                        content_type: "text/plain".to_string(),
+                        url: String::new(),
+                        size: 5,
+                        upload_bytes: Some(b"hello".to_vec()),
+                    }],
+                },
+            )
+            .await;
+
+        server_handle.abort();
+
+        let sent = result?;
+        assert_eq!(sent.author.display_name, "Stoaty");
+
+        let uploads = state
+            .captured_uploads
+            .lock()
+            .map_err(|_| "captured upload lock poisoned")?;
+        assert_eq!(uploads.len(), 1);
+
+        let requests = state
+            .captured_requests
+            .lock()
+            .map_err(|_| "captured request lock poisoned")?;
+        let first_request = requests.first().ok_or("missing captured request")?;
+        assert_eq!(first_request.get("content"), Some(&json!("Hello Stoat")));
+        assert_eq!(
+            first_request.get("attachments"),
+            Some(&json!(["uploaded-file-1"]))
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_message_rejects_missing_attachment_upload_bytes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let state = TestServerState::default();
+        let (base_url, server_handle) = launch_test_server(state).await?;
+        let client = StoatClient::with_base_url(base_url)?;
+
+        client.http.set_session(StoatSessionState {
+            token: "token_123".to_string(),
+            session_id: Some("session_1".to_string()),
+            user_id: Some("user_1".to_string()),
+            user_display_name: Some("Stoaty".to_string()),
+        })?;
+
         let result = client
             .send_message(
                 "channel_1",
@@ -798,15 +981,18 @@ mod tests {
                         content_type: "text/plain".to_string(),
                         url: "https://example.test/hello.txt".to_string(),
                         size: 5,
+                        upload_bytes: None,
                     }],
                 },
             )
             .await;
 
+        server_handle.abort();
+
         assert!(matches!(
             result,
             Err(poly_client::ClientError::NotSupported(message))
-                if message == "Stoat attachment upload is not implemented yet"
+                if message == "Stoat attachment send requires raw upload bytes"
         ));
 
         Ok(())

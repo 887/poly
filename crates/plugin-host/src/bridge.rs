@@ -150,6 +150,7 @@ pub fn from_wit_attachment(a: wit::Attachment) -> pc::Attachment {
         content_type: a.content_type,
         url: a.url,
         size: a.size,
+        upload_bytes: None,
     }
 }
 

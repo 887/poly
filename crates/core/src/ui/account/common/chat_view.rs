@@ -210,6 +210,7 @@ struct PendingAttachmentPreview {
     content_type: String,
     size: u64,
     preview_url: Option<String>,
+    upload_bytes: Vec<u8>,
 }
 
 const SEARCH_FILTER_SUGGESTIONS: &[SearchFilterSuggestion] = &[
@@ -340,6 +341,7 @@ fn pending_attachment_to_attachment(preview: &PendingAttachmentPreview) -> Attac
         content_type: preview.content_type.clone(),
         url: preview.preview_url.clone().unwrap_or_default(),
         size: preview.size,
+        upload_bytes: Some(preview.upload_bytes.clone()),
     }
 }
 
@@ -354,17 +356,19 @@ async fn build_attachment_previews(
             .content_type()
             .unwrap_or_else(|| "application/octet-stream".to_string());
         let size = file.size();
-        let preview_url = if content_type.starts_with("image/") && size <= 5_000_000 {
-            match file.read_bytes().await {
-                Ok(bytes) => Some(format!(
-                    "data:{content_type};base64,{}",
-                    BASE64_STANDARD.encode(bytes)
-                )),
-                Err(err) => {
-                    tracing::warn!("failed to read attachment preview bytes: {err}");
-                    None
-                }
+        let upload_bytes = match file.read_bytes().await {
+            Ok(bytes) => bytes.to_vec(),
+            Err(err) => {
+                tracing::warn!("failed to read attachment bytes: {err}");
+                continue;
             }
+        };
+
+        let preview_url = if content_type.starts_with("image/") && size <= 5_000_000 {
+            Some(format!(
+                "data:{content_type};base64,{}",
+                BASE64_STANDARD.encode(&upload_bytes)
+            ))
         } else {
             None
         };
@@ -375,6 +379,7 @@ async fn build_attachment_previews(
             content_type,
             size,
             preview_url,
+            upload_bytes,
         });
     }
 
