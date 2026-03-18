@@ -340,6 +340,34 @@
     min-height: auto;
 }
 
+.settings-page-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.settings-page-header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 0 16px;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-primary);
+    z-index: 10;
+}
+
+.settings-page-header .settings-search-bar {
+    padding: 0;
+    border-bottom: none;
+}
+
+.settings-page-header .settings-description,
+.settings-page-header .special-page-title {
+    margin: 0;
+}
+
 .settings-section h2 {
     font-size: 20px;
     font-weight: 700;

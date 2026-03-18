@@ -2739,6 +2739,34 @@ body {
     min-height: auto;
 }
 
+.settings-page-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.settings-page-header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 0 16px;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-primary);
+    z-index: 10;
+}
+
+.settings-page-header .settings-search-bar {
+    padding: 0;
+    border-bottom: none;
+}
+
+.settings-page-header .settings-description,
+.settings-page-header .special-page-title {
+    margin: 0;
+}
+
 .settings-section h2 {
     font-size: 20px;
     font-weight: 700;
@@ -9838,12 +9866,28 @@ select {
     max-width: none;
 }
 
-.poly-app.poly-mobile-runtime-active .settings-page-sidebar .settings-nav {
+.poly-app.poly-mobile-runtime-active .settings-page-sidebar .settings-nav,
+.poly-app.poly-mobile-runtime-active .channel-list-wrapper .settings-nav {
     width: 100%;
     min-width: 0;
     height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 16px;
     border-right: none;
+    border-bottom: none;
+}
+
+.poly-app.poly-mobile-runtime-active .settings-page-sidebar .settings-nav-item,
+.poly-app.poly-mobile-runtime-active .settings-page-sidebar .settings-nav button,
+.poly-app.poly-mobile-runtime-active .channel-list-wrapper .settings-nav-item,
+.poly-app.poly-mobile-runtime-active .channel-list-wrapper .settings-nav button {
+    width: 100%;
+    flex: 0 0 auto;
+    white-space: normal;
 }
 
 .poly-app.poly-mobile-runtime-active .search-page-sidebar {
@@ -9908,7 +9952,7 @@ select {
 }
 
 .poly-app.poly-mobile-runtime-active .poly-split-content.settings-content>.poly-split-content-stage {
-    padding: 56px 20px 24px;
+    padding: 0 20px 24px;
     overflow-y: auto;
 }
 

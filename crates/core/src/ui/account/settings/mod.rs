@@ -121,6 +121,45 @@ fn scroll_to_acct_section(slug: &str) {
     let _ = document::eval(&js);
 }
 
+#[rustfmt::skip]
+#[component]
+fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
+    let current = search_text.read().clone();
+
+    rsx! {
+        div { class: "settings-search-bar",
+            input {
+                r#type: "text",
+                class: "settings-search-input",
+                placeholder: "{t(\"settings-search\")}",
+                value: "{current}",
+                oninput: move |e| search_text.set(e.value()),
+            }
+            if !current.is_empty() {
+                button {
+                    class: "settings-search-clear",
+                    onclick: move |_| search_text.set(String::new()),
+                    "×"
+                }
+            }
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>) -> Element {
+    let account_id_upper = account_id.to_uppercase();
+
+    rsx! {
+        div { class: "special-page-header settings-page-header",
+            h2 { class: "special-page-title", "{t(\"account-settings-title\")}" }
+            p { class: "settings-description", "{account_id_upper}" }
+            AccountSettingsSearchBar { search_text }
+        }
+    }
+}
+
 /// Account-scoped settings page.
 ///
 /// VS Code-style single-scroll layout: account-specific sections are rendered
@@ -164,10 +203,8 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
         }
     });
 
-    let acct_id_upper = account_id.to_uppercase();
     let sf = search_text.read().to_lowercase();
     let active = active_section.read().clone();
-    let sf_raw = search_text.read().clone();
     let is_profile_active = active == "profile";
 
     rsx! {
@@ -177,33 +214,10 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
             content_class: "settings-content".to_string(),
             sidebar: rsx! {
                 nav { class: "settings-nav",
-                    // Header: shows which account's settings we're viewing
                     div { class: "settings-nav-header",
                         h3 { class: "settings-nav-title", "{t(\"account-settings-title\")}" }
-                        p { class: "settings-nav-subtitle", "{acct_id_upper}" }
                     }
-                    // Search bar
-                    div { class: "settings-search-bar",
-                        input {
-                            r#type: "text",
-                            class: "settings-search-input",
-                            placeholder: "{t(\"settings-search\")}",
-                            value: "{sf_raw}",
-                            oninput: move |e| {
-                                search_text.set(e.value());
-                            },
-                        }
-                        if !sf_raw.is_empty() {
-                            button {
-                                class: "settings-search-clear",
-                                onclick: move |_| search_text.set(String::new()),
-                                "×"
-                            }
-                        }
-                    }
-                    // Profile nav item — only shown for poly-server accounts.
                     { profile_nav_element(show_profile, is_profile_active, search_text, active_section) }
-                    // Nav items — one per section
                     for (label_key, slug) in ACCT_NAV_SECTIONS {
                         {
                             let label = t(label_key);
@@ -232,20 +246,23 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                 VoiceAccountFooter {}
             },
             content: rsx! {
-                div { class: "settings-sections-stack",
-                    // Profile section — poly-server only (shown first, above notifications).
-                    { profile_section_element(show_profile, account_id.clone()) }
-                    // Notifications section
-                    div {
-                        id: "acct-section-notifications",
-                        class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
-                        NotificationsSettings { account_id: account_id.clone() }
+                div { class: "settings-page-panel",
+                    AccountSettingsContentHeader {
+                        account_id: account_id.clone(),
+                        search_text,
                     }
-                    // Content & Social section
-                    div {
-                        id: "acct-section-content-social",
-                        class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
-                        ContentSocialSettings { _account_id: account_id.clone() }
+                    div { class: "settings-sections-stack",
+                        { profile_section_element(show_profile, account_id.clone()) }
+                        div {
+                            id: "acct-section-notifications",
+                            class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                            NotificationsSettings { account_id: account_id.clone() }
+                        }
+                        div {
+                            id: "acct-section-content-social",
+                            class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                            ContentSocialSettings { _account_id: account_id.clone() }
+                        }
                     }
                 }
             },

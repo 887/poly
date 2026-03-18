@@ -189,6 +189,17 @@ fn SettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 
+#[rustfmt::skip]
+#[component]
+fn SettingsContentHeader(search_text: Signal<String>) -> Element {
+    rsx! {
+        div { class: "special-page-header settings-page-header",
+            h2 { class: "special-page-title", "{t(\"settings-title\")}" }
+            SettingsSearchBar { search_text }
+        }
+    }
+}
+
 /// Nav sidebar for settings.
 ///
 /// All items are always visible. Non-matching nav items are dimmed when search
@@ -212,7 +223,6 @@ fn SettingsNavigation(
             div { class: "settings-nav-header",
                 h3 { class: "settings-nav-title", "{t(\"settings-title\")}" }
             }
-            SettingsSearchBar { search_text }
             for (label_key, section) in NAV_SECTIONS {
                 {
                     let label = t(label_key);
@@ -441,8 +451,11 @@ pub fn SettingsPage() -> Element {
                 }
             },
             content: rsx! {
-                div { class: "settings-sections-stack",
-                    SettingsAllSections { search_query: query }
+                div { class: "settings-page-panel",
+                    SettingsContentHeader { search_text }
+                    div { class: "settings-sections-stack",
+                        SettingsAllSections { search_query: query }
+                    }
                 }
             },
         }
