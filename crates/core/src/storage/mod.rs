@@ -30,6 +30,7 @@
 //! DECISION(DX-STORAGE-1): Unified trait pattern — same call sites work whether
 //! compiled to native or WASM. No feature flags required at call sites.
 
+use crate::state::LayoutMode;
 use serde::{Deserialize, Serialize};
 
 const fn default_server_member_list_open() -> bool {
@@ -213,9 +214,22 @@ pub struct AppSettings {
     /// Changing this setting requires reconnecting or restarting the app.
     #[serde(default = "default_true")]
     pub poly_use_websocket: bool,
-    /// Whether the mobile shell should be forced regardless of viewport width.
+    /// Legacy compatibility field from the old single force-mobile toggle.
+    ///
+    /// New code should use [`Self::layout_mode`]. If this legacy field is true
+    /// and `layout_mode` is still its default, the app upgrades it to
+    /// [`LayoutMode::ForceMobile`] on load.
     #[serde(default)]
     pub force_mobile_layout: bool,
+    /// Global shell layout mode.
+    #[serde(default)]
+    pub layout_mode: LayoutMode,
+    /// Whether the menu / wing order is mirrored.
+    #[serde(default)]
+    pub mirror_menu_layout: bool,
+    /// Whether chat message rows are mirrored.
+    #[serde(default)]
+    pub mirror_chat_messages: bool,
 }
 
 /// Minimal server metadata cached for offline display.

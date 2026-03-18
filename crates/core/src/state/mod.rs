@@ -15,6 +15,20 @@ pub use chat_data::{ChatData, DragSource};
 use poly_client::BackendType;
 use serde::{Deserialize, Serialize};
 
+/// Global shell layout mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum LayoutMode {
+    /// Use the mobile shell when the viewport width is <= 640px.
+    #[default]
+    AutoWidth,
+    /// Use the mobile shell when the viewport is portrait (`height > width`).
+    AutoPortrait,
+    /// Always use the desktop shell regardless of viewport size.
+    ForceDesktop,
+    /// Always use the mobile shell regardless of viewport size.
+    ForceMobile,
+}
+
 /// The main navigation views.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum View {
@@ -198,8 +212,12 @@ pub struct AppState {
     pub nav: NavigationState,
     /// Active settings section.
     pub settings_section: SettingsSection,
-    /// Whether the mobile shell should be forced regardless of viewport width.
-    pub force_mobile_layout: bool,
+    /// Global shell layout mode.
+    pub layout_mode: LayoutMode,
+    /// Whether the menu / wing order is mirrored.
+    pub mirror_menu_layout: bool,
+    /// Whether chat message rows are mirrored.
+    pub mirror_chat_messages: bool,
     /// One-shot seed for the next visit to the global search page.
     ///
     /// Used by account-scoped views to open the shared search route with a
@@ -218,7 +236,9 @@ impl Default for AppState {
             is_setup_complete: false,
             nav: NavigationState::default(),
             settings_section: SettingsSection::Accounts,
-            force_mobile_layout: false,
+            layout_mode: LayoutMode::AutoWidth,
+            mirror_menu_layout: false,
+            mirror_chat_messages: false,
             search_type_seed: None,
             context_menu: None,
         }

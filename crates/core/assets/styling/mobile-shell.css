@@ -519,6 +519,101 @@
     max-width: none;
 }
 
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .server-sidebar {
+    left: auto;
+    right: 0;
+    border-right: none;
+    border-left: 1px solid var(--border-primary);
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .account-server-bar {
+    left: auto;
+    right: 72px;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .poly-split-sidebar {
+    left: auto;
+    right: var(--poly-mobile-rail-offset);
+    border-right: none;
+    border-left: 1px solid var(--border-primary);
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .poly-split-content {
+    left: auto;
+    right: var(--poly-mobile-left-offset-px);
+    transition: right 0.22s ease, box-shadow 0.22s ease;
+    will-change: right;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .poly-mobile-left-wing-toggle {
+    left: auto;
+    right: 6px;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .mobile-left-wing-backdrop {
+    left: 0;
+    right: var(--poly-mobile-left-offset-px);
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-header {
+    padding: 10px 56px 10px 12px;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .special-page-header,
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .search-page-header {
+    padding-left: 12px;
+    padding-right: 56px;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-header-right {
+    margin-left: 0;
+    margin-right: auto;
+    order: -1;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .poly-mobile-right-wing-toggle,
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .mobile-server-icon-toggle {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-side-column {
+    right: auto;
+    left: var(--poly-mobile-right-panel-offset-px);
+    border-left: none;
+    border-right: 1px solid var(--border-primary);
+    box-shadow: inset -8px 0 24px rgb(0 0 0 / 0%);
+    transition: left 0.22s ease, box-shadow 0.22s ease;
+    will-change: left;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-side-column::before {
+    left: auto;
+    right: 0;
+    background: linear-gradient(270deg, rgb(0 0 0 / 58%) 0%, rgb(0 0 0 / 28%) 45%, rgb(0 0 0 / 0%) 100%);
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored.poly-mobile-right-wing-open .chat-side-column,
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored.poly-mobile-right-wing-dragging .chat-side-column {
+    box-shadow: inset -12px 0 28px rgb(0 0 0 / 42%), inset -24px 0 38px rgb(0 0 0 / 22%);
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-main-column {
+    left: auto;
+    right: var(--poly-mobile-right-offset-px);
+    transition: right 0.22s ease, box-shadow 0.22s ease;
+    will-change: right;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .mobile-right-wing-backdrop {
+    right: 0;
+    left: var(--poly-mobile-right-reveal-px);
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .mobile-chat-tools-topbar {
+    flex-direction: row-reverse;
+}
+
 .poly-app.poly-mobile-runtime-active .message-list {
     padding: 12px;
 }

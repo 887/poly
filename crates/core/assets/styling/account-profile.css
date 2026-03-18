@@ -118,6 +118,10 @@
     overflow: hidden;
 }
 
+.poly-app.poly-menu-mirrored .chat-body-shell {
+    flex-direction: row-reverse;
+}
+
 .chat-content-column {
     flex: 1;
     min-width: 0;
@@ -136,6 +140,11 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.poly-app.poly-menu-mirrored .chat-side-column {
+    border-right: 1px solid var(--border-primary);
+    border-left: none;
 }
 
 .chat-header-right {

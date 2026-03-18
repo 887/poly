@@ -1095,22 +1095,39 @@ fn runtime_mobile_ui_active() -> bool {
         return false;
     };
 
-    let forced_mobile = window
+    window
         .document()
         .and_then(|document| document.query_selector(".poly-app").ok().flatten())
         .and_then(|root| root.get_attribute("class"))
         .is_some_and(|classes| {
             classes
                 .split_whitespace()
-                .any(|class| class == "poly-force-mobile")
-        });
-    let narrow_viewport = window
-        .inner_width()
-        .ok()
-        .and_then(|value| value.as_f64())
-        .is_some_and(|width| width <= 640.0);
-
-    forced_mobile || narrow_viewport
+                .any(|class| class == "poly-layout-mode-force-mobile")
+                || (classes
+                    .split_whitespace()
+                    .any(|class| class == "poly-layout-mode-auto-width")
+                    && window
+                        .inner_width()
+                        .ok()
+                        .and_then(|value| value.as_f64())
+                        .is_some_and(|width| width <= 640.0))
+                || (classes
+                    .split_whitespace()
+                    .any(|class| class == "poly-layout-mode-auto-portrait")
+                    && {
+                        let width = window
+                            .inner_width()
+                            .ok()
+                            .and_then(|value| value.as_f64())
+                            .unwrap_or_default();
+                        let height = window
+                            .inner_height()
+                            .ok()
+                            .and_then(|value| value.as_f64())
+                            .unwrap_or_default();
+                        height > width
+                    })
+        })
 }
 
 #[cfg(not(target_arch = "wasm32"))]

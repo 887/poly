@@ -6,23 +6,58 @@
 //! - Helper: `run_reset_flow` async function
 
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, LayoutMode};
 use crate::storage::AppSettings;
 use dioxus::prelude::*;
 
-async fn persist_force_mobile_layout(enabled: bool) {
+async fn persist_layout_mode(mode: LayoutMode) {
     let Some(storage) = crate::STORAGE.get() else {
         return;
     };
     let Ok(mut settings) = storage.get_app_settings().await else {
         return;
     };
-    if settings.force_mobile_layout == enabled {
+    if settings.layout_mode == mode
+        && settings.force_mobile_layout == matches!(mode, LayoutMode::ForceMobile)
+    {
         return;
     }
-    settings.force_mobile_layout = enabled;
+    settings.layout_mode = mode;
+    settings.force_mobile_layout = matches!(mode, LayoutMode::ForceMobile);
     if let Err(err) = storage.set_app_settings(&settings).await {
-        tracing::warn!("Failed to persist force-mobile layout setting: {err}");
+        tracing::warn!("Failed to persist layout mode setting: {err}");
+    }
+}
+
+async fn persist_mirror_menu_layout(enabled: bool) {
+    let Some(storage) = crate::STORAGE.get() else {
+        return;
+    };
+    let Ok(mut settings) = storage.get_app_settings().await else {
+        return;
+    };
+    if settings.mirror_menu_layout == enabled {
+        return;
+    }
+    settings.mirror_menu_layout = enabled;
+    if let Err(err) = storage.set_app_settings(&settings).await {
+        tracing::warn!("Failed to persist menu mirror setting: {err}");
+    }
+}
+
+async fn persist_mirror_chat_messages(enabled: bool) {
+    let Some(storage) = crate::STORAGE.get() else {
+        return;
+    };
+    let Ok(mut settings) = storage.get_app_settings().await else {
+        return;
+    };
+    if settings.mirror_chat_messages == enabled {
+        return;
+    }
+    settings.mirror_chat_messages = enabled;
+    if let Err(err) = storage.set_app_settings(&settings).await {
+        tracing::warn!("Failed to persist chat mirror setting: {err}");
     }
 }
 
@@ -32,7 +67,12 @@ fn load_general_settings(mut settings_sig: Signal<AppSettings>) {
             return;
         };
         match storage.get_app_settings().await {
-            Ok(settings) => settings_sig.set(settings),
+            Ok(mut settings) => {
+                if settings.layout_mode == LayoutMode::AutoWidth && settings.force_mobile_layout {
+                    settings.layout_mode = LayoutMode::ForceMobile;
+                }
+                settings_sig.set(settings);
+            }
             Err(err) => tracing::warn!("Failed to load general settings: {err}"),
         }
     });
@@ -40,7 +80,19 @@ fn load_general_settings(mut settings_sig: Signal<AppSettings>) {
 
 #[rustfmt::skip]
 #[component]
-fn MobileLayoutToggle() -> Element {
+fn LayoutModeButton(label: String, active: bool, onclick: EventHandler<MouseEvent>) -> Element {
+    rsx! {
+        button {
+            class: if active { "settings-choice-button active" } else { "settings-choice-button" },
+            onclick: move |evt| onclick.call(evt),
+            "{label}"
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn LayoutModeSelector() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let mut settings_sig = use_signal(AppSettings::default);
     let mut loaded = use_signal(|| false);
@@ -53,17 +105,71 @@ fn MobileLayoutToggle() -> Element {
         load_general_settings(settings_sig);
     });
 
-    let enabled = settings_sig.read().force_mobile_layout;
+    let selected_mode = settings_sig.read().layout_mode;
+
+    rsx! {
+        div { class: "settings-toggle-row settings-toggle-row-column",
+            div { class: "settings-toggle-label-group",
+                label { class: "settings-toggle-label",
+                    "{t(\"settings-layout-mode\")}"
+                }
+                p { class: "settings-toggle-desc",
+                    "{t(\"settings-layout-mode-description\")}"
+                }
+            }
+            div { class: "settings-choice-group",
+                LayoutModeButton {
+                    label: t("settings-layout-auto-width"),
+                    active: selected_mode == LayoutMode::AutoWidth,
+                    onclick: move |_| {
+                        settings_sig.write().layout_mode = LayoutMode::AutoWidth;
+                        app_state.write().layout_mode = LayoutMode::AutoWidth;
+                        spawn(async move { persist_layout_mode(LayoutMode::AutoWidth).await; });
+                    },
+                }
+                LayoutModeButton {
+                    label: t("settings-layout-auto-portrait"),
+                    active: selected_mode == LayoutMode::AutoPortrait,
+                    onclick: move |_| {
+                        settings_sig.write().layout_mode = LayoutMode::AutoPortrait;
+                        app_state.write().layout_mode = LayoutMode::AutoPortrait;
+                        spawn(async move { persist_layout_mode(LayoutMode::AutoPortrait).await; });
+                    },
+                }
+                LayoutModeButton {
+                    label: t("settings-layout-force-desktop"),
+                    active: selected_mode == LayoutMode::ForceDesktop,
+                    onclick: move |_| {
+                        settings_sig.write().layout_mode = LayoutMode::ForceDesktop;
+                        app_state.write().layout_mode = LayoutMode::ForceDesktop;
+                        spawn(async move { persist_layout_mode(LayoutMode::ForceDesktop).await; });
+                    },
+                }
+                LayoutModeButton {
+                    label: t("settings-layout-force-mobile"),
+                    active: selected_mode == LayoutMode::ForceMobile,
+                    onclick: move |_| {
+                        settings_sig.write().layout_mode = LayoutMode::ForceMobile;
+                        app_state.write().layout_mode = LayoutMode::ForceMobile;
+                        spawn(async move { persist_layout_mode(LayoutMode::ForceMobile).await; });
+                    },
+                }
+            }
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn MirrorMenuToggle() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let enabled = app_state.read().mirror_menu_layout;
 
     rsx! {
         div { class: "settings-toggle-row",
             div { class: "settings-toggle-label-group",
-                label { class: "settings-toggle-label",
-                    "{t(\"settings-force-mobile-layout\")}"
-                }
-                p { class: "settings-toggle-desc",
-                    "{t(\"settings-force-mobile-layout-description\")}"
-                }
+                label { class: "settings-toggle-label", "{t(\"settings-mirror-menu-layout\")}" }
+                p { class: "settings-toggle-desc", "{t(\"settings-mirror-menu-layout-description\")}" }
             }
             label { class: "toggle-switch",
                 input {
@@ -71,11 +177,36 @@ fn MobileLayoutToggle() -> Element {
                     checked: enabled,
                     onchange: move |evt| {
                         let next = evt.checked();
-                        settings_sig.write().force_mobile_layout = next;
-                        app_state.write().force_mobile_layout = next;
-                        spawn(async move {
-                            persist_force_mobile_layout(next).await;
-                        });
+                        app_state.write().mirror_menu_layout = next;
+                        spawn(async move { persist_mirror_menu_layout(next).await; });
+                    },
+                }
+                span { class: "toggle-slider" }
+            }
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn MirrorChatMessagesToggle() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let enabled = app_state.read().mirror_chat_messages;
+
+    rsx! {
+        div { class: "settings-toggle-row",
+            div { class: "settings-toggle-label-group",
+                label { class: "settings-toggle-label", "{t(\"settings-mirror-chat-messages\")}" }
+                p { class: "settings-toggle-desc", "{t(\"settings-mirror-chat-messages-description\")}" }
+            }
+            label { class: "toggle-switch",
+                input {
+                    r#type: "checkbox",
+                    checked: enabled,
+                    onchange: move |evt| {
+                        let next = evt.checked();
+                        app_state.write().mirror_chat_messages = next;
+                        spawn(async move { persist_mirror_chat_messages(next).await; });
                     },
                 }
                 span { class: "toggle-slider" }
@@ -239,7 +370,9 @@ pub(super) fn GeneralSettings() -> Element {
         div { class: "settings-section",
             h2 { "{t(\"settings-general\")}" }
             p { class: "settings-description", "{t(\"settings-general-description\")}" }
-            MobileLayoutToggle {}
+            LayoutModeSelector {}
+            MirrorMenuToggle {}
+            MirrorChatMessagesToggle {}
             ResetSection {}
         }
     }

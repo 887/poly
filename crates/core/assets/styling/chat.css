@@ -268,6 +268,15 @@
     padding: 1px 16px;
 }
 
+.poly-app.poly-chat-mirrored .message-full,
+.poly-app.poly-chat-mirrored .message-grouped {
+    flex-direction: row-reverse;
+}
+
+.poly-app.poly-chat-mirrored .message-gutter {
+    align-items: flex-end;
+}
+
 .message-body {
     flex: 1;
     min-width: 0;

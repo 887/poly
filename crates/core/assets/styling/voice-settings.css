@@ -446,6 +446,11 @@
     z-index: 12;
 }
 
+.poly-app.poly-menu-mirrored .voice-account-footer {
+    margin-left: 0;
+    margin-right: -72px;
+}
+
 .account-bar {
     display: flex;
     align-items: center;

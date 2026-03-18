@@ -89,6 +89,11 @@
     gap: 16px;
 }
 
+.settings-toggle-row-column {
+    flex-direction: column;
+    align-items: stretch;
+}
+
 .settings-toggle-label {
     font-size: 14px;
     color: var(--text-primary);
@@ -106,6 +111,34 @@
     font-size: 12px;
     color: var(--text-muted);
     line-height: 1.4;
+}
+
+.settings-choice-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.settings-choice-button {
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 8px 12px;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.settings-choice-button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.settings-choice-button.active {
+    background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
+    color: var(--text-primary);
 }
 
 /* ===========================

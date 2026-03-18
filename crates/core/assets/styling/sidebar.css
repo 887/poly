@@ -21,6 +21,11 @@
     transition: outline 0.1s ease, background-color 0.1s ease;
 }
 
+.poly-app.poly-menu-mirrored .server-sidebar {
+    border-left: 1px solid var(--border-primary);
+    border-right: none;
+}
+
 /* Scrollable area for accounts and favorites */
 .sidebar-scroll-area {
     flex: 1;
@@ -183,6 +188,11 @@
     scroll-padding-bottom: 64px;
     position: relative;
     z-index: 0;
+}
+
+.poly-app.poly-menu-mirrored .account-server-bar {
+    border-left: 1px solid var(--border-primary);
+    border-right: none;
 }
 
 /* Account icon extra styling — ring indicator for active account */

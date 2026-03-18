@@ -17,7 +17,27 @@ if (!window.__polyMobileDrawerInit) {
     }
 
     function isMobileUi(root) {
-        return Boolean(root) && (root.classList.contains('poly-force-mobile') || window.innerWidth <= 640);
+        if (!root) {
+            return false;
+        }
+
+        if (root.classList.contains('poly-layout-mode-force-mobile')) {
+            return true;
+        }
+
+        if (root.classList.contains('poly-layout-mode-force-desktop')) {
+            return false;
+        }
+
+        if (root.classList.contains('poly-layout-mode-auto-portrait')) {
+            return window.innerHeight > window.innerWidth;
+        }
+
+        return window.innerWidth <= 640;
+    }
+
+    function isMirrored(root) {
+        return Boolean(root) && root.classList.contains('poly-menu-mirrored');
     }
 
     function railOffsetPx() {
@@ -49,16 +69,29 @@ if (!window.__polyMobileDrawerInit) {
     function applyStageTransforms(root) {
         const leftOffset = cssNumber(root, '--poly-mobile-left-offset-px', 0);
         const rightOffset = cssNumber(root, '--poly-mobile-right-offset-px', 0);
+        const mirrored = isMirrored(root);
 
         document.querySelectorAll('.poly-split-content').forEach(function (element) {
             if (element instanceof HTMLElement) {
-                element.style.left = `${leftOffset}px`;
+                if (mirrored) {
+                    element.style.removeProperty('left');
+                    element.style.right = `${leftOffset}px`;
+                } else {
+                    element.style.removeProperty('right');
+                    element.style.left = `${leftOffset}px`;
+                }
             }
         });
 
         document.querySelectorAll('.chat-main-column').forEach(function (element) {
             if (element instanceof HTMLElement) {
-                element.style.left = `${rightOffset}px`;
+                if (mirrored) {
+                    element.style.removeProperty('left');
+                    element.style.right = `${rightOffset}px`;
+                } else {
+                    element.style.removeProperty('right');
+                    element.style.left = `${rightOffset}px`;
+                }
             }
         });
     }
@@ -174,6 +207,7 @@ if (!window.__polyMobileDrawerInit) {
             document.querySelectorAll('.poly-split-content, .chat-main-column').forEach(function (element) {
                 if (element instanceof HTMLElement) {
                     element.style.removeProperty('left');
+                    element.style.removeProperty('right');
                 }
             });
             return;
@@ -214,12 +248,20 @@ if (!window.__polyMobileDrawerInit) {
             const touch = event.touches[0];
             const x = touch.clientX;
             const y = touch.clientY;
+            const mirrored = isMirrored(root);
             const leftOpen = root.classList.contains(LEFT_OPEN_CLASS);
             const rightOpen = root.classList.contains(RIGHT_OPEN_CLASS);
             const canOpenLeft = Boolean(document.querySelector('.poly-left-drawer-panel'));
             const canOpenRight = Boolean(document.querySelector('.chat-side-column') || document.querySelector('.chat-members-toggle-btn'));
 
-            if ((leftOpen && x <= leftRevealPx(root) + 24) || (!leftOpen && canOpenLeft && x <= 24)) {
+            const leftOpenEdgeHit = mirrored
+                ? x >= window.innerWidth - leftRevealPx(root) - 24
+                : x <= leftRevealPx(root) + 24;
+            const leftClosedEdgeHit = mirrored
+                ? x >= window.innerWidth - 24
+                : x <= 24;
+
+            if ((leftOpen && leftOpenEdgeHit) || (!leftOpen && canOpenLeft && leftClosedEdgeHit)) {
                 tracking = {
                     side: 'left',
                     startX: x,
@@ -231,7 +273,14 @@ if (!window.__polyMobileDrawerInit) {
                 return;
             }
 
-            if ((rightOpen && x >= window.innerWidth - rightRevealPx(root) - 24) || (!rightOpen && canOpenRight && x >= window.innerWidth - 24)) {
+            const rightOpenEdgeHit = mirrored
+                ? x <= rightRevealPx(root) + 24
+                : x >= window.innerWidth - rightRevealPx(root) - 24;
+            const rightClosedEdgeHit = mirrored
+                ? x <= 24
+                : x >= window.innerWidth - 24;
+
+            if ((rightOpen && rightOpenEdgeHit) || (!rightOpen && canOpenRight && rightClosedEdgeHit)) {
                 tracking = {
                     side: 'right',
                     startX: x,
@@ -272,14 +321,15 @@ if (!window.__polyMobileDrawerInit) {
             }
 
             event.preventDefault();
+            const mirrored = isMirrored(root);
 
             if (tracking.side === 'left') {
                 root.classList.add(LEFT_DRAGGING_CLASS);
-                setLeftProgress(root, tracking.startProgress + dx / tracking.reveal);
+                setLeftProgress(root, tracking.startProgress + ((mirrored ? -1 : 1) * dx) / tracking.reveal);
                 setRightProgress(root, 0);
             } else {
                 root.classList.add(RIGHT_DRAGGING_CLASS);
-                setRightProgress(root, tracking.startProgress - dx / tracking.reveal);
+                setRightProgress(root, tracking.startProgress + ((mirrored ? 1 : -1) * dx) / tracking.reveal);
                 setLeftProgress(root, 0);
             }
         },

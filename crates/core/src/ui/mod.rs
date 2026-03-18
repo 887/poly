@@ -87,7 +87,7 @@ pub use routes::Route;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};
-use crate::state::{AppState, ChatData, SettingsSection, View};
+use crate::state::{AppState, ChatData, LayoutMode, SettingsSection, View};
 use dioxus::prelude::*;
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
 
@@ -95,7 +95,7 @@ use routes::{route_targets_unknown_account, sync_route_to_app_state};
 const CSS: Asset = asset!("assets/tailwind.css");
 
 #[cfg(target_arch = "wasm32")]
-fn force_mobile_query_override() -> Option<bool> {
+fn layout_query_override() -> Option<LayoutMode> {
     let Some(window) = web_sys::window() else {
         return None;
     };
@@ -114,16 +114,24 @@ fn force_mobile_query_override() -> Option<bool> {
             Some((key, value))
         })
         .find_map(|(key, value)| {
-            if !matches!(key, "mobile" | "polyMobile" | "forceMobile") {
-                return None;
+            if key == "layout" {
+                return match value {
+                    "mobile" => Some(LayoutMode::ForceMobile),
+                    "desktop" => Some(LayoutMode::ForceDesktop),
+                    "auto-width" => Some(LayoutMode::AutoWidth),
+                    "auto-portrait" => Some(LayoutMode::AutoPortrait),
+                    _ => None,
+                };
             }
 
-            if matches!(value, "1" | "true" | "yes" | "on") {
-                return Some(true);
-            }
+            if matches!(key, "mobile" | "polyMobile" | "forceMobile") {
+                if matches!(value, "1" | "true" | "yes" | "on") {
+                    return Some(LayoutMode::ForceMobile);
+                }
 
-            if matches!(value, "0" | "false" | "no" | "off") {
-                return Some(false);
+                if matches!(value, "0" | "false" | "no" | "off") {
+                    return Some(LayoutMode::ForceDesktop);
+                }
             }
 
             None
@@ -131,21 +139,70 @@ fn force_mobile_query_override() -> Option<bool> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn force_mobile_ui_enabled(force_mobile_layout: bool) -> bool {
-    force_mobile_query_override().unwrap_or(force_mobile_layout)
+fn layout_mode_is_mobile(mode: LayoutMode) -> bool {
+    match mode {
+        LayoutMode::ForceMobile => true,
+        LayoutMode::ForceDesktop => false,
+        LayoutMode::AutoPortrait => {
+            let Some(window) = web_sys::window() else {
+                return false;
+            };
+            let width = window
+                .inner_width()
+                .ok()
+                .and_then(|value| value.as_f64())
+                .unwrap_or_default();
+            let height = window
+                .inner_height()
+                .ok()
+                .and_then(|value| value.as_f64())
+                .unwrap_or_default();
+            height > width
+        }
+        LayoutMode::AutoWidth => web_sys::window()
+            .and_then(|window| window.inner_width().ok())
+            .and_then(|value| value.as_f64())
+            .is_some_and(|width| width <= 640.0),
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-const fn force_mobile_ui_enabled(force_mobile_layout: bool) -> bool {
-    force_mobile_layout
+const fn layout_mode_is_mobile(mode: LayoutMode) -> bool {
+    matches!(mode, LayoutMode::ForceMobile)
 }
 
-fn app_root_class(force_mobile_layout: bool) -> &'static str {
-    if force_mobile_ui_enabled(force_mobile_layout) {
-        "poly-app poly-force-mobile"
-    } else {
-        "poly-app"
+fn effective_layout_mode(configured: LayoutMode, legacy_force_mobile: bool) -> LayoutMode {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(override_mode) = layout_query_override() {
+        return override_mode;
     }
+
+    if legacy_force_mobile && configured == LayoutMode::AutoWidth {
+        LayoutMode::ForceMobile
+    } else {
+        configured
+    }
+}
+
+const fn layout_mode_class(mode: LayoutMode) -> &'static str {
+    match mode {
+        LayoutMode::AutoWidth => "poly-layout-mode-auto-width",
+        LayoutMode::AutoPortrait => "poly-layout-mode-auto-portrait",
+        LayoutMode::ForceDesktop => "poly-layout-mode-force-desktop",
+        LayoutMode::ForceMobile => "poly-layout-mode-force-mobile",
+    }
+}
+
+fn app_root_class(app_state: &AppState) -> String {
+    let effective_mode = effective_layout_mode(app_state.layout_mode, false);
+    let mut classes = vec!["poly-app", layout_mode_class(effective_mode)];
+    if app_state.mirror_menu_layout {
+        classes.push("poly-menu-mirrored");
+    }
+    if app_state.mirror_chat_messages {
+        classes.push("poly-chat-mirrored");
+    }
+    classes.join(" ")
 }
 
 // ── App — startup registration helpers ──────────────────────────────────────
@@ -466,7 +523,11 @@ async fn init_storage(
                     client_manager
                         .write()
                         .set_disabled_native_backends(settings.disabled_native_backends.clone());
-                    app_state.write().force_mobile_layout = settings.force_mobile_layout;
+                    let restored_layout_mode =
+                        effective_layout_mode(settings.layout_mode, settings.force_mobile_layout);
+                    app_state.write().layout_mode = restored_layout_mode;
+                    app_state.write().mirror_menu_layout = settings.mirror_menu_layout;
+                    app_state.write().mirror_chat_messages = settings.mirror_chat_messages;
                     app_state.write().nav.view = View::DmsFriends;
                     // Restore favorited servers so Bar 1 repopulates immediately
                     // on launch — before the server list is fetched from the network.
@@ -486,7 +547,7 @@ async fn init_storage(
                     }
                     app_state.write().nav.right_sidebar_visible = settings.server_member_list_open;
                     app_state.write().nav.dm_right_sidebar_visible = settings.dm_member_list_open;
-                    if force_mobile_ui_enabled(settings.force_mobile_layout) {
+                    if layout_mode_is_mobile(restored_layout_mode) {
                         app_state.write().nav.right_sidebar_visible = false;
                         app_state.write().nav.dm_right_sidebar_visible = false;
                     }
@@ -552,6 +613,9 @@ async fn persist_setup_completion(account_id: String) {
         // Use WebSocket for real-time events by default.
         poly_use_websocket: true,
         force_mobile_layout: false,
+        layout_mode: LayoutMode::AutoWidth,
+        mirror_menu_layout: false,
+        mirror_chat_messages: false,
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");
@@ -713,7 +777,7 @@ pub fn App() -> Element {
     let storage_ready_now = *storage_ready.read();
     let app_state_snapshot = app_state.read().clone();
     let setup_complete = app_state_snapshot.is_setup_complete;
-    let root_class = app_root_class(app_state_snapshot.force_mobile_layout);
+    let root_class = app_root_class(&app_state_snapshot);
 
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }

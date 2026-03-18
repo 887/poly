@@ -209,6 +209,10 @@
     overflow: visible;
 }
 
+.poly-app.poly-menu-mirrored .account-view-main {
+    flex-direction: row-reverse;
+}
+
 /* The shared split shell normally hides overflow, but DM/server account pages
    intentionally let the voice/account footer bleed 72px left so it covers Bar 2.
    Keep the content pane itself responsible for its own clipping. */
@@ -232,6 +236,11 @@
     position: relative;
     z-index: 3;
     overflow: visible;
+}
+
+.poly-app.poly-menu-mirrored .channel-list-wrapper {
+    border-left: 1px solid var(--border-color);
+    border-right: none;
 }
 
 .channel-list-wrapper .channel-list {

@@ -48,6 +48,10 @@ body {
     /* for nav-bar-top absolute positioning */
 }
 
+.poly-app.poly-menu-mirrored .main-layout-body {
+    flex-direction: row-reverse;
+}
+
 .poly-split-shell {
     display: flex;
     flex: 1;
