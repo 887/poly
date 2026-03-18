@@ -80,6 +80,21 @@ body {
     min-height: 0;
 }
 
+.poly-split-content-stage {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+}
+
+.poly-split-content-stage>* {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
 .electron-titlebar {
     display: flex;
     align-items: stretch;
