@@ -1,14 +1,85 @@
 if (!window.__polyMobileDrawerInit) {
     window.__polyMobileDrawerInit = true;
 
-    window.__polySetMobileRightWingOpen = function (open) {
-        const root = document.querySelector('.poly-app');
-        if (!root) {
-            return;
-        }
+    const MOBILE_CLASS = 'poly-mobile-runtime-active';
+    const LEFT_OPEN_CLASS = 'poly-mobile-left-wing-open';
+    const RIGHT_OPEN_CLASS = 'poly-mobile-right-wing-open';
+    const LEFT_DRAGGING_CLASS = 'poly-mobile-left-wing-dragging';
+    const RIGHT_DRAGGING_CLASS = 'poly-mobile-right-wing-dragging';
+    const SNAP_THRESHOLD = 0.2;
 
-        root.classList.toggle('poly-mobile-right-wing-open', Boolean(open));
-    };
+    function getRoot() {
+        return document.querySelector('.poly-app');
+    }
+
+    function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+    }
+
+    function isMobileUi(root) {
+        return Boolean(root) && (root.classList.contains('poly-force-mobile') || window.innerWidth <= 640);
+    }
+
+    function railOffsetPx() {
+        return document.querySelector('.account-server-bar') ? 144 : 72;
+    }
+
+    function computeLeftRevealPx() {
+        return Math.min(window.innerWidth * 0.9, 420);
+    }
+
+    function computeRightRevealPx() {
+        return Math.min(window.innerWidth * 0.9, 360);
+    }
+
+    function cssNumber(root, propertyName, fallback) {
+        const raw = window.getComputedStyle(root).getPropertyValue(propertyName);
+        const parsed = Number.parseFloat(raw);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function leftRevealPx(root) {
+        return cssNumber(root, '--poly-mobile-left-reveal-px', window.innerWidth * 0.9);
+    }
+
+    function rightRevealPx(root) {
+        return cssNumber(root, '--poly-mobile-right-reveal-px', window.innerWidth * 0.9);
+    }
+
+    function applyStageTransforms(root) {
+        const leftOffset = cssNumber(root, '--poly-mobile-left-offset-px', 0);
+        const rightOffset = cssNumber(root, '--poly-mobile-right-offset-px', 0);
+
+        document.querySelectorAll('.poly-split-content').forEach(function (element) {
+            if (element instanceof HTMLElement) {
+                element.style.left = `${leftOffset}px`;
+            }
+        });
+
+        document.querySelectorAll('.chat-main-column').forEach(function (element) {
+            if (element instanceof HTMLElement) {
+                element.style.left = `${rightOffset}px`;
+            }
+        });
+    }
+
+    function setLeftProgress(root, progress) {
+        const next = clamp(progress, 0, 1);
+        root.style.setProperty('--poly-mobile-left-progress', `${next}`);
+        root.style.setProperty('--poly-mobile-left-offset-px', `${next * leftRevealPx(root)}px`);
+        root.classList.toggle(LEFT_OPEN_CLASS, next >= 1);
+        applyStageTransforms(root);
+    }
+
+    function setRightProgress(root, progress) {
+        const next = clamp(progress, 0, 1);
+        const reveal = rightRevealPx(root);
+        root.style.setProperty('--poly-mobile-right-progress', `${next}`);
+        root.style.setProperty('--poly-mobile-right-offset-px', `${-1 * next * reveal}px`);
+        root.style.setProperty('--poly-mobile-right-panel-offset-px', `${-1 * (1 - next) * reveal}px`);
+        root.classList.toggle(RIGHT_OPEN_CLASS, next >= 1);
+        applyStageTransforms(root);
+    }
 
     window.__polyToggleChatSideColumn = function () {
         const toggle = document.querySelector('.chat-members-toggle-btn');
@@ -17,75 +88,102 @@ if (!window.__polyMobileDrawerInit) {
         }
     };
 
-    window.__polyApplyMobileDrawerState = function (open) {
-        const root = document.querySelector('.poly-app');
+    window.__polyRequestOpenMobileRightWing = function () {
+        const root = getRoot();
         if (!root) {
             return;
         }
 
-        const favorites = document.querySelector('.server-sidebar');
-        const account = document.querySelector('.account-server-bar');
-        const panels = document.querySelectorAll('.poly-left-drawer-panel');
+        window.__polySetMobileDrawerOpen?.(false);
+        const toggle = document.querySelector('.chat-members-toggle-btn');
+        if (toggle instanceof HTMLElement) {
+            toggle.click();
+        }
+        setRightProgress(root, 1);
+    };
 
-        if (favorites) {
-            favorites.style.left = open ? '0px' : '-72px';
-            favorites.style.right = 'auto';
+    window.__polyRequestCloseMobileRightWing = function () {
+        const root = getRoot();
+        if (!root) {
+            return;
         }
 
-        if (account) {
-            account.style.left = open ? '72px' : '-72px';
-            account.style.right = 'auto';
+        const explicitClose = document.querySelector('.poly-mobile-right-wing-close-state');
+        if (explicitClose instanceof HTMLElement) {
+            explicitClose.click();
+            setRightProgress(root, 0);
+            return;
         }
 
-        panels.forEach(function (panel) {
-            panel.style.left = 'auto';
-            panel.style.right = open ? '0px' : '100vw';
-        });
+        const toggle = document.querySelector('.chat-members-toggle-btn');
+        if (toggle instanceof HTMLElement) {
+            toggle.click();
+        }
+        setRightProgress(root, 0);
+    };
+
+    window.__polySetMobileRightWingOpen = function (open) {
+        const root = getRoot();
+        if (!root) {
+            return;
+        }
+
+        if (open) {
+            setLeftProgress(root, 0);
+        }
+        setRightProgress(root, open ? 1 : 0);
+    };
+
+    window.__polySetMobileDrawerOpen = function (open) {
+        const root = getRoot();
+        if (!root) {
+            return;
+        }
+
+        if (open) {
+            setRightProgress(root, 0);
+        }
+        setLeftProgress(root, open ? 1 : 0);
+        window.__polySyncMobileDrawerMode?.();
+    };
+
+    window.__polyToggleMobileDrawerOpen = function () {
+        const root = getRoot();
+        if (!root) {
+            return;
+        }
+
+        window.__polySetMobileDrawerOpen(!root.classList.contains(LEFT_OPEN_CLASS));
     };
 
     window.__polySyncMobileDrawerMode = function () {
-        const root = document.querySelector('.poly-app');
+        const root = getRoot();
         if (!root) {
             return;
         }
 
-        const account = document.querySelector('.account-server-bar');
-        const isMobileUi = root.classList.contains('poly-force-mobile') || window.innerWidth <= 640;
-        if (!isMobileUi) {
-            root.classList.remove('poly-mobile-drawer-open');
-            root.classList.remove('poly-mobile-right-wing-open');
+        const mobileActive = isMobileUi(root);
+        root.classList.toggle(MOBILE_CLASS, mobileActive);
+        if (!mobileActive) {
+            root.classList.remove(LEFT_OPEN_CLASS, RIGHT_OPEN_CLASS, LEFT_DRAGGING_CLASS, RIGHT_DRAGGING_CLASS);
             root.style.removeProperty('--poly-mobile-rail-offset');
-            window.__polyApplyMobileDrawerState(false);
-
-            const favorites = document.querySelector('.server-sidebar');
-            const account = document.querySelector('.account-server-bar');
-            const panels = document.querySelectorAll('.poly-left-drawer-panel');
-            if (favorites) {
-                favorites.style.removeProperty('left');
-            }
-            if (account) {
-                account.style.removeProperty('left');
-            }
-            panels.forEach(function (panel) {
-                panel.style.removeProperty('right');
+            root.style.removeProperty('--poly-mobile-left-progress');
+            root.style.removeProperty('--poly-mobile-right-progress');
+            root.style.removeProperty('--poly-mobile-left-offset-px');
+            root.style.removeProperty('--poly-mobile-right-offset-px');
+            document.querySelectorAll('.poly-split-content, .chat-main-column').forEach(function (element) {
+                if (element instanceof HTMLElement) {
+                    element.style.removeProperty('left');
+                }
             });
             return;
         }
 
-        const railOffset = 72 + (account ? 72 : 0);
-        root.style.setProperty('--poly-mobile-rail-offset', `${railOffset}px`);
-        window.__polyApplyMobileDrawerState(root.classList.contains('poly-mobile-drawer-open'));
-    };
-
-    window.__polySetMobileDrawerOpen = function (open) {
-        const root = document.querySelector('.poly-app');
-        if (!root) {
-            return;
-        }
-
-        root.classList.toggle('poly-mobile-drawer-open', Boolean(open));
-        window.__polyApplyMobileDrawerState(Boolean(open));
-        window.__polySyncMobileDrawerMode?.();
+        root.style.setProperty('--poly-mobile-rail-offset', `${railOffsetPx()}px`);
+        root.style.setProperty('--poly-mobile-left-reveal-px', `${computeLeftRevealPx()}px`);
+        root.style.setProperty('--poly-mobile-right-reveal-px', `${computeRightRevealPx()}px`);
+        setLeftProgress(root, root.classList.contains(LEFT_OPEN_CLASS) ? 1 : 0);
+        setRightProgress(root, root.classList.contains(RIGHT_OPEN_CLASS) ? 1 : 0);
     };
 
     let resizeFrame = null;
@@ -107,42 +205,41 @@ if (!window.__polyMobileDrawerInit) {
     document.addEventListener(
         'touchstart',
         function (event) {
-            const root = document.querySelector('.poly-app');
-            if (!root) {
-                return;
-            }
-
-            const isMobileUi = root.classList.contains('poly-force-mobile') || window.innerWidth <= 640;
-            if (!isMobileUi || !event.touches || event.touches.length !== 1) {
+            const root = getRoot();
+            if (!root || !isMobileUi(root) || !event.touches || event.touches.length !== 1) {
                 tracking = null;
                 return;
             }
 
             const touch = event.touches[0];
-            const drawerOpen = root.classList.contains('poly-mobile-drawer-open');
             const x = touch.clientX;
             const y = touch.clientY;
+            const leftOpen = root.classList.contains(LEFT_OPEN_CLASS);
+            const rightOpen = root.classList.contains(RIGHT_OPEN_CLASS);
+            const canOpenLeft = Boolean(document.querySelector('.poly-left-drawer-panel'));
+            const canOpenRight = Boolean(document.querySelector('.chat-side-column') || document.querySelector('.chat-members-toggle-btn'));
 
-            if (!drawerOpen && x <= 24) {
-                tracking = { mode: 'open', startX: x, startY: y };
+            if ((leftOpen && x <= leftRevealPx(root) + 24) || (!leftOpen && canOpenLeft && x <= 24)) {
+                tracking = {
+                    side: 'left',
+                    startX: x,
+                    startY: y,
+                    startProgress: cssNumber(root, '--poly-mobile-left-progress', leftOpen ? 1 : 0),
+                    reveal: leftRevealPx(root),
+                    dragging: false,
+                };
                 return;
             }
 
-            if (drawerOpen && x <= Math.min(window.innerWidth, 360)) {
-                tracking = { mode: 'close', startX: x, startY: y };
-                return;
-            }
-
-            const rightWingOpen = root.classList.contains('poly-mobile-right-wing-open');
-            const canToggleRightWing = document.querySelector('.chat-members-toggle-btn');
-
-            if (!rightWingOpen && canToggleRightWing && x >= window.innerWidth - 24) {
-                tracking = { mode: 'open-right', startX: x, startY: y };
-                return;
-            }
-
-            if (rightWingOpen && x >= Math.max(0, window.innerWidth - 360)) {
-                tracking = { mode: 'close-right', startX: x, startY: y };
+            if ((rightOpen && x >= window.innerWidth - rightRevealPx(root) - 24) || (!rightOpen && canOpenRight && x >= window.innerWidth - 24)) {
+                tracking = {
+                    side: 'right',
+                    startX: x,
+                    startY: y,
+                    startProgress: cssNumber(root, '--poly-mobile-right-progress', rightOpen ? 1 : 0),
+                    reveal: rightRevealPx(root),
+                    dragging: false,
+                };
                 return;
             }
 
@@ -152,43 +249,81 @@ if (!window.__polyMobileDrawerInit) {
     );
 
     document.addEventListener(
-        'touchend',
+        'touchmove',
         function (event) {
-            if (!tracking || !event.changedTouches || event.changedTouches.length !== 1) {
-                tracking = null;
+            const root = getRoot();
+            if (!root || !tracking || !event.touches || event.touches.length !== 1) {
                 return;
             }
 
-            const root = document.querySelector('.poly-app');
-            if (!root) {
-                tracking = null;
-                return;
-            }
-
-            const touch = event.changedTouches[0];
+            const touch = event.touches[0];
             const dx = touch.clientX - tracking.startX;
             const dy = Math.abs(touch.clientY - tracking.startY);
 
-            if (dy <= 80) {
-                if (tracking.mode === 'open' && dx >= 60) {
-                    window.__polySetMobileDrawerOpen(true);
-                } else if (tracking.mode === 'close' && dx <= -60) {
-                    window.__polySetMobileDrawerOpen(false);
-                } else if (tracking.mode === 'open-right' && dx <= -60) {
-                    if (!root.classList.contains('poly-mobile-right-wing-open')) {
-                        window.__polyToggleChatSideColumn?.();
-                    }
-                } else if (tracking.mode === 'close-right' && dx <= -60) {
-                    window.__polySetMobileRightWingOpen(false);
-                    window.setTimeout(function () {
-                        if (root.classList.contains('poly-mobile-right-wing-open')) {
-                            window.__polyToggleChatSideColumn?.();
-                        }
-                    }, 220);
+            if (!tracking.dragging) {
+                if (Math.abs(dx) < 8) {
+                    return;
                 }
+                if (Math.abs(dx) < dy) {
+                    tracking = null;
+                    return;
+                }
+                tracking.dragging = true;
             }
 
+            event.preventDefault();
+
+            if (tracking.side === 'left') {
+                root.classList.add(LEFT_DRAGGING_CLASS);
+                setLeftProgress(root, tracking.startProgress + dx / tracking.reveal);
+                setRightProgress(root, 0);
+            } else {
+                root.classList.add(RIGHT_DRAGGING_CLASS);
+                setRightProgress(root, tracking.startProgress - dx / tracking.reveal);
+                setLeftProgress(root, 0);
+            }
+        },
+        { passive: false },
+    );
+
+    function finishTracking(cancelled) {
+        const root = getRoot();
+        if (!root || !tracking) {
             tracking = null;
+            return;
+        }
+
+        const side = tracking.side;
+        const finalProgress = side === 'left'
+            ? cssNumber(root, '--poly-mobile-left-progress', 0)
+            : cssNumber(root, '--poly-mobile-right-progress', 0);
+        const open = !cancelled && finalProgress >= SNAP_THRESHOLD;
+
+        root.classList.remove(LEFT_DRAGGING_CLASS, RIGHT_DRAGGING_CLASS);
+
+        if (side === 'left') {
+            window.__polySetMobileDrawerOpen?.(open);
+        } else if (open) {
+            window.__polyRequestOpenMobileRightWing?.();
+        } else {
+            window.__polyRequestCloseMobileRightWing?.();
+        }
+
+        tracking = null;
+    }
+
+    document.addEventListener(
+        'touchend',
+        function () {
+            finishTracking(false);
+        },
+        { passive: true },
+    );
+
+    document.addEventListener(
+        'touchcancel',
+        function () {
+            finishTracking(true);
         },
         { passive: true },
     );

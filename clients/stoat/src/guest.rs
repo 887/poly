@@ -201,10 +201,9 @@ fn fetch_self(base_url: &str, token: &str) -> Result<StoatGuestUser, wit::Client
 
 fn current_session() -> Result<StoredSession, wit::ClientError> {
     STATE.with(|state| {
-        state
-            .borrow()
-            .clone()
-            .ok_or_else(|| wit::ClientError::AuthFailed("Stoat guest is not authenticated".to_string()))
+        state.borrow().clone().ok_or_else(|| {
+            wit::ClientError::AuthFailed("Stoat guest is not authenticated".to_string())
+        })
     })
 }
 
@@ -212,7 +211,11 @@ fn stoat_auth_headers(token: &str) -> Vec<(String, String)> {
     vec![(STOAT_SESSION_TOKEN_HEADER.to_string(), token.to_string())]
 }
 
-fn fetch_user(base_url: &str, token: &str, user_id: &str) -> Result<StoatGuestUser, wit::ClientError> {
+fn fetch_user(
+    base_url: &str,
+    token: &str,
+    user_id: &str,
+) -> Result<StoatGuestUser, wit::ClientError> {
     let response = host_http_request(
         "GET",
         &format!("{base_url}/users/{user_id}"),
@@ -224,7 +227,9 @@ fn fetch_user(base_url: &str, token: &str, user_id: &str) -> Result<StoatGuestUs
         return Err(match response.status {
             401 => wit::ClientError::AuthFailed("Stoat token rejected".to_string()),
             404 => wit::ClientError::NotFound(format!("Stoat user {user_id} not found")),
-            status => wit::ClientError::Network(format!("Stoat /users/{user_id} returned HTTP {status}")),
+            status => {
+                wit::ClientError::Network(format!("Stoat /users/{user_id} returned HTTP {status}"))
+            }
         });
     }
 
@@ -247,7 +252,9 @@ fn fetch_open_dm_channel(
         return Err(match response.status {
             401 => wit::ClientError::AuthFailed("Stoat token rejected".to_string()),
             404 => wit::ClientError::NotFound(format!("Stoat DM target {user_id} not found")),
-            status => wit::ClientError::Network(format!("Stoat /users/{user_id}/dm returned HTTP {status}")),
+            status => wit::ClientError::Network(format!(
+                "Stoat /users/{user_id}/dm returned HTTP {status}"
+            )),
         });
     }
 
@@ -262,9 +269,7 @@ fn mutate_group_member(
     let session = current_session()?;
     let response = host_http_request(
         method,
-        &format!(
-            "{OFFICIAL_STOAT_BASE_URL}/channels/{group_id}/recipients/{user_id}"
-        ),
+        &format!("{OFFICIAL_STOAT_BASE_URL}/channels/{group_id}/recipients/{user_id}"),
         stoat_auth_headers(&session.token),
         None,
     )?;

@@ -232,19 +232,21 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                 VoiceAccountFooter {}
             },
             content: rsx! {
-                // Profile section — poly-server only (shown first, above notifications).
-                { profile_section_element(show_profile, account_id.clone()) }
-                // Notifications section
-                div {
-                    id: "acct-section-notifications",
-                    class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
-                    NotificationsSettings { account_id: account_id.clone() }
-                }
-                // Content & Social section
-                div {
-                    id: "acct-section-content-social",
-                    class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
-                    ContentSocialSettings { _account_id: account_id.clone() }
+                div { class: "settings-sections-stack",
+                    // Profile section — poly-server only (shown first, above notifications).
+                    { profile_section_element(show_profile, account_id.clone()) }
+                    // Notifications section
+                    div {
+                        id: "acct-section-notifications",
+                        class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                        NotificationsSettings { account_id: account_id.clone() }
+                    }
+                    // Content & Social section
+                    div {
+                        id: "acct-section-content-social",
+                        class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                        ContentSocialSettings { _account_id: account_id.clone() }
+                    }
                 }
             },
         }

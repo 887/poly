@@ -19,14 +19,12 @@ use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
 use crate::client_manager::ClientManager;
-use crate::i18n::t;
 use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
 
 const MOBILE_DRAWER_RUNTIME_JS: &str =
     include_str!("../../assets/scripts/mobile_drawer_runtime.js");
-const MOBILE_DRAWER_OPEN_JS: &str = "window.__polySetMobileDrawerOpen?.(true);";
 const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
 const MOBILE_RIGHT_WING_CLOSE_JS: &str = "window.__polySetMobileRightWingOpen?.(false);";
 const DRAG_BRIDGE_RUNTIME_JS: &str = include_str!("../../assets/scripts/drag_bridge_runtime.js");
@@ -60,12 +58,6 @@ fn init_mobile_drawer_runtime() {
         // Blitz at this layer, so native renderers get an explicit no-op stub
         // until a renderer-specific split-shell runtime exists.
         BrowserRuntime::NativeStub => {}
-    }
-}
-
-fn open_mobile_drawer() {
-    if browser_runtime() == BrowserRuntime::WasmDom {
-        let _ = document::eval(MOBILE_DRAWER_OPEN_JS);
     }
 }
 
@@ -187,6 +179,7 @@ pub fn MainLayout() -> Element {
     let route_key = format!("{route}");
     use_effect(move || {
         let _ = &route_key;
+        close_mobile_drawer();
         close_mobile_right_wing();
         if runtime_mobile_ui_active() {
             let mut state = app_state.write();
@@ -253,22 +246,6 @@ pub fn MainLayout() -> Element {
             },
             // Floating server right-click context menu (position: fixed, above sidebars)
             ServerContextMenu {}
-            button {
-                class: "mobile-drawer-open-btn",
-                title: t("mobile-nav-open"),
-                onclick: move |_| open_mobile_drawer(),
-                "☰"
-            }
-            button {
-                class: "mobile-drawer-close-btn",
-                title: t("mobile-nav-close"),
-                onclick: move |_| close_mobile_drawer(),
-                "✕"
-            }
-            div {
-                class: "mobile-drawer-backdrop",
-                onclick: move |_| close_mobile_drawer(),
-            }
             // Voice connection banner — spans full width when connected
             VoiceBanner {}
             // Main body: nav + sidebar + route content

@@ -1113,6 +1113,11 @@ fn runtime_mobile_ui_active() -> bool {
     forced_mobile || narrow_viewport
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+const fn runtime_mobile_ui_active() -> bool {
+    false
+}
+
 #[cfg(target_arch = "wasm32")]
 fn sync_mobile_side_column_open(open: bool) {
     if !runtime_mobile_ui_active() {
@@ -1968,10 +1973,109 @@ fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
+    let mobile_server_right_wing = mobile_server_right_wing_active(&ctx);
+
     rsx! {
         div { class: "chat-header-right",
-            {render_chat_header_actions(ctx.clone())}
-            {render_chat_header_search(ctx)}
+            if mobile_server_right_wing {
+                {render_mobile_chat_header_right_toggle(ctx)}
+            } else {
+                {render_chat_header_actions(ctx.clone())}
+                {render_chat_header_search(ctx)}
+            }
+        }
+    }
+}
+
+fn mobile_server_right_wing_active(ctx: &ChatViewMarkupCtx) -> bool {
+    runtime_mobile_ui_active() && !ctx.is_dm_channel && !ctx.is_group_channel
+}
+
+fn close_chat_side_column_state(
+    mut app_state: Signal<AppState>,
+    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
+    mut show_search_filters: Signal<bool>,
+    is_group_channel: bool,
+    is_dm_channel: bool,
+) {
+    show_search_filters.set(false);
+    if utility_panel.read().is_some() {
+        utility_panel.set(None);
+        return;
+    }
+
+    if is_group_channel || is_dm_channel {
+        app_state.write().nav.dm_right_sidebar_visible = false;
+    } else {
+        app_state.write().nav.right_sidebar_visible = false;
+    }
+}
+
+fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
+    let mut app_state = ctx.app_state;
+    let mut utility_panel = ctx.utility_panel;
+    let mut show_search_filters = ctx.show_search_filters;
+    let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some();
+    let current_server = ctx.current_server.clone();
+    let is_dm_channel = ctx.is_dm_channel;
+    let is_group_channel = ctx.is_group_channel;
+    let server_icon_url = current_server
+        .as_ref()
+        .and_then(|server| server.icon_url.clone());
+    let server_icon_label = current_server
+        .as_ref()
+        .map(|server| server.name.clone())
+        .unwrap_or_else(|| t("chat-toggle-members"));
+    let server_icon_fallback = current_server
+        .as_ref()
+        .map(|server| server.name.chars().next().unwrap_or('#').to_string())
+        .unwrap_or_else(|| "#".to_string());
+
+    rsx! {
+        button {
+            class: if right_wing_open { "header-btn soft-active poly-mobile-right-wing-toggle mobile-server-icon-toggle" } else { "header-btn poly-mobile-right-wing-toggle mobile-server-icon-toggle" },
+            title: t("chat-toggle-members"),
+            aria_label: "{server_icon_label}",
+            onclick: move |_| {
+                let is_opening = !(utility_panel.read().is_some()
+                    || app_state.read().nav.right_sidebar_visible);
+                if !is_opening {
+                    close_chat_side_column_state(
+                        app_state,
+                        utility_panel,
+                        show_search_filters,
+                        is_group_channel,
+                        is_dm_channel,
+                    ); // Sync drawer state to JS immediately
+                } else {
+                    show_search_filters.set(false);
+                    utility_panel.set(None);
+                    if is_dm_channel || is_group_channel {
+                        app_state.write().nav.dm_right_sidebar_visible = true;
+                    } else {
+                        app_state.write().nav.right_sidebar_visible = true;
+                    }
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let _ = document::eval(
+                        if is_opening {
+                            MOBILE_RIGHT_WING_OPEN_JS
+                        } else {
+                            MOBILE_RIGHT_WING_CLOSE_JS
+                        },
+                    );
+                }
+            },
+            if let Some(ref icon_url) = server_icon_url {
+                img {
+                    class: "mobile-server-icon-image",
+                    src: "{icon_url}",
+                    alt: "{server_icon_label}",
+                }
+            } else {
+                span { class: "mobile-server-icon-fallback", "{server_icon_fallback}" }
+            }
         }
     }
 }
@@ -2263,7 +2367,9 @@ fn render_search_clear_button(
 }
 
 fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
-    let show_side_column = ctx.utility_panel.read().is_some() || ctx.member_list_visible;
+    let show_side_column = ctx.utility_panel.read().is_some()
+        || ctx.member_list_visible
+        || mobile_server_right_wing_active(&ctx);
 
     rsx! {
         div { class: "chat-body-shell",
@@ -3440,11 +3546,15 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
         .map(|channel| channel.name.clone())
         .unwrap_or_default();
     let panel = *ctx.utility_panel.read();
+    let mobile_server_tools = mobile_server_right_wing_active(&ctx);
 
     rsx! {
         RightWingShell {
             panel_class: String::new(),
             content: rsx! {
+                if mobile_server_tools {
+                    {render_mobile_chat_tools_panel(ctx.clone())}
+                }
                 if let Some(panel) = panel {
                     {render_chat_utility_rail(ctx, panel, current_channel_name)}
                 } else if ctx.is_dm_channel {
@@ -3455,6 +3565,94 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
                     UserSidebar {}
                 }
             },
+        }
+    }
+}
+
+fn render_mobile_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
+    let mut app_state = ctx.app_state;
+    let mut utility_panel = ctx.utility_panel;
+    let mut notifications_muted = ctx.notifications_muted;
+    let mut show_search_filters = ctx.show_search_filters;
+    let member_sidebar_active = app_state.read().nav.right_sidebar_visible;
+    let threads_active = *utility_panel.read() == Some(ChatUtilityPanel::Threads);
+    let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
+
+    rsx! {
+        div { class: "mobile-chat-tools-panel",
+            div { class: "mobile-chat-tools-topbar",
+                button {
+                    class: "header-btn mobile-chat-tools-close poly-mobile-right-wing-close-state",
+                    title: t("action-close"),
+                    onclick: move |_| {
+                        close_chat_side_column_state(
+                            app_state,
+                            utility_panel,
+                            show_search_filters,
+                            false,
+                            false,
+                        );
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            let _ = document::eval(MOBILE_RIGHT_WING_CLOSE_JS);
+                        }
+                    },
+                    "✕"
+                }
+                div { class: "mobile-chat-tools-action-row",
+                    button {
+                        class: if member_sidebar_active && utility_panel.read().is_none() { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
+                        title: t("chat-toggle-members"),
+                        onclick: move |_| {
+                            let current = app_state.read().nav.right_sidebar_visible;
+                            app_state.write().nav.right_sidebar_visible = !current;
+                            utility_panel.set(None);
+                            show_search_filters.set(false);
+                        },
+                        "👥"
+                    }
+                    button {
+                        class: if threads_active { "header-btn active" } else { "header-btn" },
+                        title: t("threads"),
+                        onclick: move |_| {
+                            show_search_filters.set(false);
+                            let next = if *utility_panel.read() == Some(ChatUtilityPanel::Threads) {
+                                None
+                            } else {
+                                Some(ChatUtilityPanel::Threads)
+                            };
+                            utility_panel.set(next);
+                            app_state.write().nav.right_sidebar_visible = false;
+                        },
+                        "🧵"
+                    }
+                    button {
+                        class: if pinned_active { "header-btn active" } else { "header-btn" },
+                        title: t("pinned-messages"),
+                        onclick: move |_| {
+                            show_search_filters.set(false);
+                            let next = if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) {
+                                None
+                            } else {
+                                Some(ChatUtilityPanel::Pinned)
+                            };
+                            utility_panel.set(next);
+                            app_state.write().nav.right_sidebar_visible = false;
+                        },
+                        "📌"
+                    }
+                    button {
+                        class: if *notifications_muted.read() { "header-btn active" } else { "header-btn" },
+                        title: if *notifications_muted.read() { t("unmute-notifications") } else { t("mute-notifications") },
+                        onclick: move |_| {
+                            let current = *notifications_muted.read();
+                            notifications_muted.set(!current);
+                        },
+                        "🔔"
+                    }
+                }
+            }
+            div { class: "mobile-chat-tools-search", {render_chat_header_search(ctx)} }
         }
     }
 }

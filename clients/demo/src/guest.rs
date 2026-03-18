@@ -533,7 +533,12 @@ impl MessengerClientGuest for DemoPlugin {
                 .into_iter()
                 .find(|dm| dm.user.id == user_id)
                 .map_or_else(
-                    || crate::data::demo_empty_dm_channel_for_user(&user_id, crate::data::DEMO_ACCOUNT_ID),
+                    || {
+                        crate::data::demo_empty_dm_channel_for_user(
+                            &user_id,
+                            crate::data::DEMO_ACCOUNT_ID,
+                        )
+                    },
                     Ok,
                 ),
             to_wit_dm_channel,

@@ -276,7 +276,10 @@ async fn demo_open_direct_message_channel_for_non_dm_friend() {
     assert_eq!(dm.user.id, "user-grace");
     assert_eq!(dm.user.display_name, "Grace");
     assert_eq!(dm.account_id, "demo-cat");
-    assert!(dm.last_message.is_none(), "new fallback demo DMs should start empty");
+    assert!(
+        dm.last_message.is_none(),
+        "new fallback demo DMs should start empty"
+    );
     assert_eq!(dm.unread_count, 0);
 }
 

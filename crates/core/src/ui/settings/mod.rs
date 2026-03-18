@@ -441,7 +441,9 @@ pub fn SettingsPage() -> Element {
                 }
             },
             content: rsx! {
-                SettingsAllSections { search_query: query }
+                div { class: "settings-sections-stack",
+                    SettingsAllSections { search_query: query }
+                }
             },
         }
     }

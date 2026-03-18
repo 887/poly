@@ -1035,7 +1035,7 @@ mod tests {
                     }
                 }),
             )
-                            .route("/users/friend", post(send_friend_request))
+            .route("/users/friend", post(send_friend_request))
             .route("/autumn/attachments", post(upload_attachment))
             .route("/channels/{channel_id}/messages", post(send_message))
             .route(

@@ -85,7 +85,10 @@ impl TestServer {
             .route("/users/dms", get(fetch_dms))
             .route("/users/friend", post(send_friend_request))
             .route("/users/{target}/dm", get(open_dm))
-            .route("/users/{target}/friend", put(accept_or_remove_friend).delete(accept_or_remove_friend))
+            .route(
+                "/users/{target}/friend",
+                put(accept_or_remove_friend).delete(accept_or_remove_friend),
+            )
             .route("/users/{target}", get(fetch_user))
             .route("/servers/{target}", get(fetch_server))
             .route("/servers/{target}/members", get(fetch_server_members))
@@ -242,13 +245,7 @@ async fn send_friend_request(
 
     match username {
         "otterpal#0002" => Ok(Json(stoat_user_json(
-            "user_2",
-            "otterpal",
-            "0002",
-            None,
-            "Outgoing",
-            "Idle",
-            true,
+            "user_2", "otterpal", "0002", None, "Outgoing", "Idle", true,
         ))),
         _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
     }
@@ -281,13 +278,7 @@ async fn accept_or_remove_friend(
             true,
         ))),
         "user_2" => Ok(Json(stoat_user_json(
-            "user_2",
-            "otterpal",
-            "0002",
-            None,
-            "None",
-            "Idle",
-            true,
+            "user_2", "otterpal", "0002", None, "None", "Idle", true,
         ))),
         _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
     }

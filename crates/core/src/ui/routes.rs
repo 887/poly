@@ -47,8 +47,8 @@
 // DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
 use super::account::{
-    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, FriendsPanel, NewConversationView, NotificationsView, SavedItemsView,
-    ServerSettingsPage, VoiceChannelView,
+    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, FriendsPanel,
+    NewConversationView, NotificationsView, SavedItemsView, ServerSettingsPage, VoiceChannelView,
 };
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
@@ -813,7 +813,12 @@ fn ServerChat(
     let chat_data: Signal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
+    let nav = navigator();
     use_effect(move || {
+        let backend_slug = backend.clone();
+        let instance = instance_id.clone();
+        let account = account_id.clone();
+        let route_server_id = server_id.clone();
         let cid = channel_id.clone();
         let sid = server_id.clone();
 
@@ -835,14 +840,26 @@ fn ServerChat(
         }
 
         spawn(async move {
-            super::favorites_sidebar::restore_server_channel(
+            let resolved_channel_id = super::favorites_sidebar::restore_server_channel(
                 sid,
-                cid,
+                cid.clone(),
                 app_state,
                 client_manager,
                 chat_data,
             )
             .await;
+
+            if let Some(resolved_channel_id) = resolved_channel_id
+                && resolved_channel_id != cid
+            {
+                nav.replace(Route::ServerChat {
+                    backend: backend_slug,
+                    instance_id: instance,
+                    account_id: account,
+                    server_id: route_server_id,
+                    channel_id: resolved_channel_id,
+                });
+            }
         });
     });
 

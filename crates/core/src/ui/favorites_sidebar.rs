@@ -800,13 +800,13 @@ pub async fn restore_server_channel(
     mut app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
-) {
+) -> Option<String> {
     chat_data.write().loading = true;
 
     let backend_info = client_manager.read().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
         chat_data.write().loading = false;
-        return;
+        return None;
     };
 
     // Load server details
@@ -836,7 +836,7 @@ pub async fn restore_server_channel(
 
     chat_data.write().channels = channels;
 
-    if let Some(ch) = target {
+    if let Some(ref ch) = target {
         app_state.write().nav.selected_channel = Some(ch.id.clone());
         chat_data.write().current_channel = Some(ch.clone());
 
@@ -869,4 +869,6 @@ pub async fn restore_server_channel(
     chat_data.write().loading = false;
     // Apply any user-defined icon/banner overrides from storage.
     apply_server_icon_overrides(&mut chat_data).await;
+
+    target.as_ref().map(|channel| channel.id.clone())
 }

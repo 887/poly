@@ -12,8 +12,8 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.8): Wire notifications to backend data
 
-use crate::i18n::t;
 use crate::client_manager::ClientManager;
+use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::backend_badge;
 use crate::ui::account::common::VoiceAccountFooter;
@@ -547,7 +547,8 @@ async fn handle_friend_request_action(
     drop(guard);
 
     let mut cd = chat_data.write();
-    cd.notifications.retain(|notification| notification.id != notif_id);
+    cd.notifications
+        .retain(|notification| notification.id != notif_id);
 
     if let Some(friends) = refreshed_friends {
         for friend in friends {

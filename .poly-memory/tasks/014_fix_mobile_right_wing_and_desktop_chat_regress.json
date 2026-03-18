@@ -1,0 +1,13 @@
+{
+  "id": 14,
+  "slug": "fix-mobile-right-wing-and-desktop-chat-regressions",
+  "title": "Fix mobile right wing and desktop chat regressions",
+  "description": "Repair mobile right wing gradient visibility, replace the hologram top-right toggle with a proper server icon button, prevent clicks through the exposed main-view sliver when the right wing is open, resize the mobile server/header layout so banner/channels/roles fit, and fix the desktop chat composer overlapping the last message. Verify in poly-web and store findings.",
+  "status": "todo",
+  "created_at": "2026-03-18T00:24:04.413711169Z",
+  "updated_at": "2026-03-18T00:24:04.413711169Z",
+  "completed_at": null,
+  "memory_count": 0,
+  "finding_count": 0,
+  "checklist": []
+}

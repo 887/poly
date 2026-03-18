@@ -29,7 +29,10 @@ fn dm_last_incoming_timestamp(dm: &DmChannel) -> Option<DateTime<Utc>> {
         .map(|message| message.timestamp)
 }
 
-fn group_last_incoming_timestamp(group: &poly_client::Group, active_user_id: Option<&str>) -> Option<DateTime<Utc>> {
+fn group_last_incoming_timestamp(
+    group: &poly_client::Group,
+    active_user_id: Option<&str>,
+) -> Option<DateTime<Utc>> {
     group
         .last_message
         .as_ref()
@@ -259,9 +262,9 @@ pub(crate) fn open_direct_message_from_active_account(
         };
 
         let mut chat_data_write = chat_data.write();
-        chat_data_write
-            .dm_channels
-            .retain(|dm| !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == user_id)));
+        chat_data_write.dm_channels.retain(|dm| {
+            !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == user_id))
+        });
         chat_data_write.dm_channels.push(opened_dm.clone());
         drop(chat_data_write);
 

@@ -1,0 +1,13 @@
+{
+  "id": 13,
+  "slug": "fix-mobile-right-wing-panel-positioning",
+  "title": "Fix mobile right-wing panel positioning",
+  "description": "Members panel overlaps chat messages. Need to position it off-screen when closed and slide in when open.",
+  "status": "completed",
+  "created_at": "2026-03-17T23:49:35.026182713Z",
+  "updated_at": "2026-03-18T00:04:20.582624100Z",
+  "completed_at": "2026-03-18T00:04:20.582625030Z",
+  "memory_count": 3,
+  "finding_count": 2,
+  "checklist": []
+}
