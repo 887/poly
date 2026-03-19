@@ -488,7 +488,7 @@
     background: color-mix(in srgb, var(--accent-primary) 28%, var(--bg-tertiary));
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-panel {
+.poly-app.poly-mobile-runtime-active .chat-tools-panel {
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -497,26 +497,21 @@
     background: color-mix(in srgb, var(--bg-secondary) 96%, black);
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-topbar {
+.poly-app.poly-mobile-runtime-active .chat-tools-topbar {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-close {
+.poly-app.poly-mobile-runtime-active .chat-tools-close {
     flex: 0 0 auto;
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-action-row {
+.poly-app.poly-mobile-runtime-active .chat-tools-action-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
-}
-
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-search .chat-header-search-inline {
-    width: 100%;
-    max-width: none;
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .server-sidebar {
@@ -610,7 +605,7 @@
     left: var(--poly-mobile-right-reveal-px);
 }
 
-.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .mobile-chat-tools-topbar {
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-tools-topbar {
     flex-direction: row-reverse;
 }
 

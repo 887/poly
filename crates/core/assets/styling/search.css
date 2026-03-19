@@ -25,6 +25,12 @@
     gap: 12px;
 }
 
+/* When mirrored, sidebar moves to right side — flip border. */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .search-page-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+
 .search-page-sidebar h2 {
     font-size: 20px;
     font-weight: 700;

@@ -122,6 +122,14 @@
     gap: 4px;
 }
 
+.poly-app.poly-menu-mirrored .user-sidebar-header {
+    flex-direction: row-reverse;
+}
+
+.poly-app.poly-menu-mirrored .user-sidebar-title {
+    text-align: right;
+}
+
 /* Filter toggle icon button */
 .user-filter-btn {
     width: 22px;

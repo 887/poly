@@ -766,7 +766,7 @@
 .content-social-section {
     margin-bottom: 32px;
     padding-bottom: 24px;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
 }
 
 .content-social-section:last-child {
@@ -802,7 +802,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 0;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
 }
 
 .content-social-select-row:last-child {
@@ -815,7 +815,8 @@
 }
 
 .content-social-select {
-    display: block; /* override wizard.css global select {display:none} */
+    display: block;
+    /* override wizard.css global select {display:none} */
     background: var(--bg-surface);
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
@@ -870,7 +871,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 0;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
     cursor: pointer;
 }
 
@@ -907,7 +908,7 @@
     padding: 10px 14px;
     background-color: var(--bg-surface);
     border-radius: var(--radius-md);
-    border: 1px solid var(--border-subtle, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
 }
 
 .content-social-blocked-avatar {
@@ -959,4 +960,3 @@
     text-align: center;
     padding: 16px 0;
 }
-

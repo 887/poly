@@ -30,7 +30,6 @@ use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::main_layout::close_mobile_drawer;
 use dioxus::prelude::*;
-use poly_client::BackendType;
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
 fn get_ordered_servers(
@@ -188,10 +187,10 @@ pub fn AccountServerBar() -> Element {
                 }
             }
 
-            // Poly accounts: "+" button to create a new server/guild.
-            if active_backend == Some(BackendType::Poly) {
-                CreateServerButton { account_id: account_id.clone() }
-            }
+            // Separator + "+" button to join/create a new server/guild.
+            // Shown for all backends so the affordance is always discoverable.
+            div { class: "sidebar-separator" }
+            CreateServerButton { account_id: account_id.clone() }
 
             // Spacer keeps the icon rail aligned above the shared bottom account bar.
             div { class: "sidebar-spacer" }

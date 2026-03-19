@@ -184,6 +184,7 @@ enum ChatUtilityPanel {
     Search,
     Pinned,
     Threads,
+    Settings,
 }
 
 #[derive(Clone, Copy)]
@@ -879,6 +880,14 @@ struct ChatViewSignals {
     history_state: Signal<ChatHistoryUiState>,
     unread_marker_on_screen: Signal<bool>,
     virtual_window: Signal<MessageVirtualWindowState>,
+    /// Whether the filter/search box is open inside the Pinned tab
+    pinned_filter_open: Signal<bool>,
+    /// Current filter query text for the Pinned tab
+    pinned_filter_query: Signal<String>,
+    /// Whether the filter/search box is open inside the Threads tab
+    threads_filter_open: Signal<bool>,
+    /// Current filter query text for the Threads tab
+    threads_filter_query: Signal<String>,
 }
 
 fn use_chat_view_signals() -> ChatViewSignals {
@@ -909,6 +918,10 @@ fn use_chat_view_signals() -> ChatViewSignals {
         history_state: use_signal(ChatHistoryUiState::default),
         unread_marker_on_screen: use_signal(|| false),
         virtual_window: use_signal(MessageVirtualWindowState::default),
+        pinned_filter_open: use_signal(|| false),
+        pinned_filter_query: use_signal(String::new),
+        threads_filter_open: use_signal(|| false),
+        threads_filter_query: use_signal(String::new),
     }
 }
 
@@ -1019,6 +1032,10 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         history_state: signals.history_state,
         unread_marker_on_screen: signals.unread_marker_on_screen,
         virtual_window: signals.virtual_window,
+        pinned_filter_open: signals.pinned_filter_open,
+        pinned_filter_query: signals.pinned_filter_query,
+        threads_filter_open: signals.threads_filter_open,
+        threads_filter_query: signals.threads_filter_query,
     }
 }
 
@@ -1520,6 +1537,14 @@ struct ChatViewMarkupCtx {
     history_state: Signal<ChatHistoryUiState>,
     unread_marker_on_screen: Signal<bool>,
     virtual_window: Signal<MessageVirtualWindowState>,
+    /// Whether the filter/search box is open inside the Pinned tab
+    pinned_filter_open: Signal<bool>,
+    /// Current filter query text for the Pinned tab
+    pinned_filter_query: Signal<String>,
+    /// Whether the filter/search box is open inside the Threads tab
+    threads_filter_open: Signal<bool>,
+    /// Current filter query text for the Threads tab
+    threads_filter_query: Signal<String>,
 }
 
 fn should_virtualize_messages(message_count: usize, search_query_value: &str) -> bool {
@@ -1997,8 +2022,7 @@ fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
             if mobile_server_right_wing {
                 {render_mobile_chat_header_right_toggle(ctx)}
             } else {
-                {render_chat_header_actions(ctx.clone())}
-                {render_chat_header_search(ctx)}
+                {render_chat_header_actions(ctx)}
             }
         }
     }
@@ -2098,17 +2122,26 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 fn render_chat_header_actions(ctx: ChatViewMarkupCtx) -> Element {
-    let app_state = ctx.app_state;
+    let mut app_state = ctx.app_state;
     let mut utility_panel = ctx.utility_panel;
-    let mut notifications_muted = ctx.notifications_muted;
+    let notifications_muted = ctx.notifications_muted;
     let mut show_search_filters = ctx.show_search_filters;
     let is_group_channel = ctx.is_group_channel;
     let is_dm_channel = ctx.is_dm_channel;
 
     rsx! {
         div { class: "chat-header-actions",
+            {
+                render_member_toggle_button(
+                    app_state,
+                    utility_panel,
+                    show_search_filters,
+                    is_group_channel,
+                    is_dm_channel,
+                )
+            }
             button {
-                class: if *utility_panel.read() == Some(ChatUtilityPanel::Threads) { "header-btn active" } else { "header-btn" },
+                class: if *utility_panel.read() == Some(ChatUtilityPanel::Threads) { "header-btn active chat-header-btn-threads" } else { "header-btn chat-header-btn-threads" },
                 title: t("threads"),
                 onclick: move |_| {
                     show_search_filters.set(false);
@@ -2122,7 +2155,7 @@ fn render_chat_header_actions(ctx: ChatViewMarkupCtx) -> Element {
                 "🧵"
             }
             button {
-                class: if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) { "header-btn active" } else { "header-btn" },
+                class: if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) { "header-btn active chat-header-btn-pinned" } else { "header-btn chat-header-btn-pinned" },
                 title: t("pinned-messages"),
                 onclick: move |_| {
                     show_search_filters.set(false);
@@ -2135,23 +2168,80 @@ fn render_chat_header_actions(ctx: ChatViewMarkupCtx) -> Element {
                 },
                 "📌"
             }
-            button {
-                class: if *notifications_muted.read() { "header-btn active" } else { "header-btn" },
-                title: if *notifications_muted.read() { t("unmute-notifications") } else { t("mute-notifications") },
-                onclick: move |_| {
-                    let current = *notifications_muted.read();
-                    notifications_muted.set(!current);
-                },
-                "🔔"
-            }
             {
-                render_member_toggle_button(
-                    app_state,
+                render_search_tab_button(
                     utility_panel,
                     show_search_filters,
+                    false,
                     is_group_channel,
                     is_dm_channel,
+                    app_state,
                 )
+            }
+            button {
+                class: if *utility_panel.read() == Some(ChatUtilityPanel::Settings) { "header-btn active chat-header-btn-settings" } else { "header-btn chat-header-btn-settings" },
+                title: t("chat-settings"),
+                onclick: move |_| {
+                    show_search_filters.set(false);
+                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Settings) {
+                        None
+                    } else {
+                        Some(ChatUtilityPanel::Settings)
+                    };
+                    utility_panel.set(next);
+                    // Close member sidebar when opening settings
+                    if next.is_some() {
+                        if is_dm_channel || is_group_channel {
+                            app_state.write().nav.dm_right_sidebar_visible = false;
+                        } else {
+                            app_state.write().nav.right_sidebar_visible = false;
+                        }
+                    }
+                },
+                span { class: "chat-settings-btn-icon",
+                    span { class: "chat-settings-btn-icon-cog", "⚙️" }
+                    if *notifications_muted.read() {
+                        span { class: "chat-settings-btn-muted-dot" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn render_search_tab_button(
+    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
+    mut show_search_filters: Signal<bool>,
+    mobile_tools: bool,
+    is_group_channel: bool,
+    is_dm_channel: bool,
+    mut app_state: Signal<AppState>,
+) -> Element {
+    let active = *utility_panel.read() == Some(ChatUtilityPanel::Search);
+
+    rsx! {
+        button {
+            class: if active { "header-btn active chat-search-tab-btn chat-header-btn-search" } else { "header-btn chat-search-tab-btn chat-header-btn-search" },
+            title: t("search-messages"),
+            onclick: move |_| {
+                show_search_filters.set(false);
+                let next = if *utility_panel.read() == Some(ChatUtilityPanel::Search) {
+                    None
+                } else {
+                    Some(ChatUtilityPanel::Search)
+                };
+                utility_panel.set(next);
+                if mobile_tools || next.is_some() {
+                    if is_dm_channel || is_group_channel {
+                        app_state.write().nav.dm_right_sidebar_visible = false;
+                    } else {
+                        app_state.write().nav.right_sidebar_visible = false;
+                    }
+                }
+            },
+            span { class: "chat-search-tab-icon",
+                span { class: "chat-search-tab-icon-base", "📰" }
+                span { class: "chat-search-tab-icon-overlay", "🔎" }
             }
         }
     }
@@ -2167,7 +2257,7 @@ fn render_member_toggle_button(
     if is_group_channel {
         return rsx! {
             button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
+                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
                 title: t("chat-toggle-members"),
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -2183,7 +2273,7 @@ fn render_member_toggle_button(
     if is_dm_channel {
         return rsx! {
             button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
+                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
                 title: t("chat-toggle-contact"),
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
@@ -2198,7 +2288,7 @@ fn render_member_toggle_button(
 
     rsx! {
         button {
-            class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
+            class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
             title: t("chat-toggle-members"),
             onclick: move |_| {
                 let current = app_state.read().nav.right_sidebar_visible;
@@ -3563,14 +3653,14 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
         .map(|channel| channel.name.clone())
         .unwrap_or_default();
     let panel = *ctx.utility_panel.read();
-    let mobile_server_tools = mobile_server_right_wing_active(&ctx);
+    let mobile_tools = runtime_mobile_ui_active();
 
     rsx! {
         RightWingShell {
             panel_class: String::new(),
             content: rsx! {
-                if mobile_server_tools {
-                    {render_mobile_chat_tools_panel(ctx.clone())}
+                if mobile_tools {
+                    {render_chat_tools_panel(ctx.clone())}
                 }
                 if let Some(panel) = panel {
                     {render_chat_utility_rail(ctx, panel, current_channel_name)}
@@ -3586,28 +3676,31 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-fn render_mobile_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
+fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     let mut app_state = ctx.app_state;
     let mut utility_panel = ctx.utility_panel;
-    let mut notifications_muted = ctx.notifications_muted;
+    let notifications_muted = ctx.notifications_muted;
     let mut show_search_filters = ctx.show_search_filters;
-    let member_sidebar_active = app_state.read().nav.right_sidebar_visible;
+    let member_sidebar_active = ctx.member_list_visible;
+    let is_group_channel = ctx.is_group_channel;
+    let is_dm_channel = ctx.is_dm_channel;
     let threads_active = *utility_panel.read() == Some(ChatUtilityPanel::Threads);
     let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
+    let settings_active = *utility_panel.read() == Some(ChatUtilityPanel::Settings);
 
     rsx! {
-        div { class: "mobile-chat-tools-panel",
-            div { class: "mobile-chat-tools-topbar",
+        div { class: "chat-tools-panel",
+            div { class: "chat-tools-topbar",
                 button {
-                    class: "header-btn mobile-chat-tools-close poly-mobile-right-wing-close-state",
+                    class: "header-btn chat-tools-close poly-mobile-right-wing-close-state",
                     title: t("action-close"),
                     onclick: move |_| {
                         close_chat_side_column_state(
                             app_state,
                             utility_panel,
                             show_search_filters,
-                            false,
-                            false,
+                            is_group_channel,
+                            is_dm_channel,
                         );
                         #[cfg(target_arch = "wasm32")]
                         {
@@ -3616,9 +3709,9 @@ fn render_mobile_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                     },
                     "✕"
                 }
-                div { class: "mobile-chat-tools-action-row",
+                div { class: "chat-tools-action-row",
                     button {
-                        class: if member_sidebar_active && utility_panel.read().is_none() { "header-btn soft-active chat-members-toggle-btn" } else { "header-btn chat-members-toggle-btn" },
+                        class: if member_sidebar_active && utility_panel.read().is_none() { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
                         title: t("chat-toggle-members"),
                         onclick: move |_| {
                             let current = app_state.read().nav.right_sidebar_visible;
@@ -3629,7 +3722,7 @@ fn render_mobile_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                         "👥"
                     }
                     button {
-                        class: if threads_active { "header-btn active" } else { "header-btn" },
+                        class: if threads_active { "header-btn active chat-header-btn-threads" } else { "header-btn chat-header-btn-threads" },
                         title: t("threads"),
                         onclick: move |_| {
                             show_search_filters.set(false);
@@ -3644,7 +3737,7 @@ fn render_mobile_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                         "🧵"
                     }
                     button {
-                        class: if pinned_active { "header-btn active" } else { "header-btn" },
+                        class: if pinned_active { "header-btn active chat-header-btn-pinned" } else { "header-btn chat-header-btn-pinned" },
                         title: t("pinned-messages"),
                         onclick: move |_| {
                             show_search_filters.set(false);
@@ -3658,18 +3751,38 @@ fn render_mobile_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                         },
                         "📌"
                     }
+                    {
+                        render_search_tab_button(
+                            utility_panel,
+                            show_search_filters,
+                            true,
+                            is_group_channel,
+                            is_dm_channel,
+                            app_state,
+                        )
+                    }
                     button {
-                        class: if *notifications_muted.read() { "header-btn active" } else { "header-btn" },
-                        title: if *notifications_muted.read() { t("unmute-notifications") } else { t("mute-notifications") },
+                        class: if settings_active { "header-btn active chat-header-btn-settings" } else { "header-btn chat-header-btn-settings" },
+                        title: t("chat-settings"),
                         onclick: move |_| {
-                            let current = *notifications_muted.read();
-                            notifications_muted.set(!current);
+                            show_search_filters.set(false);
+                            let next = if *utility_panel.read() == Some(ChatUtilityPanel::Settings) {
+                                None
+                            } else {
+                                Some(ChatUtilityPanel::Settings)
+                            };
+                            utility_panel.set(next);
+                            app_state.write().nav.right_sidebar_visible = false;
                         },
-                        "🔔"
+                        span { class: "chat-settings-btn-icon",
+                            span { class: "chat-settings-btn-icon-cog", "⚙️" }
+                            if *notifications_muted.read() {
+                                span { class: "chat-settings-btn-muted-dot" }
+                            }
+                        }
                     }
                 }
             }
-            div { class: "mobile-chat-tools-search", {render_chat_header_search(ctx)} }
         }
     }
 }
@@ -3694,15 +3807,27 @@ fn render_chat_utility_rail(
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
     let app_state = ctx.app_state;
+    let notifications_muted = ctx.notifications_muted;
+    let pinned_filter_open = ctx.pinned_filter_open;
+    let pinned_filter_query = ctx.pinned_filter_query;
+    let threads_filter_open = ctx.threads_filter_open;
+    let threads_filter_query = ctx.threads_filter_query;
+    let search_ui = render_chat_header_search(ctx.clone());
 
     rsx! {
         ChatUtilityRail {
             panel,
+            search_ui,
             search_query,
             search_hits,
             search_terms,
             pinned_messages,
             current_channel_name,
+            notifications_muted,
+            pinned_filter_open,
+            pinned_filter_query,
+            threads_filter_open,
+            threads_filter_query,
             on_open_search_hit: move |hit: MessageSearchHit| {
                 let current_channel_id = search_hit_channel_id.clone();
                 let current_server_id = search_hit_server
@@ -3792,6 +3917,7 @@ fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
 #[component]
 fn ChatUtilityRail(
     panel: ChatUtilityPanel,
+    search_ui: Element,
     search_query: String,
     search_hits: Vec<MessageSearchHit>,
     search_terms: Vec<String>,
@@ -3800,7 +3926,13 @@ fn ChatUtilityRail(
     on_open_search_hit: EventHandler<MessageSearchHit>,
     on_open_pinned: EventHandler<Message>,
     on_close: EventHandler<()>,
+    notifications_muted: Signal<bool>,
+    mut pinned_filter_open: Signal<bool>,
+    mut pinned_filter_query: Signal<String>,
+    mut threads_filter_open: Signal<bool>,
+    mut threads_filter_query: Signal<String>,
 ) -> Element {
+    let show_close_button = runtime_mobile_ui_active();
     let title = if panel == ChatUtilityPanel::Search {
         if search_query.is_empty() {
             t("search-messages")
@@ -3809,6 +3941,8 @@ fn ChatUtilityRail(
         }
     } else if panel == ChatUtilityPanel::Pinned {
         t("pinned-messages")
+    } else if panel == ChatUtilityPanel::Settings {
+        t("chat-settings")
     } else {
         t("threads")
     };
@@ -3817,15 +3951,90 @@ fn ChatUtilityRail(
     } else {
         format!("🧵 {}", t("no-threads"))
     };
+    // Per-tab filter visibility and queries
+    let filter_open = if panel == ChatUtilityPanel::Pinned {
+        *pinned_filter_open.read()
+    } else {
+        *threads_filter_open.read()
+    };
+    let filter_query = if panel == ChatUtilityPanel::Pinned {
+        pinned_filter_query.read().clone()
+    } else {
+        threads_filter_query.read().clone()
+    };
+    // Filtered pinned messages by query
+    let filtered_pinned: Vec<Message> = if filter_query.is_empty() {
+        pinned_messages.clone()
+    } else {
+        let q = filter_query.to_lowercase();
+        pinned_messages
+            .iter()
+            .filter(|m| {
+                let text = match &m.content {
+                    poly_client::MessageContent::Text(t) => t.as_str(),
+                    poly_client::MessageContent::WithAttachments { text, .. } => text.as_str(),
+                };
+                text.to_lowercase().contains(&q)
+            })
+            .cloned()
+            .collect()
+    };
 
     rsx! {
         aside { class: "chat-utility-rail",
             div { class: "chat-utility-header",
-                h3 { "{title}" }
-                button { class: "close-btn", onclick: move |_| on_close.call(()), "✕" }
+                h3 { class: "chat-utility-title", "{title}" }
+                // Per-tab filter toggle — shown on Pinned and Threads tabs only
+                if panel == ChatUtilityPanel::Pinned || panel == ChatUtilityPanel::Threads {
+                    button {
+                        class: if filter_open { "header-btn active chat-utility-filter-btn" } else { "header-btn chat-utility-filter-btn" },
+                        title: t("filter"),
+                        onclick: move |_| {
+                            if panel == ChatUtilityPanel::Pinned {
+                                let was_open = *pinned_filter_open.read();
+                                pinned_filter_open.set(!was_open);
+                                if was_open {
+                                    pinned_filter_query.set(String::new());
+                                }
+                            } else {
+                                let was_open = *threads_filter_open.read();
+                                threads_filter_open.set(!was_open);
+                                if was_open {
+                                    threads_filter_query.set(String::new());
+                                }
+                            }
+                        },
+                        "🔍"
+                    }
+                }
+                if show_close_button {
+                    button { class: "close-btn", onclick: move |_| on_close.call(()), "✕" }
+                }
+            }
+            // Per-tab filter input — shown when toggled on for Pinned/Threads
+            if (panel == ChatUtilityPanel::Pinned || panel == ChatUtilityPanel::Threads) && filter_open {
+                div { class: "chat-utility-filter-row",
+                    input {
+                        class: "chat-utility-filter-input",
+                        r#type: "text",
+                        placeholder: t("filter"),
+                        value: "{filter_query}",
+                        oninput: move |e: Event<FormData>| {
+                            let val = e.value();
+                            if panel == ChatUtilityPanel::Pinned {
+                                pinned_filter_query.set(val);
+                            } else {
+                                threads_filter_query.set(val);
+                            }
+                        },
+                    }
+                }
             }
             if panel == ChatUtilityPanel::Search {
                 div { class: "chat-utility-body",
+                    div { class: "chat-utility-search-box",
+                        {search_ui}
+                    }
                     if search_query.is_empty() || search_hits.is_empty() {
                         div { class: "utility-empty-state",
                             p { {t("search-no-results")} }
@@ -3844,13 +4053,13 @@ fn ChatUtilityRail(
                 }
             } else if panel == ChatUtilityPanel::Pinned {
                 div { class: "chat-utility-body",
-                    if pinned_messages.is_empty() {
+                    if filtered_pinned.is_empty() {
                         div { class: "utility-empty-state",
                             p { "{empty_label}" }
                         }
                     } else {
                         div { class: "search-results-list",
-                            for message in &pinned_messages {
+                            for message in &filtered_pinned {
                                 PinnedMessageCard {
                                     message: message.clone(),
                                     channel_name: current_channel_name.clone(),
@@ -3860,10 +4069,46 @@ fn ChatUtilityRail(
                         }
                     }
                 }
+            } else if panel == ChatUtilityPanel::Settings {
+                ChatSettingsPanel { notifications_muted }
             } else {
                 div { class: "chat-utility-body",
                     div { class: "utility-empty-state",
                         p { "{empty_label}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Chat settings panel — shown inside the utility rail when the ⚙️ tab is open.
+///
+/// Contains per-channel notification settings and member display preferences.
+#[rustfmt::skip]
+#[component]
+fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
+    let muted = *notifications_muted.read();
+    rsx! {
+        div { class: "chat-utility-body chat-settings-panel",
+            // ── Notifications ────────────────────────────────────────────
+            div { class: "chat-settings-section",
+                h4 { class: "chat-settings-section-title", {t("chat-settings-notifications")} }
+                label { class: "chat-settings-toggle-row",
+                    button {
+                        class: if muted { "chat-settings-mute-btn chat-settings-mute-btn-active" } else { "chat-settings-mute-btn" },
+                        title: if muted { t("unmute-notifications") } else { t("mute-notifications") },
+                        onclick: move |_| notifications_muted.set(!muted),
+                        // Bell with strikethrough using CSS overlay trick
+                        span { class: "chat-mute-bell-icon",
+                            span { class: "chat-mute-bell-base", "🔔" }
+                            if muted {
+                                span { class: "chat-mute-bell-strike" }
+                            }
+                        }
+                        span { class: "chat-settings-toggle-label",
+                            if muted { {t("unmute-notifications")} } else { {t("mute-notifications")} }
+                        }
                     }
                 }
             }

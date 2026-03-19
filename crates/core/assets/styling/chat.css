@@ -475,6 +475,68 @@
     gap: 4px;
 }
 
+.chat-search-tab-btn {
+    position: relative;
+    min-width: 34px;
+}
+
+.chat-search-tab-icon {
+    position: relative;
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+}
+
+.chat-search-tab-icon-base {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.chat-search-tab-icon-overlay {
+    position: absolute;
+    right: -4px;
+    bottom: -5px;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.chat-tools-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-primary);
+    background: color-mix(in srgb, var(--bg-secondary) 96%, black);
+}
+
+.chat-tools-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chat-tools-close {
+    flex: 0 0 auto;
+}
+
+.chat-tools-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.chat-utility-search-box {
+    margin-bottom: 12px;
+}
+
+.chat-utility-search-box .chat-header-search-inline {
+    width: 100%;
+    max-width: none;
+}
+
 /* DM / Group DM chat header info section */
 .dm-chat-header-info {
     display: flex;

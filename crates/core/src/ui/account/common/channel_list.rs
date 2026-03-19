@@ -531,7 +531,6 @@ fn DMFriendsView() -> Element {
             .map(|session| session.user.id.clone())
     });
     let new_conversation_label = t("dm-new-conversation");
-    let search_conversations_label = t("dm-search-conversations");
     let saved_messages_label = t("dm-saved-messages");
     let dm_channels: Vec<_> = chat_data
         .read()
@@ -620,31 +619,6 @@ fn DMFriendsView() -> Element {
             },
             span { class: "dm-friends-row-icon", "✚" }
             span { class: "dm-friends-row-label", "{new_conversation_label}" }
-        }
-
-        button {
-            class: "dm-friends-row-btn",
-            onclick: move |_| {
-                let (backend_slug, instance_id, account_id) = {
-                    let nav = &app_state.read().nav;
-                    match (
-                        nav.active_backend,
-                        nav.active_instance_id.clone(),
-                        nav.active_account_id.clone(),
-                    ) {
-                        (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
-                        _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
-                    }
-                };
-                navigator().push(Route::ConversationSearchRoute {
-                    backend: backend_slug,
-                    instance_id,
-                    account_id,
-                });
-                close_mobile_drawer();
-            },
-            span { class: "dm-friends-row-icon", "🔎" }
-            span { class: "dm-friends-row-label", "{search_conversations_label}" }
         }
 
         button {

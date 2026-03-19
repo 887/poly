@@ -62,6 +62,12 @@ pub fn FavoritesBar() -> Element {
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
     let active_account = app_state.read().nav.active_account_id.clone();
+    let active_backend_slug = app_state
+        .read()
+        .nav
+        .active_backend
+        .map(|b| b.slug().to_string());
+    let active_instance_id = app_state.read().nav.active_instance_id.clone();
 
     // Collect distinct active account IDs for account icons
     let account_ids = client_manager.read().active_account_ids();
@@ -172,15 +178,31 @@ pub fn FavoritesBar() -> Element {
 
             // Footer: search + settings buttons float at bottom
             div { class: "sidebar-footer",
-                // Global Search button
+                // Global Search button — context-aware: when coming from an account page,
+                // navigates to account-scoped search (pre-filtered to that account).
+                // When on a non-account page (settings, root, etc.), navigates to global search.
                 {
                     let is_search = current_view == View::Search;
+                    let search_account = active_account.clone();
+                    let search_backend = active_backend_slug.clone();
+                    let search_instance = active_instance_id.clone();
                     rsx! {
                         div {
                             class: if is_search { "server-icon active" } else { "server-icon" },
                             onclick: move |_| {
                                 close_mobile_drawer();
-                                navigator().push(Route::SearchRoute);
+                                match (search_account.clone(), search_backend.clone(), search_instance.clone()) {
+                                    (Some(account_id), Some(backend), Some(instance_id)) => {
+                                        navigator().push(Route::AccountSearchRoute {
+                                            backend,
+                                            instance_id,
+                                            account_id,
+                                        });
+                                    }
+                                    _ => {
+                                        navigator().push(Route::SearchRoute);
+                                    }
+                                }
                             },
                             title: "{t(\"nav-search\")}",
                             div { class: "icon-search", "🔍" }

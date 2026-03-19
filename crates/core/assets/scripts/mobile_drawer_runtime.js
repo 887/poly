@@ -94,6 +94,19 @@ if (!window.__polyMobileDrawerInit) {
                 }
             }
         });
+
+        const panelOffset = window.getComputedStyle(root).getPropertyValue('--poly-mobile-right-panel-offset-px').trim() || '0px';
+        document.querySelectorAll('.chat-side-column').forEach(function (element) {
+            if (element instanceof HTMLElement) {
+                if (mirrored) {
+                    element.style.removeProperty('right');
+                    element.style.left = panelOffset;
+                } else {
+                    element.style.removeProperty('left');
+                    element.style.right = panelOffset;
+                }
+            }
+        });
     }
 
     function setLeftProgress(root, progress) {
@@ -205,6 +218,12 @@ if (!window.__polyMobileDrawerInit) {
             root.style.removeProperty('--poly-mobile-left-offset-px');
             root.style.removeProperty('--poly-mobile-right-offset-px');
             document.querySelectorAll('.poly-split-content, .chat-main-column').forEach(function (element) {
+                if (element instanceof HTMLElement) {
+                    element.style.removeProperty('left');
+                    element.style.removeProperty('right');
+                }
+            });
+            document.querySelectorAll('.chat-side-column').forEach(function (element) {
                 if (element instanceof HTMLElement) {
                     element.style.removeProperty('left');
                     element.style.removeProperty('right');

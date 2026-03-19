@@ -77,7 +77,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::NotificationsRoute { account_id, .. }
         | Route::SavedItemsRoute { account_id, .. }
         | Route::AccountSettingsRoute { account_id, .. }
-        | Route::CreateServerRoute { account_id, .. } => Some(account_id.as_str()),
+        | Route::CreateServerRoute { account_id, .. }
+        | Route::AccountSearchRoute { account_id, .. } => Some(account_id.as_str()),
         Route::Root
         | Route::SettingsRoute
         | Route::SettingsSectionRoute { .. }
@@ -190,6 +191,10 @@ pub enum Route {
 
         #[route("/search")]
         SearchRoute,
+
+        /// Account-scoped search — shows the global search page but pre-filters to one account.
+        #[route("/:backend/:instance_id/:account_id/search")]
+        AccountSearchRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped settings ──────────────────────────────────
         #[route("/:backend/:instance_id/:account_id/settings")]
@@ -398,6 +403,20 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = None;
             s.nav.active_instance_id = None;
             s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::AccountSearchRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
+            // Account-scoped search — keep account context so Bar 2 stays visible
+            // and `SearchPage` can pre-filter to this account.
+            s.nav.view = View::Search;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
         }
@@ -935,7 +954,22 @@ fn SettingsSectionRoute(section: String) -> Element {
 #[component]
 fn SearchRoute() -> Element {
     rsx! {
-        super::search::SearchPage {}
+        super::search::SearchPage { locked_account_id: None }
+    }
+}
+
+/// Account-scoped search — shows the global search but pre-filters to one account.
+///
+/// Navigated to from the 🔍 button in `FavoritesBar` when an account
+/// context is active.  The account context stays in app-state nav so Bar 2
+/// remains visible; `SearchPage` receives the `locked_account_id` prop and
+/// initialises `enabled_accounts` to contain only that account.
+#[rustfmt::skip]
+#[component]
+fn AccountSearchRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let _ = (backend, instance_id); // consumed by router; state already synced
+    rsx! {
+        super::search::SearchPage { locked_account_id: Some(account_id) }
     }
 }
 

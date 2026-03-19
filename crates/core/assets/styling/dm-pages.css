@@ -122,6 +122,12 @@
     z-index: 20;
 }
 
+/* When mirrored, sidebar moves to right side — flip border. */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .special-page-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+
 .special-page-sidebar .voice-account-footer {
     width: 100%;
     margin-left: 0;

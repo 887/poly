@@ -32,6 +32,12 @@
     overflow-y: auto;
 }
 
+/* When mirrored, settings nav moves to right side — flip border. */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .settings-nav {
+    border-right: none;
+    border-left: 1px solid var(--border-primary);
+}
+
 /* Strip default anchor link styling inside settings nav (Dioxus Link renders as <a>) */
 .settings-nav a {
     text-decoration: none;

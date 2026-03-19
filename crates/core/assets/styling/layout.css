@@ -52,6 +52,12 @@ body {
     flex-direction: row-reverse;
 }
 
+/* When the menu is mirrored on desktop, flip the sidebar ↔ content order
+   so the panel appears on the right (matching Bar 1 / Bar 2 placement). */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .poly-split-shell {
+    flex-direction: row-reverse;
+}
+
 .poly-split-shell {
     display: flex;
     flex: 1;

@@ -163,6 +163,12 @@ body {
     flex-direction: row-reverse;
 }
 
+/* When the menu is mirrored on desktop, flip the sidebar ↔ content order
+   so the panel appears on the right (matching Bar 1 / Bar 2 placement). */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .poly-split-shell {
+    flex-direction: row-reverse;
+}
+
 .poly-split-shell {
     display: flex;
     flex: 1;
@@ -1613,6 +1619,68 @@ body {
     gap: 4px;
 }
 
+.chat-search-tab-btn {
+    position: relative;
+    min-width: 34px;
+}
+
+.chat-search-tab-icon {
+    position: relative;
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+}
+
+.chat-search-tab-icon-base {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.chat-search-tab-icon-overlay {
+    position: absolute;
+    right: -4px;
+    bottom: -5px;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.chat-tools-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-primary);
+    background: color-mix(in srgb, var(--bg-secondary) 96%, black);
+}
+
+.chat-tools-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chat-tools-close {
+    flex: 0 0 auto;
+}
+
+.chat-tools-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.chat-utility-search-box {
+    margin-bottom: 12px;
+}
+
+.chat-utility-search-box .chat-header-search-inline {
+    width: 100%;
+    max-width: none;
+}
+
 /* DM / Group DM chat header info section */
 .dm-chat-header-info {
     display: flex;
@@ -2102,6 +2170,14 @@ body {
     gap: 4px;
 }
 
+.poly-app.poly-menu-mirrored .user-sidebar-header {
+    flex-direction: row-reverse;
+}
+
+.poly-app.poly-menu-mirrored .user-sidebar-title {
+    text-align: right;
+}
+
 /* Filter toggle icon button */
 .user-filter-btn {
     width: 22px;
@@ -2467,6 +2543,12 @@ body {
     padding: 16px 8px;
     border-right: 1px solid var(--border-primary);
     overflow-y: auto;
+}
+
+/* When mirrored, settings nav moves to right side — flip border. */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .settings-nav {
+    border-right: none;
+    border-left: 1px solid var(--border-primary);
 }
 
 /* Strip default anchor link styling inside settings nav (Dioxus Link renders as <a>) */
@@ -3584,7 +3666,7 @@ body {
 .content-social-section {
     margin-bottom: 32px;
     padding-bottom: 24px;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
 }
 
 .content-social-section:last-child {
@@ -3620,7 +3702,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 10px 0;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
 }
 
 .content-social-select-row:last-child {
@@ -3633,7 +3715,8 @@ body {
 }
 
 .content-social-select {
-    display: block; /* override wizard.css global select {display:none} */
+    display: block;
+    /* override wizard.css global select {display:none} */
     background: var(--bg-surface);
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
@@ -3688,7 +3771,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 10px 0;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+    border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
     cursor: pointer;
 }
 
@@ -3725,7 +3808,7 @@ body {
     padding: 10px 14px;
     background-color: var(--bg-surface);
     border-radius: var(--radius-md);
-    border: 1px solid var(--border-subtle, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
 }
 
 .content-social-blocked-avatar {
@@ -3777,8 +3860,6 @@ body {
     text-align: center;
     padding: 16px 0;
 }
-
-
 /* Poly — Global Search Page
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
    ===================================================================== */
@@ -3804,6 +3885,12 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+/* When mirrored, sidebar moves to right side — flip border. */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .search-page-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
 }
 
 .search-page-sidebar h2 {
@@ -7338,6 +7425,12 @@ select {
     z-index: 20;
 }
 
+/* When mirrored, sidebar moves to right side — flip border. */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .special-page-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+
 .special-page-sidebar .voice-account-footer {
     width: 100%;
     margin-left: 0;
@@ -8762,6 +8855,10 @@ select {
     flex-direction: row-reverse;
 }
 
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .chat-header {
+    flex-direction: row-reverse;
+}
+
 .chat-content-column {
     flex: 1;
     min-width: 0;
@@ -8797,11 +8894,66 @@ select {
     flex-shrink: 0;
 }
 
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .chat-header-right {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .server-chat-header-info,
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .dm-chat-header-info {
+    justify-content: flex-end;
+    text-align: right;
+}
+
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .dm-chat-header-text {
+    align-items: flex-end;
+}
+
 .chat-header-actions {
     display: flex;
     gap: 4px;
     align-items: center;
     flex-shrink: 0;
+}
+
+.chat-header-btn-settings {
+    order: 10;
+}
+
+.chat-header-btn-threads {
+    order: 20;
+}
+
+.chat-header-btn-pinned {
+    order: 30;
+}
+
+.chat-header-btn-search {
+    order: 40;
+}
+
+.chat-header-btn-members {
+    order: 50;
+}
+
+.poly-app.poly-menu-mirrored .chat-header-btn-members {
+    order: 10;
+}
+
+.poly-app.poly-menu-mirrored .chat-header-btn-search {
+    order: 20;
+}
+
+.poly-app.poly-menu-mirrored .chat-header-btn-pinned {
+    order: 30;
+}
+
+.poly-app.poly-menu-mirrored .chat-header-btn-threads {
+    order: 40;
+}
+
+.poly-app.poly-menu-mirrored .chat-header-btn-settings {
+    order: 50;
 }
 
 .header-btn.active {
@@ -8893,23 +9045,6 @@ select {
     .chat-header-search-inline {
         max-width: none;
     }
-
-    .chat-body-shell {
-        position: relative;
-    }
-
-    .chat-side-column {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 30;
-        flex: none;
-        width: min(260px, calc(100% - 24px));
-        min-width: 0;
-        max-width: calc(100% - 24px);
-        box-shadow: -12px 0 32px rgb(0 0 0 / 28%);
-    }
 }
 
 .search-filter-popup {
@@ -8923,6 +9058,12 @@ select {
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
     padding: 10px;
     z-index: 160;
+}
+
+.chat-utility-search-box .search-filter-popup {
+    left: 0;
+    right: 0;
+    width: auto;
 }
 
 .search-filter-popup-header {
@@ -8950,15 +9091,17 @@ select {
 .chat-utility-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 6px;
     padding: 16px;
     border-bottom: 1px solid var(--border-primary);
 }
 
-.chat-utility-header h3 {
+.chat-utility-title {
+    flex: 1;
     margin: 0;
     font-size: 15px;
     color: var(--text-primary);
+    font-weight: 600;
 }
 
 .chat-utility-body {
@@ -9409,6 +9552,172 @@ select {
 
 .voice-view-right-spacer {
     display: none;
+}
+
+/* ── Chat Settings Tab Button ──────────────────────────────────── */
+.chat-settings-btn-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chat-settings-btn-icon-cog {
+    font-size: 15px;
+    line-height: 1;
+}
+
+/* Small muted indicator dot shown on the cog when notifications are muted */
+.chat-settings-btn-muted-dot {
+    position: absolute;
+    bottom: -3px;
+    right: -4px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent-danger, #e04141);
+    border: 2px solid var(--bg-secondary);
+}
+
+/* ── Chat Settings Panel (inside utility rail) ─────────────────── */
+.chat-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 12px;
+}
+
+.chat-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-settings-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.chat-settings-toggle-row {
+    display: flex;
+    align-items: center;
+}
+
+.chat-settings-mute-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary, var(--bg-secondary));
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.1s, color 0.1s;
+    text-align: left;
+}
+
+.chat-settings-mute-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.chat-settings-mute-btn-active {
+    background: color-mix(in srgb, var(--accent-danger, #e04141) 18%, transparent);
+    border-color: color-mix(in srgb, var(--accent-danger, #e04141) 35%, transparent);
+    color: var(--text-primary);
+}
+
+.chat-settings-toggle-label {
+    flex: 1;
+}
+
+/* Bell with strikethrough SVG overlay */
+.chat-mute-bell-icon {
+    position: relative;
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.chat-mute-bell-base {
+    font-size: 15px;
+    line-height: 1;
+}
+
+/* Red diagonal line over the bell when muted — CSS-only strikethrough */
+.chat-mute-bell-strike {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    width: 2px;
+    height: 18px;
+    background: var(--accent-danger, #e04141);
+    border-radius: 1px;
+    transform-origin: center;
+    transform: translateX(-50%) rotate(45deg);
+    pointer-events: none;
+}
+
+/* ── Per-tab filter toggle (Pinned / Threads) ──────────────────────────── */
+.chat-utility-filter-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.chat-utility-filter-btn:hover {
+    background: var(--bg-2);
+    color: var(--text-primary);
+}
+
+.chat-utility-filter-btn.active {
+    background: var(--bg-3);
+    color: var(--text-primary);
+}
+
+.chat-utility-filter-row {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.chat-utility-filter-input {
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-1);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.chat-utility-filter-input:focus {
+    border-color: var(--accent-primary);
+    background: var(--bg-2);
+}
+
 }
 /* Poly — Add Account, Create Server, Inline Create Channel
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
@@ -10239,7 +10548,7 @@ select {
     background: color-mix(in srgb, var(--accent-primary) 28%, var(--bg-tertiary));
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-panel {
+.poly-app.poly-mobile-runtime-active .chat-tools-panel {
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -10248,26 +10557,21 @@ select {
     background: color-mix(in srgb, var(--bg-secondary) 96%, black);
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-topbar {
+.poly-app.poly-mobile-runtime-active .chat-tools-topbar {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-close {
+.poly-app.poly-mobile-runtime-active .chat-tools-close {
     flex: 0 0 auto;
 }
 
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-action-row {
+.poly-app.poly-mobile-runtime-active .chat-tools-action-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
-}
-
-.poly-app.poly-mobile-runtime-active .mobile-chat-tools-search .chat-header-search-inline {
-    width: 100%;
-    max-width: none;
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .server-sidebar {
@@ -10361,7 +10665,7 @@ select {
     left: var(--poly-mobile-right-reveal-px);
 }
 
-.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .mobile-chat-tools-topbar {
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-tools-topbar {
     flex-direction: row-reverse;
 }
 

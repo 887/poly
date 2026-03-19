@@ -390,14 +390,27 @@ fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Elem
 /// Global search page — sidebar with account filters + right tree of all nodes.
 #[rustfmt::skip]
 #[component]
-pub fn SearchPage() -> Element {
+pub fn SearchPage(
+    /// When `Some(account_id)`, the search is initialised with only that account
+    /// enabled (account-scoped entry from the favourites bar). The user can still
+    /// toggle other accounts on manually to broaden the search.
+    /// When `None`, all accounts start enabled (global search).
+    locked_account_id: Option<String>,
+) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let query = use_signal(String::new);
     let initial_type_seed = app_state.read().search_type_seed.clone();
     let mut enabled_accounts: Signal<std::collections::HashSet<String>> = use_signal(|| {
-        client_manager.read().active_account_ids().into_iter().collect()
+        // If we have a locked account, start with only that account enabled.
+        if let Some(ref aid) = locked_account_id {
+            let mut set = std::collections::HashSet::new();
+            set.insert(aid.clone());
+            set
+        } else {
+            client_manager.read().active_account_ids().into_iter().collect()
+        }
     });
     let mut enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
         initial_type_seed
