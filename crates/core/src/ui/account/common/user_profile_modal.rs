@@ -1,0 +1,274 @@
+//! Unified user profile modal.
+//!
+//! Shown when clicking any user — member list, DM contact, voice participant,
+//! or a chat message's author name.
+//!
+//! ## Layout
+//! - **Overlay**: fixed full-screen backdrop (z-index 2000), click to close.
+//! - **Desktop** (>520 px): centered card, max-width 460 px, scrollable if tall.
+//! - **Mobile** (≤520 px): full-height sheet, slides up from the bottom.
+//!
+//! ## Discord-style content
+//! Banner → avatar (overlaps banner) with presence dot → name → action row
+//! (Message / Call / Video) → divider → backend badge → note text area.
+//!
+//! ## Back-gesture support (WASM / mobile)
+//! `open_user_profile` pushes `#poly-profile` onto the browser history.
+//! A JS promise awaits the next `hashchange` event that removes the hash,
+//! and resolves back into Rust to close the modal. Closing via "×" also clears
+//! the hash by calling `history.back()` (which fires the hashchange + resolves
+//! the promise as a harmless no-op).
+
+use crate::i18n::t;
+use crate::state::AppState;
+use crate::state::chat_data::{backend_badge, user_color};
+use dioxus::prelude::*;
+use poly_client::{PresenceStatus, User};
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/// Open the global user profile modal for `user`.
+///
+/// Stores the user in `AppState.nav.profile_modal_user` and, on WASM,
+/// pushes `#poly-profile` to the browser history so the native back
+/// gesture closes the modal.
+pub fn open_user_profile(mut app_state: Signal<AppState>, user: User) {
+    app_state.write().nav.profile_modal_user = Some(user);
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = document::eval(
+            "if(location.hash!=='#poly-profile'){\
+                history.pushState(null,'',\
+                    location.pathname+location.search+'#poly-profile');\
+            }",
+        );
+    }
+}
+
+// ── Internal close helper ─────────────────────────────────────────────────────
+
+/// Close the modal and strip the `#poly-profile` hash from the address bar.
+///
+/// Uses `history.back()` so the hashchange event fires and the async back-gesture
+/// listener (if running) resolves cleanly without a second write.
+fn close_modal(mut app_state: Signal<AppState>) {
+    app_state.write().nav.profile_modal_user = None;
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = document::eval(
+            "if(location.hash==='#poly-profile'){ history.back(); }\
+             else { history.replaceState(null,'',location.pathname+location.search); }",
+        );
+    }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+/// Global user profile modal.
+///
+/// Render this **once** from `AppBody` — it is a no-op when
+/// `AppState.nav.profile_modal_user` is `None`.
+#[rustfmt::skip]
+#[component]
+pub fn UserProfileModal() -> Element {
+    let app_state: Signal<AppState> = use_context();
+    let user = app_state.read().nav.profile_modal_user.clone();
+    let Some(user) = user else {
+        return rsx! {};
+    };
+
+    // Back-gesture + Escape support on WASM:
+    // await a JS promise that resolves when either:
+    // 1) the hash navigates away from #poly-profile (browser back / close), or
+    // 2) Escape is pressed.
+    //
+    // Both event listeners are removed on first resolve.
+    #[cfg(target_arch = "wasm32")]
+    {
+        use_effect(move || {
+            spawn(async move {
+                let mut eval = document::eval(
+                    "new Promise(resolve => {\
+                        let done = { value: false };\
+                        function cleanup() {\
+                            if (done.value) return;\
+                            done.value = true;\
+                            window.removeEventListener('hashchange', onHash);\
+                            window.removeEventListener('keydown', onKey);\
+                        }\
+                        function onHash() {\
+                            if(location.hash!=='#poly-profile'){\
+                                cleanup();\
+                                resolve('hash');\
+                            }\
+                        }\
+                        function onKey(e) {\
+                            if (e.key === 'Escape') {\
+                                e.preventDefault();\
+                                cleanup();\
+                                resolve('escape');\
+                            }\
+                        }\
+                        window.addEventListener('hashchange', onHash);\
+                        window.addEventListener('keydown', onKey);\
+                    })",
+                );
+                if eval.recv::<String>().await.is_ok() {
+                    // Route through close_modal so browser hash and signal state
+                    // always converge regardless of whether dismissal came from
+                    // Escape, backdrop/cross button, or browser back.
+                    close_modal(app_state);
+                }
+            });
+        });
+    }
+
+    let color = user_color(&user.id);
+    let banner_style = format!(
+        "background: linear-gradient(135deg, {color}, \
+         color-mix(in srgb, {color} 30%, #0a0a1a));",
+    );
+    let first_char: String = user
+        .display_name
+        .chars()
+        .next()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
+    let presence_dot_class = match user.presence {
+        PresenceStatus::Online => "status-dot presence-dot online",
+        PresenceStatus::Idle => "status-dot presence-dot away",
+        PresenceStatus::DoNotDisturb => "status-dot presence-dot dnd",
+        PresenceStatus::Invisible | PresenceStatus::Offline => "status-dot presence-dot offline",
+    };
+    let presence_label = match user.presence {
+        PresenceStatus::Online => t("user-online"),
+        PresenceStatus::Idle => t("user-idle"),
+        PresenceStatus::DoNotDisturb => t("user-dnd"),
+        PresenceStatus::Invisible => t("user-invisible"),
+        PresenceStatus::Offline => t("user-offline"),
+    };
+    let backend_icon = backend_badge(&user.backend);
+    let backend_name = user.backend.display_name().to_string();
+    let avatar_url = user.avatar_url.clone();
+    let display_name = user.display_name.clone();
+
+    rsx! {
+        // Full-screen backdrop — click to close
+        div {
+            class: "poly-profile-overlay",
+            onclick: move |_| close_modal(app_state),
+
+            // Modal card — stops click propagation
+            div {
+                class: "poly-profile-modal",
+                onclick: move |e| e.stop_propagation(),
+
+                // ── Banner with × and ··· buttons ────────────────────────────
+                div { class: "poly-profile-banner", style: "{banner_style}",
+                    button {
+                        class: "poly-profile-header-btn poly-profile-close-btn",
+                        title: "{t(\"action-close\")}",
+                        onclick: move |_| close_modal(app_state),
+                        "✕"
+                    }
+                    button {
+                        class: "poly-profile-header-btn poly-profile-more-btn",
+                        title: "{t(\"user-profile-more-options\")}",
+                        "···"
+                    }
+                }
+
+                // ── Avatar row (overlaps bottom of banner) ───────────────────
+                div { class: "poly-profile-avatar-row",
+                    div { class: "poly-profile-avatar-wrap",
+                        if let Some(ref url) = avatar_url {
+                            img {
+                                class: "poly-profile-avatar-img",
+                                src: "{url}",
+                                alt: "{display_name}",
+                            }
+                        } else {
+                            div {
+                                class: "poly-profile-avatar-fallback",
+                                style: "background-color: {color};",
+                                "{first_char}"
+                            }
+                        }
+                        span { class: "{presence_dot_class} poly-profile-presence-dot" }
+                    }
+                }
+
+                // ── Scrollable body ──────────────────────────────────────────
+                div { class: "poly-profile-body",
+
+                    // Name + presence status
+                    div { class: "poly-profile-identity",
+                        h2 { class: "poly-profile-name", "{display_name}" }
+                        div { class: "poly-profile-status-line",
+                            span { class: "{presence_dot_class}" }
+                            span { class: "poly-profile-status-text", "{presence_label}" }
+                        }
+                    }
+
+                    // Action buttons
+                    div { class: "poly-profile-actions",
+                        button { class: "poly-profile-action-btn",
+                            span { class: "poly-profile-action-icon", "💬" }
+                            span { class: "poly-profile-action-label",
+                                "{t(\"user-profile-message\")}"
+                            }
+                        }
+                        button { class: "poly-profile-action-btn",
+                            span { class: "poly-profile-action-icon", "📞" }
+                            span { class: "poly-profile-action-label",
+                                "{t(\"user-profile-call\")}"
+                            }
+                        }
+                        button { class: "poly-profile-action-btn",
+                            span { class: "poly-profile-action-icon", "🎥" }
+                            span { class: "poly-profile-action-label",
+                                "{t(\"user-profile-video\")}"
+                            }
+                        }
+                    }
+
+                    div { class: "poly-profile-divider" }
+
+                    // Backend / source badge
+                    div { class: "poly-profile-meta",
+                        span { class: "account-backend-badge", "{backend_icon}" }
+                        span { class: "poly-profile-status-text", "{backend_name}" }
+                    }
+
+                    // Note section
+                    div { class: "poly-profile-note-section",
+                        label { class: "poly-profile-note-label",
+                            "{t(\"user-profile-note\")}"
+                        }
+                        NoteEditor {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Editable note text area with a live character counter.
+#[rustfmt::skip]
+#[component]
+fn NoteEditor() -> Element {
+    let mut note = use_signal(String::new);
+    let len = note.read().len();
+    rsx! {
+        div { class: "poly-profile-note-wrap",
+            textarea {
+                class: "poly-profile-note-input",
+                placeholder: "{t(\"user-profile-note-placeholder\")}",
+                maxlength: "256",
+                value: "{note}",
+                oninput: move |e| note.set(e.value()),
+            }
+            span { class: "poly-profile-note-count", "{len}/256" }
+        }
+    }
+}
