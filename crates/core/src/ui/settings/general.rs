@@ -1,7 +1,8 @@
-//! General settings — app reset and nuke flows.
+//! General + layout settings — app layout controls plus reset and nuke flows.
 //!
 //! # Architecture
-//! - `GeneralSettings`: Main section container
+//! - `LayoutSettings`: Layout behavior / mirroring controls
+//! - `GeneralSettings`: Reset / nuke section container
 //! - `ResetSection`: Handles reset button state and logic
 //! - Helper: `run_reset_flow` async function
 
@@ -361,6 +362,23 @@ fn ResetSection() -> Element {
 
 /// General settings section.
 ///
+/// Contains shell layout and mirroring preferences.
+#[rustfmt::skip]
+#[component]
+pub(super) fn LayoutSettings() -> Element {
+    rsx! {
+        div { class: "settings-section",
+            h2 { "{t(\"settings-layout\")}" }
+            p { class: "settings-description", "{t(\"settings-layout-description\")}" }
+            LayoutModeSelector {}
+            MirrorMenuToggle {}
+            MirrorChatMessagesToggle {}
+        }
+    }
+}
+
+/// General settings section.
+///
 /// Contains the app-reset and nuke-all-data danger zone.
 // TODO(phase-2.7.9.10): Notification preferences, startup behavior
 #[rustfmt::skip]
@@ -370,9 +388,6 @@ pub(super) fn GeneralSettings() -> Element {
         div { class: "settings-section",
             h2 { "{t(\"settings-general\")}" }
             p { class: "settings-description", "{t(\"settings-general-description\")}" }
-            LayoutModeSelector {}
-            MirrorMenuToggle {}
-            MirrorChatMessagesToggle {}
             ResetSection {}
         }
     }

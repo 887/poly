@@ -2451,20 +2451,24 @@ body {
 
 /* Per-kind action button colours */
 
-.notif-action-accept { /* green accept */
+.notif-action-accept {
+    /* green accept */
     background-color: var(--color-success, #22c55e);
     color: #fff;
     border: none;
 }
+
 .notif-action-accept:hover {
     background-color: color-mix(in srgb, var(--color-success, #22c55e) 80%, #000 20%);
 }
 
-.notif-action-join { /* green join-voice */
+.notif-action-join {
+    /* green join-voice */
     background-color: var(--color-success, #22c55e);
     color: #fff;
     border: none;
 }
+
 .notif-action-join:hover {
     background-color: color-mix(in srgb, var(--color-success, #22c55e) 80%, #000 20%);
 }
@@ -2474,6 +2478,7 @@ body {
     border: 1px solid var(--border-secondary);
     color: var(--text-secondary);
 }
+
 .notif-action-deny:hover {
     background-color: var(--bg-hover);
 }
@@ -2483,6 +2488,7 @@ body {
     border: 1px solid var(--border-secondary);
     color: var(--text-secondary);
 }
+
 .notif-action-read:hover {
     background-color: var(--bg-hover);
 }
@@ -2509,8 +2515,6 @@ body {
     padding: 32px 0;
     font-size: 14px;
 }
-
-
 /* Poly — Settings Page Layout Shell — nav sidebar, content area
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
    ===================================================================== */
@@ -7432,8 +7436,6 @@ select {
 }
 
 .special-page-sidebar .voice-account-footer {
-    width: 100%;
-    margin-left: 0;
     z-index: 40;
 }
 
@@ -9717,8 +9719,6 @@ select {
     border-color: var(--accent-primary);
     background: var(--bg-2);
 }
-
-}
 /* Poly — Add Account, Create Server, Inline Create Channel
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
    ===================================================================== */
@@ -10405,8 +10405,8 @@ select {
 .poly-app.poly-mobile-runtime-active .chat-side-column {
     position: fixed;
     top: 0;
-    right: var(--poly-mobile-right-panel-offset-px);
-    z-index: 490;
+    right: 0;
+    z-index: 460;
     width: var(--poly-mobile-right-reveal-px);
     min-width: var(--poly-mobile-right-reveal-px);
     max-width: var(--poly-mobile-right-reveal-px);
@@ -10415,9 +10415,9 @@ select {
     border-left: 1px solid var(--border-primary);
     border-top: none;
     box-shadow: inset 8px 0 24px rgb(0 0 0 / 0%);
-    transition: right 0.22s ease, box-shadow 0.22s ease;
-    will-change: right;
     overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .poly-app.poly-mobile-runtime-active .chat-side-column::before {
@@ -10436,6 +10436,8 @@ select {
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-open .chat-side-column,
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-dragging .chat-side-column {
     box-shadow: inset 12px 0 28px rgb(0 0 0 / 42%), inset 24px 0 38px rgb(0 0 0 / 22%);
+    visibility: visible;
+    pointer-events: auto;
 }
 
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-open .chat-side-column::before,
@@ -10634,12 +10636,10 @@ select {
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-side-column {
     right: auto;
-    left: var(--poly-mobile-right-panel-offset-px);
+    left: 0;
     border-left: none;
     border-right: 1px solid var(--border-primary);
     box-shadow: inset -8px 0 24px rgb(0 0 0 / 0%);
-    transition: left 0.22s ease, box-shadow 0.22s ease;
-    will-change: left;
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-side-column::before {

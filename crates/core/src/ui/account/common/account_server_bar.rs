@@ -427,6 +427,9 @@ fn AccountBarDmsButton(
         div {
             class: if current_view == View::DmsFriends { "server-icon active" } else { "server-icon" },
             onclick: move |_| {
+                if current_view == View::DmsFriends {
+                    return;
+                }
                 chat_data.write().current_server = None;
                 chat_data.write().current_channel = None;
                 chat_data.write().channels.clear();
@@ -461,6 +464,9 @@ fn AccountBarFriendsButton(
         div {
             class: if current_view == View::Friends { "server-icon active" } else { "server-icon" },
             onclick: move |_| {
+                if current_view == View::Friends {
+                    return;
+                }
                 app_state.write().nav.view = View::Friends;
                 chat_data.write().current_server = None;
                 chat_data.write().current_channel = None;
@@ -472,7 +478,6 @@ fn AccountBarFriendsButton(
                     instance_id: instance_id.clone(),
                     account_id: account_id.clone(),
                 });
-                close_mobile_drawer();
             },
             title: "{t(\"nav-friends\")}",
             div { class: "icon-dms", "👥" }
@@ -508,6 +513,9 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
         div {
             class: if current_view == View::Notifications { "server-icon active" } else { "server-icon" },
             onclick: move |_| {
+                if current_view == View::Notifications {
+                    return;
+                }
                 app_state.write().nav.view = View::Notifications;
                 let mut cd = chat_data.write();
                 cd.current_server = None;
@@ -520,7 +528,6 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                     instance_id: instance_id.clone(),
                     account_id: account_id.clone(),
                 });
-                close_mobile_drawer();
             },
             title: "{t(\"nav-notifications\")}",
             div { class: "icon-notifications", "🔔" }

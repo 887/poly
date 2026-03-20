@@ -19,7 +19,7 @@
 //! | `identity` | `IdentitySettings`, `MnemonicModal` |
 //! | `theme` | `ThemeSettings` + pickers/editors |
 //! | `language` | `LanguageSettings` |
-//! | `general` | `GeneralSettings` (reset / nuke) |
+//! | `general` | `LayoutSettings`, `GeneralSettings` |
 //! | `voice_video` | `VoiceVideoSettings` |
 
 mod accounts;
@@ -54,7 +54,7 @@ use dioxus::prelude::*;
 use accounts::AccountsSettings;
 use backup::BackupSettings;
 use diagnostics::DiagnosticsPage;
-use general::GeneralSettings;
+use general::{GeneralSettings, LayoutSettings};
 use identity::IdentitySettings;
 use language::LanguageSettings;
 use media::MediaSettings;
@@ -65,7 +65,7 @@ use voice_video::VoiceVideoSettings;
 // plugin_settings is used via the dynamic registry — no compile-time import
 // of specific plugin components into the host.
 
-const NAV_SECTIONS: [(&str, SettingsSection); 10] = [
+const NAV_SECTIONS: [(&str, SettingsSection); 11] = [
     ("settings-accounts", SettingsSection::Accounts),
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("settings-backup", SettingsSection::Backup),
@@ -73,6 +73,7 @@ const NAV_SECTIONS: [(&str, SettingsSection); 10] = [
     ("settings-theme", SettingsSection::Theme),
     ("settings-media", SettingsSection::Media),
     ("settings-language", SettingsSection::Language),
+    ("settings-layout", SettingsSection::Layout),
     ("settings-general", SettingsSection::General),
     ("settings-plugins", SettingsSection::Plugins),
     ("settings-diagnostics", SettingsSection::Diagnostics),
@@ -127,6 +128,11 @@ const SETTINGS_NODES: &[(&str, SettingsSection)] = &[
     ("settings-media-active-provider", SettingsSection::Media),
     // Language
     ("settings-language", SettingsSection::Language),
+    // Layout
+    ("settings-layout", SettingsSection::Layout),
+    ("settings-layout-mode", SettingsSection::Layout),
+    ("settings-mirror-menu-layout", SettingsSection::Layout),
+    ("settings-mirror-chat-messages", SettingsSection::Layout),
     // General
     ("settings-general", SettingsSection::General),
     ("settings-reset-app", SettingsSection::General),
@@ -338,6 +344,9 @@ fn SettingsAllSections(search_query: String) -> Element {
                             SettingsSection::Language => rsx! {
                                 LanguageSettings {}
                             },
+                            SettingsSection::Layout => rsx! {
+                                LayoutSettings {}
+                            },
                             SettingsSection::General => rsx! {
                                 GeneralSettings {}
                             },
@@ -397,7 +406,7 @@ fn SettingsAllSections(search_query: String) -> Element {
 #[component]
 pub fn SettingsPage() -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let _locale = crate::i18n::use_locale().read().clone();
+    let locale_key = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
     let nav = use_navigator();
 
@@ -441,6 +450,7 @@ pub fn SettingsPage() -> Element {
             content_class: "settings-content".to_string(),
             sidebar: rsx! {
                 SettingsNavigation {
+                    key: "settings-nav-{locale_key}",
                     current: section,
                     search_text,
                     on_select: move |next: SettingsSection| {
@@ -451,7 +461,7 @@ pub fn SettingsPage() -> Element {
                 }
             },
             content: rsx! {
-                div { class: "settings-page-panel",
+                div { class: "settings-page-panel", key: "settings-panel-{locale_key}",
                     SettingsContentHeader { search_text }
                     div { class: "settings-sections-stack",
                         SettingsAllSections { search_query: query }

@@ -181,8 +181,10 @@ settings-appearance-description = Modo oscuro, modo claro y opciones de visualiz
 settings-dark-mode = Modo oscuro
 settings-light-mode = Modo claro
 settings-follow-device = Seguir preferencia del dispositivo
+settings-layout = Diseño
+settings-layout-description = Comportamiento de diseño y reflejo entre las interfaces de escritorio y móvil
 settings-general = General
-settings-general-description = Comportamiento de diseño, espejo, preferencias de notificación y comportamiento de inicio
+settings-general-description = Restablece los datos locales de la app o destruye por completo el estado para pruebas limpias
 settings-layout-mode = Modo de diseño
 settings-layout-mode-description = Elige si Poly debe detectar móvil por ancho, por orientación vertical, o forzar siempre escritorio/móvil. Los overrides por URL como ?layout=mobile o ?layout=desktop tienen prioridad mientras estén presentes.
 settings-layout-auto-width = Auto (ancho ≤ 640px)

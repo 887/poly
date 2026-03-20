@@ -125,6 +125,8 @@ pub enum SettingsSection {
     Theme,
     /// Language selection.
     Language,
+    /// Layout behavior and mirroring.
+    Layout,
     /// Appearance (dark/light mode).
     Appearance,
     /// General preferences.
@@ -156,6 +158,7 @@ impl SettingsSection {
             Self::Theme | Self::Appearance => "theme",
             Self::Media => "media",
             Self::Language => "language",
+            Self::Layout => "layout",
             Self::General => "general",
             Self::Plugins => "plugins",
             Self::Diagnostics => "diagnostics",
@@ -173,6 +176,7 @@ impl SettingsSection {
             "theme" => Self::Theme,
             "media" => Self::Media,
             "language" => Self::Language,
+            "layout" => Self::Layout,
             "general" => Self::General,
             "plugins" => Self::Plugins,
             "diagnostics" => Self::Diagnostics,

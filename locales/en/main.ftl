@@ -192,8 +192,10 @@ settings-appearance-description = Dark mode, light mode, and display options
 settings-dark-mode = Dark Mode
 settings-light-mode = Light Mode
 settings-follow-device = Follow Device Preference
+settings-layout = Layout
+settings-layout-description = Layout behavior and mirroring across desktop and mobile shells
 settings-general = General
-settings-general-description = Layout behavior, mirroring, notification preferences, and startup behavior
+settings-general-description = Reset local app data or fully nuke state for clean re-testing
 settings-layout-mode = Layout mode
 settings-layout-mode-description = Choose whether Poly should auto-detect mobile by width, auto-detect by portrait orientation, or always force desktop/mobile. URL query overrides like ?layout=mobile or ?layout=desktop take priority while present.
 settings-layout-auto-width = Auto (width ≤ 640px)

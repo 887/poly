@@ -196,7 +196,6 @@ pub fn MainLayout() -> Element {
     let route_key = format!("{route}");
     use_effect(move || {
         let _ = &route_key;
-        close_mobile_drawer();
         close_mobile_right_wing();
         if runtime_mobile_ui_active() {
             let mut state = app_state.write();

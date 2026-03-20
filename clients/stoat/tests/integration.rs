@@ -38,24 +38,26 @@ struct TestState {
     addr: String,
 }
 
-fn stoat_user_json(
-    user_id: &str,
-    username: &str,
-    discriminator: &str,
-    display_name: Option<&str>,
-    relationship: &str,
-    presence: &str,
+struct StoatUserJsonParams {
+    user_id: &'static str,
+    username: &'static str,
+    discriminator: &'static str,
+    display_name: Option<&'static str>,
+    relationship: &'static str,
+    presence: &'static str,
     online: bool,
-) -> Value {
+}
+
+fn stoat_user_json(params: StoatUserJsonParams) -> Value {
     json!({
-        "_id": user_id,
-        "username": username,
-        "discriminator": discriminator,
-        "display_name": display_name,
+        "_id": params.user_id,
+        "username": params.username,
+        "discriminator": params.discriminator,
+        "display_name": params.display_name,
         "avatar": null,
-        "relationship": relationship,
-        "status": { "presence": presence },
-        "online": online
+        "relationship": params.relationship,
+        "status": { "presence": params.presence },
+        "online": params.online
     })
 }
 
@@ -244,9 +246,15 @@ async fn send_friend_request(
         .unwrap_or_default();
 
     match username {
-        "otterpal#0002" => Ok(Json(stoat_user_json(
-            "user_2", "otterpal", "0002", None, "Outgoing", "Idle", true,
-        ))),
+        "otterpal#0002" => Ok(Json(stoat_user_json(StoatUserJsonParams {
+            user_id: "user_2",
+            username: "otterpal",
+            discriminator: "0002",
+            display_name: None,
+            relationship: "Outgoing",
+            presence: "Idle",
+            online: true,
+        }))),
         _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
     }
 }
@@ -268,18 +276,24 @@ async fn accept_or_remove_friend(
     }
 
     match target.as_str() {
-        "user_4" => Ok(Json(stoat_user_json(
-            "user_4",
-            "ferretfriend",
-            "0004",
-            Some("Ferret Friend"),
-            "Friend",
-            "Online",
-            true,
-        ))),
-        "user_2" => Ok(Json(stoat_user_json(
-            "user_2", "otterpal", "0002", None, "None", "Idle", true,
-        ))),
+        "user_4" => Ok(Json(stoat_user_json(StoatUserJsonParams {
+            user_id: "user_4",
+            username: "ferretfriend",
+            discriminator: "0004",
+            display_name: Some("Ferret Friend"),
+            relationship: "Friend",
+            presence: "Online",
+            online: true,
+        }))),
+        "user_2" => Ok(Json(stoat_user_json(StoatUserJsonParams {
+            user_id: "user_2",
+            username: "otterpal",
+            discriminator: "0002",
+            display_name: None,
+            relationship: "None",
+            presence: "Idle",
+            online: true,
+        }))),
         _ => Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" })))),
     }
 }
@@ -1132,9 +1146,10 @@ async fn stoat_get_friends_uses_self_relationships() {
     let friends = client.get_friends().await.expect("friends fetch succeeds");
 
     assert_eq!(friends.len(), 1);
-    assert_eq!(friends[0].id, "user_2");
-    assert_eq!(friends[0].display_name, "otterpal");
-    assert_eq!(friends[0].presence, PresenceStatus::Idle);
+    let friend = friends.first().expect("friend present");
+    assert_eq!(friend.id, "user_2");
+    assert_eq!(friend.display_name, "otterpal");
+    assert_eq!(friend.presence, PresenceStatus::Idle);
 }
 
 #[tokio::test]
@@ -1155,7 +1170,7 @@ async fn stoat_get_notifications_maps_incoming_friend_requests() {
         .expect("notifications fetch succeeds");
 
     assert_eq!(notifications.len(), 1);
-    let notif = &notifications[0];
+    let notif = notifications.first().expect("notification present");
     assert_eq!(notif.account_id, "user_1");
     assert!(matches!(
         &notif.kind,
@@ -1329,7 +1344,7 @@ async fn stoat_get_groups_maps_members_and_last_message() {
         .expect("group list fetch succeeds");
 
     assert_eq!(groups.len(), 1);
-    let group = &groups[0];
+    let group = groups.first().expect("group present");
     assert_eq!(group.id, "group_1");
     assert_eq!(group.name.as_deref(), Some("Stoat Crew"));
     assert_eq!(group.members.len(), 3);

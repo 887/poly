@@ -181,8 +181,10 @@ settings-appearance-description = Dunkel-/Hellmodus und Anzeigeoptionen
 settings-dark-mode = Dunkelmodus
 settings-light-mode = Hellmodus
 settings-follow-device = Geräteeinstellung folgen
+settings-layout = Layout
+settings-layout-description = Layout-Verhalten und Spiegelung über Desktop- und Mobil-Shell hinweg
 settings-general = Allgemein
-settings-general-description = Layout-Verhalten, Spiegelung, Benachrichtigungseinstellungen und Startverhalten
+settings-general-description = Lokale App-Daten zurücksetzen oder den Zustand vollständig für sauberes Re-Testing nuken
 settings-layout-mode = Layout-Modus
 settings-layout-mode-description = Lege fest, ob Poly Mobil per Breite, per Hochformat oder immer als Desktop/Mobil erzwingen soll. URL-Overrides wie ?layout=mobile oder ?layout=desktop haben Vorrang, solange sie gesetzt sind.
 settings-layout-auto-width = Auto (Breite ≤ 640px)

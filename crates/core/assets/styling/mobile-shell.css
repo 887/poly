@@ -345,8 +345,8 @@
 .poly-app.poly-mobile-runtime-active .chat-side-column {
     position: fixed;
     top: 0;
-    right: var(--poly-mobile-right-panel-offset-px);
-    z-index: 490;
+    right: 0;
+    z-index: 460;
     width: var(--poly-mobile-right-reveal-px);
     min-width: var(--poly-mobile-right-reveal-px);
     max-width: var(--poly-mobile-right-reveal-px);
@@ -355,9 +355,9 @@
     border-left: 1px solid var(--border-primary);
     border-top: none;
     box-shadow: inset 8px 0 24px rgb(0 0 0 / 0%);
-    transition: right 0.22s ease, box-shadow 0.22s ease;
-    will-change: right;
     overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .poly-app.poly-mobile-runtime-active .chat-side-column::before {
@@ -376,6 +376,8 @@
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-open .chat-side-column,
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-dragging .chat-side-column {
     box-shadow: inset 12px 0 28px rgb(0 0 0 / 42%), inset 24px 0 38px rgb(0 0 0 / 22%);
+    visibility: visible;
+    pointer-events: auto;
 }
 
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-open .chat-side-column::before,
@@ -574,12 +576,10 @@
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-side-column {
     right: auto;
-    left: var(--poly-mobile-right-panel-offset-px);
+    left: 0;
     border-left: none;
     border-right: 1px solid var(--border-primary);
     box-shadow: inset -8px 0 24px rgb(0 0 0 / 0%);
-    transition: left 0.22s ease, box-shadow 0.22s ease;
-    will-change: left;
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-side-column::before {

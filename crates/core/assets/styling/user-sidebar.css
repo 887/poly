@@ -403,20 +403,24 @@
 
 /* Per-kind action button colours */
 
-.notif-action-accept { /* green accept */
+.notif-action-accept {
+    /* green accept */
     background-color: var(--color-success, #22c55e);
     color: #fff;
     border: none;
 }
+
 .notif-action-accept:hover {
     background-color: color-mix(in srgb, var(--color-success, #22c55e) 80%, #000 20%);
 }
 
-.notif-action-join { /* green join-voice */
+.notif-action-join {
+    /* green join-voice */
     background-color: var(--color-success, #22c55e);
     color: #fff;
     border: none;
 }
+
 .notif-action-join:hover {
     background-color: color-mix(in srgb, var(--color-success, #22c55e) 80%, #000 20%);
 }
@@ -426,6 +430,7 @@
     border: 1px solid var(--border-secondary);
     color: var(--text-secondary);
 }
+
 .notif-action-deny:hover {
     background-color: var(--bg-hover);
 }
@@ -435,6 +440,7 @@
     border: 1px solid var(--border-secondary);
     color: var(--text-secondary);
 }
+
 .notif-action-read:hover {
     background-color: var(--bg-hover);
 }
@@ -461,4 +467,3 @@
     padding: 32px 0;
     font-size: 14px;
 }
-

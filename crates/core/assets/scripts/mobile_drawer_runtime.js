@@ -95,16 +95,10 @@ if (!window.__polyMobileDrawerInit) {
             }
         });
 
-        const panelOffset = window.getComputedStyle(root).getPropertyValue('--poly-mobile-right-panel-offset-px').trim() || '0px';
         document.querySelectorAll('.chat-side-column').forEach(function (element) {
             if (element instanceof HTMLElement) {
-                if (mirrored) {
-                    element.style.removeProperty('right');
-                    element.style.left = panelOffset;
-                } else {
-                    element.style.removeProperty('left');
-                    element.style.right = panelOffset;
-                }
+                element.style.removeProperty('left');
+                element.style.removeProperty('right');
             }
         });
     }
@@ -208,6 +202,7 @@ if (!window.__polyMobileDrawerInit) {
             return;
         }
 
+        const wasMobileActive = root.classList.contains(MOBILE_CLASS);
         const mobileActive = isMobileUi(root);
         root.classList.toggle(MOBILE_CLASS, mobileActive);
         if (!mobileActive) {
@@ -235,6 +230,9 @@ if (!window.__polyMobileDrawerInit) {
         root.style.setProperty('--poly-mobile-rail-offset', `${railOffsetPx()}px`);
         root.style.setProperty('--poly-mobile-left-reveal-px', `${computeLeftRevealPx()}px`);
         root.style.setProperty('--poly-mobile-right-reveal-px', `${computeRightRevealPx()}px`);
+        if (!wasMobileActive) {
+            window.__polyRequestCloseMobileRightWing?.();
+        }
         setLeftProgress(root, root.classList.contains(LEFT_OPEN_CLASS) ? 1 : 0);
         setRightProgress(root, root.classList.contains(RIGHT_OPEN_CLASS) ? 1 : 0);
     };
