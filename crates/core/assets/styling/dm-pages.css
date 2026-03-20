@@ -223,6 +223,16 @@
     background: var(--bg-primary);
 }
 
+/* Special account pages (People, Notifications, Saved Items) reuse the same
+   shared footer geometry as account-view-main: the voice/account footer bleeds
+   72px left so it visually covers Bar 2. The base split shell clips overflow,
+   so these shells must opt out on desktop. */
+.poly-split-shell.notifications-shell,
+.poly-split-shell.friends-panel-shell,
+.poly-split-shell.saved-items-shell {
+    overflow: visible;
+}
+
 .special-page-panel {
     display: flex;
     flex-direction: column;
