@@ -1141,39 +1141,43 @@ fn runtime_mobile_ui_active() -> bool {
         return false;
     };
 
-    window
+    let viewport_width = window
+        .inner_width()
+        .ok()
+        .and_then(|value| value.as_f64())
+        .unwrap_or_default();
+    let viewport_height = window
+        .inner_height()
+        .ok()
+        .and_then(|value| value.as_f64())
+        .unwrap_or_default();
+
+    let classes = window
         .document()
         .and_then(|document| document.query_selector(".poly-app").ok().flatten())
-        .and_then(|root| root.get_attribute("class"))
-        .is_some_and(|classes| {
-            classes
-                .split_whitespace()
-                .any(|class| class == "poly-layout-mode-force-mobile")
-                || (classes
-                    .split_whitespace()
-                    .any(|class| class == "poly-layout-mode-auto-width")
-                    && window
-                        .inner_width()
-                        .ok()
-                        .and_then(|value| value.as_f64())
-                        .is_some_and(|width| width <= 640.0))
-                || (classes
-                    .split_whitespace()
-                    .any(|class| class == "poly-layout-mode-auto-portrait")
-                    && {
-                        let width = window
-                            .inner_width()
-                            .ok()
-                            .and_then(|value| value.as_f64())
-                            .unwrap_or_default();
-                        let height = window
-                            .inner_height()
-                            .ok()
-                            .and_then(|value| value.as_f64())
-                            .unwrap_or_default();
-                        height > width
-                    })
-        })
+        .and_then(|root| root.get_attribute("class"));
+
+    // Early render/hydration fallback: if `.poly-app` isn't available yet,
+    // mirror the real app-shell precedence: URL override -> persisted setting.
+    let Some(classes) = classes else {
+        let (configured_mode, legacy_force_mobile) =
+            crate::ui::load_persisted_layout_mode_from_window(&window);
+        let fallback_mode = crate::ui::layout_query_override()
+            .unwrap_or_else(|| crate::ui::effective_layout_mode(configured_mode, legacy_force_mobile));
+        return crate::ui::layout_mode_is_mobile(fallback_mode);
+    };
+
+    classes
+        .split_whitespace()
+        .any(|class| class == "poly-layout-mode-force-mobile")
+        || (classes
+            .split_whitespace()
+            .any(|class| class == "poly-layout-mode-auto-width")
+            && viewport_width <= 640.0)
+        || (classes
+            .split_whitespace()
+            .any(|class| class == "poly-layout-mode-auto-portrait")
+            && viewport_height > viewport_width)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

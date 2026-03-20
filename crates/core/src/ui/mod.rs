@@ -90,15 +90,41 @@ use crate::client_manager::{ClientManager, SignupEntry};
 use crate::state::{AppState, ChatData, LayoutMode, SettingsSection, View};
 use dioxus::prelude::*;
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
+#[cfg(target_arch = "wasm32")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
 const CSS: Asset = asset!("assets/tailwind.css");
 
 #[cfg(target_arch = "wasm32")]
-fn layout_query_override() -> Option<LayoutMode> {
-    let Some(window) = web_sys::window() else {
-        return None;
-    };
+const LAYOUT_OVERRIDE_SESSION_KEY: &str = "poly_layout_query_override";
+
+#[cfg(target_arch = "wasm32")]
+static LAYOUT_OVERRIDE_BOOTSTRAPPED_THIS_PAGE: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_arch = "wasm32")]
+const fn layout_mode_query_value(mode: LayoutMode) -> &'static str {
+    match mode {
+        LayoutMode::ForceMobile => "mobile",
+        LayoutMode::ForceDesktop => "desktop",
+        LayoutMode::AutoWidth => "auto-width",
+        LayoutMode::AutoPortrait => "auto-portrait",
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn layout_mode_from_query_value(value: &str) -> Option<LayoutMode> {
+    match value {
+        "mobile" => Some(LayoutMode::ForceMobile),
+        "desktop" => Some(LayoutMode::ForceDesktop),
+        "auto-width" => Some(LayoutMode::AutoWidth),
+        "auto-portrait" => Some(LayoutMode::AutoPortrait),
+        _ => None,
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn layout_query_override_from_search(window: &web_sys::Window) -> Option<LayoutMode> {
     let Ok(search) = window.location().search() else {
         return None;
     };
@@ -115,13 +141,7 @@ fn layout_query_override() -> Option<LayoutMode> {
         })
         .find_map(|(key, value)| {
             if key == "layout" {
-                return match value {
-                    "mobile" => Some(LayoutMode::ForceMobile),
-                    "desktop" => Some(LayoutMode::ForceDesktop),
-                    "auto-width" => Some(LayoutMode::AutoWidth),
-                    "auto-portrait" => Some(LayoutMode::AutoPortrait),
-                    _ => None,
-                };
+                return layout_mode_from_query_value(value);
             }
 
             if matches!(key, "mobile" | "polyMobile" | "forceMobile") {
@@ -139,7 +159,76 @@ fn layout_query_override() -> Option<LayoutMode> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn layout_mode_is_mobile(mode: LayoutMode) -> bool {
+pub(crate) fn layout_query_override() -> Option<LayoutMode> {
+    let Some(window) = web_sys::window() else {
+        return None;
+    };
+
+    if let Some(override_mode) = layout_query_override_from_search(&window) {
+        LAYOUT_OVERRIDE_BOOTSTRAPPED_THIS_PAGE.store(true, Ordering::SeqCst);
+        if let Ok(Some(storage)) = window.session_storage() {
+            let _ = storage.set_item(
+                LAYOUT_OVERRIDE_SESSION_KEY,
+                layout_mode_query_value(override_mode),
+            );
+        }
+        return Some(override_mode);
+    }
+
+    // Fresh page load without an explicit layout override should clear any
+    // previously remembered session override, so manually removing ?layout=...
+    // from the URL restores normal behavior. Internal SPA navigations in the
+    // same page lifetime skip this branch after the first bootstrap call.
+    if !LAYOUT_OVERRIDE_BOOTSTRAPPED_THIS_PAGE.swap(true, Ordering::SeqCst) {
+        if let Ok(Some(storage)) = window.session_storage() {
+            let _ = storage.remove_item(LAYOUT_OVERRIDE_SESSION_KEY);
+        }
+        return None;
+    }
+
+    window
+        .session_storage()
+        .ok()
+        .flatten()
+        .and_then(|storage| storage.get_item(LAYOUT_OVERRIDE_SESSION_KEY).ok().flatten())
+        .and_then(|value| layout_mode_from_query_value(&value))
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn preserve_layout_override_query_in_url() {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(mode) = layout_query_override() else {
+        return;
+    };
+
+    let canonical_search = format!("?layout={}", layout_mode_query_value(mode));
+    let Ok(current_search) = window.location().search() else {
+        return;
+    };
+    if current_search == canonical_search {
+        return;
+    }
+
+    let Ok(pathname) = window.location().pathname() else {
+        return;
+    };
+    let hash = window.location().hash().unwrap_or_default();
+    if let Ok(history) = window.history() {
+        let _ = history.replace_state_with_url(
+            &wasm_bindgen::JsValue::NULL,
+            "",
+            Some(&format!("{pathname}{canonical_search}{hash}")),
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn preserve_layout_override_query_in_url() {}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn layout_mode_is_mobile(mode: LayoutMode) -> bool {
     match mode {
         LayoutMode::ForceMobile => true,
         LayoutMode::ForceDesktop => false,
@@ -171,7 +260,10 @@ const fn layout_mode_is_mobile(mode: LayoutMode) -> bool {
     matches!(mode, LayoutMode::ForceMobile)
 }
 
-fn effective_layout_mode(configured: LayoutMode, legacy_force_mobile: bool) -> LayoutMode {
+pub(crate) fn effective_layout_mode(
+    configured: LayoutMode,
+    legacy_force_mobile: bool,
+) -> LayoutMode {
     #[cfg(target_arch = "wasm32")]
     if let Some(override_mode) = layout_query_override() {
         return override_mode;
@@ -182,6 +274,37 @@ fn effective_layout_mode(configured: LayoutMode, legacy_force_mobile: bool) -> L
     } else {
         configured
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn load_persisted_layout_mode_from_window(
+    window: &web_sys::Window,
+) -> (LayoutMode, bool) {
+    let persisted_mode = window
+        .local_storage()
+        .ok()
+        .flatten()
+        .and_then(|storage| storage.get_item("app_settings").ok().flatten())
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
+
+    let configured_mode = match persisted_mode
+        .as_ref()
+        .and_then(|json| json.get("layout_mode"))
+        .and_then(serde_json::Value::as_str)
+    {
+        Some("ForceMobile") => LayoutMode::ForceMobile,
+        Some("ForceDesktop") => LayoutMode::ForceDesktop,
+        Some("AutoPortrait") => LayoutMode::AutoPortrait,
+        Some("AutoWidth") | Some(_) | None => LayoutMode::AutoWidth,
+    };
+
+    let legacy_force_mobile = persisted_mode
+        .as_ref()
+        .and_then(|json| json.get("force_mobile_layout"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    (configured_mode, legacy_force_mobile)
 }
 
 const fn layout_mode_class(mode: LayoutMode) -> &'static str {
@@ -638,6 +761,7 @@ fn router_config(
         move |state: dioxus_router::GenericRouterContext<Route>| {
             let route = state.current();
             sync_route_to_app_state(&route, app_state);
+            preserve_layout_override_query_in_url();
 
             if route_targets_unknown_account(&route, &client_manager.read()) {
                 let mut next_app_state = app_state;

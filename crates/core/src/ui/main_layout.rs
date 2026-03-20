@@ -223,6 +223,7 @@ pub fn MainLayout() -> Element {
     let route_key = format!("{route}");
     use_effect(move || {
         let _ = &route_key;
+        crate::ui::preserve_layout_override_query_in_url();
         close_mobile_right_wing();
         if runtime_mobile_ui_active() {
             let mut state = app_state.write();
