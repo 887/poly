@@ -157,7 +157,10 @@ if (!window.__polyMobileDrawerInit) {
 
         const toggle = document.querySelector('.chat-members-toggle-btn');
         if (toggle instanceof HTMLElement) {
-            toggle.click();
+            const isActive = toggle.classList.contains('soft-active') || toggle.classList.contains('active');
+            if (isActive) {
+                toggle.click();
+            }
         }
         setRightProgress(root, 0);
     };
@@ -206,6 +209,29 @@ if (!window.__polyMobileDrawerInit) {
         const mobileActive = isMobileUi(root);
         root.classList.toggle(MOBILE_CLASS, mobileActive);
         if (!mobileActive) {
+            // Crossing mobile -> desktop: close any open wing state in the Rust app
+            // before stripping CSS classes, otherwise the desktop layout can inherit
+            // an open mobile contact/member wing state.
+            if (wasMobileActive) {
+                const explicitRightClose = document.querySelector('.poly-mobile-right-wing-close-state');
+                if (explicitRightClose instanceof HTMLElement) {
+                    explicitRightClose.click();
+                } else {
+                    const rightToggle = document.querySelector('.chat-members-toggle-btn');
+                    if (rightToggle instanceof HTMLElement) {
+                        const isActive = rightToggle.classList.contains('soft-active') || rightToggle.classList.contains('active');
+                        if (isActive) {
+                            rightToggle.click();
+                        }
+                    }
+                }
+
+                const leftBackdrop = document.querySelector('.mobile-left-wing-backdrop');
+                if (leftBackdrop instanceof HTMLElement) {
+                    leftBackdrop.click();
+                }
+            }
+
             root.classList.remove(LEFT_OPEN_CLASS, RIGHT_OPEN_CLASS, LEFT_DRAGGING_CLASS, RIGHT_DRAGGING_CLASS);
             root.style.removeProperty('--poly-mobile-rail-offset');
             root.style.removeProperty('--poly-mobile-left-progress');

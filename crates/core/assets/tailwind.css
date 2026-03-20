@@ -9063,14 +9063,14 @@ select {
 
 @media (max-width: 980px) {
     .chat-header {
-        flex-wrap: wrap;
-        align-items: flex-start;
+        flex-wrap: nowrap;
+        align-items: center;
     }
 
     .chat-header-right {
-        width: 100%;
-        margin-left: 0;
-        justify-content: space-between;
+        width: auto;
+        margin-left: auto;
+        justify-content: flex-start;
     }
 
     .chat-header-search-inline {
