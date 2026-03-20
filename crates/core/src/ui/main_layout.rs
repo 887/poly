@@ -67,6 +67,33 @@ pub(crate) fn close_mobile_drawer() {
     }
 }
 
+pub(crate) fn mobile_left_drawer_open() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        const MOBILE_LEFT_OPEN_CLASS: &str = "poly-mobile-left-wing-open";
+        const MOBILE_LEFT_DRAGGING_CLASS: &str = "poly-mobile-left-wing-dragging";
+
+        let Some(window) = web_sys::window() else {
+            return false;
+        };
+
+        return window
+            .document()
+            .and_then(|document| document.query_selector(".poly-app").ok().flatten())
+            .and_then(|root| root.get_attribute("class"))
+            .is_some_and(|classes| {
+                classes
+                    .split_whitespace()
+                    .any(|class| class == MOBILE_LEFT_OPEN_CLASS || class == MOBILE_LEFT_DRAGGING_CLASS)
+            });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        false
+    }
+}
+
 fn close_mobile_right_wing() {
     if browser_runtime() == BrowserRuntime::WasmDom {
         let _ = document::eval(MOBILE_RIGHT_WING_CLOSE_JS);

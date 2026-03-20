@@ -28,7 +28,7 @@ use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
     request_restore_scroll_position_or_bottom,
 };
-use crate::ui::main_layout::close_mobile_drawer;
+use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 
@@ -321,6 +321,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             class: if is_active { "server-icon account-icon active" } else { "server-icon account-icon" },
             onclick: move |_| {
                 let aid = aid_for_click.clone();
+                let preserve_drawer_context = mobile_left_drawer_open();
                 // Clear server/channel state — the target route will reload what's needed.
                 chat_data.write().current_server = None;
                 chat_data.write().current_channel = None;
@@ -330,17 +331,19 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
                 // If we have a stored last route for this account, restore it.
                 // This makes account-switching feel like a true tab switch.
-                let last_route_url = app_state
-                    .read()
-                    .nav
-                    .account_last_routes
-                    .get(&aid)
-                    .cloned();
-                if let Some(url) = last_route_url
-                    && let Ok(route) = url.parse::<Route>()
-                {
-                    navigator().push(route);
-                    return;
+                if !preserve_drawer_context {
+                    let last_route_url = app_state
+                        .read()
+                        .nav
+                        .account_last_routes
+                        .get(&aid)
+                        .cloned();
+                    if let Some(url) = last_route_url
+                        && let Ok(route) = url.parse::<Route>()
+                    {
+                        navigator().push(route);
+                        return;
+                    }
                 }
 
                 // No stored route — fall back to the account's DMs home.
@@ -495,6 +498,7 @@ fn FavoriteServerIcon(
                 let iid = instance_id.clone();
                 let aid = account_id.clone();
                 move |_| {
+                    let preserve_drawer_context = mobile_left_drawer_open();
                     if let Some(previous_channel_id) = app_state
                         .read()
                         .nav
@@ -505,10 +509,12 @@ fn FavoriteServerIcon(
                     }
                     app_state.write().nav.selected_server = Some(sid.clone());
                     app_state.write().nav.selected_channel = None;
-                    let sid2 = sid.clone();
-                    spawn(async move {
-                        load_server_data(sid2, app_state, client_manager, chat_data).await;
-                    });
+                    if !preserve_drawer_context {
+                        let sid2 = sid.clone();
+                        spawn(async move {
+                            load_server_data(sid2, app_state, client_manager, chat_data).await;
+                        });
+                    }
                     navigator()
                         .push(Route::ServerHome {
                             backend: bslug.clone(),
@@ -694,9 +700,28 @@ fn FavoriteServerIcon(
 /// Load channels and select the first text channel for a server.
 pub async fn load_server_data(
     server_id: String,
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+) {
+    load_server_data_internal(server_id, app_state, client_manager, chat_data, true).await;
+}
+
+pub async fn load_server_shell_data(
+    server_id: String,
+    app_state: Signal<AppState>,
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+) {
+    load_server_data_internal(server_id, app_state, client_manager, chat_data, false).await;
+}
+
+async fn load_server_data_internal(
+    server_id: String,
     mut app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
+    auto_select_first_text_channel: bool,
 ) {
     chat_data.write().loading = true;
 
@@ -729,8 +754,13 @@ pub async fn load_server_data(
 
     chat_data.write().channels = channels;
 
-    // Auto-select first text channel
-    if let Some(ch) = first_text_channel {
+    // Only auto-open the first text channel when the user is already in the
+    // content area workflow. When the mobile left drawer is open and the user
+    // taps a favorites/account-server icon, we keep them at the server shell
+    // so only an explicit channel tap opens content and closes the drawer.
+    if auto_select_first_text_channel
+        && let Some(ch) = first_text_channel
+    {
         app_state.write().nav.selected_channel = Some(ch.id.clone());
         chat_data.write().current_channel = Some(ch.clone());
 
@@ -747,6 +777,13 @@ pub async fn load_server_data(
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
             chat_data.write().members = members;
         }
+    }
+    if !auto_select_first_text_channel {
+        app_state.write().nav.selected_channel = None;
+        let mut cd = chat_data.write();
+        cd.current_channel = None;
+        cd.messages.clear();
+        cd.members.clear();
     }
 
     chat_data.write().loading = false;

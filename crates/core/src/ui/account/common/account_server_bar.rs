@@ -28,7 +28,7 @@ use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
-use crate::ui::main_layout::close_mobile_drawer;
+use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
@@ -306,6 +306,7 @@ fn AccountServerIcon(
     let bslug_click = backend_slug.clone();
     let aid_click = account_id.clone();
     let on_click = move |_: Event<MouseData>| {
+        let preserve_drawer_context = mobile_left_drawer_open();
         if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
             remember_message_list_scroll_position(&previous_channel_id);
         }
@@ -325,16 +326,18 @@ fn AccountServerIcon(
             cd.members = Vec::new();
             cd.messages = Vec::new();
         }
-        let sid2 = sid_click.clone();
-        spawn(async move {
-            super::super::super::favorites_sidebar::load_server_data(
-                sid2,
-                app_state,
-                client_manager,
-                chat_data,
-            )
-            .await;
-        });
+        if !preserve_drawer_context {
+            let sid2 = sid_click.clone();
+            spawn(async move {
+                super::super::super::favorites_sidebar::load_server_data(
+                    sid2,
+                    app_state,
+                    client_manager,
+                    chat_data,
+                )
+                .await;
+            });
+        }
         navigator().push(Route::ServerHome {
             backend: bslug_click.clone(),
             instance_id: instance_id.clone(),

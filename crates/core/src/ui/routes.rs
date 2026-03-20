@@ -314,7 +314,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
-            // Don't clear selected_channel — load_server_data sets it
+            s.nav.selected_channel = None;
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -663,6 +663,10 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
     };
 
     use_effect(move || {
+        if crate::ui::main_layout::mobile_left_drawer_open() {
+            return;
+        }
+
         let Some(last_dm_url) = app_state
             .read()
             .nav
@@ -782,9 +786,25 @@ fn ServerHome(
         if server_already_loaded || already_loading {
             return;
         }
+        let preserve_drawer_context = crate::ui::main_layout::mobile_left_drawer_open();
         spawn(async move {
-            super::favorites_sidebar::load_server_data(sid, app_state, client_manager, chat_data)
+            if preserve_drawer_context {
+                super::favorites_sidebar::load_server_shell_data(
+                    sid,
+                    app_state,
+                    client_manager,
+                    chat_data,
+                )
                 .await;
+            } else {
+                super::favorites_sidebar::load_server_data(
+                    sid,
+                    app_state,
+                    client_manager,
+                    chat_data,
+                )
+                .await;
+            }
         });
     });
 
