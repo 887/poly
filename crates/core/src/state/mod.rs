@@ -81,6 +81,12 @@ pub struct NavigationState {
     /// Toggled by the "Members" button in the group chat header.
     /// Independent of `right_sidebar_visible` (which controls the server member list).
     pub dm_right_sidebar_visible: bool,
+    /// Mobile-only detail mode for 1:1 DM right wing.
+    ///
+    /// On mobile, the DM wing opens to a simple member/contact list first. Selecting
+    /// the contact opens the full contact-info detail panel. Closing that detail panel
+    /// should return to the list rather than collapsing the entire wing.
+    pub mobile_dm_contact_detail_visible: bool,
     /// Last-visited URL per account ID.
     ///
     /// Populated by `sync_route_to_app_state` on every account-scoped navigation.
@@ -106,6 +112,7 @@ impl Default for NavigationState {
             selected_channel: None,
             right_sidebar_visible: true,
             dm_right_sidebar_visible: true,
+            mobile_dm_contact_detail_visible: false,
             account_last_routes: std::collections::HashMap::new(),
             account_last_dm_routes: std::collections::HashMap::new(),
         }

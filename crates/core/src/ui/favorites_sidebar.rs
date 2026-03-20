@@ -758,9 +758,7 @@ async fn load_server_data_internal(
     // content area workflow. When the mobile left drawer is open and the user
     // taps a favorites/account-server icon, we keep them at the server shell
     // so only an explicit channel tap opens content and closes the drawer.
-    if auto_select_first_text_channel
-        && let Some(ch) = first_text_channel
-    {
+    if auto_select_first_text_channel && let Some(ch) = first_text_channel {
         app_state.write().nav.selected_channel = Some(ch.id.clone());
         chat_data.write().current_channel = Some(ch.clone());
 

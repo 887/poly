@@ -1649,20 +1649,49 @@ body {
 .chat-tools-panel {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px;
+    gap: 0;
+    padding: 0;
     border-bottom: 1px solid var(--border-primary);
     background: color-mix(in srgb, var(--bg-secondary) 96%, black);
+}
+
+.chat-tools-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-primary);
+    gap: 8px;
+}
+
+.chat-tools-title {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    flex: 1;
 }
 
 .chat-tools-topbar {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
+    padding: 12px;
 }
 
 .chat-tools-close {
     flex: 0 0 auto;
+    margin-right: auto;
+}
+
+.chat-tools-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .chat-tools-action-row {
@@ -10414,10 +10443,11 @@ select {
     max-height: 100dvh;
     border-left: 1px solid var(--border-primary);
     border-top: none;
-    box-shadow: inset 8px 0 24px rgb(0 0 0 / 0%);
+    box-shadow: none;
     overflow: hidden;
     visibility: hidden;
     pointer-events: none;
+    transition: visibility 0.22s ease;
 }
 
 .poly-app.poly-mobile-runtime-active .chat-side-column::before {
@@ -10435,7 +10465,6 @@ select {
 
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-open .chat-side-column,
 .poly-app.poly-mobile-runtime-active.poly-mobile-right-wing-dragging .chat-side-column {
-    box-shadow: inset 12px 0 28px rgb(0 0 0 / 42%), inset 24px 0 38px rgb(0 0 0 / 22%);
     visibility: visible;
     pointer-events: auto;
 }
@@ -10553,20 +10582,49 @@ select {
 .poly-app.poly-mobile-runtime-active .chat-tools-panel {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px;
+    gap: 0;
+    padding: 0;
     border-bottom: 1px solid var(--border-primary);
     background: color-mix(in srgb, var(--bg-secondary) 96%, black);
+}
+
+.poly-app.poly-mobile-runtime-active .chat-tools-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-primary);
+    gap: 8px;
+}
+
+.poly-app.poly-mobile-runtime-active .chat-tools-title {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    flex: 1;
 }
 
 .poly-app.poly-mobile-runtime-active .chat-tools-topbar {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
+    padding: 12px;
 }
 
 .poly-app.poly-mobile-runtime-active .chat-tools-close {
     flex: 0 0 auto;
+    margin-right: auto;
+}
+
+.poly-app.poly-mobile-runtime-active .chat-tools-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .poly-app.poly-mobile-runtime-active .chat-tools-action-row {
@@ -10574,6 +10632,14 @@ select {
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-tools-header {
+    flex-direction: row-reverse;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-tools-topbar {
+    justify-content: flex-start;
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .server-sidebar {
@@ -10639,18 +10705,12 @@ select {
     left: 0;
     border-left: none;
     border-right: 1px solid var(--border-primary);
-    box-shadow: inset -8px 0 24px rgb(0 0 0 / 0%);
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-side-column::before {
     left: auto;
     right: 0;
     background: linear-gradient(270deg, rgb(0 0 0 / 58%) 0%, rgb(0 0 0 / 28%) 45%, rgb(0 0 0 / 0%) 100%);
-}
-
-.poly-app.poly-mobile-runtime-active.poly-menu-mirrored.poly-mobile-right-wing-open .chat-side-column,
-.poly-app.poly-mobile-runtime-active.poly-menu-mirrored.poly-mobile-right-wing-dragging .chat-side-column {
-    box-shadow: inset -12px 0 28px rgb(0 0 0 / 42%), inset -24px 0 38px rgb(0 0 0 / 22%);
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-main-column {
@@ -10666,7 +10726,7 @@ select {
 }
 
 .poly-app.poly-mobile-runtime-active.poly-menu-mirrored .chat-tools-topbar {
-    flex-direction: row-reverse;
+    justify-content: flex-start;
 }
 
 .poly-app.poly-mobile-runtime-active .message-list {

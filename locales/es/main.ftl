@@ -99,6 +99,7 @@ status-picker-title = Establecer estado
 # Filtro de lista de miembros
 member-filter-placeholder = Filtrar miembros…
 member-filter-tooltip = Filtrar miembros
+member-filter-no-results = Ningún miembro coincide con el filtro.
 
 # Notificaciones
 notifications-title = Notificaciones

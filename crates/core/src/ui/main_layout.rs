@@ -82,9 +82,9 @@ pub(crate) fn mobile_left_drawer_open() -> bool {
             .and_then(|document| document.query_selector(".poly-app").ok().flatten())
             .and_then(|root| root.get_attribute("class"))
             .is_some_and(|classes| {
-                classes
-                    .split_whitespace()
-                    .any(|class| class == MOBILE_LEFT_OPEN_CLASS || class == MOBILE_LEFT_DRAGGING_CLASS)
+                classes.split_whitespace().any(|class| {
+                    class == MOBILE_LEFT_OPEN_CLASS || class == MOBILE_LEFT_DRAGGING_CLASS
+                })
             });
     }
 

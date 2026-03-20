@@ -87,11 +87,14 @@ pub fn UserSidebar() -> Element {
 
     rsx! {
         aside { class: "user-sidebar",
-            // Header row: title + filter toggle icon
-            div { class: "user-sidebar-header",
-                h4 { class: "user-sidebar-title", "{t(\"user-members\")}" }
+            div { class: "chat-utility-header user-sidebar-header",
+                h3 { class: "chat-utility-title user-sidebar-title", "{t(\"user-members\")}" }
                 button {
-                    class: if *filter_open.read() { "user-filter-btn user-filter-btn-active" } else { "user-filter-btn" },
+                    class: if *filter_open.read() {
+                        "header-btn active chat-utility-filter-btn user-filter-btn user-filter-btn-active"
+                    } else {
+                        "header-btn chat-utility-filter-btn user-filter-btn"
+                    },
                     title: "{t(\"member-filter-tooltip\")}",
                     onclick: move |_| {
                         let was_open = *filter_open.read();
@@ -104,62 +107,65 @@ pub fn UserSidebar() -> Element {
                 }
             }
 
-            // Collapsible filter input
-            if *filter_open.read() {
-                input {
-                    r#type: "text",
-                    class: "member-filter-input",
-                    placeholder: "{t(\"member-filter-placeholder\")}",
-                    value: "{query}",
-                    oninput: move |e| filter_text.set(e.value()),
-                    autofocus: true,
+            div { class: "chat-utility-body user-sidebar-body",
+                if *filter_open.read() {
+                    div { class: "chat-utility-filter-row user-sidebar-filter-row",
+                        input {
+                            r#type: "text",
+                            class: "chat-utility-filter-input member-filter-input",
+                            placeholder: "{t(\"member-filter-placeholder\")}",
+                            value: "{query}",
+                            oninput: move |e| filter_text.set(e.value()),
+                            autofocus: true,
+                        }
+                    }
                 }
-            }
 
-            if members.is_empty() {
-                div { class: "user-sidebar-empty", "{t(\"user-no-members\")}" }
-            } else if visible.is_empty() {
-                div { class: "user-sidebar-empty", "No members match the filter." }
-            }
+                if members.is_empty() {
+                    div { class: "user-sidebar-empty", "{t(\"user-no-members\")}" }
+                } else if visible.is_empty() {
+                    div { class: "user-sidebar-empty", "{t(\"member-filter-no-results\")}" }
+                }
 
-            // Online
-            if !online.is_empty() {
-                UserGroup {
-                    label: format!("{} — {}", t("user-online"), online.len()),
-                    users: online,
-                    presence_class: "online",
-                    query: query.clone(),
-                    on_click: move |user: User| popup_user.set(Some(user)),
+                // Online
+                if !online.is_empty() {
+                    UserGroup {
+                        label: format!("{} — {}", t("user-online"), online.len()),
+                        users: online,
+                        presence_class: "online",
+                        query: query.clone(),
+                        on_click: move |user: User| popup_user.set(Some(user)),
+                    }
                 }
-            }
-            // Idle
-            if !idle.is_empty() {
-                UserGroup {
-                    label: format!("{} — {}", t("user-idle"), idle.len()),
-                    users: idle,
-                    presence_class: "idle",
-                    query: query.clone(),
-                    on_click: move |user: User| popup_user.set(Some(user)),
+                // Idle
+                if !idle.is_empty() {
+                    UserGroup {
+                        label: format!("{} — {}", t("user-idle"), idle.len()),
+                        users: idle,
+                        presence_class: "idle",
+                        query: query.clone(),
+                        on_click: move |user: User| popup_user.set(Some(user)),
+                    }
                 }
-            }
-            // Do Not Disturb
-            if !dnd.is_empty() {
-                UserGroup {
-                    label: format!("{} — {}", t("user-dnd"), dnd.len()),
-                    users: dnd,
-                    presence_class: "dnd",
-                    query: query.clone(),
-                    on_click: move |user: User| popup_user.set(Some(user)),
+                // Do Not Disturb
+                if !dnd.is_empty() {
+                    UserGroup {
+                        label: format!("{} — {}", t("user-dnd"), dnd.len()),
+                        users: dnd,
+                        presence_class: "dnd",
+                        query: query.clone(),
+                        on_click: move |user: User| popup_user.set(Some(user)),
+                    }
                 }
-            }
-            // Offline
-            if !offline.is_empty() {
-                UserGroup {
-                    label: format!("{} — {}", t("user-offline"), offline.len()),
-                    users: offline,
-                    presence_class: "offline",
-                    query: query.clone(),
-                    on_click: move |user: User| popup_user.set(Some(user)),
+                // Offline
+                if !offline.is_empty() {
+                    UserGroup {
+                        label: format!("{} — {}", t("user-offline"), offline.len()),
+                        users: offline,
+                        presence_class: "offline",
+                        query: query.clone(),
+                        on_click: move |user: User| popup_user.set(Some(user)),
+                    }
                 }
             }
 

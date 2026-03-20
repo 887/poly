@@ -99,6 +99,7 @@ status-picker-title = Set Status
 # Member list filter
 member-filter-placeholder = Filter members…
 member-filter-tooltip = Filter members
+member-filter-no-results = No members match the filter.
 
 # Notifications
 notifications-title = Notifications

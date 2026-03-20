@@ -1935,8 +1935,18 @@ fn render_drag_overlay(is_drag_over: bool) -> Element {
 }
 
 fn render_chat_layout_shell(ctx: ChatViewMarkupCtx) -> Element {
+    let show_side_column = ctx.utility_panel.read().is_some()
+        || ctx.member_list_visible
+        || mobile_server_right_wing_active(&ctx);
+    let mobile_layout = runtime_mobile_ui_active();
+
     rsx! {
-        div { class: "chat-layout-shell", {render_chat_main_column(ctx)} }
+        div { class: "chat-layout-shell",
+            {render_chat_main_column(ctx.clone())}
+            if mobile_layout && show_side_column {
+                {render_chat_side_column(ctx)}
+            }
+        }
     }
 }
 
@@ -2015,11 +2025,11 @@ fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
-    let mobile_server_right_wing = mobile_server_right_wing_active(&ctx);
+    let mobile_right_wing = runtime_mobile_ui_active();
 
     rsx! {
         div { class: "chat-header-right",
-            if mobile_server_right_wing {
+            if mobile_right_wing {
                 {render_mobile_chat_header_right_toggle(ctx)}
             } else {
                 {render_chat_header_actions(ctx)}
@@ -2047,6 +2057,7 @@ fn close_chat_side_column_state(
 
     if is_group_channel || is_dm_channel {
         app_state.write().nav.dm_right_sidebar_visible = false;
+        app_state.write().nav.mobile_dm_contact_detail_visible = false;
     } else {
         app_state.write().nav.right_sidebar_visible = false;
     }
@@ -2058,25 +2069,53 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let mut show_search_filters = ctx.show_search_filters;
     let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some();
     let current_server = ctx.current_server.clone();
+    let current_channel = ctx.current_channel.clone();
+    let dm_user_avatar = ctx.dm_user_avatar.clone();
     let is_dm_channel = ctx.is_dm_channel;
     let is_group_channel = ctx.is_group_channel;
-    let server_icon_url = current_server
-        .as_ref()
-        .and_then(|server| server.icon_url.clone());
-    let server_icon_label = current_server
-        .as_ref()
-        .map(|server| server.name.clone())
-        .unwrap_or_else(|| t("chat-toggle-members"));
-    let server_icon_fallback = current_server
-        .as_ref()
-        .map(|server| server.name.chars().next().unwrap_or('#').to_string())
-        .unwrap_or_else(|| "#".to_string());
+    let toggle_icon_url = if is_dm_channel {
+        dm_user_avatar.clone()
+    } else {
+        current_server
+            .as_ref()
+            .and_then(|server| server.icon_url.clone())
+    };
+    let toggle_label = if is_dm_channel {
+        current_channel
+            .as_ref()
+            .map(|channel| channel.name.clone())
+            .unwrap_or_else(|| t("chat-toggle-contact"))
+    } else if is_group_channel {
+        current_channel
+            .as_ref()
+            .map(|channel| channel.name.clone())
+            .unwrap_or_else(|| t("chat-toggle-members"))
+    } else {
+        current_server
+            .as_ref()
+            .map(|server| server.name.clone())
+            .unwrap_or_else(|| t("chat-toggle-members"))
+    };
+    let toggle_fallback = if is_dm_channel {
+        current_channel
+            .as_ref()
+            .and_then(|channel| channel.name.chars().next())
+            .map(|ch| ch.to_string())
+            .unwrap_or_else(|| "👤".to_string())
+    } else if is_group_channel {
+        "👥".to_string()
+    } else {
+        current_server
+            .as_ref()
+            .map(|server| server.name.chars().next().unwrap_or('#').to_string())
+            .unwrap_or_else(|| "#".to_string())
+    };
 
     rsx! {
         button {
             class: if right_wing_open { "header-btn soft-active poly-mobile-right-wing-toggle mobile-server-icon-toggle" } else { "header-btn poly-mobile-right-wing-toggle mobile-server-icon-toggle" },
-            title: t("chat-toggle-members"),
-            aria_label: "{server_icon_label}",
+            title: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
+            aria_label: "{toggle_label}",
             onclick: move |_| {
                 let is_opening = !(utility_panel.read().is_some()
                     || app_state.read().nav.right_sidebar_visible);
@@ -2093,6 +2132,7 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                     utility_panel.set(None);
                     if is_dm_channel || is_group_channel {
                         app_state.write().nav.dm_right_sidebar_visible = true;
+                        app_state.write().nav.mobile_dm_contact_detail_visible = false;
                     } else {
                         app_state.write().nav.right_sidebar_visible = true;
                     }
@@ -2108,14 +2148,14 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                     );
                 }
             },
-            if let Some(ref icon_url) = server_icon_url {
+            if let Some(ref icon_url) = toggle_icon_url {
                 img {
                     class: "mobile-server-icon-image",
                     src: "{icon_url}",
-                    alt: "{server_icon_label}",
+                    alt: "{toggle_label}",
                 }
             } else {
-                span { class: "mobile-server-icon-fallback", "{server_icon_fallback}" }
+                span { class: "mobile-server-icon-fallback", "{toggle_fallback}" }
             }
         }
     }
@@ -2474,14 +2514,13 @@ fn render_search_clear_button(
 }
 
 fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
-    let show_side_column = ctx.utility_panel.read().is_some()
-        || ctx.member_list_visible
-        || mobile_server_right_wing_active(&ctx);
+    let show_side_column = ctx.utility_panel.read().is_some() || ctx.member_list_visible;
+    let mobile_layout = runtime_mobile_ui_active();
 
     rsx! {
         div { class: "chat-body-shell",
             {render_chat_content_column(ctx.clone())}
-            if show_side_column {
+            if !mobile_layout && show_side_column {
                 {render_chat_side_column(ctx)}
             }
         }
@@ -3654,6 +3693,8 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
         .unwrap_or_default();
     let panel = *ctx.utility_panel.read();
     let mobile_tools = runtime_mobile_ui_active();
+    let mobile_dm_contact_detail_visible =
+        ctx.app_state.read().nav.mobile_dm_contact_detail_visible;
 
     rsx! {
         RightWingShell {
@@ -3665,7 +3706,11 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
                 if let Some(panel) = panel {
                     {render_chat_utility_rail(ctx, panel, current_channel_name)}
                 } else if ctx.is_dm_channel {
-                    DmContactPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
+                    if mobile_tools && !mobile_dm_contact_detail_visible {
+                        DmContactListPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
+                    } else {
+                        DmContactPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
+                    }
                 } else if ctx.is_group_channel {
                     DmUserSidebar {}
                 } else {
@@ -3709,17 +3754,26 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                     },
                     "✕"
                 }
-                div { class: "chat-tools-action-row",
+                div { class: "chat-tools-actions",
                     button {
-                        class: if member_sidebar_active && utility_panel.read().is_none() { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
-                        title: t("chat-toggle-members"),
+                        class: if settings_active { "header-btn active chat-header-btn-settings" } else { "header-btn chat-header-btn-settings" },
+                        title: t("chat-settings"),
                         onclick: move |_| {
-                            let current = app_state.read().nav.right_sidebar_visible;
-                            app_state.write().nav.right_sidebar_visible = !current;
-                            utility_panel.set(None);
                             show_search_filters.set(false);
+                            let next = if *utility_panel.read() == Some(ChatUtilityPanel::Settings) {
+                                None
+                            } else {
+                                Some(ChatUtilityPanel::Settings)
+                            };
+                            utility_panel.set(next);
+                            app_state.write().nav.right_sidebar_visible = false;
                         },
-                        "👥"
+                        span { class: "chat-settings-btn-icon",
+                            span { class: "chat-settings-btn-icon-cog", "⚙️" }
+                            if *notifications_muted.read() {
+                                span { class: "chat-settings-btn-muted-dot" }
+                            }
+                        }
                     }
                     button {
                         class: if threads_active { "header-btn active chat-header-btn-threads" } else { "header-btn chat-header-btn-threads" },
@@ -3762,24 +3816,20 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                         )
                     }
                     button {
-                        class: if settings_active { "header-btn active chat-header-btn-settings" } else { "header-btn chat-header-btn-settings" },
-                        title: t("chat-settings"),
+                        class: if member_sidebar_active && utility_panel.read().is_none() { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
+                        title: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
                         onclick: move |_| {
+                            utility_panel.set(None);
                             show_search_filters.set(false);
-                            let next = if *utility_panel.read() == Some(ChatUtilityPanel::Settings) {
-                                None
+                            if is_dm_channel || is_group_channel {
+                                app_state.write().nav.dm_right_sidebar_visible = true;
+                                app_state.write().nav.mobile_dm_contact_detail_visible = false;
                             } else {
-                                Some(ChatUtilityPanel::Settings)
-                            };
-                            utility_panel.set(next);
-                            app_state.write().nav.right_sidebar_visible = false;
-                        },
-                        span { class: "chat-settings-btn-icon",
-                            span { class: "chat-settings-btn-icon-cog", "⚙️" }
-                            if *notifications_muted.read() {
-                                span { class: "chat-settings-btn-muted-dot" }
+                                let current = app_state.read().nav.right_sidebar_visible;
+                                app_state.write().nav.right_sidebar_visible = !current;
                             }
-                        }
+                        },
+                        "👥"
                     }
                 }
             }
@@ -3932,7 +3982,6 @@ fn ChatUtilityRail(
     mut threads_filter_open: Signal<bool>,
     mut threads_filter_query: Signal<String>,
 ) -> Element {
-    let show_close_button = runtime_mobile_ui_active();
     let title = if panel == ChatUtilityPanel::Search {
         if search_query.is_empty() {
             t("search-messages")
@@ -4006,9 +4055,6 @@ fn ChatUtilityRail(
                         },
                         "🔍"
                     }
-                }
-                if show_close_button {
-                    button { class: "close-btn", onclick: move |_| on_close.call(()), "✕" }
                 }
             }
             // Per-tab filter input — shown when toggled on for Pinned/Threads
@@ -4966,6 +5012,72 @@ fn SlashCommandPopup(
     }
 }
 
+#[rustfmt::skip]
+#[component]
+fn DmContactListPanel(channel_id: String) -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let mut app_state: Signal<AppState> = use_context();
+
+    let dm: Option<DmChannel> = chat_data
+        .read()
+        .dm_channels
+        .iter()
+        .find(|dm| dm.id == channel_id)
+        .cloned();
+
+    rsx! {
+        aside { class: "user-sidebar dm-contact-list-panel",
+            div { class: "chat-utility-header user-sidebar-header",
+                h3 { class: "chat-utility-title user-sidebar-title", {t("user-members")} }
+            }
+            div { class: "chat-utility-body user-sidebar-body",
+                if let Some(ref dm) = dm {
+                    {
+                        let color = user_color(&dm.user.id);
+                        let first_char: String = dm
+                            .user
+                            .display_name
+                            .chars()
+                            .next()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| "?".to_string());
+                        let presence_class = match dm.user.presence {
+                            PresenceStatus::Online => "online",
+                            PresenceStatus::Idle => "idle",
+                            PresenceStatus::DoNotDisturb => "dnd",
+                            PresenceStatus::Offline | PresenceStatus::Invisible => "offline",
+                        };
+                        let name = dm.user.display_name.clone();
+                        let avatar_url = dm.user.avatar_url.clone();
+                        rsx! {
+                            div {
+                                class: "user-entry",
+                                onclick: move |_| {
+                                    app_state.write().nav.mobile_dm_contact_detail_visible = true;
+                                },
+                                div { class: "user-avatar {presence_class}",
+                                    if let Some(ref url) = avatar_url {
+                                        img { class: "user-avatar-image", src: "{url}", alt: "{name}" }
+                                    } else {
+                                        div {
+                                            class: "user-avatar-fallback",
+                                            style: "background-color: {color};",
+                                            "{first_char}"
+                                        }
+                                    }
+                                }
+                                span { class: "user-name", "{name}" }
+                            }
+                        }
+                    }
+                } else {
+                    div { class: "user-sidebar-empty", {t("user-no-members")} }
+                }
+            }
+        }
+    }
+}
+
 /// Contact info panel shown on the right rail when a DM channel is active and the user
 /// presses the 👤 header button.
 ///
@@ -4975,6 +5087,7 @@ fn SlashCommandPopup(
 fn DmContactPanel(channel_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let mut app_state: Signal<AppState> = use_context();
+    let mobile_layout = runtime_mobile_ui_active();
 
     let dm: Option<DmChannel> = chat_data
         .read()
@@ -5003,8 +5116,12 @@ fn DmContactPanel(channel_id: String) -> Element {
                     class: "header-btn",
                     title: t("chat-toggle-contact"),
                     onclick: move |_| {
-                        let current = app_state.read().nav.dm_right_sidebar_visible;
-                        app_state.write().nav.dm_right_sidebar_visible = !current;
+                        if mobile_layout {
+                            app_state.write().nav.mobile_dm_contact_detail_visible = false;
+                        } else {
+                            let current = app_state.read().nav.dm_right_sidebar_visible;
+                            app_state.write().nav.dm_right_sidebar_visible = !current;
+                        }
                     },
                     "✕"
                 }
