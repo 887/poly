@@ -88,30 +88,30 @@ pub fn UserProfileModal() -> Element {
         use_effect(move || {
             spawn(async move {
                 let mut eval = document::eval(
-                    "new Promise(resolve => {\
-                        let done = { value: false };\
+                    "(function(){\
+                        var done = false;\
                         function cleanup() {\
-                            if (done.value) return;\
-                            done.value = true;\
+                            if (done) return;\
+                            done = true;\
                             window.removeEventListener('hashchange', onHash);\
-                            window.removeEventListener('keydown', onKey);\
+                            document.removeEventListener('keydown', onKey, true);\
                         }\
                         function onHash() {\
                             if(location.hash!=='#poly-profile'){\
                                 cleanup();\
-                                resolve('hash');\
+                                dioxus.send('close');\
                             }\
                         }\
                         function onKey(e) {\
                             if (e.key === 'Escape') {\
                                 e.preventDefault();\
                                 cleanup();\
-                                resolve('escape');\
+                                dioxus.send('close');\
                             }\
                         }\
                         window.addEventListener('hashchange', onHash);\
-                        window.addEventListener('keydown', onKey);\
-                    })",
+                        document.addEventListener('keydown', onKey, true);\
+                    })()",
                 );
                 if eval.recv::<String>().await.is_ok() {
                     // Route through close_modal so browser hash and signal state

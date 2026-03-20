@@ -17,6 +17,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
+use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
 
@@ -75,6 +76,7 @@ pub fn DmUserSidebar() -> Element {
                             account_id: active_account_id.clone().unwrap_or_default(),
                             chat_data,
                             client_manager,
+                            app_state,
                         }
                     }
                 }
@@ -92,6 +94,7 @@ fn DmMemberRow(
     account_id: String,
     mut chat_data: Signal<ChatData>,
     client_manager: Signal<ClientManager>,
+    app_state: Signal<AppState>,
 ) -> Element {
     let color = user_color(&member.id);
     let first_char: String = member
@@ -107,7 +110,9 @@ fn DmMemberRow(
     let remove_tooltip = format!("Remove {} from this group", member.display_name);
 
     rsx! {
-        div { class: "dm-member-row",
+        div {
+            class: "dm-member-row",
+            onclick: move |_| open_user_profile(app_state, member.clone()),
             // Avatar with presence dot
             div { class: "dm-member-avatar-wrap",
                 div {

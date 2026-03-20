@@ -97,9 +97,18 @@ account-conn-error = Connection Error
 status-picker-title = Set Status
 
 # Member list filter
-member-filter-placeholder = Filter members…
-member-filter-tooltip = Filter members
-member-filter-no-results = No members match the filter.
+member-filter-placeholder = Search members…
+member-filter-tooltip = Search members
+member-filter-no-results = No members match that search.
+
+# User profile modal
+user-profile-more-options = More options
+user-profile-message = Message
+user-profile-call = Call
+user-profile-video = Video
+user-profile-note = Note
+user-profile-note-placeholder = Click to add a note
+user-profile-open = View profile
 
 # Notifications
 notifications-title = Notifications
@@ -366,8 +375,16 @@ action-search = Search
 action-copy = Copy
 action-back = Back
 action-confirm = Confirm
+action-clear = Clear
+action-download = Download
+action-open-in-browser = Open in browser
+zoom-in = Zoom in
+zoom-out = Zoom out
 mobile-nav-open = Open navigation menu
 mobile-nav-close = Close navigation menu
+
+media-viewer-unavailable-title = Media unavailable
+media-viewer-unavailable-body = This media could not be loaded from the current chat state.
 
 # Errors
 error-generic = Something went wrong. Please try again.
@@ -608,6 +625,16 @@ mute-notifications = Mute notifications
 unmute-notifications = Unmute notifications
 chat-settings = Chat settings
 chat-settings-notifications = Notifications
+chat-settings-member-list = Member List
+chat-settings-grouping = Grouping
+chat-settings-grouping-by-status = By status
+chat-settings-grouping-none = No grouping
+chat-settings-sort-order = Sort order
+chat-settings-sort-alphabetical = Alphabetical
+chat-settings-sort-online-first = Online first
+chat-settings-sort-join-order = Join order
+chat-settings-show-offline = Show offline members
+user-all-offline-hidden = All members are offline and hidden
 filter = Filter
 chat-type-message-channel = Message #{ $channel }
 chat-type-message-user = Message { $user }

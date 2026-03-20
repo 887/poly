@@ -958,6 +958,85 @@
     color: var(--text-primary);
 }
 
+/* ── Chat settings — Member List rows ─────────────────────────────────── */
+.chat-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.chat-settings-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-settings-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--bg-tertiary, var(--bg-secondary));
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 12px;
+    padding: 4px 24px 4px 8px;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 7px center;
+    max-width: 130px;
+    flex-shrink: 0;
+    transition: border-color 0.12s;
+}
+
+.chat-settings-select:hover,
+.chat-settings-select:focus {
+    border-color: var(--accent-primary, var(--accent));
+    outline: none;
+}
+
+/* ── Show-offline pill toggle ──────────────────────────────────────────── */
+.chat-settings-toggle-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.chat-settings-toggle-track {
+    display: flex;
+    align-items: center;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: var(--bg-tertiary, var(--bg-secondary));
+    border: 1px solid var(--border-primary);
+    padding: 2px;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.chat-settings-toggle-btn-on .chat-settings-toggle-track {
+    background: var(--accent-primary, var(--accent));
+    border-color: var(--accent-primary, var(--accent));
+}
+
+.chat-settings-toggle-knob {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform 0.15s, background 0.15s;
+}
+
+.chat-settings-toggle-knob.on {
+    transform: translateX(16px);
+    background: #fff;
+}
+
 .chat-utility-filter-btn.active {
     background: var(--bg-3);
     color: var(--text-primary);

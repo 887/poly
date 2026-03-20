@@ -97,9 +97,18 @@ account-conn-error = Error de conexión
 status-picker-title = Establecer estado
 
 # Filtro de lista de miembros
-member-filter-placeholder = Filtrar miembros…
-member-filter-tooltip = Filtrar miembros
-member-filter-no-results = Ningún miembro coincide con el filtro.
+member-filter-placeholder = Buscar miembros…
+member-filter-tooltip = Buscar miembros
+member-filter-no-results = Ningún miembro coincide con esa búsqueda.
+
+# User profile modal
+user-profile-more-options = Más opciones
+user-profile-message = Mensaje
+user-profile-call = Llamada
+user-profile-video = Vídeo
+user-profile-note = Nota
+user-profile-note-placeholder = Haz clic para añadir una nota
+user-profile-open = Ver perfil
 
 # Notificaciones
 notifications-title = Notificaciones
@@ -341,6 +350,14 @@ action-search = Buscar
 action-copy = Copiar
 action-back = Atrás
 action-confirm = Confirmar
+action-clear = Borrar
+action-download = Descargar
+action-open-in-browser = Abrir en el navegador
+zoom-in = Acercar
+zoom-out = Alejar
+
+media-viewer-unavailable-title = Medio no disponible
+media-viewer-unavailable-body = No se pudo cargar este medio desde el estado actual del chat.
 
 # Errores
 error-generic = Algo salió mal. Por favor, inténtalo de nuevo.
@@ -540,7 +557,19 @@ chat-markdown-formatting = Formato Markdown
 
 # Usuarios extras
 user-no-members = No hay miembros que mostrar
+user-all-offline-hidden = Todos los miembros están desconectados y ocultos
 account-not-signed-in = No conectado
+
+# Configuración del chat — lista de miembros
+chat-settings-member-list = Lista de miembros
+chat-settings-grouping = Agrupación
+chat-settings-grouping-by-status = Por estado
+chat-settings-grouping-none = Sin agrupación
+chat-settings-sort-order = Orden
+chat-settings-sort-alphabetical = Alfabético
+chat-settings-sort-online-first = Conectados primero
+chat-settings-sort-join-order = Orden de entrada
+chat-settings-show-offline = Mostrar miembros desconectados
 
 # Etiquetas de color
 color-accent = Acento

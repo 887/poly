@@ -20,6 +20,7 @@ use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
+use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{ChannelType, VoiceParticipant};
 
@@ -432,6 +433,7 @@ fn VoiceParticipantGrid(
 #[component]
 fn VoiceTile(participant: VoiceParticipant) -> Element {
     let user = &participant.user;
+    let app_state: Signal<AppState> = use_context();
     let color = user_color(&user.id);
     let first_char: String = user
         .display_name
@@ -453,8 +455,12 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
         "voice-avatar"
     };
     let name = user.display_name.clone();
+    let profile_user = participant.user.clone();
     rsx! {
-        div { class: "{tile_class}",
+        div {
+            class: "{tile_class}",
+            onclick: move |_| open_user_profile(app_state, profile_user.clone()),
+            style: "cursor: pointer;",
             div { class: "{speaking_class}",
                 if let Some(url) = &avatar_url {
                     img {

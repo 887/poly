@@ -1,0 +1,13 @@
+{
+  "id": 15,
+  "slug": "fullscreen-media-viewer-dm-parity-overhaul",
+  "title": "Fullscreen media viewer + DM parity overhaul",
+  "description": "Implement route-backed fullscreen profile/image viewer UX with escape/back handling, multi-image navigation, and demo data parity for non-friend DMs. Work incrementally with checkpoints and visual verification.",
+  "status": "todo",
+  "created_at": "2026-03-20T11:43:54.510870775Z",
+  "updated_at": "2026-03-20T11:51:44.413214594Z",
+  "completed_at": null,
+  "memory_count": 2,
+  "finding_count": 0,
+  "checklist": []
+}

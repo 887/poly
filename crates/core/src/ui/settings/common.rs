@@ -7,9 +7,9 @@ use dioxus::prelude::*;
 
 /// A (value, display-label) pair for [`PolySelect`].
 #[derive(Clone, PartialEq)]
-pub(super) struct SelectOption {
-    pub(super) value: &'static str,
-    pub(super) label: &'static str,
+pub(crate) struct SelectOption {
+    pub(crate) value: &'static str,
+    pub(crate) label: String,
 }
 
 /// Fully themed dropdown select — replaces the ugly native `<select>`.
@@ -18,7 +18,7 @@ pub(super) struct SelectOption {
 /// renders entirely in the webview so it respects the active theme.
 #[rustfmt::skip]
 #[component]
-pub(super) fn PolySelect(
+pub(crate) fn PolySelect(
     options: Vec<SelectOption>,
     /// Currently selected value.
     value: String,
@@ -29,8 +29,8 @@ pub(super) fn PolySelect(
     let current_label = options
         .iter()
         .find(|o| o.value == value)
-        .map(|o| o.label)
-        .unwrap_or(&value);
+        .map(|o| o.label.as_str())
+        .unwrap_or(value.as_str());
 
     rsx! {
         div { class: "poly-select",
@@ -51,6 +51,7 @@ pub(super) fn PolySelect(
                         {
                             let opt_value = opt.value;
                             let is_active = opt.value == value;
+                            let opt_label = opt.label.clone();
                             rsx! {
                                 div {
                                     class: if is_active { "poly-select-option active" } else { "poly-select-option" },
@@ -58,7 +59,7 @@ pub(super) fn PolySelect(
                                         open.set(false);
                                         onchange.call(opt_value.to_string());
                                     },
-                                    "{opt.label}"
+                                    "{opt_label}"
                                 }
                             }
                         }

@@ -16,26 +16,28 @@ use std::path::Path;
 /// The order matches how they were originally laid out in tailwind.css:
 /// reset/variables first, then structural layout, then component-specific styles.
 const PARTIALS: &[&str] = &[
-    "variables.css",        // CSS custom properties — theme tokens
-    "layout.css",           // Base styles, layout grid, window chrome, voice banner
-    "sidebar.css",          // Server sidebar, account server bar, status dots
-    "channel-list.css",     // Channel list
-    "chat.css",             // Chat view (messages, input, attachments, reactions)
-    "user-sidebar.css",     // User/member sidebar, DM header, notification indicators
-    "settings-layout.css",  // Settings page layout shell
-    "settings-content.css", // Settings pages (accounts, plugins, profile, language)
-    "search.css",           // Global search page
-    "wizard.css",           // Setup wizard, buttons, forms, reply UI
-    "theme-utils.css",      // Backup wizard, scrollbar, theme settings, responsive
-    "voice-channel.css",    // Voice/video channel view, voice bar
-    "voice-settings.css",   // Voice settings popup/page, voice controls, account footer
-    "account-shell.css",    // Presence picker, account switcher, view shell
-    "toolbar.css",          // Emoji picker, hover actions, input toolbar, file drag
-    "dm-pages.css",         // DM nav, search bars, voice+notif settings, friends panel
-    "server-settings.css",  // Context menu, server settings, diagnostics
-    "account-profile.css",  // Account profile popup, slash command autocomplete
-    "account-forms.css",    // Add account, create server / channel forms
-    "mobile-shell.css",     // Force-mobile / narrow-viewport shell overrides
+    "variables.css",          // CSS custom properties — theme tokens
+    "layout.css",             // Base styles, layout grid, window chrome, voice banner
+    "sidebar.css",            // Server sidebar, account server bar, status dots
+    "channel-list.css",       // Channel list
+    "chat.css",               // Chat view (messages, input, attachments, reactions)
+    "user-sidebar.css",       // User/member sidebar, DM header, notification indicators
+    "settings-layout.css",    // Settings page layout shell
+    "settings-content.css",   // Settings pages (accounts, plugins, profile, language)
+    "search.css",             // Global search page
+    "wizard.css",             // Setup wizard, buttons, forms, reply UI
+    "theme-utils.css",        // Backup wizard, scrollbar, theme settings, responsive
+    "voice-channel.css",      // Voice/video channel view, voice bar
+    "voice-settings.css",     // Voice settings popup/page, voice controls, account footer
+    "account-shell.css",      // Presence picker, account switcher, view shell
+    "toolbar.css",            // Emoji picker, hover actions, input toolbar, file drag
+    "dm-pages.css",           // DM nav, search bars, voice+notif settings, friends panel
+    "server-settings.css",    // Context menu, server settings, diagnostics
+    "account-profile.css",    // Account profile popup, slash command autocomplete
+    "account-forms.css",      // Add account, create server / channel forms
+    "mobile-shell.css",       // Force-mobile / narrow-viewport shell overrides
+    "user-profile-modal.css", // Unified user profile modal (global overlay)
+    "media-viewer.css",       // Route-backed fullscreen message media viewer
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

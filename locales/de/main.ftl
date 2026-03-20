@@ -97,9 +97,18 @@ account-conn-error = Verbindungsfehler
 status-picker-title = Status setzen
 
 # Mitgliederlistenfilter
-member-filter-placeholder = Mitglieder filtern…
-member-filter-tooltip = Mitglieder filtern
-member-filter-no-results = Keine Mitglieder entsprechen dem Filter.
+member-filter-placeholder = Mitglieder suchen…
+member-filter-tooltip = Mitglieder suchen
+member-filter-no-results = Keine Mitglieder entsprechen der Suche.
+
+# User profile modal
+user-profile-more-options = Weitere Optionen
+user-profile-message = Nachricht
+user-profile-call = Anruf
+user-profile-video = Video
+user-profile-note = Notiz
+user-profile-note-placeholder = Klicken zum Hinzufügen einer Notiz
+user-profile-open = Profil anzeigen
 
 # Benachrichtigungen
 notifications-title = Benachrichtigungen
@@ -340,6 +349,14 @@ action-search = Suchen
 action-copy = Kopieren
 action-back = Zurück
 action-confirm = Bestätigen
+action-clear = Leeren
+action-download = Herunterladen
+action-open-in-browser = Im Browser öffnen
+zoom-in = Vergrößern
+zoom-out = Verkleinern
+
+media-viewer-unavailable-title = Medium nicht verfügbar
+media-viewer-unavailable-body = Dieses Medium konnte aus dem aktuellen Chat-Zustand nicht geladen werden.
 
 # Fehler
 error-generic = Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.
@@ -539,7 +556,19 @@ chat-markdown-formatting = Markdown-Formatierung
 
 # Benutzer-Extras
 user-no-members = Keine Mitglieder vorhanden
+user-all-offline-hidden = Alle Mitglieder sind offline und werden ausgeblendet
 account-not-signed-in = Nicht angemeldet
+
+# Chat-Einstellungen — Mitgliederliste
+chat-settings-member-list = Mitgliederliste
+chat-settings-grouping = Gruppierung
+chat-settings-grouping-by-status = Nach Status
+chat-settings-grouping-none = Keine Gruppierung
+chat-settings-sort-order = Sortierreihenfolge
+chat-settings-sort-alphabetical = Alphabetisch
+chat-settings-sort-online-first = Online zuerst
+chat-settings-sort-join-order = Beitrittsreihenfolge
+chat-settings-show-offline = Offline-Mitglieder anzeigen
 
 # Farbbezeichnungen
 color-accent = Akzent

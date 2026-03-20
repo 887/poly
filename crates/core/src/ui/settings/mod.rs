@@ -24,7 +24,7 @@
 
 mod accounts;
 mod backup;
-mod common;
+pub(crate) mod common;
 mod diagnostics;
 mod general;
 mod identity;

@@ -20,6 +20,7 @@ use super::chat_history::{
 };
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
+use super::user_profile_modal::open_user_profile;
 use super::user_sidebar::UserSidebar;
 use crate::client_manager::ClientManager;
 use crate::i18n::{t, t_args};
@@ -840,6 +841,25 @@ async fn persist_member_list_preferences(server_member_list_open: bool, dm_membe
     }
 }
 
+async fn persist_member_list_display_settings(
+    grouping: crate::state::MemberListGrouping,
+    sort_order: crate::state::MemberListSortOrder,
+    show_offline: bool,
+) {
+    let Some(storage) = crate::STORAGE.get() else {
+        return;
+    };
+    let Ok(mut settings) = storage.get_app_settings().await else {
+        return;
+    };
+    settings.member_list_grouping = grouping;
+    settings.member_list_sort_order = sort_order;
+    settings.member_list_show_offline = show_offline;
+    if let Err(err) = storage.set_app_settings(&settings).await {
+        tracing::warn!("Failed to persist member list display settings: {err}");
+    }
+}
+
 #[rustfmt::skip]
 #[component]
 pub fn ChatView() -> Element {
@@ -1162,8 +1182,9 @@ fn runtime_mobile_ui_active() -> bool {
     let Some(classes) = classes else {
         let (configured_mode, legacy_force_mobile) =
             crate::ui::load_persisted_layout_mode_from_window(&window);
-        let fallback_mode = crate::ui::layout_query_override()
-            .unwrap_or_else(|| crate::ui::effective_layout_mode(configured_mode, legacy_force_mobile));
+        let fallback_mode = crate::ui::layout_query_override().unwrap_or_else(|| {
+            crate::ui::effective_layout_mode(configured_mode, legacy_force_mobile)
+        });
         return crate::ui::layout_mode_is_mobile(fallback_mode);
     };
 
@@ -2389,7 +2410,6 @@ fn render_chat_header_search(ctx: ChatViewMarkupCtx) -> Element {
 
     rsx! {
         div { class: "chat-header-search-inline",
-            span { class: "chat-header-search-icon", "🔎" }
             input {
                 class: "chat-header-search-input",
                 r#type: "text",
@@ -2533,13 +2553,13 @@ fn render_search_clear_button(
     rsx! {
         button {
             class: "chat-header-search-clear",
-            title: t("action-close"),
+            title: t("action-clear"),
             onclick: move |_| {
                 search_query.set(String::new());
                 search_hits.set(Vec::new());
                 active_search_filter_idx.set(0);
-                utility_panel.set(None);
-                show_search_filters.set(true);
+                utility_panel.set(Some(ChatUtilityPanel::Search));
+                show_search_filters.set(false);
             },
             "✕"
         }
@@ -3289,7 +3309,10 @@ fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing
             MessageContentView { content: msg.content.clone(), edited: msg.edited }
         }
         if !msg.attachments.is_empty() {
-            AttachmentsView { attachments: msg.attachments.clone() }
+            AttachmentsView {
+                attachments: msg.attachments.clone(),
+                message_id: msg.id.clone(),
+            }
         }
         if !msg.reactions.is_empty() {
             ReactionsView { reactions: msg.reactions.clone(), message_id: msg.id.clone() }
@@ -3726,8 +3749,6 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
         .unwrap_or_default();
     let panel = *ctx.utility_panel.read();
     let mobile_tools = runtime_mobile_ui_active();
-    let mobile_dm_contact_detail_visible =
-        ctx.app_state.read().nav.mobile_dm_contact_detail_visible;
 
     rsx! {
         RightWingShell {
@@ -3739,11 +3760,7 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
                 if let Some(panel) = panel {
                     {render_chat_utility_rail(ctx, panel, current_channel_name)}
                 } else if ctx.is_dm_channel {
-                    if mobile_tools && !mobile_dm_contact_detail_visible {
-                        DmContactListPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
-                    } else {
-                        DmContactPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
-                    }
+                    DmContactListPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
                 } else if ctx.is_group_channel {
                     DmUserSidebar {}
                 } else {
@@ -4070,7 +4087,7 @@ fn ChatUtilityRail(
                 if panel == ChatUtilityPanel::Pinned || panel == ChatUtilityPanel::Threads {
                     button {
                         class: if filter_open { "header-btn active chat-utility-filter-btn" } else { "header-btn chat-utility-filter-btn" },
-                        title: t("filter"),
+                        title: t("action-search"),
                         onclick: move |_| {
                             if panel == ChatUtilityPanel::Pinned {
                                 let was_open = *pinned_filter_open.read();
@@ -4096,7 +4113,7 @@ fn ChatUtilityRail(
                     input {
                         class: "chat-utility-filter-input",
                         r#type: "text",
-                        placeholder: t("filter"),
+                        placeholder: t("action-search"),
                         value: "{filter_query}",
                         oninput: move |e: Event<FormData>| {
                             let val = e.value();
@@ -4167,9 +4184,26 @@ fn ChatUtilityRail(
 #[rustfmt::skip]
 #[component]
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
-    let muted = *notifications_muted.read();
+    use crate::ui::settings::common::{PolySelect, SelectOption};
+    let mut app_state: Signal<AppState> = use_context();
+    let muted    = *notifications_muted.read();
+    let grouping = app_state.read().member_list_grouping;
+    let sort     = app_state.read().member_list_sort_order;
+    let show_off = app_state.read().member_list_show_offline;
+
+    let grouping_options = vec![
+        SelectOption { value: "by-status", label: t("chat-settings-grouping-by-status") },
+        SelectOption { value: "none",      label: t("chat-settings-grouping-none") },
+    ];
+    let sort_options = vec![
+        SelectOption { value: "alphabetical", label: t("chat-settings-sort-alphabetical") },
+        SelectOption { value: "online-first", label: t("chat-settings-sort-online-first") },
+        SelectOption { value: "join-order",   label: t("chat-settings-sort-join-order") },
+    ];
+
     rsx! {
         div { class: "chat-utility-body chat-settings-panel",
+
             // ── Notifications ────────────────────────────────────────────
             div { class: "chat-settings-section",
                 h4 { class: "chat-settings-section-title", {t("chat-settings-notifications")} }
@@ -4178,7 +4212,6 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                         class: if muted { "chat-settings-mute-btn chat-settings-mute-btn-active" } else { "chat-settings-mute-btn" },
                         title: if muted { t("unmute-notifications") } else { t("mute-notifications") },
                         onclick: move |_| notifications_muted.set(!muted),
-                        // Bell with strikethrough using CSS overlay trick
                         span { class: "chat-mute-bell-icon",
                             span { class: "chat-mute-bell-base", "🔔" }
                             if muted {
@@ -4187,6 +4220,61 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                         }
                         span { class: "chat-settings-toggle-label",
                             if muted { {t("unmute-notifications")} } else { {t("mute-notifications")} }
+                        }
+                    }
+                }
+            }
+
+            // ── Member List ──────────────────────────────────────────────
+            div { class: "chat-settings-section",
+                h4 { class: "chat-settings-section-title", {t("chat-settings-member-list")} }
+
+                // Grouping
+                div { class: "chat-settings-row",
+                    label { class: "chat-settings-label", {t("chat-settings-grouping")} }
+                    PolySelect {
+                        options: grouping_options,
+                        value: grouping.as_str().to_string(),
+                        onchange: move |v: String| {
+                            let g = crate::state::MemberListGrouping::from_slug(&v);
+                            let s = app_state.read().member_list_sort_order;
+                            let o = app_state.read().member_list_show_offline;
+                            app_state.write().member_list_grouping = g;
+                            spawn(async move { persist_member_list_display_settings(g, s, o).await; });
+                        },
+                    }
+                }
+
+                // Sort order
+                div { class: "chat-settings-row",
+                    label { class: "chat-settings-label", {t("chat-settings-sort-order")} }
+                    PolySelect {
+                        options: sort_options,
+                        value: sort.as_str().to_string(),
+                        onchange: move |v: String| {
+                            let s = crate::state::MemberListSortOrder::from_slug(&v);
+                            let g = app_state.read().member_list_grouping;
+                            let o = app_state.read().member_list_show_offline;
+                            app_state.write().member_list_sort_order = s;
+                            spawn(async move { persist_member_list_display_settings(g, s, o).await; });
+                        },
+                    }
+                }
+
+                // Show offline toggle
+                div { class: "chat-settings-row",
+                    label { class: "chat-settings-label", {t("chat-settings-show-offline")} }
+                    button {
+                        class: if show_off { "chat-settings-toggle-btn chat-settings-toggle-btn-on" } else { "chat-settings-toggle-btn" },
+                        onclick: move |_| {
+                            let new_val = !app_state.read().member_list_show_offline;
+                            let g = app_state.read().member_list_grouping;
+                            let s = app_state.read().member_list_sort_order;
+                            app_state.write().member_list_show_offline = new_val;
+                            spawn(async move { persist_member_list_display_settings(g, s, new_val).await; });
+                        },
+                        span { class: "chat-settings-toggle-track",
+                            span { class: if show_off { "chat-settings-toggle-knob on" } else { "chat-settings-toggle-knob" } }
                         }
                     }
                 }
@@ -4372,9 +4460,7 @@ fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
             }
         }
     } else {
-        rsx! {
-            span { "{text}" }
-        }
+        rsx! { span { "{text}" } }
     }
 }
 
@@ -4459,19 +4545,61 @@ fn MessageContentView(content: MessageContent, edited: bool) -> Element {
 /// Render attachments (images inline, non-images as links).
 #[rustfmt::skip]
 #[component]
-fn AttachmentsView(attachments: Vec<poly_client::Attachment>) -> Element {
+fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String) -> Element {
+    let app_state: Signal<AppState> = use_context();
+    let nav = navigator();
+
     rsx! {
         div { class: "message-attachments",
-            for att in &attachments {
+            for (attachment_index, att) in attachments.iter().enumerate() {
                 {
                     let is_image = att.content_type.starts_with("image/");
                     let filename = att.filename.clone();
                     let size_str = format_file_size(att.size);
                     let url = att.url.clone();
+                    let msg_id = message_id.clone();
+                    let idx = attachment_index;
 
                     if is_image {
                         rsx! {
-                            div { class: "attachment-image",
+                            div {
+                                class: "attachment-image",
+                                onclick: move |_| {
+                                    let nav_state = app_state.read().nav.clone();
+                                    let Some(backend) = nav_state.active_backend else {
+                                        return;
+                                    };
+                                    let Some(instance_id) = nav_state.active_instance_id else {
+                                        return;
+                                    };
+                                    let Some(account_id) = nav_state.active_account_id else {
+                                        return;
+                                    };
+                                    let Some(channel_id) = nav_state.selected_channel else {
+                                        return;
+                                    };
+
+                                    if let Some(server_id) = nav_state.selected_server {
+                                        nav.push(Route::ServerMediaViewerRoute {
+                                            backend: backend.slug().to_string(),
+                                            instance_id,
+                                            account_id,
+                                            server_id,
+                                            channel_id,
+                                            message_id: msg_id.clone(),
+                                            attachment_index: idx,
+                                        });
+                                    } else {
+                                        nav.push(Route::DmMediaViewerRoute {
+                                            backend: backend.slug().to_string(),
+                                            instance_id,
+                                            account_id,
+                                            dm_id: channel_id,
+                                            message_id: msg_id.clone(),
+                                            attachment_index: idx,
+                                        });
+                                    }
+                                },
                                 img { src: "{url}", alt: "{filename}", loading: "lazy" }
                                 div { class: "attachment-info",
                                     span { class: "attachment-name", "{filename}" }
@@ -5049,7 +5177,7 @@ fn SlashCommandPopup(
 #[component]
 fn DmContactListPanel(channel_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: Signal<AppState> = use_context();
 
     let dm: Option<DmChannel> = chat_data
         .read()
@@ -5082,11 +5210,12 @@ fn DmContactListPanel(channel_id: String) -> Element {
                         };
                         let name = dm.user.display_name.clone();
                         let avatar_url = dm.user.avatar_url.clone();
+                        let profile_user = dm.user.clone();
                         rsx! {
                             div {
                                 class: "user-entry",
                                 onclick: move |_| {
-                                    app_state.write().nav.mobile_dm_contact_detail_visible = true;
+                                    open_user_profile(app_state, profile_user.clone());
                                 },
                                 div { class: "user-avatar {presence_class}",
                                     if let Some(ref url) = avatar_url {
@@ -5111,87 +5240,3 @@ fn DmContactListPanel(channel_id: String) -> Element {
     }
 }
 
-/// Contact info panel shown on the right rail when a DM channel is active and the user
-/// presses the 👤 header button.
-///
-/// Displays the remote user's avatar, display name, presence status, and backend badge.
-#[rustfmt::skip]
-#[component]
-fn DmContactPanel(channel_id: String) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
-    let mut app_state: Signal<AppState> = use_context();
-    let mobile_layout = runtime_mobile_ui_active();
-
-    let dm: Option<DmChannel> = chat_data
-        .read()
-        .dm_channels
-        .iter()
-        .find(|dm| dm.id == channel_id)
-        .cloned();
-
-    let presence_class = dm.as_ref().map_or("status-dot presence-dot offline", |dm| {
-        match dm.user.presence {
-            PresenceStatus::Online => "status-dot presence-dot online",
-            PresenceStatus::Idle => "status-dot presence-dot away",
-            PresenceStatus::DoNotDisturb => "status-dot presence-dot dnd",
-            PresenceStatus::Offline | PresenceStatus::Invisible => {
-                "status-dot presence-dot offline"
-            }
-        }
-    });
-
-    rsx! {
-        div { class: "dm-contact-panel",
-            // Header with close button
-            div { class: "dm-contact-panel-header",
-                span { class: "dm-contact-panel-title", {t("dm-contact-panel-title")} }
-                button {
-                    class: "header-btn",
-                    title: t("chat-toggle-contact"),
-                    onclick: move |_| {
-                        if mobile_layout {
-                            app_state.write().nav.mobile_dm_contact_detail_visible = false;
-                        } else {
-                            let current = app_state.read().nav.dm_right_sidebar_visible;
-                            app_state.write().nav.dm_right_sidebar_visible = !current;
-                        }
-                    },
-                    "✕"
-                }
-            }
-
-            if let Some(ref dm) = dm {
-                // Avatar section
-                div { class: "dm-contact-avatar-section",
-                    div { class: "dm-contact-avatar-wrap",
-                        if let Some(ref url) = dm.user.avatar_url {
-                            img {
-                                class: "dm-contact-avatar",
-                                src: "{url}",
-                                alt: "{dm.user.display_name}",
-                            }
-                        } else {
-                            div { class: "dm-contact-avatar dm-contact-avatar-fallback",
-                                {dm.user.display_name.chars().next().unwrap_or('?').to_uppercase().to_string()}
-                            }
-                        }
-                        span { class: "{presence_class}" }
-                    }
-                    div { class: "dm-contact-name", "{dm.user.display_name}" }
-                    div { class: "dm-contact-presence",
-                        match dm.user.presence {
-                            PresenceStatus::Online => t("presence-online"),
-                            PresenceStatus::Idle => t("presence-away"),
-                            PresenceStatus::DoNotDisturb => t("presence-dnd"),
-                            PresenceStatus::Offline | PresenceStatus::Invisible => t("presence-offline"),
-                        }
-                    }
-                    // Backend badge
-                    span { class: "account-backend-badge", {backend_badge(&dm.user.backend)} }
-                }
-            } else {
-                div { class: "dm-contact-empty", {t("dm-contact-not-found")} }
-            }
-        }
-    }
-}

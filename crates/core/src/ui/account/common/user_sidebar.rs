@@ -18,12 +18,51 @@
 // TODO(phase-2.5.7): Wire user sidebar to backend data
 
 use crate::i18n::t;
+use crate::state::{AppState, MemberListGrouping, MemberListSortOrder};
 use crate::state::ChatData;
 use crate::state::chat_data::user_color;
+use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
 
-/// Renders a name with the matching substring highlighted via a `<mark>` element.
+/// Sort-rank for a presence status (lower = shown first).
+fn presence_rank(p: PresenceStatus) -> u8 {
+    match p {
+        PresenceStatus::Online => 0,
+        PresenceStatus::Idle => 1,
+        PresenceStatus::DoNotDisturb => 2,
+        PresenceStatus::Offline | PresenceStatus::Invisible => 3,
+    }
+}
+
+/// Sort a user slice according to `sort_order`.
+/// Does not reorder when `JoinOrder` is selected.
+fn apply_sort(mut users: Vec<User>, sort_order: MemberListSortOrder) -> Vec<User> {
+    match sort_order {
+        MemberListSortOrder::JoinOrder => {}
+        MemberListSortOrder::Alphabetical => {
+            users.sort_by(|a, b| {
+                a.display_name
+                    .to_lowercase()
+                    .cmp(&b.display_name.to_lowercase())
+            });
+        }
+        MemberListSortOrder::OnlineFirst => {
+            users.sort_by(|a, b| {
+                presence_rank(a.presence)
+                    .cmp(&presence_rank(b.presence))
+                    .then_with(|| {
+                        a.display_name
+                            .to_lowercase()
+                            .cmp(&b.display_name.to_lowercase())
+                    })
+            });
+        }
+    }
+    users
+}
+
+/// Rendered member list body — switches between grouped and flat layout.
 ///
 /// If `query` is empty or not found, renders the full name as plain text.
 #[rustfmt::skip]
@@ -52,23 +91,31 @@ fn HighlightedName(name: String, query: String) -> Element {
 
 /// User sidebar component.
 ///
-/// Shows channel members grouped by presence status.
+/// Shows channel members with layout controlled by the user's member-list
+/// display preferences (`AppState.member_list_grouping`, `…sort_order`,
+/// `…show_offline`).
+///
 /// A collapsible filter (🔍 icon → text input) lets users search by name.
 #[rustfmt::skip]
 #[component]
 pub fn UserSidebar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
+    let app_state: Signal<AppState> = use_context();
     let members = chat_data.read().members.clone();
-    let mut popup_user = use_signal(|| None::<User>);
     let mut filter_open = use_signal(|| false);
     let mut filter_text = use_signal(String::new);
 
-    let query = filter_text.read().clone();
+    // Read display preferences from global AppState.
+    let grouping   = app_state.read().member_list_grouping;
+    let sort_order = app_state.read().member_list_sort_order;
+    let show_offline = app_state.read().member_list_show_offline;
+
+    let query   = filter_text.read().clone();
     let lower_q = query.to_lowercase();
 
-    // Apply filter across all members (empty query = show all)
-    let visible: Vec<_> = if lower_q.is_empty() {
-        members.to_vec()
+    // 1. Name filter
+    let after_filter: Vec<User> = if lower_q.is_empty() {
+        members.clone()
     } else {
         members
             .iter()
@@ -77,13 +124,16 @@ pub fn UserSidebar() -> Element {
             .collect()
     };
 
-    // Group by presence status
-    let online: Vec<_> = visible.iter().filter(|u| u.presence == PresenceStatus::Online).cloned().collect();
-    let idle: Vec<_> = visible.iter().filter(|u| u.presence == PresenceStatus::Idle).cloned().collect();
-    let dnd: Vec<_> = visible.iter().filter(|u| u.presence == PresenceStatus::DoNotDisturb).cloned().collect();
-    let offline: Vec<_> = visible.iter().filter(|u| {
-        u.presence == PresenceStatus::Offline || u.presence == PresenceStatus::Invisible
-    }).cloned().collect();
+    // 2. Offline visibility filter
+    let after_offline: Vec<User> = if show_offline {
+        after_filter.clone()
+    } else {
+        after_filter
+            .iter()
+            .filter(|u| !matches!(u.presence, PresenceStatus::Offline | PresenceStatus::Invisible))
+            .cloned()
+            .collect()
+    };
 
     rsx! {
         aside { class: "user-sidebar",
@@ -123,55 +173,52 @@ pub fn UserSidebar() -> Element {
 
                 if members.is_empty() {
                     div { class: "user-sidebar-empty", "{t(\"user-no-members\")}" }
-                } else if visible.is_empty() {
-                    div { class: "user-sidebar-empty", "{t(\"member-filter-no-results\")}" }
-                }
-
-                // Online
-                if !online.is_empty() {
-                    UserGroup {
-                        label: format!("{} — {}", t("user-online"), online.len()),
-                        users: online,
-                        presence_class: "online",
-                        query: query.clone(),
-                        on_click: move |user: User| popup_user.set(Some(user)),
+                } else if after_offline.is_empty() {
+                    div { class: "user-sidebar-empty",
+                        if lower_q.is_empty() { {t("user-all-offline-hidden")} } else { {t("member-filter-no-results")} }
+                    }
+                } else if matches!(grouping, MemberListGrouping::NoGrouping) {
+                    // ── Flat list with applied sort ────────────────────────
+                    {
+                        let sorted = apply_sort(after_offline.clone(), sort_order);
+                        rsx! {
+                            UserGroup {
+                                label: format!("{} — {}", t("user-members"), sorted.len()),
+                                users: sorted,
+                                presence_class: "",
+                                query: query.clone(),
+                                on_click: move |u: User| open_user_profile(app_state, u),
+                            }
+                        }
+                    }
+                } else {
+                    // ── Grouped by presence status ─────────────────────────
+                    {
+                        let mut online: Vec<User>  = after_offline.iter().filter(|u| u.presence == PresenceStatus::Online).cloned().collect();
+                        let mut idle: Vec<User>    = after_offline.iter().filter(|u| u.presence == PresenceStatus::Idle).cloned().collect();
+                        let mut dnd: Vec<User>     = after_offline.iter().filter(|u| u.presence == PresenceStatus::DoNotDisturb).cloned().collect();
+                        let mut offline: Vec<User> = after_offline.iter().filter(|u| matches!(u.presence, PresenceStatus::Offline | PresenceStatus::Invisible)).cloned().collect();
+                        if !matches!(sort_order, MemberListSortOrder::JoinOrder) {
+                            for bucket in [&mut online, &mut idle, &mut dnd, &mut offline] {
+                                bucket.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+                            }
+                        }
+                        rsx! {
+                            if !online.is_empty() {
+                                UserGroup { label: format!("{} — {}", t("user-online"), online.len()), users: online, presence_class: "online", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                            }
+                            if !idle.is_empty() {
+                                UserGroup { label: format!("{} — {}", t("user-idle"), idle.len()), users: idle, presence_class: "idle", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                            }
+                            if !dnd.is_empty() {
+                                UserGroup { label: format!("{} — {}", t("user-dnd"), dnd.len()), users: dnd, presence_class: "dnd", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                            }
+                            if !offline.is_empty() {
+                                UserGroup { label: format!("{} — {}", t("user-offline"), offline.len()), users: offline, presence_class: "offline", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                            }
+                        }
                     }
                 }
-                // Idle
-                if !idle.is_empty() {
-                    UserGroup {
-                        label: format!("{} — {}", t("user-idle"), idle.len()),
-                        users: idle,
-                        presence_class: "idle",
-                        query: query.clone(),
-                        on_click: move |user: User| popup_user.set(Some(user)),
-                    }
-                }
-                // Do Not Disturb
-                if !dnd.is_empty() {
-                    UserGroup {
-                        label: format!("{} — {}", t("user-dnd"), dnd.len()),
-                        users: dnd,
-                        presence_class: "dnd",
-                        query: query.clone(),
-                        on_click: move |user: User| popup_user.set(Some(user)),
-                    }
-                }
-                // Offline
-                if !offline.is_empty() {
-                    UserGroup {
-                        label: format!("{} — {}", t("user-offline"), offline.len()),
-                        users: offline,
-                        presence_class: "offline",
-                        query: query.clone(),
-                        on_click: move |user: User| popup_user.set(Some(user)),
-                    }
-                }
-            }
-
-            // Profile popup
-            if let Some(user) = popup_user.read().clone() {
-                UserProfilePopup { user, on_close: move |_| popup_user.set(None) }
             }
         }
     }
@@ -227,65 +274,6 @@ fn UserGroup(
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-/// Profile popup shown when clicking a user in the sidebar.
-#[rustfmt::skip]
-#[component]
-fn UserProfilePopup(user: User, on_close: EventHandler<()>) -> Element {
-    let color = user_color(&user.id);
-    let first_char: String = user
-        .display_name
-        .chars()
-        .next()
-        .map(|c| c.to_string())
-        .unwrap_or_default();
-    let presence_label = match user.presence {
-        PresenceStatus::Online => t("user-online"),
-        PresenceStatus::Idle => t("user-idle"),
-        PresenceStatus::DoNotDisturb => t("user-dnd"),
-        PresenceStatus::Invisible => t("user-invisible"),
-        PresenceStatus::Offline => t("user-offline"),
-    };
-
-    rsx! {
-        div { class: "user-popup-overlay", onclick: move |_| on_close.call(()),
-            div {
-                class: "user-popup",
-                onclick: move |evt| evt.stop_propagation(),
-                div { class: "user-popup-banner" }
-                div { class: "user-popup-avatar",
-                    if let Some(ref url) = user.avatar_url {
-                        img {
-                            class: "user-popup-avatar-image",
-                            src: "{url}",
-                            alt: "{user.display_name}",
-                        }
-                    } else {
-                        div {
-                            class: "user-popup-avatar-fallback",
-                            style: "background-color: {color};",
-                            "{first_char}"
-                        }
-                    }
-                }
-                div { class: "user-popup-info",
-                    h3 { class: "user-popup-name", "{user.display_name}" }
-                    div { class: "user-popup-status",
-                        span { class: "status-dot", "{presence_label}" }
-                    }
-                    div { class: "user-popup-backend", "Source: {user.backend.display_name()}" }
-                                // TODO(phase-3): mutual servers (2.6.3.1)
-                // TODO(phase-3): roles list (2.6.3.2)
-                }
-                button {
-                    class: "btn btn-secondary user-popup-close",
-                    onclick: move |_| on_close.call(()),
-                    "{t(\"action-close\")}"
                 }
             }
         }

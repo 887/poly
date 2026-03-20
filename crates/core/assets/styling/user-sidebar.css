@@ -10,8 +10,10 @@
     flex: 1;
     min-height: 0;
     background-color: var(--bg-secondary);
-    padding: 16px;
-    overflow-y: auto;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* DM contact info panel (right rail for 1:1 DMs) */
@@ -105,10 +107,9 @@
 
 
 .user-sidebar-title {
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--text-muted);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
     margin-bottom: 0;
     flex: 1;
 }
@@ -118,8 +119,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
-    gap: 4px;
+    margin: 0;
+    padding: 16px;
+    gap: 6px;
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .poly-app.poly-menu-mirrored .user-sidebar-header {
@@ -166,20 +169,21 @@
 /* Collapsible filter text input */
 .member-filter-input {
     width: 100%;
-    padding: 5px 8px;
-    margin-bottom: 8px;
-    font-size: 0.78rem;
-    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    padding: 7px 10px;
+    margin-bottom: 0;
+    font-size: 13px;
+    border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-tertiary, #202225);
+    background: var(--bg-1);
     color: var(--text-primary);
     outline: none;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, background 0.15s;
     box-sizing: border-box;
 }
 
 .member-filter-input:focus {
-    border-color: var(--accent-primary, #5865f2);
+    border-color: var(--accent-primary);
+    background: var(--bg-2);
 }
 
 /* Highlighted substring in a member's name during filter */

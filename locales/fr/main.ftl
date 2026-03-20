@@ -97,9 +97,18 @@ account-conn-error = Erreur de connexion
 status-picker-title = Définir le statut
 
 # Filtre de la liste des membres
-member-filter-placeholder = Filtrer les membres…
-member-filter-tooltip = Filtrer les membres
-member-filter-no-results = Aucun membre ne correspond au filtre.
+member-filter-placeholder = Rechercher des membres…
+member-filter-tooltip = Rechercher des membres
+member-filter-no-results = Aucun membre ne correspond à cette recherche.
+
+# User profile modal
+user-profile-more-options = Plus d'options
+user-profile-message = Message
+user-profile-call = Appel
+user-profile-video = Vidéo
+user-profile-note = Note
+user-profile-note-placeholder = Cliquer pour ajouter une note
+user-profile-open = Voir le profil
 
 # Notifications
 notifications-title = Notifications
@@ -340,6 +349,14 @@ action-search = Rechercher
 action-copy = Copier
 action-back = Retour
 action-confirm = Confirmer
+action-clear = Effacer
+action-download = Télécharger
+action-open-in-browser = Ouvrir dans le navigateur
+zoom-in = Zoomer
+zoom-out = Dézoomer
+
+media-viewer-unavailable-title = Média indisponible
+media-viewer-unavailable-body = Ce média n'a pas pu être chargé à partir de l'état actuel du chat.
 
 # Erreurs
 error-generic = Quelque chose s'est mal passé. Veuillez réessayer.
@@ -539,7 +556,19 @@ chat-markdown-formatting = Mise en forme Markdown
 
 # Utilisateurs extras
 user-no-members = Aucun membre à afficher
+user-all-offline-hidden = Tous les membres sont hors ligne et masqués
 account-not-signed-in = Non connecté
+
+# Paramètres du chat — liste des membres
+chat-settings-member-list = Liste des membres
+chat-settings-grouping = Regroupement
+chat-settings-grouping-by-status = Par statut
+chat-settings-grouping-none = Aucun regroupement
+chat-settings-sort-order = Ordre de tri
+chat-settings-sort-alphabetical = Alphabétique
+chat-settings-sort-online-first = En ligne d'abord
+chat-settings-sort-join-order = Ordre d'arrivée
+chat-settings-show-offline = Afficher les membres hors ligne
 
 # Libellés de couleur
 color-accent = Accent

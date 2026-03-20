@@ -1,0 +1,339 @@
+/* Poly — User Profile Modal
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+/* ===========================
+ * Full-screen overlay backdrop
+ * =========================== */
+
+.poly-profile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 16px;
+    /* Smooth fade-in */
+    animation: poly-profile-fadein 0.15s ease;
+}
+
+@keyframes poly-profile-fadein {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* ===========================
+ * Modal card
+ * =========================== */
+
+.poly-profile-modal {
+    width: 100%;
+    max-width: 460px;
+    max-height: calc(100vh - 48px);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+    box-shadow: 0 24px 72px rgba(0,0,0,0.56);
+    display: flex;
+    flex-direction: column;
+    animation: poly-profile-slidein 0.18s cubic-bezier(0.25, 0.8, 0.4, 1);
+}
+
+@keyframes poly-profile-slidein {
+    from { transform: translateY(12px) scale(0.97); opacity: 0; }
+    to   { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+
+/* Mobile: stretch full height, remove radius */
+@media (max-width: 520px) {
+    .poly-profile-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+    .poly-profile-modal {
+        max-width: 100%;
+        /* Full-height sheet on mobile */
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+        border: none;
+    }
+}
+
+/* ===========================
+ * Banner
+ * =========================== */
+
+.poly-profile-banner {
+    position: relative;
+    height: 104px;
+    flex-shrink: 0;
+    /* Inline style provides the gradient colour derived from user_color */
+}
+
+/* Top-left close button */
+.poly-profile-close-btn {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+}
+
+/* Top-right "···" options button */
+.poly-profile-more-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 18px;
+    letter-spacing: 2px;
+    padding: 4px 8px;
+}
+
+/* Shared pill button style for both header buttons */
+.poly-profile-header-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.44);
+    color: #ffffff;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.poly-profile-header-btn:hover {
+    background: rgba(0, 0, 0, 0.68);
+}
+
+.poly-profile-more-btn {
+    /* Slightly wider for the ellipsis */
+    width: auto;
+    min-width: 32px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 0 10px;
+    letter-spacing: 0.1em;
+}
+
+/* ===========================
+ * Avatar row (overlaps banner)
+ * =========================== */
+
+.poly-profile-avatar-row {
+    flex-shrink: 0;
+    position: relative;
+    height: 52px; /* half the avatar below banner */
+    background: var(--bg-secondary);
+}
+
+.poly-profile-avatar-wrap {
+    position: absolute;
+    top: -52px; /* lifts avatar halfway into banner */
+    left: 16px;
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    border: 6px solid var(--bg-secondary);
+    background: var(--bg-tertiary);
+    overflow: visible; /* needed for the presence dot */
+}
+
+.poly-profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.poly-profile-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* Presence dot on avatar */
+.poly-profile-presence-dot {
+    position: absolute !important;
+    bottom: 2px;
+    right: 2px;
+    width: 18px !important;
+    height: 18px !important;
+    border: 3px solid var(--bg-secondary) !important;
+}
+
+/* ===========================
+ * Scrollable body
+ * =========================== */
+
+.poly-profile-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ===========================
+ * Identity (name + presence line)
+ * =========================== */
+
+.poly-profile-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.poly-profile-name {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.poly-profile-status-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.poly-profile-status-text {
+    color: var(--text-secondary);
+}
+
+/* ===========================
+ * Action buttons: Message / Call / Video
+ * =========================== */
+
+.poly-profile-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.poly-profile-action-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 6px;
+    border: none;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+
+.poly-profile-action-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.poly-profile-action-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.poly-profile-action-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ===========================
+ * Divider
+ * =========================== */
+
+.poly-profile-divider {
+    height: 1px;
+    background: var(--border-primary, rgba(255,255,255,0.08));
+    margin: 0 -16px; /* bleed to edges */
+}
+
+/* ===========================
+ * Meta (backend badge)
+ * =========================== */
+
+.poly-profile-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ===========================
+ * Note section
+ * =========================== */
+
+.poly-profile-note-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.poly-profile-note-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.poly-profile-note-wrap {
+    position: relative;
+}
+
+.poly-profile-note-input {
+    width: 100%;
+    min-height: 72px;
+    max-height: 140px;
+    padding: 8px 10px 24px;
+    border-radius: 6px;
+    border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+    resize: vertical;
+    box-sizing: border-box;
+    font-family: inherit;
+    transition: border-color 0.12s;
+}
+
+.poly-profile-note-input::placeholder {
+    color: var(--text-muted);
+}
+
+.poly-profile-note-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.poly-profile-note-count {
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    pointer-events: none;
+}

@@ -30,7 +30,7 @@
 //! DECISION(DX-STORAGE-1): Unified trait pattern — same call sites work whether
 //! compiled to native or WASM. No feature flags required at call sites.
 
-use crate::state::LayoutMode;
+use crate::state::{LayoutMode, MemberListGrouping, MemberListSortOrder};
 use serde::{Deserialize, Serialize};
 
 const fn default_server_member_list_open() -> bool {
@@ -189,6 +189,15 @@ pub struct AppSettings {
     /// Whether the integrated group-DM member list is open.
     #[serde(default)]
     pub dm_member_list_open: bool,
+    /// How members are grouped in the member list sidebar.
+    #[serde(default)]
+    pub member_list_grouping: MemberListGrouping,
+    /// How members are sorted within groups (or globally if ungrouped).
+    #[serde(default)]
+    pub member_list_sort_order: MemberListSortOrder,
+    /// Whether offline/invisible members are shown in the sidebar.
+    #[serde(default = "default_true")]
+    pub member_list_show_offline: bool,
     /// External media provider configuration (GIF search, etc.).
     #[serde(default)]
     pub media: MediaProviderSettings,

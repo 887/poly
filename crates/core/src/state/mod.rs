@@ -13,7 +13,70 @@ pub mod chat_data;
 pub use chat_data::{ChatData, DragSource};
 
 use poly_client::BackendType;
+use poly_client::User;
 use serde::{Deserialize, Serialize};
+
+/// How the member list groups its entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MemberListGrouping {
+    /// Online / Idle / Do-Not-Disturb / Offline groups (default behaviour).
+    #[default]
+    ByStatus,
+    /// Flat list — no group headings.
+    NoGrouping,
+}
+
+impl MemberListGrouping {
+    /// Stable slug used in storage and HTML select values.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ByStatus => "by-status",
+            Self::NoGrouping => "none",
+        }
+    }
+
+    /// Parse from a stored slug.
+    pub fn from_slug(value: &str) -> Self {
+        match value {
+            "by-status" => Self::ByStatus,
+            "none" => Self::NoGrouping,
+            _ => Self::default(),
+        }
+    }
+}
+
+/// How members are sorted within each group (or globally when ungrouped).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MemberListSortOrder {
+    /// A-Z by display name (default).
+    #[default]
+    Alphabetical,
+    /// Online-tier members first, then offline; A-Z within each tier.
+    OnlineFirst,
+    /// Preserve the order returned by the backend (join / position order).
+    JoinOrder,
+}
+
+impl MemberListSortOrder {
+    /// Stable slug.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Alphabetical => "alphabetical",
+            Self::OnlineFirst => "online-first",
+            Self::JoinOrder => "join-order",
+        }
+    }
+
+    /// Parse from a stored slug.
+    pub fn from_slug(value: &str) -> Self {
+        match value {
+            "alphabetical" => Self::Alphabetical,
+            "online-first" => Self::OnlineFirst,
+            "join-order" => Self::JoinOrder,
+            _ => Self::default(),
+        }
+    }
+}
 
 /// Global shell layout mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -99,6 +162,13 @@ pub struct NavigationState {
     /// `/dms` can reopen the most recent conversation instead of the empty DM home.
     /// Persisted to storage so it survives restarts.
     pub account_last_dm_routes: std::collections::HashMap<String, String>,
+    /// Currently open user profile modal target.
+    ///
+    /// When `Some(user)`, `UserProfileModal` renders a full-screen overlay showing
+    /// the given user's profile. Set by `open_user_profile()`; cleared on close.
+    /// Not serialised — cleared on every cold start.
+    #[serde(skip)]
+    pub profile_modal_user: Option<User>,
 }
 
 impl Default for NavigationState {
@@ -115,6 +185,7 @@ impl Default for NavigationState {
             mobile_dm_contact_detail_visible: false,
             account_last_routes: std::collections::HashMap::new(),
             account_last_dm_routes: std::collections::HashMap::new(),
+            profile_modal_user: None,
         }
     }
 }
@@ -229,6 +300,12 @@ pub struct AppState {
     pub mirror_menu_layout: bool,
     /// Whether chat message rows are mirrored.
     pub mirror_chat_messages: bool,
+    /// How members are grouped in the member list sidebar.
+    pub member_list_grouping: MemberListGrouping,
+    /// How members are sorted within groups (or globally if ungrouped).
+    pub member_list_sort_order: MemberListSortOrder,
+    /// Whether offline/invisible members are shown in the sidebar.
+    pub member_list_show_offline: bool,
     /// One-shot seed for the next visit to the global search page.
     ///
     /// Used by account-scoped views to open the shared search route with a
@@ -250,6 +327,9 @@ impl Default for AppState {
             layout_mode: LayoutMode::AutoWidth,
             mirror_menu_layout: false,
             mirror_chat_messages: false,
+            member_list_grouping: MemberListGrouping::ByStatus,
+            member_list_sort_order: MemberListSortOrder::Alphabetical,
+            member_list_show_offline: true,
             search_type_seed: None,
             context_menu: None,
         }

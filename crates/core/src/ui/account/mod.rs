@@ -104,6 +104,7 @@ pub use common::SavedItemsView;
 pub use common::UserSidebar;
 pub use common::VoiceBar;
 pub use common::VoiceChannelView;
+pub use common::{UserProfileModal, open_user_profile};
 pub use server::{ServerContextMenu, ServerSettingsPage};
 pub use settings::AccountSettingsPage;
 

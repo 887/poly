@@ -80,6 +80,7 @@ pub(crate) use settings::poly_settings_render_fn;
 mod setup_wizard;
 mod voice_banner;
 
+use account::UserProfileModal;
 pub use account::{AccountSwitcher, FriendsPanel};
 pub use electron_titlebar::ElectronTitleBar;
 pub use main_layout::MainLayout;
@@ -651,6 +652,9 @@ async fn init_storage(
                     app_state.write().layout_mode = restored_layout_mode;
                     app_state.write().mirror_menu_layout = settings.mirror_menu_layout;
                     app_state.write().mirror_chat_messages = settings.mirror_chat_messages;
+                    app_state.write().member_list_grouping = settings.member_list_grouping;
+                    app_state.write().member_list_sort_order = settings.member_list_sort_order;
+                    app_state.write().member_list_show_offline = settings.member_list_show_offline;
                     app_state.write().nav.view = View::DmsFriends;
                     // Restore favorited servers so Bar 1 repopulates immediately
                     // on launch — before the server list is fetched from the network.
@@ -739,6 +743,9 @@ async fn persist_setup_completion(account_id: String) {
         layout_mode: LayoutMode::AutoWidth,
         mirror_menu_layout: false,
         mirror_chat_messages: false,
+        member_list_grouping: crate::state::MemberListGrouping::default(),
+        member_list_sort_order: crate::state::MemberListSortOrder::default(),
+        member_list_show_offline: true,
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");
@@ -832,6 +839,9 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
         } else {
             Router::<Route> { config: move || router_config(app_state, use_context()) }
         }
+        // Global user profile modal — rendered above all other content.
+        // A no-op when AppState.nav.profile_modal_user is None.
+        UserProfileModal {}
     }
 }
 

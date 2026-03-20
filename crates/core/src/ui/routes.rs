@@ -69,6 +69,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ConversationSearchRoute { account_id, .. }
         | Route::NewConversationRoute { account_id, .. }
         | Route::DmChat { account_id, .. }
+        | Route::DmMediaViewerRoute { account_id, .. }
+        | Route::ServerMediaViewerRoute { account_id, .. }
         | Route::ServerHome { account_id, .. }
         | Route::ServerChat { account_id, .. }
         | Route::ServerSettingsRoute { account_id, .. }
@@ -135,6 +137,16 @@ pub enum Route {
 
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id")]
             DmChat { backend: String, instance_id: String, account_id: String, dm_id: String },
+
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id/media/:message_id/:attachment_index")]
+            DmMediaViewerRoute {
+                backend: String,
+                instance_id: String,
+                account_id: String,
+                dm_id: String,
+                message_id: String,
+                attachment_index: usize,
+            },
         #[end_layout]
 
         // ── Account-scoped: Server channels ─────────────────────────
@@ -161,6 +173,17 @@ pub enum Route {
                 account_id: String,
                 server_id: String,
                 channel_id: String,
+            },
+
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/media/:message_id/:attachment_index")]
+            ServerMediaViewerRoute {
+                backend: String,
+                instance_id: String,
+                account_id: String,
+                server_id: String,
+                channel_id: String,
+                message_id: String,
+                attachment_index: usize,
             },
 
             #[route("/:backend/:instance_id/:account_id/channels/:server_id")]
@@ -278,6 +301,41 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav
                 .account_last_dm_routes
                 .insert(account_id.clone(), format!("{route}"));
+        }
+        Route::DmMediaViewerRoute {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+            ..
+        } => {
+            s.nav.view = View::DmsFriends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = Some(dm_id.clone());
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::ServerMediaViewerRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            channel_id,
+            ..
+        } => {
+            s.nav.view = View::Server;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = Some(channel_id.clone());
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
         }
         Route::NewConversationRoute {
             backend,
@@ -735,6 +793,125 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
 
 #[rustfmt::skip]
 #[component]
+fn DmMediaViewerRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    dm_id: String,
+    message_id: String,
+    attachment_index: usize,
+) -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let overlay_channel_id = dm_id.clone();
+    let overlay_message_id = message_id.clone();
+    let dm_id_for_effect = dm_id.clone();
+    let account_id_for_effect = account_id.clone();
+
+    use_effect(move || {
+        restore_dm_chat(
+            dm_id_for_effect.clone(),
+            account_id_for_effect.clone(),
+            chat_data,
+            client_manager,
+        );
+    });
+
+    rsx! {
+        ChatView {}
+        super::account::common::MessageMediaViewerOverlay {
+            channel_id: overlay_channel_id,
+            message_id: overlay_message_id,
+            attachment_index,
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn ServerMediaViewerRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+    message_id: String,
+    attachment_index: usize,
+) -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let app_state: Signal<AppState> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let nav = navigator();
+    let overlay_channel_id = channel_id.clone();
+    let overlay_message_id = message_id.clone();
+    let backend_for_effect = backend.clone();
+    let instance_for_effect = instance_id.clone();
+    let account_for_effect = account_id.clone();
+    let server_for_effect = server_id.clone();
+    let channel_for_effect = channel_id.clone();
+    let message_for_effect = message_id.clone();
+
+    use_effect(move || {
+        let backend_slug = backend_for_effect.clone();
+        let instance = instance_for_effect.clone();
+        let account = account_for_effect.clone();
+        let route_server_id = server_for_effect.clone();
+        let cid = channel_for_effect.clone();
+        let sid = server_for_effect.clone();
+        let route_message_id = message_for_effect.clone();
+
+        let snapshot = chat_data.read();
+        let already_loaded = snapshot
+            .current_server
+            .as_ref()
+            .is_some_and(|server| server.id == sid)
+            && snapshot
+                .current_channel
+                .as_ref()
+                .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
+            && snapshot.channels.iter().any(|ch| ch.id == cid);
+        if already_loaded {
+            return;
+        }
+
+        spawn(async move {
+            let resolved_channel_id = super::favorites_sidebar::restore_server_channel(
+                sid,
+                cid.clone(),
+                app_state,
+                client_manager,
+                chat_data,
+            )
+            .await;
+
+            if let Some(resolved_channel_id) = resolved_channel_id
+                && resolved_channel_id != cid
+            {
+                nav.replace(Route::ServerMediaViewerRoute {
+                    backend: backend_slug,
+                    instance_id: instance,
+                    account_id: account,
+                    server_id: route_server_id,
+                    channel_id: resolved_channel_id,
+                    message_id: route_message_id,
+                    attachment_index,
+                });
+            }
+        });
+    });
+
+    rsx! {
+        ChatView {}
+        super::account::common::MessageMediaViewerOverlay {
+            channel_id: overlay_channel_id,
+            message_id: overlay_message_id,
+            attachment_index,
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
 fn NewConversationRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
         NewConversationView {}
@@ -1083,11 +1260,22 @@ fn ClientSignup(client: String) -> Element {
     }
 }
 
-/// Catch-all 404 — redirected by on_update before being seen.
+/// Catch-all 404 — on_update redirects before render, but as a belt-and-suspenders
+/// fallback this component also redirects to Root on mount.
 #[rustfmt::skip]
 #[component]
 fn PageNotFound(segments: Vec<String>) -> Element {
-    rsx! {}
+    // `segments` is provided by the router for the unmatched path but we only
+    // need it for the route match; discard it so the unused-variable lint stays clean.
+    drop(segments);
+    let nav = navigator();
+    use_effect(move || {
+        // Belt-and-suspenders: redirect in case on_update hasn't fired yet
+        // (e.g. stale browser history URLs from old route formats).
+        nav.replace(Route::Root);
+    });
+    // Brief loading while redirect fires — never visible in practice.
+    rsx! { div { class: "storage-loading" } }
 }
 
 /// Create Server — `/:backend/:instance_id/:account_id/create-server`.
