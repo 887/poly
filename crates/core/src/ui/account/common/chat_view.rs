@@ -888,6 +888,8 @@ struct ChatViewSignals {
     threads_filter_open: Signal<bool>,
     /// Current filter query text for the Threads tab
     threads_filter_query: Signal<String>,
+    /// Resize-driven rerender tick so desktop/mobile header branches flip immediately.
+    mobile_layout_resize_tick: Signal<u64>,
 }
 
 fn use_chat_view_signals() -> ChatViewSignals {
@@ -922,10 +924,12 @@ fn use_chat_view_signals() -> ChatViewSignals {
         pinned_filter_query: use_signal(String::new),
         threads_filter_open: use_signal(|| false),
         threads_filter_query: use_signal(String::new),
+        mobile_layout_resize_tick: use_signal(|| 0_u64),
     }
 }
 
 fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
+    let _mobile_layout_resize_tick = *signals.mobile_layout_resize_tick.read();
     let app_state = signals.app_state;
     let client_manager = signals.client_manager;
     let chat_data = signals.chat_data;
@@ -1100,11 +1104,36 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     use_pinned_messages_effect(signals);
     use_history_state_effect(signals);
     use_member_list_preferences_effect(signals.app_state);
+    use_mobile_layout_resize_rerender_effect(signals.mobile_layout_resize_tick);
     use_mobile_side_column_effect(signals, ctx);
     use_command_preload_effect(signals, &ctx.channel_id);
     use_unread_marker_visibility_effect(signals);
     use_composer_focus_effect(signals);
 }
+
+#[cfg(target_arch = "wasm32")]
+fn use_mobile_layout_resize_rerender_effect(mut mobile_layout_resize_tick: Signal<u64>) {
+    use_effect(move || {
+        use wasm_bindgen::JsCast;
+        use wasm_bindgen::closure::Closure;
+
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+
+        let closure = Closure::wrap(Box::new(move |_evt: web_sys::Event| {
+            if let Ok(mut tick) = mobile_layout_resize_tick.try_write() {
+                *tick = tick.wrapping_add(1);
+            }
+        }) as Box<dyn FnMut(web_sys::Event)>);
+
+        let _ = window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref());
+        closure.forget();
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn use_mobile_layout_resize_rerender_effect(_mobile_layout_resize_tick: Signal<u64>) {}
 
 #[cfg(target_arch = "wasm32")]
 fn runtime_mobile_ui_active() -> bool {

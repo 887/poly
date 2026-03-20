@@ -213,15 +213,18 @@ if (!window.__polyMobileDrawerInit) {
             // before stripping CSS classes, otherwise the desktop layout can inherit
             // an open mobile contact/member wing state.
             if (wasMobileActive) {
-                const explicitRightClose = document.querySelector('.poly-mobile-right-wing-close-state');
-                if (explicitRightClose instanceof HTMLElement) {
-                    explicitRightClose.click();
-                } else {
-                    const rightToggle = document.querySelector('.chat-members-toggle-btn');
-                    if (rightToggle instanceof HTMLElement) {
-                        const isActive = rightToggle.classList.contains('soft-active') || rightToggle.classList.contains('active');
-                        if (isActive) {
-                            rightToggle.click();
+                const hasChatView = Boolean(document.querySelector('.chat-view'));
+                if (hasChatView) {
+                    const explicitRightClose = document.querySelector('.poly-mobile-right-wing-close-state');
+                    if (explicitRightClose instanceof HTMLElement) {
+                        explicitRightClose.click();
+                    } else {
+                        const rightToggle = document.querySelector('.chat-members-toggle-btn');
+                        if (rightToggle instanceof HTMLElement) {
+                            const isActive = rightToggle.classList.contains('soft-active') || rightToggle.classList.contains('active');
+                            if (isActive) {
+                                rightToggle.click();
+                            }
                         }
                     }
                 }

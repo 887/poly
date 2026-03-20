@@ -133,6 +133,7 @@
 }
 
 .special-page-sidebar .account-bar {
+    position: relative;
     z-index: 41;
 }
 
