@@ -1,7 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "anthropic/claude-sonnet-4-5",
-  "small_model": "anthropic/claude-haiku-4-5",
+  "disabled_providers": [
+    "grok",
+    "xai"
+  ],
+  "model": "github-copilot/gpt-5.4",
+  "small_model": "github-copilot/gpt-5-mini",
   "mcp": {
     "poly-memory": {
       "type": "local",
@@ -166,6 +170,10 @@
     "github-copilot": {
       "models": {
         "gpt-5.4": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5-mini": {
           "supports_vision": true,
           "vision": true
         },
