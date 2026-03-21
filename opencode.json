@@ -1,0 +1,267 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5",
+  "small_model": "anthropic/claude-haiku-4-5",
+  "mcp": {
+    "poly-memory": {
+      "type": "local",
+      "command": [
+        "cargo",
+        "run",
+        "--bin",
+        "poly-memory-mcp",
+        "--manifest-path",
+        "/home/laragana/workspcacemsg/Cargo.toml",
+        "--",
+        "mcp"
+      ],
+      "enabled": true
+    },
+    "poly-desktop": {
+      "type": "local",
+      "command": [
+        "cargo",
+        "run",
+        "--bin",
+        "poly-desktop-devtools-mcp",
+        "--manifest-path",
+        "/home/laragana/workspcacemsg/Cargo.toml"
+      ],
+      "enabled": true
+    },
+    "poly-web": {
+      "type": "local",
+      "command": [
+        "cargo",
+        "run",
+        "--bin",
+        "poly-web-devtools-mcp",
+        "--manifest-path",
+        "/home/laragana/workspcacemsg/Cargo.toml"
+      ],
+      "enabled": true
+    },
+    "poly-electron": {
+      "type": "local",
+      "command": [
+        "cargo",
+        "run",
+        "--bin",
+        "poly-electron-devtools-mcp",
+        "--manifest-path",
+        "/home/laragana/workspcacemsg/Cargo.toml"
+      ],
+      "enabled": true
+    }
+  },
+  "provider": {
+    "anthropic": {
+      "models": {
+        "claude-opus-4-6": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-opus-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-sonnet-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-haiku-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-3-5-sonnet-4-20250514": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-3-5-sonnet-4-20250520": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-3-5-haiku-4-20250514": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-3-5-haiku-4-20250620": {
+          "supports_vision": true,
+          "vision": true
+        }
+      }
+    },
+    "openai": {
+      "models": {
+        "gpt-5.4": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.4-mini": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.2": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.2-mini": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.1": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.3-codex": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.2-codex": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-4o": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-4o-mini": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-4-turbo": {
+          "supports_vision": true,
+          "vision": true
+        }
+      }
+    },
+    "google": {
+      "models": {
+        "gemini-2.0-flash-exp": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gemini-1.5-pro": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gemini-1.5-flash": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gemini-pro-vision": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gemini-3-pro": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gemini-3-flash": {
+          "supports_vision": true,
+          "vision": true
+        }
+      }
+    },
+    "github-copilot": {
+      "models": {
+        "gpt-5.4": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.4-mini": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.2": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.3-codex": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gpt-5.2-codex": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-opus-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-opus-4-6": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-sonnet-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-sonnet-4-6": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "claude-haiku-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "gemini-3-pro": {
+          "supports_vision": true,
+          "vision": true
+        }
+      }
+    },
+    "openrouter": {
+      "models": {
+        "anthropic/claude-opus-4-6": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "anthropic/claude-opus-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "anthropic/claude-sonnet-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "anthropic/claude-3.5-sonnet": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "openai/gpt-5.4": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "openai/gpt-5.2": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "openai/gpt-4o": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "google/gemini-3-pro": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "google/gemini-pro-1.5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "github/gpt-5.4": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "github/claude-opus-4-5": {
+          "supports_vision": true,
+          "vision": true
+        },
+        "mistral/mistral-large-latest": {
+          "supports_vision": false,
+          "vision": false
+        }
+      }
+    }
+  }
+}
