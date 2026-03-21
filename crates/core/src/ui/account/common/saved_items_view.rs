@@ -190,14 +190,7 @@ pub fn SavedItemsView() -> Element {
                     h2 { class: "special-page-sidebar-title", "{title}" }
                     p { class: "special-page-sidebar-description", "{description}" }
                 }
-                div { class: "special-page-sidebar-section",
-                    input {
-                        class: "friends-search special-page-sidebar-search",
-                        placeholder: "{t(\"saved-items-filter-placeholder\")}",
-                        value: "{source_search.read()}",
-                        oninput: move |evt| source_search.set(evt.value().clone()),
-                    }
-                }
+                // sidebar header only; no filter input here (mobile-friendly)
                 div { class: "special-page-sidebar-nav saved-sources-list",
                     if let Some(items) = &loaded_items {
                         SidebarSourceButton {
