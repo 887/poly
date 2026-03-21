@@ -238,6 +238,37 @@
     position: relative;
 }
 
+/* Wrapper for avatar + presence dot — status dot is a sibling, not overflow-clipped */
+.user-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+}
+
+.user-avatar-wrap .presence-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-secondary);
+    pointer-events: none;
+}
+
+.user-avatar-wrap .presence-dot.online {
+    background-color: #22c55e;
+}
+
+.user-avatar-wrap .presence-dot.idle {
+    background-color: #f97316;
+}
+
+.user-avatar-wrap .presence-dot.dnd {
+    background-color: #ef4444;
+}
+
 .user-name {
     font-size: 14px;
     color: var(--text-secondary);

@@ -25,6 +25,7 @@
      assets/styling/account-forms.css
      assets/styling/mobile-shell.css
      assets/styling/user-profile-modal.css
+     assets/styling/direct-call-overlay.css
      assets/styling/media-viewer.css
    ======================================================================= */
 
@@ -456,6 +457,70 @@ body {
 
 .voice-ctrl-btn.disconnect:hover {
     background: rgba(237, 66, 69, 0.8);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * Mobile: voice banner above all fixed sidebars
+ * ═══════════════════════════════════════════════════════════════════════
+ * IMPORTANT: do NOT use position:fixed here. That detaches the banner
+ * from the flex flow, making main-layout-body start at y=0 and covering
+ * the hamburger button and other header elements with the bar.
+ *
+ * Correct approach:
+ *  1. Keep banner in normal flex flow (position:relative) so content
+ *     naturally sits at y=40 — the hamburger/header stay below the bar.
+ *  2. z-index:500 paints the banner above the fixed sidebars (z-index
+ *     410–420) so it is not obscured by the rails in the x=0..144 zone.
+ *  3. :has(.voice-banner) pushes all position:fixed mobile sidebars
+ *     down 40px so their drag-handles / backdrop areas start below the
+ *     banner instead of at top:0 — no overlap with the bar's buttons.
+ *  4. Strip the hard min-width constraints on banner sections so the
+ *     flex layout can fit everything within the narrower mobile viewport
+ *     without the controls overflowing off the right edge of the screen.
+ */
+.poly-app.poly-mobile-runtime-active .voice-banner {
+    position: relative;
+    z-index: 500;
+    padding: 0 6px;
+    overflow: hidden;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-left {
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-center {
+    padding: 4px 6px;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-center .voice-banner-server {
+    display: none;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-controls {
+    min-width: 0;
+    flex-shrink: 0;
+    gap: 4px;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-ctrl-btn {
+    width: 28px;
+    height: 28px;
+}
+
+/* Shift every fixed sidebar/panel down by the banner's height */
+.poly-app.poly-mobile-runtime-active:has(.voice-banner) .server-sidebar,
+.poly-app.poly-mobile-runtime-active:has(.voice-banner) .account-server-bar {
+    top: 40px;
+}
+
+.poly-app.poly-mobile-runtime-active:has(.voice-banner) .poly-split-sidebar {
+    top: 40px;
 }
 
 /* ===========================
@@ -1719,6 +1784,36 @@ body {
     gap: 10px;
 }
 
+.dm-chat-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+}
+
+.dm-chat-avatar-wrap .presence-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-primary);
+    pointer-events: none;
+}
+
+.dm-chat-avatar-wrap .presence-dot.online {
+    background-color: #22c55e;
+}
+
+.dm-chat-avatar-wrap .presence-dot.idle {
+    background-color: #f97316;
+}
+
+.dm-chat-avatar-wrap .presence-dot.dnd {
+    background-color: #ef4444;
+}
+
 .dm-chat-avatar {
     width: 32px;
     height: 32px;
@@ -1731,6 +1826,7 @@ body {
     font-size: 14px;
     flex-shrink: 0;
     object-fit: cover;
+    overflow: hidden;
 }
 
 .group-chat-icon {
@@ -1816,6 +1912,68 @@ body {
 .dm-member-avatar-wrap {
     position: relative;
     flex-shrink: 0;
+}
+
+/* Presence indicator dot in group member list */
+.dm-member-avatar-wrap .presence-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-secondary);
+}
+
+.dm-member-avatar-wrap .presence-dot.online {
+    background-color: #22c55e;
+}
+
+.dm-member-avatar-wrap .presence-dot.idle {
+    background-color: #f97316;
+}
+
+.dm-member-avatar-wrap .presence-dot.dnd {
+    background-color: #ef4444;
+}
+
+.dm-member-avatar-wrap .presence-dot.offline {
+    display: none;
+}
+
+/* DM list avatar wrapper — for individual DMs in the left sidebar */
+.dm-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.dm-avatar-wrap .presence-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: 1.5px solid var(--bg-secondary);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+/* Ensure dm-avatar-wrap is overflow-visible so dot isn't clipped */
+.dm-avatar-wrap {
+    overflow: visible;
+}
+
+.dm-avatar-wrap .presence-dot.online {
+    background-color: #22c55e;
+}
+
+.dm-avatar-wrap .presence-dot.idle {
+    background-color: #f97316;
+}
+
+.dm-avatar-wrap .presence-dot.dnd {
+    background-color: #ef4444;
 }
 
 .dm-member-avatar {
@@ -2061,6 +2219,7 @@ body {
     color: white;
     flex-shrink: 0;
     overflow: hidden;
+    pointer-events: none;
 }
 
 .dm-avatar-img {
@@ -2313,6 +2472,37 @@ body {
     font-weight: 600;
     color: white;
     position: relative;
+}
+
+/* Wrapper for avatar + presence dot — status dot is a sibling, not overflow-clipped */
+.user-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+}
+
+.user-avatar-wrap .presence-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-secondary);
+    pointer-events: none;
+}
+
+.user-avatar-wrap .presence-dot.online {
+    background-color: #22c55e;
+}
+
+.user-avatar-wrap .presence-dot.idle {
+    background-color: #f97316;
+}
+
+.user-avatar-wrap .presence-dot.dnd {
+    background-color: #ef4444;
 }
 
 .user-name {
@@ -8066,6 +8256,35 @@ select {
     color: #fff;
 }
 
+/* Wrapper for friend card avatar + presence dot */
+.friend-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.friend-avatar-wrap .presence-dot {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 3px solid var(--bg-secondary);
+    pointer-events: none;
+}
+
+.friend-avatar-wrap .presence-dot.online {
+    background-color: #22c55e;
+}
+
+.friend-avatar-wrap .presence-dot.idle {
+    background-color: #f97316;
+}
+
+.friend-avatar-wrap .presence-dot.dnd {
+    background-color: #ef4444;
+}
+
 .friend-avatar-image {
     object-fit: cover;
     overflow: hidden;
@@ -8923,11 +9142,31 @@ select {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+}
+
+/* Subtle left-edge gradient overlay for visual depth — fades from left to transparent */
+:not(.poly-mobile-runtime-active) .chat-side-column::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 24px;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgb(0 0 0 / 16%) 0%, rgb(0 0 0 / 0%) 100%);
 }
 
 .poly-app.poly-menu-mirrored .chat-side-column {
     border-right: 1px solid var(--border-primary);
     border-left: none;
+}
+
+/* Mirrored gradient overlay — fades from right to transparent when menu is flipped */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .chat-side-column::before {
+    left: auto;
+    right: 0;
+    background: linear-gradient(270deg, rgb(0 0 0 / 16%) 0%, rgb(0 0 0 / 0%) 100%);
 }
 
 .chat-header-right {
@@ -10461,6 +10700,7 @@ select {
     position: relative;
 }
 
+
 .poly-app.poly-mobile-runtime-active .special-page-header,
 .poly-app.poly-mobile-runtime-active .search-page-header {
     padding-left: 56px;
@@ -10884,8 +11124,13 @@ select {
 }
 
 @keyframes poly-profile-fadein {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 /* ===========================
@@ -10899,16 +11144,23 @@ select {
     border-radius: 12px;
     overflow: hidden;
     background: var(--bg-secondary);
-    border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
-    box-shadow: 0 24px 72px rgba(0,0,0,0.56);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    box-shadow: 0 24px 72px rgba(0, 0, 0, 0.56);
     display: flex;
     flex-direction: column;
     animation: poly-profile-slidein 0.18s cubic-bezier(0.25, 0.8, 0.4, 1);
 }
 
 @keyframes poly-profile-slidein {
-    from { transform: translateY(12px) scale(0.97); opacity: 0; }
-    to   { transform: translateY(0)    scale(1);    opacity: 1; }
+    from {
+        transform: translateY(12px) scale(0.97);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
 }
 
 /* Mobile: stretch full height, remove radius */
@@ -10917,6 +11169,7 @@ select {
         padding: 0;
         align-items: flex-end;
     }
+
     .poly-profile-modal {
         max-width: 100%;
         /* Full-height sheet on mobile */
@@ -10994,20 +11247,23 @@ select {
 .poly-profile-avatar-row {
     flex-shrink: 0;
     position: relative;
-    height: 52px; /* half the avatar below banner */
+    height: 52px;
+    /* half the avatar below banner */
     background: var(--bg-secondary);
 }
 
 .poly-profile-avatar-wrap {
     position: absolute;
-    top: -52px; /* lifts avatar halfway into banner */
+    top: -52px;
+    /* lifts avatar halfway into banner */
     left: 16px;
     width: 88px;
     height: 88px;
     border-radius: 50%;
     border: 6px solid var(--bg-secondary);
     background: var(--bg-tertiary);
-    overflow: visible; /* needed for the presence dot */
+    overflow: visible;
+    /* needed for the presence dot */
 }
 
 .poly-profile-avatar-img {
@@ -11131,8 +11387,9 @@ select {
 
 .poly-profile-divider {
     height: 1px;
-    background: var(--border-primary, rgba(255,255,255,0.08));
-    margin: 0 -16px; /* bleed to edges */
+    background: var(--border-primary, rgba(255, 255, 255, 0.08));
+    margin: 0 -16px;
+    /* bleed to edges */
 }
 
 /* ===========================
@@ -11174,7 +11431,7 @@ select {
     max-height: 140px;
     padding: 8px 10px 24px;
     border-radius: 6px;
-    border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
     background: var(--bg-input);
     color: var(--text-primary);
     font-size: 14px;
@@ -11200,6 +11457,174 @@ select {
     font-size: 11px;
     color: var(--text-muted);
     pointer-events: none;
+}
+/* Poly — Pending Direct Call Overlay
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+.direct-call-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgb(4 6 14 / 74%);
+    backdrop-filter: blur(10px);
+}
+
+.direct-call-modal {
+    position: relative;
+    width: min(100%, 420px);
+    border-radius: 18px;
+    border: 1px solid rgb(255 255 255 / 8%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 92%, #203864) 0%, var(--bg-secondary) 100%);
+    box-shadow: 0 28px 80px rgb(0 0 0 / 48%);
+    overflow: hidden;
+}
+
+.direct-call-modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 28px 22px 24px;
+}
+
+.direct-call-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 32%);
+    color: #fff;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.direct-call-close-btn:hover {
+    background: rgb(0 0 0 / 48%);
+}
+
+.direct-call-avatar-wrap {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    padding: 5px;
+    background: linear-gradient(135deg, #6ea8ff 0%, #5b6dff 100%);
+}
+
+.direct-call-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--bg-tertiary);
+}
+
+.direct-call-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.direct-call-title {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.direct-call-subtitle {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #9ab8ff;
+}
+
+.direct-call-status {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.direct-call-pulse-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 2px;
+}
+
+.direct-call-pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #7aa2ff;
+    animation: direct-call-pulse 1.2s infinite ease-in-out;
+}
+
+.direct-call-pulse-dot-delay-1 {
+    animation-delay: 0.16s;
+}
+
+.direct-call-pulse-dot-delay-2 {
+    animation-delay: 0.32s;
+}
+
+@keyframes direct-call-pulse {
+    0%, 80%, 100% {
+        opacity: 0.35;
+        transform: scale(0.8);
+    }
+
+    40% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.direct-call-cancel-btn {
+    margin-top: 10px;
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f05b68 0%, #d63b52 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 12px 16px;
+    cursor: pointer;
+}
+
+.direct-call-cancel-btn:hover {
+    filter: brightness(1.04);
+}
+
+@media (max-width: 520px) {
+    .direct-call-overlay {
+        padding: 0;
+        align-items: stretch;
+        justify-content: stretch;
+        background: rgb(7 10 18 / 84%);
+    }
+
+    .direct-call-modal {
+        width: 100%;
+        border-radius: 0;
+        border: none;
+        min-height: 100dvh;
+    }
+
+    .direct-call-modal-body {
+        min-height: 100dvh;
+        justify-content: center;
+        padding: 32px 24px;
+    }
 }
 
 /* Route-backed fullscreen media viewer */
@@ -11322,4 +11747,3 @@ select {
     background: var(--bg-secondary);
     color: var(--text-primary);
 }
-

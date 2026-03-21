@@ -191,6 +191,12 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                         let color = user_color(&friend.id);
                         let avatar_url = friend.avatar_url.clone();
                         let first_char = display_name.chars().next().map(|ch| ch.to_string()).unwrap_or_default();
+                        let presence_dot_class: &'static str = match friend.presence {
+                            poly_client::PresenceStatus::Online => "presence-dot online",
+                            poly_client::PresenceStatus::Idle => "presence-dot idle",
+                            poly_client::PresenceStatus::DoNotDisturb => "presence-dot dnd",
+                            poly_client::PresenceStatus::Offline | poly_client::PresenceStatus::Invisible => "",
+                        };
                         rsx! {
                             button {
                                 class: "friend-card",
@@ -207,10 +213,15 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                     );
                                 },
                                 div { class: "friend-info",
-                                    if let Some(ref url) = avatar_url {
-                                        img { class: "friend-avatar friend-avatar-image", src: "{url}", alt: "{display_name}" }
-                                    } else {
-                                        div { class: "friend-avatar", style: "background-color: {color};", "{first_char}" }
+                                    div { class: "friend-avatar-wrap",
+                                        if let Some(ref url) = avatar_url {
+                                            img { class: "friend-avatar friend-avatar-image", src: "{url}", alt: "{display_name}" }
+                                        } else {
+                                            div { class: "friend-avatar", style: "background-color: {color};", "{first_char}" }
+                                        }
+                                        if !presence_dot_class.is_empty() {
+                                            span { class: "{presence_dot_class}" }
+                                        }
                                     }
                                     div { class: "friend-name", "{display_name}" }
                                     div { class: "friend-account", "{backend.display_name()}" }

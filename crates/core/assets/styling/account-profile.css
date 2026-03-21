@@ -144,11 +144,31 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+}
+
+/* Subtle left-edge gradient overlay for visual depth — fades from left to transparent */
+:not(.poly-mobile-runtime-active) .chat-side-column::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 24px;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgb(0 0 0 / 16%) 0%, rgb(0 0 0 / 0%) 100%);
 }
 
 .poly-app.poly-menu-mirrored .chat-side-column {
     border-right: 1px solid var(--border-primary);
     border-left: none;
+}
+
+/* Mirrored gradient overlay — fades from right to transparent when menu is flipped */
+.poly-app.poly-menu-mirrored:not(.poly-mobile-runtime-active) .chat-side-column::before {
+    left: auto;
+    right: 0;
+    background: linear-gradient(270deg, rgb(0 0 0 / 16%) 0%, rgb(0 0 0 / 0%) 100%);
 }
 
 .chat-header-right {

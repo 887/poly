@@ -55,6 +55,25 @@ and writes crash state to `window.__polyCrashState` while rendering a fixed over
 3. When debugging a web/electron freeze, inspect `window.__polyCrashState` before guessing.
 4. Keep the crash overlay implementation dependency-light and browser-only — no native/Desktop-Wry code path should depend on it.
 
+## Temporary Direct Calls (2026-03-20)
+
+Direct 1:1 / ad-hoc calls are now modelled in shared core as an extension of the
+existing global voice state — **not** as a separate parallel system.
+
+Rules:
+
+1. Reuse `ChatData.voice_connection` for the active call.
+2. Temporary calls are distinguished via `VoiceConnectionKind::TemporaryCall`.
+3. Held calls live in `ChatData.held_voice_connections`.
+4. Disconnecting the active call should resume the most recent held call.
+5. Temporary direct/group calls are currently a **UI-local pseudo-backend** in core.
+  Do not pretend there is real backend signaling unless the client trait grows the
+  necessary APIs.
+6. DM/profile call buttons should route through shared helpers in
+  `ui/account/common/direct_call.rs` rather than ad-hoc per-component logic.
+7. If you add more temporary-call features (invite flow, held-call list, add-people UI),
+  extend the same shared model rather than creating a second call state store.
+
 ## Module Structure
 
 ```

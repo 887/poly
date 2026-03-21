@@ -169,6 +169,22 @@ pub struct NavigationState {
     /// Not serialised — cleared on every cold start.
     #[serde(skip)]
     pub profile_modal_user: Option<User>,
+    /// Pending direct call intent awaiting route-backed confirmation/connection.
+    ///
+    /// Used by the temporary outgoing-call route: the route holds the lightweight
+    /// "calling…" UI, and once it dismisses back to the DM route, the DM route
+    /// consumes this request and starts the actual temporary call connection.
+    #[serde(skip)]
+    pub pending_direct_call: Option<PendingDirectCallRequest>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingDirectCallRequest {
+    pub account_id: String,
+    pub dm_id: String,
+    pub target_user: User,
+    pub start_video: bool,
+    pub allow_add_to_active_temporary: bool,
 }
 
 impl Default for NavigationState {
@@ -186,6 +202,7 @@ impl Default for NavigationState {
             account_last_routes: std::collections::HashMap::new(),
             account_last_dm_routes: std::collections::HashMap::new(),
             profile_modal_user: None,
+            pending_direct_call: None,
         }
     }
 }

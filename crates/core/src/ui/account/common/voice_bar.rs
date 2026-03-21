@@ -29,7 +29,9 @@
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::user_color;
+use super::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use dioxus::prelude::*;
+use poly_client::VoiceConnectionKind;
 
 // ── JS snippets stored as constants to keep fn bodies under 150 lines ──────
 
@@ -114,6 +116,12 @@ pub fn VoiceBar() -> Element {
             div { class: "voice-preview-panel" }
         };
     };
+
+    if conn.kind == VoiceConnectionKind::TemporaryCall {
+        return rsx! {
+            div { class: "voice-preview-panel" }
+        };
+    }
 
     let participants = chat_data
         .read()
@@ -228,9 +236,18 @@ fn VoiceDockControls(
     let is_video_on = conn.is_video_on;
     let is_streaming = conn.is_streaming;
     let noise_cancel = chat_data.read().voice_media_settings.noise_cancel_enabled;
+    let held_count = chat_data.read().held_voice_connections.len();
 
     rsx! {
         div { class: "voice-dock-controls",
+            if held_count > 0 {
+                button {
+                    class: "voice-bar-quick-btn",
+                    title: t("voice-swap-held-call"),
+                    onclick: move |_| swap_to_first_held_call(chat_data),
+                    "🔁"
+                }
+            }
             // Camera toggle
             button {
                 class: if is_video_on { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
@@ -345,7 +362,7 @@ fn VoiceDockControls(
                 title: "{t(\"voice-disconnect\")}",
                 onclick: move |_| {
                     let _ = document::eval(JS_STOP_ALL_STREAMS);
-                    chat_data.write().voice_connection = None;
+                    disconnect_active_call(chat_data);
                 },
                 "📵"
             }

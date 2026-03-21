@@ -37,6 +37,7 @@ const PARTIALS: &[&str] = &[
     "account-forms.css",      // Add account, create server / channel forms
     "mobile-shell.css",       // Force-mobile / narrow-viewport shell overrides
     "user-profile-modal.css", // Unified user profile modal (global overlay)
+    "direct-call-overlay.css", // Route-backed pending direct-call overlay
     "media-viewer.css",       // Route-backed fullscreen message media viewer
 ];
 

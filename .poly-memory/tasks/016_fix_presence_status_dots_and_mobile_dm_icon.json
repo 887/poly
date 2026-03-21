@@ -1,0 +1,39 @@
+{
+  "id": 16,
+  "slug": "fix-presence-status-dots-and-mobile-dm-icon",
+  "title": "Fix presence status dots and mobile DM @ icon",
+  "description": "Three bugs reported:\n1. Status dots in server/DM member list are half-clipped (overflow hidden on parent)\n2. DM sidebar list (channel_list.rs) has NO presence dots on avatars at all\n3. Friends grid panel has NO presence dots on avatars\n4. Mobile DM header still shows avatar instead of @ symbol (previous fix incomplete)",
+  "status": "todo",
+  "created_at": "2026-03-20T19:41:44.142757937Z",
+  "updated_at": "2026-03-20T19:42:57.984457545Z",
+  "completed_at": null,
+  "memory_count": 0,
+  "finding_count": 0,
+  "checklist": [
+    {
+      "id": 1,
+      "text": "Investigate: status dots are clipped in member list (overflow:hidden on parent)",
+      "done": false
+    },
+    {
+      "id": 2,
+      "text": "Fix: overflow:visible on user-avatar parent containers (member list, DM contact panel)",
+      "done": false
+    },
+    {
+      "id": 3,
+      "text": "Fix: Add status dots to DM list in channel_list.rs (left sidebar)",
+      "done": false
+    },
+    {
+      "id": 4,
+      "text": "Fix: Add status dots to Friends grid in channel_list.rs",
+      "done": false
+    },
+    {
+      "id": 5,
+      "text": "Verify: mobile DM @ icon fix is working correctly",
+      "done": false
+    }
+  ]
+}

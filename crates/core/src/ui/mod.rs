@@ -80,7 +80,6 @@ pub(crate) use settings::poly_settings_render_fn;
 mod setup_wizard;
 mod voice_banner;
 
-use account::UserProfileModal;
 pub use account::{AccountSwitcher, FriendsPanel};
 pub use electron_titlebar::ElectronTitleBar;
 pub use main_layout::MainLayout;
@@ -839,9 +838,6 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
         } else {
             Router::<Route> { config: move || router_config(app_state, use_context()) }
         }
-        // Global user profile modal — rendered above all other content.
-        // A no-op when AppState.nav.profile_modal_user is None.
-        UserProfileModal {}
     }
 }
 

@@ -95,6 +95,7 @@ pub use common::AccountSwitcher;
 pub use common::ChannelList;
 pub use common::ChatView;
 pub use common::ConversationSearchView;
+pub use common::OutgoingDirectCallOverlay;
 pub use common::DmUserSidebar;
 pub use common::EmojiPicker;
 pub use common::FriendsPanel;

@@ -18,6 +18,7 @@ use super::chat_history::{
     request_preserve_scroll_position, request_preserve_scroll_position_from_bottom,
     unread_marker_message_id,
 };
+use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
 use super::user_profile_modal::open_user_profile;
@@ -33,7 +34,7 @@ use dioxus::prelude::*;
 use poly_client::{
     Attachment, BackendType, Channel, ChatCommand, CommandScope, DmChannel, Message,
     MessageContent, MessageQuery, MessageReplyPreview, MessageSearchHit, MessageSearchQuery,
-    PresenceStatus,
+    PresenceStatus, User,
 };
 use std::sync::{
     Arc,
@@ -1025,7 +1026,9 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         unread_banner_date,
         unread_banner_channel_id: channel_id.clone(),
         self_user_id: current_self_user_id(app_state, client_manager),
+        dm_user: current_dm_user(chat_data, &channel_id, is_dm_channel),
         dm_user_avatar: current_dm_user_avatar(chat_data, &channel_id, is_dm_channel),
+        dm_user_presence: current_dm_user_presence(chat_data, &channel_id, is_dm_channel),
         search_hit_channel_id: channel_id.clone(),
         pinned_hit_channel_id: channel_id,
         search_hit_server: current_server.clone(),
@@ -1116,6 +1119,43 @@ fn current_dm_user_avatar(
         .iter()
         .find(|dm| dm.id == cid)
         .and_then(|dm| dm.user.avatar_url.clone())
+}
+
+fn current_dm_user(
+    chat_data: Signal<ChatData>,
+    channel_id: &Option<String>,
+    is_dm_channel: bool,
+) -> Option<User> {
+    if !is_dm_channel {
+        return None;
+    }
+
+    let cid = channel_id.clone().unwrap_or_default();
+    chat_data
+        .read()
+        .dm_channels
+        .iter()
+        .find(|dm| dm.id == cid)
+        .map(|dm| dm.user.clone())
+}
+
+fn current_dm_user_presence(
+    chat_data: Signal<ChatData>,
+    channel_id: &Option<String>,
+    is_dm_channel: bool,
+) -> PresenceStatus {
+    if !is_dm_channel {
+        return PresenceStatus::Offline;
+    }
+
+    let cid = channel_id.clone().unwrap_or_default();
+    chat_data
+        .read()
+        .dm_channels
+        .iter()
+        .find(|dm| dm.id == cid)
+        .map(|dm| dm.user.presence)
+        .unwrap_or(PresenceStatus::Offline)
 }
 
 fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
@@ -1560,7 +1600,9 @@ struct ChatViewMarkupCtx {
     unread_banner_date: String,
     unread_banner_channel_id: Option<String>,
     self_user_id: String,
+    dm_user: Option<User>,
     dm_user_avatar: Option<String>,
+    dm_user_presence: PresenceStatus,
     search_hit_channel_id: Option<String>,
     pinned_hit_channel_id: Option<String>,
     search_hit_server: Option<poly_client::Server>,
@@ -2026,25 +2068,37 @@ fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
     let current_channel = ctx.current_channel.clone();
     let current_server = ctx.current_server.clone();
     let dm_user_avatar = ctx.dm_user_avatar.clone();
+    let dm_user_presence = ctx.dm_user_presence;
     let is_dm_channel = ctx.is_dm_channel;
     let is_group_channel = ctx.is_group_channel;
     let group_count = ctx.group_members.len();
+    let dm_presence_dot_class = match dm_user_presence {
+        PresenceStatus::Online => "presence-dot online",
+        PresenceStatus::Idle => "presence-dot idle",
+        PresenceStatus::DoNotDisturb => "presence-dot dnd",
+        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+    };
 
     rsx! {
         if let Some(ref ch) = current_channel {
             if is_dm_channel {
                 div { class: "dm-chat-header-info",
-                    if let Some(ref avatar) = dm_user_avatar {
-                        img {
-                            class: "dm-chat-avatar",
-                            src: "{avatar}",
-                            alt: "{ch.name}",
+                    div { class: "dm-chat-avatar-wrap",
+                        if let Some(ref avatar) = dm_user_avatar {
+                            img {
+                                class: "dm-chat-avatar",
+                                src: "{avatar}",
+                                alt: "{ch.name}",
+                            }
+                        } else {
+                            div {
+                                class: "dm-chat-avatar",
+                                style: "background:{user_color(&ch.id)}",
+                                "{ch.name.chars().next().unwrap_or('?')}"
+                            }
                         }
-                    } else {
-                        div {
-                            class: "dm-chat-avatar",
-                            style: "background:{user_color(&ch.id)}",
-                            "{ch.name.chars().next().unwrap_or('?')}"
+                        if !dm_presence_dot_class.is_empty() {
+                            span { class: "{dm_presence_dot_class}" }
                         }
                     }
                     div { class: "dm-chat-header-text",
@@ -2124,16 +2178,25 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some();
     let current_server = ctx.current_server.clone();
     let current_channel = ctx.current_channel.clone();
-    let dm_user_avatar = ctx.dm_user_avatar.clone();
+    let dm_user = ctx.dm_user.clone();
+    let chat_data = ctx.chat_data;
+    let client_manager = ctx.client_manager;
     let is_dm_channel = ctx.is_dm_channel;
     let is_group_channel = ctx.is_group_channel;
+    let active_dm_call = chat_data
+        .read()
+        .voice_connection
+        .clone()
+        .filter(|connection| connection.dm_id.as_deref() == ctx.channel_id.as_deref());
+    // For DMs, don't use the avatar — always show "@" on mobile
     let toggle_icon_url = if is_dm_channel {
-        dm_user_avatar.clone()
+        None
     } else {
         current_server
             .as_ref()
             .and_then(|server| server.icon_url.clone())
     };
+    
     let toggle_label = if is_dm_channel {
         current_channel
             .as_ref()
@@ -2151,11 +2214,8 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
             .unwrap_or_else(|| t("chat-toggle-members"))
     };
     let toggle_fallback = if is_dm_channel {
-        current_channel
-            .as_ref()
-            .and_then(|channel| channel.name.chars().next())
-            .map(|ch| ch.to_string())
-            .unwrap_or_else(|| "👤".to_string())
+        // On mobile, DMs show "@" symbol instead of first character
+        "@".to_string()
     } else if is_group_channel {
         "👥".to_string()
     } else {
@@ -2166,50 +2226,101 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     };
 
     rsx! {
-        button {
-            class: if right_wing_open { "header-btn soft-active poly-mobile-right-wing-toggle mobile-server-icon-toggle" } else { "header-btn poly-mobile-right-wing-toggle mobile-server-icon-toggle" },
-            title: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
-            aria_label: "{toggle_label}",
-            onclick: move |_| {
-                let is_opening = !(utility_panel.read().is_some()
-                    || app_state.read().nav.right_sidebar_visible);
-                if !is_opening {
-                    close_chat_side_column_state(
-                        app_state,
-                        utility_panel,
-                        show_search_filters,
-                        is_group_channel,
-                        is_dm_channel,
-                    ); // Sync drawer state to JS immediately
-                } else {
-                    show_search_filters.set(false);
-                    utility_panel.set(None);
-                    if is_dm_channel || is_group_channel {
-                        app_state.write().nav.dm_right_sidebar_visible = true;
-                        app_state.write().nav.mobile_dm_contact_detail_visible = false;
-                    } else {
-                        app_state.write().nav.right_sidebar_visible = true;
+        div { class: "chat-header-actions chat-header-actions-mobile",
+            if is_dm_channel && active_dm_call.is_none() {
+                if let Some(dm_target) = dm_user.clone() {
+                    button {
+                        class: "header-btn chat-header-btn-call",
+                        title: t("user-profile-call"),
+                        onclick: move |_| {
+                            navigate_to_pending_direct_call_from_active_account(
+                                DirectCallRequest {
+                                    target_user: dm_target.clone(),
+                                    start_video: false,
+                                    allow_add_to_active_temporary: false,
+                                },
+                                app_state,
+                                chat_data,
+                                client_manager,
+                                navigator(),
+                            );
+                        },
+                        "📞"
                     }
                 }
-                #[cfg(target_arch = "wasm32")]
-                {
-                    let _ = document::eval(
-                        if is_opening {
-                            MOBILE_RIGHT_WING_OPEN_JS
-                        } else {
-                            MOBILE_RIGHT_WING_CLOSE_JS
+                if let Some(dm_target) = dm_user {
+                    button {
+                        class: "header-btn chat-header-btn-video",
+                        title: t("user-profile-video"),
+                        onclick: move |_| {
+                            navigate_to_pending_direct_call_from_active_account(
+                                DirectCallRequest {
+                                    target_user: dm_target.clone(),
+                                    start_video: true,
+                                    allow_add_to_active_temporary: false,
+                                },
+                                app_state,
+                                chat_data,
+                                client_manager,
+                                navigator(),
+                            );
                         },
-                    );
+                        "🎥"
+                    }
                 }
-            },
-            if let Some(ref icon_url) = toggle_icon_url {
-                img {
-                    class: "mobile-server-icon-image",
-                    src: "{icon_url}",
-                    alt: "{toggle_label}",
+            }
+            button {
+                class: if right_wing_open { "header-btn soft-active poly-mobile-right-wing-toggle mobile-server-icon-toggle" } else { "header-btn poly-mobile-right-wing-toggle mobile-server-icon-toggle" },
+                title: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
+                aria_label: "{toggle_label}",
+                onclick: move |_| {
+                    let currently_open = if is_dm_channel || is_group_channel {
+                        app_state.read().nav.dm_right_sidebar_visible
+                    } else {
+                        app_state.read().nav.right_sidebar_visible
+                    };
+                    let is_opening = !currently_open;
+
+                    show_search_filters.set(false);
+                    utility_panel.set(None);
+
+                    if is_opening {
+                        show_search_filters.set(false);
+                        if is_dm_channel || is_group_channel {
+                            app_state.write().nav.dm_right_sidebar_visible = true;
+                            app_state.write().nav.mobile_dm_contact_detail_visible = false;
+                        } else {
+                            app_state.write().nav.right_sidebar_visible = true;
+                        }
+                    } else {
+                        close_chat_side_column_state(
+                            app_state,
+                            utility_panel,
+                            show_search_filters,
+                            is_group_channel,
+                            is_dm_channel,
+                        );
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        let _ = document::eval(
+                            if is_opening {
+                                MOBILE_RIGHT_WING_OPEN_JS
+                            } else {
+                                MOBILE_RIGHT_WING_CLOSE_JS
+                            },
+                        );
+                    }
+                },
+                if let Some(ref icon_url) = toggle_icon_url {
+                    img {
+                        class: "mobile-server-icon-image",
+                        src: "{icon_url}",
+                        alt: "{toggle_label}",
+                    }
+                } else {
+                    span { class: "mobile-server-icon-fallback", "{toggle_fallback}" }
                 }
-            } else {
-                span { class: "mobile-server-icon-fallback", "{toggle_fallback}" }
             }
         }
     }
@@ -2222,9 +2333,58 @@ fn render_chat_header_actions(ctx: ChatViewMarkupCtx) -> Element {
     let mut show_search_filters = ctx.show_search_filters;
     let is_group_channel = ctx.is_group_channel;
     let is_dm_channel = ctx.is_dm_channel;
-
+    let dm_user = ctx.dm_user.clone();
+    let chat_data = ctx.chat_data;
+    let client_manager = ctx.client_manager;
+    let active_dm_call = chat_data
+        .read()
+        .voice_connection
+        .clone()
+        .filter(|connection| connection.dm_id.as_deref() == ctx.channel_id.as_deref());
     rsx! {
         div { class: "chat-header-actions",
+            if is_dm_channel && active_dm_call.is_none() {
+                if let Some(dm_target) = dm_user.clone() {
+                    button {
+                        class: "header-btn chat-header-btn-call",
+                        title: t("user-profile-call"),
+                        onclick: move |_| {
+                            navigate_to_pending_direct_call_from_active_account(
+                                DirectCallRequest {
+                                    target_user: dm_target.clone(),
+                                    start_video: false,
+                                    allow_add_to_active_temporary: false,
+                                },
+                                app_state,
+                                chat_data,
+                                client_manager,
+                                navigator(),
+                            );
+                        },
+                        "📞"
+                    }
+                }
+                if let Some(dm_target) = dm_user {
+                    button {
+                        class: "header-btn chat-header-btn-video",
+                        title: t("user-profile-video"),
+                        onclick: move |_| {
+                            navigate_to_pending_direct_call_from_active_account(
+                                DirectCallRequest {
+                                    target_user: dm_target.clone(),
+                                    start_video: true,
+                                    allow_add_to_active_temporary: false,
+                                },
+                                app_state,
+                                chat_data,
+                                client_manager,
+                                navigator(),
+                            );
+                        },
+                        "🎥"
+                    }
+                }
+            }
             {
                 render_member_toggle_button(
                     app_state,
@@ -5179,12 +5339,22 @@ fn DmContactListPanel(channel_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
 
+    let active_account_id = app_state.read().nav.active_account_id.clone().unwrap_or_default();
+
+    // The other person in this 1:1 DM
     let dm: Option<DmChannel> = chat_data
         .read()
         .dm_channels
         .iter()
         .find(|dm| dm.id == channel_id)
         .cloned();
+
+    // The current user ("you") — from the active session
+    let self_user: Option<User> = chat_data
+        .read()
+        .account_sessions
+        .get(&active_account_id)
+        .map(|s| s.user.clone());
 
     rsx! {
         aside { class: "user-sidebar dm-contact-list-panel",
@@ -5193,49 +5363,68 @@ fn DmContactListPanel(channel_id: String) -> Element {
             }
             div { class: "chat-utility-body user-sidebar-body",
                 if let Some(ref dm) = dm {
-                    {
-                        let color = user_color(&dm.user.id);
-                        let first_char: String = dm
-                            .user
-                            .display_name
-                            .chars()
-                            .next()
-                            .map(|c| c.to_string())
-                            .unwrap_or_else(|| "?".to_string());
-                        let presence_class = match dm.user.presence {
-                            PresenceStatus::Online => "online",
-                            PresenceStatus::Idle => "idle",
-                            PresenceStatus::DoNotDisturb => "dnd",
-                            PresenceStatus::Offline | PresenceStatus::Invisible => "offline",
-                        };
-                        let name = dm.user.display_name.clone();
-                        let avatar_url = dm.user.avatar_url.clone();
-                        let profile_user = dm.user.clone();
-                        rsx! {
-                            div {
-                                class: "user-entry",
-                                onclick: move |_| {
-                                    open_user_profile(app_state, profile_user.clone());
-                                },
-                                div { class: "user-avatar {presence_class}",
-                                    if let Some(ref url) = avatar_url {
-                                        img { class: "user-avatar-image", src: "{url}", alt: "{name}" }
-                                    } else {
-                                        div {
-                                            class: "user-avatar-fallback",
-                                            style: "background-color: {color};",
-                                            "{first_char}"
-                                        }
-                                    }
-                                }
-                                span { class: "user-name", "{name}" }
-                            }
-                        }
-                    }
+                    DmContactRow { user: dm.user.clone(), app_state }
                 } else {
                     div { class: "user-sidebar-empty", {t("user-no-members")} }
                 }
+                if let Some(self_u) = self_user {
+                    DmContactRow { user: self_u, app_state }
+                }
             }
+        }
+    }
+}
+
+/// A single contact row in the 1:1 DM contact panel.
+///
+/// Uses the `user-avatar-wrap` + explicit `span.presence-dot` pattern so the dot
+/// is never clipped by `overflow: hidden` on `.user-avatar`.
+#[rustfmt::skip]
+#[component]
+fn DmContactRow(user: User, app_state: Signal<AppState>) -> Element {
+    let color = user_color(&user.id);
+    let first_char: String = user
+        .display_name
+        .chars()
+        .next()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
+    let dot_class: &'static str = match user.presence {
+        PresenceStatus::Online => "presence-dot online",
+        PresenceStatus::Idle => "presence-dot idle",
+        PresenceStatus::DoNotDisturb => "presence-dot dnd",
+        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+    };
+    let entry_class = if matches!(user.presence, PresenceStatus::Offline | PresenceStatus::Invisible) {
+        "user-entry offline"
+    } else {
+        "user-entry"
+    };
+    let name = user.display_name.clone();
+    let avatar_url = user.avatar_url.clone();
+    let user_clone = user.clone();
+
+    rsx! {
+        div {
+            class: "{entry_class}",
+            onclick: move |_| open_user_profile(app_state, user_clone.clone()),
+            div { class: "user-avatar-wrap",
+                div { class: "user-avatar",
+                    if let Some(ref url) = avatar_url {
+                        img { class: "user-avatar-image", src: "{url}", alt: "{name}" }
+                    } else {
+                        div {
+                            class: "user-avatar-fallback",
+                            style: "background-color: {color};",
+                            "{first_char}"
+                        }
+                    }
+                }
+                if !dot_class.is_empty() {
+                    span { class: "{dot_class}" }
+                }
+            }
+            span { class: "user-name", "{name}" }
         }
     }
 }

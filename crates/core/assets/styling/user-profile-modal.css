@@ -20,8 +20,13 @@
 }
 
 @keyframes poly-profile-fadein {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 /* ===========================
@@ -35,16 +40,23 @@
     border-radius: 12px;
     overflow: hidden;
     background: var(--bg-secondary);
-    border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
-    box-shadow: 0 24px 72px rgba(0,0,0,0.56);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    box-shadow: 0 24px 72px rgba(0, 0, 0, 0.56);
     display: flex;
     flex-direction: column;
     animation: poly-profile-slidein 0.18s cubic-bezier(0.25, 0.8, 0.4, 1);
 }
 
 @keyframes poly-profile-slidein {
-    from { transform: translateY(12px) scale(0.97); opacity: 0; }
-    to   { transform: translateY(0)    scale(1);    opacity: 1; }
+    from {
+        transform: translateY(12px) scale(0.97);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
 }
 
 /* Mobile: stretch full height, remove radius */
@@ -53,6 +65,7 @@
         padding: 0;
         align-items: flex-end;
     }
+
     .poly-profile-modal {
         max-width: 100%;
         /* Full-height sheet on mobile */
@@ -130,20 +143,23 @@
 .poly-profile-avatar-row {
     flex-shrink: 0;
     position: relative;
-    height: 52px; /* half the avatar below banner */
+    height: 52px;
+    /* half the avatar below banner */
     background: var(--bg-secondary);
 }
 
 .poly-profile-avatar-wrap {
     position: absolute;
-    top: -52px; /* lifts avatar halfway into banner */
+    top: -52px;
+    /* lifts avatar halfway into banner */
     left: 16px;
     width: 88px;
     height: 88px;
     border-radius: 50%;
     border: 6px solid var(--bg-secondary);
     background: var(--bg-tertiary);
-    overflow: visible; /* needed for the presence dot */
+    overflow: visible;
+    /* needed for the presence dot */
 }
 
 .poly-profile-avatar-img {
@@ -267,8 +283,9 @@
 
 .poly-profile-divider {
     height: 1px;
-    background: var(--border-primary, rgba(255,255,255,0.08));
-    margin: 0 -16px; /* bleed to edges */
+    background: var(--border-primary, rgba(255, 255, 255, 0.08));
+    margin: 0 -16px;
+    /* bleed to edges */
 }
 
 /* ===========================
@@ -310,7 +327,7 @@
     max-height: 140px;
     padding: 8px 10px 24px;
     border-radius: 6px;
-    border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
     background: var(--bg-input);
     color: var(--text-primary);
     font-size: 14px;

@@ -726,6 +726,35 @@
     color: #fff;
 }
 
+/* Wrapper for friend card avatar + presence dot */
+.friend-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.friend-avatar-wrap .presence-dot {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 3px solid var(--bg-secondary);
+    pointer-events: none;
+}
+
+.friend-avatar-wrap .presence-dot.online {
+    background-color: #22c55e;
+}
+
+.friend-avatar-wrap .presence-dot.idle {
+    background-color: #f97316;
+}
+
+.friend-avatar-wrap .presence-dot.dnd {
+    background-color: #ef4444;
+}
+
 .friend-avatar-image {
     object-fit: cover;
     overflow: hidden;

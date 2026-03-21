@@ -17,14 +17,24 @@ use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
+use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use dioxus::prelude::*;
+use poly_client::VoiceConnectionKind;
 
 #[rustfmt::skip]
 #[component]
-fn VoiceBannerParticipants(participants: Vec<poly_client::VoiceParticipant>) -> Element {
+fn VoiceBannerParticipants(
+    participants: Vec<poly_client::VoiceParticipant>,
+    connection_kind: VoiceConnectionKind,
+) -> Element {
     let participant_count = participants.len();
     let display_participants = participants.into_iter().take(4).collect::<Vec<_>>();
+    let participant_label = if connection_kind == VoiceConnectionKind::TemporaryCall {
+        t("voice-in-call")
+    } else {
+        t("voice-in-channel")
+    };
 
     rsx! {
         div { class: "voice-banner-left",
@@ -50,7 +60,7 @@ fn VoiceBannerParticipants(participants: Vec<poly_client::VoiceParticipant>) -> 
                 }
             }
             if participant_count > 0 {
-                span { class: "voice-banner-count", "{participant_count} {t(\"voice-in-channel\")}" }
+                span { class: "voice-banner-count", "{participant_count} {participant_label}" }
             }
         }
     }
@@ -66,27 +76,44 @@ fn VoiceBannerChannelLink(
     backend_slug: String,
     instance_id: String,
     account_id: String,
+    connection_kind: VoiceConnectionKind,
+    dm_id: Option<String>,
     app_state: Signal<AppState>,
 ) -> Element {
     rsx! {
         button {
             class: "voice-banner-center",
-            title: "{t(\"voice-go-to-channel\")}",
+            title: if connection_kind == VoiceConnectionKind::TemporaryCall {
+                t("voice-go-to-conversation")
+            } else {
+                t("voice-go-to-channel")
+            },
             onclick: move |_| {
-                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
-                {
-                    remember_message_list_scroll_position(&previous_channel_id);
+                if connection_kind == VoiceConnectionKind::TemporaryCall {
+                    if let Some(dm_id) = dm_id.clone() {
+                        navigator().push(Route::DmChat {
+                            backend: backend_slug.clone(),
+                            instance_id: instance_id.clone(),
+                            account_id: account_id.clone(),
+                            dm_id,
+                        });
+                    }
+                } else {
+                    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                    {
+                        remember_message_list_scroll_position(&previous_channel_id);
+                    }
+                    app_state.write().nav.selected_server = Some(server_id.clone());
+                    app_state.write().nav.selected_channel = Some(channel_id.clone());
+                    navigator()
+                        .push(Route::ServerChat {
+                            backend: backend_slug.clone(),
+                            instance_id: instance_id.clone(),
+                            account_id: account_id.clone(),
+                            server_id: server_id.clone(),
+                            channel_id: channel_id.clone(),
+                        });
                 }
-                app_state.write().nav.selected_server = Some(server_id.clone());
-                app_state.write().nav.selected_channel = Some(channel_id.clone());
-                navigator()
-                    .push(Route::ServerChat {
-                        backend: backend_slug.clone(),
-                        instance_id: instance_id.clone(),
-                        account_id: account_id.clone(),
-                        server_id: server_id.clone(),
-                        channel_id: channel_id.clone(),
-                    });
             },
             span { class: "voice-banner-icon", "🔊" }
             span { class: "voice-banner-channel", "{channel_name}" }
@@ -100,6 +127,7 @@ fn VoiceBannerChannelLink(
 fn VoiceBannerControls(
     is_muted: bool,
     is_deafened: bool,
+    held_count: usize,
     mut chat_data: Signal<ChatData>,
 ) -> Element {
     let mute_title = if is_muted {
@@ -115,6 +143,14 @@ fn VoiceBannerControls(
 
     rsx! {
         div { class: "voice-banner-controls",
+            if held_count > 0 {
+                button {
+                    class: "voice-ctrl-btn",
+                    title: t("voice-swap-held-call"),
+                    onclick: move |_| swap_to_first_held_call(chat_data),
+                    "🔁"
+                }
+            }
             button {
                 class: if is_muted { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{mute_title}",
@@ -147,7 +183,7 @@ fn VoiceBannerControls(
                 class: "voice-ctrl-btn disconnect",
                 title: "{t(\"voice-disconnect\")}",
                 onclick: move |_| {
-                    chat_data.write().voice_connection = None;
+                    disconnect_active_call(chat_data);
                 },
                 "📵"
             }
@@ -187,10 +223,19 @@ pub fn VoiceBanner() -> Element {
     let instance_id = conn.instance_id.clone();
     let is_muted = conn.is_muted;
     let is_deafened = conn.is_deafened;
+    let held_count = chat_data.read().held_voice_connections.len();
+    let connection_kind = conn.kind;
+    let dm_id = conn.dm_id.clone();
+
+    let banner_class = if conn.kind == VoiceConnectionKind::TemporaryCall {
+        "voice-banner voice-banner--temporary-call"
+    } else {
+        "voice-banner"
+    };
 
     rsx! {
-        div { class: "voice-banner",
-            VoiceBannerParticipants { participants }
+        div { class: "{banner_class}",
+            VoiceBannerParticipants { participants, connection_kind }
             VoiceBannerChannelLink {
                 channel_id,
                 server_id,
@@ -199,9 +244,11 @@ pub fn VoiceBanner() -> Element {
                 backend_slug,
                 instance_id,
                 account_id,
+                connection_kind,
+                dm_id,
                 app_state,
             }
-            VoiceBannerControls { is_muted, is_deafened, chat_data }
+            VoiceBannerControls { is_muted, is_deafened, held_count, chat_data }
         }
     }
 }

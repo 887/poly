@@ -659,6 +659,7 @@ fn DMFriendsView() -> Element {
                     backend_slug: dm.backend.slug().to_string(),
                     instance_id: dm_iid.clone(),
                     avatar_url: dm.user.avatar_url.clone(),
+                    presence: dm.user.presence,
                 }
             }
 
@@ -827,8 +828,11 @@ fn DMChannelItem(
     /// Optional avatar URL for the DM user.
     #[props(into)]
     avatar_url: Option<String>,
+    /// Presence status for the status dot.
+    presence: poly_client::PresenceStatus,
 ) -> Element {
     use crate::state::chat_data::user_color;
+    use poly_client::PresenceStatus;
     let mut app_state: Signal<AppState> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
@@ -839,6 +843,12 @@ fn DMChannelItem(
         .next()
         .map(|c| c.to_string())
         .unwrap_or_default();
+    let presence_dot_class: &'static str = match presence {
+        PresenceStatus::Online => "presence-dot online",
+        PresenceStatus::Idle => "presence-dot idle",
+        PresenceStatus::DoNotDisturb => "presence-dot dnd",
+        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+    };
 
     rsx! {
         div {
@@ -875,15 +885,20 @@ fn DMChannelItem(
                     });
                 close_mobile_drawer();
             },
-            div { class: "dm-avatar-small", style: "background-color: {color};",
-                if let Some(ref url) = avatar_url {
-                    img {
-                        class: "dm-avatar-img",
-                        src: "{url}",
-                        alt: "{first_char}",
+            div { class: "dm-avatar-wrap",
+                div { class: "dm-avatar-small", style: "background-color: {color};",
+                    if let Some(ref url) = avatar_url {
+                        img {
+                            class: "dm-avatar-img",
+                            src: "{url}",
+                            alt: "{first_char}",
+                        }
+                    } else {
+                        "{first_char}"
                     }
-                } else {
-                    "{first_char}"
+                }
+                if !presence_dot_class.is_empty() {
+                    span { class: "{presence_dot_class}" }
                 }
             }
             span { class: "channel-name", "{display_name}" }

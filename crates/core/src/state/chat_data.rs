@@ -93,6 +93,12 @@ pub struct ChatData {
     pub voice_channel_participants: HashMap<String, Vec<VoiceParticipant>>,
     /// The local user's current voice connection (None if not in a call).
     pub voice_connection: Option<VoiceConnection>,
+    /// Voice calls currently on hold.
+    ///
+    /// Poly only renders one active call at a time, but temporary direct calls can
+    /// suspend the previously active call (similar to Teams/Discord) so the user can
+    /// swap back later.
+    pub held_voice_connections: Vec<VoiceConnection>,
     /// Voice and audio device settings (noise cancel, mic/speaker selection).
     pub voice_media_settings: VoiceMediaSettings,
     /// Sessions keyed by account ID — one entry per active account.

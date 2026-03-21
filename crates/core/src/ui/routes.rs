@@ -48,8 +48,10 @@
 
 use super::account::{
     AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, FriendsPanel,
-    NewConversationView, NotificationsView, SavedItemsView, ServerSettingsPage, VoiceChannelView,
+    NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
+    ServerSettingsPage, VoiceChannelView,
 };
+use super::account::common::direct_call::{DirectCallRequest, start_direct_call_from_active_account};
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
@@ -69,6 +71,10 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ConversationSearchRoute { account_id, .. }
         | Route::NewConversationRoute { account_id, .. }
         | Route::DmChat { account_id, .. }
+        | Route::DmPendingCall { account_id, .. }
+        | Route::DmPendingVideoCall { account_id, .. }
+        | Route::DmPendingAddCall { account_id, .. }
+        | Route::DmPendingAddVideoCall { account_id, .. }
         | Route::DmMediaViewerRoute { account_id, .. }
         | Route::ServerMediaViewerRoute { account_id, .. }
         | Route::ServerHome { account_id, .. }
@@ -137,6 +143,18 @@ pub enum Route {
 
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id")]
             DmChat { backend: String, instance_id: String, account_id: String, dm_id: String },
+
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id/call")]
+            DmPendingCall { backend: String, instance_id: String, account_id: String, dm_id: String },
+
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id/video-call")]
+            DmPendingVideoCall { backend: String, instance_id: String, account_id: String, dm_id: String },
+
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id/call/add")]
+            DmPendingAddCall { backend: String, instance_id: String, account_id: String, dm_id: String },
+
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id/video-call/add")]
+            DmPendingAddVideoCall { backend: String, instance_id: String, account_id: String, dm_id: String },
 
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/media/:message_id/:attachment_index")]
             DmMediaViewerRoute {
@@ -301,6 +319,48 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav
                 .account_last_dm_routes
                 .insert(account_id.clone(), format!("{route}"));
+        }
+        Route::DmPendingCall {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+        }
+        | Route::DmPendingVideoCall {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+        }
+        | Route::DmPendingAddCall {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+        }
+        | Route::DmPendingAddVideoCall {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+        } => {
+            s.nav.view = View::DmsFriends;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
+            s.nav.selected_channel = Some(dm_id.clone());
+            let dm_route = format!(
+                "{}",
+                Route::DmChat {
+                    backend: backend.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                    dm_id: dm_id.clone(),
+                }
+            );
+            s.nav.account_last_routes.insert(account_id.clone(), dm_route.clone());
+            s.nav.account_last_dm_routes.insert(account_id.clone(), dm_route);
         }
         Route::DmMediaViewerRoute {
             backend,
@@ -779,15 +839,155 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 #[rustfmt::skip]
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
+    let dm_id_for_pending = dm_id.clone();
+    let account_id_for_pending = account_id.clone();
 
     use_effect(move || {
         restore_dm_chat(dm_id.clone(), account_id.clone(), chat_data, client_manager);
     });
 
+    use_effect(move || {
+        let pending = app_state.read().nav.pending_direct_call.clone();
+        let Some(pending) = pending else {
+            return;
+        };
+        if pending.account_id != account_id_for_pending || pending.dm_id != dm_id_for_pending {
+            return;
+        }
+        spawn(async move {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let mut eval = document::eval(
+                    "(function(){ \
+                        const ready = !!window.__polyPendingDirectCallReady; \
+                        if (ready) window.__polyPendingDirectCallReady = false; \
+                        dioxus.send(ready ? 'ready' : 'wait'); \
+                    })()",
+                );
+                let status = eval.recv::<String>().await.unwrap_or_default();
+                if status != "ready" {
+                    return;
+                }
+            }
+
+            let Some(pending) = app_state.write().nav.pending_direct_call.take() else {
+                return;
+            };
+            start_direct_call_from_active_account(
+                DirectCallRequest {
+                    target_user: pending.target_user,
+                    start_video: pending.start_video,
+                    allow_add_to_active_temporary: pending.allow_add_to_active_temporary,
+                },
+                app_state,
+                chat_data,
+                client_manager,
+            );
+        });
+    });
+
     rsx! {
         ChatView {}
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn DmPendingCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
+    rsx! {
+        DmPendingCallInner {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+            start_video: false,
+            allow_add_to_active_temporary: false,
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn DmPendingVideoCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
+    rsx! {
+        DmPendingCallInner {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+            start_video: true,
+            allow_add_to_active_temporary: false,
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn DmPendingAddCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
+    rsx! {
+        DmPendingCallInner {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+            start_video: false,
+            allow_add_to_active_temporary: true,
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn DmPendingAddVideoCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
+    rsx! {
+        DmPendingCallInner {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+            start_video: true,
+            allow_add_to_active_temporary: true,
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
+fn DmPendingCallInner(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    dm_id: String,
+    start_video: bool,
+    allow_add_to_active_temporary: bool,
+) -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let dm_id_for_effect = dm_id.clone();
+    let account_id_for_effect = account_id.clone();
+
+    use_effect(move || {
+        restore_dm_chat(
+            dm_id_for_effect.clone(),
+            account_id_for_effect.clone(),
+            chat_data,
+            client_manager,
+        );
+    });
+
+    rsx! {
+        ChatView {}
+        OutgoingDirectCallOverlay {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+            start_video,
+            allow_add_to_active_temporary,
+        }
     }
 }
 

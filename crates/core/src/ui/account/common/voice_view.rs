@@ -19,10 +19,11 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
+use super::direct_call::disconnect_active_call;
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
-use poly_client::{ChannelType, VoiceParticipant};
+use poly_client::{ChannelType, VoiceConnectionKind, VoiceParticipant};
 
 // ── JS snippets ───────────────────────────────────────────────────────────────
 
@@ -216,6 +217,9 @@ async fn join_voice_channel(
         is_deafened: false,
         is_streaming: false,
         is_video_on: false,
+        kind: VoiceConnectionKind::ServerChannel,
+        dm_id: None,
+        participant_user_ids: Vec::new(),
     });
 
     if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
@@ -718,22 +722,7 @@ fn VoiceChatBar(mut chat_data: Signal<ChatData>) -> Element {
                 title: "{t(\"voice-disconnect\")}",
                 onclick: move |_| {
                     let _ = document::eval(JS_STOP_ALL_STREAMS);
-                    let local_id = {
-                        let reader = chat_data.read();
-                        reader
-                            .voice_connection
-                            .as_ref()
-                            .and_then(|vc| reader.account_sessions.get(&vc.account_id))
-                            .map(|s| s.user.id.clone())
-                    };
-                    let mut writer = chat_data.write();
-                    if let Some(ref vc) = writer.voice_connection.clone()
-                        && let Some(ref uid) = local_id
-                        && let Some(ps) = writer.voice_channel_participants.get_mut(&vc.channel_id)
-                    {
-                        ps.retain(|p| &p.user.id != uid);
-                    }
-                    writer.voice_connection = None;
+                    disconnect_active_call(chat_data);
                 },
                 "📵"
             }

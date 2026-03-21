@@ -1,0 +1,168 @@
+/* Poly — Pending Direct Call Overlay
+   Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
+   ===================================================================== */
+
+.direct-call-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgb(4 6 14 / 74%);
+    backdrop-filter: blur(10px);
+}
+
+.direct-call-modal {
+    position: relative;
+    width: min(100%, 420px);
+    border-radius: 18px;
+    border: 1px solid rgb(255 255 255 / 8%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 92%, #203864) 0%, var(--bg-secondary) 100%);
+    box-shadow: 0 28px 80px rgb(0 0 0 / 48%);
+    overflow: hidden;
+}
+
+.direct-call-modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 28px 22px 24px;
+}
+
+.direct-call-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 32%);
+    color: #fff;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.direct-call-close-btn:hover {
+    background: rgb(0 0 0 / 48%);
+}
+
+.direct-call-avatar-wrap {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    padding: 5px;
+    background: linear-gradient(135deg, #6ea8ff 0%, #5b6dff 100%);
+}
+
+.direct-call-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--bg-tertiary);
+}
+
+.direct-call-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.direct-call-title {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.direct-call-subtitle {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #9ab8ff;
+}
+
+.direct-call-status {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.direct-call-pulse-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 2px;
+}
+
+.direct-call-pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #7aa2ff;
+    animation: direct-call-pulse 1.2s infinite ease-in-out;
+}
+
+.direct-call-pulse-dot-delay-1 {
+    animation-delay: 0.16s;
+}
+
+.direct-call-pulse-dot-delay-2 {
+    animation-delay: 0.32s;
+}
+
+@keyframes direct-call-pulse {
+    0%, 80%, 100% {
+        opacity: 0.35;
+        transform: scale(0.8);
+    }
+
+    40% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.direct-call-cancel-btn {
+    margin-top: 10px;
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f05b68 0%, #d63b52 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 12px 16px;
+    cursor: pointer;
+}
+
+.direct-call-cancel-btn:hover {
+    filter: brightness(1.04);
+}
+
+@media (max-width: 520px) {
+    .direct-call-overlay {
+        padding: 0;
+        align-items: stretch;
+        justify-content: stretch;
+        background: rgb(7 10 18 / 84%);
+    }
+
+    .direct-call-modal {
+        width: 100%;
+        border-radius: 0;
+        border: none;
+        min-height: 100dvh;
+    }
+
+    .direct-call-modal-body {
+        min-height: 100dvh;
+        justify-content: center;
+        padding: 32px 24px;
+    }
+}

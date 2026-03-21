@@ -22,8 +22,12 @@
 use crate::i18n::t;
 use crate::state::AppState;
 use crate::state::chat_data::{backend_badge, user_color};
+use crate::state::ChatData;
+use crate::client_manager::ClientManager;
+use super::channel_list::open_direct_message_from_active_account;
+use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use dioxus::prelude::*;
-use poly_client::{PresenceStatus, User};
+use poly_client::{PresenceStatus, User, VoiceConnectionKind};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -72,6 +76,8 @@ fn close_modal(mut app_state: Signal<AppState>) {
 #[component]
 pub fn UserProfileModal() -> Element {
     let app_state: Signal<AppState> = use_context();
+    let chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
     let user = app_state.read().nav.profile_modal_user.clone();
     let Some(user) = user else {
         return rsx! {};
@@ -151,6 +157,27 @@ pub fn UserProfileModal() -> Element {
     let backend_name = user.backend.display_name().to_string();
     let avatar_url = user.avatar_url.clone();
     let display_name = user.display_name.clone();
+    let active_temp_call = chat_data
+        .read()
+        .voice_connection
+        .clone()
+        .filter(|connection| connection.kind == VoiceConnectionKind::TemporaryCall);
+    let adding_to_active_call = active_temp_call.as_ref().is_some_and(|connection| {
+        !connection.participant_user_ids.iter().any(|id| id == &user.id)
+    });
+    let call_action_label = if adding_to_active_call {
+        t("user-profile-add-to-call")
+    } else {
+        t("user-profile-call")
+    };
+    let video_action_label = if adding_to_active_call {
+        t("user-profile-add-video-to-call")
+    } else {
+        t("user-profile-video")
+    };
+    let action_user = user.clone();
+    let call_user = user.clone();
+    let video_user = user.clone();
 
     rsx! {
         // Full-screen backdrop — click to close
@@ -213,21 +240,59 @@ pub fn UserProfileModal() -> Element {
                     // Action buttons
                     div { class: "poly-profile-actions",
                         button { class: "poly-profile-action-btn",
+                            onclick: move |_| {
+                                close_modal(app_state);
+                                open_direct_message_from_active_account(
+                                    action_user.id.clone(),
+                                    app_state,
+                                    chat_data,
+                                    client_manager,
+                                    navigator(),
+                                );
+                            },
                             span { class: "poly-profile-action-icon", "💬" }
                             span { class: "poly-profile-action-label",
                                 "{t(\"user-profile-message\")}"
                             }
                         }
                         button { class: "poly-profile-action-btn",
+                            onclick: move |_| {
+                                close_modal(app_state);
+                                navigate_to_pending_direct_call_from_active_account(
+                                    DirectCallRequest {
+                                        target_user: call_user.clone(),
+                                        start_video: false,
+                                        allow_add_to_active_temporary: true,
+                                    },
+                                    app_state,
+                                    chat_data,
+                                    client_manager,
+                                    navigator(),
+                                );
+                            },
                             span { class: "poly-profile-action-icon", "📞" }
                             span { class: "poly-profile-action-label",
-                                "{t(\"user-profile-call\")}"
+                                "{call_action_label}"
                             }
                         }
                         button { class: "poly-profile-action-btn",
+                            onclick: move |_| {
+                                close_modal(app_state);
+                                navigate_to_pending_direct_call_from_active_account(
+                                    DirectCallRequest {
+                                        target_user: video_user.clone(),
+                                        start_video: true,
+                                        allow_add_to_active_temporary: true,
+                                    },
+                                    app_state,
+                                    chat_data,
+                                    client_manager,
+                                    navigator(),
+                                );
+                            },
                             span { class: "poly-profile-action-icon", "🎥" }
                             span { class: "poly-profile-action-label",
-                                "{t(\"user-profile-video\")}"
+                                "{video_action_label}"
                             }
                         }
                     }

@@ -762,6 +762,15 @@ pub struct VoiceParticipant {
     pub is_speaking: bool,
 }
 
+/// What kind of live voice session the user is connected to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VoiceConnectionKind {
+    /// A normal server voice/video channel.
+    ServerChannel,
+    /// A temporary direct/group call anchored to a DM rather than a server channel.
+    TemporaryCall,
+}
+
 /// The local user's voice connection state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoiceConnection {
@@ -787,6 +796,17 @@ pub struct VoiceConnection {
     pub is_streaming: bool,
     /// Whether our camera is on.
     pub is_video_on: bool,
+    /// Whether this is a server voice channel or a temporary direct call.
+    pub kind: VoiceConnectionKind,
+    /// DM anchor for temporary direct calls.
+    ///
+    /// `Some(dm_id)` for temporary direct/group calls so UI affordances like the
+    /// voice banner can jump back to the originating DM. `None` for server calls.
+    pub dm_id: Option<String>,
+    /// Remote participant user IDs for temporary calls.
+    ///
+    /// Server voice channels derive membership from the backend and leave this empty.
+    pub participant_user_ids: Vec<String>,
 }
 
 /// The scope in which a slash command is valid.

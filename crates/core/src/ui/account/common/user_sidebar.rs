@@ -18,9 +18,9 @@
 // TODO(phase-2.5.7): Wire user sidebar to backend data
 
 use crate::i18n::t;
-use crate::state::{AppState, MemberListGrouping, MemberListSortOrder};
 use crate::state::ChatData;
 use crate::state::chat_data::user_color;
+use crate::state::{AppState, MemberListGrouping, MemberListSortOrder};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
@@ -230,6 +230,8 @@ pub fn UserSidebar() -> Element {
 fn UserGroup(
     label: String,
     users: Vec<User>,
+    /// Presence class for the group header section (e.g. "offline" dims entries).
+    /// Pass "" for flat/no-grouping lists — per-user presence is used for dots.
     presence_class: &'static str,
     /// Current filter query for substring highlighting (empty = no highlight).
     query: String,
@@ -251,22 +253,35 @@ fn UserGroup(
                     let u = user.clone();
                     let avatar_url = user.avatar_url.clone();
                     let q = query.clone();
-                    let entry_class = if presence_class == "offline" {
+                    // Use per-user presence for both the entry class and the dot.
+                    let is_offline = matches!(user.presence, PresenceStatus::Offline | PresenceStatus::Invisible);
+                    let entry_class = if is_offline || presence_class == "offline" {
                         "user-entry offline"
                     } else {
                         "user-entry"
                     };
+                    let dot_class: &'static str = match user.presence {
+                        PresenceStatus::Online => "presence-dot online",
+                        PresenceStatus::Idle => "presence-dot idle",
+                        PresenceStatus::DoNotDisturb => "presence-dot dnd",
+                        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+                    };
                     rsx! {
                         div { class: "{entry_class}", onclick: move |_| on_click.call(u.clone()),
-                            div { class: "user-avatar {presence_class}",
-                                if let Some(ref url) = avatar_url {
-                                    img { class: "user-avatar-image", src: "{url}", alt: "{name}" }
-                                } else {
-                                    div {
-                                        class: "user-avatar-fallback",
-                                        style: "background-color: {color};",
-                                        "{first_char}"
+                            div { class: "user-avatar-wrap",
+                                div { class: "user-avatar",
+                                    if let Some(ref url) = avatar_url {
+                                        img { class: "user-avatar-image", src: "{url}", alt: "{name}" }
+                                    } else {
+                                        div {
+                                            class: "user-avatar-fallback",
+                                            style: "background-color: {color};",
+                                            "{first_char}"
+                                        }
                                     }
+                                }
+                                if !dot_class.is_empty() {
+                                    span { class: "{dot_class}" }
                                 }
                             }
                             span { class: "user-name",

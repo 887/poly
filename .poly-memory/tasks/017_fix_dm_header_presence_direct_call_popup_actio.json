@@ -1,0 +1,13 @@
+{
+  "id": 17,
+  "slug": "fix-dm-header-presence-direct-call-popup-actions",
+  "title": "Fix DM header presence + direct call popup actions",
+  "description": "Track remaining direct-DM presence and temp call UX work in poly-core, with web verification.",
+  "status": "todo",
+  "created_at": "2026-03-20T20:48:48.041961398Z",
+  "updated_at": "2026-03-20T20:48:48.041961398Z",
+  "completed_at": null,
+  "memory_count": 0,
+  "finding_count": 0,
+  "checklist": []
+}

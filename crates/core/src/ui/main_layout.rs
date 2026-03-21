@@ -14,7 +14,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::account::{AccountServerBar, ServerContextMenu};
+use super::account::{AccountServerBar, ServerContextMenu, UserProfileModal};
 use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
@@ -303,6 +303,9 @@ pub fn MainLayout() -> Element {
                 // Route content: DmsLayout, ServerLayout, or standalone views
                 Outlet::<Route> {}
             } // end main-layout-body
+            // Global user profile modal — now rendered inside router context
+            // so action buttons can navigate safely.
+            UserProfileModal {}
         }
     }
 }
