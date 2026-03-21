@@ -93,6 +93,249 @@ use routes::{route_targets_unknown_account, sync_route_to_app_state};
 #[cfg(target_arch = "wasm32")]
 use std::sync::atomic::{AtomicBool, Ordering};
 
+const STARTUP_OVERLAY_MIN_MS: u32 = 500;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct StartupOverlayConfig {
+    enabled: bool,
+    min_visible_ms: u32,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct StartupOverlayAccount {
+    id: String,
+    label: String,
+    avatar_url: Option<String>,
+    status_class: String,
+    status_symbol: String,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct StartupOverlayState {
+    enabled: bool,
+    visible: bool,
+    compact: bool,
+    headline: String,
+    subline: String,
+    logs: Vec<String>,
+    accounts: Vec<StartupOverlayAccount>,
+}
+
+#[cfg(target_arch = "wasm32")]
+fn startup_overlay_config_from_query() -> StartupOverlayConfig {
+    let Some(window) = web_sys::window() else {
+        return StartupOverlayConfig {
+            enabled: true,
+            min_visible_ms: STARTUP_OVERLAY_MIN_MS,
+        };
+    };
+    let Ok(search) = window.location().search() else {
+        return StartupOverlayConfig {
+            enabled: true,
+            min_visible_ms: STARTUP_OVERLAY_MIN_MS,
+        };
+    };
+
+    let mut enabled = true;
+    let mut min_visible_ms = STARTUP_OVERLAY_MIN_MS;
+
+    for (key, value) in search
+        .trim_start_matches('?')
+        .split('&')
+        .filter(|segment| !segment.is_empty())
+        .filter_map(|segment| {
+            let mut parts = segment.splitn(2, '=');
+            let key = parts.next()?;
+            let value = parts.next().unwrap_or_default();
+            Some((key, value))
+        })
+    {
+        if matches!(key, "boot" | "startup") {
+            if matches!(value, "off" | "0" | "false") {
+                enabled = false;
+            } else if matches!(value, "on" | "1" | "true") {
+                enabled = true;
+            }
+        }
+        if key == "bootmin" {
+            if let Ok(parsed) = value.parse::<u32>() {
+                min_visible_ms = parsed;
+            }
+        }
+    }
+
+    StartupOverlayConfig {
+        enabled,
+        min_visible_ms,
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn startup_overlay_config_from_query() -> StartupOverlayConfig {
+    StartupOverlayConfig {
+        enabled: true,
+        min_visible_ms: STARTUP_OVERLAY_MIN_MS,
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn startup_overlay_compact_mode() -> bool {
+    web_sys::window()
+        .and_then(|window| window.inner_width().ok())
+        .and_then(|value| value.as_f64())
+        .is_some_and(|width| width <= 640.0)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn startup_overlay_compact_mode() -> bool {
+    false
+}
+
+#[cfg(target_arch = "wasm32")]
+fn startup_now_ms() -> f64 {
+    js_sys::Date::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const fn startup_now_ms() -> f64 {
+    0.0
+}
+
+fn startup_status_symbol(status_class: &str) -> &'static str {
+    match status_class {
+        "connected" => "check",
+        "connecting" => "sync",
+        "error" => "error",
+        _ => "idle",
+    }
+}
+
+fn startup_display_name(label: &str, fallback_id: &str) -> String {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        fallback_id.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn startup_log_lines(
+    storage_ready: bool,
+    setup_complete: bool,
+    app_state: &AppState,
+    client_manager: &ClientManager,
+    chat_data: &ChatData,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.push(if storage_ready {
+        "[ok] storage ready; persisted settings restored".to_string()
+    } else {
+        "[..] opening local storage and reading persisted state".to_string()
+    });
+    lines.push(if setup_complete {
+        "[ok] app setup complete; preparing main shell".to_string()
+    } else {
+        "[..] awaiting setup wizard state".to_string()
+    });
+    lines.push(format!(
+        "[..] layout mode {:?}; mirrored menus: {}",
+        app_state.layout_mode, app_state.mirror_menu_layout
+    ));
+
+    if client_manager.sessions.is_empty() {
+        lines.push("[..] no active accounts yet".to_string());
+    } else {
+        for (account_id, session) in &client_manager.sessions {
+            let status_class = client_manager
+                .connection_statuses
+                .get(account_id)
+                .map(poly_client::ConnectionStatus::css_class)
+                .unwrap_or("disconnected");
+            let verb = match status_class {
+                "connected" => "connected",
+                "connecting" => "connecting",
+                "error" => "error",
+                _ => "cached",
+            };
+            lines.push(format!(
+                "[{}] {} ({})",
+                if status_class == "connected" {
+                    "ok"
+                } else {
+                    ".."
+                },
+                startup_display_name(&session.user.display_name, account_id),
+                verb
+            ));
+        }
+    }
+
+    lines.push(if chat_data.loading {
+        "[..] chat data still populating for active route".to_string()
+    } else {
+        "[ok] route data stable enough to reveal UI".to_string()
+    });
+    lines
+}
+
+fn startup_overlay_state(
+    enabled: bool,
+    visible: bool,
+    storage_ready: bool,
+    setup_complete: bool,
+    app_state: &AppState,
+    client_manager: &ClientManager,
+    chat_data: &ChatData,
+) -> StartupOverlayState {
+    let accounts = client_manager
+        .sessions
+        .iter()
+        .map(|(account_id, session)| {
+            let status_class = client_manager
+                .connection_statuses
+                .get(account_id)
+                .map(poly_client::ConnectionStatus::css_class)
+                .unwrap_or("disconnected")
+                .to_string();
+            StartupOverlayAccount {
+                id: account_id.clone(),
+                label: startup_display_name(&session.user.display_name, account_id),
+                avatar_url: session.user.avatar_url.clone(),
+                status_symbol: startup_status_symbol(&status_class).to_string(),
+                status_class,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let compact = startup_overlay_compact_mode();
+    let logs = startup_log_lines(
+        storage_ready,
+        setup_complete,
+        app_state,
+        client_manager,
+        chat_data,
+    );
+    let ready = storage_ready && setup_complete && !chat_data.loading;
+
+    StartupOverlayState {
+        enabled,
+        visible,
+        compact,
+        headline: if ready {
+            "Boot sequence complete".to_string()
+        } else {
+            "Starting Poly".to_string()
+        },
+        subline: if ready {
+            "Swapping the live workspace in smoothly...".to_string()
+        } else {
+            "Restoring shell state, accounts, and local cache...".to_string()
+        },
+        logs,
+        accounts,
+    }
+}
+
 /// Compiled stylesheet asset — watched by Dioxus hot-reload.
 const CSS: Asset = asset!("assets/tailwind.css");
 
@@ -841,6 +1084,89 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
     }
 }
 
+#[rustfmt::skip]
+#[component]
+fn StartupOverlay(state: StartupOverlayState) -> Element {
+    if !state.enabled || !state.visible {
+        return rsx! {};
+    }
+
+    let root_class = if state.compact {
+        "poly-startup-overlay poly-startup-overlay-compact"
+    } else {
+        "poly-startup-overlay"
+    };
+
+    rsx! {
+        div {
+            class: "{root_class}",
+            div { class: "poly-startup-backdrop" }
+            div { class: "poly-startup-shell",
+                div { class: "poly-startup-window",
+                    div { class: "poly-startup-header",
+                        span { class: "poly-startup-kicker", "Poly boot" }
+                        h1 { class: "poly-startup-title", "{state.headline}" }
+                        p { class: "poly-startup-subline", "{state.subline}" }
+                    }
+                    div { class: "poly-startup-accounts",
+                        if state.accounts.is_empty() {
+                            div { class: "poly-startup-account poly-startup-account-placeholder",
+                                span { class: "poly-startup-account-avatar poly-startup-account-avatar-placeholder", "P" }
+                                div { class: "poly-startup-account-copy",
+                                    span { class: "poly-startup-account-name", "Preparing workspace" }
+                                    span { class: "poly-startup-account-status idle", "waiting" }
+                                }
+                            }
+                        } else {
+                            for account in state.accounts {
+                                div { class: "poly-startup-account", key: "{account.id}",
+                                    div { class: "poly-startup-account-avatar-wrap",
+                                        if let Some(url) = account.avatar_url.clone() {
+                                            img {
+                                                class: "poly-startup-account-avatar",
+                                                src: "{url}",
+                                                alt: "{account.label}",
+                                            }
+                                        } else {
+                                            span { class: "poly-startup-account-avatar poly-startup-account-avatar-placeholder", "{account.label.chars().next().unwrap_or('?')}" }
+                                        }
+                                        span { class: "poly-startup-account-indicator {account.status_class}",
+                                            span { class: "poly-startup-indicator-symbol", "{account.status_symbol}" }
+                                        }
+                                    }
+                                    div { class: "poly-startup-account-copy",
+                                        span { class: "poly-startup-account-name", "{account.label}" }
+                                        span { class: "poly-startup-account-status {account.status_class}", "{account.status_class}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    div { class: "poly-startup-log-window",
+                        div { class: "poly-startup-log-header",
+                            span { class: "poly-startup-log-title", "boot log" }
+                            span { class: "poly-startup-log-badge", "live" }
+                        }
+                        div { class: "poly-startup-log-body",
+                            for (index, line) in state.logs.iter().enumerate() {
+                                {
+                                    let line_number = format!("{:02}", index + 1);
+                                    rsx! {
+                                        div { class: "poly-startup-log-line", key: "boot-log-{index}",
+                                            span { class: "poly-startup-log-gutter", "{line_number}" }
+                                            span { class: "poly-startup-log-text", "{line}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── App component ─────────────────────────────────────────────────────────────
 
 /// Root application component.
@@ -858,6 +1184,12 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
 pub fn App() -> Element {
     let app_state = use_signal(AppState::default);
     let storage_ready = use_signal(|| false);
+    let mut startup_overlay_visible = use_signal(|| true);
+    let startup_overlay_started = use_signal(startup_now_ms);
+    let startup_overlay_config = startup_overlay_config_from_query();
+    let startup_overlay_enabled = startup_overlay_config.enabled;
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = startup_overlay_started;
     // DECISION(DX-I18N-1): Signal<String> context; use_locale() in children subscribes.
     crate::i18n::provide_locale_context();
     let locale_sig = crate::i18n::use_locale();
@@ -908,11 +1240,75 @@ pub fn App() -> Element {
     let app_state_snapshot = app_state.read().clone();
     let setup_complete = app_state_snapshot.is_setup_complete;
     let root_class = app_root_class(&app_state_snapshot);
+    let client_manager_snapshot = client_manager.read().clone();
+    let chat_data_snapshot = chat_data.read().clone();
+    let startup_should_hide = storage_ready_now && setup_complete && !chat_data_snapshot.loading;
+
+    use_effect(move || {
+        if !startup_overlay_enabled {
+            startup_overlay_visible.set(false);
+            return;
+        }
+        if !startup_should_hide {
+            return;
+        }
+
+        spawn(async move {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let elapsed_ms = js_sys::Date::now() - *startup_overlay_started.read();
+                let remaining_ms = startup_overlay_config
+                    .min_visible_ms
+                    .saturating_sub(elapsed_ms.max(0.0) as u32);
+                let _ = document::eval(&format!(
+                    "setTimeout(() => dioxus.send(true), {});",
+                    remaining_ms
+                ))
+                .recv::<bool>()
+                .await;
+            }
+            startup_overlay_visible.set(false);
+        });
+    });
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let startup_state = startup_overlay_state(
+            startup_overlay_enabled,
+            *startup_overlay_visible.read(),
+            storage_ready_now,
+            setup_complete,
+            &app_state_snapshot,
+            &client_manager_snapshot,
+            &chat_data_snapshot,
+        );
+        let script = format!(
+            "window.__polyStartupState = {{ enabled: {}, visible: {}, phase: '{}' }}; document.documentElement.setAttribute('data-poly-startup-phase', '{}');",
+            startup_state.enabled,
+            startup_state.visible,
+            if startup_state.visible { "booting" } else { "revealed" },
+            if startup_state.visible { "booting" } else { "revealed" },
+        );
+        let _ = document::eval(&script);
+    }
+
+    let startup_state = startup_overlay_state(
+        startup_overlay_enabled,
+        *startup_overlay_visible.read(),
+        storage_ready_now,
+        setup_complete,
+        &app_state_snapshot,
+        &client_manager_snapshot,
+        &chat_data_snapshot,
+    );
 
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }
         style { id: "poly-theme", "{theme_css}" }
         div { class: root_class,
+            if startup_state.visible {
+                StartupOverlay { state: startup_state.clone() }
+            }
             ElectronTitleBar {}
             AppBody {
                 storage_ready: storage_ready_now,

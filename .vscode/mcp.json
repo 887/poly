@@ -29,6 +29,12 @@
       "command": "npx",
       "args": ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics"],
       "env": {}
+    },
+    "chrome-devtools-headless": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics", "--headless"],
+      "env": {}
     }
   }
 }

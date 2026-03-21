@@ -63,6 +63,17 @@
         "npx",
         "-y",
         "chrome-devtools-mcp@latest",
+        "--no-usage-statistics",
+        "--headless"
+      ],
+      "enabled": true
+    },
+    "chrome-devtools-non-headless": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest",
         "--no-usage-statistics"
       ],
       "enabled": true
