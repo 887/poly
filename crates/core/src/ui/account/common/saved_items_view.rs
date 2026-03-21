@@ -237,6 +237,12 @@ pub fn SavedItemsView() -> Element {
                     div { class: "special-page-header",
                         h2 { class: "special-page-title", "{title}" }
                         p { class: "settings-description", "{description}" }
+                        input {
+                            class: "friends-search special-page-search",
+                            placeholder: "{t(\"saved-items-filter-placeholder\")}",
+                            value: "{source_search.read()}",
+                            oninput: move |evt| source_search.set(evt.value().clone()),
+                        }
                     }
                     div { class: "notification-list saved-items-results",
                         if let Some(items) = &visible_items {

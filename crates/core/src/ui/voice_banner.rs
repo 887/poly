@@ -17,8 +17,8 @@ use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
-use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
+use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
 

@@ -177,10 +177,7 @@ fn direct_call_bucket_label(remote_count: usize) -> String {
     }
 }
 
-fn hold_active_call_if_needed(
-    new_channel_id: &str,
-    mut chat_data: Signal<ChatData>,
-) {
+fn hold_active_call_if_needed(new_channel_id: &str, mut chat_data: Signal<ChatData>) {
     let current = chat_data.read().voice_connection.clone();
     let Some(current) = current else {
         return;
@@ -191,7 +188,9 @@ fn hold_active_call_if_needed(
     }
 
     let mut writer = chat_data.write();
-    writer.held_voice_connections.retain(|held| held.channel_id != current.channel_id);
+    writer
+        .held_voice_connections
+        .retain(|held| held.channel_id != current.channel_id);
     writer.held_voice_connections.insert(0, current);
     writer.voice_connection = None;
 }
@@ -249,7 +248,10 @@ fn activate_existing_or_new_call(
     }
 
     for user in &remote_users {
-        if !participants.iter().any(|participant| participant.user.id == user.id) {
+        if !participants
+            .iter()
+            .any(|participant| participant.user.id == user.id)
+        {
             participants.push(VoiceParticipant {
                 user: user.clone(),
                 is_muted: false,
@@ -316,7 +318,9 @@ pub(crate) fn start_direct_call_from_active_account(
     client_manager: Signal<ClientManager>,
 ) {
     spawn(async move {
-        let _ = document::eval(JS_REQUEST_AUDIO_PERMISSION).recv::<String>().await;
+        let _ = document::eval(JS_REQUEST_AUDIO_PERMISSION)
+            .recv::<String>()
+            .await;
 
         let resolved_dm = resolve_direct_message_for_active_account(
             request.target_user.id.clone(),
@@ -335,7 +339,10 @@ pub(crate) fn start_direct_call_from_active_account(
             && let Some(active) = active_connection.clone()
             && active.kind == VoiceConnectionKind::TemporaryCall
             && active.account_id == account_id
-            && !active.participant_user_ids.iter().any(|id| id == &request.target_user.id)
+            && !active
+                .participant_user_ids
+                .iter()
+                .any(|id| id == &request.target_user.id)
         {
             let self_user_id = chat_data
                 .read()
@@ -371,9 +378,13 @@ pub(crate) fn start_direct_call_from_active_account(
                 .collect::<Vec<_>>();
 
             let mut writer = chat_data.write();
-            writer.voice_channel_participants.insert(channel_id.clone(), participants);
+            writer
+                .voice_channel_participants
+                .insert(channel_id.clone(), participants);
             if let Some(ref mut current) = writer.voice_connection {
-                current.participant_user_ids.push(request.target_user.id.clone());
+                current
+                    .participant_user_ids
+                    .push(request.target_user.id.clone());
                 current.channel_name = direct_call_label(&remote_users);
                 current.server_name = direct_call_bucket_label(remote_users.len());
             }
@@ -383,11 +394,8 @@ pub(crate) fn start_direct_call_from_active_account(
         }
 
         let dm_id = resolved_dm.as_ref().map(|(dm, _)| dm.id.clone());
-        let channel_id = temporary_call_channel_id(
-            &account_id,
-            dm_id.as_deref(),
-            &request.target_user.id,
-        );
+        let channel_id =
+            temporary_call_channel_id(&account_id, dm_id.as_deref(), &request.target_user.id);
 
         hold_active_call_if_needed(&channel_id, chat_data);
         activate_existing_or_new_call(

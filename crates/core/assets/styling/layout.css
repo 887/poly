@@ -345,6 +345,70 @@ body {
     background: rgba(237, 66, 69, 0.8);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * Mobile: voice banner above all fixed sidebars
+ * ═══════════════════════════════════════════════════════════════════════
+ * IMPORTANT: do NOT use position:fixed here. That detaches the banner
+ * from the flex flow, making main-layout-body start at y=0 and covering
+ * the hamburger button and other header elements with the bar.
+ *
+ * Correct approach:
+ *  1. Keep banner in normal flex flow (position:relative) so content
+ *     naturally sits at y=40 — the hamburger/header stay below the bar.
+ *  2. z-index:500 paints the banner above the fixed sidebars (z-index
+ *     410–420) so it is not obscured by the rails in the x=0..144 zone.
+ *  3. :has(.voice-banner) pushes all position:fixed mobile sidebars
+ *     down 40px so their drag-handles / backdrop areas start below the
+ *     banner instead of at top:0 — no overlap with the bar's buttons.
+ *  4. Strip the hard min-width constraints on banner sections so the
+ *     flex layout can fit everything within the narrower mobile viewport
+ *     without the controls overflowing off the right edge of the screen.
+ */
+.poly-app.poly-mobile-runtime-active .voice-banner {
+    position: relative;
+    z-index: 500;
+    padding: 0 6px;
+    overflow: hidden;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-left {
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-center {
+    padding: 4px 6px;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-center .voice-banner-server {
+    display: none;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-banner-controls {
+    min-width: 0;
+    flex-shrink: 0;
+    gap: 4px;
+}
+
+.poly-app.poly-mobile-runtime-active .voice-ctrl-btn {
+    width: 28px;
+    height: 28px;
+}
+
+/* Shift every fixed sidebar/panel down by the banner's height */
+.poly-app.poly-mobile-runtime-active:has(.voice-banner) .server-sidebar,
+.poly-app.poly-mobile-runtime-active:has(.voice-banner) .account-server-bar {
+    top: 40px;
+}
+
+.poly-app.poly-mobile-runtime-active:has(.voice-banner) .poly-split-sidebar {
+    top: 40px;
+}
+
 /* ===========================
  * Nav-bar spacer (native only)
  * =========================== */

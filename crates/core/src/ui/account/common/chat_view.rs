@@ -2196,7 +2196,7 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
             .as_ref()
             .and_then(|server| server.icon_url.clone())
     };
-    
+
     let toggle_label = if is_dm_channel {
         current_channel
             .as_ref()
@@ -5428,4 +5428,3 @@ fn DmContactRow(user: User, app_state: Signal<AppState>) -> Element {
         }
     }
 }
-

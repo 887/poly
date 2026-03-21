@@ -15,11 +15,11 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.14): Voice/Video channel view
 
+use super::direct_call::disconnect_active_call;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
-use super::direct_call::disconnect_active_call;
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;

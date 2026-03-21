@@ -46,12 +46,14 @@
 // DECISION(DX-ROUTER-2): Multi-account routing replaces Discord-style single-account URLs.
 // DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
+use super::account::common::direct_call::{
+    DirectCallRequest, start_direct_call_from_active_account,
+};
 use super::account::{
     AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, FriendsPanel,
     NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
     ServerSettingsPage, VoiceChannelView,
 };
-use super::account::common::direct_call::{DirectCallRequest, start_direct_call_from_active_account};
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
@@ -359,8 +361,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
                     dm_id: dm_id.clone(),
                 }
             );
-            s.nav.account_last_routes.insert(account_id.clone(), dm_route.clone());
-            s.nav.account_last_dm_routes.insert(account_id.clone(), dm_route);
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), dm_route.clone());
+            s.nav
+                .account_last_dm_routes
+                .insert(account_id.clone(), dm_route);
         }
         Route::DmMediaViewerRoute {
             backend,

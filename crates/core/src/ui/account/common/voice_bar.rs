@@ -26,10 +26,10 @@
 //! Each `#[component]` fn body stays under 150 lines. See sub-components below.
 // TODO(phase-voice-1): VoiceBar sidebar panel
 
+use super::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::user_color;
-use super::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
 

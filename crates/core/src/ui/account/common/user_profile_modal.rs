@@ -19,13 +19,13 @@
 //! the hash by calling `history.back()` (which fires the hashchange + resolves
 //! the promise as a harmless no-op).
 
-use crate::i18n::t;
-use crate::state::AppState;
-use crate::state::chat_data::{backend_badge, user_color};
-use crate::state::ChatData;
-use crate::client_manager::ClientManager;
 use super::channel_list::open_direct_message_from_active_account;
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
+use crate::client_manager::ClientManager;
+use crate::i18n::t;
+use crate::state::AppState;
+use crate::state::ChatData;
+use crate::state::chat_data::{backend_badge, user_color};
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User, VoiceConnectionKind};
 
