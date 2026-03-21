@@ -1686,6 +1686,87 @@ body {
     gap: 4px;
 }
 
+.chat-header-actions-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.chat-header-actions-primary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+
+.chat-header-actions-primary.is-measuring {
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
+    inset: auto 0 auto auto;
+}
+
+.chat-header-overflow-anchor {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.chat-header-btn-overflow {
+    min-width: 38px;
+    font-size: 16px;
+    letter-spacing: 0.08em;
+}
+
+.chat-header-overflow-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 80;
+    min-width: 180px;
+    padding: 8px;
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-secondary) 96%, black);
+    box-shadow: 0 16px 32px rgb(0 0 0 / 24%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chat-header-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+}
+
+.chat-header-overflow-item:hover,
+.chat-header-overflow-item.active {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.chat-header-overflow-icon {
+    width: 18px;
+    text-align: center;
+    flex: 0 0 auto;
+}
+
+.chat-header-overflow-label {
+    font-size: 13px;
+    font-weight: 500;
+}
+
 .chat-search-tab-btn {
     position: relative;
     min-width: 34px;
@@ -2234,6 +2315,7 @@ body {
     color: var(--text-muted);
     flex-shrink: 0;
 }
+
 /* Poly — User/Member Sidebar, DM header, Notification indicators
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
    ===================================================================== */
@@ -7775,6 +7857,10 @@ select {
     border-bottom: 1px solid var(--border-color);
 }
 
+.special-page-search-bar {
+    margin-top: 12px;
+}
+
 .special-page-empty-state {
     margin: auto;
 }
@@ -8334,6 +8420,7 @@ select {
     text-align: center;
     color: var(--text-tertiary);
 }
+
 /* Poly — Context Menu, Drag-over, Server Settings, Server Overview, Diagnostics Settings
    Part of crates/core/assets/styling/ — do NOT edit tailwind.css directly.
    ===================================================================== */

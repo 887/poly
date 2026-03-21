@@ -347,6 +347,7 @@ action-cancel = Cancelar
 action-delete = Eliminar
 action-edit = Editar
 action-close = Cerrar
+action-more = Mas
 chat-replying-to = Respondiendo a { $name }
 action-search = Buscar
 action-copy = Copiar

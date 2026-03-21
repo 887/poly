@@ -193,6 +193,7 @@ fn AccountFilter(
 fn NodeRow(
     icon: String,
     label: String,
+    highlight_terms: Vec<String>,
     sublabel: String,
     on_click: EventHandler<MouseEvent>,
 ) -> Element {
@@ -201,7 +202,11 @@ fn NodeRow(
             onclick: move |evt| on_click.call(evt),
             span { class: "search-node-icon", "{icon}" }
             div { class: "search-node-info",
-                span { class: "search-node-label", "{label}" }
+                HighlightedSearchText {
+                    class_name: "search-node-label".to_string(),
+                    text: label,
+                    search_terms: highlight_terms,
+                }
                 if !sublabel.is_empty() {
                     span { class: "search-node-sublabel", "{sublabel}" }
                 }
@@ -218,6 +223,7 @@ fn AvatarNodeRow(
     avatar_label: String,
     avatar_color: String,
     label: String,
+    highlight_terms: Vec<String>,
     sublabel: String,
     on_click: EventHandler<MouseEvent>,
 ) -> Element {
@@ -230,12 +236,51 @@ fn AvatarNodeRow(
                 color: avatar_color,
             }
             div { class: "search-node-info",
-                span { class: "search-node-label", "{label}" }
+                HighlightedSearchText {
+                    class_name: "search-node-label".to_string(),
+                    text: label,
+                    search_terms: highlight_terms,
+                }
                 if !sublabel.is_empty() {
                     span { class: "search-node-sublabel", "{sublabel}" }
                 }
             }
         }
+    }
+}
+
+fn build_highlight_terms(query: &str) -> Vec<String> {
+    query
+        .split_whitespace()
+        .filter(|term| !term.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+#[rustfmt::skip]
+#[component]
+fn HighlightedSearchText(class_name: String, text: String, search_terms: Vec<String>) -> Element {
+    let lowercase_text = text.to_lowercase();
+    let found_match = search_terms.into_iter().find_map(|term| {
+        let lowercase_term = term.to_lowercase();
+        lowercase_text
+            .find(&lowercase_term)
+            .map(|index| (index, index + lowercase_term.len()))
+    });
+
+    if let Some((start, end)) = found_match {
+        let before = text.get(..start).unwrap_or_default().to_string();
+        let matched = text.get(start..end).unwrap_or_default().to_string();
+        let after = text.get(end..).unwrap_or_default().to_string();
+        rsx! {
+            span { class: "{class_name}",
+                "{before}"
+                mark { class: "search-result-match", "{matched}" }
+                "{after}"
+            }
+        }
+    } else {
+        rsx! { span { class: "{class_name}", "{text}" } }
     }
 }
 
@@ -251,6 +296,7 @@ fn ServerNode(
     account_id: String,
     account_attribution: String,
     query: String,
+    highlight_terms: Vec<String>,
 ) -> Element {
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let q_lower = query.to_lowercase();
@@ -296,7 +342,11 @@ fn ServerNode(
                     color: server_color,
                 }
                 div { class: "search-server-header-info",
-                    span { class: "search-node-label", "{server_name}" }
+                    HighlightedSearchText {
+                        class_name: "search-node-label".to_string(),
+                        text: server_name,
+                        search_terms: highlight_terms.clone(),
+                    }
                     span { class: "search-node-account-badge", "{account_attribution}" }
                 }
             }
@@ -323,6 +373,7 @@ fn ServerNode(
                                     NodeRow {
                                         icon,
                                         label: ch_name,
+                                        highlight_terms: highlight_terms.clone(),
                                         sublabel: String::new(),
                                         on_click: move |_| {
                                             close_mobile_drawer();
@@ -436,7 +487,9 @@ pub fn SearchPage(
     });
 
     let account_ids = client_manager.read().active_account_ids();
-    let q_lower = query.read().to_lowercase();
+    let query_text = query.read().clone();
+    let q_lower = query_text.to_lowercase();
+    let highlight_terms = build_highlight_terms(&query_text);
     let servers = chat_data.read().servers.clone();
     let mut dm_channels = chat_data.read().dm_channels.clone();
     let mut groups = chat_data.read().groups.clone();
@@ -594,6 +647,7 @@ pub fn SearchPage(
                                     account_id: server.account_id.clone(),
                                     account_attribution: attribution,
                                     query: q_lower.clone(),
+                                    highlight_terms: highlight_terms.clone(),
                                 }
                             }
                         }
@@ -643,6 +697,7 @@ pub fn SearchPage(
                                     avatar_label: dm_display_name,
                                     avatar_color: dm_color,
                                     label: name,
+                                    highlight_terms: highlight_terms.clone(),
                                     sublabel: attribution,
                                     on_click: move |_| {
                                         close_mobile_drawer();
@@ -714,6 +769,7 @@ pub fn SearchPage(
                                     avatar_label: grp_label,
                                     avatar_color: grp_color,
                                     label: name,
+                                    highlight_terms: highlight_terms.clone(),
                                     sublabel: attribution,
                                     on_click: move |_| {
                                         close_mobile_drawer();

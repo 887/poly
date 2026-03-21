@@ -34,6 +34,41 @@ fn channel_preview_text(content: &MessageContent) -> String {
     }
 }
 
+fn build_highlight_terms(query: &str) -> Vec<String> {
+    query
+        .split_whitespace()
+        .filter(|term| !term.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+#[rustfmt::skip]
+#[component]
+fn HighlightedSavedText(text: String, search_terms: Vec<String>) -> Element {
+    let lowercase_text = text.to_lowercase();
+    let found_match = search_terms.into_iter().find_map(|term| {
+        let lowercase_term = term.to_lowercase();
+        lowercase_text
+            .find(&lowercase_term)
+            .map(|index| (index, index + lowercase_term.len()))
+    });
+
+    if let Some((start, end)) = found_match {
+        let before = text.get(..start).unwrap_or_default().to_string();
+        let matched = text.get(start..end).unwrap_or_default().to_string();
+        let after = text.get(end..).unwrap_or_default().to_string();
+        rsx! {
+            span {
+                "{before}"
+                mark { class: "search-result-match", "{matched}" }
+                "{after}"
+            }
+        }
+    } else {
+        rsx! { span { "{text}" } }
+    }
+}
+
 fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
     let mut sources = Vec::<SavedSourceSummary>::new();
 
@@ -159,7 +194,9 @@ pub fn SavedItemsView() -> Element {
 
     let loaded_items = saved_items.read().as_ref().cloned();
     let selected_source_id = selected_source.read().clone();
-    let source_filter_text = source_search.read().to_lowercase();
+    let source_query = source_search.read().clone();
+    let source_filter_text = source_query.to_lowercase();
+    let highlight_terms = build_highlight_terms(&source_query);
     let filtered_sources = loaded_items.as_ref().map(|items| {
         build_saved_sources(items)
             .into_iter()
@@ -172,9 +209,11 @@ pub fn SavedItemsView() -> Element {
     let visible_items = loaded_items.as_ref().map(|items| {
         items.iter()
             .filter(|item| {
+                let preview = channel_preview_text(&item.hit.message.content).to_lowercase();
                 selected_source_id
                     .as_ref()
                     .is_none_or(|source_id| item.hit.channel_id == *source_id)
+                    && (source_filter_text.is_empty() || preview.contains(&source_filter_text))
             })
             .cloned()
             .collect::<Vec<_>>()
@@ -230,11 +269,21 @@ pub fn SavedItemsView() -> Element {
                     div { class: "special-page-header",
                         h2 { class: "special-page-title", "{title}" }
                         p { class: "settings-description", "{description}" }
-                        input {
-                            class: "friends-search special-page-search",
-                            placeholder: "{t(\"saved-items-filter-placeholder\")}",
-                            value: "{source_search.read()}",
-                            oninput: move |evt| source_search.set(evt.value().clone()),
+                        div { class: "search-page-input-bar special-page-search-bar",
+                            input {
+                                r#type: "text",
+                                class: "search-page-input special-page-search",
+                                placeholder: "{t(\"saved-items-filter-placeholder\")}",
+                                value: "{source_query}",
+                                oninput: move |evt| source_search.set(evt.value().clone()),
+                            }
+                            if !source_query.is_empty() {
+                                button {
+                                    class: "search-page-clear",
+                                    onclick: move |_| source_search.set(String::new()),
+                                    "×"
+                                }
+                            }
                         }
                     }
                     div { class: "notification-list saved-items-results",
@@ -248,6 +297,7 @@ pub fn SavedItemsView() -> Element {
                                     SavedPinnedItemCard {
                                         key: "{item.hit.channel_id}-{item.hit.message.id}",
                                         item: item.clone(),
+                                        highlight_terms: highlight_terms.clone(),
                                         on_open: move |hit: MessageSearchHit| {
                                             let current_channel_id = app_state.read().nav.selected_channel.clone();
                                             let current_server_id = app_state.read().nav.selected_server.clone();
@@ -307,7 +357,11 @@ fn SidebarSourceButton(
 
 #[rustfmt::skip]
 #[component]
-fn SavedPinnedItemCard(item: SavedPinnedItem, on_open: EventHandler<MessageSearchHit>) -> Element {
+fn SavedPinnedItemCard(
+    item: SavedPinnedItem,
+    highlight_terms: Vec<String>,
+    on_open: EventHandler<MessageSearchHit>,
+) -> Element {
     let preview = channel_preview_text(&item.hit.message.content);
     let preview_short = if preview.chars().count() > 140 {
         format!("{}…", preview.chars().take(140).collect::<String>())
@@ -341,7 +395,9 @@ fn SavedPinnedItemCard(item: SavedPinnedItem, on_open: EventHandler<MessageSearc
                         span { class: "search-result-author", "{author_name}" }
                         span { class: "search-result-time", "{timestamp}" }
                     }
-                    div { class: "search-result-preview", "{preview_short}" }
+                    div { class: "search-result-preview",
+                        HighlightedSavedText { text: preview_short, search_terms: highlight_terms }
+                    }
                 }
             }
         }
