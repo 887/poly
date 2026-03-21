@@ -23,6 +23,12 @@
       "command": "cargo",
       "args": ["run", "--bin", "poly-electron-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
       "env": {}
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics"],
+      "env": {}
     }
   }
 }
