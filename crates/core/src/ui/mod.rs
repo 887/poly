@@ -336,8 +336,11 @@ fn startup_overlay_state(
     }
 }
 
-/// Compiled stylesheet asset — watched by Dioxus hot-reload.
-const CSS: Asset = asset!("assets/tailwind.css");
+// Include generated CSS asset definitions from build.rs.
+// In release builds: single concatenated tailwind.css.
+// In debug builds: individual CSS partial files (no giant tailwind.css to confuse agents).
+// This file is .gitignored — do NOT edit it, it is overwritten on every build.
+include!("css.rs");
 
 #[cfg(target_arch = "wasm32")]
 const LAYOUT_OVERRIDE_SESSION_KEY: &str = "poly_layout_query_override";
@@ -1303,7 +1306,9 @@ pub fn App() -> Element {
     );
 
     rsx! {
-        document::Link { rel: "stylesheet", href: CSS }
+        for asset in CSS_SLICES.iter() {
+            document::Link { rel: "stylesheet", href: *asset }
+        }
         style { id: "poly-theme", "{theme_css}" }
         div { class: root_class,
             if startup_state.visible {
