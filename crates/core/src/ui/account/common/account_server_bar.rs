@@ -408,8 +408,8 @@ fn ServerIconDisplay(
         if mention > 0 {
             span { class: "badge mention-count-badge", "@{mention}" }
         } else if unread > 0 {
-            // Unread-but-not-mentioned: small white dot indicator.
-            span { class: "badge server-unread-dot" }
+            // Unread-but-not-mentioned: show count (same as favorites bar for consistency)
+            span { class: "badge mention-count-badge", "{unread}" }
         }
     }
 }
