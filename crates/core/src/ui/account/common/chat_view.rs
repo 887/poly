@@ -1996,8 +1996,8 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
             //  - there are newer unloaded messages (has_more_after), OR
             //  - they are more than JUMP_TO_PRESENT_THRESHOLD_PX from the live tail.
             let dist_from_bottom = metrics.scroll_height - viewport_bottom;
-            let is_scrolled_from_bottom = history_snapshot.has_more_after
-                || dist_from_bottom > JUMP_TO_PRESENT_THRESHOLD_PX;
+            let is_scrolled_from_bottom =
+                history_snapshot.has_more_after || dist_from_bottom > JUMP_TO_PRESENT_THRESHOLD_PX;
             if *ctx.scrolled_from_bottom.peek() != is_scrolled_from_bottom {
                 ctx.scrolled_from_bottom.set(is_scrolled_from_bottom);
             }

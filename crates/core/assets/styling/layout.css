@@ -36,18 +36,10 @@ body {
     flex: 1;
     min-height: 0;
     min-width: 0;
-    transition: opacity 220ms ease, transform 220ms ease;
 }
 
 .poly-app-stage-hidden {
-    opacity: 0;
-    transform: translateY(8px);
-    pointer-events: none;
-}
-
-.poly-app-stage-ready {
-    opacity: 1;
-    transform: translateY(0);
+    display: none;
 }
 
 .poly-startup-overlay {
@@ -291,6 +283,8 @@ body {
 .main-layout {
     display: flex;
     flex-direction: column;
+    /* flex:1 fills the full width of the poly-app-stage row flex container */
+    flex: 1;
     height: 100vh;
     overflow: hidden;
     position: relative;

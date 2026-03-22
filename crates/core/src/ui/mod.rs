@@ -1324,7 +1324,7 @@ pub fn App() -> Element {
                 StartupOverlay { state: startup_state.clone() }
             }
             ElectronTitleBar {}
-            div { class: if startup_state.visible { "poly-app-stage poly-app-stage-hidden" } else { "poly-app-stage poly-app-stage-ready" },
+            div { class: if startup_state.visible { "poly-app-stage poly-app-stage-hidden" } else { "poly-app-stage" },
                 AppBody {
                     storage_ready: storage_ready_now,
                     setup_complete,

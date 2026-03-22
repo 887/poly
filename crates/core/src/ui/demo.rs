@@ -412,9 +412,8 @@ pub(crate) fn spawn_event_stream_listener(
                         );
                         // Auto-scroll to bottom when the user is near the tail;
                         // otherwise the Jump to Present button will appear.
-                        let at_bottom = read_message_list_scroll_metrics()
-                            .await
-                            .is_some_and(|(scroll_top, scroll_height)| {
+                        let at_bottom = read_message_list_scroll_metrics().await.is_some_and(
+                            |(scroll_top, scroll_height)| {
                                 // Compute client height is not directly available here,
                                 // so approximate: at bottom when scrollHeight - scrollTop
                                 // is small (near zero means scrolled to very bottom).
@@ -423,7 +422,8 @@ pub(crate) fn spawn_event_stream_listener(
                                 // that catches "near bottom".  Use scrollHeight - scrollTop < threshold
                                 // where threshold accounts for typical viewport heights.
                                 scroll_height - scroll_top < AUTO_SCROLL_THRESHOLD_PX + 800.0
-                            });
+                            },
+                        );
                         if at_bottom {
                             request_scroll_to_bottom();
                         }
