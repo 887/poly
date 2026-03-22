@@ -1197,11 +1197,14 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 pub fn App() -> Element {
     let app_state = use_signal(AppState::default);
     let storage_ready = use_signal(|| false);
-    let mut startup_overlay_visible = use_signal(|| false);
-    let mut startup_overlay_started = use_signal(startup_now_ms);
-    let mut startup_overlay_finished = use_signal(|| false);
     let startup_overlay_config = startup_overlay_config_from_query();
     let startup_overlay_enabled = startup_overlay_config.enabled;
+    // Show the startup overlay immediately on boot when enabled so the boot
+    // log is visible on fast web launches instead of only appearing after the
+    // first post-mount effect pass.
+    let mut startup_overlay_visible = use_signal(|| startup_overlay_enabled);
+    let mut startup_overlay_started = use_signal(startup_now_ms);
+    let mut startup_overlay_finished = use_signal(|| false);
     #[cfg(not(target_arch = "wasm32"))]
     let _ = (startup_overlay_started, startup_overlay_finished);
     // DECISION(DX-I18N-1): Signal<String> context; use_locale() in children subscribes.
@@ -1256,11 +1259,9 @@ pub fn App() -> Element {
     let root_class = app_root_class(&app_state_snapshot);
     let client_manager_snapshot = client_manager.read().clone();
     let chat_data_snapshot = chat_data.read().clone();
-    let startup_overlay_eligible = startup_overlay_enabled && storage_ready_now && setup_complete;
-    let startup_should_hide = startup_overlay_eligible && !chat_data_snapshot.loading;
 
     use_effect(move || {
-        if !startup_overlay_eligible {
+        if !startup_overlay_enabled {
             startup_overlay_visible.set(false);
             startup_overlay_finished.set(false);
             return;
@@ -1270,9 +1271,11 @@ pub fn App() -> Element {
             startup_overlay_visible.set(true);
             return;
         }
-        if !startup_should_hide {
+        if *startup_overlay_finished.read() {
             return;
         }
+
+        startup_overlay_finished.set(true);
 
         spawn(async move {
             #[cfg(target_arch = "wasm32")]
