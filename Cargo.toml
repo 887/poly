@@ -40,6 +40,8 @@ dioxus = { version = "0.7.3", features = ["router"] }
 
 # Database
 surrealdb = { version = "3.0.1", default-features = false }
+sqlite = "0.37.0"
+indexed_db_futures = { version = "0.6.4", features = ["serde"] }
 
 # Async runtime
 # Async runtime — strict WASM-compatible subset per tokio's own wasm check:
@@ -116,7 +118,6 @@ getrandom02-js = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom04-wasm = { package = "getrandom", version = "0.4", features = [
     "wasm_js",
 ] }
-gloo-storage = "0.3"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = [
@@ -129,6 +130,7 @@ web-sys = { version = "0.3", features = [
     "Location",
     "Node",
     "PromiseRejectionEvent",
+    "Storage",
     "Text",
     "Window",
     "console",

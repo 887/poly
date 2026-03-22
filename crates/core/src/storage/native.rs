@@ -1,195 +1,253 @@
-//! Native (non-WASM) storage backend — SurrealDB with SurrealKV.
+//! Native (non-WASM) storage backend — SQLite.
 //!
-//! Uses the same SurrealKV engine that the main Poly app uses, ensuring
-//! the data written by desktop-devtools is readable by the production app.
-//!
-//! Storage location (follows XDG / platform conventions):
-//! - Linux:   `$XDG_DATA_HOME/poly/storage.db`  (default: `~/.local/share/poly/storage.db`)
-//! - macOS:   `~/Library/Application Support/poly/storage.db`
-//! - Windows: `%APPDATA%\poly\storage.db`
-//!
-//! # Implementation notes
-//!
-//! Uses raw SurrealQL `.query()` calls rather than the typed SDK (`db.select`, `db.upsert`)
-//! because user-defined types require `#[derive(SurrealValue)]` from an internal surrealdb
-//! proc-macro crate not exposed to downstream consumers. The `.query()` path avoids that
-//! restriction entirely.
-//!
-//! `serde_json::Value` implements the internal `SurrealValue` trait, so we use it
-//! in `.take()` calls to extract results from query `Response` objects.
-//!
-//! Storage schema:
-//!   Table `poly_kv`, each record = `poly_kv:<key>`, field `payload` stores the
-//!   raw JSON string of the value (double-serialized, mirrors the WASM localStorage approach).
+//! This is the default native backend so `poly-core` can compile without pulling
+//! in SurrealDB unless it is explicitly requested.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use surrealdb::{
-    Surreal,
-    engine::local::{Db, SurrealKv},
-};
+use sqlite::{Connection, ConnectionThreadSafe, State};
 
 use super::StorageError;
-
-// ── StorageInner ──────────────────────────────────────────────────────────────
-
-/// SurrealDB-backed storage inner.
-///
-/// Uses raw SurrealQL `.query()` calls — avoids the `SurrealValue` derive
-/// requirement that the typed SDK imposes on all record types.
 #[derive(Clone)]
 pub struct StorageInner {
-    db: Arc<Surreal<Db>>,
+    db: Arc<Mutex<ConnectionThreadSafe>>,
 }
 
 impl StorageInner {
-    /// Open (or create) the SurrealKV store in the platform data directory.
     pub async fn init() -> Result<Self, StorageError> {
-        let path = poly_data_dir().join("storage.db");
-        std::fs::create_dir_all(poly_data_dir())
-            .map_err(|e| StorageError::Backend(format!("cannot create data dir: {e}")))?;
-
-        let path_str = path.to_string_lossy().to_string();
-        tracing::info!("Opening SurrealKV storage at: {path_str}");
-
-        let db: Surreal<Db> = Surreal::new::<SurrealKv>(&*path_str)
-            .await
-            .map_err(|e| StorageError::Backend(e.to_string()))?;
-        db.use_ns("poly")
-            .use_db("main")
-            .await
-            .map_err(|e| StorageError::Backend(e.to_string()))?;
-
-        tracing::info!("SurrealKV storage ready ✓");
-        Ok(Self { db: Arc::new(db) })
+        Self::open(super::poly_data_dir()).await
     }
 
-    /// Get raw JSON value by key.
-    ///
-    /// Uses `SELECT payload FROM poly_kv:<key>` — the record-ID syntax guarantees
-    /// point lookup without a table scan.
+    #[cfg(test)]
+    pub async fn init_with_path(base_dir: std::path::PathBuf) -> Result<Self, StorageError> {
+        Self::open(base_dir).await
+    }
+
+    async fn open(base_dir: std::path::PathBuf) -> Result<Self, StorageError> {
+        let path = base_dir.join("storage.sqlite3");
+        std::fs::create_dir_all(&base_dir)
+            .map_err(|e| StorageError::Backend(format!("cannot create data dir: {e}")))?;
+
+        let mut db = Connection::open_thread_safe(&path)
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+        db.set_busy_timeout(5_000)
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS poly_kv (key TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL)",
+        )
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        tracing::info!("SQLite storage ready at: {}", path.to_string_lossy());
+        Ok(Self {
+            db: Arc::new(Mutex::new(db)),
+        })
+    }
+
     pub async fn get(&self, key: &str) -> Result<Option<serde_json::Value>, StorageError> {
-        // `key` is always a controlled literal (e.g. "app_settings") — never user input.
-        let query = format!("SELECT payload FROM poly_kv:{key}");
-        let mut resp = self
+        let db = self
             .db
-            .query(&query)
-            .await
-            .map_err(|e| StorageError::Backend(format!("query({key}): {e}")))?;
+            .lock()
+            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
 
-        // `.take("payload")` extracts the "payload" field from the first result record.
-        // Returns None if the record doesn't exist.
-        let raw: Option<String> = resp
-            .take::<Option<String>>("payload")
-            .map_err(|e| StorageError::Backend(format!("take payload ({key}): {e}")))?;
+        let mut statement = db
+            .prepare("SELECT payload FROM poly_kv WHERE key = ?1 LIMIT 1")
+            .map_err(|e| StorageError::Backend(format!("prepare get({key}): {e}")))?;
+        statement
+            .bind((1, key))
+            .map_err(|e| StorageError::Backend(format!("bind get({key}): {e}")))?;
 
-        tracing::debug!("storage::get({key}) → {raw:?}");
-
-        match raw {
-            None => Ok(None),
-            Some(s) => {
-                let val: serde_json::Value =
-                    serde_json::from_str(&s).map_err(|e| StorageError::Serde(e.to_string()))?;
-                Ok(Some(val))
+        match statement
+            .next()
+            .map_err(|e| StorageError::Backend(format!("step get({key}): {e}")))?
+        {
+            State::Done => Ok(None),
+            State::Row => {
+                let payload = statement
+                    .read::<String, _>(0)
+                    .map_err(|e| StorageError::Backend(format!("read get({key}): {e}")))?;
+                let value = serde_json::from_str(&payload)
+                    .map_err(|e| StorageError::Serde(e.to_string()))?;
+                Ok(Some(value))
             }
         }
     }
 
-    /// Upsert raw JSON value by key.
-    ///
-    /// Uses `UPSERT poly_kv:<key> SET payload = $payload` — record-ID syntax creates
-    /// or replaces exactly one record, the canonical SurrealDB 3.0 upsert pattern.
     pub async fn set(&self, key: &str, value: serde_json::Value) -> Result<(), StorageError> {
         let serialized =
             serde_json::to_string(&value).map_err(|e| StorageError::Serde(e.to_string()))?;
 
-        tracing::debug!("storage::set({key}) serialized_len={}", serialized.len());
-
-        // NOTE: We renamed the field to `payload` (from `value`) to avoid any potential
-        // SurrealDB keyword collision with the `VALUE` keyword used in expressions.
-        // DECISION: Use `RETURN NONE` to suppress the upserted record—in SurrealDB 3.0,
-        // UPSERT without RETURN NONE returns a record type, which causes a type mismatch
-        // when the SDK expects `any`. RETURN NONE makes the query return nothing, so we
-        // can skip the result extraction entirely.
-        let query = format!("UPSERT poly_kv:{key} SET payload = $payload RETURN NONE");
-        // Bind as a JSON object — serde_json::Value implements SurrealValue, and
-        // Value::Object is treated as a variables map by IntoVariables.
-        let mut resp = self
+        let db = self
             .db
-            .query(&query)
-            .bind(serde_json::json!({ "payload": serialized }))
-            .await
-            .map_err(|e| StorageError::Backend(format!("upsert({key}): {e}")))?;
+            .lock()
+            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
 
-        // Consume result index 0 to surface any SurrealQL-level errors.
-        // With RETURN NONE, this will be empty, but we still need to call take()
-        // to properly consume the response and check for errors.
-        let _ = resp
-            .take::<Option<serde_json::Value>>(0usize)
-            .map_err(|e| StorageError::Backend(format!("upsert result ({key}): {e}")))?;
-
-        tracing::debug!("storage::set({key}) committed ✓");
-
+        let mut statement = db
+            .prepare(
+                "INSERT INTO poly_kv(key, payload) VALUES(?1, ?2) \
+                 ON CONFLICT(key) DO UPDATE SET payload = excluded.payload",
+            )
+            .map_err(|e| StorageError::Backend(format!("prepare set({key}): {e}")))?;
+        statement
+            .bind((1, key))
+            .map_err(|e| StorageError::Backend(format!("bind key set({key}): {e}")))?;
+        statement
+            .bind((2, serialized.as_str()))
+            .map_err(|e| StorageError::Backend(format!("bind payload set({key}): {e}")))?;
+        while statement
+            .next()
+            .map_err(|e| StorageError::Backend(format!("step set({key}): {e}")))?
+            != State::Done
+        {}
         Ok(())
     }
 
-    /// Delete a key from storage. No-op if not present.
     pub async fn delete(&self, key: &str) -> Result<(), StorageError> {
-        let query = format!("DELETE poly_kv:{key}");
-        let mut resp = self
+        let db = self
             .db
-            .query(&query)
-            .await
-            .map_err(|e| StorageError::Backend(format!("delete({key}): {e}")))?;
-        // Consume result to surface errors.
-        let _ = resp.take::<Option<serde_json::Value>>(0usize);
+            .lock()
+            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
+
+        let mut statement = db
+            .prepare("DELETE FROM poly_kv WHERE key = ?1")
+            .map_err(|e| StorageError::Backend(format!("prepare delete({key}): {e}")))?;
+        statement
+            .bind((1, key))
+            .map_err(|e| StorageError::Backend(format!("bind delete({key}): {e}")))?;
+        while statement
+            .next()
+            .map_err(|e| StorageError::Backend(format!("step delete({key}): {e}")))?
+            != State::Done
+        {}
         Ok(())
     }
 
-    /// Remove all records from the `poly_kv` table.
     pub async fn clear_all(&self) -> Result<(), StorageError> {
-        let mut resp = self
+        let db = self
             .db
-            .query("DELETE poly_kv")
-            .await
+            .lock()
+            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
+        db.execute("DELETE FROM poly_kv")
             .map_err(|e| StorageError::Backend(format!("clear_all: {e}")))?;
-        let _ = resp.take::<Option<serde_json::Value>>(0usize);
         Ok(())
     }
 }
 
-// ── Data directory resolution ─────────────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
 
-/// Return the Poly data directory path for the current platform.
-///
-/// Matches the path that `reset_app` in the MCP server removes:
-/// `~/.local/share/poly` on Linux.
-fn poly_data_dir() -> std::path::PathBuf {
-    #[cfg(target_os = "linux")]
-    {
-        let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| {
-                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-                std::path::PathBuf::from(home).join(".local").join("share")
-            });
-        base.join("poly")
+    fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock().expect("lock")
     }
-    #[cfg(target_os = "macos")]
-    {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        std::path::Path::new(&home)
-            .join("Library")
-            .join("Application Support")
-            .join("poly")
+
+    #[tokio::test]
+    async fn sqlite_storage_round_trips_values() {
+        let _guard = env_guard();
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let storage = StorageInner::init_with_path(dir.path().to_path_buf())
+            .await
+            .expect("init");
+
+        storage
+            .set("app_settings", serde_json::json!({"theme":"neutral-dark"}))
+            .await
+            .expect("set");
+        assert_eq!(
+            storage.get("app_settings").await.expect("get"),
+            Some(serde_json::json!({"theme":"neutral-dark"}))
+        );
+
+        storage
+            .set("app_settings", serde_json::json!({"theme":"red"}))
+            .await
+            .expect("update");
+        assert_eq!(
+            storage.get("app_settings").await.expect("get2"),
+            Some(serde_json::json!({"theme":"red"}))
+        );
+
+        storage.delete("app_settings").await.expect("delete");
+        assert_eq!(storage.get("app_settings").await.expect("get3"), None);
+
+        storage
+            .set("a", serde_json::json!(1))
+            .await
+            .expect("set a");
+        storage
+            .set("b", serde_json::json!(2))
+            .await
+            .expect("set b");
+        storage.clear_all().await.expect("clear");
+        assert_eq!(storage.get("a").await.expect("geta"), None);
+        assert_eq!(storage.get("b").await.expect("getb"), None);
     }
-    #[cfg(target_os = "windows")]
-    {
-        let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
-        std::path::Path::new(&appdata).join("poly")
+
+    #[tokio::test]
+    async fn sqlite_storage_handles_various_types() {
+        let _guard = env_guard();
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let storage = StorageInner::init_with_path(dir.path().to_path_buf())
+            .await
+            .expect("init");
+
+        storage.set("string", serde_json::json!("hello")).await.expect("set");
+        storage.set("number", serde_json::json!(42.5)).await.expect("set");
+        storage.set("boolean", serde_json::json!(true)).await.expect("set");
+        storage.set("array", serde_json::json!([1, 2, 3])).await.expect("set");
+        storage.set("object", serde_json::json!({"key": "value"})).await.expect("set");
+        storage.set("null", serde_json::json!(null)).await.expect("set");
+
+        assert_eq!(storage.get("string").await.expect("get"), Some(serde_json::json!("hello")));
+        assert_eq!(storage.get("number").await.expect("get"), Some(serde_json::json!(42.5)));
+        assert_eq!(storage.get("boolean").await.expect("get"), Some(serde_json::json!(true)));
+        assert_eq!(storage.get("array").await.expect("get"), Some(serde_json::json!([1, 2, 3])));
+        assert_eq!(storage.get("object").await.expect("get"), Some(serde_json::json!({"key": "value"})));
+        assert_eq!(storage.get("null").await.expect("get"), Some(serde_json::json!(null)));
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    {
-        std::path::PathBuf::from(".poly")
+
+    #[tokio::test]
+    async fn sqlite_storage_handles_large_values() {
+        let _guard = env_guard();
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let storage = StorageInner::init_with_path(dir.path().to_path_buf())
+            .await
+            .expect("init");
+
+        let large_string = "x".repeat(10000);
+        storage.set("large", serde_json::json!(large_string)).await.expect("set");
+
+        let retrieved = storage.get("large").await.expect("get");
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().as_str().unwrap(), large_string);
+    }
+
+    #[tokio::test]
+    async fn sqlite_storage_nonexistent_key_returns_none() {
+        let _guard = env_guard();
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let storage = StorageInner::init_with_path(dir.path().to_path_buf())
+            .await
+            .expect("init");
+
+        assert_eq!(storage.get("does_not_exist").await.expect("get"), None);
+    }
+
+    #[tokio::test]
+    async fn sqlite_storage_delete_nonexistent_key_is_noop() {
+        let _guard = env_guard();
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let storage = StorageInner::init_with_path(dir.path().to_path_buf())
+            .await
+            .expect("init");
+
+        storage.delete("does_not_exist").await.expect("delete");
+        assert_eq!(storage.get("does_not_exist").await.expect("get"), None);
     }
 }

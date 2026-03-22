@@ -17,8 +17,8 @@
 
 pub mod client_manager;
 pub mod crypto;
-// Legacy database module (native-only; superseded by `storage` for new code).
-#[cfg(not(target_arch = "wasm32"))]
+// Legacy database module (native-only and only available with the SurrealDB backend).
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-surreal"))]
 pub mod db;
 pub mod i18n;
 /// WASM plugin host runtime (native-only — wasmtime cannot target wasm32).

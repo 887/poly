@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["demo", "server"]
+default = ["demo", "server", "storage-sqlite"]
 stoat = ["dep:poly-stoat"]
 matrix = ["dep:poly-matrix"]
 discord = ["dep:poly-discord"]
@@ -14,6 +14,8 @@ teams = ["dep:poly-teams"]
 demo = ["dep:poly-demo"]
 server = ["dep:poly-server-client"]
 native-nav = []                     # Back/forward nav buttons (desktop/mobile only, not web)
+storage-sqlite = ["dep:sqlite"]
+storage-surreal = ["dep:surrealdb"]
 
 [dependencies]
 # UI
@@ -66,20 +68,24 @@ ammonia = { workspace = true }
 # See docs/phase-voice-plan.md DECISION(V-4).
 nnnoiseless = { workspace = true }
 
-# Native-only: SurrealDB + WASM plugin host (dylib)
+[dev-dependencies]
+tempfile = { workspace = true }
+
+# Native-only: SQLite by default, SurrealDB when `storage-surreal` is enabled.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-surrealdb = { workspace = true, features = ["kv-surrealkv"] }
+sqlite = { workspace = true, optional = true }
+surrealdb = { workspace = true, optional = true, features = ["kv-surrealkv"] }
 poly-plugin-host = { workspace = true }
 poly-server-client = { workspace = true, optional = true, features = [
     "native",
 ] }
 
-# WASM-only: browser localStorage + getrandom JS backend forwarding + poly-server HTTP client.
+# WASM-only: IndexedDB + getrandom JS backend forwarding + poly-server HTTP client.
 # rand_core 0.6 (aead, ed25519-dalek) and rand 0.10 each pull a different getrandom
 # semver line; both need their WASM JS backend feature enabled or they fail to compile.
 # These aliases are defined once in the workspace; no version numbers live here.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gloo-storage = { workspace = true }
+indexed_db_futures = { workspace = true }
 getrandom02-js = { workspace = true }
 getrandom04-wasm = { workspace = true }
 web-sys = { workspace = true }

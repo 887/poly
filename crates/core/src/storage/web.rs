@@ -1,64 +1,123 @@
-//! WASM storage backend — browser `localStorage` via `gloo-storage`.
-//!
-//! `localStorage` persists across page reloads and browser sessions until
-//! explicitly cleared. It is synchronous under the hood; we expose an `async`
-//! interface to match the native backend API.
-//!
-//! Capacity: 5–10 MB (more than enough for settings, tokens, and identity).
-//!
-//! DECISION(DX-STORAGE-2): `localStorage` chosen over IndexedDB for the initial
-//! WASM implementation because:
-//!   - Zero setup — no schema migrations, no object-store definitions.
-//!   - Synchronous underlying API wraps trivially into async signatures.
-//!   - Our storage payload (settings, account tokens) is well under 1 MB.
-//!
-//! Full IndexedDB support (for caching messages, etc.) is planned for Phase 3.
+//! WASM storage backend — browser IndexedDB.
 
 use super::StorageError;
 
-/// Zero-size-type — `localStorage` is a browser global, no handle needed.
+use indexed_db_futures::{
+    KeyPath,
+    database::Database,
+    prelude::{Build, BuildPrimitive, BuildSerde, QuerySource},
+    transaction::TransactionMode,
+};
+use serde::{Deserialize, Serialize};
+
 #[derive(Clone)]
 pub struct StorageInner;
 
-// `StorageInner` is a unit struct with no fields, so Rust automatically
-// provides `Send + Sync` — no manual impls needed.
+const DB_NAME: &str = "poly-storage";
+const STORE_NAME: &str = "kv";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StoredRecord {
+    key: String,
+    payload: serde_json::Value,
+}
+
+fn backend_error<E: std::fmt::Display>(error: E) -> StorageError {
+    StorageError::Backend(error.to_string())
+}
+
+async fn open_db() -> Result<Database, StorageError> {
+    Database::open(DB_NAME)
+        .with_version(1u32)
+        .with_on_upgrade_needed(|event, db| {
+            if event.old_version() < 1.0 {
+                db.create_object_store(STORE_NAME)
+                    .with_key_path(KeyPath::from("key"))
+                    .build()?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(backend_error)
+}
 
 impl StorageInner {
-    /// No-op initialisation — `localStorage` is always available.
     pub async fn init() -> Result<Self, StorageError> {
+        let db = open_db().await?;
+        db.close();
         Ok(Self)
     }
 
-    /// Get a raw JSON value from `localStorage`.
     pub async fn get(&self, key: &str) -> Result<Option<serde_json::Value>, StorageError> {
-        use gloo_storage::errors::StorageError as GlooErr;
-        use gloo_storage::{LocalStorage, Storage as _};
-
-        match LocalStorage::get::<serde_json::Value>(key) {
-            Ok(val) => Ok(Some(val)),
-            Err(GlooErr::KeyNotFound(_)) => Ok(None),
-            Err(e) => Err(StorageError::Backend(e.to_string())),
-        }
+        let db = open_db().await?;
+        let record = {
+            let tx = db.transaction(STORE_NAME).build().map_err(backend_error)?;
+            let store = tx.object_store(STORE_NAME).map_err(backend_error)?;
+            let record: Option<StoredRecord> = store
+                .get(key)
+                .serde()
+                .map_err(backend_error)?
+                .await
+                .map_err(backend_error)?;
+            record
+        };
+        db.close();
+        Ok(record.map(|record| record.payload))
     }
 
-    /// Set a raw JSON value in `localStorage` (upsert semantics).
     pub async fn set(&self, key: &str, value: serde_json::Value) -> Result<(), StorageError> {
-        use gloo_storage::{LocalStorage, Storage as _};
-
-        LocalStorage::set(key, &value).map_err(|e| StorageError::Backend(e.to_string()))
-    }
-
-    /// Remove a key from `localStorage`. No-op if not present.
-    pub async fn delete(&self, key: &str) -> Result<(), StorageError> {
-        use gloo_storage::{LocalStorage, Storage as _};
-        LocalStorage::delete(key);
+        let db = open_db().await?;
+        let tx = db
+            .transaction(STORE_NAME)
+            .with_mode(TransactionMode::Readwrite)
+            .build()
+            .map_err(backend_error)?;
+        let store = tx.object_store(STORE_NAME).map_err(backend_error)?;
+        store
+            .put(StoredRecord {
+                key: key.to_string(),
+                payload: value,
+            })
+            .without_key_type()
+            .serde()
+            .map_err(backend_error)?
+            .await
+            .map_err(backend_error)?;
+        tx.commit().await.map_err(backend_error)?;
+        db.close();
         Ok(())
     }
 
-    /// Clear all localStorage data.
+    pub async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        let db = open_db().await?;
+        let tx = db
+            .transaction(STORE_NAME)
+            .with_mode(TransactionMode::Readwrite)
+            .build()
+            .map_err(backend_error)?;
+        let store = tx.object_store(STORE_NAME).map_err(backend_error)?;
+        store
+            .delete(key)
+            .primitive()
+            .map_err(backend_error)?
+            .await
+            .map_err(backend_error)?;
+        tx.commit().await.map_err(backend_error)?;
+        db.close();
+        Ok(())
+    }
+
     pub async fn clear_all(&self) -> Result<(), StorageError> {
-        use gloo_storage::{LocalStorage, Storage as _};
-        LocalStorage::clear();
+        let db = open_db().await?;
+        let tx = db
+            .transaction(STORE_NAME)
+            .with_mode(TransactionMode::Readwrite)
+            .build()
+            .map_err(backend_error)?;
+        let store = tx.object_store(STORE_NAME).map_err(backend_error)?;
+        store.clear().map_err(backend_error)?.await.map_err(backend_error)?;
+        tx.commit().await.map_err(backend_error)?;
+        db.close();
         Ok(())
     }
 }

@@ -7,8 +7,12 @@
 //!
 //! | Target | Backend | Notes |
 //! |---|---|---|
-//! | Native (Linux/macOS/Windows) | SurrealDB (SurrealKV) | Same as main app |
-//! | WebAssembly | `localStorage` via `gloo-storage` | Persistent across page reloads |
+//! | Native (Linux/macOS/Windows) | SQLite | Default lightweight backend |
+//! | Native + `storage-surreal` | SurrealDB (SurrealKV) | Opt-in compatibility backend |
+//! | WebAssembly | IndexedDB | Persistent browser storage |
+//!
+//! The native backends are mutually exclusive; use `--no-default-features` when
+//! building with `storage-surreal`.
 //!
 //! ## Usage
 //!
@@ -48,10 +52,15 @@ const fn default_gif_provider() -> GifProviderKind {
 
 // ── Platform backends ─────────────────────────────────────────────────────────
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "storage-surreal")))]
 mod native;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "storage-surreal")))]
 use native::StorageInner;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-surreal"))]
+mod native_surreal;
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-surreal"))]
+use native_surreal::StorageInner;
 
 #[cfg(target_arch = "wasm32")]
 mod web;
@@ -63,7 +72,7 @@ use web::StorageInner;
 /// Storage operation error.
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
-    /// Backend-specific error (SurrealDB or Web API error).
+    /// Backend-specific error.
     #[error("storage backend error: {0}")]
     Backend(String),
 
@@ -75,6 +84,37 @@ pub enum StorageError {
 impl From<serde_json::Error> for StorageError {
     fn from(e: serde_json::Error) -> Self {
         Self::Serde(e.to_string())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn poly_data_dir() -> std::path::PathBuf {
+    #[cfg(target_os = "linux")]
+    {
+        let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| {
+                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                std::path::PathBuf::from(home).join(".local").join("share")
+            });
+        base.join("poly")
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        std::path::Path::new(&home)
+            .join("Library")
+            .join("Application Support")
+            .join("poly")
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+        std::path::Path::new(&appdata).join("poly")
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        std::path::PathBuf::from(".poly")
     }
 }
 
@@ -488,9 +528,9 @@ pub struct Storage(StorageInner);
 impl Storage {
     /// Initialize the storage backend.
     ///
-    /// * **Native**: opens (or creates) the SurrealKV database in the platform
-    ///   data directory (`~/.local/share/poly` on Linux etc.).
-    /// * **WASM**: no-op — `localStorage` is always available.
+    /// * **Native**: opens (or creates) the selected local database in the
+    ///   platform data directory (`~/.local/share/poly` on Linux etc.).
+    /// * **WASM**: opens (or creates) the IndexedDB database.
     pub async fn init() -> Result<Self, StorageError> {
         Ok(Self(StorageInner::init().await?))
     }
@@ -531,8 +571,8 @@ impl Storage {
 
     /// Irreversibly clear all app state from persistent storage.
     ///
-    /// On native this wipes the whole SurrealKV table. On web this clears all
-    /// browser localStorage keys used by the app.
+    /// On native this wipes the whole local KV table. On web this clears the
+    /// IndexedDB object store used by the app.
     pub async fn nuke_all_data(&self) -> Result<(), StorageError> {
         self.0.clear_all().await
     }
