@@ -101,6 +101,13 @@ struct StartupOverlayConfig {
     min_visible_ms: u32,
 }
 
+struct StartupOverlayParams {
+    enabled: bool,
+    visible: bool,
+    storage_ready: bool,
+    setup_complete: bool,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 struct StartupOverlayAccount {
     id: String,
@@ -279,14 +286,17 @@ fn startup_log_lines(
 }
 
 fn startup_overlay_state(
-    enabled: bool,
-    visible: bool,
-    storage_ready: bool,
-    setup_complete: bool,
+    params: StartupOverlayParams,
     app_state: &AppState,
     client_manager: &ClientManager,
     chat_data: &ChatData,
 ) -> StartupOverlayState {
+    let StartupOverlayParams {
+        enabled,
+        visible,
+        storage_ready,
+        setup_complete,
+    } = params;
     let accounts = client_manager
         .sessions
         .iter()
@@ -1286,10 +1296,12 @@ pub fn App() -> Element {
     #[cfg(target_arch = "wasm32")]
     {
         let startup_state = startup_overlay_state(
-            startup_overlay_enabled,
-            *startup_overlay_visible.read(),
-            storage_ready_now,
-            setup_complete,
+            StartupOverlayParams {
+                enabled: startup_overlay_enabled,
+                visible: *startup_overlay_visible.read(),
+                storage_ready: storage_ready_now,
+                setup_complete,
+            },
             &app_state_snapshot,
             &client_manager_snapshot,
             &chat_data_snapshot,
@@ -1305,10 +1317,12 @@ pub fn App() -> Element {
     }
 
     let startup_state = startup_overlay_state(
-        startup_overlay_enabled,
-        *startup_overlay_visible.read(),
-        storage_ready_now,
-        setup_complete,
+        StartupOverlayParams {
+            enabled: startup_overlay_enabled,
+            visible: *startup_overlay_visible.read(),
+            storage_ready: storage_ready_now,
+            setup_complete,
+        },
         &app_state_snapshot,
         &client_manager_snapshot,
         &chat_data_snapshot,
