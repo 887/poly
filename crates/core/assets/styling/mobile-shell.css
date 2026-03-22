@@ -95,6 +95,25 @@
     box-shadow: none;
 }
 
+/* Left drawer shadow overlay — matches the right panel's gradient edge shadow */
+.poly-app.poly-mobile-runtime-active .poly-split-sidebar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 34px;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(-90deg, rgb(0 0 0 / 20%) 0%, rgb(0 0 0 / 10%) 45%, rgb(0 0 0 / 0%) 100%);
+    transition: opacity 0.22s ease;
+}
+
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-open .poly-split-sidebar::after,
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-dragging .poly-split-sidebar::after {
+    opacity: 1;
+}
+
 .poly-app.poly-mobile-runtime-active .poly-left-drawer-panel {
     background: var(--bg-secondary);
 }
@@ -371,7 +390,7 @@
     width: 34px;
     pointer-events: none;
     opacity: 0;
-    background: linear-gradient(90deg, rgb(0 0 0 / 58%) 0%, rgb(0 0 0 / 28%) 45%, rgb(0 0 0 / 0%) 100%);
+    background: linear-gradient(90deg, rgb(0 0 0 / 20%) 0%, rgb(0 0 0 / 10%) 45%, rgb(0 0 0 / 0%) 100%);
     transition: opacity 0.22s ease;
 }
 

@@ -696,6 +696,13 @@ server-menu-copy-id = Copy Server ID
 server-menu-add-favorites = Add to Favorites
 server-menu-remove-favorites = Remove from Favorites
 
+# Channel context menu
+channel-menu-mark-read = Mark as Read
+channel-menu-mute = Mute Channel
+channel-menu-unmute = Unmute Channel
+channel-menu-copy-link = Copy Link
+channel-menu-copy-id = Copy Channel ID
+
 # Remove from favorites inline confirm
 remove-favorites-title = Remove "{ $name }" from Favorites?
 remove-favorites-body = You can add it back anytime by dragging it to the favorites bar or using this menu.

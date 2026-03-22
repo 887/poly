@@ -582,32 +582,32 @@ fn display_unread_count(unread_count: u32) -> String {
     unread_count.to_string()
 }
 
-fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id: &str) -> u32 {
-    let (unread_count, current_server_id) = {
+pub(crate) fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id: &str) -> u32 {
+    let (unread_count, mention_count, current_server_id) = {
         let data = chat_data.read();
-        let unread_count = data
+        let (unread_count, mention_count) = data
             .dm_channels
             .iter()
             .find(|dm| dm.id == channel_id)
-            .map(|dm| dm.unread_count)
+            .map(|dm| (dm.unread_count, 0u32))
             .or_else(|| {
                 data.channels
                     .iter()
                     .find(|channel| channel.id == channel_id)
-                    .map(|channel| channel.unread_count)
+                    .map(|channel| (channel.unread_count, channel.mention_count))
             })
             .or_else(|| {
                 data.current_channel
                     .as_ref()
                     .filter(|channel| channel.id == channel_id)
-                    .map(|channel| channel.unread_count)
+                    .map(|channel| (channel.unread_count, channel.mention_count))
             })
-            .unwrap_or(0);
+            .unwrap_or((0, 0));
         let current_server_id = data.current_server.as_ref().map(|server| server.id.clone());
-        (unread_count, current_server_id)
+        (unread_count, mention_count, current_server_id)
     };
 
-    if unread_count == 0 {
+    if unread_count == 0 && mention_count == 0 {
         return 0;
     }
 
@@ -617,11 +617,13 @@ fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id: &str) -> u
         && current_channel.id == channel_id
     {
         current_channel.unread_count = 0;
+        current_channel.mention_count = 0;
     }
 
     for channel in &mut data.channels {
         if channel.id == channel_id {
             channel.unread_count = 0;
+            channel.mention_count = 0;
             break;
         }
     }
@@ -638,11 +640,14 @@ fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id: &str) -> u
             && current_server.id == server_id
         {
             current_server.unread_count = current_server.unread_count.saturating_sub(unread_count);
+            current_server.mention_count =
+                current_server.mention_count.saturating_sub(mention_count);
         }
 
         for server in &mut data.servers {
             if server.id == server_id {
                 server.unread_count = server.unread_count.saturating_sub(unread_count);
+                server.mention_count = server.mention_count.saturating_sub(mention_count);
                 break;
             }
         }
@@ -1192,6 +1197,7 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     use_mobile_side_column_effect(signals, ctx);
     use_command_preload_effect(signals, &ctx.channel_id);
     use_unread_marker_visibility_effect(signals);
+    use_auto_dismiss_divider_effect(signals);
     use_composer_focus_effect(signals);
 }
 
@@ -1513,7 +1519,7 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
 
 fn use_history_state_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
-    let chat_data = signals.chat_data;
+    let mut chat_data = signals.chat_data;
     let mut history_state = signals.history_state;
 
     use_effect(move || {
@@ -1527,6 +1533,16 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         }
         if history_state.read().channel_id.as_deref() == Some(&active_channel_id) {
             return;
+        }
+
+        // Channel switched — if the outgoing channel has no remaining unread
+        // messages (user saw everything), mark it as read so the bold name and
+        // server badge are cleared immediately rather than waiting for a backend
+        // sync. This also clears mention badges on the channel / server.
+        if let Some(prev_channel_id) = history_state.read().channel_id.clone()
+            && history_state.read().unread_count == 0
+        {
+            mark_channel_as_read(&mut chat_data, &prev_channel_id);
         }
         let messages = chat_snapshot.messages.clone();
         let unread_count = current_channel_unread_count(
@@ -1633,6 +1649,46 @@ fn use_unread_marker_visibility_effect(signals: &ChatViewSignals) {
                 unread_marker_on_screen.set(visible);
             }
         });
+    });
+}
+
+/// Auto-dismiss the unread divider (and mark the channel as read) the moment the
+/// user reaches the live tail of a channel.
+///
+/// Fires whenever `scrolled_from_bottom` transitions to `false` (i.e. the user is
+/// at the bottom and there are no newer unloaded messages).  At that point, if
+/// `history_state.unread_count == 0`, all unread messages have been seen:
+///   - clear `unread_divider_visible` so the red line disappears immediately, and
+///   - call `mark_channel_as_read` so the channel name loses its bold styling and
+///     the server badge counters are decremented.
+fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
+    let scrolled_from_bottom = signals.scrolled_from_bottom;
+    let mut history_state = signals.history_state;
+    let mut chat_data = signals.chat_data;
+
+    use_effect(move || {
+        // Only act when the user is at the bottom (not scrolled away from live tail).
+        if *scrolled_from_bottom.read() {
+            return;
+        }
+
+        let (unread_count, divider_visible, channel_id) = {
+            let hs = history_state.read();
+            (hs.unread_count, hs.unread_divider_visible, hs.channel_id.clone())
+        };
+
+        // If divider is already gone or there are still unseen messages, nothing to do.
+        if !divider_visible || unread_count != 0 {
+            return;
+        }
+
+        // User is at the bottom, has seen everything — clear the divider.
+        history_state.write().unread_divider_visible = false;
+
+        // Also clear bold / server badge so they don't linger.
+        if let Some(channel_id) = channel_id {
+            mark_channel_as_read(&mut chat_data, &channel_id);
+        }
     });
 }
 

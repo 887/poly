@@ -302,6 +302,27 @@ pub struct ContextMenuState {
     pub backend_slug: String,
 }
 
+/// State for the active right-click channel context menu.
+#[derive(Debug, Clone)]
+pub struct ChannelContextMenuState {
+    /// Fixed X position (from `page_coordinates()`).
+    pub x: f64,
+    /// Fixed Y position (from `page_coordinates()`).
+    pub y: f64,
+    /// Channel ID this menu was opened for.
+    pub channel_id: String,
+    /// Human-readable channel name.
+    pub channel_name: String,
+    /// Account ID that owns this channel.
+    pub account_id: String,
+    /// Server ID this channel belongs to.
+    pub server_id: String,
+    /// Federated instance ID for this account.
+    pub instance_id: String,
+    /// Backend slug.
+    pub backend_slug: String,
+}
+
 /// Global app state provided at the root level.
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -333,6 +354,8 @@ pub struct AppState {
     /// Set by `oncontextmenu` on server icons; cleared by a global
     /// click handler in `MainLayout`.
     pub context_menu: Option<ContextMenuState>,
+    /// Active right-click channel context menu, if any.
+    pub channel_context_menu: Option<ChannelContextMenuState>,
 }
 
 impl Default for AppState {
@@ -349,6 +372,7 @@ impl Default for AppState {
             member_list_show_offline: true,
             search_type_seed: None,
             context_menu: None,
+            channel_context_menu: None,
         }
     }
 }

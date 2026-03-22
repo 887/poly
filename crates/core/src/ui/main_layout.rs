@@ -14,7 +14,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::account::{AccountServerBar, ServerContextMenu, UserProfileModal};
+use super::account::{AccountServerBar, ChannelContextMenu, ServerContextMenu, UserProfileModal};
 use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
@@ -287,9 +287,14 @@ pub fn MainLayout() -> Element {
                 if app_state.read().context_menu.is_some() {
                     app_state.write().context_menu = None;
                 }
+                if app_state.read().channel_context_menu.is_some() {
+                    app_state.write().channel_context_menu = None;
+                }
             },
             // Floating server right-click context menu (position: fixed, above sidebars)
             ServerContextMenu {}
+            // Floating channel right-click / long-press context menu
+            ChannelContextMenu {}
             // Voice connection banner — spans full width when connected
             VoiceBanner {}
             // Main body: nav + sidebar + route content

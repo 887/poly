@@ -92,6 +92,7 @@ pub mod poly_native;
 pub use common::AccountBar;
 pub use common::AccountServerBar;
 pub use common::AccountSwitcher;
+pub use common::ChannelContextMenu;
 pub use common::ChannelList;
 pub use common::ChatView;
 pub use common::ConversationSearchView;

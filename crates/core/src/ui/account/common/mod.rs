@@ -36,6 +36,7 @@
 pub mod account_bar;
 pub mod account_server_bar;
 pub mod account_switcher;
+pub mod channel_context_menu;
 pub mod channel_list;
 pub mod chat_history;
 pub mod chat_view;
@@ -58,6 +59,7 @@ pub mod voice_view;
 pub use account_bar::AccountBar;
 pub use account_server_bar::AccountServerBar;
 pub use account_switcher::AccountSwitcher;
+pub use channel_context_menu::ChannelContextMenu;
 pub use channel_list::ChannelList;
 pub use chat_view::ChatView;
 pub use conversation_search_view::ConversationSearchView;
