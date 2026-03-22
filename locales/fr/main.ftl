@@ -69,6 +69,8 @@ chat-select-conversation = Sélectionnez une conversation
 chat-loading-earlier = Chargement des anciens messages...
 chat-unread-banner = { $count } nouveaux messages depuis { $time } le { $date }
 chat-unread-divider = Nouveau
+chat-jump-to-present = Aller au présent
+chat-viewing-older-messages = Vous regardez des messages plus anciens
 
 # Salons
 channel-text = Salon textuel

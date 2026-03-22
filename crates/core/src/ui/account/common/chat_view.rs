@@ -16,7 +16,7 @@ use super::chat_history::{
     ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE, read_message_list_anchor,
     remember_message_list_scroll_position, request_preserve_message_anchor,
     request_preserve_scroll_position, request_preserve_scroll_position_from_bottom,
-    unread_marker_message_id,
+    request_scroll_to_bottom, unread_marker_message_id,
 };
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use super::dm_user_sidebar::DmUserSidebar;
@@ -58,6 +58,9 @@ const MESSAGE_HISTORY_SENTINEL_PX: f64 = 8.0;
 /// This avoids visibly "attaching" rows page-by-page and clears the bottom
 /// spacer once the real latest message has been reached.
 const MAX_CHAINED_NEWER_HISTORY_PAGES: usize = 20;
+/// Distance from the scroll bottom (in pixels) beyond which the "Jump to Present"
+/// button appears. Matches roughly one viewport height of buffer.
+const JUMP_TO_PRESENT_THRESHOLD_PX: f64 = 200.0;
 const ESTIMATED_FULL_MESSAGE_HEIGHT: f64 = 92.0;
 const ESTIMATED_GROUPED_MESSAGE_HEIGHT: f64 = 34.0;
 const ESTIMATED_DATE_SEPARATOR_HEIGHT: f64 = 28.0;
@@ -913,6 +916,12 @@ struct ChatViewSignals {
     threads_filter_query: Signal<String>,
     /// Resize-driven rerender tick so desktop/mobile header branches flip immediately.
     mobile_layout_resize_tick: Signal<u64>,
+    /// Whether the user has scrolled far enough from the live tail that the
+    /// "Jump to Present" button should be shown.
+    scrolled_from_bottom: Signal<bool>,
+    /// Count of live messages that arrived while the user was scrolled up.
+    /// Shown as a badge on the "Jump to Present" button.
+    new_messages_while_scrolled_up: Signal<u32>,
 }
 
 fn use_chat_view_signals() -> ChatViewSignals {
@@ -950,6 +959,8 @@ fn use_chat_view_signals() -> ChatViewSignals {
         mobile_layout_resize_tick: use_signal(|| 0_u64),
         header_actions_overflow: use_signal(|| false),
         header_actions_menu_open: use_signal(|| false),
+        scrolled_from_bottom: use_signal(|| false),
+        new_messages_while_scrolled_up: use_signal(|| 0_u32),
     }
 }
 
@@ -1069,6 +1080,8 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         pinned_filter_query: signals.pinned_filter_query,
         threads_filter_open: signals.threads_filter_open,
         threads_filter_query: signals.threads_filter_query,
+        scrolled_from_bottom: signals.scrolled_from_bottom,
+        new_messages_while_scrolled_up: signals.new_messages_while_scrolled_up,
     }
 }
 
@@ -1531,6 +1544,9 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             after_spacer_px: 0.0,
             unread_count,
             unread_marker_message_id: unread_marker_message_id(&messages, unread_count),
+            // Show the unread divider on channel open when there are unread messages.
+            // The divider persists until the channel is switched (even after mark-as-read).
+            unread_divider_visible: unread_count > 0,
         };
         recompute_history_spacers(&mut next_history, &messages);
         history_state.set(next_history);
@@ -1693,6 +1709,10 @@ struct ChatViewMarkupCtx {
     threads_filter_open: Signal<bool>,
     /// Current filter query text for the Threads tab
     threads_filter_query: Signal<String>,
+    /// Whether the user has scrolled far enough from the live tail for "Jump to Present".
+    scrolled_from_bottom: Signal<bool>,
+    /// Count of live messages that arrived while the user was scrolled up.
+    new_messages_while_scrolled_up: Signal<u32>,
 }
 
 fn should_virtualize_messages(message_count: usize, search_query_value: &str) -> bool {
@@ -1924,6 +1944,9 @@ struct MessageListScrollWorkCtx {
     chat_data: Signal<ChatData>,
     top_edge_armed: Arc<AtomicBool>,
     bottom_edge_armed: Arc<AtomicBool>,
+    /// Signal updated by the scroll loop — true when the user is scrolled far
+    /// enough from the live tail that "Jump to Present" should be shown.
+    scrolled_from_bottom: Signal<bool>,
 }
 
 async fn wait_for_next_animation_frame() -> bool {
@@ -1967,6 +1990,17 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
             let top_spacer_boundary = history_snapshot.before_spacer_px.max(0.0);
             let bottom_spacer_boundary =
                 (metrics.scroll_height - history_snapshot.after_spacer_px).max(0.0);
+
+            // Update "scrolled from bottom" signal for the Jump to Present button.
+            // The user is considered "scrolled up" when:
+            //  - there are newer unloaded messages (has_more_after), OR
+            //  - they are more than JUMP_TO_PRESENT_THRESHOLD_PX from the live tail.
+            let dist_from_bottom = metrics.scroll_height - viewport_bottom;
+            let is_scrolled_from_bottom = history_snapshot.has_more_after
+                || dist_from_bottom > JUMP_TO_PRESENT_THRESHOLD_PX;
+            if *ctx.scrolled_from_bottom.peek() != is_scrolled_from_bottom {
+                ctx.scrolled_from_bottom.set(is_scrolled_from_bottom);
+            }
 
             let near_top = history_snapshot.has_more_before
                 && metrics.scroll_top <= top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
@@ -2982,6 +3016,7 @@ fn render_chat_content_column(ctx: ChatViewMarkupCtx) -> Element {
     rsx! {
         div { class: "chat-content-column",
             {render_message_list(ctx.clone())}
+            {render_jump_to_present(ctx.clone())}
             TypingIndicator {}
             {render_message_input_area(ctx)}
         }
@@ -3014,6 +3049,7 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let scroll_unread_marker_id = ctx.unread_marker_id.clone();
     let scroll_search_query_value = ctx.search_query_value.clone();
     let mut virtual_window = ctx.virtual_window;
+    let scrolled_from_bottom = ctx.scrolled_from_bottom;
 
     use_effect(move || {
         if !virtualize_messages {
@@ -3078,10 +3114,12 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
                         chat_data,
                         top_edge_armed: scroll_top_edge_armed,
                         bottom_edge_armed: scroll_bottom_edge_armed,
+                        scrolled_from_bottom,
                     });
                 });
             },
             {render_message_list_loading_overlays(ctx.clone())}
+            {render_unread_banner(ctx.clone())}
             div { class: if is_loading_history { "message-list-content message-list-content-swapping" } else { "message-list-content" },
                 {render_message_list_content(ctx.clone())}
             }
@@ -3391,7 +3429,6 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
                 style: "height: {total_top_spacer_px}px;",
             }
         }
-        {render_unread_banner(ctx.clone())}
         for slot_idx in 0..MAX_LOADED_MESSAGES {
             {
                 let actual_idx = render_start + slot_idx;
@@ -3434,6 +3471,44 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+/// Render the "Jump to Present" / "You're Viewing Older Messages" floating button.
+///
+/// Shown when the user has scrolled up far enough from the live tail (tracked by
+/// `scrolled_from_bottom`) or when `has_more_after = true` (newer unloaded messages exist).
+/// Clicking it scrolls to the bottom and, if `has_more_after`, the scroll sentinel will
+/// automatically chain-load newer message pages to bring the user to the live tail.
+fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
+    let is_scrolled = *ctx.scrolled_from_bottom.read();
+    let has_more_after = ctx.history_state.read().has_more_after;
+    if !is_scrolled && !has_more_after {
+        return rsx! {};
+    }
+
+    let new_count = *ctx.new_messages_while_scrolled_up.read();
+    let mut new_messages_while_scrolled_up = ctx.new_messages_while_scrolled_up;
+
+    rsx! {
+        div { class: "chat-jump-to-present-wrap",
+            button {
+                class: "chat-jump-to-present",
+                onclick: move |_| {
+                    new_messages_while_scrolled_up.set(0);
+                    request_scroll_to_bottom();
+                },
+                if new_count > 0 {
+                    span { class: "chat-jump-to-present-badge", "{new_count}" }
+                }
+                span { class: "chat-jump-to-present-arrow", "↓" }
+                if has_more_after {
+                    "{t(\"chat-viewing-older-messages\")}"
+                } else {
+                    "{t(\"chat-jump-to-present\")}"
+                }
+            }
+        }
+    }
+}
+
 fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
     // Only show the banner if there are unread messages AND the unread marker is not visible on screen
     if !ctx.unread_banner_visible || *ctx.unread_marker_on_screen.read() {
@@ -3457,8 +3532,9 @@ fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
                 onclick: move |_| {
                     if let Some(active_channel_id) = unread_banner_channel_id.clone() {
                         let _ = mark_channel_as_read(&mut chat_data, &active_channel_id);
+                        // Clear unread count (hides the banner) but preserve
+                        // unread_divider_visible so the red line stays (Discord behaviour).
                         history_state.write().unread_count = 0;
-                        history_state.write().unread_marker_message_id = None;
                     }
                 },
                 "{t(\"notifications-mark-read\")}"
@@ -3488,7 +3564,7 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
     } else {
         String::new()
     };
-    let unread_count = ctx.history_state.read().unread_count;
+    let unread_divider_visible = ctx.history_state.read().unread_divider_visible;
     let unread_marker_id = ctx.unread_marker_id.clone();
     let hovered_msg_signal = ctx.hovered_msg;
     let hovered_msg_signal_leave = ctx.hovered_msg;
@@ -3506,7 +3582,7 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
                 span { class: "date-separator-text", "{date_str}" }
             }
         }
-        if unread_marker_id.as_deref() == Some(msg_id.as_str()) && unread_count > 0 {
+        if unread_marker_id.as_deref() == Some(msg_id.as_str()) && unread_divider_visible {
             div { class: "message-unread-divider",
                 div { class: "message-unread-divider-line" }
                 span { class: "message-unread-divider-label", "{t(\"chat-unread-divider\")}" }
@@ -3838,6 +3914,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
         client_manager,
         chat_data,
         app_state,
+        new_messages_while_scrolled_up: ctx.new_messages_while_scrolled_up,
     };
 
     rsx! {
@@ -3937,6 +4014,7 @@ struct ComposerRuntimeCtx {
     client_manager: Signal<ClientManager>,
     chat_data: Signal<ChatData>,
     app_state: Signal<AppState>,
+    new_messages_while_scrolled_up: Signal<u32>,
 }
 
 fn handle_composer_keydown(
@@ -3985,6 +4063,7 @@ fn handle_composer_keydown(
                 client_manager: ctx.client_manager,
                 chat_data: ctx.chat_data,
                 app_state: ctx.app_state,
+                new_messages_while_scrolled_up: ctx.new_messages_while_scrolled_up,
             })
             .await;
         });
@@ -4056,6 +4135,7 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
     let app_state = ctx.app_state;
+    let new_messages_while_scrolled_up = ctx.new_messages_while_scrolled_up;
 
     rsx! {
         button {
@@ -4090,6 +4170,7 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
                                 client_manager,
                                 chat_data,
                                 app_state,
+                                new_messages_while_scrolled_up,
                             })
                             .await;
                     });
@@ -5136,6 +5217,8 @@ struct SendMessageCtx {
     client_manager: Signal<ClientManager>,
     chat_data: Signal<ChatData>,
     app_state: Signal<AppState>,
+    /// Reset to 0 after sending so the Jump to Present badge clears.
+    new_messages_while_scrolled_up: Signal<u32>,
 }
 
 /// Send a message via the backend and prepend it to the message list.
@@ -5148,6 +5231,7 @@ async fn send_message(ctx: SendMessageCtx) {
         client_manager,
         mut chat_data,
         app_state,
+        mut new_messages_while_scrolled_up,
     } = ctx;
     // Resolve the backend: server channels use server_id lookup; DM channels fall back to
     // active_account_id so messages still send when no server is selected.
@@ -5186,6 +5270,9 @@ async fn send_message(ctx: SendMessageCtx) {
     match result {
         Ok(msg) => {
             chat_data.write().messages.push(msg);
+            // Always scroll to bottom when the user sends a message.
+            new_messages_while_scrolled_up.set(0);
+            request_scroll_to_bottom();
         }
         Err(e) => {
             tracing::error!("Failed to send message: {e}");

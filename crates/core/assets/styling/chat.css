@@ -73,7 +73,14 @@
 .message-list-content {
     display: flex;
     flex-direction: column;
-    min-height: 100%;
+    /* Anchor messages to the bottom — when there are few messages they appear
+       near the input rather than floating at the top with a huge empty gap.
+       This mirrors Discord/Slack chat anchoring behaviour.
+       flex: 1 makes this div fill all remaining height in the scroll container
+       so justify-content: flex-end has real free space to push messages down. */
+    justify-content: flex-end;
+    flex: 1;
+    min-height: 0;
 }
 
 .message-list-content-swapping {
@@ -157,6 +164,65 @@
 
 .chat-unread-banner-action:hover {
     background: rgb(255 255 255 / 22%);
+}
+
+/* ===========================
+ * Jump to Present / Viewing Older Messages button
+ * Anchored above the typing indicator + input, appears when the user
+ * has scrolled up far enough to be off the live tail.
+ * Mirrors the Discord "Jump to Present" pill UX.
+ * =========================== */
+
+.chat-jump-to-present-wrap {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    /* A thin strip below the message list — zero height when hidden */
+}
+
+.chat-jump-to-present {
+    position: absolute;
+    bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 999px;
+    background-color: var(--bg-floating, #2b2d31);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+    pointer-events: all;
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+    white-space: nowrap;
+    z-index: 5;
+}
+
+.chat-jump-to-present:hover {
+    background-color: var(--bg-tertiary);
+    transform: translateY(-1px);
+}
+
+.chat-jump-to-present-arrow {
+    font-size: 14px;
+}
+
+.chat-jump-to-present-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background-color: var(--accent-primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
 }
 
 .message {

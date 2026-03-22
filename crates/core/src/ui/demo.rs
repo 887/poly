@@ -14,11 +14,18 @@
 
 use crate::client_manager::{BackendHandle, ClientManager, PluginSettingsEntry};
 use crate::state::{AppState, ChatData};
+use crate::ui::account::common::chat_history::{
+    read_message_list_scroll_metrics, request_scroll_to_bottom,
+};
 use dioxus::prelude::*;
 // ClientBackend trait must be in scope for `.authenticate()` to be callable on
 // DemoClient / DemoClient2 inside the #[cfg(feature = "demo")] activation path.
 #[cfg(feature = "demo")]
 use poly_client::ClientBackend as _;
+
+/// Scroll threshold: if the user is within this many pixels of the bottom, treat
+/// them as "at the bottom" and auto-scroll when a new message arrives.
+const AUTO_SCROLL_THRESHOLD_PX: f64 = 60.0;
 
 /// Toggle the demo client on/off and refresh all data.
 ///
@@ -403,6 +410,23 @@ pub(crate) fn spawn_event_stream_listener(
                             "Live message in #{channel_id}: {}",
                             message.author.display_name
                         );
+                        // Auto-scroll to bottom when the user is near the tail;
+                        // otherwise the Jump to Present button will appear.
+                        let at_bottom = read_message_list_scroll_metrics()
+                            .await
+                            .is_some_and(|(scroll_top, scroll_height)| {
+                                // Compute client height is not directly available here,
+                                // so approximate: at bottom when scrollHeight - scrollTop
+                                // is small (near zero means scrolled to very bottom).
+                                // In practice scrollHeight - (scrollTop + clientHeight) < threshold.
+                                // We check the simpler: scrollHeight - scrollTop <= a large value
+                                // that catches "near bottom".  Use scrollHeight - scrollTop < threshold
+                                // where threshold accounts for typical viewport heights.
+                                scroll_height - scroll_top < AUTO_SCROLL_THRESHOLD_PX + 800.0
+                            });
+                        if at_bottom {
+                            request_scroll_to_bottom();
+                        }
                     }
                     // TODO(phase-3): increment unread count for other channels
                 }

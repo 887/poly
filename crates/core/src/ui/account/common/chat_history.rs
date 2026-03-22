@@ -34,6 +34,12 @@ pub struct ChatHistoryUiState {
     pub unread_count: u32,
     /// Message ID where the unread divider should be rendered.
     pub unread_marker_message_id: Option<String>,
+    /// Whether the red unread-divider line should be shown.
+    ///
+    /// Distinct from `unread_count > 0`: the line persists after the user marks
+    /// the channel as read (matching Discord behaviour — the line stays until the
+    /// channel is switched, it just gets pushed up by new messages).
+    pub unread_divider_visible: bool,
 }
 
 /// Build the initial message query for a channel based on unread count.
