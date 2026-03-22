@@ -31,6 +31,25 @@ body {
     flex-direction: column;
 }
 
+.poly-app-stage {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.poly-app-stage-hidden {
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+}
+
+.poly-app-stage-ready {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 .poly-startup-overlay {
     position: fixed;
     inset: 0;
@@ -46,9 +65,8 @@ body {
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(circle at top, rgb(82 133 255 / 16%), transparent 42%),
-        linear-gradient(180deg, rgb(5 10 18 / 82%), rgb(8 11 18 / 92%));
-    backdrop-filter: blur(8px);
+        radial-gradient(circle at top, rgb(82 133 255 / 12%), transparent 42%),
+        linear-gradient(180deg, rgb(7 10 17 / 100%), rgb(8 11 18 / 100%));
 }
 
 .poly-startup-shell {

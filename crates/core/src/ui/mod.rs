@@ -1187,12 +1187,13 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 pub fn App() -> Element {
     let app_state = use_signal(AppState::default);
     let storage_ready = use_signal(|| false);
-    let mut startup_overlay_visible = use_signal(|| true);
-    let startup_overlay_started = use_signal(startup_now_ms);
+    let mut startup_overlay_visible = use_signal(|| false);
+    let mut startup_overlay_started = use_signal(startup_now_ms);
+    let mut startup_overlay_finished = use_signal(|| false);
     let startup_overlay_config = startup_overlay_config_from_query();
     let startup_overlay_enabled = startup_overlay_config.enabled;
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = startup_overlay_started;
+    let _ = (startup_overlay_started, startup_overlay_finished);
     // DECISION(DX-I18N-1): Signal<String> context; use_locale() in children subscribes.
     crate::i18n::provide_locale_context();
     let locale_sig = crate::i18n::use_locale();
@@ -1245,11 +1246,18 @@ pub fn App() -> Element {
     let root_class = app_root_class(&app_state_snapshot);
     let client_manager_snapshot = client_manager.read().clone();
     let chat_data_snapshot = chat_data.read().clone();
-    let startup_should_hide = storage_ready_now && setup_complete && !chat_data_snapshot.loading;
+    let startup_overlay_eligible = startup_overlay_enabled && storage_ready_now && setup_complete;
+    let startup_should_hide = startup_overlay_eligible && !chat_data_snapshot.loading;
 
     use_effect(move || {
-        if !startup_overlay_enabled {
+        if !startup_overlay_eligible {
             startup_overlay_visible.set(false);
+            startup_overlay_finished.set(false);
+            return;
+        }
+        if !*startup_overlay_visible.read() && !*startup_overlay_finished.read() {
+            startup_overlay_started.set(startup_now_ms());
+            startup_overlay_visible.set(true);
             return;
         }
         if !startup_should_hide {
@@ -1264,13 +1272,14 @@ pub fn App() -> Element {
                     .min_visible_ms
                     .saturating_sub(elapsed_ms.max(0.0) as u32);
                 let _ = document::eval(&format!(
-                    "setTimeout(() => dioxus.send(true), {});",
+                    "setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => dioxus.send(true))), {});",
                     remaining_ms
                 ))
                 .recv::<bool>()
                 .await;
             }
             startup_overlay_visible.set(false);
+            startup_overlay_finished.set(true);
         });
     });
 
@@ -1315,10 +1324,12 @@ pub fn App() -> Element {
                 StartupOverlay { state: startup_state.clone() }
             }
             ElectronTitleBar {}
-            AppBody {
-                storage_ready: storage_ready_now,
-                setup_complete,
-                app_state,
+            div { class: if startup_state.visible { "poly-app-stage poly-app-stage-hidden" } else { "poly-app-stage poly-app-stage-ready" },
+                AppBody {
+                    storage_ready: storage_ready_now,
+                    setup_complete,
+                    app_state,
+                }
             }
         }
     }
