@@ -1151,6 +1151,8 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 let instance_id_ts = instance_id_ctx.clone();
                 let backend_slug_ts = backend_slug_ctx.clone();
                 move |evt: TouchEvent| {
+                    evt.prevent_default();
+                    evt.stop_propagation();
                     // Grab the first touch point's client coordinates.
                     let (x, y) = evt.touches()
                         .first()
@@ -1200,15 +1202,18 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 }
             },
             // Cancel the long-press timer on release, movement, or cancel.
-            ontouchend: move |_| {
+            ontouchend: move |evt| {
+                evt.stop_propagation();
                 let next = touch_cancel_gen.peek().wrapping_add(1);
                 touch_cancel_gen.set(next);
             },
-            ontouchmove: move |_| {
+            ontouchmove: move |evt| {
+                evt.stop_propagation();
                 let next = touch_cancel_gen.peek().wrapping_add(1);
                 touch_cancel_gen.set(next);
             },
-            ontouchcancel: move |_| {
+            ontouchcancel: move |evt| {
+                evt.stop_propagation();
                 let next = touch_cancel_gen.peek().wrapping_add(1);
                 touch_cancel_gen.set(next);
             },
