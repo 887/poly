@@ -15,8 +15,10 @@ use manganis::asset;
 use serde::Serialize;
 
 #[cfg(target_arch = "wasm32")]
-const SETTINGS_SCROLL_SPY_RUNTIME_JS: Asset =
-    asset!("assets/scripts/settings_scroll_spy_runtime.js", AssetOptions::js());
+const SETTINGS_SCROLL_SPY_RUNTIME_JS: Asset = asset!(
+    "assets/scripts/settings_scroll_spy_runtime.js",
+    AssetOptions::js()
+);
 
 /// JS install-time config for a settings scroll spy.
 #[cfg(target_arch = "wasm32")]
@@ -58,11 +60,17 @@ where
             }
         };
 
-        let js = format!("window.__polySettingsScrollSpyPendingConfig = {config_json}; 'ready'");
+        let js = format!(
+            "window.__polySettingsScrollSpyCleanup?.(); window.__polySettingsScrollSpyPendingConfig = {config_json}; 'ready'"
+        );
         let _ = document::eval(&js);
 
         if !crate::ui::load_js_asset(SETTINGS_SCROLL_SPY_RUNTIME_JS).await {
             return;
         }
+
+        let _ = document::eval(
+            "window.__polyInstallSettingsScrollSpy?.(window.__polySettingsScrollSpyPendingConfig)",
+        );
     });
 }

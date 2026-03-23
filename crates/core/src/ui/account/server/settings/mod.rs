@@ -237,7 +237,12 @@ pub fn ServerSettingsPage(
     server_id: String,
     section: String,
 ) -> Element {
-    let mut section = use_signal(|| ServerSettingsSection::from_slug(&section));
+    let initial_section = section.clone();
+    let mut section = use_signal(|| ServerSettingsSection::from_slug(&initial_section));
+    let route_section = ServerSettingsSection::from_slug(&initial_section);
+    if *section.read() != route_section {
+        section.set(route_section);
+    }
     let _locale = crate::i18n::use_locale().read().clone();
     let search_text = use_signal(String::new);
     let chat_data: Signal<crate::state::ChatData> = use_context();

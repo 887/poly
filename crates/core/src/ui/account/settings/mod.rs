@@ -264,6 +264,7 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                             rsx! {
                                 div {
                                     class,
+                                    "data-settings-slug": "{slug}",
                                     onclick: move |_| {
                                         *search_text.write() = String::new();
                                         active_section.set(slug_s.clone());
