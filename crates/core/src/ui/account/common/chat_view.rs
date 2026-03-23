@@ -3177,7 +3177,9 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
             {render_message_list_loading_overlays(ctx.clone())}
             {render_unread_banner(ctx.clone())}
             div { class: if is_loading_history { "message-list-content message-list-content-swapping" } else { "message-list-content" },
-                div { class: "message-list-spacer" }
+                if !ctx.messages.is_empty() {
+                    div { class: "message-list-spacer" }
+                }
                 {render_message_list_content(ctx.clone())}
             }
         }
