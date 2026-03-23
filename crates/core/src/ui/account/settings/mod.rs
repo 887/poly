@@ -24,6 +24,11 @@ mod profile;
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::main_layout::close_mobile_drawer;
+use crate::ui::settings::scroll_spy::scroll_to_settings_section;
+#[cfg(target_arch = "wasm32")]
+use crate::ui::settings::scroll_spy::{
+    SettingsScrollSpyConfig, install_settings_scroll_spy as install_shared_settings_scroll_spy,
+};
 use crate::ui::split_shell::SplitMenuShell;
 use content_social::ContentSocialSettings;
 use dioxus::prelude::*;
@@ -110,15 +115,34 @@ fn acct_section_has_match(section_slug: &str, q: &str) -> bool {
 
 /// Fire-and-forget JS: smooth-scroll the account settings content area to a section.
 fn scroll_to_acct_section(slug: &str) {
-    let id = format!("acct-section-{slug}");
-    let js = format!(
-        "(() => {{ \
-            const el = document.getElementById('{id}'); \
-            const c = el && el.closest('.settings-content'); \
-            if (el && c) c.scrollTo({{ top: el.offsetTop - 16, behavior: 'smooth' }}); \
-        }})()"
-    );
-    let _ = document::eval(&js);
+    scroll_to_settings_section("acct-section-", slug);
+}
+
+fn install_account_settings_scroll_spy(_active_section: Signal<String>, _show_profile: bool) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut active_section = _active_section;
+        let show_profile = _show_profile;
+        let mut section_ids = vec![
+            "acct-section-notifications".to_string(),
+            "acct-section-content-social".to_string(),
+        ];
+        if show_profile {
+            section_ids.insert(0, "acct-section-profile".to_string());
+        }
+        let config = SettingsScrollSpyConfig {
+            runtime_flag: "__polyAccountSettingsScrollSpyInstalled",
+            content_selector: ".settings-content",
+            section_prefix: "acct-section-",
+            section_ids,
+            plugin_section_prefix: None,
+        };
+        install_shared_settings_scroll_spy(config, move |slug| {
+            if active_section.read().as_str() != slug {
+                active_section.set(slug);
+            }
+        });
+    }
 }
 
 #[rustfmt::skip]
@@ -189,6 +213,10 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     use_effect(move || {
         let slug = active_section.read().clone();
         scroll_to_acct_section(&slug);
+    });
+
+    use_effect(move || {
+        install_account_settings_scroll_spy(active_section, show_profile);
     });
 
     // When search changes, scroll to first matching section.

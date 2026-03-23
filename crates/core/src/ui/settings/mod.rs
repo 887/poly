@@ -31,6 +31,7 @@ mod identity;
 mod language;
 mod media;
 mod plugin_settings;
+pub(crate) mod scroll_spy;
 // Re-export the demo render function so ui/demo.rs can register it at runtime
 // via ClientManager::register_plugin_settings without knowing UI module internals.
 #[cfg(feature = "demo")]
@@ -50,6 +51,11 @@ use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
+use scroll_spy::scroll_to_settings_section;
+#[cfg(target_arch = "wasm32")]
+use scroll_spy::{
+    SettingsScrollSpyConfig, install_settings_scroll_spy as install_shared_settings_scroll_spy,
+};
 
 use accounts::AccountsSettings;
 use backup::BackupSettings;
@@ -159,15 +165,7 @@ fn section_has_search_match(section: SettingsSection, q: &str) -> bool {
 /// Fire-and-forget JS: smooth-scroll the `.settings-content` container so that
 /// the section with id `settings-section-{slug}` is near the top of the viewport.
 fn scroll_to_section_anchor(slug: &str) {
-    let id = format!("settings-section-{slug}");
-    let js = format!(
-        "(() => {{ \
-            const el = document.getElementById('{id}'); \
-            const c = el && el.closest('.settings-content'); \
-            if (el && c) c.scrollTo({{ top: el.offsetTop - 16, behavior: 'smooth' }}); \
-        }})()"
-    );
-    let _ = document::eval(&js);
+    scroll_to_settings_section("settings-section-", slug);
 }
 
 #[rustfmt::skip]
@@ -194,6 +192,56 @@ fn SettingsSearchBar(search_text: Signal<String>) -> Element {
         }
     }
 }
+fn install_settings_scroll_spy(
+    _app_state: Signal<AppState>,
+    _plugin_section_ids: Vec<String>,
+    _active_plugin_slug: Signal<Option<String>>,
+) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut app_state = _app_state;
+        let mut active_plugin_slug = _active_plugin_slug;
+        let config = SettingsScrollSpyConfig {
+            runtime_flag: "__polySettingsScrollSpyInstalled",
+            content_selector: ".settings-content",
+            section_prefix: "settings-section-",
+            section_ids: [
+                "settings-section-accounts",
+                "settings-section-voice-video",
+                "settings-section-backup",
+                "settings-section-identity",
+                "settings-section-theme",
+                "settings-section-media",
+                "settings-section-language",
+                "settings-section-layout",
+                "settings-section-general",
+                "settings-section-plugins",
+                "settings-section-diagnostics",
+            ]
+            .into_iter()
+            .map(ToString::to_string)
+            .chain(_plugin_section_ids.into_iter())
+            .collect(),
+            plugin_section_prefix: Some("settings-section-plugin-"),
+        };
+        install_shared_settings_scroll_spy(config, move |slug| {
+            if let Some(plugin_slug) = slug.strip_prefix("plugin-") {
+                if active_plugin_slug.read().as_deref() != Some(plugin_slug) {
+                    active_plugin_slug.set(Some(plugin_slug.to_string()));
+                }
+                if app_state.read().settings_section != SettingsSection::Plugins {
+                    app_state.write().settings_section = SettingsSection::Plugins;
+                }
+            } else {
+                active_plugin_slug.set(None);
+                let next = SettingsSection::from_slug(&slug);
+                if app_state.read().settings_section != next {
+                    app_state.write().settings_section = next;
+                }
+            }
+        });
+    }
+}
 
 #[rustfmt::skip]
 #[component]
@@ -216,9 +264,12 @@ fn SettingsContentHeader(search_text: Signal<String>) -> Element {
 fn SettingsNavigation(
     current: SettingsSection,
     search_text: Signal<String>,
+    active_plugin_slug: Signal<Option<String>>,
     on_select: EventHandler<SettingsSection>,
 ) -> Element {
     let filter = search_text.read().to_lowercase();
+    let active_plugin = active_plugin_slug.read().clone();
+    let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     // Snapshot the registered plugin settings pages so we don't hold the read
     // guard across the RSX macro expansion.
@@ -243,6 +294,8 @@ fn SettingsNavigation(
                         div {
                             class,
                             onclick: move |_| {
+                                active_plugin_slug.set(None);
+                                app_state.write().settings_section = section;
                                 on_select.call(section);
                                 close_mobile_drawer();
                             },
@@ -263,10 +316,13 @@ fn SettingsNavigation(
                     let entry = *entry;
                     let label = t(entry.nav_label_key);
                     let slug = entry.slug;
+                    let is_active = active_plugin.as_deref() == Some(slug);
                     rsx! {
                         div {
-                            class: "settings-nav-item",
+                            class: if is_active { "settings-nav-item active" } else { "settings-nav-item" },
                             onclick: move |_| {
+                                active_plugin_slug.set(Some(slug.to_string()));
+                                app_state.write().settings_section = SettingsSection::Plugins;
                                 // Plugin sections live below the built-in sections and are
                                 // not part of SettingsSection routing (no enum variant).
                                 // Reuse scroll_to_section_anchor with "plugin-{slug}" so
@@ -408,7 +464,15 @@ pub fn SettingsPage() -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let locale_key = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
+    let active_plugin_slug = use_signal(|| None::<String>);
     let nav = use_navigator();
+    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let plugin_section_ids: Vec<String> = client_manager
+        .read()
+        .plugin_settings
+        .iter()
+        .map(|entry| format!("settings-section-plugin-{}", entry.slug))
+        .collect();
 
     // Memo: isolate settings_section so effects only re-run when IT changes.
     let section_memo = use_memo(move || app_state.read().settings_section);
@@ -421,11 +485,14 @@ pub fn SettingsPage() -> Element {
         let js = format!(
             "setTimeout(() => {{ \
                 const el = document.getElementById('settings-section-{slug}'); \
-                const c = el && el.closest('.settings-content'); \
-                if (el && c) c.scrollTo({{ top: el.offsetTop - 16, behavior: 'smooth' }}); \
+                if (el) el.scrollIntoView({{ block: 'start', behavior: 'smooth' }}); \
             }}, 0)"
         );
         let _ = document::eval(&js);
+    });
+
+    use_effect(move || {
+        install_settings_scroll_spy(app_state, plugin_section_ids.clone(), active_plugin_slug);
     });
 
     // When the search query changes to non-empty, scroll to the first matching section.
@@ -453,6 +520,7 @@ pub fn SettingsPage() -> Element {
                     key: "settings-nav-{locale_key}",
                     current: section,
                     search_text,
+                    active_plugin_slug,
                     on_select: move |next: SettingsSection| {
                         *search_text.write() = String::new();
                         app_state.write().settings_section = next;

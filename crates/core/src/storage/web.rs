@@ -115,7 +115,11 @@ impl StorageInner {
             .build()
             .map_err(backend_error)?;
         let store = tx.object_store(STORE_NAME).map_err(backend_error)?;
-        store.clear().map_err(backend_error)?.await.map_err(backend_error)?;
+        store
+            .clear()
+            .map_err(backend_error)?
+            .await
+            .map_err(backend_error)?;
         tx.commit().await.map_err(backend_error)?;
         db.close();
         Ok(())

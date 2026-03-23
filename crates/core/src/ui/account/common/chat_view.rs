@@ -1674,7 +1674,11 @@ fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
 
         let (unread_count, divider_visible, channel_id) = {
             let hs = history_state.read();
-            (hs.unread_count, hs.unread_divider_visible, hs.channel_id.clone())
+            (
+                hs.unread_count,
+                hs.unread_divider_visible,
+                hs.channel_id.clone(),
+            )
         };
 
         // If divider is already gone or there are still unseen messages, nothing to do.

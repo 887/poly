@@ -21,6 +21,12 @@ mod profile;
 use crate::i18n::t;
 use crate::state::AppState;
 use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::main_layout::close_mobile_drawer;
+use crate::ui::settings::scroll_spy::scroll_to_settings_section;
+#[cfg(target_arch = "wasm32")]
+use crate::ui::settings::scroll_spy::{
+    SettingsScrollSpyConfig, install_settings_scroll_spy as install_shared_settings_scroll_spy,
+};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use general::ServerGeneralSettings;
@@ -40,6 +46,38 @@ const SERVER_SETTINGS_SECTIONS: [(&str, ServerSettingsSection); 4] = [
 
 fn matches_server_settings_search(filter: &str, label: &str) -> bool {
     filter.is_empty() || label.to_lowercase().contains(filter)
+}
+
+fn scroll_to_server_section(slug: &str) {
+    scroll_to_settings_section("server-settings-section-", slug);
+}
+
+fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut section = _section;
+        let config = SettingsScrollSpyConfig {
+            runtime_flag: "__polyServerSettingsScrollSpyInstalled",
+            content_selector: ".settings-content",
+            section_prefix: "server-settings-section-",
+            section_ids: [
+                "server-settings-section-overview",
+                "server-settings-section-notifications",
+                "server-settings-section-profile",
+                "server-settings-section-general",
+            ]
+            .into_iter()
+            .map(ToString::to_string)
+            .collect(),
+            plugin_section_prefix: None,
+        };
+        install_shared_settings_scroll_spy(config, move |slug| {
+            let next = ServerSettingsSection::from_slug(&slug);
+            if *section.read() != next {
+                section.set(next);
+            }
+        });
+    }
 }
 
 #[rustfmt::skip]
@@ -69,6 +107,17 @@ fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
 
 #[rustfmt::skip]
 #[component]
+fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String) -> Element {
+    rsx! {
+        div { class: "special-page-header settings-page-header",
+            h2 { class: "special-page-title", "{t(\"server-settings-title\")} — {server_name}" }
+            ServerSettingsSearchBar { search_text }
+        }
+    }
+}
+
+#[rustfmt::skip]
+#[component]
 fn ServerSettingsNavigation(
     active_section: ServerSettingsSection,
     search_text: Signal<String>,
@@ -78,7 +127,6 @@ fn ServerSettingsNavigation(
 
     rsx! {
         nav { class: "settings-nav",
-            ServerSettingsSearchBar { search_text }
             for (label_key , section) in SERVER_SETTINGS_SECTIONS {
                 {
                     let label = t(label_key);
@@ -102,33 +150,32 @@ fn ServerSettingsNavigation(
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsContent(
-    section: ServerSettingsSection,
+    search_text: Signal<String>,
     backend: String,
     instance_id: String,
     account_id: String,
     server_id: String,
     server_name: String,
 ) -> Element {
+    let _ = (&backend, &instance_id, &account_id);
     rsx! {
-        div { class: "settings-content",
-            div { class: "settings-header",
-                h2 { "{t(\"server-settings-title\")} — {server_name}" }
-            }
-            match section {
-                ServerSettingsSection::Overview => rsx! {
+        div { class: "settings-page-panel",
+            ServerSettingsContentHeader { search_text, server_name: server_name.clone() }
+            div { class: "settings-sections-stack",
+                div { id: "server-settings-section-overview", class: "settings-section-block",
                     ServerOverviewSettings {
                         server_id: server_id.clone(),
                         server_name: server_name.clone(),
                         backend_slug: backend.clone(),
                     }
-                },
-                ServerSettingsSection::Notifications => rsx! {
+                }
+                div { id: "server-settings-section-notifications", class: "settings-section-block",
                     ServerNotificationsSettings { server_id: server_id.clone(), server_name: server_name.clone() }
-                },
-                ServerSettingsSection::Profile => rsx! {
+                }
+                div { id: "server-settings-section-profile", class: "settings-section-block",
                     ServerProfileSettings { server_id: server_id.clone(), server_name: server_name.clone() }
-                },
-                ServerSettingsSection::General => rsx! {
+                }
+                div { id: "server-settings-section-general", class: "settings-section-block",
                     ServerGeneralSettings {
                         server_id,
                         server_name,
@@ -136,7 +183,8 @@ fn ServerSettingsContent(
                         instance_id,
                         account_id,
                     }
-                },
+                }
+                div { class: "settings-scroll-spacer" }
             }
         }
     }
@@ -152,6 +200,26 @@ enum ServerSettingsSection {
     General,
 }
 
+impl ServerSettingsSection {
+    fn to_slug(self) -> &'static str {
+        match self {
+            Self::Overview => "overview",
+            Self::Notifications => "notifications",
+            Self::Profile => "profile",
+            Self::General => "general",
+        }
+    }
+
+    fn from_slug(slug: &str) -> Self {
+        match slug {
+            "notifications" => Self::Notifications,
+            "profile" => Self::Profile,
+            "general" => Self::General,
+            _ => Self::Overview,
+        }
+    }
+}
+
 /// Per-server settings page component.
 ///
 /// Shares the same two-column layout (nav sidebar + content) as `AccountSettingsPage`
@@ -163,12 +231,23 @@ pub fn ServerSettingsPage(
     instance_id: String,
     account_id: String,
     server_id: String,
+    section: String,
 ) -> Element {
-    let mut section = use_signal(ServerSettingsSection::default);
+    let mut section = use_signal(|| ServerSettingsSection::from_slug(&section));
     let _locale = crate::i18n::use_locale().read().clone();
     let search_text = use_signal(String::new);
     let chat_data: Signal<crate::state::ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
+    let mut published_section = use_signal(String::new);
+
+    #[cfg(target_arch = "wasm32")]
+    let backend_for_route = backend.clone();
+    #[cfg(target_arch = "wasm32")]
+    let instance_id_for_route = instance_id.clone();
+    #[cfg(target_arch = "wasm32")]
+    let account_id_for_route = account_id.clone();
+    #[cfg(target_arch = "wasm32")]
+    let server_id_for_route = server_id.clone();
 
     // Resolve server name from ChatData, fallback to server_id
     let server_name = chat_data
@@ -178,6 +257,31 @@ pub fn ServerSettingsPage(
         .find(|s| s.id == server_id)
         .map(|s| s.name.clone())
         .unwrap_or_else(|| server_id.clone());
+
+    use_effect(move || {
+        let slug = section.read().to_slug().to_string();
+        scroll_to_server_section(&slug);
+        if published_section.read().as_str() != slug {
+            published_section.set(slug.clone());
+            #[cfg(target_arch = "wasm32")]
+            {
+                let route_url = format!(
+                    "/{}/{}/{}/servers/{}/settings/{}",
+                    backend_for_route,
+                    instance_id_for_route,
+                    account_id_for_route,
+                    server_id_for_route,
+                    slug,
+                );
+                let js = format!("history.replaceState({{}}, '', '{}')", route_url);
+                let _ = document::eval(&js);
+            }
+        }
+    });
+
+    use_effect(move || {
+        install_server_settings_scroll_spy(section);
+    });
 
     // Keep nav.selected_server in sync (needed if arrived via context menu)
     let server_id_for_effect = server_id.clone();
@@ -192,20 +296,23 @@ pub fn ServerSettingsPage(
         SplitMenuShell {
             root_class: "account-view-main".to_string(),
             sidebar_class: "channel-list-wrapper".to_string(),
-            content_class: String::new(),
+            content_class: "settings-content".to_string(),
             sidebar: rsx! {
                 nav { class: "settings-nav",
                     ServerSettingsNavigation {
                         active_section: section(),
                         search_text,
-                        on_select: move |next| section.set(next),
+                        on_select: move |next| {
+                            section.set(next);
+                            close_mobile_drawer();
+                        },
                     }
                 }
                 VoiceAccountFooter {}
             },
             content: rsx! {
                 ServerSettingsContent {
-                    section: section(),
+                    search_text,
                     backend,
                     instance_id,
                     account_id,

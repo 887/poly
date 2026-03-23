@@ -172,14 +172,8 @@ mod tests {
         storage.delete("app_settings").await.expect("delete");
         assert_eq!(storage.get("app_settings").await.expect("get3"), None);
 
-        storage
-            .set("a", serde_json::json!(1))
-            .await
-            .expect("set a");
-        storage
-            .set("b", serde_json::json!(2))
-            .await
-            .expect("set b");
+        storage.set("a", serde_json::json!(1)).await.expect("set a");
+        storage.set("b", serde_json::json!(2)).await.expect("set b");
         storage.clear_all().await.expect("clear");
         assert_eq!(storage.get("a").await.expect("geta"), None);
         assert_eq!(storage.get("b").await.expect("getb"), None);
@@ -194,19 +188,55 @@ mod tests {
             .await
             .expect("init");
 
-        storage.set("string", serde_json::json!("hello")).await.expect("set");
-        storage.set("number", serde_json::json!(42.5)).await.expect("set");
-        storage.set("boolean", serde_json::json!(true)).await.expect("set");
-        storage.set("array", serde_json::json!([1, 2, 3])).await.expect("set");
-        storage.set("object", serde_json::json!({"key": "value"})).await.expect("set");
-        storage.set("null", serde_json::json!(null)).await.expect("set");
+        storage
+            .set("string", serde_json::json!("hello"))
+            .await
+            .expect("set");
+        storage
+            .set("number", serde_json::json!(42.5))
+            .await
+            .expect("set");
+        storage
+            .set("boolean", serde_json::json!(true))
+            .await
+            .expect("set");
+        storage
+            .set("array", serde_json::json!([1, 2, 3]))
+            .await
+            .expect("set");
+        storage
+            .set("object", serde_json::json!({"key": "value"}))
+            .await
+            .expect("set");
+        storage
+            .set("null", serde_json::json!(null))
+            .await
+            .expect("set");
 
-        assert_eq!(storage.get("string").await.expect("get"), Some(serde_json::json!("hello")));
-        assert_eq!(storage.get("number").await.expect("get"), Some(serde_json::json!(42.5)));
-        assert_eq!(storage.get("boolean").await.expect("get"), Some(serde_json::json!(true)));
-        assert_eq!(storage.get("array").await.expect("get"), Some(serde_json::json!([1, 2, 3])));
-        assert_eq!(storage.get("object").await.expect("get"), Some(serde_json::json!({"key": "value"})));
-        assert_eq!(storage.get("null").await.expect("get"), Some(serde_json::json!(null)));
+        assert_eq!(
+            storage.get("string").await.expect("get"),
+            Some(serde_json::json!("hello"))
+        );
+        assert_eq!(
+            storage.get("number").await.expect("get"),
+            Some(serde_json::json!(42.5))
+        );
+        assert_eq!(
+            storage.get("boolean").await.expect("get"),
+            Some(serde_json::json!(true))
+        );
+        assert_eq!(
+            storage.get("array").await.expect("get"),
+            Some(serde_json::json!([1, 2, 3]))
+        );
+        assert_eq!(
+            storage.get("object").await.expect("get"),
+            Some(serde_json::json!({"key": "value"}))
+        );
+        assert_eq!(
+            storage.get("null").await.expect("get"),
+            Some(serde_json::json!(null))
+        );
     }
 
     #[tokio::test]
@@ -219,7 +249,10 @@ mod tests {
             .expect("init");
 
         let large_string = "x".repeat(10000);
-        storage.set("large", serde_json::json!(large_string)).await.expect("set");
+        storage
+            .set("large", serde_json::json!(large_string))
+            .await
+            .expect("set");
 
         let retrieved = storage.get("large").await.expect("get");
         assert!(retrieved.is_some());

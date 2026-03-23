@@ -82,6 +82,7 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ServerHome { account_id, .. }
         | Route::ServerChat { account_id, .. }
         | Route::ServerSettingsRoute { account_id, .. }
+        | Route::ServerSettingsSectionRoute { account_id, .. }
         | Route::CreateChannelRoute { account_id, .. }
         | Route::FriendsRoute { account_id, .. }
         | Route::NotificationsRoute { account_id, .. }
@@ -254,6 +255,15 @@ pub enum Route {
             instance_id: String,
             account_id: String,
             server_id: String,
+        },
+
+        #[route("/:backend/:instance_id/:account_id/servers/:server_id/settings/:section")]
+        ServerSettingsSectionRoute {
+            backend: String,
+            instance_id: String,
+            account_id: String,
+            server_id: String,
+            section: String,
         },
 
     #[end_layout]
@@ -594,6 +604,23 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
             server_id,
+        } => {
+            s.nav.view = View::Settings;
+            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::ServerSettingsSectionRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            ..
         } => {
             s.nav.view = View::Settings;
             s.nav.active_backend = BackendType::from_slug(backend);
@@ -1413,6 +1440,28 @@ fn ServerSettingsRoute(
             instance_id,
             account_id,
             server_id,
+            section: "overview".to_string(),
+        }
+    }
+}
+
+/// Server settings for a specific section of one server.
+#[rustfmt::skip]
+#[component]
+fn ServerSettingsSectionRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    section: String,
+) -> Element {
+    rsx! {
+        ServerSettingsPage {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            section,
         }
     }
 }
