@@ -58,7 +58,10 @@ fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
         let mut section = _section;
         let config = SettingsScrollSpyConfig {
             runtime_flag: "__polyServerSettingsScrollSpyInstalled",
-            content_selector: ".settings-content",
+            scroll_root_selectors: vec![
+                ".poly-split-content.settings-content > .poly-split-content-stage",
+                ".settings-content",
+            ],
             section_prefix: "server-settings-section-",
             section_ids: [
                 "server-settings-section-overview",
@@ -135,6 +138,7 @@ fn ServerSettingsNavigation(
                             ServerSettingsNavItem {
                                 label,
                                 active: active_section == section,
+                                slug: section.to_slug().to_string(),
                                 onclick: move |_| on_select.call(section),
                             }
                         }
@@ -330,11 +334,13 @@ pub fn ServerSettingsPage(
 fn ServerSettingsNavItem(
     label: String,
     active: bool,
+    slug: String,
     onclick: EventHandler<MouseEvent>,
 ) -> Element {
     rsx! {
         div {
             class: if active { "settings-nav-item active" } else { "settings-nav-item" },
+            "data-settings-slug": slug,
             onclick: move |evt| onclick.call(evt),
             "{label}"
         }

@@ -23,11 +23,10 @@ use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
 
-const MOBILE_DRAWER_RUNTIME_JS: &str =
-    include_str!("../../assets/scripts/mobile_drawer_runtime.js");
+const MOBILE_DRAWER_RUNTIME_JS: Asset = asset!("assets/scripts/mobile_drawer_runtime.js", AssetOptions::js());
 const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
 const MOBILE_RIGHT_WING_CLOSE_JS: &str = "window.__polySetMobileRightWingOpen?.(false);";
-const DRAG_BRIDGE_RUNTIME_JS: &str = include_str!("../../assets/scripts/drag_bridge_runtime.js");
+const DRAG_BRIDGE_RUNTIME_JS: Asset = asset!("assets/scripts/drag_bridge_runtime.js", AssetOptions::js());
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum BrowserRuntime {
@@ -51,7 +50,9 @@ const fn browser_runtime() -> BrowserRuntime {
 fn init_mobile_drawer_runtime() {
     match browser_runtime() {
         BrowserRuntime::WasmDom => {
-            let _ = document::eval(MOBILE_DRAWER_RUNTIME_JS);
+            spawn(async move {
+                let _ = crate::ui::load_js_asset(MOBILE_DRAWER_RUNTIME_JS).await;
+            });
         }
         #[cfg(not(target_arch = "wasm32"))]
         // DECISION(DX-MOBILE-1): poly-core cannot yet distinguish Wry from
@@ -275,7 +276,9 @@ pub fn MainLayout() -> Element {
     // handlers still fire afterwards and update ChatData state correctly.
     use_effect(move || {
         if browser_runtime() == BrowserRuntime::WasmDom {
-            let _ = document::eval(DRAG_BRIDGE_RUNTIME_JS);
+            spawn(async move {
+                let _ = crate::ui::load_js_asset(DRAG_BRIDGE_RUNTIME_JS).await;
+            });
         }
     });
 

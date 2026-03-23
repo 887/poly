@@ -77,6 +77,7 @@ pub(crate) use settings::stoat_settings_render_fn;
 // Re-export the poly server settings render function for the same reason.
 #[cfg(feature = "server")]
 pub(crate) use settings::poly_settings_render_fn;
+mod runtime_js;
 mod setup_wizard;
 mod voice_banner;
 
@@ -84,6 +85,7 @@ pub use account::{AccountSwitcher, FriendsPanel};
 pub use electron_titlebar::ElectronTitleBar;
 pub use main_layout::MainLayout;
 pub use routes::Route;
+pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};

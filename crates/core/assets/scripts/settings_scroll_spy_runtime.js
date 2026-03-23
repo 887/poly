@@ -8,8 +8,23 @@ if (!window.__polySettingsScrollSpyRuntimeInit) {
         }
     };
 
+    window.__polySetSettingsNavActiveSlug = function (slug) {
+        const items = document.querySelectorAll('.settings-nav [data-settings-slug]');
+        for (const item of items) {
+            const isActive = item.getAttribute('data-settings-slug') === slug;
+            item.classList.toggle('active', isActive);
+            item.setAttribute('aria-current', isActive ? 'page' : 'false');
+        }
+    };
+
     window.__polyInstallSettingsScrollSpy = function (config) {
-        if (!config || !config.runtimeFlag || !config.contentSelector || !Array.isArray(config.sectionIds) || config.sectionIds.length === 0) {
+            const scrollRootSelectors = Array.isArray(config?.scrollRootSelectors)
+                ? config.scrollRootSelectors
+                : Array.isArray(config?.scroll_root_selectors)
+                    ? config.scroll_root_selectors
+                    : [];
+
+            if (!config || !config.runtimeFlag || scrollRootSelectors.length === 0 || !Array.isArray(config.sectionIds) || config.sectionIds.length === 0) {
             return 'missing';
         }
 
@@ -29,14 +44,57 @@ if (!window.__polySettingsScrollSpyRuntimeInit) {
             return id;
         };
 
+        const isMobileRuntimeActive = function () {
+            const root = document.querySelector('.poly-app');
+            return Boolean(root && root.classList.contains('poly-mobile-runtime-active'));
+        };
+
+        const orderedScrollRootSelectors = function () {
+            const selectors = scrollRootSelectors.slice();
+            const stageSelector = '.poly-split-content.settings-content > .poly-split-content-stage';
+            const contentSelector = '.settings-content';
+
+            if (isMobileRuntimeActive()) {
+                return selectors.sort(function (a, b) {
+                    if (a === stageSelector) return -1;
+                    if (b === stageSelector) return 1;
+                    if (a === contentSelector) return 1;
+                    if (b === contentSelector) return -1;
+                    return 0;
+                });
+            }
+
+            return selectors.sort(function (a, b) {
+                if (a === contentSelector) return -1;
+                if (b === contentSelector) return 1;
+                if (a === stageSelector) return 1;
+                if (b === stageSelector) return -1;
+                return 0;
+            });
+        };
+
+        const resolveScrollRoot = function () {
+            for (const selector of orderedScrollRootSelectors()) {
+                const content = document.querySelector(selector);
+                if (content) {
+                    return content;
+                }
+            }
+
+            return null;
+        };
+
         const computeActiveSlug = function () {
-            const content = document.querySelector(config.contentSelector);
+            const content = resolveScrollRoot();
             if (!content) {
                 return null;
             }
 
             const contentRect = content.getBoundingClientRect();
-            const threshold = contentRect.top + 24;
+            // Sub-pixel layout and smooth-scrolling can leave section headers a
+            // fraction of a pixel below the nominal top edge, so use a small
+            // epsilon instead of a hard 24px cutoff.
+            const threshold = contentRect.top + 32;
             let active = null;
 
             for (const id of config.sectionIds) {
@@ -62,7 +120,13 @@ if (!window.__polySettingsScrollSpyRuntimeInit) {
 
         const emit = function () {
             raf = 0;
-            dioxus.send(computeActiveSlug());
+            const slug = computeActiveSlug();
+            if (slug) {
+                window.__polySetSettingsNavActiveSlug?.(slug);
+                if (typeof dioxus !== 'undefined' && dioxus?.send) {
+                    dioxus.send(slug);
+                }
+            }
         };
 
         const schedule = function () {
@@ -95,4 +159,10 @@ if (!window.__polySettingsScrollSpyRuntimeInit) {
 
         return 'ready';
     };
+
+    if (window.__polySettingsScrollSpyPendingConfig) {
+        const pendingConfig = window.__polySettingsScrollSpyPendingConfig;
+        delete window.__polySettingsScrollSpyPendingConfig;
+        window.__polyInstallSettingsScrollSpy(pendingConfig);
+    }
 }

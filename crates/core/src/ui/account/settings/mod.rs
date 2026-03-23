@@ -55,6 +55,7 @@ fn profile_nav_element(
     };
     rsx! {
         div {
+            "data-settings-slug": "profile",
             class,
             onclick: move |_| {
                 *search_text.write() = String::new();
@@ -132,7 +133,10 @@ fn install_account_settings_scroll_spy(_active_section: Signal<String>, _show_pr
         }
         let config = SettingsScrollSpyConfig {
             runtime_flag: "__polyAccountSettingsScrollSpyInstalled",
-            content_selector: ".settings-content",
+            scroll_root_selectors: vec![
+                ".poly-split-content.settings-content > .poly-split-content-stage",
+                ".settings-content",
+            ],
             section_prefix: "acct-section-",
             section_ids,
             plugin_section_prefix: None,

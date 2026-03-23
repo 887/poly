@@ -203,7 +203,10 @@ fn install_settings_scroll_spy(
         let mut active_plugin_slug = _active_plugin_slug;
         let config = SettingsScrollSpyConfig {
             runtime_flag: "__polySettingsScrollSpyInstalled",
-            content_selector: ".settings-content",
+            scroll_root_selectors: vec![
+                ".poly-split-content.settings-content > .poly-split-content-stage",
+                ".settings-content",
+            ],
             section_prefix: "settings-section-",
             section_ids: [
                 "settings-section-accounts",
@@ -299,6 +302,7 @@ fn SettingsNavigation(
                                 on_select.call(section);
                                 close_mobile_drawer();
                             },
+                            "data-settings-slug": "{section.to_slug()}",
                             "{label}"
                         }
                     }
@@ -320,6 +324,7 @@ fn SettingsNavigation(
                     rsx! {
                         div {
                             class: if is_active { "settings-nav-item active" } else { "settings-nav-item" },
+                            "data-settings-slug": "plugin-{slug}",
                             onclick: move |_| {
                                 active_plugin_slug.set(Some(slug.to_string()));
                                 app_state.write().settings_section = SettingsSection::Plugins;
