@@ -90,3 +90,13 @@ launch_app → poll get_last_build_status → connect_cdp → take_screenshot / 
 
 All `launch_app` and `rebuild_app` calls are **non-blocking** — poll `get_last_build_status`
 every 5-10s until `state != "Running"`.
+
+### MCP Identity — DO NOT CONFUSE
+
+The **poly-electron**, **poly-web**, and **poly-desktop** MCP servers are custom Rust
+binaries in this repo (`mcp/*/src/main.rs`). They are **NOT** `chrome-devtools-mcp`,
+`chrome-devtools-headless`, or `firefox-devtools-mcp`. Never substitute a generic
+browser MCP for a poly MCP — they have different tools (`launch_app`, `rebuild_app`,
+`get_last_build_status`, `connect_cdp`, etc.) and manage the full app lifecycle.
+If the poly MCPs are not loaded in the current session, say so — do not fall back
+to chrome-devtools as a replacement.
