@@ -1,6 +1,9 @@
 {
   "defaultMode": "bypassPermissions",
+  "enableAllProjectMcpServers": true,
+  "skipDangerousModePermissionPrompt": true,
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "additionalDirectories": ["/tmp", "/dev/null"],
     "allow": [
       "Bash(*)",
@@ -12,7 +15,12 @@
       "Grep(*)",
       "WebFetch(*)",
       "WebSearch(*)",
-      "mcp__*"
+      "mcp__poly-electron",
+      "mcp__poly-desktop",
+      "mcp__poly-web",
+      "mcp__poly-memory",
+      "mcp__chrome-devtools",
+      "mcp__chrome-devtools-headless"
     ]
   }
 }

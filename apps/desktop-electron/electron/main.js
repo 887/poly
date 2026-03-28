@@ -29,8 +29,6 @@ const WINDOW_OPTIONS = {
   minHeight: 600,
   title: 'Poly',
   frame: false,
-  titleBarStyle: 'hidden',
-  titleBarOverlay: false,
   autoHideMenuBar: true,
   webPreferences: {
     preload: path.join(__dirname, 'preload.js'),
@@ -52,32 +50,39 @@ async function createWindow() {
   // Show only after the first paint — avoids white-flash on cold start.
   attachWindowStateListeners(win);
 
-  // Load the local WASM web-app bundle. Path relative to THIS file (electron/).
-  let webRoot;
-  try {
-    webRoot = resolveWebRoot([
-      path.join(__dirname, '..', 'dist'),
-      path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'debug', 'web', 'public'),
-      path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'release', 'web', 'public'),
-    ]);
-    assetServer = await startAssetServer(webRoot);
-  } catch (err) {
-    // Friendly message if the WASM build hasn't been run yet.
-    console.error(
-      `[Poly] Failed to resolve or serve the web bundle: ${err.message}\n` +
-      `  Did you run 'dx build --platform web' in apps/desktop-electron/?`,
-    );
-    return;
+  let appUrl;
+
+  if (process.env.POLY_DEV === '1') {
+    // Dev mode: poly-electron-devtools-mcp runs `dx serve --platform web` on
+    // this port.  Electron loads directly from the live dev server — no build
+    // step needed and the window survives WASM rebuilds (just a Page.reload).
+    const devPort = process.env.POLY_DEV_SERVE_PORT || '3001';
+    appUrl = `http://127.0.0.1:${devPort}/`;
+    console.log(`[Poly] Dev mode — loading from ${appUrl}`);
+  } else {
+    // Production mode: serve the pre-built WASM bundle from disk.
+    let webRoot;
+    try {
+      webRoot = resolveWebRoot([
+        path.join(__dirname, '..', 'dist'),
+        path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'debug', 'web', 'public'),
+        path.join(__dirname, '..', '..', '..', 'target', 'dx', 'poly-desktop-electron', 'release', 'web', 'public'),
+      ]);
+      assetServer = await startAssetServer(webRoot);
+    } catch (err) {
+      console.error(
+        `[Poly] Failed to resolve or serve the web bundle: ${err.message}\n` +
+        `  Did you run 'dx build --platform web' in apps/desktop-electron/?`,
+      );
+      return;
+    }
+    const address = assetServer.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    appUrl = `http://127.0.0.1:${port}/`;
   }
 
-  const address = assetServer.address();
-  const port = typeof address === 'object' && address ? address.port : 0;
-  const appUrl = `http://127.0.0.1:${port}/`;
   win.loadURL(appUrl).catch((err) => {
-    console.error(
-      `[Poly] Failed to load ${appUrl}: ${err.message}\n` +
-      `  Web root: ${webRoot}`,
-    );
+    console.error(`[Poly] Failed to load ${appUrl}: ${err.message}`);
   });
 
   // Open DevTools only when POLY_DEVTOOLS=1 is explicitly set.

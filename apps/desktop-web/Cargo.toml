@@ -1,0 +1,32 @@
+[package]
+name = "poly-desktop-web"
+description = "Poly desktop thin web shell — native Wry window that loads WASM from a dx serve dev server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly-desktop-web"
+path = "src/main.rs"
+
+[dependencies]
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "net",
+    "process",
+    "signal",
+    "io-std",
+    "fs",
+] }
+axum = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+webkit2gtk = { workspace = true }
+cairo-rs = { workspace = true }
+wry = { workspace = true }
+tao = "0.34"
+
+[lints]
+workspace = true

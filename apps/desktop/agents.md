@@ -1,7 +1,7 @@
 # Desktop (Wry) — Agent Instructions
 
-> **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Read root `agents.md` FIRST**, then this file.
+> **Last Updated:** 2026-03-28
 
 ## Purpose
 
@@ -13,24 +13,41 @@ Primary desktop entry point using the **Wry** system webview renderer. This is t
 - All logic lives in `poly-core` — this crate just sets up the platform
 - Uses system webview (WebKitGTK on Linux, WebKit on macOS, WebView2 on Windows)
 
-## Development
+## Web-Shell Mode (2026-03-28)
+
+The `poly-desktop-devtools-mcp` now defaults to **web-shell mode**: it runs
+`dx serve --platform web --port 3002` in this directory, compiling the app as WASM,
+and loads it in `apps/desktop-web` (a thin Wry shell that stays alive across rebuilds).
+
+### WASM Target Compatibility
+
+The `Cargo.toml` uses cfg-gated dependencies so the same crate compiles for both
+native desktop and wasm32:
+- **Native:** `dioxus = ["desktop"]`, `tokio`, `tracing-subscriber`
+- **WASM:** `dioxus = ["web"]`, `getrandom04-wasm`
+
+The `main.rs` cfg-gates `tracing_subscriber` init and `install_wasm_crash_handler()`
+based on `target_arch`.
+
+## Native Development
 
 ```bash
-dx serve --hotpatch          # Run with hot-reload
+dx serve --hotpatch          # Run with hot-reload (native Wry)
 dx serve --platform desktop  # Explicit desktop platform
 ```
 
 ## Build
 
 ```bash
-dx build --release --platform desktop  # Release build
+dx build --release --platform desktop  # Native release build
+dx build --platform web                # WASM build (for web-shell mode)
 ```
 
 ## Configuration
 
-- `Dioxus.toml` — platform: desktop, renderer: webview (default)
+- `Dioxus.toml` — platform: desktop (default), renderer: webview
 - Window title, size, icon configured in Dioxus.toml
-- Tokio multi-threaded runtime
+- Tokio multi-threaded runtime (native only)
 
 ## Supported OS
 

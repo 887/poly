@@ -480,6 +480,20 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                             .await
                             .unwrap_or_else(|_| "(viewport info unavailable)".to_string());
 
+                        // Guard: reject 0×0 screenshots — they produce
+                        // an empty/corrupt PNG that the API cannot process.
+                        if viewport_info.contains("0x0") || image_bytes.len() < 100 {
+                            return text_result(
+                                format!(
+                                    "Screenshot skipped: viewport is 0×0 or image is empty ({} bytes). \
+                                     The window may not be visible or the page hasn't loaded yet. \
+                                     Use take_snapshot instead, or wait for the page to load.",
+                                    image_bytes.len()
+                                ),
+                                true,
+                            );
+                        }
+
                         use base64::Engine as _;
                         let b64 = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
                         json!({ "content": [

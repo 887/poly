@@ -2,11 +2,15 @@
 //!
 //! Launches the Poly messenger using Dioxus desktop with the system
 //! webview (Wry) renderer.
+//!
+//! When compiled for WASM (via `dx serve --platform web` in web-shell mode),
+//! the tracing_subscriber and tokio deps are unavailable — we skip them.
 
 use poly_core::ui::App;
 
 fn main() {
-    // Initialize logging
+    // Initialize logging (native only — tracing-subscriber isn't available on wasm32)
+    #[cfg(not(target_arch = "wasm32"))]
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -17,10 +21,12 @@ fn main() {
     tracing::info!("Starting Poly Desktop (Wry)");
 
     // Initialize poly-core subsystems
-    // Note: Dioxus manages the async runtime
     poly_core::i18n::init();
     poly_core::theme::init();
 
-    // Launch Dioxus desktop app
+    #[cfg(target_arch = "wasm32")]
+    poly_core::install_wasm_crash_handler();
+
+    // Launch Dioxus app
     dioxus::launch(App);
 }

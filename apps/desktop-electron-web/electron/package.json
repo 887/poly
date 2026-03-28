@@ -1,0 +1,44 @@
+{
+  "name": "poly-desktop-electron-web",
+  "version": "0.1.0",
+  "description": "Poly Desktop — thin Electron shell that always loads WASM from a dx serve dev server",
+  "main": "main.js",
+  "author": "Poly Contributors",
+  "license": "MIT OR Apache-2.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "build": "electron-builder"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "chat.poly.desktop.web",
+    "productName": "Poly (Web Shell)",
+    "copyright": "Copyright © 2025 Poly Contributors",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "shared/**/*"
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Network"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.social-networking"
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    }
+  }
+}

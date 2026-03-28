@@ -285,7 +285,7 @@ body {
     flex-direction: column;
     /* flex:1 fills the full width of the poly-app-stage row flex container */
     flex: 1;
-    height: 100vh;
+    height: 100%;
     overflow: hidden;
     position: relative;
 }

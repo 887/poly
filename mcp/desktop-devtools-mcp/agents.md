@@ -72,7 +72,9 @@ Treat timeout errors as a strong signal that the app or bridge is wedged.
 
 ---
 
-## Architecture
+## Architecture (Updated 2026-03-28 — Web-Shell Mode)
+
+### Web-Shell Mode (Default)
 
 ```
 VS Code Copilot / MCP Client
@@ -80,21 +82,36 @@ VS Code Copilot / MCP Client
     ▼
 poly-desktop-devtools-mcp (this crate)
     │ HTTP requests to 127.0.0.1:9223
-    ├── Runs in its own background process (VSCode task)
-    └── Survives app kill/restart
+    ├── Runs in its own background process
+    └── Survives shell kill/restart
+    ▼
+poly-desktop-web (apps/desktop-web/)
+    ├── Thin Wry/tao window (stays alive across rebuilds)
+    ├── HTTP eval-bridge on port 9223
+    ├── Screenshots via WebKit2GTK snapshot API
+    └── Loads WASM from dx serve on port 3002
+         ▼
+dx serve --platform web --port 3002  (in apps/desktop/)
+    └── Compiles Poly as WASM, serves hot-reloading dev server
+```
+
+### Legacy Mode (POLY_DESKTOP_LEGACY=1)
+
+```
+poly-desktop-devtools-mcp
+    │ HTTP requests to 127.0.0.1:9223
     ▼
 poly-desktop-devtools (apps/desktop-devtools/)
     ├── Embedded axum HTTP server (port 9223)
     ├── Bridges HTTP → dioxus eval() via use_coroutine + mpsc channel
-    └── Renders the Poly UI in a Wry/WebKit webview
+    └── Renders the Poly UI in a native Wry/WebKit webview
 ```
 
 ### Why HTTP, not Chrome CDP?
 
 WebKit2GTK's inspector (port 9222 via `WEBKIT_INSPECTOR_SERVER`) uses a
 **proprietary binary protocol**, NOT Chrome CDP. You cannot connect with
-standard CDP/WebSocket libraries. The HTTP eval-bridge via dioxus `eval()` is
-the only reliable path for the desktop build.
+standard CDP/WebSocket libraries. The HTTP eval-bridge is the only reliable path.
 
 ---
 

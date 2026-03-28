@@ -38,6 +38,17 @@ use tokio::sync::Mutex;
 const BASE: &str = "http://127.0.0.1:9223";
 const BUILD_LOG_EXCERPT_LINES: usize = 60;
 const APP_PROCESS_PATTERN: &str = "poly-desktop-devtools($|[^-])";
+const WEB_SHELL_PATTERN: &str = "poly-desktop-web($|[^-])";
+
+/// Web-shell dev server port (dx serve --platform web --port 3002).
+const WEB_SERVE_PORT: u16 = 3002;
+
+/// Check if legacy hotpatch mode is enabled.
+fn is_legacy_mode() -> bool {
+    std::env::var("POLY_DESKTOP_LEGACY")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
@@ -135,16 +146,28 @@ where
 
 // ─── Desktop HTTP Backend ─────────────────────────────────────────────────────
 
-/// Desktop devtools backend — builds and launches the app via `dx serve --hotpatch`
-/// and communicates via its HTTP eval-bridge at [`BASE`].
+/// Desktop devtools backend.
+///
+/// **New default mode** (`POLY_DESKTOP_LEGACY` not set):
+///   - Starts `dx serve --platform web --port 3002` in `apps/desktop`
+///   - Launches `poly-desktop-web` (thin Wry shell) which loads from port 3002
+///   - Rebuild: kills dx serve, restarts it, calls `/reload` on the eval bridge
+///
+/// **Legacy hotpatch mode** (`POLY_DESKTOP_LEGACY=1`):
+///   - Uses the old `dx serve --hotpatch` in `apps/desktop-devtools`
+///   - The binary embeds the app + eval bridge
 ///
 /// `Clone` is derived so that a cheap Arc-clone can be given to background build
 /// tasks without sharing ownership of the entire backend.
 #[derive(Clone)]
 struct DesktopHttpBackend {
     client: reqwest::Client,
-    /// Handle to the running desktop-devtools binary process.
+    /// Handle to the running desktop-devtools (legacy) or dx serve (web) process.
     app_process: Arc<Mutex<Option<AppProcess>>>,
+    /// PID of the dx serve process (web shell mode only).
+    dx_serve_pid: Arc<Mutex<Option<u32>>>,
+    /// PID of the poly-desktop-web shell process (web shell mode only).
+    shell_pid: Arc<Mutex<Option<u32>>>,
     /// Workspace path — set during `launch_app`, used by `rebuild_app`.
     workspace: Arc<Mutex<Option<String>>>,
     /// Rolling combined stdout/stderr log from Dioxus build and app output.
@@ -164,6 +187,8 @@ impl DesktopHttpBackend {
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
             app_process: Arc::new(Mutex::new(None)),
+            dx_serve_pid: Arc::new(Mutex::new(None)),
+            shell_pid: Arc::new(Mutex::new(None)),
             workspace: Arc::new(Mutex::new(None)),
             build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
             last_build: Arc::new(Mutex::new(None)),
@@ -417,7 +442,318 @@ impl DesktopHttpBackend {
         Ok(())
     }
 
-    /// Background task body for `launch_app` / `rebuild_app`.
+    /// Poll `http://127.0.0.1:<port>/` until it returns any HTTP response.
+    async fn wait_for_port(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
+        let url = format!("http://127.0.0.1:{port}/");
+        let polls = max_seconds * 2; // 500 ms intervals
+        for _ in 0..polls {
+            let ok = self
+                .client
+                .get(&url)
+                .timeout(std::time::Duration::from_secs(2))
+                .send()
+                .await
+                .map(|r| r.status().as_u16() < 500)
+                .unwrap_or(false);
+            if ok {
+                return Ok(());
+            }
+            // Early abort: check if dx serve crashed.
+            if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
+                anyhow::bail!("dx serve crashed: {crash_line}");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+        anyhow::bail!(
+            "dx serve did not become ready on port {port} within {max_seconds}s. \
+             Call get_last_build_log for errors."
+        )
+    }
+
+    /// Kill the tracked dx serve process (web shell mode).
+    async fn kill_dx_serve(&self) {
+        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-15", &pid.to_string()])
+                .status()
+                .await;
+        }
+        let _ = tokio::process::Command::new("pkill")
+            .args([
+                "-f",
+                &format!("dx.*serve.*--port.*{WEB_SERVE_PORT}"),
+            ])
+            .status()
+            .await;
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    }
+
+    /// Kill the poly-desktop-web shell process.
+    async fn kill_web_shell(&self) {
+        if let Some(pid) = self.shell_pid.lock().await.take() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-15", &pid.to_string()])
+                .status()
+                .await;
+        }
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", WEB_SHELL_PATTERN])
+            .status()
+            .await;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    /// Background task for the new web-shell launch mode.
+    ///
+    /// 1. Start `dx serve --platform web --port 3002` in `apps/desktop`
+    /// 2. Poll port 3002 until ready (max 120s)
+    /// 3. Launch `poly-desktop-web` (thin Wry shell)
+    /// 4. Wait for eval bridge on port 9223 (max 30s)
+    async fn bg_serve_and_launch_web_shell(&self, app_dir: &str, workspace: &str) {
+        tracing::info!("[bg] dx serve --platform web --port {WEB_SERVE_PORT}  in {app_dir}");
+
+        // ── Spawn dx serve ────────────────────────────────────────────────────
+        let mut serve_child = match tokio::process::Command::new("dx")
+            .args([
+                "serve",
+                "--platform",
+                "web",
+                "--port",
+                &WEB_SERVE_PORT.to_string(),
+            ])
+            .current_dir(app_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("[bg] Failed to spawn dx serve: {e}");
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    format!("Failed to spawn `dx serve --platform web`: {e}"),
+                    "dx serve could not be spawned. Is dx installed and on PATH?",
+                    None,
+                )
+                .await;
+                return;
+            }
+        };
+
+        if let Some(stdout) = serve_child.stdout.take() {
+            spawn_log_reader(stdout, "dx-stdout", self.build_log.clone());
+        }
+        if let Some(stderr) = serve_child.stderr.take() {
+            spawn_log_reader(stderr, "dx-stderr", self.build_log.clone());
+        }
+
+        let serve_pid = serve_child.id();
+        *self.dx_serve_pid.lock().await = serve_pid;
+
+        // Auto-clear when dx serve exits.
+        let pid_ref = self.dx_serve_pid.clone();
+        tokio::spawn(async move {
+            let _ = serve_child.wait().await;
+            *pid_ref.lock().await = None;
+            tracing::info!("[bg] dx serve exited");
+        });
+
+        let _ = Self::increment_rebuild_counter().await;
+
+        // ── Wait for dx serve port ────────────────────────────────────────────
+        match self.wait_for_port(WEB_SERVE_PORT, 120).await {
+            Ok(()) => tracing::info!("[bg] dx serve ready on port {WEB_SERVE_PORT}"),
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "dx serve --platform web did not become ready.",
+                    format!("{e}"),
+                    None,
+                )
+                .await;
+                return;
+            }
+        }
+
+        // ── Launch poly-desktop-web shell ─────────────────────────────────────
+        let shell_bin = format!("{workspace}/target/debug/poly-desktop-web");
+        let mut shell_cmd = if std::path::Path::new(&shell_bin).exists() {
+            tracing::info!("[bg] Using pre-built shell binary: {shell_bin}");
+            tokio::process::Command::new(&shell_bin)
+        } else {
+            tracing::info!("[bg] Running shell via cargo run --bin poly-desktop-web");
+            let mut c = tokio::process::Command::new("cargo");
+            c.args(["run", "--bin", "poly-desktop-web"]);
+            c.current_dir(workspace);
+            c
+        };
+
+        shell_cmd
+            .env("POLY_DEV_URL", format!("http://127.0.0.1:{WEB_SERVE_PORT}"))
+            .env_remove("ELECTRON_RUN_AS_NODE")
+            .env_remove("ELECTRON_NO_ATTACH_CONSOLE")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit());
+
+        let mut shell_child = match shell_cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("[bg] Failed to spawn poly-desktop-web: {e}");
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    format!("dx serve ready but shell launch failed: {e}"),
+                    "poly-desktop-web could not be spawned.",
+                    None,
+                )
+                .await;
+                return;
+            }
+        };
+
+        let shell_pid = shell_child.id();
+        *self.shell_pid.lock().await = shell_pid;
+
+        let shell_pid_ref = self.shell_pid.clone();
+        tokio::spawn(async move {
+            let status = shell_child.wait().await;
+            let code = status.as_ref().ok().and_then(|s| s.code());
+            *shell_pid_ref.lock().await = None;
+            tracing::info!("poly-desktop-web exited (code {code:?})");
+        });
+
+        // ── Wait for eval bridge on port 9223 ─────────────────────────────────
+        match self.wait_for_bridge(30).await {
+            Ok(()) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Succeeded,
+                    format!(
+                        "dx serve ready on port {WEB_SERVE_PORT}. \
+                         poly-desktop-web shell launched (PID: {shell_pid:?}). \
+                         Eval bridge ready on port 9223. Call connect_cdp."
+                    ),
+                    format!("Verified {BASE}/status. Shell stays alive across rebuilds."),
+                    None,
+                )
+                .await;
+                tracing::info!(
+                    "[bg] Web shell launched (shell PID: {shell_pid:?}, dx serve PID: {serve_pid:?})"
+                );
+            }
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "dx serve and shell started but eval bridge did not respond within 30s.",
+                    format!("{e}"),
+                    None,
+                )
+                .await;
+            }
+        }
+    }
+
+    /// Background task for the new web-shell rebuild mode.
+    ///
+    /// 1. Kill dx serve (NOT the shell)
+    /// 2. Restart dx serve
+    /// 3. Poll port 3002
+    /// 4. Call eval bridge POST /reload
+    async fn bg_rebuild_web_shell(&self, app_dir: &str) {
+        tracing::info!("[bg] rebuild: killing dx serve, restarting on port {WEB_SERVE_PORT}");
+
+        self.kill_dx_serve().await;
+
+        // Restart dx serve
+        let mut serve_child = match tokio::process::Command::new("dx")
+            .args([
+                "serve",
+                "--platform",
+                "web",
+                "--port",
+                &WEB_SERVE_PORT.to_string(),
+            ])
+            .current_dir(app_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("[bg] Failed to restart dx serve: {e}");
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    format!("Failed to restart `dx serve`: {e}"),
+                    "dx serve could not be spawned.",
+                    None,
+                )
+                .await;
+                return;
+            }
+        };
+
+        if let Some(stdout) = serve_child.stdout.take() {
+            spawn_log_reader(stdout, "dx-stdout", self.build_log.clone());
+        }
+        if let Some(stderr) = serve_child.stderr.take() {
+            spawn_log_reader(stderr, "dx-stderr", self.build_log.clone());
+        }
+
+        let serve_pid = serve_child.id();
+        *self.dx_serve_pid.lock().await = serve_pid;
+
+        let pid_ref = self.dx_serve_pid.clone();
+        tokio::spawn(async move {
+            let _ = serve_child.wait().await;
+            *pid_ref.lock().await = None;
+        });
+
+        match self.wait_for_port(WEB_SERVE_PORT, 120).await {
+            Ok(()) => tracing::info!("[bg] dx serve ready on port {WEB_SERVE_PORT} after rebuild"),
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "dx serve did not become ready after rebuild.",
+                    format!("{e}"),
+                    None,
+                )
+                .await;
+                return;
+            }
+        }
+
+        // Reload the shell page via the eval bridge
+        let reload_ok = self
+            .client
+            .post(format!("{BASE}/reload"))
+            .send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false);
+
+        self.finish_build_record(
+            BuildLifecycleState::Succeeded,
+            if reload_ok {
+                format!(
+                    "WASM recompiled (dx serve PID {serve_pid:?}). \
+                     Shell reloaded via eval bridge /reload. Shell window survived."
+                )
+            } else {
+                "WASM recompiled. Shell reload failed — call connect_cdp or launch_app.".to_string()
+            },
+            if reload_ok {
+                "Shell page reload triggered. WASM bundle updated."
+            } else {
+                "dx serve ready but reload failed. The shell may have crashed — use launch_app."
+            },
+            None,
+        )
+        .await;
+        tracing::info!("[bg] Rebuild done. reload_ok={reload_ok}");
+    }
+
+    /// Background task body for `launch_app` / `rebuild_app` (legacy hotpatch mode).
     ///
     /// Spawns `dx serve --hotpatch` as a long-running background process.
     /// `--hotpatch` is required: it configures `LD_LIBRARY_PATH` so the launched
@@ -516,7 +852,6 @@ impl DevtoolsBackend for DesktopHttpBackend {
 
     async fn launch_app(&self, workspace: &str) -> anyhow::Result<String> {
         *self.workspace.lock().await = Some(workspace.to_string());
-        let app_dir = format!("{workspace}/apps/desktop-devtools");
 
         // ── Guard: refuse concurrent builds ──────────────────────────────────
         {
@@ -526,73 +861,114 @@ impl DevtoolsBackend for DesktopHttpBackend {
             {
                 return Ok(
                         "A build is already in progress.\n\
-                         Poll get_last_build_status \u{2014} state will change Running \u{2192} Succeeded/Failed."
+                         Poll get_last_build_status — state will change Running → Succeeded/Failed."
                             .to_string(),
                     );
             }
         }
 
-        // ── Step 1: Kill any stale dx serve / app instance synchronously ──────
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-f", "dx.*serve.*hotpatch"])
-            .status()
+        if is_legacy_mode() {
+            // ── Legacy hotpatch mode ──────────────────────────────────────────
+            let app_dir = format!("{workspace}/apps/desktop-devtools");
+            let _ = tokio::process::Command::new("pkill")
+                .args(["-f", "dx.*serve.*hotpatch"])
+                .status()
+                .await;
+            let _ = tokio::process::Command::new("pkill")
+                .args(["-f", APP_PROCESS_PATTERN])
+                .status()
+                .await;
+            *self.app_process.lock().await = None;
+            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+
+            self.start_build_record(
+                "launch_app",
+                "dx serve --hotpatch (legacy)",
+                &app_dir,
+                "dx serve --hotpatch",
+                "dx serve --hotpatch started in background (legacy mode). \
+                 Poll get_last_build_status for progress.",
+            )
             .await;
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-f", APP_PROCESS_PATTERN])
-            .status()
+
+            let ctx = self.clone();
+            let handle = tokio::spawn(async move {
+                ctx.bg_build_and_launch_desktop(&app_dir).await;
+            });
+            *self.build_task.lock().await = Some(handle);
+
+            Ok("Build started in background (legacy hotpatch mode, state: Running).\n\
+                 Poll `get_last_build_status` until state = Succeeded or Failed.\n\
+                 On Succeeded: call `connect_cdp`.\n\
+                 On Failed: call `get_last_build_log` for the compiler error."
+                .to_string())
+        } else {
+            // ── New web-shell mode ────────────────────────────────────────────
+            let app_dir = format!("{workspace}/apps/desktop");
+            // Kill stale dx serve and shell
+            self.kill_dx_serve().await;
+            self.kill_web_shell().await;
+            *self.app_process.lock().await = None;
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+
+            self.start_build_record(
+                "launch_app",
+                &format!("dx serve --platform web --port {WEB_SERVE_PORT}"),
+                &app_dir,
+                &format!("dx serve --platform web --port {WEB_SERVE_PORT}"),
+                "dx serve started in background (web-shell mode). \
+                 Poll get_last_build_status for progress.",
+            )
             .await;
-        *self.app_process.lock().await = None;
-        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-        // ── Hand off the slow work (dx serve + wait for bridge) to background ─
-        //
-        // `dx serve --hotpatch` takes 30-90 s to compile before the app
-        // starts. Running it synchronously blocks this MCP response long enough
-        // for VS Code to drop the connection.  We set state = Running, return
-        // immediately (\u{2248}600 ms), and the agent polls get_last_build_status
-        // until Running \u{2192} Succeeded/Failed.
-        self.start_build_record(
-            "launch_app",
-            "dx serve --hotpatch",
-            &app_dir,
-            "dx serve --hotpatch",
-            "dx serve started in background (state: Running). \
-             Poll get_last_build_status for progress.",
-        )
-        .await;
+            let ctx = self.clone();
+            let ws = workspace.to_string();
+            let handle = tokio::spawn(async move {
+                ctx.bg_serve_and_launch_web_shell(&app_dir, &ws).await;
+            });
+            *self.build_task.lock().await = Some(handle);
 
-        let ctx = self.clone(); // cheap Arc clone \u{2014} shares all mutable state
-        let handle = tokio::spawn(async move {
-            ctx.bg_build_and_launch_desktop(&app_dir).await;
-        });
-        *self.build_task.lock().await = Some(handle);
-
-        Ok("\u{1f527} Build started in background (state: Running).\n\
-             \u{25b6} Poll `get_last_build_status` until state = Succeeded or Failed.\n\
-             \u{1f4cb} On Succeeded: app is running \u{2014} call `connect_cdp`.\n\
-             \u{274c} On Failed: call `get_last_build_log` for the exact compiler error."
-            .to_string())
+            Ok(format!(
+                "Build started in background (web-shell mode, state: Running).\n\
+                 Command: dx serve --platform web --port {WEB_SERVE_PORT}  (in apps/desktop/)\n\
+                 First compile takes 30-90 s.\n\
+                 \n\
+                 Poll get_last_build_status every 5-10 s:\n\
+                   state = \"Running\"   → keep polling\n\
+                   state = \"Succeeded\" → shell is running, call connect_cdp\n\
+                   state = \"Failed\"    → call get_last_build_log for the compiler error\n\
+                 \n\
+                 The poly-desktop-web shell stays alive across rebuilds — use rebuild_app to recompile WASM.\n\
+                 Set POLY_DESKTOP_LEGACY=1 to use the old dx serve --hotpatch mode."
+            ))
+        }
     }
 
     async fn kill_app(&self) -> anyhow::Result<String> {
-        // SIGTERM the dx serve process (which also terminates the app it compiled).
-        if let Some(proc) = self.app_process.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
-                .args(["-15", &proc.pid.to_string()])
+        if is_legacy_mode() {
+            // Legacy: SIGTERM dx serve (which also terminates the devtools binary).
+            if let Some(proc) = self.app_process.lock().await.take() {
+                let _ = tokio::process::Command::new("kill")
+                    .args(["-15", &proc.pid.to_string()])
+                    .status()
+                    .await;
+            }
+            let _ = tokio::process::Command::new("pkill")
+                .args(["-f", "dx.*serve.*hotpatch"])
                 .status()
                 .await;
+            let _ = tokio::process::Command::new("pkill")
+                .args(["-f", APP_PROCESS_PATTERN])
+                .status()
+                .await;
+            Ok("Killed dx serve and poly-desktop-devtools. Call launch_app to restart.".to_string())
+        } else {
+            // Web-shell mode: kill dx serve and the shell separately.
+            self.kill_dx_serve().await;
+            self.kill_web_shell().await;
+            *self.app_process.lock().await = None;
+            Ok("Killed dx serve and poly-desktop-web shell. Call launch_app to restart.".to_string())
         }
-        // Pattern fallbacks: kill any stray dx serve or app instances.
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-f", "dx.*serve.*hotpatch"])
-            .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-f", APP_PROCESS_PATTERN])
-            .status()
-            .await;
-
-        Ok("Killed dx serve and poly-desktop-devtools. Call launch_app to restart.".to_string())
     }
 
     async fn connect(&self) -> anyhow::Result<String> {
@@ -631,34 +1007,107 @@ impl DevtoolsBackend for DesktopHttpBackend {
     }
 
     async fn hard_kill(&self) -> anyhow::Result<String> {
-        // SIGKILL the dx serve process by PID.
-        if let Some(proc) = self.app_process.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
-                .args(["-9", &proc.pid.to_string()])
+        if is_legacy_mode() {
+            if let Some(proc) = self.app_process.lock().await.take() {
+                let _ = tokio::process::Command::new("kill")
+                    .args(["-9", &proc.pid.to_string()])
+                    .status()
+                    .await;
+            }
+            let _ = tokio::process::Command::new("pkill")
+                .args(["-9", "-f", "dx.*serve.*hotpatch"])
                 .status()
                 .await;
+            let _ = tokio::process::Command::new("pkill")
+                .args(["-9", "-f", APP_PROCESS_PATTERN])
+                .status()
+                .await;
+            Ok(
+                "Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
+                    .to_string(),
+            )
+        } else {
+            // Web-shell mode: SIGKILL both dx serve and shell.
+            if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+                let _ = tokio::process::Command::new("kill")
+                    .args(["-9", &pid.to_string()])
+                    .status()
+                    .await;
+            }
+            if let Some(pid) = self.shell_pid.lock().await.take() {
+                let _ = tokio::process::Command::new("kill")
+                    .args(["-9", &pid.to_string()])
+                    .status()
+                    .await;
+            }
+            let _ = tokio::process::Command::new("pkill")
+                .args([
+                    "-9",
+                    "-f",
+                    &format!("dx.*serve.*--port.*{WEB_SERVE_PORT}"),
+                ])
+                .status()
+                .await;
+            let _ = tokio::process::Command::new("pkill")
+                .args(["-9", "-f", WEB_SHELL_PATTERN])
+                .status()
+                .await;
+            *self.app_process.lock().await = None;
+            Ok(
+                "Hard-killed dx serve and poly-desktop-web shell (SIGKILL). Call launch_app to restart."
+                    .to_string(),
+            )
         }
-        // Pattern fallbacks: SIGKILL dx serve and the app binary.
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-9", "-f", "dx.*serve.*hotpatch"])
-            .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-9", "-f", APP_PROCESS_PATTERN])
-            .status()
-            .await;
-
-        Ok(
-            "Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
-                .to_string(),
-        )
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
-        // Kills the running binary then rebuilds and relaunches via launch_app.
-        // launch_app already kills stale instances at the start, so this is safe
-        // to call directly without an extra kill step.
-        self.launch_app(workspace).await
+        if is_legacy_mode() {
+            // Legacy: full kill + relaunch.
+            return self.launch_app(workspace).await;
+        }
+
+        // ── Guard: refuse concurrent builds ──────────────────────────────────
+        {
+            let guard = self.build_task.lock().await;
+            if let Some(handle) = guard.as_ref()
+                && !handle.is_finished()
+            {
+                return Ok("A build is already in progress.\n\
+                     Poll get_last_build_status until state = \"Succeeded\" or \"Failed\"."
+                    .to_string());
+            }
+        }
+
+        let app_dir = format!("{workspace}/apps/desktop");
+
+        let _ = Self::increment_rebuild_counter().await;
+
+        self.start_build_record(
+            "rebuild_app",
+            &format!("dx serve --platform web --port {WEB_SERVE_PORT}"),
+            &app_dir,
+            &format!("restart dx serve --platform web --port {WEB_SERVE_PORT}"),
+            "Restarting dx serve to recompile WASM. Shell window will NOT restart.",
+        )
+        .await;
+
+        let ctx = self.clone();
+        let app_dir2 = app_dir.clone();
+        let handle = tokio::spawn(async move {
+            ctx.bg_rebuild_web_shell(&app_dir2).await;
+        });
+        *self.build_task.lock().await = Some(handle);
+
+        Ok(format!(
+            "WASM rebuild started in background (state: Running).\n\
+             Restarting: dx serve --platform web --port {WEB_SERVE_PORT}\n\
+             Shell window stays alive — only the page content reloads.\n\
+             \n\
+             Poll get_last_build_status every 5-10 s:\n\
+               state = \"Running\"   → keep polling\n\
+               state = \"Succeeded\" → call connect_cdp to verify the new build\n\
+               state = \"Failed\"    → call get_last_build_log for the compiler error"
+        ))
     }
 
     async fn get_last_build_status(&self) -> anyhow::Result<String> {

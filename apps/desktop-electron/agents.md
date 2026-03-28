@@ -1,7 +1,7 @@
 # Desktop Electron — Agent Instructions
 
-> **Read root `agents.md` FIRST**, then this file.  
-> **Last Updated:** 2026-02-28
+> **Read root `agents.md` FIRST**, then this file.
+> **Last Updated:** 2026-03-28
 
 ## Purpose
 
@@ -9,11 +9,18 @@ Desktop entry point wrapping the Dioxus web (WASM) build inside an **Electron** 
 
 ## How It Works
 
+### Production Mode
 1. Build the Dioxus web target (WASM + HTML + JS + CSS)
 2. Electron `main.js` creates a `BrowserWindow`, serves the built web app over
 	loopback HTTP, and loads that local URL
 3. All Poly logic runs as WASM inside Electron's Chromium webview
 4. `src/main.rs` must call `poly_core::install_wasm_crash_handler()` before `dioxus::launch(App)`
+
+### Web-Shell Dev Mode (2026-03-28)
+1. `poly-electron-devtools-mcp` runs `dx serve --platform web --port 3001` in this directory
+2. The thin shell (`apps/desktop-electron-web`) loads from the live dev server
+3. Electron window **stays alive across WASM rebuilds** — only the page reloads
+4. CDP on port 9224 for remote debugging via the MCP
 
 ## WASM Crash Visibility (2026-03-10)
 

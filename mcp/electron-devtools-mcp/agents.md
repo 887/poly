@@ -52,14 +52,35 @@ Treat those timeout errors as a real signal that the page/renderer is wedged.
 
 If the renderer is still responsive enough for JS evaluation, inspect `window.__polyCrashState` to see whether the shared WASM crash handler recorded a panic or browser-side error.
 
-## Architecture
+## Architecture (Updated 2026-03-28 — Web-Shell Mode)
 
 - **CDP port:** `9224` (distinct from web-devtools `9222` and desktop HTTP `9223`)
+- **dx serve port:** `3001` (Electron loads WASM from this dev server)
 - **Rebuild counter file:** `/tmp/poly-devtools-electron-rebuild-counter`
 - **Backend struct:** `ElectronCdpBackend`
-- **No watchdog:** Electron is a single stable process; user closing it is intentional
-- **No `dx serve`:** uses `dx build --platform web` (one-shot builds, not watch mode)
+- **Thin shell:** `apps/desktop-electron-web/electron/` — stays alive across rebuilds
+- **Build mode:** `dx serve --platform web --port 3001` (live dev server, NOT one-shot)
 - **MCP name:** `"poly-electron"`
+
+### Web-Shell Mode (Default)
+
+The Electron MCP now uses a **web-shell architecture** where:
+1. `dx serve --platform web --port 3001` runs in `apps/desktop-electron/`
+2. The thin shell (`apps/desktop-electron-web/electron/`) loads from `http://127.0.0.1:3001/`
+3. On rebuild, only the WASM page reloads — the Electron window stays alive
+4. This matches how `poly-web-devtools-mcp` works with Chrome
+
+### ELECTRON_RUN_AS_NODE
+
+The MCP strips `ELECTRON_RUN_AS_NODE` and `ELECTRON_NO_ATTACH_CONSOLE` from the
+environment when spawning Electron. If these are set (common in VS Code/Claude Code
+terminals), Electron runs as plain Node.js and `require('electron')` fails.
+
+### Orphan Process Cleanup
+
+`launch_app`, `kill_app`, and `hard_kill` all run `pkill -f "poly-desktop-electron-web"`
+to catch orphaned Electron child processes (main, GPU, network, renderer) from
+previous MCP sessions — not just renderer processes matched by CDP port.
 
 ## Launch Sequence (NON-BLOCKING)
 
@@ -173,19 +194,21 @@ build counters and real UI markers as the readiness source of truth.
 | Feature | `web-devtools-mcp` | `electron-devtools-mcp` |
 |---|---|---|
 | CDP port | `9222` | `9224` |
-| Build command | `dx serve` (hot-watching) | `dx build` (one-shot) |
-| Browser | Chrome / Chromium | Electron |
-| URL type | `http://localhost:3000` | `file://…/dist/index.html` |
+| dx serve port | `3000` | `3001` |
+| Build command | `dx serve --platform web` | `dx serve --platform web --port 3001` |
+| Browser | Chrome / Chromium | Electron (thin shell) |
+| URL type | `http://localhost:3000` | `http://localhost:3001` |
+| Native shell | None (Chrome) | `apps/desktop-electron-web/` |
 | Watchdog (restart on crash) | Yes | No |
-| Hot-patch | No | No |
 | Counter file | `…web-rebuild-counter` | `…electron-rebuild-counter` |
 
 ## Discovery Strategy
 
 `discover_ws_url()` queries `http://127.0.0.1:9224/json`:
 
-1. **1st preference:** page targets whose URL starts with `file://` or `app://` (our WASM app)
-2. **2nd preference:** any `page`-type target (handles `about:blank` while loading)
+1. **1st preference:** page targets whose URL starts with `http://127.0.0.1:3001` (dev server)
+2. **2nd preference:** page targets with `file://` or `app://` URLs (production mode)
+3. **3rd preference:** any `page`-type target (handles `about:blank` while loading)
 
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 

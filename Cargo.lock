@@ -6101,6 +6101,7 @@ name = "poly-desktop"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+ "getrandom 0.4.2",
  "poly-core",
  "tokio",
  "tracing",
@@ -6147,6 +6148,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -6158,6 +6161,22 @@ dependencies = [
  "poly-core",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "poly-desktop-web"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "cairo-rs",
+ "serde_json",
+ "tao",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "webkit2gtk",
+ "wry",
 ]
 
 [[package]]

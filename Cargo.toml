@@ -25,6 +25,7 @@ members = [
     "apps/ios",
     "apps/web",
     "apps/desktop-devtools",
+    "apps/desktop-web",
 ]
 
 [workspace.package]

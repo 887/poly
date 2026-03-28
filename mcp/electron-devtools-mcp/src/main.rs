@@ -20,7 +20,7 @@
 
 use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -40,6 +40,10 @@ use tokio_tungstenite::tungstenite::Message;
 /// - `poly-web-devtools-mcp` → 9222
 /// - `poly-desktop-devtools` HTTP bridge → 9223
 const CDP_PORT: u16 = 9224;
+
+/// Port that `dx serve --platform web` listens on for the Electron WASM build.
+/// Electron loads from `http://127.0.0.1:DX_SERVE_PORT/` in dev mode.
+const DX_SERVE_PORT: u16 = 3001;
 
 /// Rebuild counter file — incremented by `launch_app` and `rebuild_app`.
 /// Separate from desktop (`…rebuild-counter`) and web (`…web-rebuild-counter`).
@@ -105,6 +109,10 @@ struct ElectronCdpBackend {
     last_build: Arc<Mutex<Option<ElectronBuildRecord>>>,
     /// Active background build task — guards against concurrent builds.
     build_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    /// PID of the managed `dx serve --platform web` process.
+    dx_serve_pid: Arc<Mutex<Option<u32>>>,
+    /// Set to `true` on MCP shutdown — stops any Electron watchdog from restarting.
+    shutting_down: Arc<AtomicBool>,
 }
 
 impl ElectronCdpBackend {
@@ -122,6 +130,8 @@ impl ElectronCdpBackend {
             build_log: Arc::new(Mutex::new(RollingBuildLog::default())),
             last_build: Arc::new(Mutex::new(None)),
             build_task: Arc::new(Mutex::new(None)),
+            dx_serve_pid: Arc::new(Mutex::new(None)),
+            shutting_down: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -167,16 +177,6 @@ impl ElectronCdpBackend {
             diagnostics,
             log_start_seq: start_seq,
         });
-    }
-
-    async fn append_command_output(&self, stdout_text: &str, stderr_text: &str) {
-        let mut buffer = self.build_log.lock().await;
-        for line in stdout_text.lines() {
-            buffer.push_line(format!("[stdout] {line}"));
-        }
-        for line in stderr_text.lines() {
-            buffer.push_line(format!("[stderr] {line}"));
-        }
     }
 
     async fn finish_build_record(
@@ -532,36 +532,81 @@ impl ElectronCdpBackend {
             .await;
     }
 
+    // ── Port / process helpers ──────────────────────────────────────────────
+
+    /// Poll `http://127.0.0.1:<port>/` until it returns any HTTP response,
+    /// detecting early dx-serve crashes via the build log.
+    async fn wait_for_port(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
+        let url = format!("http://127.0.0.1:{port}/");
+        let polls = max_seconds * 2; // 500 ms intervals
+        for _ in 0..polls {
+            let ok = self
+                .client
+                .get(&url)
+                .timeout(Duration::from_secs(2))
+                .send()
+                .await
+                .map(|r| r.status().as_u16() < 500)
+                .unwrap_or(false);
+            if ok {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        anyhow::bail!(
+            "dx serve did not become ready on port {port} within {max_seconds}s. \
+             Call get_last_build_log to inspect the build output."
+        )
+    }
+
+    /// Kill the tracked `dx serve` process and wait briefly for it to exit.
+    async fn kill_dx_serve(&self) {
+        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-15", &pid.to_string()])
+                .status()
+                .await;
+        }
+        // Pattern fallback.
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", &format!("dx.*serve.*--port.*{DX_SERVE_PORT}")])
+            .status()
+            .await;
+        tokio::time::sleep(Duration::from_millis(400)).await;
+    }
+
     // ── Background task helpers ─────────────────────────────────────────────
     // These take `self` by value (via `self.clone()` at the call site) so they
     // can be dropped into `tokio::spawn` without lifetime issues.
 
     /// Background task body for `launch_app`.
     ///
-    /// Runs `dx build --platform web`, installs npm deps, launches Electron,
-    /// and updates build diagnostics.  Called from a `tokio::spawn`.
-    async fn bg_build_and_launch_electron(
+    /// Starts `dx serve --platform web --port DX_SERVE_PORT`, waits for the
+    /// dev server to become ready, then launches Electron with `POLY_DEV=1` so
+    /// it loads from the live dev server.  Electron stays alive across rebuilds.
+    async fn bg_serve_and_launch_electron(
         self,
-        dx_build_dir: String,
-        electron_devtools_dir: String,
+        app_dir: String,
+        electron_dir: String,
     ) {
-        tracing::info!("[bg] dx build --platform web  in {dx_build_dir}");
+        tracing::info!("[bg] dx serve --platform web --port {DX_SERVE_PORT}  in {app_dir}");
 
-        // ── dx build ──────────────────────────────────────────────────────
-        let build_output = match tokio::process::Command::new("dx")
-            .args(["build", "--platform", "web"])
-            .current_dir(&dx_build_dir)
+        // ── Spawn dx serve (long-running) ─────────────────────────────────
+        let mut serve_child = match tokio::process::Command::new("dx")
+            .args(["serve", "--platform", "web", "--port", &DX_SERVE_PORT.to_string()])
+            .current_dir(&app_dir)
             .stdin(Stdio::null())
-            .output()
-            .await
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
         {
-            Ok(o) => o,
+            Ok(c) => c,
             Err(e) => {
-                tracing::error!("[bg] Failed to spawn dx build: {e}");
+                tracing::error!("[bg] Failed to spawn dx serve: {e}");
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    format!("Failed to spawn `dx build`: {e}"),
-                    "dx build could not be spawned. Is dx installed and on PATH?",
+                    format!("Failed to spawn `dx serve`: {e}"),
+                    "dx serve could not be spawned. Is dx installed and on PATH?",
                     None,
                 )
                 .await;
@@ -569,49 +614,67 @@ impl ElectronCdpBackend {
             }
         };
 
-        self.append_command_output(
-            &String::from_utf8_lossy(&build_output.stdout),
-            &String::from_utf8_lossy(&build_output.stderr),
-        )
-        .await;
-
-        if !build_output.status.success() {
-            self.finish_build_record(
-                BuildLifecycleState::Failed,
-                "Electron WASM build failed.",
-                "dx build --platform web exited non-zero. Inspect get_last_build_log.",
-                build_output.status.code(),
-            )
-            .await;
-            tracing::error!(
-                "[bg] dx build failed (exit {:?})",
-                build_output.status.code()
-            );
-            return;
+        // Stream dx serve stdout/stderr into the rolling build log.
+        if let Some(stdout) = serve_child.stdout.take() {
+            let buf = self.build_log.clone();
+            tokio::spawn(async move {
+                use tokio::io::AsyncBufReadExt as _;
+                let mut lines = tokio::io::BufReader::new(stdout).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    buf.lock().await.push_line(format!("[dx-stdout] {line}"));
+                }
+            });
+        }
+        if let Some(stderr) = serve_child.stderr.take() {
+            let buf = self.build_log.clone();
+            tokio::spawn(async move {
+                use tokio::io::AsyncBufReadExt as _;
+                let mut lines = tokio::io::BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    buf.lock().await.push_line(format!("[dx-stderr] {line}"));
+                }
+            });
         }
 
-        tracing::info!("[bg] WASM build succeeded \u{2713} \u{2014} incrementing counter");
+        let serve_pid = serve_child.id();
+        *self.dx_serve_pid.lock().await = serve_pid;
+
+        // Auto-clear when dx serve exits.
+        let pid_ref = self.dx_serve_pid.clone();
+        tokio::spawn(async move {
+            let _ = serve_child.wait().await;
+            *pid_ref.lock().await = None;
+            tracing::info!("[bg] dx serve exited");
+        });
+
         Self::increment_rebuild_counter();
 
-        // ── npm install ───────────────────────────────────────────────────
-        let npm_status = tokio::process::Command::new("npm")
-            .args(["install", "--prefer-offline"])
-            .current_dir(&electron_devtools_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await;
-        match npm_status {
-            Ok(s) if s.success() => tracing::info!("[bg] npm install ok"),
-            Ok(s) => tracing::warn!("[bg] npm install exit {:?} \u{2014} continuing", s.code()),
-            Err(e) => tracing::warn!("[bg] npm install failed: {e} \u{2014} continuing"),
+        // ── Wait for dx serve to come up ──────────────────────────────────
+        match self.wait_for_port(DX_SERVE_PORT, 120).await {
+            Ok(()) => tracing::info!("[bg] dx serve is ready on port {DX_SERVE_PORT}"),
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "dx serve did not become ready.",
+                    format!("{e}"),
+                    None,
+                )
+                .await;
+                return;
+            }
         }
 
-        // ── Launch Electron ───────────────────────────────────────────────
-        let local_electron = format!("{electron_devtools_dir}/node_modules/.bin/electron");
-        let mut cmd = if std::path::Path::new(&local_electron).exists() {
-            tracing::info!("[bg] Using local electron binary: {local_electron}");
+        // ── Launch Electron with POLY_DEV=1 ───────────────────────────────
+        // Use the electron binary from the original app's node_modules so that
+        // the thin shell's node_modules (if any) don't shadow the built-in
+        // `require('electron')` module inside main.js.
+        let original_electron = format!("{app_dir}/electron/node_modules/.bin/electron");
+        let local_electron = format!("{electron_dir}/node_modules/.bin/electron");
+        let mut cmd = if std::path::Path::new(&original_electron).exists() {
+            tracing::info!("[bg] Using original app electron binary: {original_electron}");
+            tokio::process::Command::new(&original_electron)
+        } else if std::path::Path::new(&local_electron).exists() {
+            tracing::info!("[bg] Using thin-shell electron binary: {local_electron}");
             tokio::process::Command::new(&local_electron)
         } else {
             tracing::info!("[bg] Falling back to npx electron");
@@ -620,8 +683,19 @@ impl ElectronCdpBackend {
             c
         };
 
-        cmd.arg(".")
-            .current_dir(&electron_devtools_dir)
+        cmd.arg(&electron_dir)
+            .current_dir(&electron_dir)
+            .env("POLY_DEV", "1")
+            .env("POLY_DEV_SERVE_PORT", DX_SERVE_PORT.to_string())
+            .env(
+                "POLY_ELECTRON_REMOTE_DEBUGGING_PORT",
+                CDP_PORT.to_string(),
+            )
+            // ELECTRON_RUN_AS_NODE makes Electron behave as plain Node.js,
+            // suppressing all Electron bindings.  Unset it so the process
+            // starts as a proper Electron browser process.
+            .env_remove("ELECTRON_RUN_AS_NODE")
+            .env("ELECTRON_DISABLE_SANDBOX", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit());
@@ -632,7 +706,7 @@ impl ElectronCdpBackend {
                 tracing::error!("[bg] Failed to spawn Electron: {e}");
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    format!("Build succeeded but Electron launch failed: {e}"),
+                    format!("dx serve is ready but Electron launch failed: {e}"),
                     "Electron process could not be spawned.",
                     None,
                 )
@@ -646,46 +720,66 @@ impl ElectronCdpBackend {
 
         // Reap in background so it doesn't become a zombie.
         let pid_ref = self.electron_pid.clone();
+        let shutting_down = self.shutting_down.clone();
         tokio::spawn(async move {
-            let _ = child.wait().await;
+            let status = child.wait().await;
+            let exit_code = status.as_ref().ok().and_then(|s| s.code());
             *pid_ref.lock().await = None;
-            tracing::info!("Electron process exited");
+            if !shutting_down.load(Ordering::Relaxed) && exit_code != Some(0) {
+                tracing::warn!(
+                    "Electron exited unexpectedly (code {exit_code:?}). \
+                     Call launch_app to restart."
+                );
+            } else {
+                tracing::info!("Electron process exited (code {exit_code:?})");
+            }
         });
 
         self.finish_build_record(
             BuildLifecycleState::Succeeded,
             format!(
-                "Electron launched with CDP on port {CDP_PORT} (PID: {pid:?}). \
-                 Wait ~5 s then call connect_cdp."
+                "dx serve ready on port {DX_SERVE_PORT}. \
+                 Electron launched with CDP on port {CDP_PORT} (PID: {pid:?}). \
+                 Electron stays alive across rebuilds — use rebuild_app to update WASM."
             ),
-            "App launched. Call connect_cdp after a 5 s wait to verify the CDP session.",
-            build_output.status.code(),
+            "dx serve is running and Electron is connected to it. \
+             Call connect_cdp (wait ~3 s first). \
+             Use rebuild_app to recompile WASM — Electron window will NOT restart.",
+            None,
         )
         .await;
-        tracing::info!("[bg] Electron launched (PID: {pid:?}). Launch task complete.");
+        tracing::info!("[bg] Electron launched (PID: {pid:?}). dx serve PID: {serve_pid:?}.");
     }
 
     /// Background task body for `rebuild_app`.
     ///
-    /// Runs `dx build --platform web`, then sends a CDP `Page.reload` so Electron
-    /// picks up the new WASM bundle.  Called from a `tokio::spawn`.
-    async fn bg_rebuild_electron(self, dx_build_dir: String) {
-        tracing::info!("[bg] Rebuilding: dx build --platform web  in {dx_build_dir}");
+    /// Restarts `dx serve --platform web` (recompiles WASM) then sends a CDP
+    /// `Page.reload` so Electron picks up the fresh bundle.  Electron is NOT
+    /// killed — the window stays alive, only the page content reloads.
+    async fn bg_restart_serve_and_reload(self, app_dir: String) {
+        tracing::info!(
+            "[bg] rebuild: killing dx serve, restarting dx serve --platform web --port {DX_SERVE_PORT}"
+        );
 
-        let build_output = match tokio::process::Command::new("dx")
-            .args(["build", "--platform", "web"])
-            .current_dir(&dx_build_dir)
+        // ── Kill current dx serve ─────────────────────────────────────────
+        self.kill_dx_serve().await;
+
+        // ── Restart dx serve ──────────────────────────────────────────────
+        let mut serve_child = match tokio::process::Command::new("dx")
+            .args(["serve", "--platform", "web", "--port", &DX_SERVE_PORT.to_string()])
+            .current_dir(&app_dir)
             .stdin(Stdio::null())
-            .output()
-            .await
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
         {
-            Ok(o) => o,
+            Ok(c) => c,
             Err(e) => {
-                tracing::error!("[bg] Failed to spawn dx build for rebuild: {e}");
+                tracing::error!("[bg] Failed to spawn dx serve for rebuild: {e}");
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    format!("Failed to spawn `dx build`: {e}"),
-                    "dx build could not be spawned.",
+                    format!("Failed to restart `dx serve`: {e}"),
+                    "dx serve could not be spawned.",
                     None,
                 )
                 .await;
@@ -693,28 +787,52 @@ impl ElectronCdpBackend {
             }
         };
 
-        self.append_command_output(
-            &String::from_utf8_lossy(&build_output.stdout),
-            &String::from_utf8_lossy(&build_output.stderr),
-        )
-        .await;
-
-        if !build_output.status.success() {
-            self.finish_build_record(
-                BuildLifecycleState::Failed,
-                "Electron WASM rebuild failed.",
-                "dx build --platform web exited non-zero during rebuild. Inspect get_last_build_log.",
-                build_output.status.code(),
-            )
-            .await;
-            tracing::error!(
-                "[bg] Rebuild failed (exit {:?})",
-                build_output.status.code()
-            );
-            return;
+        if let Some(stdout) = serve_child.stdout.take() {
+            let buf = self.build_log.clone();
+            tokio::spawn(async move {
+                use tokio::io::AsyncBufReadExt as _;
+                let mut lines = tokio::io::BufReader::new(stdout).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    buf.lock().await.push_line(format!("[dx-stdout] {line}"));
+                }
+            });
+        }
+        if let Some(stderr) = serve_child.stderr.take() {
+            let buf = self.build_log.clone();
+            tokio::spawn(async move {
+                use tokio::io::AsyncBufReadExt as _;
+                let mut lines = tokio::io::BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    buf.lock().await.push_line(format!("[dx-stderr] {line}"));
+                }
+            });
         }
 
-        // Reload the page via CDP so Electron picks up the new WASM bundle.
+        let serve_pid = serve_child.id();
+        *self.dx_serve_pid.lock().await = serve_pid;
+
+        let pid_ref = self.dx_serve_pid.clone();
+        tokio::spawn(async move {
+            let _ = serve_child.wait().await;
+            *pid_ref.lock().await = None;
+        });
+
+        // ── Wait for port to come back ────────────────────────────────────
+        match self.wait_for_port(DX_SERVE_PORT, 120).await {
+            Ok(()) => tracing::info!("[bg] dx serve ready on port {DX_SERVE_PORT} after rebuild"),
+            Err(e) => {
+                self.finish_build_record(
+                    BuildLifecycleState::Failed,
+                    "dx serve did not become ready after rebuild.",
+                    format!("{e}"),
+                    None,
+                )
+                .await;
+                return;
+            }
+        }
+
+        // ── Reload Electron page via CDP (window stays alive) ─────────────
         let reload_ok = self
             .cdp_send("Page.reload", json!({ "ignoreCache": true }))
             .await
@@ -724,19 +842,22 @@ impl ElectronCdpBackend {
         self.finish_build_record(
             BuildLifecycleState::Succeeded,
             if reload_ok {
-                "Electron WASM rebuild complete. Page reloaded via CDP.".to_string()
+                format!(
+                    "WASM recompiled and Electron page reloaded in-place (dx serve PID {serve_pid:?}). \
+                     Electron window survived the rebuild."
+                )
             } else {
-                "Electron WASM rebuild complete. CDP reload failed \u{2014} restart with launch_app.".to_string()
+                "WASM recompiled. CDP reload failed — call connect_cdp to reconnect Electron.".to_string()
             },
             if reload_ok {
-                "WASM bundle replaced and page reload sent. Call connect_cdp to reconnect."
+                "Page reload sent. Call connect_cdp to get a fresh CDP session."
             } else {
-                "WASM bundle replaced. CDP reload failed (Electron may not be running). Use launch_app to restart."
+                "dx serve is ready but CDP reload failed. Electron may have crashed — use launch_app."
             },
-            build_output.status.code(),
+            None,
         )
         .await;
-        tracing::info!("[bg] Electron rebuild done. reload_ok={reload_ok}");
+        tracing::info!("[bg] Rebuild done. reload_ok={reload_ok}");
     }
 }
 
@@ -764,99 +885,102 @@ impl DevtoolsBackend for ElectronCdpBackend {
         }
 
         *self.workspace.lock().await = Some(workspace.to_string());
-        let dx_build_dir = format!("{workspace}/apps/desktop-electron");
-        let electron_devtools_dir = format!("{workspace}/apps/desktop-electron-devtools/electron");
+        let app_dir = format!("{workspace}/apps/desktop-electron");
+        let electron_dir = format!("{workspace}/apps/desktop-electron-web/electron");
 
-        // Kill any existing Electron synchronously (~1.3 s).
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-15", "-f", &electron_devtools_dir])
-            .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-15", "-f", &format!("remote-debugging-port={CDP_PORT}")])
-            .status()
-            .await;
-        tokio::time::sleep(Duration::from_millis(800)).await;
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-9", "-f", &electron_devtools_dir])
-            .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
-            .args(["-9", "-f", &format!("remote-debugging-port={CDP_PORT}")])
-            .status()
-            .await;
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        // Drop the stale CDP connection.
-        *self.ws.lock().await = None;
-
-        // Record: build starting.
-        self.start_build_record(
-            "launch_app",
-            "dx build --platform web",
-            &dx_build_dir,
-            "dx build --platform web",
-            "Running the Electron WASM bundle build before launching Electron.",
-        )
-        .await;
-
-        // Spawn the long-running build + launch in the background.
-        let ctx = self.clone();
-        let handle =
-            tokio::spawn(ctx.bg_build_and_launch_electron(dx_build_dir, electron_devtools_dir));
-        *self.build_task.lock().await = Some(handle);
-
-        Ok(
-            "\u{1f527} Electron build started in background (state: Running).\n\
-             Command: dx build --platform web  (in apps/desktop-electron/)\n\
-             This takes 30-90 s with a warm Cargo cache.\n\
-             \n\
-             Poll get_last_build_status every 5-10 s:\n\
-               state = \"Running\"   \u{2192} keep polling\n\
-               state = \"Succeeded\" \u{2192} wait ~5 s, then call connect_cdp\n\
-               state = \"Failed\"    \u{2192} call get_last_build_log for the compiler error"
-                .to_string(),
-        )
-    }
-
-    async fn kill_app(&self) -> anyhow::Result<String> {
-        // Close the CDP connection first.
-        *self.ws.lock().await = None;
-
-        // Gracefully terminate Electron by PID.
+        // Kill existing dx serve and ALL Electron processes from this app.
+        self.kill_dx_serve().await;
         if let Some(pid) = self.electron_pid.lock().await.take() {
             let _ = tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
                 .await;
         }
-        // Pattern fallback to catch any stray Electron --remote-debugging-port=9224 processes.
+        // Kill orphaned Electron processes from previous MCP sessions.
+        // Match by CDP port (renderer) AND by the thin-shell app path (catches
+        // main, GPU, network utility, and renderer processes).
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", &format!("remote-debugging-port={CDP_PORT}")])
+            .status()
+            .await;
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", "poly-desktop-electron-web"])
+            .status()
+            .await;
+        tokio::time::sleep(Duration::from_millis(600)).await;
+
+        // Drop the stale CDP connection.
+        *self.ws.lock().await = None;
+
+        self.start_build_record(
+            "launch_app",
+            &format!("dx serve --platform web --port {DX_SERVE_PORT}"),
+            &app_dir,
+            &format!("dx serve --platform web --port {DX_SERVE_PORT}"),
+            "Starting dx serve (long-running). Electron will load from the live dev server.",
+        )
+        .await;
+
+        let ctx = self.clone();
+        let handle = tokio::spawn(ctx.bg_serve_and_launch_electron(app_dir, electron_dir));
+        *self.build_task.lock().await = Some(handle);
+
+        Ok(format!(
+            "🔧 dx serve started in background (state: Running).\n\
+             Command: dx serve --platform web --port {DX_SERVE_PORT}  (in apps/desktop-electron/)\n\
+             First compile takes 30-90 s.\n\
+             \n\
+             Poll get_last_build_status every 5-10 s:\n\
+               state = \"Running\"   → keep polling\n\
+               state = \"Succeeded\" → Electron is running, call connect_cdp (wait ~3 s first)\n\
+               state = \"Failed\"    → call get_last_build_log for the compiler error\n\
+             \n\
+             ✨ After first launch: use rebuild_app to recompile WASM — Electron window stays alive."
+        ))
+    }
+
+    async fn kill_app(&self) -> anyhow::Result<String> {
+        *self.ws.lock().await = None;
+        self.kill_dx_serve().await;
+
+        if let Some(pid) = self.electron_pid.lock().await.take() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-15", &pid.to_string()])
+                .status()
+                .await;
+        }
         let _ = tokio::process::Command::new("pkill")
             .args(["-f", "remote-debugging-port=9224"])
             .status()
             .await;
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-f", "poly-desktop-electron-web"])
+            .status()
+            .await;
 
-        Ok("Killed Electron process. CDP connection closed.".to_string())
+        Ok("Killed dx serve and Electron. Call launch_app to restart.".to_string())
     }
 
     async fn hard_kill(&self) -> anyhow::Result<String> {
-        // Close CDP connection.
         *self.ws.lock().await = None;
+        self.kill_dx_serve().await;
 
-        // SIGKILL Electron by PID.
         if let Some(pid) = self.electron_pid.lock().await.take() {
             let _ = tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
                 .await;
         }
-        // SIGKILL by pattern fallback.
         let _ = tokio::process::Command::new("pkill")
             .args(["-9", "-f", "remote-debugging-port=9224"])
             .status()
             .await;
+        let _ = tokio::process::Command::new("pkill")
+            .args(["-9", "-f", "poly-desktop-electron-web"])
+            .status()
+            .await;
 
-        Ok("Hard-killed Electron (SIGKILL). Call launch_app to restart.".to_string())
+        Ok("Hard-killed dx serve and Electron (SIGKILL). Call launch_app to restart.".to_string())
     }
 
     async fn rebuild_app(&self, workspace: &str) -> anyhow::Result<String> {
@@ -872,34 +996,34 @@ impl DevtoolsBackend for ElectronCdpBackend {
             }
         }
 
-        let dx_build_dir = format!("{workspace}/apps/desktop-electron");
+        let app_dir = format!("{workspace}/apps/desktop-electron");
 
         // Increment counter now so build_id advances immediately.
         Self::increment_rebuild_counter();
 
         self.start_build_record(
             "rebuild_app",
-            "dx build --platform web",
-            &dx_build_dir,
-            "dx build --platform web",
-            "Running the Electron WASM rebuild before forcing a CDP page reload.",
+            &format!("dx serve --platform web --port {DX_SERVE_PORT}"),
+            &app_dir,
+            &format!("restart dx serve --platform web --port {DX_SERVE_PORT}"),
+            "Restarting dx serve to recompile WASM. Electron window will NOT restart.",
         )
         .await;
 
         let ctx = self.clone();
-        let handle = tokio::spawn(ctx.bg_rebuild_electron(dx_build_dir));
+        let handle = tokio::spawn(ctx.bg_restart_serve_and_reload(app_dir));
         *self.build_task.lock().await = Some(handle);
 
-        Ok(
-            "\u{1f527} WASM rebuild started in background (state: Running).\n\
-             Command: dx build --platform web  (in apps/desktop-electron/)\n\
+        Ok(format!(
+            "🔧 WASM rebuild started in background (state: Running).\n\
+             Restarting: dx serve --platform web --port {DX_SERVE_PORT}\n\
+             ✨ Electron window stays alive — only the page content reloads.\n\
              \n\
              Poll get_last_build_status every 5-10 s:\n\
-               state = \"Running\"   \u{2192} keep polling\n\
-               state = \"Succeeded\" \u{2192} call connect_cdp to re-establish the CDP session\n\
-               state = \"Failed\"    \u{2192} call get_last_build_log for the compiler error"
-                .to_string(),
-        )
+               state = \"Running\"   → keep polling\n\
+               state = \"Succeeded\" → call connect_cdp to get a fresh CDP session\n\
+               state = \"Failed\"    → call get_last_build_log for the compiler error"
+        ))
     }
 
     async fn get_last_build_status(&self) -> anyhow::Result<String> {

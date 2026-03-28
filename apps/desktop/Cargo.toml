@@ -11,10 +11,18 @@ path = "src/main.rs"
 
 [dependencies]
 poly-core = { workspace = true, features = ["demo", "native-nav"] }
-dioxus = { workspace = true, features = ["desktop"] }
 tracing = { workspace = true }
+
+# Native (Wry) build
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dioxus = { workspace = true, features = ["desktop"] }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
+
+# WASM build (used by poly-desktop-web shell via `dx serve --platform web`)
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dioxus = { workspace = true, features = ["web"] }
+getrandom04-wasm = { workspace = true }
 
 [lints]
 workspace = true
