@@ -1,23 +1,23 @@
 {
   "mcpServers": {
     "poly-memory": {
-      "command": "cargo",
-      "args": ["run", "--bin", "poly-memory-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml", "--", "mcp"],
+      "command": "/home/laragana/workspcacemsg/target/debug/poly-memory-mcp",
+      "args": ["mcp"],
       "env": {}
     },
     "poly-desktop": {
-      "command": "cargo",
-      "args": ["run", "--bin", "poly-desktop-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "command": "/home/laragana/workspcacemsg/target/debug/poly-desktop-devtools-mcp",
+      "args": [],
       "env": {}
     },
     "poly-web": {
-      "command": "cargo",
-      "args": ["run", "--bin", "poly-web-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "command": "/home/laragana/workspcacemsg/target/debug/poly-web-devtools-mcp",
+      "args": [],
       "env": {}
     },
     "poly-electron": {
-      "command": "cargo",
-      "args": ["run", "--bin", "poly-electron-devtools-mcp", "--manifest-path", "/home/laragana/workspcacemsg/Cargo.toml"],
+      "command": "/home/laragana/workspcacemsg/target/debug/poly-electron-devtools-mcp",
+      "args": [],
       "env": {}
     },
     "chrome-devtools": {
