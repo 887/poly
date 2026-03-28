@@ -1,6 +1,6 @@
 {
+  "defaultMode": "bypassPermissions",
   "permissions": {
-    "defaultMode": "bypassPermissions",
     "additionalDirectories": ["/tmp", "/dev/null"],
     "allow": [
       "Bash(*)",
