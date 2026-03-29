@@ -28,8 +28,8 @@ app.commandLine.appendSwitch('remote-debugging-port', CDP_PORT);
 const WINDOW_OPTIONS = {
   width: 1280,
   height: 800,
-  minWidth: 800,
-  minHeight: 600,
+  minWidth: 320,
+  minHeight: 400,
   title: 'Poly',
   frame: false,
   autoHideMenuBar: true,

@@ -455,6 +455,10 @@ voice-test-mic = Test Microphone (3 sec)
 emoji-picker = Emoji
 emoji-search = Search emoji...
 gif-picker = GIF
+stickers-picker = Stickers
+media-picker-gif-placeholder = GIF search coming soon
+media-picker-stickers-placeholder = Stickers coming soon
+media-picker-markdown = Markdown formatting
 reaction-add = Add Reaction
 
 # Message action bar / context menu

@@ -46,6 +46,171 @@
     pointer-events: auto;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   MEDIA PICKER — tab bar, footer, and mobile slide-up sheet
+   ───────────────────────────────────────────────────────────── */
+
+/* Extend .emoji-picker-panel when used as media picker */
+.media-picker-panel {
+    max-height: 420px;
+}
+
+.media-picker-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.media-picker-tab {
+    flex: 1;
+    padding: 5px 8px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.media-picker-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.media-picker-tab.active {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+.media-picker-emoji-tab {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.media-picker-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+}
+
+.media-picker-placeholder-text {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.media-picker-footer {
+    border-top: 1px solid var(--border-color);
+    padding: 6px 10px;
+    flex-shrink: 0;
+}
+
+.media-picker-markdown-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    gap: 8px;
+}
+
+.media-picker-markdown-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.media-picker-toggle {
+    position: relative;
+    width: 32px;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    flex-shrink: 0;
+}
+
+.media-picker-toggle-on {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.media-picker-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform 0.2s, background 0.2s;
+}
+
+.media-picker-toggle-on .media-picker-toggle-thumb {
+    transform: translateX(14px);
+    background: #fff;
+}
+
+/* Mobile: slide-up full-width sheet */
+.poly-app.poly-mobile-runtime-active .emoji-picker-panel {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 60dvh;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SEND BUTTON — icon-only variant
+   ───────────────────────────────────────────────────────────── */
+
+.chat-send-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    align-self: center;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, opacity 0.15s;
+    opacity: 0.4;
+    margin-bottom: 0;
+}
+
+.chat-send-btn-active {
+    color: var(--accent-primary);
+    opacity: 1;
+}
+
+.chat-send-btn-active:hover {
+    background: rgba(88, 101, 242, 0.15);
+}
+
+/* On mobile: hide send button entirely when no content */
+.poly-app.poly-mobile-runtime-active .chat-send-btn:not(.chat-send-btn-active) {
+    display: none;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MARKDOWN MODE INDICATOR — subtle tint on input shell
+   ───────────────────────────────────────────────────────────── */
+
+.message-input-shell.markdown-mode {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px rgba(88, 101, 242, 0.25);
+}
+
 .emoji-search {
     padding: 0.5rem;
     border-bottom: 1px solid var(--border-color);

@@ -14,12 +14,43 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-
 #[cfg(target_arch = "wasm32")]
 const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
 
 #[cfg(target_arch = "wasm32")]
 const MOBILE_RIGHT_WING_REQUEST_CLOSE_JS: &str = "window.__polyRequestCloseMobileRightWing?.();";
+
+/// Inline right-panel resize handler — evaluated once via `document::eval` (fire-and-forget).
+/// Using an external script via `load_js_asset` / `use_future` creates an orphaned Promise when
+/// the component re-renders during hot-reload, producing "Unhandled promise rejection" crashes.
+#[cfg(target_arch = "wasm32")]
+const RIGHT_PANEL_RESIZE_INLINE_JS: &str = r#"
+if (!window.__polyRightPanelResizerInit) {
+    window.__polyRightPanelResizerInit = true;
+    const MIN_WIDTH = 160, MAX_WIDTH = 500;
+    let dragging = false;
+    document.addEventListener('pointerdown', function(e) {
+        const handle = e.target.closest('.right-panel-resizer');
+        if (!handle) return;
+        dragging = true;
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    }, true);
+    document.addEventListener('pointermove', function(e) {
+        if (!dragging) return;
+        const w = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - e.clientX));
+        document.documentElement.style.setProperty('--right-panel-width', w + 'px');
+    }, true);
+    document.addEventListener('pointerup', function() {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    }, true);
+}
+"#;
 
 #[derive(Props, Clone, PartialEq)]
 pub(crate) struct SplitMenuShellProps {
@@ -110,6 +141,13 @@ pub(crate) fn RightWingShell(props: RightWingShellProps) -> Element {
         &props.panel_class,
     );
 
+    // Install the drag-to-resize handler once. Fire-and-forget eval avoids an orphaned
+    // Promise (which `load_js_asset` + `use_future` would create on hot-reload re-renders).
+    #[cfg(target_arch = "wasm32")]
+    use_effect(move || {
+        let _ = document::eval(RIGHT_PANEL_RESIZE_INLINE_JS);
+    });
+
     rsx! {
         Fragment {
             button {
@@ -118,6 +156,8 @@ pub(crate) fn RightWingShell(props: RightWingShellProps) -> Element {
                 onclick: move |_| request_close_mobile_right_wing(),
             }
             div { class: "{panel_class}",
+                // Drag handle — only visible on desktop, sits on the left edge of the panel.
+                div { class: "right-panel-resizer" }
                 {props.content}
             }
         }

@@ -21,6 +21,7 @@ use super::chat_history::{
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
+use super::media_picker::MediaPickerPopup;
 use super::user_profile_modal::open_user_profile;
 use super::user_sidebar::UserSidebar;
 use crate::client_manager::ClientManager;
@@ -888,6 +889,7 @@ struct ChatViewSignals {
     chat_data: Signal<ChatData>,
     message_input: Signal<String>,
     show_input_emoji: Signal<bool>,
+    markdown_enabled: Signal<bool>,
     reaction_picker_msg: Signal<Option<String>>,
     drag_over: Signal<bool>,
     hovered_msg: Signal<Option<String>>,
@@ -936,6 +938,7 @@ fn use_chat_view_signals() -> ChatViewSignals {
         chat_data: use_context(),
         message_input: use_signal(String::new),
         show_input_emoji: use_signal(|| false),
+        markdown_enabled: use_signal(|| false),
         reaction_picker_msg: use_signal(|| None::<String>),
         drag_over: use_signal(|| false),
         hovered_msg: use_signal(|| None::<String>),
@@ -1058,6 +1061,7 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         nav_for_pinned: nav,
         message_input: signals.message_input,
         show_input_emoji: signals.show_input_emoji,
+        markdown_enabled: signals.markdown_enabled,
         reaction_picker_msg: signals.reaction_picker_msg,
         drag_over: signals.drag_over,
         hovered_msg: signals.hovered_msg,
@@ -1738,6 +1742,7 @@ struct ChatViewMarkupCtx {
     nav_for_pinned: crate::ui::dioxus_router::Navigator,
     message_input: Signal<String>,
     show_input_emoji: Signal<bool>,
+    markdown_enabled: Signal<bool>,
     reaction_picker_msg: Signal<Option<String>>,
     drag_over: Signal<bool>,
     hovered_msg: Signal<Option<String>>,
@@ -3990,12 +3995,12 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                     "➕"
                 }
                 div { class: "message-input-text-area",
-                    input {
+                    textarea {
                         class: "message-input",
                         id: "poly-message-composer",
-                        r#type: "text",
                         placeholder: "{compose_placeholder}",
                         value: "{message_input}",
+                        rows: "1",
                         oninput: move |evt| {
                             handle_composer_input(
                                 evt.value(),
@@ -4012,10 +4017,10 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                             }
                         },
                     }
-                    {render_composer_toolbar(show_input_emoji)}
                 }
+                {render_composer_toolbar(show_input_emoji)}
+                {render_send_button(ctx)}
             }
-            {render_send_button(ctx)}
         }
     }
 }
@@ -4032,8 +4037,6 @@ fn render_composer_toolbar(mut show_input_emoji: Signal<bool>) -> Element {
                 },
                 "😀"
             }
-            button { class: "toolbar-btn gif-btn", title: t("gif-picker"), "GIF" }
-            button { class: "toolbar-btn", title: t("chat-markdown-formatting"), "⌘" }
         }
     }
 }
@@ -4094,9 +4097,18 @@ fn handle_composer_keydown(
         return;
     }
 
-    if evt.key() != Key::Enter || evt.modifiers().shift() {
+    if evt.key() != Key::Enter {
         return;
     }
+
+    // Shift+Enter → insert newline into the composer, don't send.
+    if evt.modifiers().shift() {
+        evt.prevent_default();
+        let current = message_input.read().clone();
+        message_input.set(format!("{current}\n"));
+        return;
+    }
+
     evt.prevent_default();
 
     let raw_text = message_input.read().clone();
@@ -4200,10 +4212,11 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
     let app_state = ctx.app_state;
     let new_messages_while_scrolled_up = ctx.new_messages_while_scrolled_up;
 
+    let has_content = !message_input.read().is_empty() || !pending_attachments.read().is_empty();
     rsx! {
         button {
-            class: "btn btn-send chat-send-inline",
-            disabled: message_input.read().is_empty() && pending_attachments.read().is_empty(),
+            class: if has_content { "toolbar-btn chat-send-btn chat-send-btn-active" } else { "toolbar-btn chat-send-btn" },
+            disabled: !has_content,
             onclick: move |_| {
                 let text = message_input.read().clone();
                 let attachments = pending_attachments.read().clone();
@@ -4239,7 +4252,7 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
                     });
                 }
             },
-            {t("chat-send")}
+            "➤"
         }
     }
 }
@@ -4271,14 +4284,16 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
 
     let mut message_input = ctx.message_input;
     let mut show_input_emoji = ctx.show_input_emoji;
+    let markdown_enabled = ctx.markdown_enabled;
     rsx! {
-        EmojiPicker {
-            on_select: move |emoji: String| {
+        MediaPickerPopup {
+            on_emoji_select: move |emoji: String| {
                 let current = message_input.read().clone();
                 message_input.set(format!("{current}{emoji}"));
                 show_input_emoji.set(false);
             },
             on_close: move |_| show_input_emoji.set(false),
+            markdown_enabled,
         }
     }
 }

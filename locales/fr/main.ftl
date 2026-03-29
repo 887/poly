@@ -429,6 +429,10 @@ voice-test-mic = Tester le microphone (3 sec)
 emoji-picker = Emoji
 emoji-search = Chercher un emoji...
 gif-picker = GIF
+stickers-picker = Autocollants
+media-picker-gif-placeholder = Recherche de GIF bientôt disponible
+media-picker-stickers-placeholder = Autocollants bientôt disponibles
+media-picker-markdown = Mise en forme Markdown
 reaction-add = Ajouter une réaction
 
 # Barre d'actions de message / menu contextuel

@@ -122,6 +122,13 @@ pub fn ElectronTitleBar() -> Element {
 
     let title = current_title(&app_state.read(), &chat_data.read());
 
+    // Keep the OS-level window title (taskbar/dock) in sync with the custom titlebar.
+    let title_for_doc = title.clone();
+    use_effect(move || {
+        let escaped = title_for_doc.replace('\\', "\\\\").replace('`', "\\`");
+        let _ = document::eval(&format!("document.title = `{escaped}`;"));
+    });
+
     rsx! {
         div {
             class: "electron-titlebar",

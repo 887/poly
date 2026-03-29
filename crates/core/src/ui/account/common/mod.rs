@@ -27,6 +27,7 @@
 //! | `channel_list` | Channel/DM list for the selected server or DM home |
 //! | `chat_view` | Message list + input box |
 //! | `emoji_picker` | Emoji grid for reactions and input |
+//! | `media_picker` | Unified media picker (emoji, GIF, stickers) + markdown toggle |
 //! | `friends_panel` | Tiled friends browser |
 //! | `notifications` | Aggregated notification feed across all backends |
 //! | `user_sidebar` | Right-panel member list |
@@ -46,6 +47,7 @@ pub mod direct_call_overlay;
 pub mod dm_user_sidebar;
 pub mod emoji_picker;
 pub mod friends_panel;
+pub mod media_picker;
 pub mod media_viewer;
 pub mod new_conversation_view;
 pub mod notifications;
@@ -67,6 +69,7 @@ pub use direct_call_overlay::OutgoingDirectCallOverlay;
 pub use dm_user_sidebar::DmUserSidebar;
 pub use emoji_picker::EmojiPicker;
 pub use friends_panel::FriendsPanel;
+pub use media_picker::MediaPickerPopup;
 pub use media_viewer::MessageMediaViewerOverlay;
 pub use new_conversation_view::NewConversationView;
 pub use notifications::NotificationsView;

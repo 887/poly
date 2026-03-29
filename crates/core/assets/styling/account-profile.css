@@ -128,16 +128,17 @@
 
 .chat-content-column {
     flex: 1;
-    min-width: 0;
+    min-width: 280px;
     min-height: 0;
     display: flex;
     flex-direction: column;
 }
 
 .chat-side-column {
-    flex: 0 0 320px;
-    width: 320px;
-    min-width: 320px;
+    flex: 0 1 var(--right-panel-width, 240px);
+    width: var(--right-panel-width, 240px);
+    min-width: 160px;
+    max-width: 500px;
     border-left: 1px solid var(--border-primary);
     background: color-mix(in srgb, var(--bg-secondary) 96%, black);
     min-height: 0;
@@ -145,6 +146,30 @@
     flex-direction: column;
     overflow: hidden;
     position: relative;
+}
+
+/* Drag handle on the left edge of the right panel — desktop only */
+.right-panel-resizer {
+    position: absolute;
+    top: 0;
+    left: -3px;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 10;
+    background: transparent;
+    transition: background 0.15s;
+}
+
+.right-panel-resizer:hover,
+.right-panel-resizer:active {
+    background: var(--accent-primary);
+    opacity: 0.4;
+}
+
+/* Hide resizer on mobile — panel becomes a drawer there */
+.poly-app.poly-mobile-runtime-active .right-panel-resizer {
+    display: none;
 }
 
 /* Subtle left-edge gradient overlay for visual depth — fades from left to transparent */
@@ -709,7 +734,7 @@
     min-width: 0;
     display: flex;
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     gap: 4px;
     padding: 8px 10px;
     background-color: var(--chat-input-bg);
@@ -723,7 +748,8 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
+    overflow: hidden;
 }
 
 .composer-upload-btn {
@@ -737,12 +763,22 @@
     border: none;
     padding: 0;
     min-height: 24px;
-    height: 24px;
+    max-height: 160px;
     line-height: 24px;
+    flex: 1;
+    min-width: 0;
+    resize: none;
+    overflow-y: auto;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    display: block;
+    align-self: center;
 }
 
 .message-input-row .message-input:focus {
     border: none;
+    outline: none;
 }
 
 .input-toolbar-inline {
@@ -751,11 +787,6 @@
     justify-content: flex-end;
 }
 
-.chat-send-inline {
-    align-self: stretch;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
 
 /* Slash command autocomplete popup */
 .slash-command-popup {

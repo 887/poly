@@ -16,7 +16,7 @@ use crate::i18n::t;
 use dioxus::prelude::*;
 
 /// Categories of emoji with their contents.
-const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
+pub(crate) const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
     (
         "frecent",
         "⭐",
