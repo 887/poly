@@ -116,13 +116,15 @@ pub(crate) fn build_emoji_sections(custom: &[CustomEmoji]) -> Vec<EmojiSection> 
 #[rustfmt::skip]
 #[component]
 fn SidebarIcon(icon: String, label: String, section_id: String) -> Element {
+    #[cfg(target_arch = "wasm32")]
+    let id = section_id.clone();
+
     rsx! {
         button {
             class: "emoji-sidebar-icon",
             title: "{label}",
             "data-emoji-section": "{section_id}",
             onclick: move |_| {
-                let id = section_id.clone();
                 #[cfg(target_arch = "wasm32")]
                 {
                     // Scroll to section and update active state immediately

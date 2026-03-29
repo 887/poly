@@ -668,6 +668,8 @@ body {
 
 .poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .poly-split-sidebar {
     top: 34px;
+    height: calc(100dvh - 34px);
+    max-height: calc(100dvh - 34px);
 }
 
 .poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .chat-side-column {

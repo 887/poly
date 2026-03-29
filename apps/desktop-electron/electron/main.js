@@ -25,8 +25,9 @@ const {
 const WINDOW_OPTIONS = {
   width: 1280,
   height: 800,
-  minWidth: 800,
-  minHeight: 600,
+  // Match the thin dev shell so Electron can shrink into the mobile layout.
+  minWidth: 320,
+  minHeight: 400,
   title: 'Poly',
   frame: false,
   autoHideMenuBar: true,

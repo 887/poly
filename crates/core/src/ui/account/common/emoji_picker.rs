@@ -15,7 +15,7 @@
 use crate::i18n::t;
 use dioxus::prelude::*;
 
-use super::media_picker::{EmojiSection, EmojiSectionItems, build_emoji_sections};
+use super::media_picker::{EmojiSectionItems, build_emoji_sections};
 
 /// Categories of emoji with their contents.
 pub(crate) const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
@@ -28,45 +28,113 @@ pub(crate) const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
         "smileys",
         "😀",
         &[
-            "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "😊", "😇", "🥰", "😍",
-            "😘", "😗", "😙", "😚", "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫",
-            "🤔", "🤐", "😐", "😑", "😶", "😏", "😒", "🙄", "😬", "😮‍💨", "🤥", "😌", "😔",
-            "😪", "🤤", "😴", "😷", "🤒", "🤕", "🤢", "🤮", "🤧", "🥵", "🥶", "🥴", "😵",
-            "🤯", "🤠", "🥳", "🥸", "😎", "🤓", "🧐",
+            "😀",
+            "😃",
+            "😄",
+            "😁",
+            "😆",
+            "😅",
+            "🤣",
+            "😂",
+            "🙂",
+            "😊",
+            "😇",
+            "🥰",
+            "😍",
+            "😘",
+            "😗",
+            "😙",
+            "😚",
+            "😋",
+            "😛",
+            "😜",
+            "🤪",
+            "😝",
+            "🤑",
+            "🤗",
+            "🤭",
+            "🤫",
+            "🤔",
+            "🤐",
+            "😐",
+            "😑",
+            "😶",
+            "😏",
+            "😒",
+            "🙄",
+            "😬",
+            "😮‍💨",
+            "🤥",
+            "😌",
+            "😔",
+            "😪",
+            "🤤",
+            "😴",
+            "😷",
+            "🤒",
+            "🤕",
+            "🤢",
+            "🤮",
+            "🤧",
+            "🥵",
+            "🥶",
+            "🥴",
+            "😵",
+            "🤯",
+            "🤠",
+            "🥳",
+            "🥸",
+            "😎",
+            "🤓",
+            "🧐",
         ],
     ),
     (
         "gestures",
         "👋",
         &[
-            "👋", "🤚", "🖐", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙",
-            "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏",
-            "🙌", "🫶", "👐", "🤝", "🙏", "💪",
+            "👋", "🤚", "🖐", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈",
+            "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "🫶",
+            "👐", "🤝", "🙏", "💪",
         ],
     ),
     (
         "hearts",
         "❤️",
         &[
-            "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞",
-            "💓", "💗", "💖", "💘", "💝",
+            "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓",
+            "💗", "💖", "💘", "💝",
         ],
     ),
     (
         "objects",
         "🎉",
         &[
-            "🎉", "🎊", "🎈", "🎁", "🏆", "🥇", "⭐", "🌟", "✨", "💫", "🔥", "💯", "✅",
-            "❌", "⚠️", "💡", "🔔", "🔒", "🔑", "💎", "🎮", "🎲", "🎵", "🎶", "🎸", "📱",
-            "💻", "🖥", "📷", "☕", "🍕", "🍔", "🌮",
+            "🎉", "🎊", "🎈", "🎁", "🏆", "🥇", "⭐", "🌟", "✨", "💫", "🔥", "💯", "✅", "❌",
+            "⚠️", "💡", "🔔", "🔒", "🔑", "💎", "🎮", "🎲", "🎵", "🎶", "🎸", "📱", "💻", "🖥",
+            "📷", "☕", "🍕", "🍔", "🌮",
         ],
     ),
     (
         "flags",
         "🏁",
         &[
-            "🏁", "🚩", "🏳️", "🏴", "🏳️‍🌈", "🏳️‍⚧️", "🇺🇸", "🇬🇧", "🇩🇪", "🇫🇷", "🇪🇸",
-            "🇯🇵", "🇰🇷", "🇨🇳", "🇧🇷", "🇦🇺",
+            "🏁",
+            "🚩",
+            "🏳️",
+            "🏴",
+            "🏳️‍🌈",
+            "🏳️‍⚧️",
+            "🇺🇸",
+            "🇬🇧",
+            "🇩🇪",
+            "🇫🇷",
+            "🇪🇸",
+            "🇯🇵",
+            "🇰🇷",
+            "🇨🇳",
+            "🇧🇷",
+            "🇦🇺",
         ],
     ),
 ];
@@ -308,9 +376,9 @@ pub fn EmojiPicker(on_select: EventHandler<String>, on_close: EventHandler<()>) 
                         for (idx, section) in sections_ref.iter().enumerate() {
                             if section.items != EmojiSectionItems::Divider {
                                 {
-                                    let sid = section.id.clone();
                                     let label = section.label.clone();
                                     let icon = section.icon.clone();
+                                    let _sid = section.id.clone();
                                     rsx! {
                                         button {
                                             class: if idx == active_idx { "emoji-sidebar-icon active" } else { "emoji-sidebar-icon" },
@@ -319,7 +387,7 @@ pub fn EmojiPicker(on_select: EventHandler<String>, on_close: EventHandler<()>) 
                                                 active_section.set(idx);
                                                 #[cfg(target_arch = "wasm32")]
                                                 {
-                                                    let js = format!("document.getElementById('{sid}')?.scrollIntoView({{block:'start',behavior:'smooth'}})");
+                                                    let js = format!("document.getElementById('{_sid}')?.scrollIntoView({{block:'start',behavior:'smooth'}})");
                                                     let _ = document::eval(&js);
                                                 }
                                             },
