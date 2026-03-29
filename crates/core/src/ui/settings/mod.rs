@@ -520,12 +520,17 @@ pub fn SettingsPage() -> Element {
     let active_plugin_slug = use_signal(|| None::<String>);
     let nav = use_navigator();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
-    let plugin_section_ids: Vec<String> = client_manager
-        .read()
-        .plugin_settings
-        .iter()
-        .map(|entry| format!("settings-section-plugin-{}", entry.slug))
-        .collect();
+
+    // Memo: stabilize plugin_section_ids so scroll spy effect doesn't re-run on every render.
+    // Effect only re-runs when plugins actually change, not on unrelated state updates.
+    let plugin_section_ids = use_memo(move || {
+        client_manager
+            .read()
+            .plugin_settings
+            .iter()
+            .map(|entry| format!("settings-section-plugin-{}", entry.slug))
+            .collect::<Vec<String>>()
+    });
 
     // Memo: isolate settings_section so effects only re-run when IT changes.
     let section_memo = use_memo(move || app_state.read().settings_section);
@@ -544,8 +549,10 @@ pub fn SettingsPage() -> Element {
         let _ = document::eval(&js);
     });
 
+    // Install scroll spy when plugins change; memoized plugin_section_ids prevents
+    // spurious re-runs on unrelated state updates (e.g., search, section changes).
     use_effect(move || {
-        install_settings_scroll_spy(app_state, plugin_section_ids.clone(), active_plugin_slug);
+        install_settings_scroll_spy(app_state, (*plugin_section_ids.read()).clone(), active_plugin_slug);
     });
 
     // When the search query changes to non-empty, scroll the content area to the

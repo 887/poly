@@ -69,9 +69,9 @@ where
             return;
         }
 
-        // Small delay via JS to ensure scroll spy runtime is initialized before installing
+        // load_js_asset already awaited the runtime script, so call install directly.
         let _ = document::eval(
-            "new Promise(r => setTimeout(r, 10)).then(() => window.__polyInstallSettingsScrollSpy?.(window.__polySettingsScrollSpyPendingConfig))",
+            "window.__polyInstallSettingsScrollSpy?.(window.__polySettingsScrollSpyPendingConfig)",
         );
     });
 }

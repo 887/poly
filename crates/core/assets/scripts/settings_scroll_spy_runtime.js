@@ -1,11 +1,15 @@
 if (!window.__polySettingsScrollSpyRuntimeInit) {
     window.__polySettingsScrollSpyRuntimeInit = true;
 
-    window.__polyScrollSettingsSectionById = function (id) {
+    window.__polyScrollSettingsSectionById = function (id, sectionPrefix) {
         const el = document.getElementById(id);
-        if (el) {
-            el.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        }
+        if (!el) return;
+        el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        // scrollIntoView does not dispatch a scroll event in some Chromium builds,
+        // so update the active nav slug directly from the known target section.
+        const prefix = sectionPrefix || 'settings-section-';
+        const slug = id.startsWith(prefix) ? id.slice(prefix.length) : id;
+        window.__polySetSettingsNavActiveSlug?.(slug);
     };
 
     window.__polySetSettingsNavActiveSlug = function (slug) {
