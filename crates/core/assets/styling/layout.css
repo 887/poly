@@ -283,9 +283,12 @@ body {
 .main-layout {
     display: flex;
     flex-direction: column;
-    /* flex:1 fills the full width of the poly-app-stage row flex container */
+    /* flex:1 fills remaining height after .electron-titlebar (if present).
+       Do NOT add height:100% here — it resolves to the full parent height
+       and overflows by the titlebar's 34 px, causing document scroll and
+       clipping the bottom of the layout. */
     flex: 1;
-    height: 100%;
+    min-height: 0;
     overflow: hidden;
     position: relative;
 }
@@ -648,6 +651,34 @@ body {
 .poly-app.poly-mobile-runtime-active .voice-ctrl-btn {
     width: 28px;
     height: 28px;
+}
+
+/* In mobile mode the shared rule sets .main-layout { height: 100dvh }, but
+   on Electron the 34px custom titlebar sits above it, so cap it accordingly. */
+.poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .main-layout {
+    height: calc(100dvh - 34px);
+    max-height: calc(100dvh - 34px);
+}
+
+/* Shift fixed panels below the Electron titlebar in mobile/narrow mode */
+.poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .server-sidebar,
+.poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .account-server-bar {
+    top: 34px;
+}
+
+.poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .poly-split-sidebar {
+    top: 34px;
+}
+
+.poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .chat-side-column {
+    top: 34px;
+    height: calc(100dvh - 34px);
+    max-height: calc(100dvh - 34px);
+}
+
+.poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .mobile-left-wing-backdrop,
+.poly-app.poly-mobile-runtime-active:has(.electron-titlebar) .mobile-right-wing-backdrop {
+    top: 34px;
 }
 
 /* Shift every fixed sidebar/panel down by the banner's height */
