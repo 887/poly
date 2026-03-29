@@ -160,6 +160,7 @@ if (!window.__polySettingsScrollSpyRuntimeInit) {
         return 'ready';
     };
 
+    // Auto-install if pending config exists (runs on initial load and after hot-reload)
     if (window.__polySettingsScrollSpyPendingConfig) {
         const pendingConfig = window.__polySettingsScrollSpyPendingConfig;
         delete window.__polySettingsScrollSpyPendingConfig;

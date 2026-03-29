@@ -69,8 +69,9 @@ where
             return;
         }
 
+        // Small delay via JS to ensure scroll spy runtime is initialized before installing
         let _ = document::eval(
-            "window.__polyInstallSettingsScrollSpy?.(window.__polySettingsScrollSpyPendingConfig)",
+            "new Promise(r => setTimeout(r, 10)).then(() => window.__polyInstallSettingsScrollSpy?.(window.__polySettingsScrollSpyPendingConfig))",
         );
     });
 }

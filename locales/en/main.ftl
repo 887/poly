@@ -482,6 +482,7 @@ nav-forward = Forward
 # Settings search
 settings-search = Search settings...
 settings-search-no-results = No settings found matching your search.
+settings-search-found = Settings Found
 settings-voice-video = Voice & Video
 settings-notifications = Notifications
 settings-content-social = Content & Social

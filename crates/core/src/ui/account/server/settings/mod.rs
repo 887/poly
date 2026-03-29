@@ -48,6 +48,17 @@ fn matches_server_settings_search(filter: &str, label: &str) -> bool {
     filter.is_empty() || label.to_lowercase().contains(filter)
 }
 
+/// Count matching sections. Returns 0 when filter is empty.
+fn server_total_match_count(filter: &str) -> usize {
+    if filter.is_empty() {
+        return 0;
+    }
+    SERVER_SETTINGS_SECTIONS
+        .iter()
+        .filter(|(key, _)| t(key).to_lowercase().contains(filter))
+        .count()
+}
+
 fn scroll_to_server_section(slug: &str) {
     scroll_to_settings_section("server-settings-section-", slug);
 }
@@ -87,6 +98,7 @@ fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
 #[component]
 fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
+    let total = server_total_match_count(&current.to_lowercase());
 
     rsx! {
         div { class: "settings-search-bar",
@@ -98,6 +110,9 @@ fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
                 oninput: move |e| search_text.set(e.value()),
             }
             if !current.is_empty() {
+                span { class: "settings-search-count",
+                    "{total} {t(\"settings-search-found\")}"
+                }
                 button {
                     class: "settings-search-clear",
                     onclick: move |_| search_text.set(String::new()),
@@ -128,22 +143,25 @@ fn ServerSettingsNavigation(
 ) -> Element {
     let filter = search_text.read().to_lowercase();
 
+    let searching = !filter.is_empty();
+
     rsx! {
         nav { class: "settings-nav",
             for (label_key , section) in SERVER_SETTINGS_SECTIONS {
                 {
                     let label = t(label_key);
-                    if matches_server_settings_search(&filter, &label) {
-                        rsx! {
-                            ServerSettingsNavItem {
-                                label,
-                                active: active_section == section,
-                                slug: section.to_slug().to_string(),
-                                onclick: move |_| on_select.call(section),
-                            }
+                    let has_match = matches_server_settings_search(&filter, &label);
+                    // Always render so scroll spy can find data-settings-slug; hide via CSS
+                    let hidden = searching && !has_match;
+                    rsx! {
+                        ServerSettingsNavItem {
+                            label,
+                            active: active_section == section,
+                            slug: section.to_slug().to_string(),
+                            show_match_badge: searching && has_match,
+                            hidden,
+                            onclick: move |_| on_select.call(section),
                         }
-                    } else {
-                        rsx! {}
                     }
                 }
             }
@@ -162,30 +180,51 @@ fn ServerSettingsContent(
     server_name: String,
 ) -> Element {
     let _ = (&backend, &instance_id, &account_id);
+    let filter = search_text.read().to_lowercase();
     rsx! {
         div { class: "settings-page-panel",
             ServerSettingsContentHeader { search_text, server_name: server_name.clone() }
             div { class: "settings-sections-stack",
-                div { id: "server-settings-section-overview", class: "settings-section-block",
-                    ServerOverviewSettings {
-                        server_id: server_id.clone(),
-                        server_name: server_name.clone(),
-                        backend_slug: backend.clone(),
-                    }
-                }
-                div { id: "server-settings-section-notifications", class: "settings-section-block",
-                    ServerNotificationsSettings { server_id: server_id.clone(), server_name: server_name.clone() }
-                }
-                div { id: "server-settings-section-profile", class: "settings-section-block",
-                    ServerProfileSettings { server_id: server_id.clone(), server_name: server_name.clone() }
-                }
-                div { id: "server-settings-section-general", class: "settings-section-block",
-                    ServerGeneralSettings {
-                        server_id,
-                        server_name,
-                        backend_slug: backend,
-                        instance_id,
-                        account_id,
+                for (label_key, section) in SERVER_SETTINGS_SECTIONS {
+                    {
+                        let label = t(label_key);
+                        let has_match = matches_server_settings_search(&filter, &label);
+                        let searching = !filter.is_empty();
+                        // Always render so scroll spy IDs remain in the DOM; hide via CSS
+                        let id = format!("server-settings-section-{}", section.to_slug());
+                        let class = if searching && !has_match {
+                            "settings-section-block settings-section-hidden"
+                        } else {
+                            "settings-section-block"
+                        };
+                        rsx! {
+                            div { id, class,
+                                match section {
+                                    ServerSettingsSection::Overview => rsx! {
+                                        ServerOverviewSettings {
+                                            server_id: server_id.clone(),
+                                            server_name: server_name.clone(),
+                                            backend_slug: backend.clone(),
+                                        }
+                                    },
+                                    ServerSettingsSection::Notifications => rsx! {
+                                        ServerNotificationsSettings { server_id: server_id.clone(), server_name: server_name.clone() }
+                                    },
+                                    ServerSettingsSection::Profile => rsx! {
+                                        ServerProfileSettings { server_id: server_id.clone(), server_name: server_name.clone() }
+                                    },
+                                    ServerSettingsSection::General => rsx! {
+                                        ServerGeneralSettings {
+                                            server_id: server_id.clone(),
+                                            server_name: server_name.clone(),
+                                            backend_slug: backend.clone(),
+                                            instance_id: instance_id.clone(),
+                                            account_id: account_id.clone(),
+                                        }
+                                    },
+                                }
+                            }
+                        }
                     }
                 }
                 div { class: "settings-scroll-spacer" }
@@ -340,14 +379,25 @@ fn ServerSettingsNavItem(
     label: String,
     active: bool,
     slug: String,
+    #[props(default = false)] show_match_badge: bool,
+    #[props(default = false)] hidden: bool,
     onclick: EventHandler<MouseEvent>,
 ) -> Element {
+    // Hide takes priority over active — if hidden, always hide.
+    let class = match (hidden, active) {
+        (true, _) => "settings-nav-item settings-nav-item-hidden",
+        (_, true) => "settings-nav-item active",
+        _ => "settings-nav-item",
+    };
     rsx! {
         div {
-            class: if active { "settings-nav-item active" } else { "settings-nav-item" },
+            class,
             "data-settings-slug": slug,
             onclick: move |evt| onclick.call(evt),
             "{label}"
+            if show_match_badge {
+                span { class: "settings-nav-match-count", "(1)" }
+            }
         }
     }
 }

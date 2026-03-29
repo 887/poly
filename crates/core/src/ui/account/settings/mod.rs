@@ -114,6 +114,28 @@ fn acct_section_has_match(section_slug: &str, q: &str) -> bool {
         .any(|(key, slug)| *slug == section_slug && t(key).to_lowercase().contains(q))
 }
 
+/// Count matching nodes for an account section. Returns 0 when `q` is empty.
+fn acct_section_match_count(section_slug: &str, q: &str) -> usize {
+    if q.is_empty() {
+        return 0;
+    }
+    ACCT_NAV_SECTIONS
+        .iter()
+        .filter(|(key, slug)| *slug == section_slug && t(key).to_lowercase().contains(q))
+        .count()
+}
+
+/// Total matching nodes across all account sections.
+fn acct_total_match_count(q: &str) -> usize {
+    if q.is_empty() {
+        return 0;
+    }
+    ACCT_NAV_SECTIONS
+        .iter()
+        .filter(|(key, _)| t(key).to_lowercase().contains(q))
+        .count()
+}
+
 /// Fire-and-forget JS: smooth-scroll the account settings content area to a section.
 fn scroll_to_acct_section(slug: &str) {
     scroll_to_settings_section("acct-section-", slug);
@@ -153,6 +175,7 @@ fn install_account_settings_scroll_spy(_active_section: Signal<String>, _show_pr
 #[component]
 fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
+    let total = acct_total_match_count(&current.to_lowercase());
 
     rsx! {
         div { class: "settings-search-bar",
@@ -164,6 +187,9 @@ fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
                 oninput: move |e| search_text.set(e.value()),
             }
             if !current.is_empty() {
+                span { class: "settings-search-count",
+                    "{total} {t(\"settings-search-found\")}"
+                }
                 button {
                     class: "settings-search-clear",
                     onclick: move |_| search_text.set(String::new()),
@@ -223,16 +249,15 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
         install_account_settings_scroll_spy(active_section, show_profile);
     });
 
-    // When search changes, scroll to first matching section.
+    // When search changes, scroll content to top so filtered results are visible.
     use_effect(move || {
         let q = search_text.read().to_lowercase();
         if q.is_empty() {
             return;
         }
-        if let Some((_, slug)) = ACCT_NAV_SECTIONS.iter().find(|(_, slug)| acct_section_has_match(slug, &q)) {
-            scroll_to_acct_section(slug);
-            active_section.set(slug.to_string());
-        }
+        let _ = document::eval(
+            "{ const c = document.querySelector('.settings-content'); if (c) c.scrollTop = 0; }"
+        );
     });
 
     let sf = search_text.read().to_lowercase();
@@ -254,11 +279,15 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                         {
                             let label = t(label_key);
                             let has_match = acct_section_has_match(slug, &sf);
+                            let count = acct_section_match_count(slug, &sf);
                             let is_active = active == *slug;
-                            let class = match (is_active, has_match) {
-                                (true, _) => "settings-nav-item active",
-                                (false, true) => "settings-nav-item",
-                                (false, false) => "settings-nav-item settings-nav-item-dimmed",
+                            let searching = !sf.is_empty();
+                            // Always render so scroll spy can find data-settings-slug; hide via CSS
+                            // Hide takes priority over active — if searching and no match, always hide.
+                            let class = match (searching, has_match, is_active) {
+                                (true, false, _) => "settings-nav-item settings-nav-item-hidden",
+                                (_, _, true) => "settings-nav-item active",
+                                _ => "settings-nav-item",
                             };
                             let slug_s = slug.to_string();
                             rsx! {
@@ -271,6 +300,9 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                                         close_mobile_drawer();
                                     },
                                     "{label}"
+                                    if searching && count > 0 {
+                                        span { class: "settings-nav-match-count", "({count})" }
+                                    }
                                 }
                             }
                         }
@@ -288,12 +320,12 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                         { profile_section_element(show_profile, account_id.clone()) }
                         div {
                             id: "acct-section-notifications",
-                            class: if acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                            class: if sf.is_empty() || acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-hidden" },
                             NotificationsSettings { account_id: account_id.clone() }
                         }
                         div {
                             id: "acct-section-content-social",
-                            class: if acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-dimmed" },
+                            class: if sf.is_empty() || acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-hidden" },
                             ContentSocialSettings { _account_id: account_id.clone() }
                         }
                     }

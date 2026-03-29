@@ -162,6 +162,29 @@ fn section_has_search_match(section: SettingsSection, q: &str) -> bool {
         .any(|(key, s)| *s == section && t(key).to_lowercase().contains(q))
 }
 
+/// Count matching searchable nodes for a section. Returns 0 when `q` is empty
+/// (caller should treat empty query as "show all, no badges").
+fn section_match_count(section: SettingsSection, q: &str) -> usize {
+    if q.is_empty() {
+        return 0;
+    }
+    SETTINGS_NODES
+        .iter()
+        .filter(|(key, s)| *s == section && t(key).to_lowercase().contains(q))
+        .count()
+}
+
+/// Total number of matching nodes across all sections.
+fn total_match_count(q: &str) -> usize {
+    if q.is_empty() {
+        return 0;
+    }
+    SETTINGS_NODES
+        .iter()
+        .filter(|(key, _)| t(key).to_lowercase().contains(q))
+        .count()
+}
+
 /// Fire-and-forget JS: smooth-scroll the `.settings-content` container so that
 /// the section with id `settings-section-{slug}` is near the top of the viewport.
 fn scroll_to_section_anchor(slug: &str) {
@@ -172,6 +195,7 @@ fn scroll_to_section_anchor(slug: &str) {
 #[component]
 fn SettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
+    let total = total_match_count(&current.to_lowercase());
 
     rsx! {
         div { class: "settings-search-bar",
@@ -183,6 +207,9 @@ fn SettingsSearchBar(search_text: Signal<String>) -> Element {
                 oninput: move |e| search_text.set(e.value()),
             }
             if !current.is_empty() {
+                span { class: "settings-search-count",
+                    "{total} {t(\"settings-search-found\")}"
+                }
                 button {
                     class: "settings-search-clear",
                     onclick: move |_| search_text.set(String::new()),
@@ -287,11 +314,15 @@ fn SettingsNavigation(
                 {
                     let label = t(label_key);
                     let has_match = section_has_search_match(section, &filter);
+                    let count = section_match_count(section, &filter);
                     let active = current == section;
-                    let class = match (active, has_match) {
-                        (true, _) => "settings-nav-item active",
-                        (false, true) => "settings-nav-item",
-                        (false, false) => "settings-nav-item settings-nav-item-dimmed",
+                    let searching = !filter.is_empty();
+                    // Always render so scroll spy can find data-settings-slug; hide via CSS
+                    // Hide takes priority over active — if searching and no match, always hide.
+                    let class = match (searching, has_match, active) {
+                        (true, false, _) => "settings-nav-item settings-nav-item-hidden",
+                        (_, _, true) => "settings-nav-item active",
+                        _ => "settings-nav-item",
                     };
                     rsx! {
                         div {
@@ -304,6 +335,9 @@ fn SettingsNavigation(
                             },
                             "data-settings-slug": "{section.to_slug()}",
                             "{label}"
+                            if searching && count > 0 {
+                                span { class: "settings-nav-match-count", "({count})" }
+                            }
                         }
                     }
                 }
@@ -311,8 +345,13 @@ fn SettingsNavigation(
             // Plugin-provided settings pages — registered dynamically by active backends.
             // A group header separates them visually from the built-in sections.
             if !plugin_entries.is_empty() {
-                div { class: "settings-nav-group-header",
-                    "{t(\"settings-plugin-settings-nav-header\")}"
+                {
+                    let hide_class = if filter.is_empty() { "settings-nav-group-header" } else { "settings-nav-group-header settings-nav-group-hidden" };
+                    rsx! {
+                        div { class: hide_class,
+                            "{t(\"settings-plugin-settings-nav-header\")}"
+                        }
+                    }
                 }
             }
             for entry in &plugin_entries {
@@ -321,17 +360,18 @@ fn SettingsNavigation(
                     let label = t(entry.nav_label_key);
                     let slug = entry.slug;
                     let is_active = active_plugin.as_deref() == Some(slug);
+                    let class = match (filter.is_empty(), is_active) {
+                        (false, _) => "settings-nav-item settings-nav-item-hidden",
+                        (_, true) => "settings-nav-item active",
+                        _ => "settings-nav-item",
+                    };
                     rsx! {
                         div {
-                            class: if is_active { "settings-nav-item active" } else { "settings-nav-item" },
+                            class,
                             "data-settings-slug": "plugin-{slug}",
                             onclick: move |_| {
                                 active_plugin_slug.set(Some(slug.to_string()));
                                 app_state.write().settings_section = SettingsSection::Plugins;
-                                // Plugin sections live below the built-in sections and are
-                                // not part of SettingsSection routing (no enum variant).
-                                // Reuse scroll_to_section_anchor with "plugin-{slug}" so
-                                // the generated ID matches "settings-section-plugin-{slug}".
                                 scroll_to_section_anchor(&format!("plugin-{slug}"));
                                 close_mobile_drawer();
                             },
@@ -363,10 +403,12 @@ fn SettingsAllSections(search_query: String) -> Element {
                 let slug = section.to_slug();
                 let id = format!("settings-section-{slug}");
                 let has_match = section_has_search_match(section, &q);
-                let class = if has_match {
-                    "settings-section-block"
+                let searching = !q.is_empty();
+                // Always render so scroll spy IDs remain in the DOM; hide via CSS
+                let class = if searching && !has_match {
+                    "settings-section-block settings-section-hidden"
                 } else {
-                    "settings-section-block settings-section-dimmed"
+                    "settings-section-block"
                 };
                 // Inject the plugin-section divider before the first plugin section,
                 // but only when search is not active (dimming is sufficient hint).
@@ -440,8 +482,14 @@ fn SettingsAllSections(search_query: String) -> Element {
                 let slug = entry.slug;
                 let id = format!("settings-section-plugin-{slug}");
                 let render_fn = entry.render;
+                // Always render plugin sections; hide via CSS during search
+                let class = if q.is_empty() {
+                    "settings-section-block"
+                } else {
+                    "settings-section-block settings-section-hidden"
+                };
                 rsx! {
-                    div { id, class: "settings-section-block",
+                    div { id, class,
                         { render_fn() }
                     }
                 }
@@ -500,16 +548,16 @@ pub fn SettingsPage() -> Element {
         install_settings_scroll_spy(app_state, plugin_section_ids.clone(), active_plugin_slug);
     });
 
-    // When the search query changes to non-empty, scroll to the first matching section.
+    // When the search query changes to non-empty, scroll the content area to the
+    // top so the user sees filtered results from the beginning.
     use_effect(move || {
         let q = search_text.read().to_lowercase();
         if q.is_empty() {
             return;
         }
-        if let Some((_, first)) = NAV_SECTIONS.iter().find(|(_, s)| section_has_search_match(*s, &q)) {
-            scroll_to_section_anchor(first.to_slug());
-            app_state.write().settings_section = *first;
-        }
+        let _ = document::eval(
+            "{ const c = document.querySelector('.settings-content'); if (c) c.scrollTop = 0; }"
+        );
     });
 
     let section = *section_memo.read();

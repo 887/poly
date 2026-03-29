@@ -3,17 +3,17 @@
 //! Per-account controls for:
 //! - Sensitive media filters (DMs from friends, DMs from others, server channels)
 //! - DM spam filter aggressiveness
-//! - Age-restricted content access
 //! - Social permissions (who can DM, message requests)
 //! - Friend request origin filters
-//! - Blocked users list with unblock action
+//! - Age-restricted content access
 //!
-//! All settings are read from `ChatData::content_policy` / `ChatData::blocked_users`
-//! and written back immediately on change.
+//! All settings are read from `ChatData::content_policy` and written back immediately on change.
+//!
+//! Blocked users are managed in the People page, not in account settings.
 //!
 //! # Backend sync
 //! Writing to `ChatData` is the source of truth for the running session.
-//! TODO(phase-3.x): call `set_content_policy` / `unblock_user` on the active backend
+//! TODO(phase-3.x): call `set_content_policy` on the active backend
 //! handle to persist changes server-side, mirroring the `toggle_demo` pattern in
 //! `crates/core/src/ui/demo.rs`.
 //!
@@ -151,10 +151,10 @@ fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
     }
 }
 
-/// Age-Restricted Content + Social Permissions (grouped for compactness).
+/// Age-Restricted Content section — age access toggles.
 #[rustfmt::skip]
 #[component]
-fn AgeAndSocialSection(mut chat_data: Signal<ChatData>) -> Element {
+fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
@@ -174,6 +174,15 @@ fn AgeAndSocialSection(mut chat_data: Signal<ChatData>) -> Element {
                 },
             }
         }
+    }
+}
+
+/// Social Permissions section — DM and message request controls.
+#[rustfmt::skip]
+#[component]
+fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
+    let policy = chat_data.read().content_policy.clone();
+    rsx! {
         div { class: "content-social-section",
             div { class: "content-social-section-header",
                 h3 { class: "content-social-section-title", "{t(\"content-social-social-perms\")}" }
@@ -230,65 +239,13 @@ fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
     }
 }
 
-/// Blocked Users section — list each blocked user with an Unblock button.
-#[rustfmt::skip]
-#[component]
-fn BlockedUsersSection(mut chat_data: Signal<ChatData>) -> Element {
-    let blocked = chat_data.read().blocked_users.clone();
-    rsx! {
-        div { class: "content-social-section",
-            div { class: "content-social-section-header",
-                h3 { class: "content-social-section-title", "{t(\"content-social-blocked\")}" }
-                p  { class: "content-social-section-desc", "{t(\"content-social-blocked-desc\")}" }
-            }
-            if blocked.is_empty() {
-                p { class: "content-social-no-blocked", "{t(\"content-social-no-blocked\")}" }
-            } else {
-                div { class: "content-social-blocked-list",
-                    for user in &blocked {
-                        {
-                            let uid = user.user_id.clone();
-                            let display = user.display_name.clone();
-                            let avatar = user.avatar_url.clone();
-                            let first_char = display.chars().next().unwrap_or('?');
-                            rsx! {
-                                div { class: "content-social-blocked-row", key: "{uid}",
-                                    if let Some(ref url) = avatar {
-                                        img {
-                                            class: "content-social-blocked-avatar",
-                                            src: "{url}",
-                                            alt: "",
-                                        }
-                                    } else {
-                                        div { class: "content-social-blocked-avatar content-social-blocked-avatar-placeholder",
-                                            "{first_char}"
-                                        }
-                                    }
-                                    span { class: "content-social-blocked-name", "{display}" }
-                                    button {
-                                        class: "content-social-unblock-btn",
-                                        onclick: move |_| {
-                                            // TODO(phase-3.x): call unblock_user on the active backend
-                                            chat_data.write().blocked_users.retain(|u| u.user_id != uid);
-                                        },
-                                        "{t(\"content-social-unblock\")}"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ─── entry point ────────────────────────────────────────────────────────────
 
 /// Content & Social settings page for a single account.
 ///
-/// Reads policy from `ChatData::content_policy` and blocked users from
-/// `ChatData::blocked_users`. All writes go directly back to `ChatData`.
+/// Reads policy from `ChatData::content_policy`. All writes go directly back to `ChatData`.
+///
+/// Blocked users are managed in the People page, not here.
 ///
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`] when the
 /// "content-social" section is active.
@@ -301,9 +258,9 @@ pub fn ContentSocialSettings(_account_id: String) -> Element {
             h2 { class: "settings-section-title", "{t(\"content-social-title\")}" }
             SensitiveMediaSection { chat_data }
             SpamFilterSection { chat_data }
-            AgeAndSocialSection { chat_data }
+            SocialPermissionsSection { chat_data }
             FriendRequestsSection { chat_data }
-            BlockedUsersSection { chat_data }
+            AgeRestrictedSection { chat_data }
         }
     }
 }

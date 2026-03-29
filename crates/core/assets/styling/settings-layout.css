@@ -92,6 +92,36 @@
     opacity: 0.4;
 }
 
+/* Hide nav items that don't match the current search query */
+.settings-nav-item.settings-nav-item-hidden {
+    display: none;
+}
+
+/* Hide group headers when search is active */
+.settings-nav-group-header.settings-nav-group-hidden {
+    display: none;
+}
+
+/* Match count badge shown next to nav items during search */
+.settings-nav-match-count {
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* "N Settings Found" badge next to the search input */
+.settings-search-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    padding: 2px 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm, 4px);
+    flex-shrink: 0;
+}
+
 /* Group header separating built-in sections from plugin-provided settings pages */
 .settings-nav-group-header {
     padding: 16px 16px 6px 16px;
@@ -130,6 +160,11 @@
 .settings-section-block.settings-section-dimmed {
     opacity: 0.25;
     pointer-events: none;
+}
+
+/* Hide sections that don't match the current search query */
+.settings-section-block.settings-section-hidden {
+    display: none;
 }
 
 .settings-scroll-spacer {

@@ -24,6 +24,7 @@ pub fn ServerGeneralSettings(
     let mut show_confirm = use_signal(|| false);
 
     rsx! {
+        h2 { class: "settings-section-title", "{t(\"server-settings-general\")}" }
         div { class: "settings-section",
             h3 { class: "settings-section-title", "{t(\"server-general-info\")}" }
             div { class: "settings-field",

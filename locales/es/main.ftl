@@ -457,6 +457,7 @@ nav-forward = Adelante
 # Settings search
 settings-search = Buscar ajustes...
 settings-search-no-results = No se encontraron ajustes para esta búsqueda.
+settings-search-found = Ajustes Encontrados
 settings-voice-video = Voz y Video
 settings-notifications = Notificaciones
 account-settings-title = Configuración de cuenta

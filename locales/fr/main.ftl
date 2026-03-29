@@ -456,6 +456,7 @@ nav-forward = Avancer
 # Settings search
 settings-search = Rechercher dans les paramètres...
 settings-search-no-results = Aucun paramètre trouvé pour cette recherche.
+settings-search-found = Paramètres Trouvés
 settings-voice-video = Voix & Vidéo
 settings-notifications = Notifications
 account-settings-title = Paramètres du compte
