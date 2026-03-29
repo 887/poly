@@ -15,6 +15,8 @@
 use crate::i18n::t;
 use dioxus::prelude::*;
 
+use super::media_picker::{EmojiSection, EmojiSectionItems, build_emoji_sections};
+
 /// Categories of emoji with their contents.
 pub(crate) const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
     (
@@ -137,40 +139,38 @@ pub(crate) const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
     ),
 ];
 
-/// Emoji picker component.
-#[rustfmt::skip]
+/// Emoji picker component (used for reactions).
 ///
-/// Renders a category-tabbed grid of emoji. Clicking one fires `on_select`.
+/// Compact picker: left sidebar icons + scrollable section list.
+#[rustfmt::skip]
 #[component]
 pub fn EmojiPicker(on_select: EventHandler<String>, on_close: EventHandler<()>) -> Element {
-    let mut active_category = use_signal(|| 0usize);
     let mut search_text = use_signal(String::new);
-    let cat_idx = *active_category.read();
-
-    // Get the current category's emoji (or search results)
+    let mut active_section = use_signal(|| 0usize);
     let search = search_text.read().clone();
-    let display_emoji: Vec<&str> = if search.is_empty() {
-        EMOJI_CATEGORIES
-            .get(cat_idx)
-            .map(|(_, _, emojis)| emojis.to_vec())
-            .unwrap_or_default()
+
+    let sections = use_memo(|| build_emoji_sections(&[]));
+    let sections_ref = sections.read().clone();
+
+    let search_results: Vec<String> = if search.is_empty() {
+        vec![]
     } else {
-        // Simple search: show all emoji that match (basically just filter categories)
-        EMOJI_CATEGORIES
+        let q = search.to_lowercase();
+        sections_ref
             .iter()
-            .flat_map(|(_, _, emojis)| emojis.iter().copied())
+            .flat_map(|s| match &s.items {
+                EmojiSectionItems::Unicode(v) => v.clone(),
+                EmojiSectionItems::Custom(_) => vec![],
+            })
             .collect()
     };
 
+    let active_idx = *active_section.read();
+
     rsx! {
         div { class: "emoji-picker",
-            // Click outside to close via a backdrop
-            div {
-                class: "emoji-picker-backdrop",
-                onclick: move |_| on_close.call(()),
-            }
+            div { class: "emoji-picker-backdrop", onclick: move |_| on_close.call(()) }
             div { class: "emoji-picker-panel",
-                // Search bar
                 div { class: "emoji-search",
                     input {
                         r#type: "text",
@@ -180,24 +180,66 @@ pub fn EmojiPicker(on_select: EventHandler<String>, on_close: EventHandler<()>) 
                         oninput: move |evt| search_text.set(evt.value()),
                     }
                 }
-                // Category tabs
-                div { class: "emoji-category-tabs",
-                    for (idx , (_ , icon , _)) in EMOJI_CATEGORIES.iter().enumerate() {
-                        button {
-                            class: if idx == cat_idx { "emoji-tab active" } else { "emoji-tab" },
-                            onclick: move |_| active_category.set(idx),
-                            "{icon}"
+                div { class: "emoji-body",
+                    div { class: "emoji-sidebar",
+                        for (idx, section) in sections_ref.iter().enumerate() {
+                            {
+                                let sid = section.id.clone();
+                                let label = section.label.clone();
+                                let icon = section.icon.clone();
+                                rsx! {
+                                    button {
+                                        class: if idx == active_idx { "emoji-sidebar-icon active" } else { "emoji-sidebar-icon" },
+                                        title: "{label}",
+                                        onclick: move |_| {
+                                            active_section.set(idx);
+                                            #[cfg(target_arch = "wasm32")]
+                                            {
+                                                let js = format!("document.getElementById('{sid}')?.scrollIntoView({{block:'start',behavior:'smooth'}})");
+                                                let _ = document::eval(&js);
+                                            }
+                                        },
+                                        "{icon}"
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-                // Emoji grid
-                div { class: "emoji-grid",
-                    for emoji in &display_emoji {
-                        {
-                            let e = emoji.to_string();
-                            let e2 = e.clone();
-                            rsx! {
-                                button { class: "emoji-item", onclick: move |_| on_select.call(e2.clone()), "{e}" }
+                    div {
+                        class: "emoji-scroll-area",
+                        id: "emoji-scroll-area-reaction",
+                        if search.is_empty() {
+                            for section in sections_ref.iter() {
+                                div { class: "emoji-section",
+                                    div { id: "{section.id}", class: "emoji-section-header", "{section.label}" }
+                                    div { class: "emoji-grid",
+                                        for e in match &section.items { EmojiSectionItems::Unicode(v) => v.clone(), _ => vec![] } {
+                                            {
+                                                let e2 = e.clone();
+                                                let e3 = e.clone();
+                                                rsx! {
+                                                    button {
+                                                        class: "emoji-item",
+                                                        onclick: move |_| on_select.call(e3.clone()),
+                                                        "{e2}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            div { class: "emoji-section",
+                                div { class: "emoji-section-header", "{t(\"emoji-search-results\")}" }
+                                div { class: "emoji-grid",
+                                    for e in &search_results {
+                                        {
+                                            let e2 = e.clone(); let e3 = e.clone();
+                                            rsx! { button { class: "emoji-item", onclick: move |_| on_select.call(e3.clone()), "{e2}" } }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

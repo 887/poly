@@ -258,6 +258,10 @@
 
 .poly-app.poly-mobile-runtime-active .voice-account-footer {
     z-index: 2;
+    /* In mobile mode the server-icon rail is fixed/overlaid, not inline.
+       Reset the negative-margin width trick that extends the footer behind it. */
+    width: 100%;
+    margin-left: 0;
 }
 
 .poly-app.poly-mobile-runtime-active .account-view-main,

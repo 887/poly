@@ -4278,13 +4278,41 @@ fn render_hidden_file_input(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
-    if !*ctx.show_input_emoji.read() {
-        return rsx! {};
-    }
-
     let mut message_input = ctx.message_input;
     let mut show_input_emoji = ctx.show_input_emoji;
     let markdown_enabled = ctx.markdown_enabled;
+    let channel_id = ctx.channel_id.clone();
+    let client_manager = ctx.client_manager;
+
+    // Hooks must be called before any early return for stable hook ordering.
+    // Load custom emojis for the current channel on mount.
+    let custom_emojis = use_signal(Vec::<poly_client::CustomEmoji>::new);
+    let app_state_for_emoji = ctx.app_state;
+    use_effect(move || {
+        let channel_id = channel_id.clone();
+        let mut custom_emojis = custom_emojis;
+        let client_manager = client_manager;
+        let app_state = app_state_for_emoji;
+        spawn(async move {
+            let Some(ref cid) = channel_id else { return };
+            let active_account_id = app_state.read().nav.active_account_id.clone();
+            let backend = if let Some(account_id) = active_account_id {
+                client_manager.read().get_backend(&account_id)
+            } else {
+                None
+            };
+            let Some(backend) = backend else { return };
+            let guard = backend.read().await;
+            if let Ok(emojis) = guard.get_available_emojis(cid).await {
+                custom_emojis.set(emojis);
+            }
+        });
+    });
+
+    if !*show_input_emoji.read() {
+        return rsx! {};
+    }
+
     rsx! {
         MediaPickerPopup {
             on_emoji_select: move |emoji: String| {
@@ -4294,6 +4322,7 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
             },
             on_close: move |_| show_input_emoji.set(false),
             markdown_enabled,
+            custom_emojis: custom_emojis.read().clone(),
         }
     }
 }

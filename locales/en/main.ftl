@@ -454,6 +454,8 @@ voice-test-mic = Test Microphone (3 sec)
 # Emoji / GIF / Reactions
 emoji-picker = Emoji
 emoji-search = Search emoji...
+emoji-search-results = Search Results
+emoji-no-results = No emoji found
 gif-picker = GIF
 stickers-picker = Stickers
 media-picker-gif-placeholder = GIF search coming soon

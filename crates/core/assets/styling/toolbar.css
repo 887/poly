@@ -50,21 +50,35 @@
    MEDIA PICKER — tab bar, footer, and mobile slide-up sheet
    ───────────────────────────────────────────────────────────── */
 
-/* Extend .emoji-picker-panel when used as media picker */
+/* ─────────────────────────────────────────────────────────────
+   MEDIA PICKER — Discord-style layout
+   tab bar (36px) + fixed-height body + footer (32px)
+   Total panel height is fixed so switching tabs never resizes it.
+   ───────────────────────────────────────────────────────────── */
+
+/* Override base panel sizing for the media picker */
 .media-picker-panel {
-    max-height: 420px;
+    /* tabs(36) + body(356) + footer(32) = 424px — fixed, never changes */
+    height: 424px;
+    max-height: 424px;
+    width: 380px;
 }
 
+/* Tab bar */
 .media-picker-tabs {
     display: flex;
     gap: 2px;
-    padding: 6px 8px;
+    padding: 5px 8px;
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    height: 36px;
+    align-items: center;
+    box-sizing: border-box;
 }
 
 .media-picker-tab {
     flex: 1;
-    padding: 5px 8px;
+    padding: 4px 8px;
     border: none;
     border-radius: 6px;
     background: transparent;
@@ -85,6 +99,18 @@
     color: #fff;
 }
 
+/* Fixed-height content area — tab switching NEVER resizes this */
+.media-picker-content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* 424 - 36(tabs) - 32(footer) = 356px */
+    height: 356px;
+}
+
+/* Emoji tab: search bar + body row (sidebar + scroll area) */
 .media-picker-emoji-tab {
     display: flex;
     flex-direction: column;
@@ -93,6 +119,149 @@
     overflow: hidden;
 }
 
+/* Search bar row */
+.emoji-search {
+    padding: 6px 8px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.emoji-search-input {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.emoji-search-input:focus {
+    border-color: var(--accent-primary);
+}
+
+/* Body row: left sidebar + right scroll area */
+.emoji-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Left sidebar — narrow strip of section icons */
+.emoji-sidebar {
+    width: 36px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    scrollbar-width: none;
+}
+
+.emoji-sidebar::-webkit-scrollbar {
+    display: none;
+}
+
+.emoji-sidebar-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s;
+    flex-shrink: 0;
+}
+
+.emoji-sidebar-icon:hover {
+    background: var(--bg-hover);
+}
+
+.emoji-sidebar-icon.active {
+    background: var(--accent-primary);
+}
+
+/* Right scrollable area */
+.emoji-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    scrollbar-width: thin;
+    padding-bottom: 280px; /* allow last sections to scroll their headers to the top */
+}
+
+/* Section: sticky header + grid */
+.emoji-section {
+    padding-bottom: 4px;
+}
+
+.emoji-section-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-floating, var(--bg-secondary));
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 8px 2px;
+}
+
+/* Emoji grid: 8 columns */
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 1px;
+    padding: 2px 4px 4px;
+}
+
+.emoji-item {
+    width: 34px;
+    height: 34px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, transform 0.1s;
+}
+
+.emoji-item:hover {
+    background: var(--bg-hover);
+    transform: scale(1.15);
+}
+
+/* Custom emoji items (image-backed) */
+.emoji-item-custom {
+    font-size: 1rem;
+}
+
+.emoji-no-results {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    padding: 1rem 0;
+}
+
+/* Placeholder tab */
 .media-picker-placeholder {
     flex: 1;
     display: flex;
@@ -107,10 +276,15 @@
     text-align: center;
 }
 
+/* Footer */
 .media-picker-footer {
     border-top: 1px solid var(--border-color);
     padding: 6px 10px;
     flex-shrink: 0;
+    height: 32px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
 }
 
 .media-picker-markdown-row {
@@ -119,6 +293,7 @@
     justify-content: space-between;
     cursor: pointer;
     gap: 8px;
+    width: 100%;
 }
 
 .media-picker-markdown-label {
@@ -168,7 +343,17 @@
     width: 100%;
     max-width: 100%;
     border-radius: 16px 16px 0 0;
+    height: 60dvh;
     max-height: 60dvh;
+}
+
+.poly-app.poly-mobile-runtime-active .media-picker-panel {
+    height: 60dvh;
+    max-height: 60dvh;
+}
+
+.poly-app.poly-mobile-runtime-active .media-picker-content {
+    height: auto;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -211,84 +396,6 @@
     box-shadow: 0 0 0 1px rgba(88, 101, 242, 0.25);
 }
 
-.emoji-search {
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.emoji-search-input {
-    width: 100%;
-    padding: 0.375rem 0.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 0.8rem;
-    outline: none;
-}
-
-.emoji-search-input:focus {
-    border-color: var(--accent-primary);
-}
-
-.emoji-category-tabs {
-    display: flex;
-    gap: 2px;
-    padding: 0.375rem 0.5rem;
-    border-bottom: 1px solid var(--border-color);
-    overflow-x: auto;
-}
-
-.emoji-tab {
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    border-radius: 6px;
-    font-size: 1.1rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s;
-    flex-shrink: 0;
-}
-
-.emoji-tab:hover {
-    background: var(--bg-hover);
-}
-
-.emoji-tab.active {
-    background: var(--accent-primary);
-}
-
-.emoji-grid {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: 2px;
-    padding: 0.5rem;
-    overflow-y: auto;
-    flex: 1;
-}
-
-.emoji-item {
-    width: 36px;
-    height: 36px;
-    border: none;
-    background: transparent;
-    border-radius: 6px;
-    font-size: 1.25rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s, transform 0.1s;
-}
-
-.emoji-item:hover {
-    background: var(--bg-hover);
-    transform: scale(1.2);
-}
 
 /* ═══════════════════════════════════════════════════════════════
    MESSAGE HOVER ACTIONS + REACTION PICKER
