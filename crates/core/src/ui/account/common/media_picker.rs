@@ -13,7 +13,7 @@
 //! # 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX + logic.
 
-use super::emoji_picker::EMOJI_CATEGORIES;
+use super::emoji_picker::{EMOJI_CATEGORIES, emoji_shortcode_matches};
 use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::CustomEmoji;
@@ -45,15 +45,16 @@ pub(crate) enum EmojiSectionItems {
     Unicode(Vec<String>),
     /// Custom server emoji with image URLs.
     Custom(Vec<CustomEmoji>),
+    /// Visual divider between custom and standard sections.
+    Divider,
 }
 
-/// Build the full ordered list of emoji sections from standard categories
-/// plus any custom emoji grouped by source_name.
+/// Build sections: custom server emoji first, then a divider, then standard categories.
+/// This matches Discord's layout where server-specific emoji appear above built-ins.
 pub(crate) fn build_emoji_sections(custom: &[CustomEmoji]) -> Vec<EmojiSection> {
-    let mut sections: Vec<EmojiSection> = EMOJI_CATEGORIES
+    let standard: Vec<EmojiSection> = EMOJI_CATEGORIES
         .iter()
-        .enumerate()
-        .map(|(i, (id, icon, emojis))| EmojiSection {
+        .map(|(id, icon, emojis)| EmojiSection {
             id: format!("emoji-section-{id}"),
             label: id.to_string(),
             icon: icon.to_string(),
@@ -75,20 +76,39 @@ pub(crate) fn build_emoji_sections(custom: &[CustomEmoji]) -> Vec<EmojiSection> 
         }
     }
 
-    for (name, emojis) in groups {
-        let icon = emojis
-            .first()
-            .and_then(|e| e.unicode_fallback.clone())
-            .unwrap_or_else(|| "🖼".to_string());
-        let id = name.to_lowercase().replace(' ', "-");
-        sections.push(EmojiSection {
-            id: format!("emoji-section-custom-{id}"),
-            label: name,
-            icon,
-            items: EmojiSectionItems::Custom(emojis),
-        });
+    if groups.is_empty() {
+        // No custom emoji — just standard sections
+        return standard;
     }
 
+    // Custom sections first
+    let mut sections: Vec<EmojiSection> = groups
+        .into_iter()
+        .map(|(name, emojis)| {
+            let icon = emojis
+                .first()
+                .and_then(|e| e.unicode_fallback.clone())
+                .unwrap_or_else(|| "🖼".to_string());
+            let id = name.to_lowercase().replace(' ', "-");
+            EmojiSection {
+                id: format!("emoji-section-custom-{id}"),
+                label: name,
+                icon,
+                items: EmojiSectionItems::Custom(emojis),
+            }
+        })
+        .collect();
+
+    // Divider between server and built-in emoji
+    sections.push(EmojiSection {
+        id: "emoji-divider".to_string(),
+        label: String::new(),
+        icon: String::new(),
+        items: EmojiSectionItems::Divider,
+    });
+
+    // Standard categories at the bottom
+    sections.extend(standard);
     sections
 }
 
@@ -126,10 +146,13 @@ fn SidebarIcon(icon: String, label: String, section_id: String) -> Element {
     }
 }
 
-/// One emoji section: sticky header + grid of items.
+/// One emoji section: sticky header + grid of items, or a divider.
 #[rustfmt::skip]
 #[component]
 fn EmojiSectionBlock(section: EmojiSection, on_select: EventHandler<String>) -> Element {
+    if section.items == EmojiSectionItems::Divider {
+        return rsx! { div { class: "emoji-section-divider" } };
+    }
     rsx! {
         div { class: "emoji-section",
             div { id: "{section.id}", class: "emoji-section-header", "{section.label}" }
@@ -170,6 +193,7 @@ fn EmojiSectionBlock(section: EmojiSection, on_select: EventHandler<String>) -> 
                             }
                         }
                     },
+                    EmojiSectionItems::Divider => rsx! {},
                 }
             }
         }
@@ -219,7 +243,8 @@ fn EmojiTabContent(
         "#);
     });
 
-    // Filtered emoji across all sections for search mode
+    // Filtered emoji across all sections for search mode.
+    // Supports shortcode search: `:joy:`, `joy`, `laughing` all find 😂.
     let search_results: Vec<String> = if search.is_empty() {
         vec![]
     } else {
@@ -227,12 +252,19 @@ fn EmojiTabContent(
         sections_ref
             .iter()
             .flat_map(|s| match &s.items {
-                EmojiSectionItems::Unicode(v) => v.clone(),
-                EmojiSectionItems::Custom(v) => v
+                EmojiSectionItems::Unicode(v) => v
                     .iter()
-                    .filter(|e| e.shortcode.contains(&q))
-                    .filter_map(|e| e.unicode_fallback.clone())
-                    .collect(),
+                    .filter(|e| emoji_shortcode_matches(e, &q))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                EmojiSectionItems::Custom(v) => {
+                    let stripped = q.trim_matches(':');
+                    v.iter()
+                        .filter(|e| e.shortcode.contains(stripped))
+                        .filter_map(|e| e.unicode_fallback.clone())
+                        .collect()
+                }
+                EmojiSectionItems::Divider => vec![],
             })
             .collect()
     };
@@ -251,9 +283,9 @@ fn EmojiTabContent(
             }
             // Body: sidebar + scroll area
             div { class: "emoji-body",
-                // Left sidebar with section icons
+                // Left sidebar — skip divider entries
                 div { class: "emoji-sidebar",
-                    for section in sections_ref.iter() {
+                    for section in sections_ref.iter().filter(|s| s.items != EmojiSectionItems::Divider) {
                         SidebarIcon {
                             icon: section.icon.clone(),
                             label: section.label.clone(),
@@ -348,6 +380,24 @@ pub fn MediaPickerPopup(
 ) -> Element {
     let mut active_tab = use_signal(MediaTab::default);
     let tab = *active_tab.read();
+
+    // Anchor the panel just above the message input shell on desktop.
+    // On mobile the CSS slide-up sheet overrides this.
+    #[cfg(target_arch = "wasm32")]
+    use_effect(move || {
+        let _ = document::eval(r#"
+            (function() {
+                var panel = document.querySelector('.media-picker-panel');
+                var shell = document.querySelector('.message-input-shell');
+                if (!panel || !shell) return;
+                var rect = shell.getBoundingClientRect();
+                panel.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+                panel.style.right = (window.innerWidth - rect.right) + 'px';
+                panel.style.top = 'auto';
+                panel.style.left = 'auto';
+            })()
+        "#);
+    });
 
     rsx! {
         div { class: "emoji-picker",

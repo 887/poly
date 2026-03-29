@@ -31,8 +31,9 @@
 
 .emoji-picker-panel {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    /* CSS fallback: JS overrides bottom/right to anchor above the input shell */
+    bottom: 66px;
+    right: 16px;
     width: 340px;
     max-height: 380px;
     background: var(--bg-floating, var(--bg-secondary));
@@ -200,7 +201,33 @@
     overflow-x: hidden;
     min-height: 0;
     scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb, var(--border-color)) transparent;
     padding-bottom: 280px; /* allow last sections to scroll their headers to the top */
+}
+
+.emoji-scroll-area::-webkit-scrollbar {
+    width: 5px;
+}
+
+.emoji-scroll-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.emoji-scroll-area::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb, var(--border-color));
+    border-radius: 3px;
+}
+
+.emoji-scroll-area::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Divider between server emoji and built-in emoji */
+.emoji-section-divider {
+    margin: 6px 8px;
+    height: 1px;
+    background: var(--border-color);
+    opacity: 0.6;
 }
 
 /* Section: sticky header + grid */
