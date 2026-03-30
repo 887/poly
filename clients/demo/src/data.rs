@@ -1247,6 +1247,73 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
         })
         .collect();
 
+    // Add non-friend DMs: Iris and Jack have pending friend requests but
+    // already have an open DM conversation (DM list and friends list diverge).
+    let iris = demo_users().into_iter().find(|u| u.id == "user-iris").unwrap();
+    let jack = demo_users().into_iter().find(|u| u.id == "user-jack").unwrap();
+
+    channels.push(DmChannel {
+        id: "dm-user-iris".to_string(),
+        user: iris.clone(),
+        last_message: Some(Message {
+            id: "msg-dm-iris-latest".to_string(),
+            author: iris.clone(),
+            content: MessageContent::Text(
+                "Hey! Great meeting you at RustConf 🦀 Here are a few shots from the hallway track:".to_string(),
+            ),
+            timestamp: now - Duration::hours(3),
+            attachments: vec![
+                Attachment::remote(
+                    "att-iris-conf-1".to_string(),
+                    "rustconf-hallway-1.jpg".to_string(),
+                    "image/jpeg".to_string(),
+                    "https://picsum.photos/seed/rustconf1/600/400".to_string(),
+                    1_843_200,
+                ),
+                Attachment::remote(
+                    "att-iris-conf-2".to_string(),
+                    "rustconf-hallway-2.jpg".to_string(),
+                    "image/jpeg".to_string(),
+                    "https://picsum.photos/seed/rustconf2/600/400".to_string(),
+                    1_720_320,
+                ),
+                Attachment::remote(
+                    "att-iris-conf-3".to_string(),
+                    "rustconf-speaker-notes.png".to_string(),
+                    "image/png".to_string(),
+                    "https://picsum.photos/seed/rustconf3/600/400".to_string(),
+                    982_016,
+                ),
+            ],
+            reactions: vec![],
+            reply_to: None,
+            edited: false,
+        }),
+        unread_count: 1,
+        backend: BackendType::Demo,
+        account_id: DEMO_ACCOUNT_ID.to_string(),
+    });
+
+    channels.push(DmChannel {
+        id: "dm-user-jack".to_string(),
+        user: jack.clone(),
+        last_message: Some(Message {
+            id: "msg-dm-jack-latest".to_string(),
+            author: jack.clone(),
+            content: MessageContent::Text(
+                "Sent you the slides — let me know what you think of the WebRTC section!".to_string(),
+            ),
+            timestamp: now - Duration::hours(6),
+            attachments: vec![],
+            reactions: vec![],
+            reply_to: None,
+            edited: false,
+        }),
+        unread_count: 0,
+        backend: BackendType::Demo,
+        account_id: DEMO_ACCOUNT_ID.to_string(),
+    });
+
     // Add cross-account DM: cat sees dog
     channels.push(DmChannel {
         id: "dm-demo-dog".to_string(),
@@ -2136,6 +2203,132 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
         edited: false,
             },
         ],
+
+        // Non-friend DM: Iris (met at RustConf, pending friend request)
+        "dm-user-iris" => {
+            let iris = demo_users().into_iter().find(|u| u.id == "user-iris").unwrap();
+            vec![
+                Message {
+                    id: "msg-dm-iris-0".to_string(),
+                    author: iris.clone(),
+                    content: MessageContent::Text(
+                        "Hey! Great meeting you at RustConf 🦀 I'm Iris — we briefly talked about the async runtime session."
+                            .to_string(),
+                    ),
+                    timestamp: now - Duration::hours(5),
+                    attachments: vec![],
+                    reactions: vec![],
+                    reply_to: None,
+                    edited: false,
+                },
+                Message {
+                    id: "msg-dm-iris-1".to_string(),
+                    author: demo_session().user,
+                    content: MessageContent::Text(
+                        "Oh yes! I remember — you had the great question about Tokio task budgets. Small world! 😄"
+                            .to_string(),
+                    ),
+                    timestamp: now - Duration::hours(4) - Duration::minutes(30),
+                    attachments: vec![],
+                    reactions: vec![],
+                    reply_to: None,
+                    edited: false,
+                },
+                Message {
+                    id: "msg-dm-iris-2".to_string(),
+                    author: iris.clone(),
+                    content: MessageContent::Text(
+                        "Here are a few shots from the hallway track:".to_string(),
+                    ),
+                    timestamp: now - Duration::hours(3),
+                    attachments: vec![
+                        Attachment::remote(
+                            "att-iris-conf-1".to_string(),
+                            "rustconf-hallway-1.jpg".to_string(),
+                            "image/jpeg".to_string(),
+                            "https://picsum.photos/seed/rustconf1/600/400".to_string(),
+                            1_843_200,
+                        ),
+                        Attachment::remote(
+                            "att-iris-conf-2".to_string(),
+                            "rustconf-hallway-2.jpg".to_string(),
+                            "image/jpeg".to_string(),
+                            "https://picsum.photos/seed/rustconf2/600/400".to_string(),
+                            1_720_320,
+                        ),
+                        Attachment::remote(
+                            "att-iris-conf-3".to_string(),
+                            "rustconf-speaker-notes.png".to_string(),
+                            "image/png".to_string(),
+                            "https://picsum.photos/seed/rustconf3/600/400".to_string(),
+                            982_016,
+                        ),
+                    ],
+                    reactions: vec![
+                        Reaction { emoji: "📸".to_string(), count: 1, me: false },
+                    ],
+                    reply_to: None,
+                    edited: false,
+                },
+                Message {
+                    id: "msg-dm-iris-3".to_string(),
+                    author: demo_session().user,
+                    content: MessageContent::Text(
+                        "Amazing shots! The energy at that keynote was incredible 🙌".to_string(),
+                    ),
+                    timestamp: now - Duration::hours(2) - Duration::minutes(45),
+                    attachments: vec![],
+                    reactions: vec![],
+                    reply_to: None,
+                    edited: false,
+                },
+            ]
+        }
+
+        // Non-friend DM: Jack (sent a friend request, already chatting)
+        "dm-user-jack" => {
+            let jack = demo_users().into_iter().find(|u| u.id == "user-jack").unwrap();
+            vec![
+                Message {
+                    id: "msg-dm-jack-0".to_string(),
+                    author: jack.clone(),
+                    content: MessageContent::Text(
+                        "Hey! I watched your talk on WASM Component Model — really insightful stuff."
+                            .to_string(),
+                    ),
+                    timestamp: now - Duration::hours(12),
+                    attachments: vec![],
+                    reactions: vec![],
+                    reply_to: None,
+                    edited: false,
+                },
+                Message {
+                    id: "msg-dm-jack-1".to_string(),
+                    author: demo_session().user,
+                    content: MessageContent::Text(
+                        "Thanks Jack! The plugin boundary work was the trickiest part to get right."
+                            .to_string(),
+                    ),
+                    timestamp: now - Duration::hours(10),
+                    attachments: vec![],
+                    reactions: vec![],
+                    reply_to: None,
+                    edited: false,
+                },
+                Message {
+                    id: "msg-dm-jack-2".to_string(),
+                    author: jack.clone(),
+                    content: MessageContent::Text(
+                        "Sent you the slides — let me know what you think of the WebRTC section!".to_string(),
+                    ),
+                    timestamp: now - Duration::hours(6),
+                    attachments: vec![],
+                    reactions: vec![],
+                    reply_to: None,
+                    edited: false,
+                },
+            ]
+        }
 
         // Fallback for any other dm- ID
         _ => vec![
