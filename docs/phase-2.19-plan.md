@@ -29,18 +29,24 @@ Implement Discord-like fullscreen UX for profile and message images with route/b
 
 ### 1) Fullscreen media viewer route scaffold (single image)
 - [x] Add route shape for fullscreen message media viewer (account-scoped).
-- [ ] Add shared viewer state model (image list, active index, origin context).
-- [ ] Ensure route open/close integrates with browser back.
+- [x] Add shared viewer state model (image list, active index, origin context).
+- [x] Ensure route open/close integrates with browser back.
+
+**Done:** `DmMediaViewerRoute` + `ServerMediaViewerRoute` in `routes.rs`; `MessageMediaViewerOverlay` component in `crates/core/src/ui/account/common/media_viewer.rs`.
 
 ### 2) Hook message image click -> viewer route
-- [ ] Wire image attachments in chat messages to open viewer route.
-- [ ] Ensure this works from server channels, DMs, and group DMs.
+- [x] Wire image attachments in chat messages to open viewer route.
+- [x] Ensure this works from server channels, DMs, and group DMs.
+
+**Done:** `AttachmentsView` in `chat_view.rs` navigates to viewer route on image click.
 
 ### 3) Viewer UI v1 (single image)
-- [ ] Backdrop + centered media with clean controls.
-- [ ] Escape to close viewer.
-- [ ] Toolbar: zoom, next/prev placeholders, download, open in browser.
-- [ ] Overflow menu (`...`) for secondary actions.
+- [x] Backdrop + centered media with clean controls.
+- [x] Escape to close viewer.
+- [x] Toolbar: zoom, next/prev placeholders, download, open in browser.
+- [x] Overflow menu (`...`) for secondary actions.
+
+**Done:** Full toolbar with zoom in/out, download, open-in-browser; Escape via JS keydown listener; backdrop click closes.
 
 ### 4) Multi-image support
 - [ ] Support multiple images per message.
@@ -48,10 +54,14 @@ Implement Discord-like fullscreen UX for profile and message images with route/b
 - [ ] Bottom thumbnail strip with active preview.
 - [ ] Keyboard left/right navigation.
 
+**Note:** Explicitly deferred — code comment in `media_viewer.rs` marks this as a follow-up. Single-image viewer is complete.
+
 ### 5) Viewer route semantics + robust navigation
-- [ ] Deep-link route opens correct media.
-- [ ] Back button returns to exact previous chat context.
-- [ ] Close button and Escape use same state transition path.
+- [x] Deep-link route opens correct media.
+- [x] Back button returns to exact previous chat context.
+- [x] Close button and Escape use same state transition path.
+
+**Done:** Both routes render `ChatView` + overlay together; all close paths call `nav.go_back()`.
 
 ### 6) Demo data + DM parity
 - [ ] Add non-friend DM examples in demo data.
