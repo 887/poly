@@ -172,6 +172,16 @@ pub fn demo2_session() -> Session {
     }
 }
 
+/// Look up a demo user by id. Panics if the id is not found — all callers use
+/// static ids that must exist in `demo_users()`.
+#[allow(clippy::expect_used)]
+fn demo_user(id: &str) -> User {
+    demo_users()
+        .into_iter()
+        .find(|u| u.id == id)
+        .expect("demo user id not found in demo_users()")
+}
+
 /// Generate a list of demo users.
 ///
 /// Users are assigned deterministic avatar images via the DiceBear API so the
@@ -1249,8 +1259,8 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
 
     // Add non-friend DMs: Iris and Jack have pending friend requests but
     // already have an open DM conversation (DM list and friends list diverge).
-    let iris = demo_users().into_iter().find(|u| u.id == "user-iris").unwrap();
-    let jack = demo_users().into_iter().find(|u| u.id == "user-jack").unwrap();
+    let iris = demo_user("user-iris");
+    let jack = demo_user("user-jack");
 
     channels.push(DmChannel {
         id: "dm-user-iris".to_string(),
@@ -2206,7 +2216,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
 
         // Non-friend DM: Iris (met at RustConf, pending friend request)
         "dm-user-iris" => {
-            let iris = demo_users().into_iter().find(|u| u.id == "user-iris").unwrap();
+            let iris = demo_user("user-iris");
             vec![
                 Message {
                     id: "msg-dm-iris-0".to_string(),
@@ -2287,7 +2297,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
 
         // Non-friend DM: Jack (sent a friend request, already chatting)
         "dm-user-jack" => {
-            let jack = demo_users().into_iter().find(|u| u.id == "user-jack").unwrap();
+            let jack = demo_user("user-jack");
             vec![
                 Message {
                     id: "msg-dm-jack-0".to_string(),
