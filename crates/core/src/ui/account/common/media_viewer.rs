@@ -2,11 +2,8 @@
 //!
 //! Route-backed overlay used for message image attachments.
 //! Supports single-image and multi-image carousels with a thumbnail strip,
-//! left/right navigation, and keyboard arrow/Escape handling.
-//!
-//! Layout: Discord-style full-width topbar (author + time left, controls right,
-//! ✕ at far right near window controls). Clicking the dark background around
-//! the image dismisses; clicking the image itself does not.
+//! left/right navigation, keyboard arrow/Escape, scroll-wheel zoom,
+//! pinch-to-zoom (touch), and mouse drag to pan.
 
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -26,6 +23,8 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
     let chat_data: Signal<ChatData> = use_context();
     let nav = navigator();
     let mut zoom = use_signal(|| 1.0_f32);
+    let mut pan_x = use_signal(|| 0.0_f32);
+    let mut pan_y = use_signal(|| 0.0_f32);
     let mut menu_open = use_signal(|| false);
 
     // Collect image attachments + author info in a single message lookup.
@@ -46,7 +45,6 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
         }
     };
 
-    // Find starting position from the route's attachment_index.
     let start_pos = image_attachments
         .iter()
         .position(|(orig_idx, _)| *orig_idx == props.attachment_index)
@@ -54,37 +52,57 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
 
     let mut active_pos = use_signal(|| start_pos);
 
-    // Keyboard: Escape closes, ArrowLeft/ArrowRight navigate.
+    // Combined JS handler: keyboard, wheel zoom, pinch zoom, drag pan.
+    //
+    // Zoom/pan are delta-based (send factors/deltas, not absolute state) so
+    // no JS-side accumulated state needs resetting when images change.
+    //
+    // Drag-end click: a `moved` flag intercepts the click event on the stage
+    // and stops it propagating to the overlay's backdrop-dismiss handler, so
+    // finishing a drag does not accidentally close the viewer.
     #[cfg(target_arch = "wasm32")]
     {
         let img_count = image_attachments.len();
         use_effect(move || {
             spawn(async move {
-                let mut eval = document::eval(
-                    "(function(){\
-                        function onKey(e) {\
-                            if (e.key === 'Escape') {\
-                                document.removeEventListener('keydown', onKey, true);\
-                                dioxus.send('escape');\
-                            } else if (e.key === 'ArrowLeft') {\
-                                dioxus.send('prev');\
-                            } else if (e.key === 'ArrowRight') {\
-                                dioxus.send('next');\
-                            }\
-                        }\
-                        document.addEventListener('keydown', onKey, true);\
-                    })()",
-                );
+                let js = include_str!("../../../../assets/scripts/media_viewer_interactions.js");
+                let mut eval = document::eval(js);
                 loop {
                     match eval.recv::<String>().await {
-                        Ok(msg) if msg == "escape" => { nav.go_back(); break; }
+                        Ok(msg) if msg == "esc" => { nav.go_back(); break; }
                         Ok(msg) if msg == "prev" => {
                             let cur = *active_pos.read();
-                            if cur > 0 { active_pos.set(cur - 1); }
+                            if cur > 0 {
+                                active_pos.set(cur - 1);
+                                zoom.set(1.0); pan_x.set(0.0); pan_y.set(0.0);
+                            }
                         }
                         Ok(msg) if msg == "next" => {
                             let cur = *active_pos.read();
-                            if cur + 1 < img_count { active_pos.set(cur + 1); }
+                            if cur + 1 < img_count {
+                                active_pos.set(cur + 1);
+                                zoom.set(1.0); pan_x.set(0.0); pan_y.set(0.0);
+                            }
+                        }
+                        Ok(msg) if msg.starts_with("zf:") => {
+                            if let Ok(f) = msg[3..].parse::<f32>() {
+                                let s = (*zoom.read() * f).clamp(0.1, 10.0);
+                                zoom.set(s);
+                            }
+                        }
+                        Ok(msg) if msg.starts_with("dp:") => {
+                            let rest = &msg[3..];
+                            if let Some(colon) = rest.find(':') {
+                                if let (Ok(dx), Ok(dy)) = (
+                                    rest[..colon].parse::<f32>(),
+                                    rest[colon + 1..].parse::<f32>(),
+                                ) {
+                                    let new_x = *pan_x.read() + dx;
+                                    let new_y = *pan_y.read() + dy;
+                                    pan_x.set(new_x);
+                                    pan_y.set(new_y);
+                                }
+                            }
                         }
                         _ => break,
                     }
@@ -113,22 +131,24 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
     };
 
     let scale = *zoom.read();
-    let image_style = format!("transform: scale({scale});");
+    let tx = *pan_x.read();
+    let ty = *pan_y.read();
+    // translate in screen space (applied before scale so panning feels 1:1)
+    let image_style = format!("transform: translate({tx}px, {ty}px) scale({scale});");
     let filename = attachment.filename.clone();
     let url = attachment.url.clone();
 
     let can_prev = pos > 0;
     let can_next = pos + 1 < total;
+    let is_zoomed = scale > 1.01;
 
     rsx! {
         div {
             class: "poly-media-viewer-overlay",
             tabindex: "-1",
-            onclick: move |_| nav.go_back(),  // Backdrop dismiss
+            onclick: move |_| nav.go_back(),
 
             // — Full-width top bar —
-            // Author info on the left, controls on the right.
-            // ✕ is the rightmost button so it sits near the window close control.
             div {
                 class: "poly-media-viewer-topbar",
                 onclick: move |e| e.stop_propagation(),
@@ -146,8 +166,8 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                         class: "poly-media-viewer-btn",
                         title: "{t(\"zoom-out\")}",
                         onclick: move |_| {
-                            let next = (*zoom.read() - 0.25_f32).max(0.25_f32);
-                            zoom.set(next);
+                            let s = (*zoom.read() / 1.4_f32).clamp(0.1, 10.0);
+                            zoom.set(s);
                         },
                         "－"
                     }
@@ -155,8 +175,8 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                         class: "poly-media-viewer-btn",
                         title: "{t(\"zoom-in\")}",
                         onclick: move |_| {
-                            let next = (*zoom.read() + 0.25_f32).min(5.0_f32);
-                            zoom.set(next);
+                            let s = (*zoom.read() * 1.4_f32).clamp(0.1, 10.0);
+                            zoom.set(s);
                         },
                         "＋"
                     }
@@ -191,7 +211,6 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                             }
                         }
                     }
-                    // Close is rightmost — near Electron window controls
                     button {
                         class: "poly-media-viewer-btn poly-media-viewer-btn--close",
                         title: "{t(\"action-close\")}",
@@ -209,16 +228,26 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                     onclick: move |e| {
                         e.stop_propagation();
                         let cur = *active_pos.read();
-                        if cur > 0 { active_pos.set(cur - 1); }
+                        if cur > 0 {
+                            active_pos.set(cur - 1);
+                            zoom.set(1.0); pan_x.set(0.0); pan_y.set(0.0);
+                        }
                     },
                     "‹"
                 }
             }
 
-            // — Stage: dark background clicks bubble up and dismiss the viewer.
-            //   The image itself stops propagation so clicking on it doesn't close. —
+            // — Stage —
+            // Clicking the dark letterbox area bubbles up to the overlay and closes.
+            // stop_propagation is on the <img> so the image itself doesn't close.
+            // The JS eval on this element also handles drag-end clicks via a
+            // `moved` flag to prevent accidental close after panning.
             div {
-                class: "poly-media-viewer-stage",
+                class: if is_zoomed {
+                    "poly-media-viewer-stage poly-media-viewer-stage--zoomed"
+                } else {
+                    "poly-media-viewer-stage"
+                },
                 img {
                     class: "poly-media-viewer-image",
                     style: "{image_style}",
@@ -236,7 +265,10 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                     onclick: move |e| {
                         e.stop_propagation();
                         let cur = *active_pos.read();
-                        if cur + 1 < total { active_pos.set(cur + 1); }
+                        if cur + 1 < total {
+                            active_pos.set(cur + 1);
+                            zoom.set(1.0); pan_x.set(0.0); pan_y.set(0.0);
+                        }
                     },
                     "›"
                 }
@@ -267,6 +299,7 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                                         onclick: move |e| {
                                             e.stop_propagation();
                                             active_pos.set(tp);
+                                            zoom.set(1.0); pan_x.set(0.0); pan_y.set(0.0);
                                         },
                                     }
                                 }
