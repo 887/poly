@@ -2,6 +2,27 @@
 
 > Last updated: 2026-03-28
 
+---
+
+## !! MANDATORY — READ FIRST, ALWAYS !!
+
+> Source: https://github.com/drona23/claude-token-efficient
+
+- Think before acting. Read existing files before writing code.
+- Be concise in output but thorough in reasoning.
+- Prefer editing over rewriting whole files.
+- Do not re-read files you have already read unless the file may have changed.
+- No sycophantic openers or closing fluff.
+- Keep solutions simple and direct. No over-engineering.
+- If unsure: say so. Never guess or invent file paths.
+- Read before writing. Understand the problem before coding.
+- No redundant file reads. Read each file once.
+- One focused coding pass. Avoid write-delete-rewrite cycles.
+- Test once, fix if needed, verify once. No unnecessary iterations.
+- Budget: 50 tool calls maximum. Work efficiently.
+
+---
+
 ## Project Overview
 
 **Poly** is a multi-account messenger client built with Rust, Dioxus 0.7.3, and WASM
