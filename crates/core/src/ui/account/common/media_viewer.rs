@@ -3,6 +3,10 @@
 //! Route-backed overlay used for message image attachments.
 //! Supports single-image and multi-image carousels with a thumbnail strip,
 //! left/right navigation, and keyboard arrow/Escape handling.
+//!
+//! Layout: Discord-style full-width topbar (author + time left, controls right,
+//! ✕ at far right near window controls). Clicking the dark background around
+//! the image dismisses; clicking the image itself does not.
 
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -24,23 +28,25 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
     let mut zoom = use_signal(|| 1.0_f32);
     let mut menu_open = use_signal(|| false);
 
-    // Collect all image attachments from this message (preserving their original index).
-    let image_attachments: Vec<(usize, Attachment)> = chat_data
-        .read()
-        .messages
-        .iter()
-        .find(|msg| msg.id == props.message_id)
-        .map(|msg| {
-            msg.attachments
+    // Collect image attachments + author info in a single message lookup.
+    let (image_attachments, author_name, ts_str): (Vec<(usize, Attachment)>, String, String) = {
+        let snapshot = chat_data.read();
+        if let Some(msg) = snapshot.messages.iter().find(|m| m.id == props.message_id) {
+            let images = msg.attachments
                 .iter()
                 .enumerate()
                 .filter(|(_, a)| a.content_type.starts_with("image/"))
                 .map(|(i, a)| (i, a.clone()))
-                .collect()
-        })
-        .unwrap_or_default();
+                .collect();
+            let name = msg.author.display_name.clone();
+            let ts = msg.timestamp.format("%d %b %Y %H:%M").to_string();
+            (images, name, ts)
+        } else {
+            (vec![], String::new(), String::new())
+        }
+    };
 
-    // Find the starting position within the image list from the route's attachment_index.
+    // Find starting position from the route's attachment_index.
     let start_pos = image_attachments
         .iter()
         .position(|(orig_idx, _)| *orig_idx == props.attachment_index)
@@ -48,7 +54,7 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
 
     let mut active_pos = use_signal(|| start_pos);
 
-    // Keyboard handler: Escape closes, ArrowLeft/ArrowRight navigate.
+    // Keyboard: Escape closes, ArrowLeft/ArrowRight navigate.
     #[cfg(target_arch = "wasm32")]
     {
         let img_count = image_attachments.len();
@@ -71,21 +77,14 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                 );
                 loop {
                     match eval.recv::<String>().await {
-                        Ok(msg) if msg == "escape" => {
-                            nav.go_back();
-                            break;
-                        }
+                        Ok(msg) if msg == "escape" => { nav.go_back(); break; }
                         Ok(msg) if msg == "prev" => {
                             let cur = *active_pos.read();
-                            if cur > 0 {
-                                active_pos.set(cur - 1);
-                            }
+                            if cur > 0 { active_pos.set(cur - 1); }
                         }
                         Ok(msg) if msg == "next" => {
                             let cur = *active_pos.read();
-                            if cur + 1 < img_count {
-                                active_pos.set(cur + 1);
-                            }
+                            if cur + 1 < img_count { active_pos.set(cur + 1); }
                         }
                         _ => break,
                     }
@@ -125,69 +124,79 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
         div {
             class: "poly-media-viewer-overlay",
             tabindex: "-1",
-            onclick: move |_| nav.go_back(),
+            onclick: move |_| nav.go_back(),  // Backdrop dismiss
 
-            // — Toolbar (top-right) —
+            // — Full-width top bar —
+            // Author info on the left, controls on the right.
+            // ✕ is the rightmost button so it sits near the window close control.
             div {
-                class: "poly-media-viewer-toolbar",
+                class: "poly-media-viewer-topbar",
                 onclick: move |e| e.stop_propagation(),
-                if total > 1 {
-                    span { class: "poly-media-viewer-count", "{pos + 1} / {total}" }
+
+                div { class: "poly-media-viewer-author",
+                    span { class: "poly-media-viewer-author-name", "{author_name}" }
+                    span { class: "poly-media-viewer-author-ts", "{ts_str}" }
                 }
-                button {
-                    class: "poly-media-viewer-btn",
-                    title: "{t(\"action-close\")}",
-                    onclick: move |_| nav.go_back(),
-                    "✕"
-                }
-                button {
-                    class: "poly-media-viewer-btn",
-                    title: "{t(\"zoom-out\")}",
-                    onclick: move |_| {
-                        let next = (*zoom.read() - 0.2_f32).max(0.6_f32);
-                        zoom.set(next);
-                    },
-                    "－"
-                }
-                button {
-                    class: "poly-media-viewer-btn",
-                    title: "{t(\"zoom-in\")}",
-                    onclick: move |_| {
-                        let next = (*zoom.read() + 0.2_f32).min(3.0_f32);
-                        zoom.set(next);
-                    },
-                    "＋"
-                }
-                div { class: "poly-media-viewer-menu-wrap",
+
+                div { class: "poly-media-viewer-controls",
+                    if total > 1 {
+                        span { class: "poly-media-viewer-count", "{pos + 1} / {total}" }
+                    }
                     button {
                         class: "poly-media-viewer-btn",
-                        title: "{t(\"user-profile-more-options\")}",
+                        title: "{t(\"zoom-out\")}",
                         onclick: move |_| {
-                            let was_open = *menu_open.read();
-                            menu_open.set(!was_open);
+                            let next = (*zoom.read() - 0.25_f32).max(0.25_f32);
+                            zoom.set(next);
                         },
-                        "···"
+                        "－"
                     }
-                    if *menu_open.read() {
-                        div {
-                            class: "poly-media-viewer-menu",
-                            a {
-                                class: "poly-media-viewer-menu-item",
-                                href: "{url}",
-                                target: "_blank",
-                                download: "{filename}",
-                                onclick: move |_| menu_open.set(false),
-                                "{t(\"action-download\")}"
-                            }
-                            a {
-                                class: "poly-media-viewer-menu-item",
-                                href: "{url}",
-                                target: "_blank",
-                                rel: "noopener noreferrer",
-                                onclick: move |_| menu_open.set(false),
-                                "{t(\"action-open-in-browser\")}"
+                    button {
+                        class: "poly-media-viewer-btn",
+                        title: "{t(\"zoom-in\")}",
+                        onclick: move |_| {
+                            let next = (*zoom.read() + 0.25_f32).min(5.0_f32);
+                            zoom.set(next);
+                        },
+                        "＋"
+                    }
+                    div { class: "poly-media-viewer-menu-wrap",
+                        button {
+                            class: "poly-media-viewer-btn",
+                            title: "{t(\"user-profile-more-options\")}",
+                            onclick: move |_| {
+                                let was = *menu_open.read();
+                                menu_open.set(!was);
+                            },
+                            "···"
+                        }
+                        if *menu_open.read() {
+                            div { class: "poly-media-viewer-menu",
+                                a {
+                                    class: "poly-media-viewer-menu-item",
+                                    href: "{url}",
+                                    target: "_blank",
+                                    download: "{filename}",
+                                    onclick: move |_| menu_open.set(false),
+                                    "{t(\"action-download\")}"
+                                }
+                                a {
+                                    class: "poly-media-viewer-menu-item",
+                                    href: "{url}",
+                                    target: "_blank",
+                                    rel: "noopener noreferrer",
+                                    onclick: move |_| menu_open.set(false),
+                                    "{t(\"action-open-in-browser\")}"
+                                }
                             }
                         }
+                    }
+                    // Close is rightmost — near Electron window controls
+                    button {
+                        class: "poly-media-viewer-btn poly-media-viewer-btn--close",
+                        title: "{t(\"action-close\")}",
+                        onclick: move |_| nav.go_back(),
+                        "✕"
                     }
                 }
             }
@@ -206,15 +215,16 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                 }
             }
 
-            // — Image stage —
+            // — Stage: dark background clicks bubble up and dismiss the viewer.
+            //   The image itself stops propagation so clicking on it doesn't close. —
             div {
                 class: "poly-media-viewer-stage",
-                onclick: move |e| e.stop_propagation(),
                 img {
                     class: "poly-media-viewer-image",
                     style: "{image_style}",
                     src: "{attachment.url}",
                     alt: "{attachment.filename}",
+                    onclick: move |e| e.stop_propagation(),
                 }
             }
 
@@ -247,7 +257,11 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                                 let is_active = tp == pos;
                                 rsx! {
                                     img {
-                                        class: if is_active { "poly-media-viewer-thumb poly-media-viewer-thumb--active" } else { "poly-media-viewer-thumb" },
+                                        class: if is_active {
+                                            "poly-media-viewer-thumb poly-media-viewer-thumb--active"
+                                        } else {
+                                            "poly-media-viewer-thumb"
+                                        },
                                         src: "{thumb_url}",
                                         alt: "{thumb_name}",
                                         onclick: move |e| {

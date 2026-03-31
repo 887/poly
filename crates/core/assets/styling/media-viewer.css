@@ -4,36 +4,87 @@
     position: fixed;
     inset: 0;
     z-index: 2100;
-    background: rgba(0, 0, 0, 0.88);
+    background: rgba(0, 0, 0, 0.92);
     display: flex;
     flex-direction: column;
-    align-items: stretch;
-    justify-content: stretch;
 }
 
-.poly-media-viewer-toolbar {
-    position: absolute;
-    top: 20px;
-    right: 20px;
+/* ---- Top bar ---- */
+
+.poly-media-viewer-topbar {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    padding: 0 12px 0 16px;
+    height: 52px;
+    flex-shrink: 0;
+    gap: 12px;
+    /* Subtle separator from stage */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.poly-media-viewer-author {
+    display: flex;
+    align-items: baseline;
     gap: 10px;
-    z-index: 2;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.poly-media-viewer-author-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.poly-media-viewer-author-ts {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+}
+
+.poly-media-viewer-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.poly-media-viewer-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 0 8px;
+    white-space: nowrap;
 }
 
 .poly-media-viewer-btn {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border: none;
-    border-radius: 12px;
-    background: rgba(24, 24, 28, 0.86);
-    color: #fff;
-    font-size: 18px;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 16px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
 .poly-media-viewer-btn:hover {
-    background: rgba(42, 42, 48, 0.96);
+    background: rgba(255, 255, 255, 0.10);
+    color: #fff;
+}
+
+/* Close button gets a slightly stronger hover since it's a destructive action */
+.poly-media-viewer-btn--close:hover {
+    background: rgba(237, 66, 69, 0.25);
+    color: #ed4245;
 }
 
 .poly-media-viewer-menu-wrap {
@@ -48,11 +99,12 @@
     padding: 8px;
     border-radius: 14px;
     border: 1px solid var(--border-primary);
-    background: rgba(24, 24, 28, 0.96);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    background: rgba(24, 24, 28, 0.97);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
     display: flex;
     flex-direction: column;
     gap: 4px;
+    z-index: 5;
 }
 
 .poly-media-viewer-menu-item {
@@ -62,11 +114,19 @@
     border-radius: 10px;
     color: var(--text-primary);
     text-decoration: none;
+    font-size: 14px;
 }
 
 .poly-media-viewer-menu-item:hover {
     background: rgba(255, 255, 255, 0.08);
 }
+
+/* ---- Stage ----
+   flex:1 so it fills the remaining height after the topbar.
+   Dark background area outside the image bubbles click events up to the
+   overlay, which calls nav.go_back() — this is the backdrop dismiss path.
+   The image itself has onclick stop_propagation to avoid accidental closes.
+*/
 
 .poly-media-viewer-stage {
     flex: 1;
@@ -74,42 +134,109 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 84px 32px 96px;
     overflow: hidden;
+    /* Horizontal padding reserves space for side nav arrows */
+    padding: 16px 88px 88px;
 }
 
+/* Image fills as much of the stage as possible while maintaining aspect ratio.
+   Using max-width/max-height (not width/height) so the element's bounding box
+   matches the actually-displayed pixels. This is critical: if we set
+   width:100% + height:100%, the invisible letterbox area is still part of the
+   <img> click target and stop_propagation swallows those clicks, preventing
+   backdrop dismiss. With max-width/max-height the letterbox space is outside
+   the element and clicks there bubble up to the overlay. */
 .poly-media-viewer-image {
-    max-width: min(92vw, 1400px);
-    max-height: calc(100vh - 180px);
-    border-radius: 18px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-    transition: transform 0.16s ease;
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    border-radius: 6px;
+    transition: transform 0.14s ease;
     transform-origin: center center;
 }
+
+/* ---- Nav arrows ---- */
+
+.poly-media-viewer-nav {
+    position: absolute;
+    /* Vertically centered within the overlay, offset below topbar visually */
+    top: calc(52px + (100% - 52px) / 2);
+    transform: translateY(-50%);
+    z-index: 3;
+    width: 52px;
+    height: 52px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 32px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.14s ease, opacity 0.14s ease;
+    opacity: 0.65;
+}
+
+.poly-media-viewer-nav:hover {
+    background: rgba(0, 0, 0, 0.82);
+    opacity: 1;
+}
+
+.poly-media-viewer-nav--prev { left: 20px; }
+.poly-media-viewer-nav--next { right: 20px; }
+
+/* ---- Footer: filename + thumbnail strip ---- */
 
 .poly-media-viewer-footer {
     position: absolute;
     left: 50%;
-    bottom: 24px;
+    bottom: 20px;
     transform: translateX(-50%);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 10px;
     max-width: min(80vw, 900px);
     text-align: center;
-    color: var(--text-primary);
 }
 
 .poly-media-viewer-filename {
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.70);
 }
 
-.poly-media-viewer-meta {
-    font-size: 12px;
-    color: var(--text-secondary);
+.poly-media-viewer-thumbnails {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
+
+.poly-media-viewer-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.14s ease, border-color 0.14s ease;
+}
+
+.poly-media-viewer-thumb:hover {
+    opacity: 0.80;
+}
+
+.poly-media-viewer-thumb--active {
+    border-color: var(--accent-primary, #5865f2);
+    opacity: 1;
+}
+
+/* ---- Empty state ---- */
 
 .poly-media-viewer-empty {
     margin: auto;
@@ -117,78 +244,4 @@
     border-radius: 18px;
     background: var(--bg-secondary);
     color: var(--text-primary);
-}
-
-/* ---- multi-image nav arrows ---- */
-
-.poly-media-viewer-nav {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 3;
-    width: 52px;
-    height: 52px;
-    border: none;
-    border-radius: 50%;
-    background: rgba(24, 24, 28, 0.80);
-    color: #fff;
-    font-size: 28px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.14s ease, opacity 0.14s ease;
-    opacity: 0.7;
-}
-
-.poly-media-viewer-nav:hover {
-    background: rgba(42, 42, 48, 0.96);
-    opacity: 1;
-}
-
-.poly-media-viewer-nav--prev { left: 20px; }
-.poly-media-viewer-nav--next { right: 20px; }
-
-/* ---- image count badge ---- */
-
-.poly-media-viewer-count {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    padding: 0 6px;
-    min-width: 36px;
-    text-align: center;
-}
-
-/* ---- thumbnail strip ---- */
-
-.poly-media-viewer-thumbnails {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 10px;
-    flex-wrap: wrap;
-    max-width: min(80vw, 900px);
-}
-
-.poly-media-viewer-thumb {
-    width: 52px;
-    height: 52px;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 2px solid transparent;
-    cursor: pointer;
-    opacity: 0.55;
-    transition: opacity 0.14s ease, border-color 0.14s ease;
-}
-
-.poly-media-viewer-thumb:hover {
-    opacity: 0.85;
-}
-
-.poly-media-viewer-thumb--active {
-    border-color: var(--accent-primary, #5865f2);
-    opacity: 1;
 }
