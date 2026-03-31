@@ -4,18 +4,6 @@
 > **Last Updated:** 2026-02-28
 
 
----
-
-## Priority 2 — Use Jujutsu (jj) Instead of Git
-
-- **Always use `jj` commands** for version control, never raw `git`
-- `jj status`, `jj diff`, `jj log`, `jj show` for inspection
-- `jj new`, `jj describe`, `jj commit` for creating changes
-- `jj git push` to push to remote
-- Only fall back to `git` if `jj` cannot accomplish the task
-
----
-
 ## Purpose
 
 Desktop entry point using the **Blitz** WGPU native renderer. This is Dioxus's experimental GPU-accelerated HTML/CSS renderer — no webview dependency.

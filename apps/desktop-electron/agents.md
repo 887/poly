@@ -4,18 +4,6 @@
 > **Last Updated:** 2026-03-28
 
 
----
-
-## Priority 2 — Use Jujutsu (jj) Instead of Git
-
-- **Always use `jj` commands** for version control, never raw `git`
-- `jj status`, `jj diff`, `jj log`, `jj show` for inspection
-- `jj new`, `jj describe`, `jj commit` for creating changes
-- `jj git push` to push to remote
-- Only fall back to `git` if `jj` cannot accomplish the task
-
----
-
 ## Purpose
 
 Desktop entry point wrapping the Dioxus web (WASM) build inside an **Electron** shell. For users who prefer the Electron ecosystem or need Electron-specific features.
