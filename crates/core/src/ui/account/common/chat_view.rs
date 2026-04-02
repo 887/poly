@@ -1552,7 +1552,12 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         if chat_snapshot.loading {
             return;
         }
-        if history_state.read().channel_id.as_deref() == Some(&active_channel_id) {
+        let is_channel_switch =
+            history_state.read().channel_id.as_deref() != Some(&active_channel_id);
+
+        if history_state.read().channel_id.as_deref() == Some(&active_channel_id)
+            && history_state.read().messages_loaded
+        {
             return;
         }
 
@@ -1560,10 +1565,12 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         // messages (user saw everything), mark it as read so the bold name and
         // server badge are cleared immediately rather than waiting for a backend
         // sync. This also clears mention badges on the channel / server.
-        if let Some(prev_channel_id) = history_state.read().channel_id.clone()
-            && history_state.read().unread_count == 0
-        {
-            mark_channel_as_read(&mut chat_data, &prev_channel_id);
+        if is_channel_switch {
+            if let Some(prev_channel_id) = history_state.read().channel_id.clone()
+                && history_state.read().unread_count == 0
+            {
+                mark_channel_as_read(&mut chat_data, &prev_channel_id);
+            }
         }
         let messages = chat_snapshot.messages.clone();
         let unread_count = current_channel_unread_count(
@@ -1571,9 +1578,10 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             chat_snapshot.current_channel.as_ref(),
             &chat_snapshot.dm_channels,
         );
+        let messages_loaded = !messages.is_empty();
         let mut next_history = ChatHistoryUiState {
             channel_id: Some(active_channel_id),
-            has_more_before: !messages.is_empty(),
+            has_more_before: messages_loaded,
             loading_before: false,
             has_more_after: false,
             loading_after: false,
@@ -1584,6 +1592,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             // Show the unread divider on channel open when there are unread messages.
             // The divider persists until the channel is switched (even after mark-as-read).
             unread_divider_visible: unread_count > 0,
+            messages_loaded,
         };
         recompute_history_spacers(&mut next_history, &messages);
         history_state.set(next_history);
@@ -2067,29 +2076,30 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
             }
 
             let history_snapshot = ctx.history_state.read().clone();
-            // column-reverse layout: scrollTop=0 = visual BOTTOM = newest messages.
-            // "top" (older content) is at HIGH scrollTop; "bottom" (newer) is at LOW scrollTop.
-            // dist_from_top = how far scrollTop is from the maximum (the oldest end).
-            let dist_from_top = (metrics.scroll_height - metrics.client_height - metrics.scroll_top)
-                .max(0.0);
+            // column-reverse layout: Chrome scrollTop is ≤ 0.
+            //   scrollTop = 0          → visual bottom (newest messages)
+            //   scrollTop = -maxScroll → visual top (oldest messages)
+            // dist_from_bottom = how far from newest end = -scrollTop  (always ≥ 0)
+            // dist_from_top    = how far from oldest end = maxScroll - dist_from_bottom
+            let dist_from_bottom = (-metrics.scroll_top).max(0.0);
+            let max_scroll = (metrics.scroll_height - metrics.client_height).max(0.0);
+            let dist_from_top = (max_scroll - dist_from_bottom).max(0.0);
             let top_spacer_boundary = history_snapshot.before_spacer_px.max(0.0);
             let bottom_spacer_boundary = history_snapshot.after_spacer_px.max(0.0);
 
             // "Scrolled from bottom" = user is not at the newest-message end.
-            // In column-reverse, scrollTop IS the distance from the visual bottom (newest).
-            let dist_from_bottom = metrics.scroll_top;
             let is_scrolled_from_bottom =
                 history_snapshot.has_more_after || dist_from_bottom > JUMP_TO_PRESENT_THRESHOLD_PX;
             if *ctx.scrolled_from_bottom.peek() != is_scrolled_from_bottom {
                 ctx.scrolled_from_bottom.set(is_scrolled_from_bottom);
             }
 
-            // near_top: approaching the older-content spacer (high scrollTop end).
+            // near_top: approaching the older-content spacer (dist_from_top is small).
             let near_top = history_snapshot.has_more_before
                 && dist_from_top <= top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
-            // near_bottom: approaching the newer-content spacer (low scrollTop end).
+            // near_bottom: approaching the newer-content spacer (dist_from_bottom is small).
             let near_bottom = history_snapshot.has_more_after
-                && metrics.scroll_top <= bottom_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+                && dist_from_bottom <= bottom_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
 
             if !near_top {
                 let top_rearm_threshold = if history_snapshot.before_spacer_px > 0.0 {
@@ -2097,7 +2107,6 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 } else {
                     MESSAGE_HISTORY_EDGE_REARM_PX
                 };
-                // Re-arm when user moves away from the top (dist_from_top increases).
                 ctx.top_edge_armed
                     .store(dist_from_top > top_rearm_threshold, Ordering::Relaxed);
             }
@@ -2108,9 +2117,8 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 } else {
                     MESSAGE_HISTORY_EDGE_REARM_PX
                 };
-                // Re-arm when user moves away from the bottom (scrollTop increases).
                 ctx.bottom_edge_armed
-                    .store(metrics.scroll_top > bottom_rearm_threshold, Ordering::Relaxed);
+                    .store(dist_from_bottom > bottom_rearm_threshold, Ordering::Relaxed);
             }
 
             if near_top
@@ -2124,8 +2132,6 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                     ctx.client_manager,
                     ctx.chat_data,
                     ctx.history_state,
-                    metrics.scroll_top,
-                    metrics.scroll_height,
                 )
                 .await;
             }
@@ -2141,8 +2147,6 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                     ctx.client_manager,
                     ctx.chat_data,
                     ctx.history_state,
-                    metrics.scroll_top,
-                    metrics.scroll_height,
                 )
                 .await;
             }
@@ -3237,10 +3241,6 @@ async fn load_older_messages(
     client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
-    // Scroll metrics captured BEFORE loading_before was set to true — this snapshot
-    // has no loading-indicator height contamination.
-    previous_scroll_top: f64,
-    _previous_scroll_height: f64,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
         history_state.write().loading_before = false;
@@ -3294,22 +3294,6 @@ async fn load_older_messages(
         return;
     }
 
-    let history_snapshot = history_state.read().clone();
-    let unread_marker_id = history_snapshot.unread_marker_message_id.clone();
-    let unread_count = history_snapshot.unread_count;
-
-    let prepended_height_px = {
-        let mut synthetic = older_messages.clone();
-        synthetic.extend(chat_data.read().messages.iter().cloned());
-        estimate_message_block_height(
-            &synthetic,
-            0,
-            older_messages.len(),
-            unread_marker_id.as_deref(),
-            unread_count,
-        )
-    };
-
     let has_more_before =
         u32::try_from(older_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
 
@@ -3326,12 +3310,11 @@ async fn load_older_messages(
         history.has_more_after = dropped_newer_messages || history.has_more_after;
         recompute_history_spacers(&mut history, &merged_messages);
     }
-    // Prefer exact DOM-anchor restoration so the same visible message stays pinned to the
-    // same pixel. Fall back to estimated delta math if no anchor row was available.
+    // column-reverse layout: prepending older messages at the visual top does not disturb
+    // scrollTop (browser measures from the visual bottom). No scroll correction needed.
+    // Anchor restoration is still used if available for precise pinning.
     if let Some((anchor_element_id, anchor_offset_px)) = anchor_snapshot {
         request_preserve_message_anchor(&anchor_element_id, anchor_offset_px);
-    } else {
-        request_preserve_scroll_position(previous_scroll_top, prepended_height_px);
     }
     history_state.write().loading_before = false;
 }
@@ -3341,9 +3324,6 @@ async fn load_newer_messages(
     client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
-    // Scroll metrics captured BEFORE loading_after was set to true.
-    previous_scroll_top: f64,
-    _previous_scroll_height: f64,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
         history_state.write().loading_after = false;
@@ -3425,24 +3405,6 @@ async fn load_newer_messages(
         return;
     }
 
-    let history_snapshot = history_state.read().clone();
-    let unread_marker_id = history_snapshot.unread_marker_message_id.clone();
-    let unread_count = history_snapshot.unread_count;
-
-    let trimmed_top_height_px = {
-        let existing_messages = chat_data.read().messages.clone();
-        let mut synthetic = existing_messages.clone();
-        synthetic.extend(newer_messages.iter().cloned());
-        let overflow = synthetic.len().saturating_sub(MAX_LOADED_MESSAGES);
-        estimate_message_block_height(
-            &synthetic,
-            0,
-            overflow,
-            unread_marker_id.as_deref(),
-            unread_count,
-        )
-    };
-
     let has_more_after = !reached_latest_message;
 
     {
@@ -3457,12 +3419,10 @@ async fn load_newer_messages(
         history.has_more_after = has_more_after;
         recompute_history_spacers(&mut history, &merged_messages);
     }
-    // Prefer exact DOM-anchor restoration so the same visible message stays pinned to the
-    // same pixel. Fall back to estimated delta math if no anchor row was available.
+    // column-reverse: trimming older messages from the top does not disturb scrollTop.
+    // Anchor restoration is still used for precise pinning when available.
     if let Some((anchor_element_id, anchor_offset_px)) = anchor_snapshot {
         request_preserve_message_anchor(&anchor_element_id, anchor_offset_px);
-    } else {
-        request_preserve_scroll_position_from_bottom(previous_scroll_top, trimmed_top_height_px);
     }
     history_state.write().loading_after = false;
 }
@@ -3511,10 +3471,12 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
     let total_bottom_spacer_px = bottom_history_spacer_px + bottom_virtual_spacer_px;
 
     rsx! {
-        if total_top_spacer_px > 0.0 {
+        // column-reverse: "after" spacer (newer unloaded content) must be FIRST in DOM
+        // so it appears at the visual bottom (scrollTop=0 end).
+        if total_bottom_spacer_px > 0.0 {
             div {
-                class: "message-history-spacer message-history-spacer-top",
-                style: "height: {total_top_spacer_px}px;",
+                class: "message-history-spacer message-history-spacer-bottom",
+                style: "height: {total_bottom_spacer_px}px;",
             }
         }
         for slot_idx in 0..MAX_LOADED_MESSAGES {
@@ -3550,10 +3512,12 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
                 }
             }
         }
-        if total_bottom_spacer_px > 0.0 {
+        // column-reverse: "before" spacer (older unloaded content) must be LAST in DOM
+        // so it appears at the visual top (high scrollTop end).
+        if total_top_spacer_px > 0.0 {
             div {
-                class: "message-history-spacer message-history-spacer-bottom",
-                style: "height: {total_bottom_spacer_px}px;",
+                class: "message-history-spacer message-history-spacer-top",
+                style: "height: {total_top_spacer_px}px;",
             }
         }
     }

@@ -30,14 +30,20 @@
   /**
    * Restore a previously remembered scroll position for channelId, or fall
    * back to the bottom if no position has been saved yet.
+   *
+   * Uses requestAnimationFrame so the assignment runs after Dioxus has applied
+   * its DOM patch for the newly-loaded messages — without RAF the eval fires
+   * before the render and the browser resets scrollTop when content changes.
    */
   window.polyRestoreScrollPosition = function (channelId) {
-    // column-reverse: scrollTop=0 = bottom (newest). Saved positions are still valid pixel offsets.
-    ++_scrollSeq;
-    var el = document.getElementById("message-list-scroll");
-    if (!el) return;
-    var saved = window.__polyMessageScrollPositions[channelId];
-    el.scrollTop = Number.isFinite(saved) ? saved : 0;
+    var seq = ++_scrollSeq;
+    requestAnimationFrame(function () {
+      if (_scrollSeq !== seq) return; // superseded by a newer call
+      var el = document.getElementById("message-list-scroll");
+      if (!el) return;
+      var saved = window.__polyMessageScrollPositions[channelId];
+      el.scrollTop = Number.isFinite(saved) ? saved : 0;
+    });
   };
 
   /**
@@ -52,20 +58,21 @@
   /**
    * After prepending/trimming messages, nudge scrollTop by deltaPx relative to
    * prevScrollTop so the same content stays under the user's eyes.
+   *
+   * column-reverse note: scrollTop ≤ 0. Prepending older content at the visual
+   * top does NOT shift the viewport (browser measures from the bottom), so no
+   * correction is needed. Trimming from the bottom (newer) also preserves
+   * relative position. We are a no-op here intentionally.
    */
-  window.polyPreserveScrollDelta = function (prevScrollTop, deltaPx) {
-    var seq = ++_posSeq;
-    requestAnimationFrame(function () {
-      if (_posSeq !== seq) return;
-      var el = document.getElementById("message-list-scroll");
-      if (!el) return;
-      el.scrollTop = Math.max(0, prevScrollTop + deltaPx);
-    });
+  window.polyPreserveScrollDelta = function (_prevScrollTop, _deltaPx) {
+    // No-op for column-reverse layout — browser naturally preserves position.
+    ++_posSeq;
   };
 
   /**
    * After a page swap, find anchorId and set scrollTop so the element sits at
    * exactly offsetPx from the top of the scroll container.
+   * column-reverse: scrollTop ≤ 0, so clamp with Math.min(0, ...).
    */
   window.polyPreserveMessageAnchor = function (anchorId, offsetPx) {
     var seq = ++_anchorSeq;
@@ -77,7 +84,7 @@
       var hostRect = host.getBoundingClientRect();
       var anchorRect = anchor.getBoundingClientRect();
       var currentOffset = anchorRect.top - hostRect.top;
-      host.scrollTop = Math.max(0, host.scrollTop + currentOffset - offsetPx);
+      host.scrollTop = Math.min(0, host.scrollTop + currentOffset - offsetPx);
     });
   };
 
@@ -120,6 +127,13 @@
       scrollEl.addEventListener(
         "scroll",
         function () {
+          // Auto-save scroll position for the current channel on every scroll event.
+          // This ensures the position is always up-to-date before a channel switch,
+          // even if the explicit remember call fires after the DOM has already re-rendered.
+          if (window.__polyCurrentChannelId) {
+            window.__polyMessageScrollPositions[window.__polyCurrentChannelId] =
+              scrollEl.scrollTop;
+          }
           if (!window.__polyScrollDebugEnabled) return;
           var now = performance.now();
           var sinceWheel = lastWheelTs > 0 ? (now - lastWheelTs).toFixed(1) : "n/a";

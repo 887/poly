@@ -40,6 +40,12 @@ pub struct ChatHistoryUiState {
     /// the channel as read (matching Discord behaviour — the line stays until the
     /// channel is switched, it just gets pushed up by new messages).
     pub unread_divider_visible: bool,
+    /// Whether this state was initialized with actual messages (not during a loading race).
+    ///
+    /// Set to `true` only when `use_history_state_effect` runs with non-empty messages.
+    /// Prevents the guard from treating a race-initialized state (empty messages at
+    /// init time) as a valid initialization, so the effect will re-run once messages arrive.
+    pub messages_loaded: bool,
 }
 
 /// Build the initial message query for a channel based on unread count.
@@ -144,13 +150,16 @@ pub fn request_scroll_to_bottom() {
 }
 
 /// Restore a remembered scroll position for a channel, or fall back to bottom.
+///
+/// Also sets `window.__polyCurrentChannelId` so the auto-save scroll listener
+/// can continuously track the position for this channel going forward.
 pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
     let Some(encoded_channel_id) = encoded_channel_id(channel_id) else {
         request_scroll_to_bottom();
         return;
     };
     document::eval(&format!(
-        "window.polyRestoreScrollPosition?.({encoded_channel_id})"
+        "window.__polyCurrentChannelId = {encoded_channel_id}; window.polyRestoreScrollPosition?.({encoded_channel_id});"
     ));
 }
 
