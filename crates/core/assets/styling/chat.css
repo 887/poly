@@ -240,9 +240,8 @@
     padding: 8px;
     border-radius: var(--radius-md);
     transition: background-color var(--transition-fast);
-    /* Layout containment: image load reflows stay inside the message row and
-       do not cascade to the entire scroll container, preventing scroll jank. */
-    contain: layout;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 72px;
 }
 
 .message:hover {

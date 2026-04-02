@@ -14,13 +14,19 @@
   var _posSeq = 0; // used by polyPreserveScrollDelta
   var _anchorSeq = 0; // used by polyPreserveMessageAnchor
 
-  /** Scroll the message list to the very bottom on the next frame. */
+  /** Scroll the message list to the very bottom on the next frame.
+   * Uses scrollIntoView on the last message element rather than scrollTop=scrollHeight
+   * because content-visibility:auto makes scrollHeight unreliable until off-screen
+   * rows have been rendered (they use estimated intrinsic sizes before that). */
   window.polyScrollToBottom = function () {
     var seq = ++_scrollSeq;
     requestAnimationFrame(function () {
       if (_scrollSeq !== seq) return;
       var el = document.getElementById("message-list-scroll");
-      if (el) el.scrollTop = el.scrollHeight;
+      if (!el) return;
+      var msgs = el.querySelectorAll('[id^="message-"]');
+      var last = msgs[msgs.length - 1];
+      if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
     });
   };
 
@@ -35,7 +41,13 @@
       var el = document.getElementById("message-list-scroll");
       if (!el) return;
       var saved = window.__polyMessageScrollPositions[channelId];
-      el.scrollTop = Number.isFinite(saved) ? saved : el.scrollHeight;
+      if (Number.isFinite(saved)) {
+        el.scrollTop = saved;
+      } else {
+        var msgs = el.querySelectorAll('[id^="message-"]');
+        var last = msgs[msgs.length - 1];
+        if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
+      }
     });
   };
 
