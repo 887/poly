@@ -144,14 +144,7 @@ pub fn from_wit_channel(c: wit::Channel) -> pc::Channel {
 
 /// Convert WIT `Attachment` → poly-client `Attachment`.
 pub fn from_wit_attachment(a: wit::Attachment) -> pc::Attachment {
-    pc::Attachment {
-        id: a.id,
-        filename: a.filename,
-        content_type: a.content_type,
-        url: a.url,
-        size: a.size,
-        upload_bytes: None,
-    }
+    pc::Attachment::remote(a.id, a.filename, a.content_type, a.url, a.size)
 }
 
 /// Convert WIT `MessageReplyPreview` → poly-client `MessageReplyPreview`.

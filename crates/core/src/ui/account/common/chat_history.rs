@@ -133,54 +133,14 @@ pub fn remember_message_list_scroll_position(channel_id: &str) {
     let Some(encoded_channel_id) = encoded_channel_id(channel_id) else {
         return;
     };
-
     document::eval(&format!(
-        r#"
-            window.__polyMessageScrollPositions ??= Object.create(null);
-            const el = document.getElementById('message-list-scroll');
-            if (el) {{
-                window.__polyMessageScrollPositions[{encoded_channel_id}] = el.scrollTop;
-            }}
-        "#,
-    ));
-}
-
-fn request_scroll_top(scroll_script: &str) {
-    document::eval(&format!(
-        r#"
-            window.__polyScrollRequestSeq = (window.__polyScrollRequestSeq ?? 0) + 1;
-            const seq = window.__polyScrollRequestSeq;
-            if (window.__polyScrollRafId) {{
-                cancelAnimationFrame(window.__polyScrollRafId);
-            }}
-            if (Array.isArray(window.__polyScrollTimeoutIds)) {{
-                for (const timeoutId of window.__polyScrollTimeoutIds) {{
-                    clearTimeout(timeoutId);
-                }}
-            }}
-            window.__polyScrollTimeoutIds = [];
-            const applyScroll = () => {{
-                if (window.__polyScrollRequestSeq !== seq) {{
-                    return;
-                }}
-                const el = document.getElementById('message-list-scroll');
-                if (el) {{
-                    {scroll_script}
-                }}
-            }};
-            window.__polyScrollRafId = requestAnimationFrame(() => {{
-                applyScroll();
-                window.__polyScrollTimeoutIds = [32, 90, 240, 480].map(
-                    (delay) => setTimeout(applyScroll, delay),
-                );
-            }});
-        "#,
+        "window.polyRememberScrollPosition?.({encoded_channel_id})"
     ));
 }
 
 /// Scroll the message list to the bottom after the next render frame.
 pub fn request_scroll_to_bottom() {
-    request_scroll_top("el.scrollTop = el.scrollHeight;");
+    document::eval("window.polyScrollToBottom?.()");
 }
 
 /// Restore a remembered scroll position for a channel, or fall back to bottom.
@@ -189,17 +149,8 @@ pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
         request_scroll_to_bottom();
         return;
     };
-
-    request_scroll_top(&format!(
-        r#"
-            window.__polyMessageScrollPositions ??= Object.create(null);
-            const saved = window.__polyMessageScrollPositions[{encoded_channel_id}];
-            if (Number.isFinite(saved)) {{
-                el.scrollTop = saved;
-            }} else {{
-                el.scrollTop = el.scrollHeight;
-            }}
-        "#,
+    document::eval(&format!(
+        "window.polyRestoreScrollPosition?.({encoded_channel_id})"
     ));
 }
 
@@ -211,18 +162,7 @@ pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
 /// inserted/removed height near the active edge.
 fn request_adjust_scroll_top_by(delta_px: f64, previous_scroll_top: f64) {
     document::eval(&format!(
-        r#"
-            const el = document.getElementById('message-list-scroll');
-            if (el) {{
-                const seq = (window.__polyPosRestoreSeq = (window.__polyPosRestoreSeq || 0) + 1);
-                const apply = () => {{
-                    if (window.__polyPosRestoreSeq !== seq || !el.isConnected) return;
-                    const nextTop = {previous_scroll_top} + ({delta_px});
-                    el.scrollTop = Math.max(0, nextTop);
-                }};
-                [0, 32, 90, 240].forEach(d => setTimeout(apply, d));
-            }}
-        "#,
+        "window.polyPreserveScrollDelta?.({previous_scroll_top}, {delta_px})"
     ));
 }
 
@@ -253,21 +193,7 @@ pub fn request_preserve_message_anchor(anchor_element_id: &str, offset_px: f64) 
     let Ok(encoded_anchor_id) = json_string(anchor_element_id) else {
         return;
     };
-
     document::eval(&format!(
-        r#"
-            const seq = (window.__polyAnchorRestoreSeq = (window.__polyAnchorRestoreSeq || 0) + 1);
-            const apply = () => {{
-                if (window.__polyAnchorRestoreSeq !== seq) return;
-                const host = document.getElementById('message-list-scroll');
-                const anchor = document.getElementById({encoded_anchor_id});
-                if (!host || !anchor || !host.isConnected || !anchor.isConnected) return;
-                const hostRect = host.getBoundingClientRect();
-                const anchorRect = anchor.getBoundingClientRect();
-                const currentOffset = anchorRect.top - hostRect.top;
-                host.scrollTop = Math.max(0, host.scrollTop + currentOffset - ({offset_px}));
-            }};
-            [0, 32, 90, 240].forEach(d => setTimeout(apply, d));
-        "#,
+        "window.polyPreserveMessageAnchor?.({encoded_anchor_id}, {offset_px})"
     ));
 }

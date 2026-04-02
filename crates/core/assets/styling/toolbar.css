@@ -436,7 +436,7 @@
     position: absolute;
     top: -8px;
     right: 16px;
-    display: flex;
+    display: none;
     gap: 4px;
     background: var(--bg-floating, var(--bg-secondary));
     border: 1px solid var(--border-color);
@@ -444,6 +444,14 @@
     padding: 2px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     z-index: 10;
+}
+
+.message:hover .message-actions {
+    display: flex;
+}
+
+.message-editing .message-actions {
+    display: none;
 }
 
 .msg-action-btn {

@@ -342,14 +342,15 @@ fn message_plain_text(content: &MessageContent) -> String {
 }
 
 fn pending_attachment_to_attachment(preview: &PendingAttachmentPreview) -> Attachment {
-    Attachment {
-        id: preview.id.clone(),
-        filename: preview.filename.clone(),
-        content_type: preview.content_type.clone(),
-        url: preview.preview_url.clone().unwrap_or_default(),
-        size: preview.size,
-        upload_bytes: Some(preview.upload_bytes.clone()),
-    }
+    let mut att = Attachment::remote(
+        preview.id.clone(),
+        preview.filename.clone(),
+        preview.content_type.clone(),
+        preview.preview_url.clone().unwrap_or_default(),
+        preview.size,
+    );
+    att.upload_bytes = Some(preview.upload_bytes.clone());
+    att
 }
 
 async fn build_attachment_previews(
@@ -892,7 +893,6 @@ struct ChatViewSignals {
     markdown_enabled: Signal<bool>,
     reaction_picker_msg: Signal<Option<String>>,
     drag_over: Signal<bool>,
-    hovered_msg: Signal<Option<String>>,
     editing_msg_id: Signal<Option<String>>,
     edit_draft: Signal<String>,
     msg_context_menu: Signal<Option<MsgContextMenu>>,
@@ -941,7 +941,6 @@ fn use_chat_view_signals() -> ChatViewSignals {
         markdown_enabled: use_signal(|| false),
         reaction_picker_msg: use_signal(|| None::<String>),
         drag_over: use_signal(|| false),
-        hovered_msg: use_signal(|| None::<String>),
         editing_msg_id: use_signal(|| None::<String>),
         edit_draft: use_signal(String::new),
         msg_context_menu: use_signal(|| None::<MsgContextMenu>),
@@ -1064,7 +1063,6 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         markdown_enabled: signals.markdown_enabled,
         reaction_picker_msg: signals.reaction_picker_msg,
         drag_over: signals.drag_over,
-        hovered_msg: signals.hovered_msg,
         editing_msg_id: signals.editing_msg_id,
         edit_draft: signals.edit_draft,
         msg_context_menu: signals.msg_context_menu,
@@ -1745,7 +1743,6 @@ struct ChatViewMarkupCtx {
     markdown_enabled: Signal<bool>,
     reaction_picker_msg: Signal<Option<String>>,
     drag_over: Signal<bool>,
-    hovered_msg: Signal<Option<String>>,
     editing_msg_id: Signal<Option<String>>,
     edit_draft: Signal<String>,
     msg_context_menu: Signal<Option<MsgContextMenu>>,
@@ -3634,10 +3631,7 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
     };
     let unread_divider_visible = ctx.history_state.read().unread_divider_visible;
     let unread_marker_id = ctx.unread_marker_id.clone();
-    let hovered_msg_signal = ctx.hovered_msg;
-    let hovered_msg_signal_leave = ctx.hovered_msg;
     let msg_context_menu_signal = ctx.msg_context_menu;
-    let is_hovered = ctx.hovered_msg.read().as_deref() == Some(&msg_id);
     let is_own = msg.author.id == ctx.self_user_id;
     let is_editing = ctx.editing_msg_id.read().as_deref() == Some(&msg_id);
     let context_menu_text = message_plain_text(&msg.content);
@@ -3658,15 +3652,9 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
         }
         div {
             id: "message-{msg_id}",
-            class: if is_grouped { "message message-grouped" } else { "message message-full" },
-            onmouseenter: {
-                let mut hovered_msg = hovered_msg_signal;
-                let mid = msg_id.clone();
-                move |_| hovered_msg.set(Some(mid.clone()))
-            },
-            onmouseleave: {
-                let mut hovered_msg = hovered_msg_signal_leave;
-                move |_| hovered_msg.set(None)
+            class: {
+                let base = if is_grouped { "message message-grouped" } else { "message message-full" };
+                if is_editing { format!("{base} message-editing") } else { base.to_string() }
             },
             oncontextmenu: {
                 let mut msg_context_menu = msg_context_menu_signal;
@@ -3688,15 +3676,7 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
                 }
             },
 
-            {
-                render_message_actions(
-                    ctx.clone(),
-                    msg_for_actions,
-                    is_hovered,
-                    is_editing,
-                    is_own,
-                )
-            }
+            {render_message_actions(ctx.clone(), msg_for_actions, is_own)}
             if is_grouped {
                 {render_grouped_message_body(ctx, msg_for_grouped, time_str, is_editing)}
             } else {
@@ -3709,13 +3689,8 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
 fn render_message_actions(
     ctx: ChatViewMarkupCtx,
     msg: Message,
-    is_hovered: bool,
-    is_editing: bool,
     is_own: bool,
 ) -> Element {
-    if !is_hovered || is_editing {
-        return rsx! {};
-    }
 
     let mut reaction_picker_msg = ctx.reaction_picker_msg;
     let mut edit_draft = ctx.edit_draft;
@@ -5186,7 +5161,11 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
                                         });
                                     }
                                 },
-                                img { src: "{url}", alt: "{filename}", loading: "lazy" }
+                                img {
+                                    src: "{url}",
+                                    alt: "{filename}",
+                                    loading: "lazy",
+                                }
                                 div { class: "attachment-info",
                                     span { class: "attachment-name", "{filename}" }
                                     span { class: "attachment-size", "— {size_str}" }

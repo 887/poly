@@ -27,6 +27,7 @@ const MOBILE_DRAWER_RUNTIME_JS: Asset = asset!("assets/scripts/mobile_drawer_run
 const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
 const MOBILE_RIGHT_WING_CLOSE_JS: &str = "window.__polySetMobileRightWingOpen?.(false);";
 const DRAG_BRIDGE_RUNTIME_JS: Asset = asset!("assets/scripts/drag_bridge_runtime.js", AssetOptions::js());
+const SCROLL_RUNTIME_JS: Asset = asset!("assets/scripts/scroll_runtime.js", AssetOptions::js());
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum BrowserRuntime {
@@ -52,6 +53,9 @@ fn init_mobile_drawer_runtime() {
         BrowserRuntime::WasmDom => {
             spawn(async move {
                 let _ = crate::ui::load_js_asset(MOBILE_DRAWER_RUNTIME_JS).await;
+            });
+            spawn(async move {
+                let _ = crate::ui::load_js_asset(SCROLL_RUNTIME_JS).await;
             });
         }
         #[cfg(not(target_arch = "wasm32"))]

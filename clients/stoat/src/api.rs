@@ -849,14 +849,13 @@ impl StoatFile {
     pub fn into_poly_attachment(self, autumn_base_url: Option<&str>) -> Option<Attachment> {
         let url = self.download_url(autumn_base_url)?;
         let id = self.id.clone();
-        Some(Attachment {
+        Some(Attachment::remote(
             id,
-            filename: self.filename?,
-            content_type: self.content_type?,
+            self.filename?,
+            self.content_type?,
             url,
-            size: self.size?,
-            upload_bytes: None,
-        })
+            self.size?,
+        ))
     }
 }
 
