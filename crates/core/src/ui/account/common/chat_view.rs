@@ -2067,26 +2067,29 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
             }
 
             let history_snapshot = ctx.history_state.read().clone();
-            let viewport_bottom = metrics.scroll_top + metrics.client_height;
+            // column-reverse layout: scrollTop=0 = visual BOTTOM = newest messages.
+            // "top" (older content) is at HIGH scrollTop; "bottom" (newer) is at LOW scrollTop.
+            // dist_from_top = how far scrollTop is from the maximum (the oldest end).
+            let dist_from_top = (metrics.scroll_height - metrics.client_height - metrics.scroll_top)
+                .max(0.0);
             let top_spacer_boundary = history_snapshot.before_spacer_px.max(0.0);
-            let bottom_spacer_boundary =
-                (metrics.scroll_height - history_snapshot.after_spacer_px).max(0.0);
+            let bottom_spacer_boundary = history_snapshot.after_spacer_px.max(0.0);
 
-            // Update "scrolled from bottom" signal for the Jump to Present button.
-            // The user is considered "scrolled up" when:
-            //  - there are newer unloaded messages (has_more_after), OR
-            //  - they are more than JUMP_TO_PRESENT_THRESHOLD_PX from the live tail.
-            let dist_from_bottom = metrics.scroll_height - viewport_bottom;
+            // "Scrolled from bottom" = user is not at the newest-message end.
+            // In column-reverse, scrollTop IS the distance from the visual bottom (newest).
+            let dist_from_bottom = metrics.scroll_top;
             let is_scrolled_from_bottom =
                 history_snapshot.has_more_after || dist_from_bottom > JUMP_TO_PRESENT_THRESHOLD_PX;
             if *ctx.scrolled_from_bottom.peek() != is_scrolled_from_bottom {
                 ctx.scrolled_from_bottom.set(is_scrolled_from_bottom);
             }
 
+            // near_top: approaching the older-content spacer (high scrollTop end).
             let near_top = history_snapshot.has_more_before
-                && metrics.scroll_top <= top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+                && dist_from_top <= top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+            // near_bottom: approaching the newer-content spacer (low scrollTop end).
             let near_bottom = history_snapshot.has_more_after
-                && viewport_bottom >= bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
+                && metrics.scroll_top <= bottom_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
 
             if !near_top {
                 let top_rearm_threshold = if history_snapshot.before_spacer_px > 0.0 {
@@ -2094,18 +2097,20 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 } else {
                     MESSAGE_HISTORY_EDGE_REARM_PX
                 };
+                // Re-arm when user moves away from the top (dist_from_top increases).
                 ctx.top_edge_armed
-                    .store(metrics.scroll_top > top_rearm_threshold, Ordering::Relaxed);
+                    .store(dist_from_top > top_rearm_threshold, Ordering::Relaxed);
             }
 
             if !near_bottom {
                 let bottom_rearm_threshold = if history_snapshot.after_spacer_px > 0.0 {
-                    bottom_spacer_boundary - MESSAGE_HISTORY_EDGE_THRESHOLD_PX
+                    bottom_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX
                 } else {
-                    metrics.scroll_height - MESSAGE_HISTORY_EDGE_REARM_PX
+                    MESSAGE_HISTORY_EDGE_REARM_PX
                 };
+                // Re-arm when user moves away from the bottom (scrollTop increases).
                 ctx.bottom_edge_armed
-                    .store(viewport_bottom < bottom_rearm_threshold, Ordering::Relaxed);
+                    .store(metrics.scroll_top > bottom_rearm_threshold, Ordering::Relaxed);
             }
 
             if near_top
@@ -3199,14 +3204,13 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
                     });
                 });
             },
-            {render_message_list_loading_overlays(ctx.clone())}
-            {render_unread_banner(ctx.clone())}
+            // column-reverse: content must be FIRST child so it sits at scrollTop=0 (visual bottom).
+            // Overlays and banner come AFTER so they appear at the visual top when scrolled up.
             div { class: if is_loading_history { "message-list-content message-list-content-swapping" } else { "message-list-content" },
-                if !ctx.messages.is_empty() {
-                    div { class: "message-list-spacer" }
-                }
                 {render_message_list_content(ctx.clone())}
             }
+            {render_unread_banner(ctx.clone())}
+            {render_message_list_loading_overlays(ctx.clone())}
         }
     }
 }

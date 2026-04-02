@@ -59,7 +59,10 @@
     position: relative;
     padding: 16px;
     display: flex;
-    flex-direction: column;
+    /* column-reverse: scrollTop=0 is pinned to the visual BOTTOM (newest messages).
+       The first DOM child (.message-list-content) appears at the visual bottom at scrollTop=0.
+       Scrolling up (increasing scrollTop) reveals older messages. No JS needed for scroll-to-bottom. */
+    flex-direction: column-reverse;
     gap: 4px;
 }
 
@@ -73,23 +76,8 @@
 .message-list-content {
     display: flex;
     flex-direction: column;
-    /* min-height: 100% makes this div at least as tall as the scroll container
-       so that .message-list-spacer has room to grow and push messages to the
-       bottom when there are only a few. When there are many messages the div
-       grows beyond 100% and overflows downward — the scroll container then
-       scrolls normally.
-       NOTE: do NOT use justify-content: flex-end here — that causes overflow
-       to go upward (negative y) making the content unreachable by scrolling. */
-    min-height: 100%;
-}
-
-/* Flex spacer — sits before the messages inside .message-list-content.
-   When the messages are shorter than the scroll container the spacer grows
-   to fill the free space and pushes the messages to the bottom (Discord-style
-   anchoring). When the messages overflow the container the spacer collapses
-   to zero and the overflow goes downward, keeping normal scroll behaviour. */
-.message-list-spacer {
-    flex: 1;
+    /* column-reverse on the parent (.message-list) anchors this div to the visual bottom,
+       so min-height and the old flex spacer are no longer needed. */
 }
 
 .message-list-content-swapping {

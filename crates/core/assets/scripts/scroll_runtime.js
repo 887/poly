@@ -1,7 +1,7 @@
 // Scroll-restoration runtime for Poly chat.
 // Defines all window.poly* scroll helpers.
-// Rules: no setTimeout. Use double-RAF when scrolling after a Dioxus signal write
-// so RAF1 lets Dioxus commit its render before RAF2 applies the scroll.
+// Rules: no setTimeout. scrollTop=0 is always the newest-message end (column-reverse layout),
+// so scroll-to-bottom is a synchronous assignment — no RAF timing race possible.
 (function () {
   if (window.__polyScrollRuntimeInit) return;
   window.__polyScrollRuntimeInit = true;
@@ -20,18 +20,11 @@
    * because content-visibility:auto makes scrollHeight unreliable until off-screen
    * rows have been rendered (they use estimated intrinsic sizes before that). */
   window.polyScrollToBottom = function () {
-    var seq = ++_scrollSeq;
-    // Double-RAF: RAF1 lets Dioxus commit its render, RAF2 scrolls after layout.
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        if (_scrollSeq !== seq) return;
-        var el = document.getElementById("message-list-scroll");
-        if (!el) return;
-        var msgs = el.querySelectorAll('[id^="message-"]');
-        var last = msgs[msgs.length - 1];
-        if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
-      });
-    });
+    // column-reverse: scrollTop=0 is always the bottom (newest messages).
+    // No RAF needed — this is valid even before Dioxus renders new messages.
+    ++_scrollSeq;
+    var el = document.getElementById("message-list-scroll");
+    if (el) el.scrollTop = 0;
   };
 
   /**
@@ -39,29 +32,12 @@
    * back to the bottom if no position has been saved yet.
    */
   window.polyRestoreScrollPosition = function (channelId) {
-    var seq = ++_scrollSeq;
+    // column-reverse: scrollTop=0 = bottom (newest). Saved positions are still valid pixel offsets.
+    ++_scrollSeq;
+    var el = document.getElementById("message-list-scroll");
+    if (!el) return;
     var saved = window.__polyMessageScrollPositions[channelId];
-    if (Number.isFinite(saved)) {
-      // Saved position: single RAF is fine — no new messages were injected.
-      requestAnimationFrame(function () {
-        if (_scrollSeq !== seq) return;
-        var el = document.getElementById("message-list-scroll");
-        if (!el) return;
-        el.scrollTop = saved;
-      });
-    } else {
-      // No saved position → fall back to bottom. Double-RAF so Dioxus renders first.
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          if (_scrollSeq !== seq) return;
-          var el = document.getElementById("message-list-scroll");
-          if (!el) return;
-          var msgs = el.querySelectorAll('[id^="message-"]');
-          var last = msgs[msgs.length - 1];
-          if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
-        });
-      });
-    }
+    el.scrollTop = Number.isFinite(saved) ? saved : 0;
   };
 
   /**
