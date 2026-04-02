@@ -1,6 +1,7 @@
 // Scroll-restoration runtime for Poly chat.
 // Defines all window.poly* scroll helpers.
-// Rules: no setTimeout — single requestAnimationFrame per call.
+// Rules: no setTimeout. Use double-RAF when scrolling after a Dioxus signal write
+// so RAF1 lets Dioxus commit its render before RAF2 applies the scroll.
 (function () {
   if (window.__polyScrollRuntimeInit) return;
   window.__polyScrollRuntimeInit = true;
@@ -20,13 +21,16 @@
    * rows have been rendered (they use estimated intrinsic sizes before that). */
   window.polyScrollToBottom = function () {
     var seq = ++_scrollSeq;
+    // Double-RAF: RAF1 lets Dioxus commit its render, RAF2 scrolls after layout.
     requestAnimationFrame(function () {
-      if (_scrollSeq !== seq) return;
-      var el = document.getElementById("message-list-scroll");
-      if (!el) return;
-      var msgs = el.querySelectorAll('[id^="message-"]');
-      var last = msgs[msgs.length - 1];
-      if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
+      requestAnimationFrame(function () {
+        if (_scrollSeq !== seq) return;
+        var el = document.getElementById("message-list-scroll");
+        if (!el) return;
+        var msgs = el.querySelectorAll('[id^="message-"]');
+        var last = msgs[msgs.length - 1];
+        if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
+      });
     });
   };
 
@@ -36,19 +40,28 @@
    */
   window.polyRestoreScrollPosition = function (channelId) {
     var seq = ++_scrollSeq;
-    requestAnimationFrame(function () {
-      if (_scrollSeq !== seq) return;
-      var el = document.getElementById("message-list-scroll");
-      if (!el) return;
-      var saved = window.__polyMessageScrollPositions[channelId];
-      if (Number.isFinite(saved)) {
+    var saved = window.__polyMessageScrollPositions[channelId];
+    if (Number.isFinite(saved)) {
+      // Saved position: single RAF is fine — no new messages were injected.
+      requestAnimationFrame(function () {
+        if (_scrollSeq !== seq) return;
+        var el = document.getElementById("message-list-scroll");
+        if (!el) return;
         el.scrollTop = saved;
-      } else {
-        var msgs = el.querySelectorAll('[id^="message-"]');
-        var last = msgs[msgs.length - 1];
-        if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
-      }
-    });
+      });
+    } else {
+      // No saved position → fall back to bottom. Double-RAF so Dioxus renders first.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (_scrollSeq !== seq) return;
+          var el = document.getElementById("message-list-scroll");
+          if (!el) return;
+          var msgs = el.querySelectorAll('[id^="message-"]');
+          var last = msgs[msgs.length - 1];
+          if (last) { last.scrollIntoView({ block: "end" }); } else { el.scrollTop = el.scrollHeight; }
+        });
+      });
+    }
   };
 
   /**
