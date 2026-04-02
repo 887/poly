@@ -11,8 +11,8 @@
 
 use super::super::super::routes::Route;
 use super::chat_history::{
-    initial_message_query, remember_message_list_scroll_position,
-    request_restore_scroll_position_or_bottom,
+    initial_message_query, read_channel_view_anchor, remember_message_list_scroll_position,
+    request_restore_scroll_position_or_bottom, request_restore_to_anchor,
 };
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
@@ -89,13 +89,26 @@ async fn load_channel_data(
             }
         }
         _ => {
-            // Text channel — load messages and members
-            if let Ok(messages) = guard
-                .get_messages(&channel_id, initial_message_query(unread_count))
-                .await
-            {
+            // Text channel — load messages and members.
+            // If a scrollend-saved anchor exists for this channel, load around that
+            // message so the user returns to approximately where they were reading.
+            let anchor = read_channel_view_anchor(&channel_id).await;
+            let query = if let Some((_, ref msg_id, _)) = anchor {
+                poly_client::MessageQuery {
+                    around: Some(msg_id.clone()),
+                    limit: Some(initial_message_query(unread_count).limit.unwrap_or(36)),
+                    ..Default::default()
+                }
+            } else {
+                initial_message_query(unread_count)
+            };
+            if let Ok(messages) = guard.get_messages(&channel_id, query).await {
                 chat_data.write().messages = messages;
-                request_restore_scroll_position_or_bottom(&channel_id);
+                if let Some((ref element_id, _, offset_px)) = anchor {
+                    request_restore_to_anchor(&channel_id, element_id, offset_px);
+                } else {
+                    request_restore_scroll_position_or_bottom(&channel_id);
+                }
             }
             if let Ok(members) = guard.get_channel_members(&channel_id).await {
                 chat_data.write().members = members;

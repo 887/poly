@@ -124,6 +124,37 @@
     }, 500);
 
     function attachScrollTimers(scrollEl) {
+      // On scrollend: save the first visible message as the view anchor for this channel.
+      // Used to reload around the right message when switching back to a scrolled-up channel.
+      scrollEl.addEventListener(
+        "scrollend",
+        function () {
+          if (!window.__polyCurrentChannelId) return;
+          var channelId = window.__polyCurrentChannelId;
+          var hostRect = scrollEl.getBoundingClientRect();
+          var rows = scrollEl.querySelectorAll('[id^="message-"]');
+          var anchorEl = null;
+          for (var i = 0; i < rows.length; i++) {
+            var rect = rows[i].getBoundingClientRect();
+            if (rect.bottom > hostRect.top + 1 && rect.top < hostRect.bottom) {
+              anchorEl = rows[i];
+              break;
+            }
+          }
+          if (anchorEl) {
+            if (!window.__polyChannelAnchors) window.__polyChannelAnchors = Object.create(null);
+            var offset = anchorEl.getBoundingClientRect().top - hostRect.top;
+            window.__polyChannelAnchors[channelId] = {
+              elementId: anchorEl.id,
+              // Strip "message-" prefix to get the raw message ID for MessageQuery.around
+              messageId: anchorEl.id.replace(/^message-/, ""),
+              offset: offset,
+            };
+          }
+        },
+        { passive: true }
+      );
+
       scrollEl.addEventListener(
         "scroll",
         function () {

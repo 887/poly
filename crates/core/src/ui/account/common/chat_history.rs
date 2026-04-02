@@ -163,6 +163,49 @@ pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
     ));
 }
 
+/// Read the JS-side scrollend-saved view anchor for a channel.
+///
+/// Returns `(element_id, message_id, offset_px)` where:
+/// - `element_id` is the DOM element ID (e.g. `"message-msg2-general-524"`) for `polyPreserveMessageAnchor`
+/// - `message_id` is the raw message ID (e.g. `"msg2-general-524"`) for `MessageQuery::around`
+/// - `offset_px` is pixels from the scroll container top (may be negative for partially-scrolled-off elements)
+pub async fn read_channel_view_anchor(channel_id: &str) -> Option<(String, String, f64)> {
+    let Some(encoded) = encoded_channel_id(channel_id) else {
+        return None;
+    };
+    let mut eval = document::eval(&format!(
+        r#"
+        const a = (window.__polyChannelAnchors || {{}})[{encoded}];
+        dioxus.send(a ? `${{a.elementId}}|${{a.messageId}}|${{a.offset}}` : '');
+        "#
+    ));
+    let Ok(raw) = eval.recv::<String>().await else {
+        return None;
+    };
+    if raw.is_empty() {
+        return None;
+    }
+    let mut parts = raw.splitn(3, '|');
+    let element_id = parts.next()?.to_string();
+    let message_id = parts.next()?.to_string();
+    let offset = parts.next()?.parse::<f64>().ok()?;
+    Some((element_id, message_id, offset))
+}
+
+/// Restore the viewport so that `element_id` appears at `offset_px` from the scroll container top.
+///
+/// Also sets `__polyCurrentChannelId` to activate auto-save tracking.
+/// Wraps `polyPreserveMessageAnchor` which is already RAF-deferred.
+pub fn request_restore_to_anchor(channel_id: &str, element_id: &str, offset_px: f64) {
+    let Some(encoded_channel_id) = encoded_channel_id(channel_id) else {
+        return;
+    };
+    let msg_json = json_string(element_id).unwrap_or_default();
+    document::eval(&format!(
+        "window.__polyCurrentChannelId = {encoded_channel_id}; window.polyPreserveMessageAnchor?.({msg_json}, {offset_px});"
+    ));
+}
+
 /// Adjust the message-list scrollTop by an explicit pixel delta after the next render.
 ///
 /// This is used for fixed-window message swapping where the DOM can both prepend and
