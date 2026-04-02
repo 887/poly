@@ -149,6 +149,12 @@ pub fn request_scroll_to_bottom() {
     document::eval("window.polyScrollToBottom?.()");
 }
 
+/// Scroll to the bottom deferred via RAF — use this after async message loads
+/// so the assignment runs after Dioxus has patched the DOM with new messages.
+pub fn request_scroll_to_bottom_deferred() {
+    document::eval("requestAnimationFrame(function(){var el=document.getElementById('message-list-scroll');if(el)el.scrollTop=0;});");
+}
+
 /// Restore a remembered scroll position for a channel, or fall back to bottom.
 ///
 /// Also sets `window.__polyCurrentChannelId` so the auto-save scroll listener

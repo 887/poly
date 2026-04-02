@@ -16,7 +16,7 @@ use super::chat_history::{
     ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE, read_message_list_anchor,
     remember_message_list_scroll_position, request_preserve_message_anchor,
     request_preserve_scroll_position, request_preserve_scroll_position_from_bottom,
-    request_scroll_to_bottom, unread_marker_message_id,
+    request_scroll_to_bottom, request_scroll_to_bottom_deferred, unread_marker_message_id,
 };
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use super::dm_user_sidebar::DmUserSidebar;
@@ -3539,6 +3539,10 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
 
     let new_count = *ctx.new_messages_while_scrolled_up.read();
     let mut new_messages_while_scrolled_up = ctx.new_messages_while_scrolled_up;
+    let app_state = ctx.app_state;
+    let client_manager = ctx.client_manager;
+    let chat_data = ctx.chat_data;
+    let mut history_state = ctx.history_state;
 
     rsx! {
         div { class: "chat-jump-to-present-wrap",
@@ -3546,7 +3550,16 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
                 class: "chat-jump-to-present",
                 onclick: move |_| {
                     new_messages_while_scrolled_up.set(0);
-                    request_scroll_to_bottom();
+                    if history_state.read().has_more_after && !history_state.read().loading_after {
+                        history_state.write().loading_after = true;
+                        spawn(async move {
+                            load_newer_messages(app_state, client_manager, chat_data, history_state).await;
+                            // RAF-deferred so it runs after Dioxus applies the new messages to the DOM.
+                            request_scroll_to_bottom_deferred();
+                        });
+                    } else {
+                        request_scroll_to_bottom();
+                    }
                 },
                 if new_count > 0 {
                     span { class: "chat-jump-to-present-badge", "{new_count}" }
