@@ -3552,10 +3552,11 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
                     span { class: "chat-jump-to-present-badge", "{new_count}" }
                 }
                 span { class: "chat-jump-to-present-arrow", "↓" }
-                if has_more_after {
-                    "{t(\"chat-viewing-older-messages\")}"
-                } else {
+                span { class: "chat-jump-to-present-label",
                     "{t(\"chat-jump-to-present\")}"
+                    if has_more_after {
+                        span { class: "chat-jump-to-present-subtitle", "{t(\"chat-viewing-older-messages\")}" }
+                    }
                 }
             }
         }
