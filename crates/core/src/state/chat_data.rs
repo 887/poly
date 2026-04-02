@@ -149,6 +149,11 @@ pub struct ChatData {
     pub content_policy: ContentPolicy,
     /// Users blocked by the currently active account (from all backends).
     pub blocked_users: Vec<BlockedUser>,
+    /// Set when the most recent channel message load used `MessageQuery::around`
+    /// (anchor restore). Tells `use_history_state_effect` to set `has_more_after = true`
+    /// so the bottom sentinel and "Jump to Present" will chain-load newer messages.
+    /// Reset to `false` after `use_history_state_effect` consumes it.
+    pub messages_loaded_via_anchor: bool,
 }
 
 /// Format a file size in human-readable form.

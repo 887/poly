@@ -103,7 +103,10 @@ async fn load_channel_data(
                 initial_message_query(unread_count)
             };
             if let Ok(messages) = guard.get_messages(&channel_id, query).await {
-                chat_data.write().messages = messages;
+                let mut data = chat_data.write();
+                data.messages = messages;
+                data.messages_loaded_via_anchor = anchor.is_some();
+                drop(data);
                 if let Some((ref element_id, _, offset_px)) = anchor {
                     request_restore_to_anchor(&channel_id, element_id, offset_px);
                 } else {

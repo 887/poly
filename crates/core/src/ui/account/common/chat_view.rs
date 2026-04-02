@@ -1579,11 +1579,12 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             &chat_snapshot.dm_channels,
         );
         let messages_loaded = !messages.is_empty();
+        let has_more_after = messages_loaded && chat_snapshot.messages_loaded_via_anchor;
         let mut next_history = ChatHistoryUiState {
             channel_id: Some(active_channel_id),
             has_more_before: messages_loaded,
             loading_before: false,
-            has_more_after: false,
+            has_more_after,
             loading_after: false,
             before_spacer_px: 0.0,
             after_spacer_px: 0.0,
