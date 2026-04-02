@@ -240,12 +240,9 @@
     padding: 8px;
     border-radius: var(--radius-md);
     transition: background-color var(--transition-fast);
-    /* Skip layout/paint for off-screen rows — browser only processes visible
-       messages during scroll and resize. contain-intrinsic-size provides the
-       estimated height so the scrollbar stays accurate. `auto` lets the browser
-       remember each row's last rendered size instead of using the fallback. */
-    content-visibility: auto;
-    contain-intrinsic-size: auto 72px;
+    /* Layout containment: image load reflows stay inside the message row and
+       do not cascade to the entire scroll container, preventing scroll jank. */
+    contain: layout;
 }
 
 .message:hover {
