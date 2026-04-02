@@ -1542,6 +1542,8 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
     let mut chat_data = signals.chat_data;
     let mut history_state = signals.history_state;
+    let mut scrolled_from_bottom = signals.scrolled_from_bottom;
+    let mut new_messages_while_scrolled_up = signals.new_messages_while_scrolled_up;
 
     use_effect(move || {
         let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
@@ -1571,6 +1573,8 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             {
                 mark_channel_as_read(&mut chat_data, &prev_channel_id);
             }
+            scrolled_from_bottom.set(false);
+            new_messages_while_scrolled_up.set(0);
         }
         let messages = chat_snapshot.messages.clone();
         let unread_count = current_channel_unread_count(
