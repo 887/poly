@@ -1206,6 +1206,8 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
 #[cfg(target_arch = "wasm32")]
 fn use_mobile_layout_resize_rerender_effect(mut mobile_layout_resize_tick: Signal<u64>) {
     use_effect(move || {
+        use std::cell::Cell;
+        use std::rc::Rc;
         use wasm_bindgen::JsCast;
         use wasm_bindgen::closure::Closure;
 
@@ -1213,10 +1215,27 @@ fn use_mobile_layout_resize_rerender_effect(mut mobile_layout_resize_tick: Signa
             return;
         };
 
+        // RAF-throttle: at most one re-render per animation frame regardless of
+        // how many resize events fire (browsers fire resize at ~60 Hz).
+        let raf_pending = Rc::new(Cell::new(false));
+
         let closure = Closure::wrap(Box::new(move |_evt: web_sys::Event| {
-            if let Ok(mut tick) = mobile_layout_resize_tick.try_write() {
-                *tick = tick.wrapping_add(1);
+            if raf_pending.get() {
+                return;
             }
+            raf_pending.set(true);
+            let raf_pending2 = Rc::clone(&raf_pending);
+            let mut tick_signal = mobile_layout_resize_tick;
+            let raf_cb = Closure::once(Box::new(move || {
+                raf_pending2.set(false);
+                if let Ok(mut tick) = tick_signal.try_write() {
+                    *tick = tick.wrapping_add(1);
+                }
+            }) as Box<dyn FnOnce()>);
+            let _ = web_sys::window()
+                .unwrap()
+                .request_animation_frame(raf_cb.as_ref().unchecked_ref());
+            raf_cb.forget();
         }) as Box<dyn FnMut(web_sys::Event)>);
 
         let _ = window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref());
