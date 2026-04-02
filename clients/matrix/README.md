@@ -1,48 +1,37 @@
 # poly-matrix
 
-Matrix protocol client for **Poly** (PolyGlot Messenger).
+Matrix protocol client for Poly. Implements `ClientBackend` using the Matrix
+client-server HTTP API directly — no `matrix-sdk` dependency.
 
-## Purpose
+## Build Modes
 
-Implements the `ClientBackend` trait for Matrix using the official `matrix-sdk` Rust crate (the same SDK that powers Element X).
+| Mode | Command | Feature | Output |
+|------|---------|---------|--------|
+| Native | `cargo build -p poly-matrix` | `native` (default) | `libpoly_matrix.rlib` |
+| WASM plugin | `cargo component build -p poly-matrix --target wasm32-wasip2` | (none) | `poly_matrix.wasm` |
 
-## WASM Plugin Support (2026-03-06)
+## Architecture
 
-Builds as **both** native and WASM Component Model plugin:
+- **Native**: `config.rs` + `http.rs` + `api.rs` → `MatrixClient` implementing `ClientBackend`
+- **WASM guest**: `guest.rs` implements the Matrix HTTP protocol using `host_api::http_request()` WIT import
 
-```sh
-# Native (workspace default):
-cargo build -p poly-matrix
+Both paths implement the same protocol directly. No external Matrix SDK.
 
-# WASM plugin:
-cargo component build -p poly-matrix --target wasm32-wasip2
-# Output: target/wasm32-wasip1/debug/poly_matrix.wasm (4.3MB debug)
-```
+## Current Status (2026-04-01)
 
-Feature-gated (`native` feature default). Currently a **stub** — WIT guest implementation in `src/guest.rs` returns errors for all operations. Full implementation coming in Phase 3.2.
-
-## Features
-
-- Username/password and SSO authentication
-- Matrix Spaces displayed as servers (with room hierarchies as categories)
-- Rooms displayed as channels
-- End-to-end encryption (Olm/Megolm)
-- Device verification (QR code, emoji)
-- Voice and video calls (Matrix VoIP + WebRTC)
-- Federation — works with any Matrix homeserver
-- Public room directory browsing
-- "Fake servers" — user-created local groupings for rooms not in Spaces
-- DMs and multi-user group chats
-
-## Key Dependency
-
-- `matrix-sdk = "0.16.0"` — production-grade Matrix Rust SDK
+- Scaffolding in place: Cargo.toml, modules, config, HTTP transport, API types
+- All `ClientBackend` methods are stubs returning empty/error
+- WASM guest is stub, returning "not yet implemented"
+- 10 E2E tests verify stub behavior through plugin host
+- Locale files: en, de, fr, es
 
 ## Testing
 
-**10 E2E tests** verify stub behavior through the WASM plugin host:
-
 ```sh
+# Native unit tests
+cargo test -p poly-matrix
+
+# E2E plugin tests
 cargo test -p poly-plugin-loader-tests --features test-matrix --test client_e2e -- --nocapture
 ```
 

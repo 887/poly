@@ -1,0 +1,405 @@
+//! Typed Matrix client-server API models used by the native client
+//! implementation.
+//!
+//! These types are intentionally kept internal to `poly-matrix` so external
+//! app crates stay isolated from Matrix-specific protocol details.
+//!
+//! Reference: https://spec.matrix.org/latest/client-server-api/
+
+use serde::{Deserialize, Serialize};
+
+// ---------------------------------------------------------------------------
+// Authentication (§5 Authentication)
+// ---------------------------------------------------------------------------
+
+/// Request body for `POST /_matrix/client/v3/login`.
+#[derive(Debug, Serialize)]
+pub struct LoginRequest {
+    /// Login type, e.g. `m.login.password` or `m.login.token`.
+    #[serde(rename = "type")]
+    pub login_type: String,
+
+    /// Login identifier (for password login).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identifier: Option<LoginIdentifier>,
+
+    /// Password (for `m.login.password`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+
+    /// Login token (for `m.login.token`, from SSO redirect).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+
+    /// Device display name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initial_device_display_name: Option<String>,
+}
+
+/// User identifier for login.
+#[derive(Debug, Serialize)]
+pub struct LoginIdentifier {
+    /// Identifier type, e.g. `m.id.user`.
+    #[serde(rename = "type")]
+    pub id_type: String,
+
+    /// The Matrix user ID or username.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+}
+
+/// Response body for `POST /_matrix/client/v3/login`.
+#[derive(Debug, Deserialize)]
+pub struct LoginResponse {
+    /// Fully-qualified user ID (e.g. `@alice:matrix.org`).
+    pub user_id: String,
+
+    /// Access token for subsequent requests.
+    pub access_token: String,
+
+    /// Device ID assigned by the homeserver.
+    pub device_id: String,
+
+    /// Homeserver URL (for well-known delegation).
+    #[serde(default)]
+    pub well_known: Option<WellKnownInfo>,
+}
+
+/// Well-known delegation info returned in login response.
+#[derive(Debug, Deserialize)]
+pub struct WellKnownInfo {
+    /// Homeserver URL.
+    #[serde(rename = "m.homeserver")]
+    pub homeserver: Option<WellKnownBaseUrl>,
+}
+
+/// A well-known base_url entry.
+#[derive(Debug, Deserialize)]
+pub struct WellKnownBaseUrl {
+    /// The base URL for the homeserver.
+    pub base_url: String,
+}
+
+/// Response from `GET /_matrix/client/v3/account/whoami`.
+#[derive(Debug, Deserialize)]
+pub struct WhoAmIResponse {
+    pub user_id: String,
+    #[serde(default)]
+    pub device_id: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// User profile (§10 User Data)
+// ---------------------------------------------------------------------------
+
+/// Response from `GET /_matrix/client/v3/profile/{userId}`.
+#[derive(Debug, Deserialize)]
+pub struct ProfileResponse {
+    /// Display name.
+    #[serde(default)]
+    pub displayname: Option<String>,
+
+    /// Avatar MXC URL.
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Sync (§7 Syncing)
+// ---------------------------------------------------------------------------
+
+/// Response body for `GET /_matrix/client/v3/sync`.
+#[derive(Debug, Deserialize)]
+pub struct SyncResponse {
+    /// Opaque token for the next sync request.
+    pub next_batch: String,
+
+    /// Room-related updates.
+    #[serde(default)]
+    pub rooms: Option<SyncRooms>,
+}
+
+/// Rooms section of a sync response.
+#[derive(Debug, Deserialize)]
+pub struct SyncRooms {
+    /// Joined rooms and their updates.
+    #[serde(default)]
+    pub join: Option<std::collections::HashMap<String, JoinedRoom>>,
+
+    /// Invited rooms.
+    #[serde(default)]
+    pub invite: Option<std::collections::HashMap<String, serde_json::Value>>,
+
+    /// Left rooms.
+    #[serde(default)]
+    pub leave: Option<std::collections::HashMap<String, serde_json::Value>>,
+}
+
+/// Updates for a single joined room in a sync response.
+#[derive(Debug, Deserialize)]
+pub struct JoinedRoom {
+    /// Timeline events.
+    #[serde(default)]
+    pub timeline: Option<Timeline>,
+
+    /// State events.
+    #[serde(default)]
+    pub state: Option<State>,
+
+    /// Ephemeral events (typing, receipts).
+    #[serde(default)]
+    pub ephemeral: Option<Ephemeral>,
+}
+
+/// Timeline section of a joined room.
+#[derive(Debug, Deserialize)]
+pub struct Timeline {
+    /// List of timeline events.
+    #[serde(default)]
+    pub events: Vec<RoomEvent>,
+
+    /// Whether more events exist before this batch.
+    #[serde(default)]
+    pub limited: bool,
+
+    /// Pagination token for earlier events.
+    #[serde(default)]
+    pub prev_batch: Option<String>,
+}
+
+/// State section of a joined room.
+#[derive(Debug, Deserialize)]
+pub struct State {
+    /// List of state events.
+    #[serde(default)]
+    pub events: Vec<RoomEvent>,
+}
+
+/// Ephemeral events section.
+#[derive(Debug, Deserialize)]
+pub struct Ephemeral {
+    /// List of ephemeral events.
+    #[serde(default)]
+    pub events: Vec<serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Room events
+// ---------------------------------------------------------------------------
+
+/// A Matrix room event (state or timeline).
+#[derive(Debug, Deserialize)]
+pub struct RoomEvent {
+    /// Event type, e.g. `m.room.message`, `m.room.name`.
+    #[serde(rename = "type")]
+    pub event_type: String,
+
+    /// Event ID.
+    #[serde(default)]
+    pub event_id: Option<String>,
+
+    /// Sender user ID.
+    #[serde(default)]
+    pub sender: Option<String>,
+
+    /// Server timestamp (ms since epoch).
+    #[serde(default)]
+    pub origin_server_ts: Option<u64>,
+
+    /// State key (only for state events).
+    #[serde(default)]
+    pub state_key: Option<String>,
+
+    /// Event content (type-dependent).
+    #[serde(default)]
+    pub content: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Messages (§11 Messaging)
+// ---------------------------------------------------------------------------
+
+/// Request body for `PUT /_matrix/client/v3/rooms/{roomId}/send/{eventType}/{txnId}`.
+#[derive(Debug, Serialize)]
+pub struct SendMessageRequest {
+    /// Message type, e.g. `m.text`, `m.image`.
+    pub msgtype: String,
+
+    /// Message body text.
+    pub body: String,
+
+    /// Formatted body (HTML).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub formatted_body: Option<String>,
+
+    /// Format type when formatted_body is present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+
+    /// For replies: the event being replied to.
+    #[serde(rename = "m.relates_to", skip_serializing_if = "Option::is_none")]
+    pub relates_to: Option<RelatesTo>,
+}
+
+/// Relationship metadata for replies and threads.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RelatesTo {
+    /// In-reply-to reference.
+    #[serde(rename = "m.in_reply_to", skip_serializing_if = "Option::is_none")]
+    pub in_reply_to: Option<InReplyTo>,
+}
+
+/// Reference to the event being replied to.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InReplyTo {
+    /// Event ID of the parent message.
+    pub event_id: String,
+}
+
+/// Response from sending a message event.
+#[derive(Debug, Deserialize)]
+pub struct SendEventResponse {
+    /// Event ID assigned by the homeserver.
+    pub event_id: String,
+}
+
+// ---------------------------------------------------------------------------
+// Room directory & Spaces
+// ---------------------------------------------------------------------------
+
+/// Response from `GET /_matrix/client/v3/joined_rooms`.
+#[derive(Debug, Deserialize)]
+pub struct JoinedRoomsResponse {
+    /// List of room IDs the user has joined.
+    pub joined_rooms: Vec<String>,
+}
+
+/// Response from `GET /_matrix/client/v1/rooms/{roomId}/hierarchy`.
+#[derive(Debug, Deserialize)]
+pub struct SpaceHierarchyResponse {
+    /// Rooms in the Space hierarchy.
+    #[serde(default)]
+    pub rooms: Vec<SpaceHierarchyRoom>,
+
+    /// Pagination token.
+    #[serde(default)]
+    pub next_batch: Option<String>,
+}
+
+/// A room entry in a Space hierarchy response.
+#[derive(Debug, Deserialize)]
+pub struct SpaceHierarchyRoom {
+    /// Room ID.
+    pub room_id: String,
+
+    /// Room name.
+    #[serde(default)]
+    pub name: Option<String>,
+
+    /// Room topic.
+    #[serde(default)]
+    pub topic: Option<String>,
+
+    /// Avatar MXC URL.
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+
+    /// Number of joined members.
+    #[serde(default)]
+    pub num_joined_members: u64,
+
+    /// Room type (e.g. `m.space` for Spaces).
+    #[serde(default)]
+    pub room_type: Option<String>,
+
+    /// Child rooms (state events of type `m.space.child`).
+    #[serde(default)]
+    pub children_state: Vec<serde_json::Value>,
+}
+
+/// Response from `GET /_matrix/client/v3/publicRooms`.
+#[derive(Debug, Deserialize)]
+pub struct PublicRoomsResponse {
+    /// Public rooms on this homeserver.
+    #[serde(default)]
+    pub chunk: Vec<PublicRoom>,
+
+    /// Pagination token.
+    #[serde(default)]
+    pub next_batch: Option<String>,
+
+    /// Estimated total number of rooms.
+    #[serde(default)]
+    pub total_room_count_estimate: Option<u64>,
+}
+
+/// A single public room listing.
+#[derive(Debug, Deserialize)]
+pub struct PublicRoom {
+    /// Room ID.
+    pub room_id: String,
+
+    /// Room name.
+    #[serde(default)]
+    pub name: Option<String>,
+
+    /// Room topic.
+    #[serde(default)]
+    pub topic: Option<String>,
+
+    /// Avatar MXC URL.
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+
+    /// Number of joined members.
+    #[serde(default)]
+    pub num_joined_members: u64,
+
+    /// Room alias.
+    #[serde(default)]
+    pub canonical_alias: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Room members
+// ---------------------------------------------------------------------------
+
+/// Response from `GET /_matrix/client/v3/rooms/{roomId}/members`.
+#[derive(Debug, Deserialize)]
+pub struct RoomMembersResponse {
+    /// Member state events.
+    #[serde(default)]
+    pub chunk: Vec<RoomEvent>,
+}
+
+/// Paginated messages response from
+/// `GET /_matrix/client/v3/rooms/{roomId}/messages`.
+#[derive(Debug, Deserialize)]
+pub struct MessagesResponse {
+    /// Message events (most recent first when `dir=b`).
+    #[serde(default)]
+    pub chunk: Vec<RoomEvent>,
+
+    /// Pagination token for requesting earlier messages.
+    #[serde(default)]
+    pub end: Option<String>,
+
+    /// Start token.
+    #[serde(default)]
+    pub start: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Error response
+// ---------------------------------------------------------------------------
+
+/// Standard Matrix error response body.
+#[derive(Debug, Deserialize)]
+pub struct MatrixError {
+    /// Error code, e.g. `M_FORBIDDEN`, `M_UNKNOWN_TOKEN`.
+    pub errcode: String,
+
+    /// Human-readable error description.
+    #[serde(default)]
+    pub error: Option<String>,
+}

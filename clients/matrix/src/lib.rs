@@ -2,8 +2,9 @@
 //!
 //! Matrix messenger client for Poly.
 //!
-//! Wraps `matrix-sdk` to implement [`poly_client::ClientBackend`].
-//! Maps Matrix Spaces to Poly servers, Matrix rooms to channels.
+//! Implements [`poly_client::ClientBackend`] using the Matrix client-server
+//! HTTP API directly (no matrix-sdk). Maps Matrix Spaces to Poly servers,
+//! Matrix rooms to channels.
 //!
 //! ## Build Modes
 //!
@@ -12,7 +13,14 @@
 //!
 //! DECISION(D21): WASM Plugin Backends.
 
-// TODO(phase-3.2): Implement Matrix client with matrix-sdk
+#[cfg(feature = "native")]
+mod api;
+
+#[cfg(feature = "native")]
+mod config;
+
+#[cfg(feature = "native")]
+mod http;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
@@ -24,25 +32,51 @@ mod wit_bindings;
 mod guest;
 
 #[cfg(feature = "native")]
+pub use config::{DEFAULT_HOMESERVER_URL, MatrixAuthInput, MatrixConfig, MatrixConfigError};
+
+#[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
 use futures::stream::{self, Stream};
+#[cfg(feature = "native")]
+use http::{MatrixHttpClient, MatrixSessionState};
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
 use std::pin::Pin;
 
+/// Return Fluent translations for the given locale.
+pub fn plugin_translations(locale: &str) -> String {
+    match locale {
+        "de" => include_str!("../locales/de/plugin.ftl").to_string(),
+        "fr" => include_str!("../locales/fr/plugin.ftl").to_string(),
+        "es" => include_str!("../locales/es/plugin.ftl").to_string(),
+        _ => include_str!("../locales/en/plugin.ftl").to_string(),
+    }
+}
+
 /// Matrix messenger client.
 #[cfg(feature = "native")]
 pub struct MatrixClient {
-    // TODO(phase-3.2): Add matrix-sdk client, session state
+    http: MatrixHttpClient,
 }
 
 #[cfg(feature = "native")]
 impl MatrixClient {
-    /// Create a new Matrix client.
+    /// Create a new Matrix client for the default homeserver (matrix.org).
+    #[must_use]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            http: MatrixHttpClient::new(MatrixConfig::default_homeserver()),
+        }
+    }
+
+    /// Create a new Matrix client for a custom homeserver URL.
+    pub fn with_homeserver(url: impl Into<String>) -> Result<Self, MatrixConfigError> {
+        let config = MatrixConfig::new(url)?;
+        Ok(Self {
+            http: MatrixHttpClient::new(config),
+        })
     }
 }
 
@@ -54,69 +88,439 @@ impl Default for MatrixClient {
 }
 
 #[cfg(feature = "native")]
+impl MatrixClient {
+    /// Normalized homeserver URL.
+    #[must_use]
+    pub fn homeserver_url(&self) -> &str {
+        self.http.homeserver_url()
+    }
+
+    /// Stable instance identifier for multi-account routing.
+    #[must_use]
+    pub fn instance_id(&self) -> String {
+        self.http.instance_id()
+    }
+
+    fn build_session(
+        &self,
+        session_state: &MatrixSessionState,
+        profile: &api::ProfileResponse,
+    ) -> Session {
+        let display_name = profile
+            .displayname
+            .clone()
+            .unwrap_or_else(|| session_state.user_id.clone());
+
+        Session {
+            id: session_state.device_id.clone(),
+            user: User {
+                id: session_state.user_id.clone(),
+                display_name,
+                avatar_url: profile.avatar_url.clone(),
+                presence: PresenceStatus::Online,
+                backend: BackendType::Matrix,
+            },
+            token: session_state.access_token.clone(),
+            backend: BackendType::Matrix,
+            icon_emoji: Some("🟦".to_string()),
+            instance_id: self.instance_id(),
+            backend_url: Some(self.homeserver_url().to_string()),
+        }
+    }
+
+    fn current_user_id(&self) -> ClientResult<String> {
+        self.http
+            .session()
+            .map(|s| s.user_id)
+            .ok_or_else(|| ClientError::AuthFailed("not logged in".into()))
+    }
+
+    fn room_event_to_message(event: &api::RoomEvent) -> Option<Message> {
+        if event.event_type != "m.room.message" {
+            return None;
+        }
+        let event_id = event.event_id.as_deref()?;
+        let sender = event.sender.as_deref()?;
+        let ts = event.origin_server_ts?;
+
+        let body = event
+            .content
+            .get("body")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_string();
+
+        Some(Message {
+            id: event_id.to_string(),
+            author: User {
+                id: sender.to_string(),
+                display_name: sender.to_string(),
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: BackendType::Matrix,
+            },
+            content: MessageContent::Text(body),
+            timestamp: chrono::DateTime::from_timestamp_millis(ts as i64)
+                .unwrap_or_default(),
+            edited: false,
+            attachments: vec![],
+            reactions: vec![],
+            reply_to: None,
+        })
+    }
+
+    fn extract_room_name(state: &[api::RoomEvent], fallback: &str) -> String {
+        state
+            .iter()
+            .find(|ev| ev.event_type == "m.room.name")
+            .and_then(|ev| ev.content.get("name"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(fallback)
+            .to_string()
+    }
+
+    fn extract_avatar_url(state: &[api::RoomEvent]) -> Option<String> {
+        state
+            .iter()
+            .find(|ev| ev.event_type == "m.room.avatar")
+            .and_then(|ev| ev.content.get("url"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    }
+
+    fn is_space_room(state: &[api::RoomEvent]) -> bool {
+        state.iter().any(|ev| {
+            ev.event_type == "m.room.create"
+                && ev
+                    .content
+                    .get("type")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("m.space")
+        })
+    }
+
+    fn build_message_from_send(
+        &self,
+        event_id: String,
+        body: String,
+    ) -> ClientResult<Message> {
+        let session = self.http.session().ok_or_else(|| {
+            ClientError::Internal("session not available after send".into())
+        })?;
+
+        Ok(Message {
+            id: event_id,
+            author: User {
+                id: session.user_id.clone(),
+                display_name: session
+                    .display_name
+                    .clone()
+                    .unwrap_or_else(|| session.user_id.clone()),
+                avatar_url: None,
+                presence: PresenceStatus::Online,
+                backend: BackendType::Matrix,
+            },
+            content: MessageContent::Text(body),
+            timestamp: chrono::Utc::now(),
+            edited: false,
+            attachments: vec![],
+            reactions: vec![],
+            reply_to: None,
+        })
+    }
+
+    fn extract_body(content: &MessageContent) -> String {
+        match content {
+            MessageContent::Text(text) => text.clone(),
+            MessageContent::WithAttachments { text, .. } => text.clone(),
+        }
+    }
+}
+
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl ClientBackend for MatrixClient {
-    async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
-        Err(ClientError::Internal(
-            "Matrix client not yet implemented".into(),
-        ))
+    async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
+        let auth_input = MatrixAuthInput::try_from(credentials)?;
+
+        match auth_input {
+            MatrixAuthInput::AccessToken(token) => {
+                let whoami = self.http.authenticate_with_token(token).await?;
+                let profile = self.http.fetch_profile(&whoami.user_id).await.unwrap_or(
+                    api::ProfileResponse {
+                        displayname: None,
+                        avatar_url: None,
+                    },
+                );
+                let session_state = self.http.session().ok_or_else(|| {
+                    ClientError::Internal("session not set after token auth".into())
+                })?;
+                Ok(self.build_session(&session_state, &profile))
+            }
+            MatrixAuthInput::UsernamePassword { username, password } => {
+                let login = self.http.login_with_password(&username, &password).await?;
+                let profile = self
+                    .http
+                    .fetch_profile(&login.user_id)
+                    .await
+                    .unwrap_or(api::ProfileResponse {
+                        displayname: None,
+                        avatar_url: None,
+                    });
+                let session_state = self.http.session().ok_or_else(|| {
+                    ClientError::Internal("session not set after password auth".into())
+                })?;
+                Ok(self.build_session(&session_state, &profile))
+            }
+        }
     }
 
     async fn logout(&mut self) -> ClientResult<()> {
-        Err(ClientError::Internal(
-            "Matrix client not yet implemented".into(),
-        ))
+        self.http.logout().await
     }
 
     fn is_authenticated(&self) -> bool {
-        false
+        self.http.is_authenticated()
     }
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        Ok(vec![])
+        let joined = self.http.fetch_joined_rooms().await?;
+        let account_id = self.current_user_id()?;
+        let mut servers = Vec::new();
+
+        for room_id in &joined.joined_rooms {
+            let state = self.http.fetch_room_state(room_id).await.unwrap_or_default();
+            if Self::is_space_room(&state) {
+                servers.push(Server {
+                    id: room_id.clone(),
+                    name: Self::extract_room_name(&state, "Unnamed Space"),
+                    icon_url: Self::extract_avatar_url(&state),
+                    banner_url: None,
+                    unread_count: 0,
+                    mention_count: 0,
+                    categories: vec![],
+                    backend: BackendType::Matrix,
+                    account_id: account_id.clone(),
+                    account_display_name: account_id.clone(),
+                });
+            }
+        }
+
+        Ok(servers)
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        Err(ClientError::NotFound(format!("Server {id}")))
+        let state = self.http.fetch_room_state(id).await?;
+        let account_id = self.current_user_id()?;
+
+        Ok(Server {
+            id: id.to_string(),
+            name: Self::extract_room_name(&state, "Unnamed Space"),
+            icon_url: Self::extract_avatar_url(&state),
+            banner_url: None,
+            unread_count: 0,
+            mention_count: 0,
+            categories: vec![],
+            backend: BackendType::Matrix,
+            account_id: account_id.clone(),
+            account_display_name: account_id,
+        })
     }
 
-    async fn get_channels(&self, _server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(vec![])
+    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
+        let hierarchy = self.http.fetch_space_hierarchy(server_id).await?;
+        let channels: Vec<Channel> = hierarchy
+            .rooms
+            .iter()
+            .filter(|room| room.room_type.as_deref() != Some("m.space"))
+            .map(|room| Channel {
+                id: room.room_id.clone(),
+                name: room.name.clone().unwrap_or_else(|| room.room_id.clone()),
+                server_id: server_id.to_string(),
+                channel_type: ChannelType::Text,
+                unread_count: 0,
+                mention_count: 0,
+                last_message_id: None,
+            })
+            .collect();
+
+        Ok(channels)
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        Err(ClientError::NotFound(format!("Channel {id}")))
+        let state = self.http.fetch_room_state(id).await?;
+
+        Ok(Channel {
+            id: id.to_string(),
+            name: Self::extract_room_name(&state, id),
+            server_id: String::new(),
+            channel_type: ChannelType::Text,
+            unread_count: 0,
+            mention_count: 0,
+            last_message_id: None,
+        })
     }
 
     async fn send_message(
         &self,
-        _channel_id: &str,
-        _content: MessageContent,
+        channel_id: &str,
+        content: MessageContent,
     ) -> ClientResult<Message> {
-        Err(ClientError::Internal(
-            "Matrix client not yet implemented".into(),
-        ))
+        let txn_id = uuid::Uuid::new_v4().to_string();
+        let body = Self::extract_body(&content);
+
+        let send_req = api::SendMessageRequest {
+            msgtype: "m.text".to_string(),
+            body: body.clone(),
+            formatted_body: None,
+            format: None,
+            relates_to: None,
+        };
+
+        let result = self
+            .http
+            .send_message(channel_id, &txn_id, &send_req)
+            .await?;
+
+        self.build_message_from_send(result.event_id, body)
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let txn_id = uuid::Uuid::new_v4().to_string();
+        let body = Self::extract_body(&content);
+
+        let send_req = api::SendMessageRequest {
+            msgtype: "m.text".to_string(),
+            body: body.clone(),
+            formatted_body: None,
+            format: None,
+            relates_to: Some(api::RelatesTo {
+                in_reply_to: Some(api::InReplyTo {
+                    event_id: reply_to_message_id.to_string(),
+                }),
+            }),
+        };
+
+        let result = self
+            .http
+            .send_message(channel_id, &txn_id, &send_req)
+            .await?;
+
+        self.build_message_from_send(result.event_id, body)
     }
 
     async fn get_messages(
         &self,
-        _channel_id: &str,
-        _query: MessageQuery,
+        channel_id: &str,
+        query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        Ok(vec![])
+        let from = if let Some(before) = &query.before {
+            before.clone()
+        } else {
+            let session = self.http.session().ok_or_else(|| {
+                ClientError::AuthFailed("not logged in".into())
+            })?;
+            session.sync_next_batch.unwrap_or_default()
+        };
+
+        if from.is_empty() {
+            // No pagination token; do an initial sync to get one
+            let sync = self.http.sync(None, Some(0)).await?;
+            let prev_batch = sync
+                .rooms
+                .as_ref()
+                .and_then(|rooms| rooms.join.as_ref())
+                .and_then(|join| join.get(channel_id))
+                .and_then(|room| room.timeline.as_ref())
+                .and_then(|tl| tl.prev_batch.clone())
+                .unwrap_or(sync.next_batch);
+
+            let limit = u64::from(query.limit.unwrap_or(50));
+            let response = self
+                .http
+                .fetch_messages(channel_id, &prev_batch, "b", Some(limit))
+                .await?;
+
+            return Ok(response
+                .chunk
+                .iter()
+                .filter_map(Self::room_event_to_message)
+                .collect());
+        }
+
+        let dir = if query.after.is_some() { "f" } else { "b" };
+        let limit = u64::from(query.limit.unwrap_or(50));
+        let response = self
+            .http
+            .fetch_messages(channel_id, &from, dir, Some(limit))
+            .await?;
+
+        Ok(response
+            .chunk
+            .iter()
+            .filter_map(Self::room_event_to_message)
+            .collect())
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
-        Err(ClientError::NotFound(format!("User {id}")))
+        let profile = self.http.fetch_profile(id).await?;
+        Ok(User {
+            id: id.to_string(),
+            display_name: profile.displayname.unwrap_or_else(|| id.to_string()),
+            avatar_url: profile.avatar_url,
+            presence: PresenceStatus::Offline,
+            backend: BackendType::Matrix,
+        })
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
         Ok(vec![])
     }
 
-    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
-        Ok(vec![])
+    async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
+        let members = self.http.fetch_room_members(channel_id).await?;
+        let users: Vec<User> = members
+            .chunk
+            .iter()
+            .filter(|ev| {
+                ev.event_type == "m.room.member"
+                    && ev
+                        .content
+                        .get("membership")
+                        .and_then(serde_json::Value::as_str)
+                        == Some("join")
+            })
+            .filter_map(|ev| {
+                let user_id = ev.state_key.as_deref()?;
+                let display_name = ev
+                    .content
+                    .get("displayname")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(user_id)
+                    .to_string();
+                let avatar_url = ev
+                    .content
+                    .get("avatar_url")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string);
+
+                Some(User {
+                    id: user_id.to_string(),
+                    display_name,
+                    avatar_url,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::Matrix,
+                })
+            })
+            .collect();
+
+        Ok(users)
     }
 
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
@@ -124,7 +528,40 @@ impl ClientBackend for MatrixClient {
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(vec![])
+        let user_id = self.current_user_id()?;
+        let m_direct = self
+            .http
+            .fetch_account_data(&user_id, "m.direct")
+            .await
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+        let mut dms = Vec::new();
+        if let Some(obj) = m_direct.as_object() {
+            for (other_user_id, room_ids) in obj {
+                if let Some(room_id) = room_ids
+                    .as_array()
+                    .and_then(|arr| arr.first())
+                    .and_then(serde_json::Value::as_str)
+                {
+                    dms.push(DmChannel {
+                        id: room_id.to_string(),
+                        user: User {
+                            id: other_user_id.clone(),
+                            display_name: other_user_id.clone(),
+                            avatar_url: None,
+                            presence: PresenceStatus::Offline,
+                            backend: BackendType::Matrix,
+                        },
+                        last_message: None,
+                        unread_count: 0,
+                        backend: BackendType::Matrix,
+                        account_id: user_id.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(dms)
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
@@ -143,7 +580,6 @@ impl ClientBackend for MatrixClient {
         &self,
         _channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
-        // TODO(phase-3): Implement voice participant fetching for Matrix
         Ok(vec![])
     }
 
@@ -157,5 +593,29 @@ impl ClientBackend for MatrixClient {
 
     fn backend_name(&self) -> &str {
         "Matrix"
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_client_is_not_authenticated() {
+        let client = MatrixClient::new();
+        assert!(!client.is_authenticated());
+    }
+
+    #[test]
+    fn custom_homeserver_client() {
+        let client = MatrixClient::with_homeserver("https://my.server.tld").unwrap();
+        assert!(!client.is_authenticated());
+    }
+
+    #[test]
+    fn translations_return_nonempty_for_en() {
+        let t = plugin_translations("en");
+        assert!(t.contains("plugin-matrix-title"));
     }
 }

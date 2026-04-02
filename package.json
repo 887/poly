@@ -1,0 +1,27 @@
+{
+  "name": "workspcacemsg",
+  "version": "1.0.0",
+  "description": "A cross-platform, multi-backend messenger client built in **Rust** with **Dioxus 0.7.3** and powered by **SurrealDB 3.0.x** (SurrealKV backend).",
+  "main": "cdp-eval.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/887/poly.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/887/poly/issues"
+  },
+  "homepage": "https://github.com/887/poly#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}
