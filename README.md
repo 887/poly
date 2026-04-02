@@ -2,7 +2,7 @@
 
 A cross-platform, multi-backend messenger client built in **Rust** with **Dioxus 0.7.3** and powered by **SurrealDB 3.0.x** (SurrealKV backend).
 
-**Status (2026-03-06):** WASM Component Model plugins successfully designed, built, and integrated. All 6 messenger backends compile to WebAssembly artifacts. Plugin host extracted to dynamically-linked crate (D22). 77 E2E tests passing across all clients.
+**Status (2026-04-02):** WASM Component Model plugins integrated. All 6 messenger backends compile to WebAssembly artifacts. Plugin host extracted to dynamically-linked crate (D22). 77 E2E tests passing. **Chat UI working** — infinite scroll (older + newer), scroll position memory, view-anchor restore, one-click Jump to Present. Tagged `chat-ui-working`.
 
 ---
 
@@ -232,6 +232,26 @@ Each client crate follows the same structure:
 | `docs/overall-plan.md` | Comprehensive 3-phase plan + decision registry |
 | `docs/phase-2.14-plan.md` | WASM plugin system (D21) + dylib extraction (D22) + E2E tests |
 | `docs/phase-3-plan.md` | Backend implementation roadmap (Phases 3.1–3.4) |
+
+---
+
+## 💬 Chat UI
+
+The chat view uses a **column-reverse CSS layout** (newest messages at bottom, `scrollTop=0`). All scroll logic accounts for negative scrollTop values.
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Infinite scroll (older)** | Scroll to the top edge loads older messages in 50-message pages, up to 200 messages in memory |
+| **Infinite scroll (newer)** | Scroll to the bottom edge chain-loads newer pages (up to 20 pages per burst) |
+| **Scroll position memory** | Returning to a channel restores the exact scroll position via auto-save on every scroll event |
+| **View anchor restore** | If scrolled up when leaving a channel, re-entry loads messages *around* the last-viewed message (`MessageQuery::around`) and restores the pixel-exact viewport position |
+| **Jump to Present** | One-click button chain-loads all newer pages and scrolls to the live tail. Shows a subtitle "You're Viewing Older Messages" when unloaded newer messages exist |
+| **No stale button** | Jump to Present is cleared when switching channels |
+| **Unread divider** | Red "NEW" line persists until channel switch (Discord-style), pushed up by new messages |
+
+See [`specs/chat-scroll-and-history.md`](specs/chat-scroll-and-history.md) for the full implementation spec.
 
 ---
 
