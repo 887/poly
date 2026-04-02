@@ -240,8 +240,7 @@
     padding: 8px;
     border-radius: var(--radius-md);
     transition: background-color var(--transition-fast);
-    content-visibility: auto;
-    contain-intrinsic-size: auto 72px;
+    contain: layout;
 }
 
 .message:hover {
