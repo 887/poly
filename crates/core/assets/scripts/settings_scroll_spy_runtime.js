@@ -171,3 +171,12 @@ if (!window.__polySettingsScrollSpyRuntimeInit) {
         window.__polyInstallSettingsScrollSpy(pendingConfig);
     }
 }
+
+// Re-install on every script execution (including cached re-loads on SPA re-navigation).
+// The runtimeInit guard above skips function setup on re-execution, but the install
+// call must still run so the scroll spy is re-attached after cleanup ran on unmount.
+if (window.__polySettingsScrollSpyPendingConfig && window.__polyInstallSettingsScrollSpy) {
+    const pendingConfig = window.__polySettingsScrollSpyPendingConfig;
+    delete window.__polySettingsScrollSpyPendingConfig;
+    window.__polyInstallSettingsScrollSpy(pendingConfig);
+}
