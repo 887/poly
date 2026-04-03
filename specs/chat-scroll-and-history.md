@@ -1,7 +1,7 @@
 # Chat Scroll & History — Implementation Spec
 
-> Status: **Working** — tagged `chat-ui-working` on 2026-04-02
-> Commits: `7e89582f` → `70063cdf` on `main`
+> Status: **Working + Fast** — tagged `chat-fast` on 2026-04-03
+> Previous tag: `chat-ui-working` (2026-04-02)
 
 ---
 
@@ -309,3 +309,54 @@ channel re-entry
 
 anchor does NOT survive F5 (session-only, in-memory JS object)
 ```
+
+---
+
+## Performance — Resize Re-render Isolation (2026-04-03)
+
+**Problem:** Horizontal window resize caused the entire `ChatView` (up to 200 message rows)
+to re-render on every animation frame. Root cause chain:
+
+```
+window resize → RAF → mobile_layout_resize_tick signal increments
+  → use_header_actions_overflow_effect fires → JS eval → header_actions_overflow.set()
+  → ChatView re-renders ALL 200 messages (plain function, no component boundary)
+```
+
+Two additional contributors were also eliminated:
+- `build_chat_view_markup_ctx` had a dummy `let _mobile_layout_resize_tick = *signals.mobile_layout_resize_tick.read()` — subscribed the entire ChatView to every resize tick even before the overflow check ran
+- `window.__polyScrollDebugEnabled = true` was calling `querySelectorAll('[id^="message-"]')` on every scroll event (200-node DOM query per frame)
+
+**Fix — `ChatHeaderActions` `#[component]` isolation:**
+
+`render_chat_header_actions` was a plain function call — it rendered inside the parent
+`ChatView` scope, so any signal it subscribed caused the whole view to re-render.
+
+Converted to a proper Dioxus `#[component]`:
+
+```rust
+#[component]
+fn ChatHeaderActions(
+    app_state: Signal<AppState>,
+    utility_panel: Signal<Option<ChatUtilityPanel>>,
+    // ... all header signals
+    mobile_layout_resize_tick: Signal<u64>,
+    is_group_channel: bool,
+    is_dm_channel: bool,
+    dm_user: Option<User>,
+    channel_id: Option<String>,
+    member_list_visible: bool,
+) -> Element {
+    // Overflow effect now lives HERE — scoped to this component only
+    use_header_actions_overflow_effect(header_actions_overflow, header_actions_menu_open, mobile_layout_resize_tick);
+    // ...
+}
+```
+
+`use_header_actions_overflow_effect` was removed from `use_chat_view_effects` and moved
+inside `ChatHeaderActions`. Now when `header_actions_overflow` changes on resize, only
+the 7-button header re-renders — the 200-message list is untouched.
+
+`mobile_layout_resize_tick` is forwarded through `ChatViewMarkupCtx` to the component.
+
+**Result:** Resize is instant. The message list no longer participates in resize re-renders.

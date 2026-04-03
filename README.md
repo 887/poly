@@ -2,7 +2,7 @@
 
 A cross-platform, multi-backend messenger client built in **Rust** with **Dioxus 0.7.3** and powered by **SurrealDB 3.0.x** (SurrealKV backend).
 
-**Status (2026-04-02):** WASM Component Model plugins integrated. All 6 messenger backends compile to WebAssembly artifacts. Plugin host extracted to dynamically-linked crate (D22). 77 E2E tests passing. **Chat UI working** — infinite scroll (older + newer), scroll position memory, view-anchor restore, one-click Jump to Present. Tagged `chat-ui-working`.
+**Status (2026-04-03):** WASM Component Model plugins integrated. All 6 messenger backends compile to WebAssembly artifacts. Plugin host extracted to dynamically-linked crate (D22). 77 E2E tests passing. **Chat UI fast** — infinite scroll (older + newer), scroll position memory, view-anchor restore, one-click Jump to Present. Resize re-render isolated to header component. Tagged `chat-fast`.
 
 ---
 

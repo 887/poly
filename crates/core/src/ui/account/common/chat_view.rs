@@ -1088,6 +1088,7 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
         threads_filter_query: signals.threads_filter_query,
         scrolled_from_bottom: signals.scrolled_from_bottom,
         new_messages_while_scrolled_up: signals.new_messages_while_scrolled_up,
+        mobile_layout_resize_tick: signals.mobile_layout_resize_tick,
     }
 }
 
@@ -1190,11 +1191,6 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     use_history_state_effect(signals);
     use_member_list_preferences_effect(signals.app_state);
     use_mobile_layout_resize_rerender_effect(signals.mobile_layout_resize_tick);
-    use_header_actions_overflow_effect(
-        signals.header_actions_overflow,
-        signals.header_actions_menu_open,
-        signals.mobile_layout_resize_tick,
-    );
     use_mobile_side_column_effect(signals, ctx);
     use_command_preload_effect(signals, &ctx.channel_id);
     use_unread_marker_visibility_effect(signals);
@@ -1203,7 +1199,7 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn use_mobile_layout_resize_rerender_effect(mut mobile_layout_resize_tick: Signal<u64>) {
+fn use_mobile_layout_resize_rerender_effect(mobile_layout_resize_tick: Signal<u64>) {
     use_effect(move || {
         use std::cell::Cell;
         use std::rc::Rc;
@@ -1807,6 +1803,8 @@ struct ChatViewMarkupCtx {
     scrolled_from_bottom: Signal<bool>,
     /// Count of live messages that arrived while the user was scrolled up.
     new_messages_while_scrolled_up: Signal<u32>,
+    /// Resize-driven rerender tick — forwarded to ChatHeaderActions for overflow detection.
+    mobile_layout_resize_tick: Signal<u64>,
 }
 
 fn should_virtualize_messages(message_count: usize, search_query_value: &str) -> bool {
@@ -2320,7 +2318,22 @@ fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
             if mobile_right_wing {
                 {render_mobile_chat_header_right_toggle(ctx)}
             } else {
-                {render_chat_header_actions(ctx)}
+                ChatHeaderActions {
+                    app_state: ctx.app_state,
+                    utility_panel: ctx.utility_panel,
+                    notifications_muted: ctx.notifications_muted,
+                    show_search_filters: ctx.show_search_filters,
+                    header_actions_menu_open: ctx.header_actions_menu_open,
+                    header_actions_overflow: ctx.header_actions_overflow,
+                    chat_data: ctx.chat_data,
+                    client_manager: ctx.client_manager,
+                    mobile_layout_resize_tick: ctx.mobile_layout_resize_tick,
+                    is_group_channel: ctx.is_group_channel,
+                    is_dm_channel: ctx.is_dm_channel,
+                    dm_user: ctx.dm_user.clone(),
+                    channel_id: ctx.channel_id.clone(),
+                    member_list_visible: ctx.member_list_visible,
+                }
             }
         }
     }
@@ -2530,24 +2543,39 @@ fn HeaderOverflowItem(
     }
 }
 
-fn render_chat_header_actions(ctx: ChatViewMarkupCtx) -> Element {
-    let mut app_state = ctx.app_state;
-    let mut utility_panel = ctx.utility_panel;
-    let notifications_muted = ctx.notifications_muted;
-    let mut show_search_filters = ctx.show_search_filters;
-    let mut header_actions_menu_open = ctx.header_actions_menu_open;
-    let header_actions_overflow = ctx.header_actions_overflow;
-    let is_group_channel = ctx.is_group_channel;
-    let is_dm_channel = ctx.is_dm_channel;
-    let dm_user = ctx.dm_user.clone();
-    let chat_data = ctx.chat_data;
-    let client_manager = ctx.client_manager;
+#[component]
+fn ChatHeaderActions(
+    app_state: Signal<AppState>,
+    utility_panel: Signal<Option<ChatUtilityPanel>>,
+    notifications_muted: Signal<bool>,
+    show_search_filters: Signal<bool>,
+    header_actions_menu_open: Signal<bool>,
+    header_actions_overflow: Signal<bool>,
+    chat_data: Signal<ChatData>,
+    client_manager: Signal<ClientManager>,
+    mobile_layout_resize_tick: Signal<u64>,
+    is_group_channel: bool,
+    is_dm_channel: bool,
+    dm_user: Option<User>,
+    channel_id: Option<String>,
+    member_list_visible: bool,
+) -> Element {
+    use_header_actions_overflow_effect(header_actions_overflow, header_actions_menu_open, mobile_layout_resize_tick);
+
+    let mut app_state = app_state;
+    let mut utility_panel = utility_panel;
+    let notifications_muted = notifications_muted;
+    let mut show_search_filters = show_search_filters;
+    let mut header_actions_menu_open = header_actions_menu_open;
+    let header_actions_overflow = header_actions_overflow;
+    let chat_data = chat_data;
+    let client_manager = client_manager;
     let active_dm_call = chat_data
         .read()
         .voice_connection
         .clone()
-        .filter(|connection| connection.dm_id.as_deref() == ctx.channel_id.as_deref());
-    let member_sidebar_active = ctx.member_list_visible && utility_panel.read().is_none();
+        .filter(|connection| connection.dm_id.as_deref() == channel_id.as_deref());
+    let member_sidebar_active = member_list_visible && utility_panel.read().is_none();
     let threads_active = *utility_panel.read() == Some(ChatUtilityPanel::Threads);
     let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
     let settings_active = *utility_panel.read() == Some(ChatUtilityPanel::Settings);

@@ -127,6 +127,7 @@ web-sys = { version = "0.3", features = [
     "ErrorEvent",
     "Event",
     "EventTarget",
+    "History",
     "HtmlElement",
     "Location",
     "Node",

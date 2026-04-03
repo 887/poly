@@ -176,9 +176,7 @@ pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
 /// - `message_id` is the raw message ID (e.g. `"msg2-general-524"`) for `MessageQuery::around`
 /// - `offset_px` is pixels from the scroll container top (may be negative for partially-scrolled-off elements)
 pub async fn read_channel_view_anchor(channel_id: &str) -> Option<(String, String, f64)> {
-    let Some(encoded) = encoded_channel_id(channel_id) else {
-        return None;
-    };
+    let encoded = encoded_channel_id(channel_id)?;
     let mut eval = document::eval(&format!(
         r#"
         const a = (window.__polyChannelAnchors || {{}})[{encoded}];
