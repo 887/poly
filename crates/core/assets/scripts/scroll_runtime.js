@@ -92,7 +92,7 @@
   // Logs scroll pipeline latency to the browser console.
   // Measures: time from wheel input → scroll event, and scroll event spacing.
   // Remove or set window.__polyScrollDebugEnabled = false to silence.
-  window.__polyScrollDebugEnabled = true;
+  window.__polyScrollDebugEnabled = false;
 
   (function installScrollDebug() {
     var lastWheelTs = 0;

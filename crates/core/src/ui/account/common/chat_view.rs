@@ -972,7 +972,6 @@ fn use_chat_view_signals() -> ChatViewSignals {
 }
 
 fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
-    let _mobile_layout_resize_tick = *signals.mobile_layout_resize_tick.read();
     let app_state = signals.app_state;
     let client_manager = signals.client_manager;
     let chat_data = signals.chat_data;
