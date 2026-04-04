@@ -1,9 +1,44 @@
 //! In-memory state for the mock Stoat/Revolt server.
 
 use dashmap::DashMap;
-use poly_test_common::AuthState;
+use poly_test_common::{AuthState, EventBus};
 
-/// All mock Stoat state: users, servers, channels, messages, tokens.
+/// Events broadcast to Bonfire WebSocket clients.
+///
+/// When a REST handler mutates state (e.g. sends a message), it publishes
+/// a `StoatEvent` to the bus. Connected WebSocket clients receive them in
+/// real-time, matching the Revolt Bonfire protocol.
+#[derive(Clone, Debug)]
+pub enum StoatEvent {
+    /// New message created in a channel.
+    Message {
+        channel_id: String,
+        message: serde_json::Value,
+    },
+    /// Message updated (edited).
+    MessageUpdate {
+        channel_id: String,
+        message_id: String,
+        data: serde_json::Value,
+    },
+    /// Message deleted.
+    MessageDelete {
+        channel_id: String,
+        message_id: String,
+    },
+    /// User started typing in a channel.
+    ChannelStartTyping {
+        channel_id: String,
+        user_id: String,
+    },
+    /// User presence/status changed.
+    UserUpdate {
+        user_id: String,
+        data: serde_json::Value,
+    },
+}
+
+/// All mock Stoat state: users, servers, channels, messages, tokens, broadcast bus.
 #[derive(Clone)]
 pub struct StoatState {
     pub auth: AuthState,
@@ -11,6 +46,8 @@ pub struct StoatState {
     pub servers: DashMap<String, Server>,
     pub channels: DashMap<String, Channel>,
     pub messages: DashMap<String, Vec<Message>>,
+    /// Event bus for real-time delivery to Bonfire WebSocket clients.
+    pub events: EventBus<StoatEvent>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -56,6 +93,7 @@ impl StoatState {
             servers: DashMap::new(),
             channels: DashMap::new(),
             messages: DashMap::new(),
+            events: EventBus::new(),
         }
     }
 

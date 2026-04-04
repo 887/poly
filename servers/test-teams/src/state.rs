@@ -1,9 +1,39 @@
 //! In-memory state for the mock Teams/Graph API server.
 
 use dashmap::DashMap;
-use poly_test_common::AuthState;
+use poly_test_common::{AuthState, EventBus};
 
-/// All mock Teams state: users, teams, channels, chats, messages, tokens.
+/// Events delivered to subscribed clients via change notifications.
+///
+/// Teams uses a subscription model: clients register a webhook/callback URL,
+/// and the server POSTs change notifications to it. In our mock, we use an
+/// EventBus so polling or WebSocket-based notification endpoints can deliver
+/// events to connected clients.
+#[derive(Clone, Debug)]
+pub enum TeamsEvent {
+    /// New message in a channel or chat.
+    MessageCreated {
+        resource_id: String,
+        message: serde_json::Value,
+    },
+    /// Message updated.
+    MessageUpdated {
+        resource_id: String,
+        message: serde_json::Value,
+    },
+    /// Message deleted.
+    MessageDeleted {
+        resource_id: String,
+        message_id: String,
+    },
+    /// User presence changed.
+    PresenceChanged {
+        user_id: String,
+        availability: String,
+    },
+}
+
+/// All mock Teams state: users, teams, channels, chats, messages, tokens, broadcast bus.
 #[derive(Clone)]
 pub struct TeamsState {
     pub auth: AuthState,
@@ -12,6 +42,8 @@ pub struct TeamsState {
     pub channels: DashMap<String, Channel>,
     pub chats: DashMap<String, Chat>,
     pub messages: DashMap<String, Vec<Message>>,
+    /// Event bus for real-time delivery via change notifications.
+    pub events: EventBus<TeamsEvent>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -63,6 +95,7 @@ impl TeamsState {
             channels: DashMap::new(),
             chats: DashMap::new(),
             messages: DashMap::new(),
+            events: EventBus::new(),
         }
     }
 

@@ -1,9 +1,47 @@
 //! In-memory state for the mock Discord server.
 
 use dashmap::DashMap;
-use poly_test_common::AuthState;
+use poly_test_common::{AuthState, EventBus};
 
-/// All mock Discord state: users, guilds, channels, messages, tokens.
+/// Events dispatched to Gateway WebSocket clients.
+///
+/// When a REST handler mutates state (e.g. sends a message), it publishes
+/// a `DiscordEvent` to the bus. Connected Gateway clients receive them as
+/// dispatch payloads matching Discord's event types.
+#[derive(Clone, Debug)]
+pub enum DiscordEvent {
+    /// New message in a channel.
+    MessageCreate {
+        channel_id: String,
+        message: serde_json::Value,
+    },
+    /// Message updated (edited).
+    MessageUpdate {
+        channel_id: String,
+        message: serde_json::Value,
+    },
+    /// Message deleted.
+    MessageDelete {
+        channel_id: String,
+        message_id: String,
+    },
+    /// User started typing.
+    TypingStart {
+        channel_id: String,
+        user_id: String,
+    },
+    /// User presence changed.
+    PresenceUpdate {
+        user_id: String,
+        status: String,
+    },
+    /// Guild (server) available — sent on READY.
+    GuildCreate {
+        guild: serde_json::Value,
+    },
+}
+
+/// All mock Discord state: users, guilds, channels, messages, tokens, broadcast bus.
 #[derive(Clone)]
 pub struct DiscordState {
     pub auth: AuthState,
@@ -11,6 +49,8 @@ pub struct DiscordState {
     pub guilds: DashMap<String, Guild>,
     pub channels: DashMap<String, Channel>,
     pub messages: DashMap<String, Vec<Message>>,
+    /// Event bus for real-time delivery to Gateway WebSocket clients.
+    pub events: EventBus<DiscordEvent>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -57,6 +97,7 @@ impl DiscordState {
             guilds: DashMap::new(),
             channels: DashMap::new(),
             messages: DashMap::new(),
+            events: EventBus::new(),
         }
     }
 

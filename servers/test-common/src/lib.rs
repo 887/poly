@@ -1,7 +1,8 @@
 //! Shared infrastructure for Poly test server suite.
 //!
 //! Provides dynamic port binding, CLI args, health/reset/seed route builders,
-//! and simple opaque token auth helpers used by all mock test servers.
+//! simple opaque token auth helpers, and event broadcast infrastructure used
+//! by all mock test servers.
 //!
 //! ## Lifecycle Endpoints
 //!
@@ -9,12 +10,23 @@
 //! - **`POST /seed`** — populate demo data (idempotent, skips if already present)
 //! - **`POST /reset`** — wipe all data to empty state
 //! - **`POST /reseed`** — wipe + re-seed in one call (most common between test runs)
+//!
+//! ## Event Broadcast
+//!
+//! All backends need real-time event delivery (messages, typing, presence).
+//! The shared [`EventBus`] wraps a `tokio::sync::broadcast` channel so that:
+//! - REST handlers publish events when state changes (e.g. message sent)
+//! - WebSocket handlers / long-poll `/sync` endpoints subscribe and receive them
+//!
+//! Each backend defines its own event enum but uses the same broadcast plumbing.
 
 mod auth;
+mod broadcast;
 mod cli;
 mod server;
 
 pub use auth::{AuthState, TokenAuth};
+pub use broadcast::EventBus;
 pub use cli::CliArgs;
 pub use server::TestServerBase;
 

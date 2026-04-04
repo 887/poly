@@ -1,9 +1,33 @@
 //! In-memory state for the mock Matrix homeserver.
 
 use dashmap::DashMap;
-use poly_test_common::AuthState;
+use poly_test_common::{AuthState, EventBus};
 
-/// All mock Matrix state: users, rooms, events, tokens.
+/// Events broadcast to `/sync` long-poll waiters.
+///
+/// When a REST handler mutates state (e.g. sends a message), it publishes
+/// a `MatrixEvent` to the bus. The `/sync` handler subscribes and wakes up,
+/// returning the new events to the client.
+#[derive(Clone, Debug)]
+pub enum MatrixEvent {
+    /// New timeline event in a room (message, state change, etc.)
+    Timeline {
+        room_id: String,
+        event: serde_json::Value,
+    },
+    /// Typing indicator changed in a room.
+    Typing {
+        room_id: String,
+        user_ids: Vec<String>,
+    },
+    /// User presence changed (online/offline/unavailable).
+    Presence {
+        user_id: String,
+        presence: String,
+    },
+}
+
+/// All mock Matrix state: users, rooms, events, tokens, broadcast bus.
 #[derive(Clone)]
 pub struct MatrixState {
     pub auth: AuthState,
@@ -11,6 +35,8 @@ pub struct MatrixState {
     pub users: DashMap<String, UserProfile>,
     /// room_id → Room
     pub rooms: DashMap<String, Room>,
+    /// Event bus for real-time delivery to /sync long-poll clients.
+    pub events: EventBus<MatrixEvent>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -38,6 +64,7 @@ impl MatrixState {
             auth: AuthState::new(),
             users: DashMap::new(),
             rooms: DashMap::new(),
+            events: EventBus::new(),
         }
     }
 

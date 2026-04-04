@@ -43,6 +43,21 @@
 - [ ] **4.1.4b** Create shared `/reseed` route handler pattern: reset + seed in one call, return `200`.
 - [ ] **4.1.5** Create shared auth helpers: simple token-based auth middleware (JWT or opaque tokens), user registration, login.
 - [ ] **4.1.6** Create CLI runner: each test server binary accepts `--port <PORT>` (override dynamic), `--seed` (auto-seed on start), `--verbose` (tracing logs).
+- [x] **4.1.7** Create shared `EventBus<T>` — generic `tokio::sync::broadcast` wrapper for real-time event delivery. REST handlers publish events; WebSocket/long-poll handlers subscribe and forward to clients. Each backend defines its own event enum (`MatrixEvent`, `StoatEvent`, `DiscordEvent`, `TeamsEvent`).
+
+### Real-Time Event Delivery
+
+Every chat backend needs live event streaming. The shared `EventBus<T>` in `test-common` provides the plumbing; each server adapts it to its protocol:
+
+| Backend | Protocol | How EventBus is used |
+|---------|----------|---------------------|
+| **Matrix** | `/sync` long-poll | Handler subscribes to `EventBus<MatrixEvent>`, `tokio::select!` between broadcast recv and timeout. Returns accumulated events on wake. |
+| **Stoat** | Bonfire WebSocket (`/ws`) | WS handler authenticates, subscribes to `EventBus<StoatEvent>`, forwards events as JSON frames. |
+| **Discord** | Gateway WebSocket (`/gateway`) | WS handler does IDENTIFY→READY handshake, subscribes to `EventBus<DiscordEvent>`, dispatches as opcode-0 payloads. Heartbeat ACK on opcode 1. |
+| **Teams** | Change notifications (subscription + polling/webhook) | Mock subscription endpoint registers filters, notification handler subscribes to `EventBus<TeamsEvent>` and delivers matching events. |
+| **Poly** | WebSocket (real server) | Inherited — wraps real `poly-server` which already has its own WS broadcast. |
+
+**Flow:** REST write (send message) → publish to `EventBus` → all subscribed WS/sync clients wake up → forward event to client.
 
 ---
 
@@ -116,8 +131,8 @@ Based on what `clients/matrix/src/http.rs` and `clients/matrix/src/guest.rs` act
 - [ ] **4.3.6** Implement `POST /logout` — invalidate token
 - [ ] **4.3.7** Implement `GET /profile/{userId}` — return displayname + avatar_url
 - [ ] **4.3.8** Implement `GET /joined_rooms` — return list of room IDs user has joined
-- [ ] **4.3.9** Implement `GET /sync` — return rooms (join: timeline, state, ephemeral), support `since` + `timeout` params. For `timeout > 0`, hold connection open (simulate long-poll) and return new events.
-- [ ] **4.3.10** Implement `PUT /rooms/{roomId}/send/{eventType}/{txnId}` — store event, assign event_id, return it. Broadcast to sync waiters.
+- [ ] **4.3.9** Implement `GET /sync` — return rooms (join: timeline, state, ephemeral), support `since` + `timeout` params. For `timeout > 0`, subscribe to `EventBus<MatrixEvent>` and `tokio::select!` between new events and timeout expiry. Return accumulated events on wake.
+- [ ] **4.3.10** Implement `PUT /rooms/{roomId}/send/{eventType}/{txnId}` — store event, assign event_id, publish `MatrixEvent::Timeline` to bus, return event_id. Long-polling `/sync` clients wake up and receive it.
 - [ ] **4.3.11** Implement `GET /rooms/{roomId}/messages` — paginated message history with `from`, `dir`, `limit` params
 - [ ] **4.3.12** Implement `GET /rooms/{roomId}/members` — return m.room.member state events
 - [ ] **4.3.13** Implement `GET /rooms/{roomId}/state` — return all state events for room
@@ -152,10 +167,10 @@ Based on what `clients/stoat/src/http.rs` and `clients/stoat/src/guest.rs` actua
 - [ ] **4.4.4** Implement auth endpoints: signup, login, token validation
 - [ ] **4.4.5** Implement server endpoints: list, get, create
 - [ ] **4.4.6** Implement channel endpoints: list by server, get, create
-- [ ] **4.4.7** Implement message endpoints: list (paginated), send, edit, delete
+- [ ] **4.4.7** Implement message endpoints: list (paginated), send (publishes `StoatEvent::Message` to bus), edit, delete
 - [ ] **4.4.8** Implement user endpoints: get profile, list members
 - [ ] **4.4.9** Implement DM endpoints: list, open, send
-- [ ] **4.4.10** Implement WebSocket endpoint: authenticate, broadcast events (message_create, typing, presence)
+- [ ] **4.4.10** Implement Bonfire WebSocket endpoint (`/ws`): authenticate via token, subscribe to `EventBus<StoatEvent>`, forward events as JSON frames matching Revolt Bonfire protocol (Message, MessageUpdate, MessageDelete, ChannelStartTyping, UserUpdate)
 - [ ] **4.4.11** Implement `/seed`, `/reset`, and `/reseed` endpoints
 - [ ] **4.4.12** Seed demo data: 2 users (Stoat + Raccoon), 2 servers, channels, messages
 - [ ] **4.4.13** Serve avatar images
@@ -181,10 +196,10 @@ Based on what `clients/discord/` calls. Discord uses bot-style token auth, REST 
 - [ ] **4.5.4** Implement auth: token validation (simulated bot/user token)
 - [ ] **4.5.5** Implement guild endpoints: list guilds, get guild, guild members
 - [ ] **4.5.6** Implement channel endpoints: list by guild, get, create
-- [ ] **4.5.7** Implement message endpoints: list (paginated), send, edit, delete, reactions
+- [ ] **4.5.7** Implement message endpoints: list (paginated), send (publishes `DiscordEvent::MessageCreate` to bus), edit, delete, reactions
 - [ ] **4.5.8** Implement user endpoints: get current user (`/users/@me`), get user by ID
 - [ ] **4.5.9** Implement DM endpoints: list DM channels, create DM, send message
-- [ ] **4.5.10** Implement Gateway WebSocket: IDENTIFY, READY, dispatch events (MESSAGE_CREATE, TYPING_START, PRESENCE_UPDATE, GUILD_CREATE)
+- [ ] **4.5.10** Implement Gateway WebSocket (`/gateway`): IDENTIFY handshake → READY payload (guilds, user) → subscribe to `EventBus<DiscordEvent>` → dispatch events as Gateway payloads (opcode 0, event name + data). Heartbeat ACK on opcode 1.
 - [ ] **4.5.11** Implement `/seed`, `/reset`, and `/reseed` endpoints
 - [ ] **4.5.12** Seed demo data: 2 users (Koala + Kangaroo), 2 guilds (with categories + channels), DM channel, messages
 - [ ] **4.5.13** Serve avatar images via CDN-like path (e.g. `/cdn/avatars/{user_id}/{hash}.png`)
@@ -210,11 +225,11 @@ Based on what `clients/teams/src/` calls. Teams uses OAuth2 bearer tokens and th
 - [ ] **4.6.4** Implement auth: mock OAuth2 token endpoint, bearer token validation
 - [ ] **4.6.5** Implement teams endpoints: list joined teams, get team
 - [ ] **4.6.6** Implement channel endpoints: list by team, get channel
-- [ ] **4.6.7** Implement message endpoints: list (paginated), send, reply
+- [ ] **4.6.7** Implement message endpoints: list (paginated), send (publishes `TeamsEvent::MessageCreated` to bus), reply
 - [ ] **4.6.8** Implement user endpoints: `/me`, get user profile, profile photo
 - [ ] **4.6.9** Implement chat endpoints: list chats (1:1 and group), send message
-- [ ] **4.6.10** Implement presence endpoint: get/set presence
-- [ ] **4.6.11** Implement change notifications: mock subscription endpoint + WebSocket/webhook for real-time events
+- [ ] **4.6.10** Implement presence endpoint: get/set presence (publishes `TeamsEvent::PresenceChanged` to bus)
+- [ ] **4.6.11** Implement change notifications: mock subscription registration endpoint + notification delivery via `EventBus<TeamsEvent>` (polling endpoint or WebSocket that forwards events matching the subscription filter)
 - [ ] **4.6.12** Implement `/seed`, `/reset`, and `/reseed` endpoints
 - [ ] **4.6.13** Seed demo data: 2 users (Sheep + Walrus), 2 teams (with channels), chat threads, messages
 - [ ] **4.6.14** Serve avatar images
