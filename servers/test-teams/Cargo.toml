@@ -1,0 +1,39 @@
+[package]
+name = "poly-test-teams"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Mock Microsoft Teams/Graph API server for Poly testing"
+
+[[bin]]
+name = "poly-test-teams"
+path = "src/main.rs"
+
+[dependencies]
+poly-test-common = { path = "../test-common" }
+
+# Async runtime
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "net",
+    "signal",
+] }
+
+# Web framework
+axum = { workspace = true, features = ["macros"] }
+tower-http = { workspace = true, features = ["cors", "trace"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dashmap = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

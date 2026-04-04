@@ -1,7 +1,7 @@
 # Phase 4 Plan — Test Server Suite & Demo Data
 
 > **Created:** 2026-04-03
-> **Status:** 🔴 Not Started
+> **Status:** 🟡 In Progress
 > **Goal:** Ship a suite of mock server binaries (one per messenger backend) so developers can do full manual UI testing and automated E2E tests without connecting to real instances like matrix.org, discord.com, etc.
 > **Depends on:** Phase 3.2 (Matrix client), existing Stoat + Poly Server implementations
 
@@ -16,16 +16,17 @@
 5. **Two animal test accounts per backend** — each with a cartoony profile image in the same style as the existing Cat and Dog avatars (`clients/demo/assets/`).
 6. **Signup flow supported** — each server allows creating new accounts so the "Add Account" UI can be tested end-to-end.
 7. **No heavy external dependencies** — no real Matrix homeserver (Synapse/Dendrite), no real Discord bot gateway, no real Teams Graph API. Pure Rust mock servers.
-8. **Crate location:** `servers/test-servers/` workspace crate with feature flags per backend, or individual `servers/test-{backend}/` crates. Decision in 4.0.1.
+8. **Crate location:** Separate `servers/test-{backend}/` crates per backend + shared `servers/test-common/` library (D4.0.1).
+9. **Avatar images:** Reuse existing Bojack-style PNGs from `clients/demo/assets/` — served by each test server at runtime (D4.0.4).
 
 ---
 
 ## 4.0 Architecture Decisions
 
-- [ ] **4.0.1** Decide crate layout: single `servers/test-servers` crate with feature flags vs. separate `servers/test-matrix`, `servers/test-stoat`, etc. crates. Consider build times, shared helpers, and whether each server should be an independent binary.
-- [ ] **4.0.2** Decide database strategy: in-memory (HashMap/DashMap) vs. temp SurrealKV per server. In-memory is simpler for mocks; SurrealKV matches prod patterns.
-- [ ] **4.0.3** Decide on a shared `test-server-common` module/crate for: dynamic port binding, shutdown channel, `/reset` + `/seed` route scaffolding, demo data types.
-- [ ] **4.0.4** Decide avatar image generation approach: AI-generated PNGs matching Cat/Dog style (~740x720, transparent background, colored circle, cartoony anthropomorphized animal with accessories).
+- [x] **4.0.1** ✅ **Separate crates** — `servers/test-matrix/`, `servers/test-stoat/`, `servers/test-discord/`, `servers/test-teams/`, `servers/test-poly/`, plus `servers/test-common/` (shared lib) and `servers/test-runner/` (orchestrator). Each backend has a fundamentally different API shape; separate crates compile in parallel and match the existing `servers/server/` + `servers/backup-server/` pattern.
+- [x] **4.0.2** ✅ **In-memory state** — `DashMap` / `RwLock<HashMap>` for mock servers. No SurrealKV overhead for mocks; `/reset` is just `.clear()`. Exception: `test-poly` wraps the real `poly-server` lib and inherits SurrealKV naturally.
+- [x] **4.0.3** ✅ **Shared `servers/test-common/` crate** — provides `TestServerBase` (dynamic port, oneshot shutdown, base URL), `/health` + `/reset` + `/seed` route builders, CLI arg parser (`--port`, `--seed`, `--verbose`), simple opaque token auth helpers, and `Seedable` trait.
+- [x] **4.0.4** ✅ **Reuse existing avatars** — Bojack-style PNGs already in `clients/demo/assets/` (stoat, raccoon, koala, kangaroo, sheep, walrus, cockatoo, parrot, owl + cat, dog). Each test server serves them from that shared location. Axolotl PNG still needed (only SVG placeholder exists).
 
 ---
 
@@ -222,7 +223,7 @@ Based on what `clients/teams/src/` calls. Teams uses OAuth2 bearer tokens and th
 
 ## 4.7 Poly Server Test Instance
 
-> The Poly Server already exists at `servers/server/`. This task wraps it with `/reset`, `/seed`, demo data seeding, and a dedicated test binary.
+> The Poly Server already exists at `servers/server/`. Unlike the other 4 mock servers (which are in-memory fakes of external APIs), `test-poly` wraps the **real** `poly-server` as a library dependency — so improvements to test infrastructure flow back into the production server. This is the only backend where we own both sides.
 
 **Crate:** `servers/test-poly/` (binary: `poly-test-poly`) — thin wrapper around `poly-server` lib
 
