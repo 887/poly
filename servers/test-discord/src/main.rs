@@ -28,8 +28,9 @@ fn router(state: DiscordState) -> Router {
         // GET /api/v10/users/@me/channels (DMs)
         // POST /api/v10/users/@me/channels (open DM)
         // WS /gateway (Gateway v10)
-        // /reset (POST)
-        // /seed (POST)
+        // /seed (POST) — populate demo data (idempotent)
+        // /reset (POST) — wipe to empty state
+        // /reseed (POST) — wipe + re-seed in one call
         .with_state(state)
 }
 

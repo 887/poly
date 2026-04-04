@@ -28,8 +28,9 @@ fn router(state: TeamsState) -> Router {
         // GET /v1.0/me/chats
         // GET /v1.0/me/presence
         // GET /v1.0/users/{id}/photo/$value
-        // /reset (POST)
-        // /seed (POST)
+        // /seed (POST) — populate demo data (idempotent)
+        // /reset (POST) — wipe to empty state
+        // /reseed (POST) — wipe + re-seed in one call
         .with_state(state)
 }
 

@@ -29,8 +29,9 @@ fn router(state: StoatState) -> Router {
         // POST /channels/{id}/messages
         // GET /sync/unreads
         // WS /ws (Bonfire)
-        // /reset (POST)
-        // /seed (POST)
+        // /seed (POST) — populate demo data (idempotent)
+        // /reset (POST) — wipe to empty state
+        // /reseed (POST) — wipe + re-seed in one call
         .with_state(state)
 }
 

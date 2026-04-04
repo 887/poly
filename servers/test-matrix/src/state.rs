@@ -42,16 +42,23 @@ impl MatrixState {
     }
 
     /// Seed demo data: Owl + Axolotl, 2 spaces, rooms, messages, DMs.
+    /// Idempotent — skips if data already present.
     pub fn seed(&self) {
         // TODO(4.3.19): Populate demo data
         tracing::info!("seeding Matrix demo data");
     }
 
-    /// Clear all state and re-seed.
+    /// Wipe all data to empty state.
     pub fn reset(&self) {
         self.auth.clear();
         self.users.clear();
         self.rooms.clear();
+        tracing::info!("reset Matrix state to empty");
+    }
+
+    /// Wipe all data and re-seed. Most common operation between test runs.
+    pub fn reseed(&self) {
+        self.reset();
         self.seed();
     }
 }

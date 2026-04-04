@@ -2,6 +2,13 @@
 //!
 //! Provides dynamic port binding, CLI args, health/reset/seed route builders,
 //! and simple opaque token auth helpers used by all mock test servers.
+//!
+//! ## Lifecycle Endpoints
+//!
+//! Every test server exposes three lifecycle endpoints:
+//! - **`POST /seed`** — populate demo data (idempotent, skips if already present)
+//! - **`POST /reset`** — wipe all data to empty state
+//! - **`POST /reseed`** — wipe + re-seed in one call (most common between test runs)
 
 mod auth;
 mod cli;

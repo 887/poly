@@ -61,18 +61,25 @@ impl DiscordState {
     }
 
     /// Seed demo data: Koala + Kangaroo, 2 guilds, channels, messages.
+    /// Idempotent — skips if data already present.
     pub fn seed(&self) {
         // TODO(4.5.12): Populate demo data
         tracing::info!("seeding Discord demo data");
     }
 
-    /// Clear all state and re-seed.
+    /// Wipe all data to empty state.
     pub fn reset(&self) {
         self.auth.clear();
         self.users.clear();
         self.guilds.clear();
         self.channels.clear();
         self.messages.clear();
+        tracing::info!("reset Discord state to empty");
+    }
+
+    /// Wipe all data and re-seed. Most common operation between test runs.
+    pub fn reseed(&self) {
+        self.reset();
         self.seed();
     }
 }

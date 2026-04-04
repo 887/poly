@@ -67,12 +67,13 @@ impl TeamsState {
     }
 
     /// Seed demo data: Sheep + Walrus, 2 teams, channels, chats, messages.
+    /// Idempotent — skips if data already present.
     pub fn seed(&self) {
         // TODO(4.6.13): Populate demo data
         tracing::info!("seeding Teams demo data");
     }
 
-    /// Clear all state and re-seed.
+    /// Wipe all data to empty state.
     pub fn reset(&self) {
         self.auth.clear();
         self.users.clear();
@@ -80,6 +81,12 @@ impl TeamsState {
         self.channels.clear();
         self.chats.clear();
         self.messages.clear();
+        tracing::info!("reset Teams state to empty");
+    }
+
+    /// Wipe all data and re-seed. Most common operation between test runs.
+    pub fn reseed(&self) {
+        self.reset();
         self.seed();
     }
 }

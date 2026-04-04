@@ -34,8 +34,9 @@ fn router(state: MatrixState) -> Router {
         // /_matrix/client/v3/join/{roomIdOrAlias} (POST)
         // /_matrix/client/v3/publicRooms (GET)
         // /_matrix/client/v3/user/{userId}/account_data/{type} (GET)
-        // /reset (POST)
-        // /seed (POST)
+        // /seed (POST) — populate demo data (idempotent)
+        // /reset (POST) — wipe to empty state
+        // /reseed (POST) — wipe + re-seed in one call
         .with_state(state)
 }
 

@@ -11,8 +11,10 @@
 
 1. **Each backend gets its own standalone test server binary** — small axum app implementing the minimum API surface the Poly plugin actually calls.
 2. **All servers follow the existing `TestServer` pattern** — dynamic port via `TcpListener::bind("127.0.0.1:0")`, oneshot shutdown channel, temp SurrealKV database.
-3. **Every server has a `/reset` endpoint** — wipes all data and re-seeds with demo fixtures. Idempotent. Used between test runs.
-4. **Every server has a `/seed` endpoint** — populates demo data without wiping. Idempotent (skips if already seeded).
+3. **Three lifecycle endpoints per server:**
+   - **`POST /seed`** — populate demo data (idempotent, skips if already present)
+   - **`POST /reset`** — wipe all data to empty state
+   - **`POST /reseed`** — wipe + re-seed in one call (most common between test runs)
 5. **Two animal test accounts per backend** — each with a cartoony profile image in the same style as the existing Cat and Dog avatars (`clients/demo/assets/`).
 6. **Signup flow supported** — each server allows creating new accounts so the "Add Account" UI can be tested end-to-end.
 7. **No heavy external dependencies** — no real Matrix homeserver (Synapse/Dendrite), no real Discord bot gateway, no real Teams Graph API. Pure Rust mock servers.
@@ -36,8 +38,9 @@
 
 - [ ] **4.1.1** Create shared helper: `TestServerBase` struct — dynamic port binding, oneshot shutdown, temp dir, base URL accessor. Extract from existing `servers/server/tests/integration.rs` pattern.
 - [ ] **4.1.2** Create shared `/health` route returning `200 OK` with `{"status": "ok", "backend": "<name>"}`.
-- [ ] **4.1.3** Create shared `/reset` route handler pattern: clear all data, re-run seed, return `200`.
+- [ ] **4.1.3** Create shared `/reset` route handler pattern: wipe all data to empty state, return `200`.
 - [ ] **4.1.4** Create shared `/seed` route handler pattern: populate demo data if not already present, return `200`.
+- [ ] **4.1.4b** Create shared `/reseed` route handler pattern: reset + seed in one call, return `200`.
 - [ ] **4.1.5** Create shared auth helpers: simple token-based auth middleware (JWT or opaque tokens), user registration, login.
 - [ ] **4.1.6** Create CLI runner: each test server binary accepts `--port <PORT>` (override dynamic), `--seed` (auto-seed on start), `--verbose` (tracing logs).
 
@@ -122,7 +125,7 @@ Based on what `clients/matrix/src/http.rs` and `clients/matrix/src/guest.rs` act
 - [ ] **4.3.15** Implement `POST /join/{roomIdOrAlias}` — add user to room membership
 - [ ] **4.3.16** Implement `GET /publicRooms` — return seeded public rooms
 - [ ] **4.3.17** Implement `GET /user/{userId}/account_data/{type}` — return m.direct mappings
-- [ ] **4.3.18** Implement `/reset` and `/seed` endpoints
+- [ ] **4.3.18** Implement `/seed`, `/reset`, and `/reseed` endpoints
 - [ ] **4.3.19** Seed demo data: 2 users (Owl + Axolotl), 2 Spaces (each with 3 rooms), 3 DM rooms, sample messages, m.direct account data
 - [ ] **4.3.20** Serve avatar images from `/avatars/{filename}` (static file serving from assets dir)
 - [ ] **4.3.21** Wire up CLI entry point with `--port`, `--seed`, `--verbose` flags
@@ -153,7 +156,7 @@ Based on what `clients/stoat/src/http.rs` and `clients/stoat/src/guest.rs` actua
 - [ ] **4.4.8** Implement user endpoints: get profile, list members
 - [ ] **4.4.9** Implement DM endpoints: list, open, send
 - [ ] **4.4.10** Implement WebSocket endpoint: authenticate, broadcast events (message_create, typing, presence)
-- [ ] **4.4.11** Implement `/reset` and `/seed` endpoints
+- [ ] **4.4.11** Implement `/seed`, `/reset`, and `/reseed` endpoints
 - [ ] **4.4.12** Seed demo data: 2 users (Stoat + Raccoon), 2 servers, channels, messages
 - [ ] **4.4.13** Serve avatar images
 - [ ] **4.4.14** Wire up CLI entry point
@@ -182,7 +185,7 @@ Based on what `clients/discord/` calls. Discord uses bot-style token auth, REST 
 - [ ] **4.5.8** Implement user endpoints: get current user (`/users/@me`), get user by ID
 - [ ] **4.5.9** Implement DM endpoints: list DM channels, create DM, send message
 - [ ] **4.5.10** Implement Gateway WebSocket: IDENTIFY, READY, dispatch events (MESSAGE_CREATE, TYPING_START, PRESENCE_UPDATE, GUILD_CREATE)
-- [ ] **4.5.11** Implement `/reset` and `/seed` endpoints
+- [ ] **4.5.11** Implement `/seed`, `/reset`, and `/reseed` endpoints
 - [ ] **4.5.12** Seed demo data: 2 users (Koala + Kangaroo), 2 guilds (with categories + channels), DM channel, messages
 - [ ] **4.5.13** Serve avatar images via CDN-like path (e.g. `/cdn/avatars/{user_id}/{hash}.png`)
 - [ ] **4.5.14** Wire up CLI entry point
@@ -212,7 +215,7 @@ Based on what `clients/teams/src/` calls. Teams uses OAuth2 bearer tokens and th
 - [ ] **4.6.9** Implement chat endpoints: list chats (1:1 and group), send message
 - [ ] **4.6.10** Implement presence endpoint: get/set presence
 - [ ] **4.6.11** Implement change notifications: mock subscription endpoint + WebSocket/webhook for real-time events
-- [ ] **4.6.12** Implement `/reset` and `/seed` endpoints
+- [ ] **4.6.12** Implement `/seed`, `/reset`, and `/reseed` endpoints
 - [ ] **4.6.13** Seed demo data: 2 users (Sheep + Walrus), 2 teams (with channels), chat threads, messages
 - [ ] **4.6.14** Serve avatar images
 - [ ] **4.6.15** Wire up CLI entry point
@@ -228,8 +231,9 @@ Based on what `clients/teams/src/` calls. Teams uses OAuth2 bearer tokens and th
 **Crate:** `servers/test-poly/` (binary: `poly-test-poly`) — thin wrapper around `poly-server` lib
 
 - [ ] **4.7.1** Create `servers/test-poly/` crate that depends on `poly-server` (as a library)
-- [ ] **4.7.2** Add `/reset` route: drop all SurrealKV data, re-seed
+- [ ] **4.7.2** Add `/reset` route: drop all SurrealKV data (empty state)
 - [ ] **4.7.3** Add `/seed` route: create demo data if not present
+- [ ] **4.7.3b** Add `/reseed` route: reset + seed in one call
 - [ ] **4.7.4** Seed demo data: 2 accounts (Cockatoo + Parrot), 2 servers, channels with categories, messages, friend relationship between the two accounts, DM conversation
 - [ ] **4.7.5** Serve avatar images for Cockatoo + Parrot
 - [ ] **4.7.6** Wire up CLI entry point (same flags as other test servers)
@@ -287,7 +291,7 @@ Each test server seeds the following on `/seed` or startup with `--seed`:
 
 - [ ] **4.9.1** Create `servers/test-runner/` binary that spawns all 5 test servers on sequential ports (e.g., 9100-9104)
 - [ ] **4.9.2** Print a summary table on startup: backend, port, status, Animal 1, Animal 2
-- [ ] **4.9.3** `/reset-all` endpoint on the runner: calls `/reset` on each test server
+- [ ] **4.9.3** `/reseed-all` endpoint on the runner: calls `/reseed` on each test server
 - [ ] **4.9.4** Graceful shutdown: Ctrl+C stops all servers cleanly
 - [ ] **4.9.5** Integration test: start runner, verify all 5 backends respond to `/health`
 - [ ] **4.9.6** Document usage in `docs/testing.md`: how to start servers, connect Poly, reset between tests
@@ -324,13 +328,13 @@ Each test server seeds the following on `/seed` or startup with `--seed`:
 
 - [ ] All 5 test server binaries build and run independently
 - [ ] `poly-test-runner` starts all 5 servers with one command
-- [ ] Each server has `/health`, `/reset`, `/seed` endpoints
+- [ ] Each server has `/health`, `/seed`, `/reset`, `/reseed` endpoints
 - [ ] Each server supports signup (new account creation)
 - [ ] 10 animal avatar images generated in consistent cartoony style
 - [ ] Demo data seeded: 2 users, 2 servers, channels, messages, DMs per backend
 - [ ] All 5 E2E smoke tests pass
 - [ ] Poly app can connect to all 5 test servers via localhost
-- [ ] `/reset` on each server reliably clears and re-seeds data
+- [ ] `/reseed` on each server reliably clears and re-seeds data
 - [ ] Documentation in `docs/testing.md` covers setup and usage
 
 ---

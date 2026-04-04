@@ -60,18 +60,25 @@ impl StoatState {
     }
 
     /// Seed demo data: Stoat + Raccoon, 2 servers, channels, messages.
+    /// Idempotent — skips if data already present.
     pub fn seed(&self) {
         // TODO(4.4.12): Populate demo data
         tracing::info!("seeding Stoat demo data");
     }
 
-    /// Clear all state and re-seed.
+    /// Wipe all data to empty state.
     pub fn reset(&self) {
         self.auth.clear();
         self.users.clear();
         self.servers.clear();
         self.channels.clear();
         self.messages.clear();
+        tracing::info!("reset Stoat state to empty");
+    }
+
+    /// Wipe all data and re-seed. Most common operation between test runs.
+    pub fn reseed(&self) {
+        self.reset();
         self.seed();
     }
 }
