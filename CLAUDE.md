@@ -29,6 +29,7 @@
 - `jj status`, `jj diff`, `jj log`, `jj show` for inspection
 - `jj new`, `jj describe`, `jj commit` for creating changes
 - `jj git push` to push to remote
+- **After pushing, always run `jj new`** to finalize the change and start a clean working copy. "Commit and push" means: `jj describe` → `jj git push` → `jj new`.
 - Only fall back to `git` if `jj` cannot accomplish the task
 
 ---
