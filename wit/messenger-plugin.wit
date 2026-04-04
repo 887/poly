@@ -423,7 +423,7 @@ interface types {
 /// through these host-mediated functions. The host can restrict, rate-limit,
 /// and sandbox each plugin's access.
 interface host-api {
-    use types.{log-level, http-response};
+    use types.{log-level, http-response, client-event};
 
     /// Make an HTTP request.
     ///
@@ -437,6 +437,11 @@ interface host-api {
     ) -> result<http-response, string>;
 
     /// Open a persistent WebSocket connection. Returns a handle ID.
+    ///
+    /// The host manages the connection. When data arrives on the WebSocket,
+    /// the host calls the guest's `handle-ws-data` export with the raw bytes.
+    /// The guest parses the protocol-specific data and calls `emit-event`
+    /// to push parsed events back to the host.
     websocket-connect: func(
         url: string,
         headers: list<tuple<string, string>>,
@@ -445,12 +450,20 @@ interface host-api {
     /// Send data on a WebSocket.
     websocket-send: func(handle: u64, data: list<u8>) -> result<_, string>;
 
-    /// Receive next message from a WebSocket.
-    /// Returns None if no data is currently available (non-blocking).
-    websocket-recv: func(handle: u64) -> result<option<list<u8>>, string>;
-
     /// Close a WebSocket connection.
     websocket-close: func(handle: u64) -> result<_, string>;
+
+    /// Emit a real-time event to the host.
+    ///
+    /// Called by the guest when it has parsed incoming data (from WebSocket
+    /// or HTTP responses) into a structured event. The host delivers it to
+    /// the UI immediately — no polling, no queuing.
+    ///
+    /// Typical flow:
+    ///   1. Host receives WebSocket data → calls guest's `handle-ws-data`
+    ///   2. Guest parses protocol bytes → calls `emit-event` with result
+    ///   3. Host forwards event to `event_stream()` consumers
+    emit-event: func(event: client-event);
 
     /// Read a value from plugin-scoped key-value storage.
     storage-get: func(key: string) -> option<list<u8>>;
@@ -581,12 +594,17 @@ interface messenger-client {
     /// Set the authenticated user's presence status.
     set-presence: func(status: presence-status) -> result<_, client-error>;
 
-    /// Poll for the next real-time event. Returns None if no event is pending.
+    /// Handle incoming WebSocket data from the host.
     ///
-    /// The host calls this periodically from an async event loop. The plugin
-    /// should maintain an internal event queue populated by processing
-    /// WebSocket data received via host-api imports.
-    poll-event: func() -> option<client-event>;
+    /// Called by the host whenever data arrives on a WebSocket connection
+    /// opened via `websocket-connect`. The guest parses the raw bytes
+    /// according to its backend's protocol (e.g., Matrix sync JSON,
+    /// Revolt Bonfire events, Discord Gateway payloads) and calls
+    /// `emit-event` on the host for each parsed event.
+    ///
+    /// This replaces the old poll-based model — events flow push-to-push
+    /// with zero polling overhead.
+    handle-ws-data: func(handle: u64, data: list<u8>);
 
     /// The type of backend this plugin connects to.
     get-backend-type: func() -> backend-type;

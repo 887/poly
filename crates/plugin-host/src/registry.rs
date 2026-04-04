@@ -786,49 +786,59 @@ impl ClientBackend for PluginBackend {
     }
 
     fn event_stream(&self) -> std::pin::Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        // Create a stream that polls the plugin's poll_event export.
-        // We use a channel-based approach: spawn a task that polls and forwards events.
+        // Push-based event delivery:
+        //
+        // 1. Set up event channel — guest calls emit-event → host forwards here
+        // 2. Take the WS inbound receiver — WS read tasks send data here
+        // 3. Spawn a loop that forwards WS data to guest via handle-ws-data,
+        //    which triggers the guest to call emit-event with parsed events
+        //
+        // No polling. Events flow push-to-push.
         let store = self.store.clone();
         let instance = self.instance.clone();
 
-        let (tx, rx) = tokio::sync::mpsc::channel::<ClientEvent>(64);
+        let (event_tx, event_rx) = tokio::sync::mpsc::channel::<ClientEvent>(64);
 
-        tokio::spawn(async move {
-            loop {
-                // Refuel before each poll
-                {
-                    let mut guard = store.lock().await;
-                    let _ = guard.set_fuel(1_000_000_000);
+        // Install the event sender in the host state so emit-event can use it.
+        // Also take ownership of the WS inbound receiver.
+        let ws_inbound_rx = {
+            let store_clone = store.clone();
+            let mut guard = store_clone.blocking_lock();
+            guard.data_mut().event_tx = Some(event_tx);
+            guard.data_mut().ws_inbound_rx.take()
+        };
+
+        // Spawn the WS data forwarding loop
+        if let Some(mut ws_rx) = ws_inbound_rx {
+            tokio::spawn(async move {
+                while let Some(ws_data) = ws_rx.recv().await {
+                    // Refuel before calling into guest
+                    {
+                        let mut guard = store.lock().await;
+                        let _ = guard.set_fuel(1_000_000_000);
+                    }
+
+                    // Forward WS data to guest — guest parses it and calls emit-event
+                    let result = {
+                        let mut guard = store.lock().await;
+                        instance
+                            .poly_messenger_messenger_client()
+                            .call_handle_ws_data(
+                                &mut *guard,
+                                ws_data.handle,
+                                &ws_data.data,
+                            )
+                            .await
+                    };
+
+                    if let Err(e) = result {
+                        tracing::error!("Plugin handle_ws_data error: {e}");
+                    }
                 }
+            });
+        }
 
-                let event = {
-                    let mut guard = store.lock().await;
-                    instance
-                        .poly_messenger_messenger_client()
-                        .call_poll_event(&mut *guard)
-                        .await
-                };
-
-                match event {
-                    Ok(Some(wit_event)) => {
-                        let client_event = bridge::from_wit_client_event(wit_event);
-                        if tx.send(client_event).await.is_err() {
-                            break; // Receiver dropped
-                        }
-                    }
-                    Ok(None) => {
-                        // No event pending — sleep briefly before polling again
-                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                    }
-                    Err(e) => {
-                        tracing::error!("Plugin poll_event error: {e}");
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    }
-                }
-            }
-        });
-
-        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+        Box::pin(tokio_stream::wrappers::ReceiverStream::new(event_rx))
     }
 
     fn backend_type(&self) -> BackendType {

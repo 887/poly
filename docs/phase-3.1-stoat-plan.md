@@ -106,7 +106,7 @@ The guest in `clients/stoat/src/guest.rs` has **partial** real implementation:
 - [ ] **3.1.5.6** Channel/server update events (`ChannelUpdate`, `ServerUpdate`)
 - [ ] **3.1.5.7** Map Stoat Bonfire events → `ClientEvent` enum in `event_stream()`
 - [ ] **3.1.5.8** Native reconnect with exponential backoff
-- [ ] **3.1.5.9** Guest: poll-based event bridge (WASM WebSockets or poll via HTTP long-poll)
+- [ ] **3.1.5.9** Guest: `handle-ws-data` parses Bonfire JSON frames → calls `emit-event` for each event. Host opens WS via `websocket-connect`, forwards data to guest automatically.
 
 ---
 

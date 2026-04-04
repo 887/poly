@@ -554,8 +554,8 @@ See individual phase plan documents for detailed checklists:
 | R6 | Subsecond hot-reload fails on library crate | **Critical** — stated failure condition | Test immediately in Phase 2 setup; adjust crate boundaries if needed |
 | R7 | Electron wrapper adds significant complexity | Low-Medium — extra build target | Can deprioritize if becomes too costly |
 | R8 | wasmtime doesn't compile on iOS/Android | High — breaks mobile plugin loading | Test early; fallback to AOT precompilation on iOS, interpreter mode, or ship precompiled .cwasm files |
-| R9 | WASM plugin overhead too high for real-time messaging | Medium — latency on each host↔guest call | wasmtime call overhead is ~1-5μs; batch events via poll_event; profile early |
-| R10 | WIT Component Model async not yet stable | Low — sync polling pattern works well | Use poll-event pattern now; migrate to WIT async when spec stabilizes |
+| R9 | WASM plugin overhead too high for real-time messaging | Medium — latency on each host↔guest call | wasmtime call overhead is ~1-5μs; push-based event delivery via emit-event minimizes round-trips; profile early |
+| R10 | WIT Component Model async not yet stable | Low — push-based pattern works well | Host pushes WS data → guest calls emit-event; migrate to WIT async when spec stabilizes |
 
 ---
 

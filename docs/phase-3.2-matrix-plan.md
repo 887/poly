@@ -195,7 +195,7 @@ CREATE TABLE fake_server_room (fake_server_id, room_id, category, position);
 - [ ] **3.2.3.W8** `get_channel_members(channel_id)` — room members endpoint
 - [ ] **3.2.3.W9** `get_dm_channels()` — `m.direct` account data → DmChannel list
 - [ ] **3.2.3.W10** `open_direct_message_channel(user_id)` — create/find DM room
-- [ ] **3.2.3.W11** `poll_event()` — implement `/sync` long-poll loop, parse timeline events into `ClientEvent` variants. Host calls this every 50ms; guest must manage `since` token and pending event queue in thread-local state.
+- [ ] **3.2.3.W11** `handle_ws_data()` — not used by Matrix (HTTP long-poll, not WS). Sync loop runs via `http-request` and calls `emit-event` for each parsed timeline event. Guest manages `since` token in thread-local state.
 - [ ] **3.2.3.W12** Transaction ID generation in WASM guest (uuid v4 or counter-based)
 
 ---
@@ -203,7 +203,7 @@ CREATE TABLE fake_server_room (fake_server_id, room_id, category, position);
 ## 3.2.4 Real-Time Sync
 
 > **Native:** `event_stream()` returns `Pin<Box<dyn Stream<Item = ClientEvent> + Send>>` — spawn a tokio task running the `/sync` loop, yield events via channel.
-> **WASM Guest:** `poll_event()` is called by host every 50ms. Guest manages `since` token + pending event queue in thread-local state. Each `poll_event()` call either kicks off a new `/sync` request (if no pending events and no in-flight request) or returns the next queued event.
+> **WASM Guest:** Guest initiates `/sync` loop via `http-request` host import. On each sync response, guest parses timeline events and calls `emit-event` for each one. Guest manages `since` token in thread-local state. The host triggers sync by calling `handle-ws-data` (unused for Matrix) or the guest self-drives via a startup hook.
 
 - [x] **3.2.4.1** Sync endpoint: `GET /_matrix/client/v3/sync?timeout=&since=` — **DONE** (http.rs sync method, used by get_messages for pagination)
 - [ ] **3.2.4.2** Native `event_stream()` impl: tokio task with `/sync` loop, `since` token tracking, yield `ClientEvent` via `futures::channel::mpsc`

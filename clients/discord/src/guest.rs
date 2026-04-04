@@ -158,8 +158,8 @@ impl Guest for DiscordPlugin {
         Ok(())
     }
 
-    fn poll_event() -> Option<wit::ClientEvent> {
-        None
+    fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
+        // TODO(3.3.5): Parse Discord Gateway WebSocket events, call emit-event
     }
 
     fn get_backend_type() -> wit::BackendType {

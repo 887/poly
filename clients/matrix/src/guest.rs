@@ -423,8 +423,9 @@ impl Guest for MatrixPlugin {
         Ok(())
     }
 
-    fn poll_event() -> Option<wit::ClientEvent> {
-        None
+    fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
+        // Matrix uses HTTP long-poll (/sync), not WebSocket.
+        // Events are emitted during sync HTTP response processing.
     }
 
     fn get_backend_type() -> wit::BackendType {

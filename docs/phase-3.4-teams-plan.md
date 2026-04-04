@@ -57,7 +57,7 @@
 
 - [ ] **3.4.5.1** Auth in guest (OAuth2 token exchange or pre-supplied token)
 - [ ] **3.4.5.2** Teams/channel/message/chat methods via Graph REST
-- [ ] **3.4.5.3** `poll_event()` — poll Graph change notifications or subscription-based events via host HTTP
+- [ ] **3.4.5.3** `handle_ws_data()` — parse Teams change notification data, call `emit-event` for message/presence events
 - [ ] **3.4.5.4** Guest E2E tests in `crates/plugin-host-tests/tests/client_e2e/teams.rs`
 
 ---

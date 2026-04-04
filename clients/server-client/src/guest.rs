@@ -159,8 +159,8 @@ impl Guest for PolyServerPlugin {
         Ok(())
     }
 
-    fn poll_event() -> Option<wit::ClientEvent> {
-        None
+    fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
+        // TODO: Parse Poly server WebSocket events, call emit-event
     }
 
     fn get_backend_type() -> wit::BackendType {

@@ -96,7 +96,7 @@ Write the canonical WIT file that mirrors the `ClientBackend` trait and all poly
   - [x] `get-voice-participants` (channel-id) → result<list<voice-participant>, client-error>
   - [x] `get-presence` (user-id) → result<presence-status, client-error>
   - [x] `set-presence` (status) → result<_, client-error>
-  - [x] `poll-event` () → option<client-event>
+  - [x] `handle-ws-data` (handle, data) — replaced poll-event with push-based model
   - [x] `backend-type` () → backend-type-enum
   - [x] `backend-name` () → string
 - [x] Define WIT `world messenger-plugin` importing host-api, exporting messenger-client
@@ -127,8 +127,9 @@ Write the canonical WIT file that mirrors the `ClientBackend` trait and all poly
   - [x] `http_request()` — delegate to reqwest
   - [x] `websocket_connect()` — delegate to tokio-tungstenite, store handle
   - [x] `websocket_send()` — write to stored WebSocket
-  - [x] `websocket_recv()` — try_read from stored WebSocket
+  - [x] ~~`websocket_recv()`~~ — removed; replaced by host pushing data to guest via `handle-ws-data`
   - [x] `websocket_close()` — remove and drop stored WebSocket
+  - [x] `emit_event()` — receive parsed events from guest, forward to event_stream consumers
   - [x] `storage_get()` — read from in-memory HashMap (SurrealKV wiring TODO)
   - [x] `storage_set()` — write to in-memory HashMap
   - [x] `storage_delete()` — delete from in-memory HashMap
@@ -142,7 +143,7 @@ Write the canonical WIT file that mirrors the `ClientBackend` trait and all poly
   - [x] Load from bytes or filesystem
   - [x] PluginBackend implements `ClientBackend` trait
   - [x] Cached backend_type/backend_name from WIT exports at instantiation
-  - [x] `event_stream()` via async polling loop + tokio channel
+  - [x] `event_stream()` via push-based emit-event + WS data forwarding
 - [x] Wire plugin_host module into `crates/core/src/lib.rs`
 - [x] Verify `cargo check --workspace` passes
 - [x] Verify `cargo check -p poly-web --target wasm32-unknown-unknown` (plugin_host gated behind cfg)

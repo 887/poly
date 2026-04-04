@@ -75,14 +75,14 @@ contract.
     │  Implements ClientBackend by delegating to WASM component:    │
     │    authenticate() → call_authenticate() in WASM               │
     │    get_servers()  → call_get_servers() in WASM                │
-    │    poll_event()   → call_poll_event() in WASM                 │
+    │    event_stream() → WS data forwarding + emit-event callback │
     │    ...                                                        │
     │                                                                │
     │  Provides host imports (the "syscalls"):                      │
     │    http_request()      → reqwest                              │
     │    websocket_connect() → tokio-tungstenite                    │
     │    websocket_send()    → write to stored connection           │
-    │    websocket_recv()    → read from stored connection          │
+    │    emit_event()        → forward parsed event to UI           │
     │    storage_get/set()   → SurrealKV (namespaced per plugin)   │
     │    log()               → tracing                              │
     └────────────────────────────────────────────────────────────────┘
@@ -125,10 +125,10 @@ the plugin interface. Located at `wit/messenger-plugin.wit` in the workspace roo
 | Function | Purpose | Host Implementation |
 |---|---|---|
 | `http-request` | Make HTTP requests | `reqwest` |
-| `websocket-connect` | Open WebSocket | `tokio-tungstenite` |
+| `websocket-connect` | Open WebSocket | `tokio-tungstenite` — host forwards data to guest via `handle-ws-data` |
 | `websocket-send` | Send on WebSocket | Write to stored connection |
-| `websocket-recv` | Receive from WebSocket | Read from stored connection |
 | `websocket-close` | Close WebSocket | Drop stored connection |
+| `emit-event` | Push a parsed event to host | Forwards to `event_stream()` consumers via mpsc channel |
 | `storage-get` | Key-value read | SurrealKV (namespaced per plugin) |
 | `storage-set` | Key-value write | SurrealKV (namespaced per plugin) |
 | `storage-delete` | Key-value delete | SurrealKV (namespaced per plugin) |
@@ -163,21 +163,27 @@ These mirror the `ClientBackend` trait exactly:
 | `get-voice-participants` | `result<list<voice-participant>, client-error>` | `ClientBackend::get_voice_participants()` |
 | `get-presence` | `result<presence-status, client-error>` | `ClientBackend::get_presence()` |
 | `set-presence` | `result<_, client-error>` | `ClientBackend::set_presence()` |
-| `poll-event` | `option<client-event>` | Replaces `event_stream()` |
+| `handle-ws-data` | `(handle: u64, data: list<u8>)` | Host pushes WS data; guest calls `emit-event` |
 | `backend-type` | `backend-type-enum` | `ClientBackend::backend_type()` |
 | `backend-name` | `string` | `ClientBackend::backend_name()` |
 
 ### 4.3 Event Streaming Strategy
 
 The `ClientBackend::event_stream()` method returns a `Pin<Box<dyn Stream>>` — this cannot cross
-the WASM boundary directly. Instead:
+the WASM boundary directly. Instead, events flow push-to-push with zero polling:
 
-- **Guest exports** `poll-event() → option<client-event>` — returns the next pending event or None
-- **Host drives** the event loop: calls `poll_event()` periodically from an async task
-- **WebSocket data** is buffered host-side; the plugin calls `websocket-recv()` (a host import)
-  to pull data and process it internally, then queues events for `poll-event` to return
-- **Alternative** (future): When WIT async stabilizes, migrate to `wait-for-event()` blocking call
-  that suspends the WASM fiber until data arrives
+1. **Guest calls** `websocket-connect(url)` — host opens a real WebSocket via tokio-tungstenite
+2. **Host receives** WS data → calls guest's `handle-ws-data(handle, bytes)` export
+3. **Guest parses** the protocol-specific bytes (Bonfire JSON, Gateway payload, etc.)
+4. **Guest calls** `emit-event(event)` — host import that pushes the parsed event directly
+5. **Host forwards** the event to `event_stream()` consumers via an mpsc channel
+
+No polling, no sleep intervals, no wasted CPU cycles. Events arrive as fast as the
+WebSocket delivers them.
+
+For HTTP-based event sources (e.g. Matrix `/sync` long-poll), the guest calls
+`http-request` and parses the response, then calls `emit-event` for each event
+found in the sync response.
 
 ---
 
@@ -278,7 +284,7 @@ When the user adds an account:
 
 ### 8.4 Client crates lose
 - `async-trait` (WIT functions are synchronous from guest perspective)
-- `futures` (no `Stream` — replaced by `poll-event`)
+- `futures` (no `Stream` — events pushed via `emit-event` host import)
 - `tokio` (no async runtime in WASM guest — host handles async)
 - `reqwest` / `tokio-tungstenite` (all I/O via host imports)
 - `dioxus` (poly-demo currently depends on this — must be removed)

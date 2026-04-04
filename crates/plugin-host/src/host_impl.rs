@@ -13,6 +13,8 @@ use wasmtime::component::ResourceTable;
 use super::engine::poly::messenger::host_api;
 use super::engine::poly::messenger::types;
 
+use poly_client::ClientEvent;
+
 /// Deterministic mocked HTTP response used by plugin-host tests.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MockHttpResponse {
@@ -56,6 +58,25 @@ pub struct PluginHostState {
     /// Remaining fuel for this invocation (prevents infinite loops).
     pub fuel_limit: u64,
 
+    /// Channel for events emitted by the plugin via `emit-event`.
+    ///
+    /// The host's `event_stream()` implementation creates the receiver side.
+    /// When the guest calls `emit-event(event)`, the host converts it and
+    /// sends it through this channel.
+    pub event_tx: Option<tokio::sync::mpsc::Sender<ClientEvent>>,
+
+    /// Sender for inbound WebSocket data.
+    ///
+    /// Each WS read task sends `WsInboundData` here. The host's event loop
+    /// receives it, calls `handle-ws-data` on the guest, and the guest
+    /// calls `emit-event` to push parsed events.
+    pub ws_inbound_tx: tokio::sync::mpsc::Sender<WsInboundData>,
+
+    /// Receiver for inbound WebSocket data.
+    ///
+    /// Consumed by the host's event loop in `event_stream()`.
+    pub ws_inbound_rx: Option<tokio::sync::mpsc::Receiver<WsInboundData>>,
+
     /// Optional deterministic HTTP fixtures keyed by `(method, url)`.
     ///
     /// When present, `http_request` returns these fixtures instead of touching
@@ -68,16 +89,27 @@ pub struct PluginHostState {
 pub struct WebSocketHandle {
     /// Sender half for writing to the WebSocket.
     pub tx: tokio::sync::mpsc::Sender<Vec<u8>>,
-    /// Receiver half for reading from the WebSocket.
-    pub rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
     /// Whether the connection is still alive.
     pub alive: bool,
+}
+
+/// Inbound WebSocket data waiting to be forwarded to the guest.
+///
+/// The host's event loop reads from this and calls `handle-ws-data`
+/// on the guest, which then calls `emit-event` to push parsed events.
+#[derive(Debug)]
+pub struct WsInboundData {
+    /// Which WebSocket handle this data came from.
+    pub handle: u64,
+    /// Raw bytes received from the WebSocket.
+    pub data: Vec<u8>,
 }
 
 impl PluginHostState {
     /// Create a new host state for a plugin instance.
     pub fn new(plugin_id: &str) -> Self {
         let wasi_ctx = wasmtime_wasi::WasiCtxBuilder::new().build();
+        let (ws_inbound_tx, ws_inbound_rx) = tokio::sync::mpsc::channel(256);
         Self {
             plugin_id: plugin_id.to_string(),
             storage: HashMap::new(),
@@ -86,6 +118,9 @@ impl PluginHostState {
             resource_table: ResourceTable::new(),
             wasi_ctx,
             fuel_limit: 1_000_000_000, // 1 billion fuel units per invocation
+            event_tx: None,
+            ws_inbound_tx,
+            ws_inbound_rx: Some(ws_inbound_rx),
             mock_http_responses: HashMap::new(),
         }
     }
@@ -179,8 +214,9 @@ impl host_api::Host for PluginHostState {
 
     /// Open a WebSocket connection.
     ///
-    /// Spawns a background task that manages the connection and routes
-    /// messages through mpsc channels.
+    /// Spawns a background task that manages the connection. Inbound data
+    /// is routed to `ws_inbound_tx` — the host's event loop picks it up
+    /// and calls `handle-ws-data` on the guest, which then calls `emit-event`.
     async fn websocket_connect(
         &mut self,
         url: String,
@@ -198,7 +234,7 @@ impl host_api::Host for PluginHostState {
         // Spawn the actual WebSocket handler
         let plugin_id = self.plugin_id.clone();
         let (ws_tx, mut ws_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(256);
-        let (inbound_tx, inbound_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(256);
+        let inbound_tx = self.ws_inbound_tx.clone();
 
         tokio::spawn(async move {
             match connect_async(&url).await {
@@ -206,17 +242,31 @@ impl host_api::Host for PluginHostState {
                     use futures_util::{SinkExt, StreamExt};
                     let (mut write, mut read) = ws_stream.split();
 
-                    // Read loop: WS → inbound channel
+                    // Read loop: WS → inbound channel → host event loop → guest handle-ws-data
                     let read_task = tokio::spawn(async move {
                         while let Some(msg) = read.next().await {
                             match msg {
                                 Ok(tokio_tungstenite::tungstenite::Message::Binary(data)) => {
-                                    if inbound_tx.send(data.to_vec()).await.is_err() {
+                                    if inbound_tx
+                                        .send(WsInboundData {
+                                            handle: handle_id,
+                                            data: data.to_vec(),
+                                        })
+                                        .await
+                                        .is_err()
+                                    {
                                         break;
                                     }
                                 }
                                 Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
-                                    if inbound_tx.send(text.as_bytes().to_vec()).await.is_err() {
+                                    if inbound_tx
+                                        .send(WsInboundData {
+                                            handle: handle_id,
+                                            data: text.as_bytes().to_vec(),
+                                        })
+                                        .await
+                                        .is_err()
+                                    {
                                         break;
                                     }
                                 }
@@ -251,7 +301,6 @@ impl host_api::Host for PluginHostState {
             handle_id,
             WebSocketHandle {
                 tx: ws_tx,
-                rx: inbound_rx,
                 alive: true,
             },
         );
@@ -276,28 +325,6 @@ impl host_api::Host for PluginHostState {
             .map_err(|e| format!("WebSocket send failed: {e}"))
     }
 
-    /// Receive data from a WebSocket (non-blocking).
-    async fn websocket_recv(&mut self, handle: u64) -> Result<Option<Vec<u8>>, String> {
-        let ws = self
-            .ws_handles
-            .get_mut(&handle)
-            .ok_or_else(|| format!("Invalid WebSocket handle: {handle}"))?;
-
-        if !ws.alive {
-            return Err("WebSocket is closed".to_string());
-        }
-
-        // Non-blocking try_recv
-        match ws.rx.try_recv() {
-            Ok(data) => Ok(Some(data)),
-            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => Ok(None),
-            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                ws.alive = false;
-                Err("WebSocket disconnected".to_string())
-            }
-        }
-    }
-
     /// Close a WebSocket connection.
     async fn websocket_close(&mut self, handle: u64) -> Result<(), String> {
         if let Some(mut ws) = self.ws_handles.remove(&handle) {
@@ -307,6 +334,28 @@ impl host_api::Host for PluginHostState {
             Ok(())
         } else {
             Err(format!("Invalid WebSocket handle: {handle}"))
+        }
+    }
+
+    /// Receive an event emitted by the guest plugin.
+    ///
+    /// The guest calls this (via `emit-event` host import) when it has
+    /// parsed WebSocket/HTTP data into a structured event. The host
+    /// converts it and forwards to the `event_stream()` consumer.
+    async fn emit_event(&mut self, event: types::ClientEvent) {
+        if let Some(tx) = &self.event_tx {
+            let client_event = super::bridge::from_wit_client_event(event);
+            if let Err(e) = tx.send(client_event).await {
+                tracing::warn!(
+                    plugin = %self.plugin_id,
+                    "Failed to forward emitted event: {e}"
+                );
+            }
+        } else {
+            tracing::debug!(
+                plugin = %self.plugin_id,
+                "Event emitted but no event_tx configured (event_stream not called?)"
+            );
         }
     }
 

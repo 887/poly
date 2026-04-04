@@ -574,12 +574,8 @@ impl MessengerClientGuest for DemoPlugin {
         Ok(())
     }
 
-    fn poll_event() -> Option<wit::ClientEvent> {
-        // Demo WASM plugin does not emit live events.
-        // The native `event_stream()` uses tokio timers which are not
-        // available in WASI. A future iteration could use host time
-        // to generate periodic events.
-        None
+    fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
+        // Demo plugin does not use WebSocket connections.
     }
 
     fn get_backend_type() -> wit::BackendType {
