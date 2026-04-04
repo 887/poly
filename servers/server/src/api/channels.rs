@@ -10,7 +10,6 @@ use uuid::Uuid;
 use crate::{
     AppState,
     auth::AuthUser,
-    db_ext::{take_many, take_one},
     error::{AppError, Result},
     models::{Category, Channel, ChannelKind, Participant},
 };
@@ -108,14 +107,7 @@ async fn list_channels(
     Path(server_id): Path<String>,
 ) -> Result<Json<Vec<ChannelResponse>>> {
     require_member(&state, &server_id, &auth.user_id).await?;
-    let channels: Vec<Channel> = take_many(
-        &mut state
-            .db
-            .query("SELECT * FROM channel WHERE server = type::record($sid) ORDER BY position")
-            .bind(("sid", server_id))
-            .await?,
-        0,
-    )?;
+    let channels = state.db.get_server_channels(&server_id).await?;
     Ok(Json(
         channels.into_iter().map(channel_to_response).collect(),
     ))
@@ -129,28 +121,17 @@ async fn create_channel(
 ) -> Result<(StatusCode, Json<ChannelResponse>)> {
     require_owner(&state, &server_id, &auth.user_id).await?;
     let kind_val = serde_json::to_value(req.kind).map_err(|e| AppError::Internal(e.to_string()))?;
-    let ch: Channel = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE channel CONTENT { \
-                  server: type::record($sid), \
-                  category: IF $cat != NONE THEN type::record($cat) ELSE NONE END, \
-                  name: $name, \
-                  kind: $kind, \
-                  position: $pos, \
-                  created_at: time::now() \
-                } RETURN *",
-            )
-            .bind(("sid", server_id))
-            .bind(("cat", req.category_id.map(|c| format!("category:{c}"))))
-            .bind(("name", req.name))
-            .bind(("kind", kind_val))
-            .bind(("pos", req.position.unwrap_or(0)))
-            .await?,
-        0,
-    )?
-    .ok_or_else(|| AppError::Internal("no record".into()))?;
+    let ch = state
+        .db
+        .create_channel(
+            &server_id,
+            req.category_id.as_deref(),
+            &req.name,
+            kind_val,
+            req.position.unwrap_or(0),
+        )
+        .await?
+        .ok_or_else(|| AppError::Internal("no record".into()))?;
     Ok((StatusCode::CREATED, Json(channel_to_response(ch))))
 }
 
@@ -163,24 +144,11 @@ async fn update_channel(
     let ch = get_channel_or_404(&state, &channel_id).await?;
     let server_id = ch.server.clone().ok_or(AppError::Forbidden)?;
     require_owner(&state, &server_id, &auth.user_id).await?;
-    let ch: Channel = take_one(
-        &mut state
-            .db
-            .query(
-                "UPDATE type::record($id) MERGE { \
-                  name: $nm ?? name, \
-                  category: IF $cat != NONE THEN type::record($cat) ELSE category END, \
-                  position: $pos ?? position \
-                } RETURN *",
-            )
-            .bind(("id", channel_id))
-            .bind(("nm", req.name))
-            .bind(("cat", req.category_id.map(|c| format!("category:{c}"))))
-            .bind(("pos", req.position))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let ch = state
+        .db
+        .update_channel(&channel_id, req.name, req.category_id, req.position)
+        .await?
+        .ok_or(AppError::NotFound)?;
     Ok(Json(channel_to_response(ch)))
 }
 
@@ -192,13 +160,7 @@ async fn delete_channel(
     let ch = get_channel_or_404(&state, &channel_id).await?;
     let server_id = ch.server.clone().ok_or(AppError::Forbidden)?;
     require_owner(&state, &server_id, &auth.user_id).await?;
-    state
-        .db
-        .query("DELETE type::record($id)")
-        .bind(("id", channel_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.delete_channel(&channel_id).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -211,21 +173,11 @@ async fn create_category(
     Json(req): Json<CreateCategoryRequest>,
 ) -> Result<(StatusCode, Json<Category>)> {
     require_owner(&state, &server_id, &auth.user_id).await?;
-    let cat: Category = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE category CONTENT { \
-                  server: type::record($sid), name: $name, position: $pos \
-                } RETURN *",
-            )
-            .bind(("sid", server_id))
-            .bind(("name", req.name))
-            .bind(("pos", req.position.unwrap_or(0)))
-            .await?,
-        0,
-    )?
-    .ok_or_else(|| AppError::Internal("no record".into()))?;
+    let cat = state
+        .db
+        .create_category(&server_id, &req.name, req.position.unwrap_or(0))
+        .await?
+        .ok_or_else(|| AppError::Internal("no record".into()))?;
     Ok((StatusCode::CREATED, Json(cat)))
 }
 
@@ -237,21 +189,11 @@ async fn update_category(
 ) -> Result<Json<Category>> {
     let cat = get_category_or_404(&state, &cat_id).await?;
     require_owner(&state, &cat.server, &auth.user_id).await?;
-    let updated: Category = take_one(
-        &mut state
-            .db
-            .query(
-                "UPDATE type::record($id) MERGE { \
-                  name: $nm ?? name, position: $pos ?? position \
-                } RETURN *",
-            )
-            .bind(("id", cat_id))
-            .bind(("nm", req.name))
-            .bind(("pos", req.position))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let updated = state
+        .db
+        .update_category(&cat_id, req.name, req.position)
+        .await?
+        .ok_or(AppError::NotFound)?;
     Ok(Json(updated))
 }
 
@@ -262,16 +204,7 @@ async fn delete_category(
 ) -> Result<Json<serde_json::Value>> {
     let cat = get_category_or_404(&state, &cat_id).await?;
     require_owner(&state, &cat.server, &auth.user_id).await?;
-    state
-        .db
-        .query(
-            "UPDATE channel SET category = NONE WHERE category = type::record($id); \
-             DELETE type::record($id)",
-        )
-        .bind(("id", cat_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.delete_category(&cat_id).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -281,19 +214,7 @@ async fn list_dms(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<Vec<ChannelResponse>>> {
-    // Get all channel IDs the user participates in, then filter to DMs (server IS NONE).
-    let channels: Vec<Channel> = take_many(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM channel WHERE \
-                 id IN (SELECT VALUE channel FROM participant WHERE user = type::record($uid)) \
-                 AND server IS NONE",
-            )
-            .bind(("uid", auth.user_id.clone()))
-            .await?,
-        0,
-    )?;
+    let channels = state.db.list_dms(&auth.user_id).await?;
     Ok(Json(
         channels.into_iter().map(channel_to_response).collect(),
     ))
@@ -309,40 +230,16 @@ async fn open_dm(
     }
 
     // Check if DM already exists between these two users.
-    let existing: Option<Channel> = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM channel WHERE server IS NONE \
-                 AND id IN (SELECT VALUE channel FROM participant WHERE user = type::record($me)) \
-                 AND id IN (SELECT VALUE channel FROM participant WHERE user = type::record($them)) \
-                 LIMIT 1",
-            )
-            .bind(("me", auth.user_id.clone()))
-            .bind(("them", req.user_id.clone()))
-            .await?,
-        0,
-    )?;
-
-    if let Some(ch) = existing {
+    if let Some(ch) = state.db.find_dm(&auth.user_id, &req.user_id).await? {
         return Ok((StatusCode::OK, Json(channel_to_response(ch))));
     }
 
     // Create new DM channel.
-    let ch: Channel = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE channel CONTENT { \
-                  server: NONE, category: NONE, name: $name, \
-                  kind: 'text', position: 0, created_at: time::now() \
-                } RETURN *",
-            )
-            .bind(("name", format!("dm-{}", Uuid::new_v4())))
-            .await?,
-        0,
-    )?
-    .ok_or_else(|| AppError::Internal("no record".into()))?;
+    let ch = state
+        .db
+        .create_dm_channel(&format!("dm-{}", Uuid::new_v4()))
+        .await?
+        .ok_or_else(|| AppError::Internal("no record".into()))?;
     let ch_id = ch
         .id
         .clone()
@@ -351,20 +248,8 @@ async fn open_dm(
     // Add both participants.
     state
         .db
-        .query(
-            "CREATE participant CONTENT { \
-              user: type::record($me), channel: type::record($ch), added_at: time::now() \
-            }; \
-            CREATE participant CONTENT { \
-              user: type::record($them), channel: type::record($ch), added_at: time::now() \
-            }",
-        )
-        .bind(("me", auth.user_id.clone()))
-        .bind(("them", req.user_id.clone()))
-        .bind(("ch", ch_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+        .create_participants(&[&auth.user_id, &req.user_id], &ch_id)
+        .await?;
 
     Ok((StatusCode::CREATED, Json(channel_to_response(ch))))
 }
@@ -376,20 +261,11 @@ async fn create_group(
     Extension(auth): Extension<AuthUser>,
     Json(req): Json<CreateGroupRequest>,
 ) -> Result<(StatusCode, Json<ChannelResponse>)> {
-    let ch: Channel = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE channel CONTENT { \
-                  server: NONE, category: NONE, name: $name, \
-                  kind: 'text', position: 0, created_at: time::now() \
-                } RETURN *",
-            )
-            .bind(("name", req.name))
-            .await?,
-        0,
-    )?
-    .ok_or_else(|| AppError::Internal("no record".into()))?;
+    let ch = state
+        .db
+        .create_dm_channel(&req.name)
+        .await?
+        .ok_or_else(|| AppError::Internal("no record".into()))?;
     let ch_id = ch
         .id
         .clone()
@@ -400,20 +276,8 @@ async fn create_group(
     if !all_members.contains(&auth.user_id) {
         all_members.push(auth.user_id.clone());
     }
-    for uid in &all_members {
-        state
-            .db
-            .query(
-                "CREATE participant CONTENT { \
-                  user: type::record($uid), channel: type::record($ch), added_at: time::now() \
-                }",
-            )
-            .bind(("uid", uid.clone()))
-            .bind(("ch", ch_id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-    }
+    let refs: Vec<&str> = all_members.iter().map(|s| s.as_str()).collect();
+    state.db.create_participants(&refs, &ch_id).await?;
 
     Ok((StatusCode::CREATED, Json(channel_to_response(ch))))
 }
@@ -427,16 +291,8 @@ async fn add_group_member(
     require_participant(&state, &channel_id, &auth.user_id).await?;
     state
         .db
-        .query(
-            "CREATE participant CONTENT { \
-              user: type::record($uid), channel: type::record($ch), added_at: time::now() \
-            }",
-        )
-        .bind(("uid", req.user_id))
-        .bind(("ch", channel_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+        .create_participants(&[req.user_id.as_str()], &channel_id)
+        .await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -449,17 +305,7 @@ async fn remove_group_member(
     if user_id != auth.user_id {
         return Err(AppError::Forbidden);
     }
-    state
-        .db
-        .query(
-            "DELETE participant \
-             WHERE user = type::record($uid) AND channel = type::record($ch)",
-        )
-        .bind(("uid", user_id))
-        .bind(("ch", channel_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.delete_participant(&user_id, &channel_id).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -469,63 +315,31 @@ async fn list_participants(
     Path(channel_id): Path<String>,
 ) -> Result<Json<Vec<serde_json::Value>>> {
     require_participant(&state, &channel_id, &auth.user_id).await?;
-    let parts: Vec<serde_json::Value> = take_many(
-        &mut state
-            .db
-            .query("SELECT * FROM participant WHERE channel = type::record($ch)")
-            .bind(("ch", channel_id))
-            .await?,
-        0,
-    )?;
+    let parts = state.db.list_participants(&channel_id).await?;
     Ok(Json(parts))
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 async fn require_member(state: &AppState, server_id: &str, user_id: &str) -> Result<()> {
-    let raw: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM membership \
-                 WHERE server = type::record($sid) AND user = type::record($uid) LIMIT 1",
-            )
-            .bind(("sid", server_id.to_owned()))
-            .bind(("uid", user_id.to_owned()))
-            .await?,
-        0,
-    )?;
-    raw.map(|_| ()).ok_or(AppError::Forbidden)
+    state
+        .db
+        .get_membership(user_id, server_id)
+        .await?
+        .map(|_| ())
+        .ok_or(AppError::Forbidden)
 }
 
 async fn require_owner(state: &AppState, server_id: &str, user_id: &str) -> Result<()> {
-    let raw: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM type::record($sid) WHERE owner = type::record($uid) LIMIT 1")
-            .bind(("sid", server_id.to_owned()))
-            .bind(("uid", user_id.to_owned()))
-            .await?,
-        0,
-    )?;
-    raw.map(|_| ()).ok_or(AppError::Forbidden)
+    if !state.db.is_server_owner(server_id, user_id).await? {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
 }
 
 async fn require_participant(state: &AppState, channel_id: &str, user_id: &str) -> Result<()> {
     // Check direct participation.
-    let raw: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM participant \
-                 WHERE channel = type::record($ch) AND user = type::record($uid) LIMIT 1",
-            )
-            .bind(("ch", channel_id.to_owned()))
-            .bind(("uid", user_id.to_owned()))
-            .await?,
-        0,
-    )?;
-    if raw.is_some() {
+    if state.db.is_participant(user_id, channel_id).await? {
         return Ok(());
     }
     // Also allow server members of the channel's server.
@@ -537,27 +351,19 @@ async fn require_participant(state: &AppState, channel_id: &str, user_id: &str) 
 }
 
 async fn get_channel_or_404(state: &AppState, channel_id: &str) -> Result<Channel> {
-    take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM type::record($id) LIMIT 1")
-            .bind(("id", channel_id.to_owned()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)
+    state
+        .db
+        .get_channel(channel_id)
+        .await?
+        .ok_or(AppError::NotFound)
 }
 
 async fn get_category_or_404(state: &AppState, cat_id: &str) -> Result<Category> {
-    take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM type::record($id) LIMIT 1")
-            .bind(("id", cat_id.to_owned()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)
+    state
+        .db
+        .get_category(cat_id)
+        .await?
+        .ok_or(AppError::NotFound)
 }
 
 fn channel_to_response(ch: Channel) -> ChannelResponse {

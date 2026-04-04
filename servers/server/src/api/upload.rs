@@ -23,9 +23,7 @@ use uuid::Uuid;
 use crate::{
     AppState,
     auth::AuthUser,
-    db_ext::take_one,
     error::{AppError, Result},
-    models::Attachment,
 };
 
 pub fn router() -> Router<AppState> {
@@ -102,29 +100,11 @@ async fn upload(
         .map_err(|e| AppError::Internal(format!("write file: {e}")))?;
 
     // Record in DB — `message` is NONE until the message is sent.
-    let att: Attachment = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE attachment CONTENT { \
-                  uploaded_by: type::record($uid), \
-                  message: NONE, \
-                  filename: $fn, \
-                  storage_name: $sn, \
-                  mime_type: $mt, \
-                  size_bytes: $sz, \
-                  created_at: time::now() \
-                } RETURN *",
-            )
-            .bind(("uid", auth.user_id.clone()))
-            .bind(("fn", filename.clone()))
-            .bind(("sn", storage_name))
-            .bind(("mt", content_type.clone()))
-            .bind(("sz", size_bytes))
-            .await?,
-        0,
-    )?
-    .ok_or_else(|| AppError::Internal("no record".into()))?;
+    let att = state
+        .db
+        .create_attachment(&auth.user_id, &filename, &storage_name, &content_type, size_bytes)
+        .await?
+        .ok_or_else(|| AppError::Internal("no record".into()))?;
     let id = att.id.clone().unwrap_or_default();
 
     Ok((
@@ -145,35 +125,18 @@ async fn serve(
     Extension(auth): Extension<AuthUser>,
     Path(att_id): Path<String>,
 ) -> Result<Response<Body>> {
-    let att: Attachment = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM type::record($id) LIMIT 1")
-            .bind(("id", att_id))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let att = state
+        .db
+        .get_attachment(&att_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     // Access control: either the uploader, or a user who can read the linked channel.
     let can_access = att.uploaded_by == auth.user_id
         || match &att.message {
             Some(msg_id) => {
-                // Look up the channel for the message.
-                let ch_raw: Option<serde_json::Value> = take_one(
-                    &mut state
-                        .db
-                        .query("SELECT channel FROM type::record($id) LIMIT 1")
-                        .bind(("id", msg_id.clone()))
-                        .await?,
-                    0,
-                )?;
-                if let Some(ch_val) = ch_raw {
-                    if let Some(ch_id) = ch_val.get("channel").and_then(|v| v.as_str()) {
-                        can_read_channel(&state, ch_id, &auth.user_id).await?
-                    } else {
-                        false
-                    }
+                if let Some(ch_id) = state.db.get_message_channel_id(msg_id).await? {
+                    can_read_channel(&state, &ch_id, &auth.user_id).await?
                 } else {
                     false
                 }
@@ -209,50 +172,13 @@ async fn serve(
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 async fn can_read_channel(state: &AppState, channel_id: &str, user_id: &str) -> Result<bool> {
-    // Participant check first.
-    let part: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM participant WHERE \
-                 channel = type::record($ch) AND user = type::record($uid) LIMIT 1",
-            )
-            .bind(("ch", channel_id.to_owned()))
-            .bind(("uid", user_id.to_owned()))
-            .await?,
-        0,
-    )?;
-    if part.is_some() {
+    if state.db.is_participant(user_id, channel_id).await? {
         return Ok(true);
     }
-    // Server membership.
-    let ch_raw: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query("SELECT server FROM type::record($ch) LIMIT 1")
-            .bind(("ch", channel_id.to_owned()))
-            .await?,
-        0,
-    )?;
-    let Some(server_id) = ch_raw
-        .as_ref()
-        .and_then(|v| v.get("server"))
-        .and_then(|v| v.as_str())
-        .map(str::to_owned)
-    else {
-        return Ok(false);
-    };
-    let member: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM membership WHERE \
-                 server = type::record($sid) AND user = type::record($uid) LIMIT 1",
-            )
-            .bind(("sid", server_id))
-            .bind(("uid", user_id.to_owned()))
-            .await?,
-        0,
-    )?;
-    Ok(member.is_some())
+    if let Some(server_id) = state.db.get_channel_server_id(channel_id).await?
+        && state.db.get_membership(user_id, &server_id).await?.is_some()
+    {
+        return Ok(true);
+    }
+    Ok(false)
 }

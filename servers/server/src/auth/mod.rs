@@ -20,7 +20,7 @@ pub mod routes;
 /// Claims embedded in the JWT token issued on sign-in/sign-up.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    /// User ID (SurrealDB record ID, e.g. `user:abc123`).
+    /// User ID (e.g. `user:abc123`).
     pub sub: String,
     /// Device ID (e.g. `device:xyz789`).
     pub device_id: String,
@@ -91,21 +91,7 @@ pub async fn auth_middleware(
     let claims = Claims::decode(token, &state.config.jwt_secret)?;
 
     // Check that the device has not been revoked.
-    let device_id = claims.device_id.clone();
-    let revoked: Option<serde_json::Value> = crate::db_ext::take_one(
-        &mut state
-            .db
-            .query("SELECT revoked FROM type::record($id)")
-            .bind(("id", device_id))
-            .await?,
-        0,
-    )?;
-
-    let is_revoked = revoked
-        .as_ref()
-        .and_then(|v| v.get("revoked"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let is_revoked = state.db.is_device_revoked(&claims.device_id).await?;
 
     if is_revoked {
         return Err(AppError::Unauthorized);

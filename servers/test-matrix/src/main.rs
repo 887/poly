@@ -1,13 +1,14 @@
 //! Mock Matrix homeserver for Poly testing.
 //!
 //! Implements the subset of the Matrix Client-Server API that poly-matrix calls:
-//! login, sync, rooms, messages, members, profile, register.
+//! login, sync, rooms, messages, members, profile, spaces, account data.
 //! In-memory state, no federation, no E2EE.
 
-use axum::routing::get;
+use axum::routing::{get, post, put};
 use axum::Router;
 use poly_test_common::{health_handler, CliArgs, TestServerBase};
 
+mod routes;
 mod state;
 
 use state::MatrixState;
@@ -18,25 +19,31 @@ fn router(state: MatrixState) -> Router {
             "/health",
             get(|| async { health_handler("matrix").await }),
         )
-        // TODO(4.3): Matrix CS API endpoints
-        // /_matrix/client/v3/login (POST)
-        // /_matrix/client/v3/logout (POST)
-        // /_matrix/client/v3/account/whoami (GET)
-        // /_matrix/client/v3/register (POST)
-        // /_matrix/client/v3/profile/{userId} (GET)
-        // /_matrix/client/v3/joined_rooms (GET)
-        // /_matrix/client/v3/sync (GET)
-        // /_matrix/client/v3/rooms/{roomId}/messages (GET)
-        // /_matrix/client/v3/rooms/{roomId}/send/{eventType}/{txnId} (PUT)
-        // /_matrix/client/v3/rooms/{roomId}/members (GET)
-        // /_matrix/client/v3/rooms/{roomId}/state (GET)
-        // /_matrix/client/v1/rooms/{roomId}/hierarchy (GET)
-        // /_matrix/client/v3/join/{roomIdOrAlias} (POST)
-        // /_matrix/client/v3/publicRooms (GET)
-        // /_matrix/client/v3/user/{userId}/account_data/{type} (GET)
-        // /seed (POST) — populate demo data (idempotent)
-        // /reset (POST) — wipe to empty state
-        // /reseed (POST) — wipe + re-seed in one call
+        // Auth
+        .route("/_matrix/client/v3/login", post(routes::login))
+        .route("/_matrix/client/v3/logout", post(routes::logout))
+        .route("/_matrix/client/v3/account/whoami", get(routes::whoami))
+        // Profile
+        .route("/_matrix/client/v3/profile/{userId}", get(routes::get_profile))
+        // Rooms
+        .route("/_matrix/client/v3/joined_rooms", get(routes::joined_rooms))
+        .route("/_matrix/client/v3/rooms/{roomId}/state", get(routes::room_state))
+        .route("/_matrix/client/v3/rooms/{roomId}/members", get(routes::room_members))
+        .route("/_matrix/client/v3/rooms/{roomId}/messages", get(routes::get_messages))
+        .route("/_matrix/client/v3/rooms/{roomId}/send/{eventType}/{txnId}", put(routes::send_message))
+        // Sync
+        .route("/_matrix/client/v3/sync", get(routes::sync))
+        // Spaces
+        .route("/_matrix/client/v1/rooms/{roomId}/hierarchy", get(routes::space_hierarchy))
+        // Directory
+        .route("/_matrix/client/v3/publicRooms", get(routes::public_rooms))
+        .route("/_matrix/client/v3/join/{roomIdOrAlias}", post(routes::join_room))
+        // Account data
+        .route("/_matrix/client/v3/user/{userId}/account_data/{dataType}", get(routes::get_account_data))
+        // Lifecycle
+        .route("/seed", post(routes::seed))
+        .route("/reset", post(routes::reset))
+        .route("/reseed", post(routes::reseed))
         .with_state(state)
 }
 

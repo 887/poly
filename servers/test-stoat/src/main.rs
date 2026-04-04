@@ -3,10 +3,11 @@
 //! Implements the subset of the Revolt REST API + WebSocket (Bonfire) that
 //! poly-stoat calls. In-memory state, no real federation.
 
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use axum::Router;
 use poly_test_common::{health_handler, CliArgs, TestServerBase};
 
+mod routes;
 mod state;
 
 use state::StoatState;
@@ -17,21 +18,30 @@ fn router(state: StoatState) -> Router {
             "/health",
             get(|| async { health_handler("stoat").await }),
         )
-        // TODO(4.4): Stoat/Revolt API endpoints
-        // POST /auth/session/login
-        // DELETE /auth/session/logout
-        // GET /users/@me
-        // GET /users/{id}
-        // GET /servers/{id}
-        // GET /servers/{id}/channels
-        // GET /channels/{id}
-        // GET /channels/{id}/messages
-        // POST /channels/{id}/messages
-        // GET /sync/unreads
-        // WS /ws (Bonfire)
-        // /seed (POST) — populate demo data (idempotent)
-        // /reset (POST) — wipe to empty state
-        // /reseed (POST) — wipe + re-seed in one call
+        // Server config
+        .route("/", get(routes::server_config))
+        // Auth
+        .route("/auth/session/login", post(routes::login))
+        .route("/auth/session/logout", delete(routes::logout))
+        // Users
+        .route("/users/@me", get(routes::get_me))
+        .route("/users/dms", get(routes::get_dms))
+        .route("/users/{id}", get(routes::get_user))
+        .route("/users/{id}/dm", get(routes::get_user_dm))
+        // Servers
+        .route("/servers/{id}", get(routes::get_server))
+        .route("/servers/{id}/members", get(routes::get_server_members))
+        // Channels
+        .route("/channels/{id}", get(routes::get_channel))
+        .route("/channels/{id}/members", get(routes::get_channel_members))
+        .route("/channels/{id}/messages", get(routes::get_messages).post(routes::send_message))
+        // Sync
+        .route("/sync/unreads", get(routes::sync_unreads))
+        // TODO(4.4): WS /ws (Bonfire) — WebSocket endpoint for real-time events
+        // Lifecycle
+        .route("/seed", post(routes::seed))
+        .route("/reset", post(routes::reset))
+        .route("/reseed", post(routes::reseed))
         .with_state(state)
 }
 

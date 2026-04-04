@@ -203,7 +203,6 @@ async fn handle_client_message(text: &str, user_id: &str, device_id: &str, state
     };
     match msg {
         ClientMessage::TypingStart { channel_id } => {
-            // Resolve the user's profile, then broadcast TypingStart to all channel members.
             debug!("TypingStart: user={user_id} channel={channel_id}");
             let user_profile = fetch_user_profile(state, user_id).await;
             if let Some(user) = user_profile {
@@ -215,13 +214,8 @@ async fn handle_client_message(text: &str, user_id: &str, device_id: &str, state
             }
         }
         ClientMessage::Heartbeat => {
-            // Update device last_seen timestamp.
             debug!("Heartbeat: user={user_id} device={device_id}");
-            let _ = state
-                .db
-                .query("UPDATE type::record($id) SET last_seen = time::now()")
-                .bind(("id", device_id.to_owned()))
-                .await;
+            state.db.update_device_heartbeat(device_id).await.ok();
         }
         ClientMessage::VoiceJoin { channel_id } => {
             debug!("VoiceJoin: user={user_id} channel={channel_id}");
@@ -233,7 +227,6 @@ async fn handle_client_message(text: &str, user_id: &str, device_id: &str, state
             target_user_id,
             sdp,
         } => {
-            // Relay the WebRTC SDP signal directly to the target user's devices.
             debug!(
                 "VoiceSignal: {user_id} → {target_user_id} ({} bytes)",
                 sdp.len()
@@ -250,79 +243,14 @@ async fn handle_client_message(text: &str, user_id: &str, device_id: &str, state
 /// Fetch a `UserProfile` for the given `user_id` from the database.
 async fn fetch_user_profile(state: &AppState, user_id: &str) -> Option<crate::models::UserProfile> {
     use crate::api::users::user_to_profile;
-    use crate::db_ext::take_one;
     use crate::models::UserRecord;
 
-    let mut result = state
-        .db
-        .query("SELECT * FROM type::record($id) LIMIT 1")
-        .bind(("id", user_id.to_owned()))
-        .await
-        .ok()?;
-
-    let record: UserRecord = take_one(&mut result, 0).ok()??;
+    let record: UserRecord = state.db.get_user(user_id).await.ok()??;
     user_to_profile(record).ok()
 }
 
 /// Broadcast a TypingStart event to all members of the given channel.
-///
-/// Mirrors `broadcast_to_channel` from messages.rs but lives here to
-/// avoid a circular-module dependency.
 async fn broadcast_typing(state: &AppState, channel_id: &str, event: ServerEvent) {
-    use crate::db_ext::record_id_to_string;
-
-    let server_members: Vec<String> = state
-        .db
-        .query(
-            "SELECT VALUE user FROM membership WHERE server = \
-             (SELECT server FROM type::record($ch) LIMIT 1)[0].server",
-        )
-        .bind(("ch", channel_id.to_owned()))
-        .await
-        .ok()
-        .map(|mut r| {
-            use surrealdb::types::Value;
-            let vals: Vec<Value> = r.take(0).unwrap_or_default();
-            vals.into_iter()
-                .filter_map(|v| {
-                    if let Value::RecordId(rid) = v {
-                        Some(record_id_to_string(&rid))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let participants: Vec<String> = state
-        .db
-        .query("SELECT VALUE user FROM participant WHERE channel = type::record($ch)")
-        .bind(("ch", channel_id.to_owned()))
-        .await
-        .ok()
-        .map(|mut r| {
-            use surrealdb::types::Value;
-            let vals: Vec<Value> = r.take(0).unwrap_or_default();
-            vals.into_iter()
-                .filter_map(|v| {
-                    if let Value::RecordId(rid) = v {
-                        Some(record_id_to_string(&rid))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let user_ids: Vec<String> = {
-        let mut set = std::collections::HashSet::new();
-        for id in server_members.into_iter().chain(participants) {
-            set.insert(id);
-        }
-        set.into_iter().collect()
-    };
-
+    let user_ids = state.db.get_channel_member_ids(channel_id).await;
     state.ws.broadcast_to_users(&user_ids, event).await;
 }

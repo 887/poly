@@ -7,7 +7,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("Database error: {0}")]
-    Db(#[from] surrealdb::Error),
+    Db(String),
 
     #[error("Not found")]
     NotFound,

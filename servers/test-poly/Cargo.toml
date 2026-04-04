@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 poly-test-common = { path = "../test-common" }
-poly-server = { workspace = true }
+poly-server = { path = "../server", default-features = false, features = ["db-sqlite"] }
 
 # Async runtime
 tokio = { workspace = true, features = [
@@ -28,9 +28,6 @@ tower-http = { workspace = true, features = ["cors", "trace"] }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
-
-# Database — real SurrealKV (wraps the production server)
-surrealdb = { workspace = true, features = ["kv-surrealkv"] }
 
 # Utilities
 tracing = { workspace = true }

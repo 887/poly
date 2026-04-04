@@ -8,9 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AppState,
     auth::AuthUser,
-    db_ext::{take_many, take_one},
     error::{AppError, Result},
-    models::{Membership, Server},
+    models::Server,
 };
 
 pub fn router() -> Router<AppState> {
@@ -55,14 +54,7 @@ async fn list_servers(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<Vec<serde_json::Value>>> {
-    let servers: Vec<serde_json::Value> = take_many(
-        &mut state
-            .db
-            .query("SELECT server.* FROM membership WHERE user = type::record($uid) FETCH server")
-            .bind(("uid", auth.user_id.clone()))
-            .await?,
-        0,
-    )?;
+    let servers = state.db.list_servers_for_user(&auth.user_id).await?;
     Ok(Json(servers))
 }
 
@@ -76,22 +68,10 @@ async fn create_server(
         return Err(AppError::BadRequest("server name required".into()));
     }
 
-    let raw: Vec<serde_json::Value> = take_many(
-        &mut state
-            .db
-            .query(
-                "CREATE server CONTENT { \
-                  name: $name, icon_url: $icon, \
-                  owner: type::record($owner), \
-                  created_at: time::now() \
-                } RETURN *",
-            )
-            .bind(("name", req.name))
-            .bind(("icon", req.icon_url))
-            .bind(("owner", auth.user_id.clone()))
-            .await?,
-        0,
-    )?;
+    let raw = state
+        .db
+        .create_server_record(&req.name, req.icon_url.as_deref(), &auth.user_id)
+        .await?;
 
     let server: Server = raw
         .into_iter()
@@ -102,20 +82,7 @@ async fn create_server(
 
     // Auto-join owner as member.
     if let Some(ref id) = server.id {
-        state
-            .db
-            .query(
-                "CREATE membership CONTENT { \
-                  user: type::record($uid), \
-                  server: type::record($sid), \
-                  joined_at: time::now() \
-                }",
-            )
-            .bind(("uid", auth.user_id.clone()))
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
+        state.db.create_membership(&auth.user_id, id).await?;
     }
 
     Ok(Json(server))
@@ -129,42 +96,23 @@ async fn get_server(
 ) -> Result<Json<ServerDetail>> {
     require_member(&state, &auth.user_id, &id).await?;
 
-    let server: Server = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM type::record($id)")
-            .bind(("id", id.clone()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let server: Server = state
+        .db
+        .get_server(&id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
-    let members: Vec<serde_json::Value> = take_many(
-        &mut state
-            .db
-            .query("SELECT user.* FROM membership WHERE server = type::record($id) FETCH user")
-            .bind(("id", id.clone()))
-            .await?,
-        0,
-    )?;
+    let members = state.db.get_server_members(&id).await?;
 
-    let channels: Vec<serde_json::Value> = take_many(
-        &mut state
-            .db
-            .query("SELECT * FROM channel WHERE server = type::record($id) ORDER BY position")
-            .bind(("id", id.clone()))
-            .await?,
-        0,
-    )?;
+    let channels: Vec<serde_json::Value> = state
+        .db
+        .get_server_channels(&id)
+        .await?
+        .into_iter()
+        .map(|ch| serde_json::to_value(ch).unwrap_or_default())
+        .collect();
 
-    let categories: Vec<serde_json::Value> = take_many(
-        &mut state
-            .db
-            .query("SELECT * FROM category WHERE server = type::record($id) ORDER BY position")
-            .bind(("id", id))
-            .await?,
-        0,
-    )?;
+    let categories = state.db.get_server_categories(&id).await?;
 
     Ok(Json(ServerDetail {
         server,
@@ -183,22 +131,11 @@ async fn update_server(
 ) -> Result<Json<Server>> {
     require_owner(&state, &auth.user_id, &id).await?;
 
-    let server: Server = take_one(
-        &mut state
-            .db
-            .query(
-                "UPDATE type::record($id) MERGE { \
-                  name: $name ?? name, \
-                  icon_url: $icon ?? icon_url \
-                } RETURN *",
-            )
-            .bind(("id", id))
-            .bind(("name", req.name))
-            .bind(("icon", req.icon_url))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let server: Server = state
+        .db
+        .update_server(&id, req.name, req.icon_url)
+        .await?
+        .ok_or(AppError::NotFound)?;
     Ok(Json(server))
 }
 
@@ -209,82 +146,7 @@ async fn delete_server(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
     require_owner(&state, &auth.user_id, &id).await?;
-
-    // Cascade delete: remove channels + their messages, categories,
-    // memberships, and invites before deleting the server record itself.
-    // Each step is best-effort (we log errors but do not abort).
-    let cascade_result: Result<()> = async {
-        // 1. Delete all messages in all channels of this server.
-        state
-            .db
-            .query("DELETE message WHERE channel.server = type::record($sid)")
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-        // 2. Delete all reactions for those messages (already deleted, referential only).
-        state
-            .db
-            .query("DELETE reaction WHERE message.channel.server = type::record($sid)")
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-        // 3. Delete all attachments for those messages.
-        state
-            .db
-            .query("DELETE attachment WHERE message.channel.server = type::record($sid)")
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-        // 4. Delete all channels in the server.
-        state
-            .db
-            .query("DELETE channel WHERE server = type::record($sid)")
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-        // 5. Delete categories.
-        state
-            .db
-            .query("DELETE category WHERE server = type::record($sid)")
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-        // 6. Delete memberships.
-        state
-            .db
-            .query("DELETE membership WHERE server = type::record($sid)")
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-        // 7. Delete invites.
-        state
-            .db
-            .query("DELETE invite WHERE server = type::record($sid)")
-            .bind(("sid", id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
-        Ok(())
-    }
-    .await;
-    if let Err(e) = cascade_result {
-        tracing::warn!("cascade delete partial failure for server={id}: {e}");
-    }
-
-    // Finally delete the server record itself.
-    state
-        .db
-        .query("DELETE type::record($id)")
-        .bind(("id", id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.delete_server_cascade(&id).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -301,21 +163,7 @@ async fn create_invite(
         .chars()
         .take(10)
         .collect::<String>();
-    state
-        .db
-        .query(
-            "CREATE invite CONTENT { \
-              code: $code, server: type::record($sid), \
-              created_by: type::record($uid), \
-              created_at: time::now(), uses: 0 \
-            }",
-        )
-        .bind(("code", code.clone()))
-        .bind(("sid", id))
-        .bind(("uid", auth.user_id.clone()))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.create_invite(&code, &id, &auth.user_id).await?;
     Ok(Json(serde_json::json!({ "code": code })))
 }
 
@@ -325,20 +173,11 @@ async fn join_server(
     Extension(auth): Extension<AuthUser>,
     Path(code): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
-    let invite: serde_json::Value = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM invite \
-                 WHERE code = $code \
-                 AND (expires_at IS NONE OR expires_at > time::now()) \
-                 LIMIT 1",
-            )
-            .bind(("code", code))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let invite: serde_json::Value = state
+        .db
+        .get_valid_invite(&code)
+        .await?
+        .ok_or(AppError::NotFound)?;
     let server_id = invite
         .get("server")
         .and_then(|v| v.as_str())
@@ -346,34 +185,9 @@ async fn join_server(
         .to_owned();
 
     // Check if already a member.
-    let existing: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM membership \
-                 WHERE user = type::record($uid) AND server = type::record($sid) \
-                 LIMIT 1",
-            )
-            .bind(("uid", auth.user_id.clone()))
-            .bind(("sid", server_id.clone()))
-            .await?,
-        0,
-    )?;
-
+    let existing = state.db.get_membership(&auth.user_id, &server_id).await?;
     if existing.is_none() {
-        state
-            .db
-            .query(
-                "CREATE membership CONTENT { \
-                  user: type::record($uid), server: type::record($sid), \
-                  joined_at: time::now() \
-                }",
-            )
-            .bind(("uid", auth.user_id.clone()))
-            .bind(("sid", server_id.clone()))
-            .await?
-            .check()
-            .map_err(AppError::Db)?;
+        state.db.create_membership(&auth.user_id, &server_id).await?;
     }
     Ok(Json(serde_json::json!({ "server_id": server_id })))
 }
@@ -384,17 +198,7 @@ async fn leave_server(
     Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
-    state
-        .db
-        .query(
-            "DELETE membership \
-             WHERE user = type::record($uid) AND server = type::record($sid)",
-        )
-        .bind(("uid", auth.user_id.clone()))
-        .bind(("sid", id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.delete_membership(&auth.user_id, &id).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -405,49 +209,27 @@ async fn kick_member(
     Path((server_id, target_user_id)): Path<(String, String)>,
 ) -> Result<Json<serde_json::Value>> {
     require_owner(&state, &auth.user_id, &server_id).await?;
-    state
-        .db
-        .query(
-            "DELETE membership \
-             WHERE user = type::record($uid) AND server = type::record($sid)",
-        )
-        .bind(("uid", target_user_id))
-        .bind(("sid", server_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.delete_membership(&target_user_id, &server_id).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 async fn require_member(state: &AppState, user_id: &str, server_id: &str) -> Result<()> {
-    let raw: Option<serde_json::Value> = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM membership \
-                 WHERE user = type::record($uid) AND server = type::record($sid) \
-                 LIMIT 1",
-            )
-            .bind(("uid", user_id.to_owned()))
-            .bind(("sid", server_id.to_owned()))
-            .await?,
-        0,
-    )?;
-    raw.map(|_| ()).ok_or(AppError::Forbidden)
+    state
+        .db
+        .get_membership(user_id, server_id)
+        .await?
+        .map(|_| ())
+        .ok_or(AppError::Forbidden)
 }
 
 async fn require_owner(state: &AppState, user_id: &str, server_id: &str) -> Result<()> {
-    let server: Server = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM type::record($id) LIMIT 1")
-            .bind(("id", server_id.to_owned()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let server: Server = state
+        .db
+        .get_server(server_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
     if server.owner != user_id {
         return Err(AppError::Forbidden);
     }
@@ -459,19 +241,10 @@ pub async fn get_membership(
     state: &AppState,
     user_id: &str,
     server_id: &str,
-) -> Result<Membership> {
-    take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM membership \
-                 WHERE user = type::record($uid) AND server = type::record($sid) \
-                 LIMIT 1",
-            )
-            .bind(("uid", user_id.to_owned()))
-            .bind(("sid", server_id.to_owned()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::Forbidden)
+) -> Result<crate::models::Membership> {
+    state
+        .db
+        .get_membership(user_id, server_id)
+        .await?
+        .ok_or(AppError::Forbidden)
 }

@@ -9,6 +9,11 @@ description = "Poly self-hosted chat server — reference implementation"
 name = "poly-server"
 path = "src/main.rs"
 
+[features]
+default = ["db-sqlite"]
+db-surreal = ["dep:surrealdb"]
+db-sqlite = ["dep:sqlite"]
+
 [dependencies]
 # Async runtime
 tokio = { workspace = true, features = [
@@ -25,8 +30,9 @@ axum = { workspace = true, features = ["ws", "macros", "multipart"] }
 tower-http = { workspace = true, features = ["cors", "trace"] }
 tower = { workspace = true, features = ["util"] }
 
-# Database
-surrealdb = { workspace = true, features = ["kv-surrealkv"] }
+# Database — one of these is active depending on feature flags.
+surrealdb = { workspace = true, features = ["kv-surrealkv"], optional = true }
+sqlite = { workspace = true, optional = true }
 
 # Serialization
 serde = { workspace = true }

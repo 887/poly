@@ -11,9 +11,8 @@ use tracing::info;
 use crate::{
     AppState,
     auth::{AuthUser, Claims},
-    db_ext::{take_many, take_one},
     error::{AppError, Result},
-    models::{AuthChallenge, Device, UserRecord},
+    models::{Device, UserRecord},
 };
 
 // ── Router ───────────────────────────────────────────────────────────────────
@@ -140,25 +139,13 @@ fn random_nonce() -> String {
     hex::encode(buf)
 }
 
-/// Fetch every user record linked to a public key.
-async fn users_for_public_key(state: &AppState, public_key: &str) -> Result<Vec<UserRecord>> {
-    take_many(
-        &mut state
-            .db
-            .query("SELECT * FROM user WHERE public_key = $pk ORDER BY created_at ASC")
-            .bind(("pk", public_key.to_owned()))
-            .await?,
-        0,
-    )
-}
-
 /// Resolve the target user for signin based on the supplied key and user ID.
 async fn resolve_user_for_signin(
     state: &AppState,
     public_key: &str,
     requested_user_id: Option<&str>,
 ) -> Result<UserRecord> {
-    let users = users_for_public_key(state, public_key).await?;
+    let users = state.db.get_users_by_pubkey(public_key).await?;
     if users.is_empty() {
         return Err(AppError::NotFound);
     }
@@ -196,53 +183,13 @@ fn is_valid_email(email: &str) -> bool {
         && !domain.ends_with('.')
 }
 
-/// Insert a new `device` record and return its string ID.
-async fn create_device(
-    state: &AppState,
-    user_id: &str,
-    device_name: Option<&str>,
-    user_agent: Option<&str>,
-    ip: Option<&str>,
-) -> Result<String> {
-    let name = device_name.unwrap_or("Unknown device");
-    let created: Option<Device> = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE device CONTENT { \
-                  owner: type::record($uid), \
-                  name: $name, \
-                  user_agent: $ua, \
-                  ip: $ip, \
-                  created_at: time::now(), \
-                  last_seen: time::now(), \
-                  revoked: false \
-                } RETURN *",
-            )
-            .bind(("uid", user_id.to_owned()))
-            .bind(("name", name.to_owned()))
-            .bind(("ua", user_agent.map(str::to_owned)))
-            .bind(("ip", ip.map(str::to_owned)))
-            .await?,
-        0,
-    )?;
-
-    created
-        .and_then(|d| d.id)
-        .ok_or_else(|| AppError::Internal("failed to create device".into()))
-}
-
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 /// `POST /auth/signup` — register a new account using Ed25519 public key.
-///
-/// The public key becomes the cryptographic identity for this user on this server.
-/// No password is needed — authentication happens via challenge-response.
 async fn signup(
     State(state): State<AppState>,
     Json(req): Json<SignupRequest>,
 ) -> Result<Json<AuthResponse>> {
-    // Validate inputs.
     if req.username.trim().is_empty() {
         return Err(AppError::BadRequest("username required".into()));
     }
@@ -256,60 +203,38 @@ async fn signup(
         return Err(AppError::BadRequest("invalid email address".into()));
     }
 
-    // Validate the public key is well-formed.
     let _vk = decode_public_key(&req.public_key)?;
 
     // Check username uniqueness.
-    let existing_name: Option<UserRecord> = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM user WHERE username = $u LIMIT 1")
-            .bind(("u", req.username.clone()))
-            .await?,
-        0,
-    )?;
-    if existing_name.is_some() {
+    if state.db.get_user_by_username(&req.username).await?.is_some() {
         return Err(AppError::Conflict("username already taken".into()));
     }
 
     // Check email uniqueness.
-    let existing_email: Option<UserRecord> = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM user WHERE email = $e LIMIT 1")
-            .bind(("e", req.email.trim().to_owned()))
-            .await?,
-        0,
-    )?;
-    if existing_email.is_some() {
+    if state.db.get_user_by_email(req.email.trim()).await?.is_some() {
         return Err(AppError::Conflict("email already registered".into()));
     }
 
     let display_name = req.display_name.unwrap_or_else(|| req.username.clone());
 
-    // Create user record with public key (no password hash).
-    let created: Option<UserRecord> = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE user CONTENT { \
-                                    username: $u, email: $e, display_name: $d, \
-                  public_key: $pk, created_at: time::now() \
-                } RETURN *",
-            )
-            .bind(("u", req.username.clone()))
-            .bind(("e", req.email.trim().to_owned()))
-            .bind(("d", display_name))
-            .bind(("pk", req.public_key.clone()))
-            .await?,
-        0,
-    )?;
+    let created = state
+        .db
+        .create_user(&req.username, req.email.trim(), &display_name, &req.public_key)
+        .await?;
 
     let user_id = created
         .and_then(|u| u.id)
         .ok_or_else(|| AppError::Internal("failed to create user".into()))?;
 
-    let device_id = create_device(&state, &user_id, req.device_name.as_deref(), None, None).await?;
+    let name = req.device_name.as_deref().unwrap_or("Unknown device");
+    let device = state
+        .db
+        .create_device(&user_id, name, None, None)
+        .await?;
+    let device_id = device
+        .and_then(|d| d.id)
+        .ok_or_else(|| AppError::Internal("failed to create device".into()))?;
+
     let token = Claims::encode(
         &user_id,
         &device_id,
@@ -339,7 +264,7 @@ async fn list_accounts(
     }
 
     let _vk = decode_public_key(&req.public_key)?;
-    let users = users_for_public_key(&state, &req.public_key).await?;
+    let users = state.db.get_users_by_pubkey(&req.public_key).await?;
     let accounts = users
         .into_iter()
         .filter_map(|user| {
@@ -356,9 +281,6 @@ async fn list_accounts(
 }
 
 /// `POST /auth/challenge` — request a random nonce for Ed25519 signin.
-///
-/// The client must sign this nonce and submit it to `/auth/verify`.
-/// Challenges expire after 60 seconds.
 async fn challenge(
     State(state): State<AppState>,
     Json(req): Json<ChallengeRequest>,
@@ -367,31 +289,16 @@ async fn challenge(
         return Err(AppError::BadRequest("public_key required".into()));
     }
 
-    // Validate the public key format.
     let _vk = decode_public_key(&req.public_key)?;
-
     let _user = resolve_user_for_signin(&state, &req.public_key, req.user_id.as_deref()).await?;
 
     let nonce = random_nonce();
 
-    // Store the challenge — use SurrealQL time arithmetic so the datetime
-    // type matches the SCHEMAFULL field (binding a chrono string would fail).
-    let created: AuthChallenge = take_one(
-        &mut state
-            .db
-            .query(
-                "CREATE auth_challenge CONTENT { \
-                  public_key: $pk, nonce: $n, \
-                  expires_at: time::now() + 60s, used: false, \
-                  created_at: time::now() \
-                } RETURN *",
-            )
-            .bind(("pk", req.public_key.clone()))
-            .bind(("n", nonce.clone()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::Internal("failed to create challenge".into()))?;
+    let created = state
+        .db
+        .create_auth_challenge(&req.public_key, &nonce)
+        .await?
+        .ok_or(AppError::Internal("failed to create challenge".into()))?;
 
     Ok(Json(ChallengeResponse {
         challenge: nonce,
@@ -400,9 +307,6 @@ async fn challenge(
 }
 
 /// `POST /auth/verify` — complete Ed25519 challenge-response signin.
-///
-/// The client signs the challenge nonce with their private key. The server
-/// verifies using the stored public key and issues a JWT.
 async fn verify(
     State(state): State<AppState>,
     Json(req): Json<VerifyRequest>,
@@ -413,26 +317,14 @@ async fn verify(
         ));
     }
 
-    // Decode and validate the public key.
     let vk = decode_public_key(&req.public_key)?;
 
-    // Look up the challenge record.
-    let challenge_record: AuthChallenge = take_one(
-        &mut state
-            .db
-            .query(
-                "SELECT * FROM auth_challenge \
-                 WHERE public_key = $pk AND nonce = $n AND used = false \
-                 LIMIT 1",
-            )
-            .bind(("pk", req.public_key.clone()))
-            .bind(("n", req.challenge.clone()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::Unauthorized)?;
+    let challenge_record = state
+        .db
+        .get_auth_challenge(&req.public_key, &req.challenge)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
 
-    // Check expiry.
     if Utc::now() > challenge_record.expires_at {
         return Err(AppError::Unauthorized);
     }
@@ -454,22 +346,23 @@ async fn verify(
     let challenge_id = challenge_record
         .id
         .ok_or(AppError::Internal("missing challenge id".into()))?;
-    state
-        .db
-        .query("UPDATE type::record($id) SET used = true")
-        .bind(("id", challenge_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.mark_challenge_used(&challenge_id).await?;
 
-    // Look up the user by public key + optional selected account.
     let user = resolve_user_for_signin(&state, &req.public_key, req.user_id.as_deref()).await?;
 
     let user_id = user
         .id
         .ok_or_else(|| AppError::Internal("missing user id".into()))?;
 
-    let device_id = create_device(&state, &user_id, req.device_name.as_deref(), None, None).await?;
+    let name = req.device_name.as_deref().unwrap_or("Unknown device");
+    let device = state
+        .db
+        .create_device(&user_id, name, None, None)
+        .await?;
+    let device_id = device
+        .and_then(|d| d.id)
+        .ok_or_else(|| AppError::Internal("failed to create device".into()))?;
+
     let token = Claims::encode(
         &user_id,
         &device_id,
@@ -493,13 +386,7 @@ async fn signout(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<serde_json::Value>> {
-    state
-        .db
-        .query("UPDATE type::record($id) SET revoked = true")
-        .bind(("id", auth.device_id.clone()))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.revoke_device(&auth.device_id).await?;
 
     // Push DeviceRevoked event so the WS closes immediately.
     state
@@ -515,15 +402,7 @@ async fn list_devices(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<Vec<Device>>> {
-    let devices: Vec<Device> = take_many(
-        &mut state
-            .db
-            .query("SELECT * FROM device WHERE owner = type::record($id) ORDER BY last_seen DESC")
-            .bind(("id", auth.user_id.clone()))
-            .await?,
-        0,
-    )?;
-
+    let devices = state.db.list_devices(&auth.user_id).await?;
     Ok(Json(devices))
 }
 
@@ -534,27 +413,17 @@ async fn revoke_device(
     Path(device_id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
     // Verify ownership.
-    let device: Device = take_one(
-        &mut state
-            .db
-            .query("SELECT * FROM type::record($id) LIMIT 1")
-            .bind(("id", device_id.clone()))
-            .await?,
-        0,
-    )?
-    .ok_or(AppError::NotFound)?;
+    let device: Device = state
+        .db
+        .get_device(&device_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     if device.owner != auth.user_id {
         return Err(AppError::Forbidden);
     }
 
-    state
-        .db
-        .query("UPDATE type::record($id) SET revoked = true")
-        .bind(("id", device_id))
-        .await?
-        .check()
-        .map_err(AppError::Db)?;
+    state.db.revoke_device(&device_id).await?;
 
     // Push DeviceRevoked to the owner's WS so they get logged out on that device.
     state
