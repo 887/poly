@@ -35,9 +35,18 @@
 
 ## Project Overview
 
-**Poly** is a multi-account messenger client built with Rust, Dioxus 0.7.3, and WASM
-Component Model plugins. It supports 6 messenger backends (demo, stoat, matrix,
-discord, teams, poly-server) via a plugin architecture.
+**Poly** is an AI-powered social layer that unifies all your messaging platforms
+(Discord, Matrix, Stoat, Teams, self-hosted) into one app — then adds an AI agent
+that remembers your conversations, responds in your voice, manages your social
+relationships, and acts as your external social memory.
+
+Built with Rust, Dioxus 0.7.3, and WASM Component Model plugins. Two layers:
+
+1. **Unified Chat UI** — 6 messenger backends via plugin architecture (demo, stoat,
+   matrix, discord, teams, poly-server). One sidebar, one message view.
+2. **Social Agent** (Phase 5) — MCP server exposing all chat backends to AI. Per-chat
+   personality, conversation memory, typing simulation, outreach scheduling, digest
+   briefings. Bring your own AI provider (Claude, GPT, Gemini, Ollama).
 
 ## Platform Targets
 

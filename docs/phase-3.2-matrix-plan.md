@@ -1,7 +1,7 @@
 # Phase 3.2 Plan — Matrix Client
 
 > **Created:** 2026-03-30
-> **Updated:** 2026-04-01
+> **Updated:** 2026-04-03
 > **Status:** 🟡 In Progress — Core HTTP client + ClientBackend impl complete
 > **Crate:** `poly-matrix`
 > **Goal:** Chat with Matrix homeservers. Spaces = servers, rooms = channels, E2EE supported.
@@ -68,9 +68,9 @@ The same approach as `clients/stoat/src/guest.rs`: implement the Matrix client-s
 - [x] **3.2.0.2** Confirm host-proxy pattern breaks plugin updatability — **CONFIRMED**, rejected
 - [x] **3.2.0.3** Chosen strategy: custom Matrix client in guest (same as Stoat) — **DECIDED**
 - [ ] **3.2.0.4** Verify vodozemac compiles to wasm32-wasip2 (`cargo component build` smoke test)
-- [ ] **3.2.0.5** Confirm `host_api::http_request()` WIT import is sufficient for Matrix HTTP (no WebSocket needed for `/sync` long-poll? — check if long-poll works over plain HTTP or needs streaming)
+- [x] **3.2.0.5** Confirm `host_api::http_request()` is sufficient for Matrix — **CONFIRMED**. `/sync` is plain HTTP long-poll, not WebSocket. The host blocks the guest for up to `timeout` ms then returns the full JSON response. No streaming needed.
 - [x] **3.2.0.6** No matrix-sdk anywhere (native or WASM) — custom Matrix HTTP client throughout — **DECIDED**
-- [ ] **3.2.0.7** Decide sync strategy: classic `/sync` long-poll (universally supported) vs Sliding Sync (faster, requires homeserver/proxy support)
+- [x] **3.2.0.7** Sync strategy: classic `/sync` long-poll — **DECIDED**. Universally supported by all homeservers. Sliding Sync deferred to later optimization.
 - [ ] **3.2.0.8** Decide session storage: serialize session tokens to `host_api::kv_set()` vs a dedicated WIT import
 
 ---
@@ -178,19 +178,45 @@ CREATE TABLE fake_server_room (fake_server_id, room_id, category, position);
 - [x] **3.2.3.16** Room membership list: `GET /_matrix/client/v3/rooms/{roomId}/members` — **DONE** (get_channel_members)
 - [x] **3.2.3.17** Federation: join room by alias `POST /_matrix/client/v3/join/{roomAliasOrId}` — **DONE** (http.rs join_room)
 - [x] **3.2.3.18** Implement `ClientBackend` trait — **DONE** (full native impl in lib.rs, guest.rs auth in WASM)
+- [ ] **3.2.3.19** MXC URL → HTTP URL conversion helper (`mxc://server/media_id` → `https://server/_matrix/media/v3/download/server/media_id`)
+- [ ] **3.2.3.20** Custom homeserver URL support — currently hardcoded to `DEFAULT_HOMESERVER` in guest.rs; accept from auth credentials or settings
+
+### 3.2.3.W WASM Guest — Remaining Methods
+
+> `guest.rs` currently only implements auth (`authenticate`, `logout`, `is_authenticated`, `get_user`). All other `Guest` trait methods return empty stubs. Port the native `lib.rs` logic to guest.rs using `host_api::http_request()`.
+
+- [ ] **3.2.3.W1** `get_servers()` — fetch joined rooms, identify Spaces via room state, return as `Server` list
+- [ ] **3.2.3.W2** `get_server(id)` — fetch single Space metadata
+- [ ] **3.2.3.W3** `get_channels(server_id)` — Space hierarchy → channel list
+- [ ] **3.2.3.W4** `get_channel(id)` — fetch single room metadata
+- [ ] **3.2.3.W5** `send_message(channel_id, content)` — PUT send event with txn_id
+- [ ] **3.2.3.W6** `send_reply_message(channel_id, reply_to, content)` — send with `m.relates_to`
+- [ ] **3.2.3.W7** `get_messages(channel_id, query)` — paginated message history via `/messages`
+- [ ] **3.2.3.W8** `get_channel_members(channel_id)` — room members endpoint
+- [ ] **3.2.3.W9** `get_dm_channels()` — `m.direct` account data → DmChannel list
+- [ ] **3.2.3.W10** `open_direct_message_channel(user_id)` — create/find DM room
+- [ ] **3.2.3.W11** `poll_event()` — implement `/sync` long-poll loop, parse timeline events into `ClientEvent` variants. Host calls this every 50ms; guest must manage `since` token and pending event queue in thread-local state.
+- [ ] **3.2.3.W12** Transaction ID generation in WASM guest (uuid v4 or counter-based)
 
 ---
 
 ## 3.2.4 Real-Time Sync
 
+> **Native:** `event_stream()` returns `Pin<Box<dyn Stream<Item = ClientEvent> + Send>>` — spawn a tokio task running the `/sync` loop, yield events via channel.
+> **WASM Guest:** `poll_event()` is called by host every 50ms. Guest manages `since` token + pending event queue in thread-local state. Each `poll_event()` call either kicks off a new `/sync` request (if no pending events and no in-flight request) or returns the next queued event.
+
 - [x] **3.2.4.1** Sync endpoint: `GET /_matrix/client/v3/sync?timeout=&since=` — **DONE** (http.rs sync method, used by get_messages for pagination)
-- [ ] **3.2.4.2** Parse timeline events from sync response → `ClientEvent` enum
-- [ ] **3.2.4.3** Handle join/leave/invite room state from sync
-- [ ] **3.2.4.4** Typing indicators: `m.typing` ephemeral events in sync
-- [ ] **3.2.4.5** Read receipts: `m.read` in account data / ephemeral
-- [ ] **3.2.4.6** Presence updates (if homeserver supports it — many disable it)
-- [ ] **3.2.4.7** Push notification rules: parse `m.push_rules` for mention/DM highlight
-- [ ] **3.2.4.8** (Optional) Sliding Sync: faster initial load, opt-in per homeserver — implement after classic sync works
+- [ ] **3.2.4.2** Native `event_stream()` impl: tokio task with `/sync` loop, `since` token tracking, yield `ClientEvent` via `futures::channel::mpsc`
+- [ ] **3.2.4.3** Parse `m.room.message` timeline events → `ClientEvent::MessageReceived`
+- [ ] **3.2.4.4** Parse `m.room.message` with `m.replace` relation → `ClientEvent::MessageEdited`
+- [ ] **3.2.4.5** Parse `m.room.redaction` → `ClientEvent::MessageDeleted`
+- [ ] **3.2.4.6** Handle join/leave/invite room state from sync → `ClientEvent::ChannelUpdated`, `ClientEvent::ServerUpdated`
+- [ ] **3.2.4.7** Typing indicators: `m.typing` ephemeral events → `ClientEvent::TypingStarted`
+- [ ] **3.2.4.8** Read receipts: `m.read` in ephemeral events
+- [ ] **3.2.4.9** Presence updates → `ClientEvent::PresenceChanged` (if homeserver supports it — many disable it)
+- [ ] **3.2.4.10** Push notification rules: parse `m.push_rules` for mention/DM highlight → `ClientEvent::NotificationReceived`
+- [ ] **3.2.4.11** Connection state management: emit `ClientEvent::ConnectionStateChanged` on sync errors/reconnects
+- [ ] **3.2.4.12** (Optional) Sliding Sync: faster initial load, opt-in per homeserver — implement after classic sync works
 
 ---
 
@@ -209,6 +235,22 @@ CREATE TABLE fake_server_room (fake_server_id, room_id, category, position);
 - [ ] **3.2.5.9** Cross-signing: bootstrap and verify via MSK/SSK/USK
 - [ ] **3.2.5.10** Key backup / SSSS (4S): upload encrypted key backup to homeserver
 - [ ] **3.2.5.11** Expose verification state in `ClientEvent` (verified / unverified device badges in UI)
+
+---
+
+## 3.2.5B Mock Test Server & Manual UI Testing
+
+> See Phase 4 plan (`docs/phase-4-test-servers-plan.md` §4.3) for full details. This section tracks Matrix-specific test server integration.
+
+**Test accounts:** Owl + Axolotl (cartoony avatar PNGs matching Cat/Dog style)
+**Crate:** `servers/test-matrix/` (binary: `poly-test-matrix`)
+
+- [ ] **3.2.5B.1** Build mock Matrix homeserver implementing the 15 CS API endpoints the plugin calls (see §4.3 checklist)
+- [ ] **3.2.5B.2** Mock `/sync` long-poll — return timeline events, state, ephemeral; support `since` + `timeout`
+- [ ] **3.2.5B.3** `/reset` and `/seed` endpoints with demo data (2 users, 2 Spaces with rooms, DM rooms, m.direct account data, messages)
+- [ ] **3.2.5B.4** `POST /register` for signup flow testing
+- [ ] **3.2.5B.5** Integration test: `poly-matrix` plugin authenticates → list Spaces → list channels → send message → verify in sync → logout
+- [ ] **3.2.5B.6** Manual UI test: connect Poly app to `localhost` test server, verify sidebar/chat/DMs render correctly
 
 ---
 

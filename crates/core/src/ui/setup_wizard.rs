@@ -64,6 +64,14 @@ pub fn SetupWizard(on_complete: EventHandler<String>) -> Element {
                         text: t("setup-feature-demo"),
                     }
                     FeatureBullet {
+                        icon: "🤖".to_string(),
+                        text: t("setup-feature-ai"),
+                    }
+                    FeatureBullet {
+                        icon: "🌐".to_string(),
+                        text: t("setup-feature-translate"),
+                    }
+                    FeatureBullet {
                         icon: "🔑".to_string(),
                         text: t("setup-feature-keys"),
                     }

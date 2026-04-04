@@ -51,6 +51,34 @@
 
 ---
 
+## 3.4.5 WASM Guest Implementation
+
+> Port native `TeamsClient` logic to `guest.rs` using `host_api::http_request()` for Graph API calls.
+
+- [ ] **3.4.5.1** Auth in guest (OAuth2 token exchange or pre-supplied token)
+- [ ] **3.4.5.2** Teams/channel/message/chat methods via Graph REST
+- [ ] **3.4.5.3** `poll_event()` — poll Graph change notifications or subscription-based events via host HTTP
+- [ ] **3.4.5.4** Guest E2E tests in `crates/plugin-host-tests/tests/client_e2e/teams.rs`
+
+---
+
+## 3.4.6 Mock Test Server & Manual UI Testing
+
+> See Phase 4 plan (`docs/phase-4-test-servers-plan.md` §4.6) for full details. This section tracks Teams-specific test server integration.
+
+**Test accounts:** Sheep + Walrus (cartoony avatar PNGs matching Cat/Dog style)
+**Crate:** `servers/test-teams/` (binary: `poly-test-teams`)
+
+- [ ] **3.4.6.1** Build mock Graph API server implementing all endpoints the plugin calls (see §4.6 checklist)
+- [ ] **3.4.6.2** Mock OAuth2 token endpoint for dev auth
+- [ ] **3.4.6.3** Mock change notification / subscription endpoint for real-time events
+- [ ] **3.4.6.4** `/reset` and `/seed` endpoints with demo data (2 users, 2 teams with channels, chat threads, messages)
+- [ ] **3.4.6.5** Signup/token flow support
+- [ ] **3.4.6.6** Integration test: `poly-teams` plugin authenticates → list teams → list channels → send message → verify → logout
+- [ ] **3.4.6.7** Manual UI test: connect Poly app to `localhost` test server, verify sidebar/chat/DMs render correctly
+
+---
+
 ## Completion Criteria
 
 - [ ] Can log into Microsoft account via OAuth2
@@ -60,3 +88,5 @@
 - [ ] User presence shows correctly
 - [ ] Notifications work for mentions and DMs
 - [ ] Contact list is accessible
+- [ ] Mock test server passes full E2E smoke test
+- [ ] WASM guest has parity with native for all core chat features

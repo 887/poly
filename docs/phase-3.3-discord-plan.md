@@ -52,6 +52,33 @@
 
 ---
 
+## 3.3.5 WASM Guest Implementation
+
+> Port native `DiscordClient` logic to `guest.rs` using `host_api::http_request()` for REST and `host_api::websocket_*()` for Gateway.
+
+- [ ] **3.3.5.1** Auth in guest (token validation or OAuth2 token exchange)
+- [ ] **3.3.5.2** Guild/channel/message methods via REST
+- [ ] **3.3.5.3** `poll_event()` — Gateway WebSocket via host WS imports, event queue in thread-local state
+- [ ] **3.3.5.4** Guest E2E tests in `crates/plugin-host-tests/tests/client_e2e/discord.rs`
+
+---
+
+## 3.3.6 Mock Test Server & Manual UI Testing
+
+> See Phase 4 plan (`docs/phase-4-test-servers-plan.md` §4.5) for full details. This section tracks Discord-specific test server integration.
+
+**Test accounts:** Koala + Kangaroo (cartoony avatar PNGs matching Cat/Dog style)
+**Crate:** `servers/test-discord/` (binary: `poly-test-discord`)
+
+- [ ] **3.3.6.1** Build mock Discord API server implementing all REST endpoints the plugin calls (see §4.5 checklist)
+- [ ] **3.3.6.2** Mock Gateway WebSocket — IDENTIFY, READY, dispatch MESSAGE_CREATE/TYPING_START/PRESENCE_UPDATE
+- [ ] **3.3.6.3** `/reset` and `/seed` endpoints with demo data (2 users, 2 guilds with categories + channels, DM channel, messages)
+- [ ] **3.3.6.4** Signup/token registration flow support
+- [ ] **3.3.6.5** Integration test: `poly-discord` plugin authenticates → list guilds → list channels → send message → receive via Gateway → logout
+- [ ] **3.3.6.6** Manual UI test: connect Poly app to `localhost` test server, verify sidebar/chat/DMs render correctly
+
+---
+
 ## Completion Criteria
 
 - [ ] Approach decision documented with ToS risk assessment
@@ -60,3 +87,5 @@
 - [ ] Friend list and DMs work
 - [ ] User is shown appropriate ToS warning before connecting
 - [ ] Voice channels work (stretch — may not be feasible depending on approach)
+- [ ] Mock test server passes full E2E smoke test
+- [ ] WASM guest has parity with native for all core chat features

@@ -1,14 +1,35 @@
-# Poly — PolyGlot Messenger
+# Poly — Your AI-Powered Social Layer
 
-A cross-platform, multi-backend messenger client built in **Rust** with **Dioxus 0.7.3** and powered by **SurrealDB 3.0.x** (SurrealKV backend).
+A cross-platform messenger that unifies all your chat accounts — Discord, Matrix, Stoat, Teams, self-hosted servers — into a single app with an AI agent that remembers, responds, and manages your social life. Built in **Rust** with **Dioxus 0.7.3**, powered by **WASM Component Model** plugins and **SurrealDB 3.0.x**.
 
-**Status (2026-04-03):** WASM Component Model plugins integrated. All 6 messenger backends compile to WebAssembly artifacts. Plugin host extracted to dynamically-linked crate (D22). 77 E2E tests passing. **Chat UI fast** — infinite scroll (older + newer), scroll position memory, view-anchor restore, one-click Jump to Present. Resize re-render isolated to header component. Tagged `chat-fast`.
+**Status (2026-04-03):** WASM Component Model plugins integrated. All 6 messenger backends compile to WebAssembly artifacts. Plugin host extracted to dynamically-linked crate (D22). 77 E2E tests passing. Chat UI fast — infinite scroll, scroll position memory, view-anchor restore. Matrix native client implemented (custom HTTP, no matrix-sdk). Phase 5 (Social Agent) planned.
 
 ---
 
 ## 🎯 Vision
 
-Poly connects you to **multiple messaging services** from a single app. Instead of switching between Discord, Matrix, Stoat, Teams, and self-hosted Poly servers, manage all conversations in one place with a unified UI.
+Poly is not just a multi-client chat app. It's a **personal AI-powered social agent** that sits on top of all your messaging platforms.
+
+**The problem:** Your conversations are scattered across 5+ apps. You miss messages, forget what people told you, lose links, and can't keep up with every chat. Switching between Discord, Teams, Matrix, and Stoat wastes hours.
+
+**Poly solves this in two layers:**
+
+### Layer 1 — Unified Chat UI
+All your accounts from every platform in one app. One sidebar, one message view, one notification stream. Switch between your Discord server and your Matrix Space without switching windows.
+
+### Layer 2 — Social Agent
+An AI agent that connects to all your chat backends via MCP and acts as your external social memory:
+
+- **Catches you up** — "What did I miss in #general?" gets a 3-sentence summary, not 200 messages to scroll
+- **Remembers everything** — Who said what, when, what links were shared, what you promised, what they asked for
+- **Responds as you** — With your tone, your humor, per-person personality, learned from how you actually write
+- **Keeps relationships alive** — "Message Alice about something interesting every week" runs in the background
+- **Finds anything** — "What was that article Bob sent about WebRTC 2 months ago?" — instant answer across all backends
+- **Prioritizes** — VIP contacts surface immediately, noise batches into a daily digest
+
+The agent shares your live connections — no duplicate logins. You can switch between responding yourself and letting the agent handle it, per-chat, at any time. Bring your own AI provider (Claude, GPT, Gemini, Ollama).
+
+Nothing like this exists as a product today.
 
 ---
 
@@ -116,10 +137,6 @@ poly/
 │   ├── teams/            # poly-teams: Teams API (Phase 3.4)
 │   └── server-client/    # poly-server-client: Poly server protocol (stub)
 │
-├── crates/
-│   ├── core/             # poly-core: UI, routing, plugin host runtime
-│   └── [other support]
-│
 ├── apps/                 # Platform entry points
 │   ├── desktop/          # Wry desktop (WebView)
 │   ├── desktop-blitz/    # WGPU native GPU rendering (experimental)
@@ -131,11 +148,19 @@ poly/
 │
 ├── servers/
 │   ├── server/           # Poly sync/backup server (Axum)
-│   └── backup-server/    # Encrypted backup service
+│   ├── backup-server/    # Encrypted backup service
+│   └── test-*/           # Mock test servers per backend (Phase 4)
 │
-└── mcp/                  # Model Context Protocol servers (DevTools)
-    ├── desktop-devtools-mcp/
-    └── web-devtools-mcp/
+├── mcp/                  # Model Context Protocol servers
+│   ├── desktop-devtools-mcp/  # Desktop DevTools
+│   ├── electron-devtools-mcp/ # Electron DevTools
+│   ├── web-devtools-mcp/      # Web DevTools
+│   └── social-agent-mcp/     # Social Agent MCP (Phase 5)
+│
+└── crates/
+    ├── core/             # poly-core: UI, routing, plugin host runtime
+    ├── social-agent/     # AI agent: personality, memory, pipeline (Phase 5)
+    └── [other support]
 ```
 
 ---
@@ -198,6 +223,8 @@ dx build --platform desktop --release
 - [ ] **Step 17**: Implement server-client real backend (host-api bindings)
 - [ ] **Step 18**: Phase 3 implementation sprint (Stoat, Matrix, Discord, Teams backends)
 - [ ] **Step 19**: Optimize WASM output size (release builds, LTO)
+- [ ] **Step 20**: Phase 4 — Mock test servers for all backends (manual UI + E2E testing)
+- [ ] **Step 21**: Phase 5 — Social Agent MCP server (AI responses, memory, personality, scheduling)
 
 ---
 
@@ -229,9 +256,12 @@ Each client crate follows the same structure:
 
 | Doc | Purpose |
 |-----|---------|
-| `docs/overall-plan.md` | Comprehensive 3-phase plan + decision registry |
+| `docs/overall-plan.md` | Comprehensive plan + decision registry |
 | `docs/phase-2.14-plan.md` | WASM plugin system (D21) + dylib extraction (D22) + E2E tests |
 | `docs/phase-3-plan.md` | Backend implementation roadmap (Phases 3.1–3.4) |
+| `docs/phase-3.2-matrix-plan.md` | Matrix client — custom HTTP, no matrix-sdk |
+| `docs/phase-4-test-servers-plan.md` | Mock test servers for all backends (manual + E2E testing) |
+| `docs/phase-5-social-agent-plan.md` | Social Agent — MCP server, AI responses, memory, personality, scheduling |
 
 ---
 
@@ -367,6 +397,6 @@ See `docs/overall-plan.md` for architecture decisions and contribution guideline
 
 ---
 
-**Last Updated:** 2026-03-06  
-**WASM Status:** All 6 backend plugins successfully built and integrated (DECISION D21)  
-**Next Phase:** Phase 3.1+ backend implementation sprint
+**Last Updated:** 2026-04-03
+**WASM Status:** All 6 backend plugins built and integrated (D21). Matrix native client implemented.
+**Roadmap:** Phase 3 (backends) → Phase 4 (test servers) → Phase 5 (social agent)

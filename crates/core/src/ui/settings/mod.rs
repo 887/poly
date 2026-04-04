@@ -23,6 +23,7 @@
 //! | `voice_video` | `VoiceVideoSettings` |
 
 mod accounts;
+mod ai;
 mod backup;
 pub(crate) mod common;
 mod diagnostics;
@@ -58,6 +59,7 @@ use scroll_spy::{
 };
 
 use accounts::AccountsSettings;
+use ai::AiSettings;
 use backup::BackupSettings;
 use diagnostics::DiagnosticsPage;
 use general::{GeneralSettings, LayoutSettings};
@@ -71,8 +73,9 @@ use voice_video::VoiceVideoSettings;
 // plugin_settings is used via the dynamic registry — no compile-time import
 // of specific plugin components into the host.
 
-const NAV_SECTIONS: [(&str, SettingsSection); 11] = [
+const NAV_SECTIONS: [(&str, SettingsSection); 12] = [
     ("settings-accounts", SettingsSection::Accounts),
+    ("settings-ai", SettingsSection::Ai),
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("settings-backup", SettingsSection::Backup),
     ("settings-identity", SettingsSection::Identity),
@@ -100,6 +103,17 @@ const SETTINGS_NODES: &[(&str, SettingsSection)] = &[
     ("settings-accounts", SettingsSection::Accounts),
     ("settings-add-account", SettingsSection::Accounts),
     ("settings-account-settings", SettingsSection::Accounts),
+    // AI Provider
+    ("settings-ai", SettingsSection::Ai),
+    ("settings-ai-provider", SettingsSection::Ai),
+    ("settings-ai-api-key", SettingsSection::Ai),
+    ("settings-ai-model", SettingsSection::Ai),
+    ("settings-ai-feature-responses", SettingsSection::Ai),
+    ("settings-ai-feature-summaries", SettingsSection::Ai),
+    ("settings-ai-feature-translate", SettingsSection::Ai),
+    ("settings-ai-feature-memory", SettingsSection::Ai),
+    ("settings-ai-feature-outreach", SettingsSection::Ai),
+    ("settings-ai-feature-image-gen", SettingsSection::Ai),
     // Voice & Video
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("voice-input-device", SettingsSection::VoiceVideo),
@@ -237,6 +251,7 @@ fn install_settings_scroll_spy(
             section_prefix: "settings-section-",
             section_ids: [
                 "settings-section-accounts",
+                "settings-section-ai",
                 "settings-section-voice-video",
                 "settings-section-backup",
                 "settings-section-identity",
@@ -443,6 +458,9 @@ fn SettingsAllSections(search_query: String) -> Element {
                             },
                             SettingsSection::Media => rsx! {
                                 MediaSettings {}
+                            },
+                            SettingsSection::Ai => rsx! {
+                                AiSettings {}
                             },
                             SettingsSection::Language => rsx! {
                                 LanguageSettings {}

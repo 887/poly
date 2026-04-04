@@ -34,11 +34,13 @@ nav-demo-active = Demo-Client aktiv
 # Einrichtungsassistent
 setup-welcome-title = Willkommen bei Poly
 setup-welcome-description = Ein einheitlicher Messenger für alle Ihre Chat-Plattformen.
-setup-welcome-tagline = Ein Multi-Account-Messenger-Client, angetrieben durch Plugins. Verbinde all deine Chat-Plattformen an einem Ort.
-setup-feature-plugins = Plugin-basiert — füge Unterstützung für jeden Messenger per WASM-Plugins hinzu
-setup-feature-multi-account = Multi-Account — verwalte all deine Konten plattformübergreifend
+setup-welcome-tagline = Dein KI-gestütztes soziales Netzwerk. Alle Chats vereint, mit einem KI-Agenten der sich erinnert, antwortet und deine Gespräche verwaltet.
+setup-feature-plugins = Plugin-basiert — Discord, Matrix, Teams, Stoat und mehr über WASM-Plugins
+setup-feature-multi-account = Einheitlicher Posteingang — alle Konten aller Plattformen an einem Ort
 setup-feature-demo = Demo-Daten geladen — erkunde die App mit Beispielunterhaltungen
 setup-feature-keys = Identitätsschlüssel — in Einstellungen → Identität generieren, wenn du bereit bist
+setup-feature-ai = KI-Agent — Chats zusammenfassen, automatisch antworten und nie ein Gespräch vergessen
+setup-feature-translate = Live-Übersetzung — Nachrichten in Echtzeit in jede Sprache übersetzen
 setup-get-started = Loslegen
 setup-generating-keys = Identitätsschlüssel werden generiert...
 setup-your-account-id = Ihre Konto-ID

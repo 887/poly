@@ -33,11 +33,13 @@ nav-demo-active = Demo Client Active
 
 # Setup Wizard
 setup-welcome-title = Welcome to Poly
-setup-welcome-tagline = A multi-account messenger client powered by plugins. Connect all your chat platforms in one place.
-setup-feature-plugins = Plugin-based — add support for any messenger via WASM plugins
-setup-feature-multi-account = Multi-account — manage all your accounts across platforms
+setup-welcome-tagline = Your AI-powered social layer. All your chats unified, with an AI agent that remembers, responds, and manages your conversations.
+setup-feature-plugins = Plugin-based — Discord, Matrix, Teams, Stoat and more via WASM plugins
+setup-feature-multi-account = Unified inbox — all your accounts across every platform in one place
 setup-feature-demo = Demo data loaded — explore the app with sample conversations
 setup-feature-keys = Identity keys — generate in Settings → Identity when you're ready
+setup-feature-ai = AI agent — catch up on chats, auto-respond, and never forget a conversation
+setup-feature-translate = Live translation — translate messages on the fly across any language
 setup-get-started = Get Started
 setup-welcome-description = A unified messenger for all your chat platforms.
 setup-generating-keys = Generating your identity keys...
@@ -241,6 +243,39 @@ settings-diagnostics-col-account = Account
 settings-diagnostics-col-connection = Connection
 settings-diagnostics-col-presence = Presence
 settings-diagnostics-no-accounts = No accounts are currently active.
+
+# Settings - AI Provider
+settings-ai = AI Provider
+settings-ai-description = Connect an AI provider to power auto-responses, chat summaries, translations, and the social agent. Bring your own API key.
+settings-ai-provider = Provider
+settings-ai-provider-none = None (disabled)
+settings-ai-provider-claude = Claude (Anthropic)
+settings-ai-provider-openai = OpenAI
+settings-ai-provider-gemini = Google Gemini
+settings-ai-provider-local = Local / Custom (Ollama, LM Studio)
+settings-ai-api-key = API Key
+settings-ai-api-key-placeholder = Paste your API key here...
+settings-ai-base-url = Base URL
+settings-ai-base-url-placeholder = http://localhost:11434/v1
+settings-ai-model = Model
+settings-ai-model-placeholder = e.g. claude-sonnet-4-6, gpt-4o, llama3
+settings-ai-test-connection = Test Connection
+settings-ai-test-success = Connected successfully
+settings-ai-test-failed = Connection failed
+settings-ai-status-configured = Configured
+settings-ai-status-not-setup = Not configured
+settings-ai-features = AI Features
+settings-ai-feature-responses = Auto-responses — draft and suggest replies to incoming messages
+settings-ai-feature-summaries = Chat summaries — catch up on missed conversations instantly
+settings-ai-feature-translate = Live translation — translate messages on the fly in any language
+settings-ai-feature-memory = Social memory — remember what people said, find anything across chats
+settings-ai-feature-outreach = Smart outreach — schedule proactive messages to keep relationships alive
+settings-ai-feature-image-gen = Image generation — create images from text prompts in chat
+settings-ai-translate-auto = Auto-translate incoming messages
+settings-ai-translate-language = Translate to
+settings-ai-usage = Usage
+settings-ai-usage-tokens-today = Tokens used today
+settings-ai-usage-estimated-cost = Estimated cost
 
 # Demo Settings
 settings-demo = Demo

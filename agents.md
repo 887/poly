@@ -1,7 +1,7 @@
 # Poly — Root Agent Instructions
 
-> **READ THIS FILE FIRST** before any work on this project.  
-> **Last Updated:** 2026-03-17
+> **READ THIS FILE FIRST** before any work on this project.
+> **Last Updated:** 2026-04-03
 
 
 ---
@@ -16,16 +16,41 @@
 
 ---
 
----
-
 ## Project Identity
 
-- **Name:** Poly (PolyGlot Messenger)
-- **Type:** Cross-platform, multi-backend messenger client
+- **Name:** Poly
+- **Tagline:** Your AI-powered social layer
+- **Type:** Cross-platform unified messenger + AI social agent
 - **Language:** Rust (latest stable)
 - **UI Framework:** Dioxus 0.7.3
 - **Database:** SurrealDB 3.0.x (SurrealKV backend EVERYWHERE — desktop + mobile)
 - **License:** MIT / Apache-2.0 dual license
+
+### What Poly Is
+
+Poly is two things:
+
+1. **A unified chat UI** — All your accounts from Discord, Matrix, Stoat, Teams, and
+   self-hosted Poly servers in one app. One sidebar, one message view, one notification
+   stream. 6 messenger backends via WASM Component Model plugins.
+
+2. **An AI social agent** — An MCP server that exposes all your chat backends to AI.
+   It remembers your conversations, responds in your voice with per-chat personality,
+   catches you up on what you missed, keeps relationships alive with scheduled outreach,
+   and acts as your external social memory. Bring your own AI provider (Claude, GPT,
+   Gemini, Ollama). Nothing like this exists as a product today.
+
+### Roadmap
+
+| Phase | What | Status |
+|-------|------|--------|
+| 1-2 | App structure, UI, plugin system, chat UI | Done |
+| 3.1 | Stoat (Revolt) client | In progress |
+| 3.2 | Matrix client (custom HTTP, no matrix-sdk) | In progress |
+| 3.3 | Discord client | Not started |
+| 3.4 | Teams client (Graph API) | Not started |
+| 4 | Mock test servers for all backends | Not started |
+| 5 | Social Agent — MCP, AI responses, memory, personality, scheduling | Not started |
 
 ---
 
@@ -474,7 +499,13 @@ When implementing messenger backends, consult:
 | `docs/overall-plan.md` | Comprehensive project plan + decisions |
 | `docs/phase-1-plan.md` | Phase 1 checklist (planning) |
 | `docs/phase-2-plan.md` | Phase 2 checklist (structure + UI) |
-| `docs/phase-3-plan.md` | Phase 3 checklist (client implementations) |
+| `docs/phase-3-plan.md` | Phase 3 overview (client implementations) |
+| `docs/phase-3.1-stoat-plan.md` | Stoat (Revolt) client plan |
+| `docs/phase-3.2-matrix-plan.md` | Matrix client plan (custom HTTP, no matrix-sdk) |
+| `docs/phase-3.3-discord-plan.md` | Discord client plan |
+| `docs/phase-3.4-teams-plan.md` | Teams client plan (Graph API) |
+| `docs/phase-4-test-servers-plan.md` | Mock test servers for all backends |
+| `docs/phase-5-social-agent-plan.md` | Social Agent — MCP, AI, memory, personality |
 | `docs/research/` | Technology research notes |
 | `crates/*/agents.md` | Per-crate agent instructions |
 | `crates/*/README.md` | Per-crate documentation |

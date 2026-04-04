@@ -150,6 +150,22 @@ The guest in `clients/stoat/src/guest.rs` has **partial** real implementation:
 
 ---
 
+## 3.1.9 Mock Test Server & Manual UI Testing
+
+> See Phase 4 plan (`docs/phase-4-test-servers-plan.md` §4.4) for full details. This section tracks Stoat-specific test server integration.
+
+**Test accounts:** Stoat + Raccoon (cartoony avatar PNGs matching Cat/Dog style)
+**Crate:** `servers/test-stoat/` (binary: `poly-test-stoat`)
+
+- [ ] **3.1.9.1** Build mock Stoat API server implementing all REST endpoints the plugin calls (see §4.4 checklist)
+- [ ] **3.1.9.2** Mock WebSocket (Bonfire) endpoint — authenticate, broadcast message/typing/presence events
+- [ ] **3.1.9.3** `/reset` and `/seed` endpoints with demo data (2 users, 2 servers, channels, messages, DMs, friend relationship)
+- [ ] **3.1.9.4** Signup flow support (create new account via mock server)
+- [ ] **3.1.9.5** Integration test: `poly-stoat` plugin authenticates → list servers → list channels → send message → receive via WS → logout
+- [ ] **3.1.9.6** Manual UI test: connect Poly app to `localhost` test server, verify sidebar/chat/DMs render correctly
+
+---
+
 ## Completion Criteria
 
 - [ ] Can log into a Stoat account through Poly settings (native + WASM plugin)

@@ -228,6 +228,8 @@ pub enum SettingsSection {
     General,
     /// External media integrations (GIF providers, future rich media sources).
     Media,
+    /// AI provider configuration (API keys, model selection, feature toggles).
+    Ai,
     /// Notification settings.
     Notifications,
     /// Voice & Video (audio device, noise suppression, etc.).
@@ -252,6 +254,7 @@ impl SettingsSection {
             Self::Identity => "identity",
             Self::Theme | Self::Appearance => "theme",
             Self::Media => "media",
+            Self::Ai => "ai",
             Self::Language => "language",
             Self::Layout => "layout",
             Self::General => "general",
@@ -270,6 +273,7 @@ impl SettingsSection {
             "identity" => Self::Identity,
             "theme" => Self::Theme,
             "media" => Self::Media,
+            "ai" => Self::Ai,
             "language" => Self::Language,
             "layout" => Self::Layout,
             "general" => Self::General,
