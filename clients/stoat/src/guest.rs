@@ -134,7 +134,7 @@ fn to_session(
         display_name,
         avatar_url: None,
         presence: map_presence(&user),
-        backend: wit::BackendType::Stoat,
+        backend: wit::BackendType::from("stoat"),
     };
 
     let instance_id = instance_id_for_base_url(base_url);
@@ -150,7 +150,7 @@ fn to_session(
         id: session_id,
         user: wit_user,
         token,
-        backend: wit::BackendType::Stoat,
+        backend: wit::BackendType::from("stoat"),
         icon_emoji: Some("🦦".to_string()),
         instance_id,
         backend_url: Some(base_url.to_string()),
@@ -298,7 +298,7 @@ fn to_wit_user(user: &StoatGuestUser) -> wit::User {
             .unwrap_or_else(|| user.username.clone()),
         avatar_url: None,
         presence: map_presence(user),
-        backend: wit::BackendType::Stoat,
+        backend: wit::BackendType::from("stoat"),
     }
 }
 
@@ -330,7 +330,7 @@ fn open_dm_like_channel(user_id: &str) -> Result<wit::DmChannel, wit::ClientErro
         user: to_wit_user(&dm_user),
         last_message: None,
         unread_count: 0,
-        backend: wit::BackendType::Stoat,
+        backend: wit::BackendType::from("stoat"),
         account_id: session.user_id,
     })
 }
@@ -560,7 +560,7 @@ impl Guest for StoatPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Stoat
+        wit::BackendType::from("stoat")
     }
 
     fn get_backend_name() -> String {

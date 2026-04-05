@@ -306,7 +306,7 @@ pub fn ServerContextMenu() -> Element {
             // discord/, matrix/, teams/, poly_native/) based on BackendType.
             // DECISION(D20): Per-backend UI dispatch by BackendType match.
             {
-                let backend = BackendType::from_slug(&backend_slug);
+                let backend = Some(BackendType::from_slug(&backend_slug));
                 rsx! {
                     {backend_server_context_menu_extras(backend, &server_id, &account_id)}
                 }

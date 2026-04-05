@@ -187,7 +187,7 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                     {
                         let friend_id = friend.id.clone();
                         let display_name = friend.display_name.clone();
-                        let backend = friend.backend;
+                        let backend = friend.backend.clone();
                         let color = user_color(&friend.id);
                         let avatar_url = friend.avatar_url.clone();
                         let first_char = display_name.chars().next().map(|ch| ch.to_string()).unwrap_or_default();

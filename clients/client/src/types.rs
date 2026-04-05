@@ -4,32 +4,42 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Identifies which messenger backend a resource belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum BackendType {
-    /// Stoat (formerly Revolt) messenger.
-    Stoat,
-    /// Matrix protocol.
-    Matrix,
-    /// Discord.
-    Discord,
-    /// Microsoft Teams.
-    Teams,
-    /// Demo/mock client for UI testing.
-    Demo,
-    /// Poly native server (self-hosted).
-    Poly,
-}
+///
+/// A string-based newtype so that new backends can be added without
+/// changing this crate. Known slugs: `"stoat"`, `"matrix"`, `"discord"`,
+/// `"teams"`, `"demo"`, `"demo_forum"`, `"poly"`, `"hackernews"`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BackendId(String);
 
-impl BackendType {
-    /// Human-readable display name.
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            Self::Stoat => "Stoat",
-            Self::Matrix => "Matrix",
-            Self::Discord => "Discord",
-            Self::Teams => "Teams",
-            Self::Demo => "Demo",
-            Self::Poly => "Poly Server",
+/// Backwards-compatible type alias — all `BackendType` type annotations
+/// continue to compile unchanged; only the `BackendType::Variant` enum
+/// constructors need to be replaced.
+pub type BackendType = BackendId;
+
+impl BackendId {
+    /// Construct a `BackendId` from any string slug.
+    pub fn new(slug: impl Into<String>) -> Self {
+        Self(slug.into())
+    }
+
+    /// Return the slug as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Human-readable display name for known slugs; falls back to the slug
+    /// itself for unknown backends.
+    pub fn display_name(&self) -> &str {
+        match self.0.as_str() {
+            "stoat" => "Stoat",
+            "matrix" => "Matrix",
+            "discord" => "Discord",
+            "teams" => "Teams",
+            "demo" => "Demo",
+            "demo_forum" => "Demo Forum",
+            "poly" => "Poly Server",
+            "hackernews" => "Hacker News",
+            other => other,
         }
     }
 
@@ -37,31 +47,45 @@ impl BackendType {
     ///
     /// These slugs appear in every account-scoped URL:
     /// `/:backend/:account_id/dms`, `/:backend/:account_id/channels/…`, etc.
-    pub fn slug(&self) -> &'static str {
-        match self {
-            Self::Stoat => "stoat",
-            Self::Matrix => "matrix",
-            Self::Discord => "discord",
-            Self::Teams => "teams",
-            Self::Demo => "demo",
-            Self::Poly => "poly",
-        }
+    pub fn slug(&self) -> &str {
+        self.as_str()
     }
 
     /// Parse a backend slug from a URL path segment.
     ///
-    /// Returns `None` for unrecognised slugs so the router can redirect to a
-    /// 404 / root rather than panicking.
-    pub fn from_slug(s: &str) -> Option<Self> {
-        match s {
-            "stoat" => Some(Self::Stoat),
-            "matrix" => Some(Self::Matrix),
-            "discord" => Some(Self::Discord),
-            "teams" => Some(Self::Teams),
-            "demo" => Some(Self::Demo),
-            "poly" => Some(Self::Poly),
-            _ => None,
-        }
+    /// All strings are valid — returns `Self` directly (no `Option`).
+    pub fn from_slug(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl std::fmt::Display for BackendId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl From<&str> for BackendId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl From<String> for BackendId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl PartialEq<&str> for BackendId {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<str> for BackendId {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
     }
 }
 
@@ -291,6 +315,11 @@ pub enum ChannelType {
     Voice,
     /// Video channel.
     Video,
+    /// Forum channel (Lemmy/Reddit-style: posts with threaded comments).
+    ///
+    /// Each post is a top-level message; replies form a thread.
+    /// Used by Lemmy, Reddit, and Discord Forums.
+    Forum,
 }
 
 /// A channel within a server.

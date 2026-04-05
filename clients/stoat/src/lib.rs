@@ -169,7 +169,7 @@ impl StoatClient {
             id: authenticated.session_id,
             user: authenticated.user,
             token: authenticated.token,
-            backend: BackendType::Stoat,
+            backend: BackendType::from("stoat"),
             icon_emoji: Some("🦦".to_string()),
             instance_id: self.instance_id(),
             backend_url: Some(self.base_url().to_string()),
@@ -339,7 +339,7 @@ impl StoatClient {
             user,
             last_message,
             unread_count,
-            backend: BackendType::Stoat,
+            backend: BackendType::from("stoat"),
             account_id: account_id.to_string(),
         })
     }
@@ -772,7 +772,7 @@ impl ClientBackend for StoatClient {
                                 .collect(),
                             name: channel.name,
                             last_message,
-                            backend: BackendType::Stoat,
+                            backend: BackendType::from("stoat"),
                             account_id: account_id.clone(),
                         })
                     }
@@ -840,7 +840,7 @@ impl ClientBackend for StoatClient {
                             kind: NotificationKind::FriendRequest {
                                 from_user_id: user.id.clone(),
                             },
-                            backend: BackendType::Stoat,
+                            backend: BackendType::from("stoat"),
                             account_id: account_id.clone(),
                             timestamp: chrono::Utc::now(),
                             read: false,
@@ -906,7 +906,7 @@ impl ClientBackend for StoatClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::Stoat
+        BackendType::from("stoat")
     }
 
     fn backend_name(&self) -> &str {
@@ -1156,22 +1156,16 @@ mod tests {
                     display_name: "Stoaty".to_string(),
                     avatar_url: None,
                     presence: PresenceStatus::Online,
-                    backend: BackendType::Stoat,
+                    backend: BackendType::from("stoat"),
                 },
                 session_name: Some("Poly".to_string()),
             })
         });
 
-        assert!(matches!(
-            session,
-            Ok(poly_client::Session {
-                backend: BackendType::Stoat,
-                instance_id,
-                backend_url,
-                ..
-            }) if instance_id == "chat.example.test~api"
-                && backend_url == Some("https://chat.example.test/api".to_string())
-        ));
+        let session = session.expect("authenticate should succeed");
+        assert_eq!(session.backend, BackendType::from("stoat"));
+        assert_eq!(session.instance_id, "chat.example.test~api");
+        assert_eq!(session.backend_url, Some("https://chat.example.test/api".to_string()));
     }
 
     #[tokio::test]
@@ -1391,7 +1385,7 @@ mod tests {
 
         assert_eq!(user.id, "user_2");
         assert_eq!(user.display_name, "Otter Pal");
-        assert_eq!(user.backend, BackendType::Stoat);
+        assert_eq!(user.backend, BackendType::from("stoat"));
 
         Ok(())
     }

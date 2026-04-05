@@ -498,6 +498,7 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
         .read()
         .nav
         .active_backend
+        .as_ref()
         .map_or_else(|| "demo".to_string(), |backend| backend.slug().to_string());
     let instance_id = app_state
         .read()
@@ -554,6 +555,7 @@ fn CreateServerButton(account_id: String) -> Element {
         .read()
         .nav
         .active_backend
+        .as_ref()
         .map(|b| b.slug().to_string())
         .unwrap_or_else(|| "poly".to_string());
     let instance_id = app_state

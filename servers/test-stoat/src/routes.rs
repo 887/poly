@@ -617,10 +617,12 @@ pub async fn sync_unreads(
 pub async fn serve_avatar(Path(id): Path<String>) -> impl IntoResponse {
     static STOAT_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/stoat.png");
     static RACCOON_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/raccoon.png");
+    static LEMMING_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/lemming.png");
 
     let bytes: &[u8] = match id.as_str() {
         "av_STOAT01" => STOAT_PNG,
         "av_RACCOON01" => RACCOON_PNG,
+        "av_LEMMING01" => LEMMING_PNG,
         _ => return (StatusCode::NOT_FOUND, "not found").into_response(),
     };
     (

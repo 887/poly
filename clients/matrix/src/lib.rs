@@ -118,10 +118,10 @@ impl MatrixClient {
                 display_name,
                 avatar_url: profile.avatar_url.clone(),
                 presence: PresenceStatus::Online,
-                backend: BackendType::Matrix,
+                backend: BackendType::from("matrix"),
             },
             token: session_state.access_token.clone(),
-            backend: BackendType::Matrix,
+            backend: BackendType::from("matrix"),
             icon_emoji: Some("🟦".to_string()),
             instance_id: self.instance_id(),
             backend_url: Some(self.homeserver_url().to_string()),
@@ -157,7 +157,7 @@ impl MatrixClient {
                 display_name: sender.to_string(),
                 avatar_url: None,
                 presence: PresenceStatus::Offline,
-                backend: BackendType::Matrix,
+                backend: BackendType::from("matrix"),
             },
             content: MessageContent::Text(body),
             timestamp: chrono::DateTime::from_timestamp_millis(ts as i64)
@@ -218,7 +218,7 @@ impl MatrixClient {
                     .unwrap_or_else(|| session.user_id.clone()),
                 avatar_url: None,
                 presence: PresenceStatus::Online,
-                backend: BackendType::Matrix,
+                backend: BackendType::from("matrix"),
             },
             content: MessageContent::Text(body),
             timestamp: chrono::Utc::now(),
@@ -300,7 +300,7 @@ impl ClientBackend for MatrixClient {
                     unread_count: 0,
                     mention_count: 0,
                     categories: vec![],
-                    backend: BackendType::Matrix,
+                    backend: BackendType::from("matrix"),
                     account_id: account_id.clone(),
                     account_display_name: account_id.clone(),
                 });
@@ -322,7 +322,7 @@ impl ClientBackend for MatrixClient {
             unread_count: 0,
             mention_count: 0,
             categories: vec![],
-            backend: BackendType::Matrix,
+            backend: BackendType::from("matrix"),
             account_id: account_id.clone(),
             account_display_name: account_id,
         })
@@ -475,7 +475,7 @@ impl ClientBackend for MatrixClient {
             display_name: profile.displayname.unwrap_or_else(|| id.to_string()),
             avatar_url: profile.avatar_url,
             presence: PresenceStatus::Offline,
-            backend: BackendType::Matrix,
+            backend: BackendType::from("matrix"),
         })
     }
 
@@ -515,7 +515,7 @@ impl ClientBackend for MatrixClient {
                     display_name,
                     avatar_url,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::Matrix,
+                    backend: BackendType::from("matrix"),
                 })
             })
             .collect();
@@ -550,11 +550,11 @@ impl ClientBackend for MatrixClient {
                             display_name: other_user_id.clone(),
                             avatar_url: None,
                             presence: PresenceStatus::Offline,
-                            backend: BackendType::Matrix,
+                            backend: BackendType::from("matrix"),
                         },
                         last_message: None,
                         unread_count: 0,
-                        backend: BackendType::Matrix,
+                        backend: BackendType::from("matrix"),
                         account_id: user_id.clone(),
                     });
                 }
@@ -588,7 +588,7 @@ impl ClientBackend for MatrixClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::Matrix
+        BackendType::from("matrix")
     }
 
     fn backend_name(&self) -> &str {

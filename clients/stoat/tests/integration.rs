@@ -1002,7 +1002,7 @@ async fn stoat_authenticate_email_password_success() {
     assert_eq!(session.user.id, "user_1".to_string());
     assert_eq!(session.user.display_name, "Stoaty McStoat".to_string());
     assert_eq!(session.user.presence, PresenceStatus::DoNotDisturb);
-    assert_eq!(session.backend, BackendType::Stoat);
+    assert_eq!(session.backend, BackendType::from("stoat"));
     assert_eq!(session.token, "test-session-token".to_string());
     assert_eq!(session.icon_emoji, Some("🦦".to_string()));
     assert_eq!(session.backend_url, Some(server.base_url.clone()));
@@ -1468,7 +1468,7 @@ async fn stoat_get_server_maps_categories_and_unreads() {
 
     assert_eq!(detail.id, "server_1");
     assert_eq!(detail.name, "Stoat Testing Grounds");
-    assert_eq!(detail.backend, BackendType::Stoat);
+    assert_eq!(detail.backend, BackendType::from("stoat"));
     assert_eq!(detail.account_id, "user_1");
     assert_eq!(detail.account_display_name, "Stoaty McStoat");
     assert_eq!(detail.unread_count, 3);

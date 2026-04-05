@@ -231,34 +231,38 @@ impl ClientManager {
 
     /// Deactivate the demo client.
     ///
-    /// Removes both demo backends from the map and clears demo-related cache.
+    /// Removes all demo backends from the map and clears demo-related cache.
     #[cfg(feature = "demo")]
     pub fn deactivate_demo(&mut self) {
-        self.backends.remove("demo-cat");
-        self.backends.remove("demo-dog");
-        self.sessions.remove("demo-cat");
-        self.sessions.remove("demo-dog");
-        self.connection_statuses.remove("demo-cat");
-        self.connection_statuses.remove("demo-dog");
-        self.presence_statuses.remove("demo-cat");
-        self.presence_statuses.remove("demo-dog");
+        for id in &["demo-cat", "demo-dog", "demo-platypus"] {
+            self.backends.remove(*id);
+            self.sessions.remove(*id);
+            self.connection_statuses.remove(*id);
+            self.presence_statuses.remove(*id);
+        }
         self.demo_active = false;
         // Remove demo entries from server map
-        self.server_account_map
-            .retain(|_, account_id| account_id != "demo-cat" && account_id != "demo-dog");
+        self.server_account_map.retain(|_, account_id| {
+            account_id != "demo-cat"
+                && account_id != "demo-dog"
+                && account_id != "demo-platypus"
+        });
         tracing::info!("Demo clients deactivated");
     }
 
     /// Return the account IDs of all currently active demo accounts.
     ///
     /// Determined by inspecting the live `sessions` map for entries whose
-    /// `backend` field is [`poly_client::BackendType::Demo`]. This keeps the
+    /// `backend` field is [`poly_client::BackendType::from("demo")`]. This keeps the
     /// UI layer free from any knowledge of hard-coded demo account IDs.
     #[cfg(feature = "demo")]
     pub fn demo_account_ids(&self) -> Vec<String> {
         self.sessions
             .iter()
-            .filter(|(_, s)| s.backend == BackendType::Demo)
+            .filter(|(_, s)| {
+                s.backend == BackendType::from("demo")
+                    || s.backend == BackendType::from("demo_forum")
+            })
             .map(|(id, _)| id.clone())
             .collect()
     }

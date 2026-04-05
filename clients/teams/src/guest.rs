@@ -163,7 +163,7 @@ impl Guest for TeamsPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Teams
+        wit::BackendType::from("teams")
     }
 
     fn get_backend_name() -> String {

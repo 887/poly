@@ -25,20 +25,20 @@ async fn load_all_wasm_plugins() {
     let wasm_dir = wasm_dir();
 
     let plugins = [
-        ("demo", "poly_demo.wasm", BackendType::Demo, "Demo"),
-        ("stoat", "poly_stoat.wasm", BackendType::Stoat, "Stoat"),
-        ("matrix", "poly_matrix.wasm", BackendType::Matrix, "Matrix"),
+        ("demo", "poly_demo.wasm", BackendType::from("demo"), "Demo"),
+        ("stoat", "poly_stoat.wasm", BackendType::from("stoat"), "Stoat"),
+        ("matrix", "poly_matrix.wasm", BackendType::from("matrix"), "Matrix"),
         (
             "discord",
             "poly_discord.wasm",
-            BackendType::Discord,
+            BackendType::from("discord"),
             "Discord",
         ),
-        ("teams", "poly_teams.wasm", BackendType::Teams, "Teams"),
+        ("teams", "poly_teams.wasm", BackendType::from("teams"), "Teams"),
         (
             "server",
             "poly_server_client.wasm",
-            BackendType::Poly,
+            BackendType::from("poly"),
             "Poly Server",
         ),
     ];

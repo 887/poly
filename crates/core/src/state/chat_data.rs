@@ -175,13 +175,16 @@ pub fn format_file_size(bytes: u64) -> String {
 
 /// Get an emoji badge for a backend type (used as source indicator).
 pub fn backend_badge(backend: &BackendType) -> &'static str {
-    match backend {
-        BackendType::Stoat => "🟣",
-        BackendType::Matrix => "🔵",
-        BackendType::Discord => "🟢",
-        BackendType::Teams => "🟡",
-        BackendType::Demo => "🧪",
-        BackendType::Poly => "🔶",
+    match backend.as_str() {
+        "stoat" => "🟣",
+        "matrix" => "🔵",
+        "discord" => "🟢",
+        "teams" => "🟡",
+        "demo" => "🧪",
+        "demo_forum" => "📋",
+        "poly" => "🔶",
+        "hackernews" => "🟠",
+        _ => "⬜",
     }
 }
 

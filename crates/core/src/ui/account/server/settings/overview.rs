@@ -23,28 +23,20 @@ use poly_client::BackendType;
 /// For Phase 2, all writes are local-only even for supported backends.
 fn backend_from_slug(slug: &str) -> Option<BackendType> {
     match slug {
-        "demo" => Some(BackendType::Demo),
-        "stoat" => Some(BackendType::Stoat),
-        "discord" => Some(BackendType::Discord),
-        "poly" => Some(BackendType::Poly),
-        "matrix" => Some(BackendType::Matrix),
-        "teams" => Some(BackendType::Teams),
-        _ => None,
+        "" => None,
+        s => Some(BackendType::from(s)),
     }
 }
 
 /// Returns `true` for backends that support user-facing banner images.
-fn supports_banner(backend: Option<BackendType>) -> bool {
-    matches!(
-        backend,
-        Some(BackendType::Demo | BackendType::Stoat | BackendType::Discord | BackendType::Poly)
-    )
+fn supports_banner(backend: Option<&BackendType>) -> bool {
+    backend.map_or(false, |b| matches!(b.as_str(), "demo" | "stoat" | "discord" | "poly"))
 }
 
 /// Returns `true` for backends where server icon changes must be local-only
 /// (Matrix workspaces, Teams channels — no "server" ownership).
-fn is_local_only(backend: Option<BackendType>) -> bool {
-    matches!(backend, Some(BackendType::Matrix | BackendType::Teams))
+fn is_local_only(backend: Option<&BackendType>) -> bool {
+    backend.map_or(false, |b| matches!(b.as_str(), "matrix" | "teams"))
 }
 
 /// Icon URL input, live preview, and save button.
@@ -255,8 +247,8 @@ pub fn ServerOverviewSettings(
     let chat_data: Signal<ChatData> = use_context();
 
     let backend = backend_from_slug(&backend_slug);
-    let show_banner = supports_banner(backend);
-    let local_only = is_local_only(backend);
+    let show_banner = supports_banner(backend.as_ref());
+    let local_only = is_local_only(backend.as_ref());
 
     // Read current icon / banner URLs from chat_data (may already include
     // any override applied by apply_server_icon_overrides).

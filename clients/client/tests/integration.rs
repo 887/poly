@@ -463,7 +463,7 @@ async fn test_backend_full_flow() {
 
     assert!(!session.id.is_empty());
     assert_eq!(session.user.display_name, "Alice Backend");
-    assert_eq!(session.backend, BackendType::Poly);
+    assert_eq!(session.backend, BackendType::from("poly"));
     assert!(alice.is_authenticated());
 
     // Create a server via the HTTP client.
@@ -511,7 +511,7 @@ async fn test_backend_full_flow() {
     );
 
     // Backend info.
-    assert_eq!(alice.backend_type(), BackendType::Poly);
+    assert_eq!(alice.backend_type(), BackendType::from("poly"));
     assert_eq!(alice.backend_name(), "Poly Server");
 
     // Logout.

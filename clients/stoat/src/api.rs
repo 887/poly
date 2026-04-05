@@ -309,7 +309,7 @@ impl StoatServer {
                 .into_iter()
                 .map(StoatCategory::into_poly_category)
                 .collect(),
-            backend: BackendType::Stoat,
+            backend: BackendType::from("stoat"),
             unread_count,
             mention_count,
             account_id,
@@ -735,7 +735,7 @@ impl StoatMessage {
                     .clone()
                     .and_then(|avatar| avatar.download_url(autumn_base_url)),
                 presence: PresenceStatus::Offline,
-                backend: BackendType::Stoat,
+                backend: BackendType::from("stoat"),
             };
         }
 
@@ -744,7 +744,7 @@ impl StoatMessage {
             display_name: self.author.clone(),
             avatar_url: None,
             presence: PresenceStatus::Offline,
-            backend: BackendType::Stoat,
+            backend: BackendType::from("stoat"),
         }
     }
 }
@@ -810,7 +810,7 @@ impl StoatUser {
                 .avatar
                 .and_then(|avatar| avatar.download_url(autumn_base_url)),
             presence,
-            backend: BackendType::Stoat,
+            backend: BackendType::from("stoat"),
         }
     }
 }

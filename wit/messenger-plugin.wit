@@ -37,6 +37,8 @@ interface types {
         text,
         voice,
         video,
+        /// Forum channel (Lemmy/Reddit-style: posts with threaded comments).
+        forum,
     }
 
     /// The user-chosen availability / presence status for an account.

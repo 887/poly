@@ -163,7 +163,7 @@ impl Guest for DiscordPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Discord
+        wit::BackendType::from("discord")
     }
 
     fn get_backend_name() -> String {

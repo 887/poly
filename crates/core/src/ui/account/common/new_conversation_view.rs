@@ -21,14 +21,14 @@ pub fn NewConversationView() -> Element {
     let mut search_filter = use_signal(String::new);
     let mut selected_user_ids = use_signal(Vec::<String>::new);
     let search_lower = search_filter.read().to_lowercase();
-    let active_backend = app_state.read().nav.active_backend;
+    let active_backend = app_state.read().nav.active_backend.clone();
 
     let friends: Vec<_> = chat_data
         .read()
         .friends
         .values()
         .flatten()
-        .filter(|friend| active_backend.is_none_or(|backend| backend == friend.backend))
+        .filter(|friend| active_backend.as_ref().map_or(true, |backend| *backend == friend.backend))
         .filter(|friend| {
             search_lower.is_empty() || friend.display_name.to_lowercase().contains(&search_lower)
         })

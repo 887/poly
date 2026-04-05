@@ -27,7 +27,7 @@ impl BackendPool {
 
     /// Add an authenticated backend to the pool.
     pub fn insert(&mut self, session: Session, backend: Box<dyn ClientBackend + Send + Sync>) {
-        let key = Self::key(session.backend, &session.user.id);
+        let key = Self::key(session.backend.clone(), &session.user.id);
         self.backends.insert(key, BackendEntry { backend, session });
     }
 
@@ -91,12 +91,12 @@ fn create_backend(
         "stoat" => {
             let client = poly_stoat::StoatClient::with_base_url(url)
                 .map_err(|e| anyhow::anyhow!("stoat config: {e}"))?;
-            Ok((Box::new(client), BackendType::Stoat))
+            Ok((Box::new(client), BackendType::from("stoat")))
         }
         "matrix" => {
             let client = poly_matrix::MatrixClient::with_homeserver(url)
                 .map_err(|e| anyhow::anyhow!("matrix config: {e}"))?;
-            Ok((Box::new(client), BackendType::Matrix))
+            Ok((Box::new(client), BackendType::from("matrix")))
         }
         "discord" => anyhow::bail!("Discord client not yet implemented"),
         "teams" => anyhow::bail!("Teams client not yet implemented"),
@@ -105,7 +105,7 @@ fn create_backend(
             // For now, generate an ephemeral key.
             let key: [u8; 32] = rand::random();
             let client = poly_server_client::PolyServerBackend::new(url, key);
-            Ok((Box::new(client), BackendType::Poly))
+            Ok((Box::new(client), BackendType::from("poly")))
         }
         _ => anyhow::bail!("unknown backend type: {backend_type}"),
     }

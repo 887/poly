@@ -78,7 +78,7 @@ pub(crate) async fn toggle_demo(
                 let sids: Vec<String> = cd
                     .servers
                     .iter()
-                    .filter(|s| s.backend == poly_client::BackendType::Demo)
+                    .filter(|s| s.backend == poly_client::BackendType::from("demo"))
                     .map(|s| s.id.clone())
                     .collect();
                 let fav_ids: Vec<String> = cd
@@ -97,14 +97,22 @@ pub(crate) async fn toggle_demo(
             client_manager.write().deactivate_demo();
             {
                 let mut cd = chat_data.write();
-                cd.servers
-                    .retain(|s| s.backend != poly_client::BackendType::Demo);
-                cd.dm_channels
-                    .retain(|d| d.backend != poly_client::BackendType::Demo);
-                cd.groups
-                    .retain(|g| g.backend != poly_client::BackendType::Demo);
-                cd.notifications
-                    .retain(|n| n.backend != poly_client::BackendType::Demo);
+                cd.servers.retain(|s| {
+                    s.backend != poly_client::BackendType::from("demo")
+                        && s.backend != poly_client::BackendType::from("demo_forum")
+                });
+                cd.dm_channels.retain(|d| {
+                    d.backend != poly_client::BackendType::from("demo")
+                        && d.backend != poly_client::BackendType::from("demo_forum")
+                });
+                cd.groups.retain(|g| {
+                    g.backend != poly_client::BackendType::from("demo")
+                        && g.backend != poly_client::BackendType::from("demo_forum")
+                });
+                cd.notifications.retain(|n| {
+                    n.backend != poly_client::BackendType::from("demo")
+                        && n.backend != poly_client::BackendType::from("demo_forum")
+                });
                 for aid in &demo_ids {
                     cd.friends.remove(aid.as_str());
                 }
@@ -181,6 +189,22 @@ pub(crate) async fn toggle_demo(
             }
             .await;
 
+            // Authenticate the platypus demo_forum account.
+            let platypus_result: Result<(poly_client::Session, BackendHandle), String> = async {
+                let mut client = poly_demo::DemoClient3::new();
+                let session = client
+                    .authenticate(poly_client::AuthCredentials::Token(
+                        "demo3-token".to_string(),
+                    ))
+                    .await
+                    .map_err(|e| format!("Demo (platypus) auth failed: {e}"))?;
+                let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
+                    Box::new(client) as Box<dyn poly_client::ClientBackend>,
+                ));
+                Ok((session, handle))
+            }
+            .await;
+
             let (cat_session, cat_handle) = match cat_result {
                 Ok(r) => r,
                 Err(e) => {
@@ -192,6 +216,13 @@ pub(crate) async fn toggle_demo(
                 Ok(r) => r,
                 Err(e) => {
                     tracing::error!("Failed to activate demo (dog): {e}");
+                    return;
+                }
+            };
+            let (platypus_session, platypus_handle) = match platypus_result {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::error!("Failed to activate demo (platypus): {e}");
                     return;
                 }
             };
@@ -215,11 +246,20 @@ pub(crate) async fn toggle_demo(
                     }
                 }
             }
+            {
+                let guard = platypus_handle.read().await;
+                if let Ok(servers) = guard.get_servers().await {
+                    for server in servers {
+                        server_map.insert(server.id, "demo-platypus".to_string());
+                    }
+                }
+            }
 
             // ── Phase 2: commit all state synchronously (brief write, NO await) ─────────
             let entries = vec![
                 ("demo-cat".to_string(), cat_session, cat_handle),
                 ("demo-dog".to_string(), dog_session, dog_handle),
+                ("demo-platypus".to_string(), platypus_session, platypus_handle),
             ];
             client_manager
                 .write()

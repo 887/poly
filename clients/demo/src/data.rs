@@ -4,9 +4,10 @@
 //! 4 servers for the "dog" demo account, 12+ channels, 10 users, messages
 //! with images/reactions/edits, DMs, groups, and notifications.
 //!
-//! Two demo accounts are provided to illustrate multi-account support:
+//! Three demo accounts are provided to illustrate multi-account support:
 //! - `demo` (🐱 cat) — 3 servers (Poly Dev, Gaming Lounge, Music Enthusiasts)
 //! - `demo2` (🐶 dog) — 4 servers (Open Source Hub, Book Club, Cooking Corner, Fitness Crew)
+//! - `demo_forum` (🦆 platypus) — Lemmy-style forum communities with forum channels
 //!
 //! SAFETY NOTE: indexing_slicing is allowed in this module because all indices
 //! are bounded by the fixed-size `demo_users()` slice, which is compile-time
@@ -18,6 +19,480 @@ use chrono::{Duration, Utc};
 use dioxus::prelude::*;
 use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
+
+/// Bundled platypus avatar image for the demo_forum account.
+#[cfg(feature = "native")]
+pub const DEMO_PLATYPUS_AVATAR: Asset = asset!("assets/platypus.png");
+
+/// Platypus avatar as a plain string for WASM plugin builds.
+#[cfg(not(feature = "native"))]
+pub const DEMO_PLATYPUS_AVATAR: &str = "/assets/platypus.png";
+
+/// The third demo account ID (platypus / demo_forum account).
+pub const DEMO3_ACCOUNT_ID: &str = "demo-platypus";
+
+/// The third demo account display name.
+pub const DEMO3_ACCOUNT_NAME: &str = "Platypus (demo_forum)";
+
+/// The demo_forum backend type slug.
+pub const DEMO_FORUM_BACKEND: &str = "demo_forum";
+
+/// Generate a demo session for the platypus account (demo_forum).
+pub fn demo3_session() -> Session {
+    Session {
+        id: "demo3-session-1".to_string(),
+        user: User {
+            id: "demo3-user-self".to_string(),
+            display_name: "Platypus (demo_forum)".to_string(),
+            avatar_url: Some(DEMO_PLATYPUS_AVATAR.to_string()),
+            presence: PresenceStatus::Online,
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+        },
+        token: "demo3-token-not-real".to_string(),
+        backend: BackendType::from(DEMO_FORUM_BACKEND),
+        icon_emoji: Some("🦆".to_string()),
+        instance_id: "demo_forum".to_string(),
+        backend_url: None,
+    }
+}
+
+/// Generate servers (communities) for the demo_forum (Lemmy-style) account.
+///
+/// In Lemmy, communities are equivalent to subreddits — top-level discussion spaces.
+/// Each community maps to a server; forum channels are post boards within the community.
+pub fn demo3_servers() -> Vec<Server> {
+    vec![
+        Server {
+            id: "comm-rust-lang".to_string(),
+            name: "rust_lang".to_string(),
+            icon_url: Some(themed_server_icon("🦀", "#b7410e", "#e07b39")),
+            banner_url: Some(themed_banner("#3b1208", "#5c2010", "#fca97d", "🦀")),
+            categories: vec![Category {
+                id: "cat-posts".to_string(),
+                name: "Posts".to_string(),
+                channel_ids: vec![
+                    "forum-rust-posts".to_string(),
+                    "forum-rust-questions".to_string(),
+                    "forum-rust-showcase".to_string(),
+                ],
+            }],
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+            unread_count: 12,
+            mention_count: 0,
+            account_id: DEMO3_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO3_ACCOUNT_NAME.to_string(),
+        },
+        Server {
+            id: "comm-linux".to_string(),
+            name: "linux".to_string(),
+            icon_url: Some(themed_server_icon("🐧", "#222222", "#e8e8e8")),
+            banner_url: Some(themed_banner("#1a1a2e", "#16213e", "#a8b8d8", "🐧")),
+            categories: vec![Category {
+                id: "cat-linux-posts".to_string(),
+                name: "Posts".to_string(),
+                channel_ids: vec![
+                    "forum-linux-news".to_string(),
+                    "forum-linux-help".to_string(),
+                    "forum-linux-rices".to_string(),
+                ],
+            }],
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+            unread_count: 5,
+            mention_count: 0,
+            account_id: DEMO3_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO3_ACCOUNT_NAME.to_string(),
+        },
+        Server {
+            id: "comm-programming".to_string(),
+            name: "programming".to_string(),
+            icon_url: Some(themed_server_icon("💻", "#4f46e5", "#818cf8")),
+            banner_url: Some(themed_banner("#1e1b4b", "#312e81", "#c7d2fe", "💻")),
+            categories: vec![Category {
+                id: "cat-prog-posts".to_string(),
+                name: "Posts".to_string(),
+                channel_ids: vec![
+                    "forum-prog-general".to_string(),
+                    "forum-prog-discussion".to_string(),
+                ],
+            }],
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+            unread_count: 3,
+            mention_count: 1,
+            account_id: DEMO3_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO3_ACCOUNT_NAME.to_string(),
+        },
+    ]
+}
+
+/// Generate forum channels for demo3 servers.
+pub fn demo3_channels(server_id: &str) -> Vec<Channel> {
+    match server_id {
+        "comm-rust-lang" => vec![
+            Channel {
+                id: "forum-rust-posts".to_string(),
+                name: "posts".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-rust-lang".to_string(),
+                unread_count: 8,
+                mention_count: 0,
+                last_message_id: Some("fpost-rust-1".to_string()),
+            },
+            Channel {
+                id: "forum-rust-questions".to_string(),
+                name: "questions".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-rust-lang".to_string(),
+                unread_count: 4,
+                mention_count: 0,
+                last_message_id: Some("fpost-rust-q1".to_string()),
+            },
+            Channel {
+                id: "forum-rust-showcase".to_string(),
+                name: "showcase".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-rust-lang".to_string(),
+                unread_count: 0,
+                mention_count: 0,
+                last_message_id: None,
+            },
+        ],
+        "comm-linux" => vec![
+            Channel {
+                id: "forum-linux-news".to_string(),
+                name: "news".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-linux".to_string(),
+                unread_count: 3,
+                mention_count: 0,
+                last_message_id: Some("fpost-linux-1".to_string()),
+            },
+            Channel {
+                id: "forum-linux-help".to_string(),
+                name: "help".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-linux".to_string(),
+                unread_count: 2,
+                mention_count: 0,
+                last_message_id: Some("fpost-linux-h1".to_string()),
+            },
+            Channel {
+                id: "forum-linux-rices".to_string(),
+                name: "rices".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-linux".to_string(),
+                unread_count: 0,
+                mention_count: 0,
+                last_message_id: None,
+            },
+        ],
+        "comm-programming" => vec![
+            Channel {
+                id: "forum-prog-general".to_string(),
+                name: "general".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-programming".to_string(),
+                unread_count: 2,
+                mention_count: 1,
+                last_message_id: Some("fpost-prog-1".to_string()),
+            },
+            Channel {
+                id: "forum-prog-discussion".to_string(),
+                name: "discussion".to_string(),
+                channel_type: ChannelType::Forum,
+                server_id: "comm-programming".to_string(),
+                unread_count: 1,
+                mention_count: 0,
+                last_message_id: Some("fpost-prog-d1".to_string()),
+            },
+        ],
+        _ => vec![],
+    }
+}
+
+/// Generate demo forum posts (messages) for a given forum channel.
+///
+/// Posts are top-level messages in a Lemmy-style community board.
+pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
+    let now = Utc::now();
+    match channel_id {
+        "forum-rust-posts" => vec![
+            Message {
+                id: "fpost-rust-1".to_string(),
+                author: User {
+                    id: "demo3-user-ferris".to_string(),
+                    display_name: "ferris_fan".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Announcing async Rust in the embedded space — no_std async executors are finally production-ready. We've been running Embassy on STM32 for 6 months in production.".to_string()),
+                timestamp: now - Duration::hours(3),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "❤️".to_string(), count: 142, me: false },
+                    Reaction { emoji: "🦀".to_string(), count: 89, me: true },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+            Message {
+                id: "fpost-rust-2".to_string(),
+                author: User {
+                    id: "demo3-user-lifetime".to_string(),
+                    display_name: "lifetime_enjoyer".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Idle,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Rust 2.0 wishlist: what would you change about the language if you could? I'll start — variadic generics and better error context chaining built into the stdlib.".to_string()),
+                timestamp: now - Duration::hours(7),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "👍".to_string(), count: 67, me: false },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+            Message {
+                id: "fpost-rust-3".to_string(),
+                author: User {
+                    id: "demo3-user-self".to_string(),
+                    display_name: "Platypus (demo_forum)".to_string(),
+                    avatar_url: Some(DEMO_PLATYPUS_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Just published my first crate: `tinydb` — an in-memory key-value store with snapshot persistence. Written in safe Rust, zero unsafe. Feedback welcome!".to_string()),
+                timestamp: now - Duration::hours(12),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🎉".to_string(), count: 23, me: false },
+                    Reaction { emoji: "🦀".to_string(), count: 15, me: false },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        "forum-rust-questions" => vec![
+            Message {
+                id: "fpost-rust-q1".to_string(),
+                author: User {
+                    id: "demo3-user-newbie".to_string(),
+                    display_name: "rust_newbie_42".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Why does the borrow checker reject this code? I'm trying to hold a reference to a vec element while also pushing to the vec. The error says 'cannot borrow `v` as mutable because it is also borrowed as immutable'. How do I restructure this?".to_string()),
+                timestamp: now - Duration::hours(1),
+                attachments: vec![],
+                reactions: vec![],
+                reply_to: None,
+                edited: false,
+            },
+            Message {
+                id: "fpost-rust-q2".to_string(),
+                author: User {
+                    id: "demo3-user-ferris".to_string(),
+                    display_name: "ferris_fan".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("When should I use `Arc<Mutex<T>>` vs `Arc<RwLock<T>>`? I understand RwLock allows multiple readers, but is the overhead worth it for a configuration struct read 10k times/sec?".to_string()),
+                timestamp: now - Duration::hours(5),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🤔".to_string(), count: 4, me: false },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        "forum-linux-news" => vec![
+            Message {
+                id: "fpost-linux-1".to_string(),
+                author: User {
+                    id: "demo3-user-tux".to_string(),
+                    display_name: "tux_forever".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Linux 6.10 released with Rust drivers for two more subsystems. The GPIO driver written entirely in Rust is now in mainline. This is huge for driver development ergonomics.".to_string()),
+                timestamp: now - Duration::hours(2),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🐧".to_string(), count: 201, me: true },
+                    Reaction { emoji: "🎉".to_string(), count: 88, me: false },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        "forum-linux-help" => vec![
+            Message {
+                id: "fpost-linux-h1".to_string(),
+                author: User {
+                    id: "demo3-user-arch_user".to_string(),
+                    display_name: "btw_i_use_arch".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::DoNotDisturb,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("After upgrading mesa to 24.x, my Wayland compositor crashes on wake-from-suspend. Bisected to the radv driver. Anyone else hitting this on AMD Polaris cards? Workaround: setting `RADV_PERFTEST=aco` in the env.".to_string()),
+                timestamp: now - Duration::hours(6),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🙏".to_string(), count: 12, me: false },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        "forum-prog-general" => vec![
+            Message {
+                id: "fpost-prog-1".to_string(),
+                author: User {
+                    id: "demo3-user-devrel".to_string(),
+                    display_name: "devrel_nerd".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Unpopular opinion: monorepos are almost always the right choice for teams larger than 5. The tooling has caught up (Turborepo, Nx, Bazel) and the cross-cutting refactor story is so much smoother.".to_string()),
+                timestamp: now - Duration::hours(4),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🔥".to_string(), count: 34, me: false },
+                    Reaction { emoji: "👎".to_string(), count: 11, me: false },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        "forum-prog-discussion" => vec![
+            Message {
+                id: "fpost-prog-d1".to_string(),
+                author: User {
+                    id: "demo3-user-fp_enjoyer".to_string(),
+                    display_name: "fp_enjoyer".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Idle,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Has anyone done a real-world comparison of algebraic effects vs monadic error handling in production Haskell/OCaml? I've been reading the Effects.js spec and curious how it holds up under complexity.".to_string()),
+                timestamp: now - Duration::hours(8),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🤓".to_string(), count: 7, me: true },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        _ => vec![],
+    }
+}
+
+/// Generate notifications for the demo_forum (platypus) account.
+pub fn demo3_notifications() -> Vec<Notification> {
+    let now = Utc::now();
+    vec![
+        Notification {
+            id: "notif3-1".to_string(),
+            kind: NotificationKind::Mention {
+                channel_id: "forum-prog-general".to_string(),
+                message_id: "fpost-prog-reply-1".to_string(),
+            },
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+            account_id: DEMO3_ACCOUNT_ID.to_string(),
+            timestamp: now - Duration::hours(1),
+            read: false,
+            preview: "devrel_nerd mentioned you in programming > general".to_string(),
+        },
+    ]
+}
+
+/// Generate a small set of DM channels for the platypus (demo_forum) account.
+///
+/// Forum users rarely DM, so this returns just one or two conversations.
+pub fn demo3_dm_channels() -> Vec<DmChannel> {
+    let now = Utc::now();
+    vec![
+        DmChannel {
+            id: "dm3-ferris".to_string(),
+            user: User {
+                id: "demo3-user-ferris".to_string(),
+                display_name: "ferris_fan".to_string(),
+                avatar_url: None,
+                presence: PresenceStatus::Online,
+                backend: BackendType::from(DEMO_FORUM_BACKEND),
+            },
+            last_message: Some(Message {
+                id: "dm3-msg-1".to_string(),
+                author: User {
+                    id: "demo3-user-ferris".to_string(),
+                    display_name: "ferris_fan".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Hey, saw your tinydb crate — have you considered adding a WAL for crash recovery?".to_string()),
+                timestamp: now - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![],
+                reply_to: None,
+                edited: false,
+            }),
+            unread_count: 1,
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+            account_id: DEMO3_ACCOUNT_ID.to_string(),
+        },
+    ]
+}
+
+/// Generate DM messages for the platypus (demo_forum) account.
+pub fn demo3_dm_messages(dm_id: &str) -> Vec<Message> {
+    let now = Utc::now();
+    match dm_id {
+        "dm3-ferris" => vec![
+            Message {
+                id: "dm3-msg-0".to_string(),
+                author: User {
+                    id: "demo3-user-self".to_string(),
+                    display_name: "Platypus (demo_forum)".to_string(),
+                    avatar_url: Some(DEMO_PLATYPUS_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Just published my first crate: tinydb! Really happy with how the API turned out.".to_string()),
+                timestamp: now - Duration::hours(2),
+                attachments: vec![],
+                reactions: vec![],
+                reply_to: None,
+                edited: false,
+            },
+            Message {
+                id: "dm3-msg-1".to_string(),
+                author: User {
+                    id: "demo3-user-ferris".to_string(),
+                    display_name: "ferris_fan".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Hey, saw your tinydb crate — have you considered adding a WAL for crash recovery?".to_string()),
+                timestamp: now - Duration::minutes(45),
+                attachments: vec![],
+                reactions: vec![],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        _ => vec![],
+    }
+}
 
 /// Encode SVG markup as a data URI so demo artwork is self-contained.
 fn svg_data_uri(svg: String) -> String {
@@ -143,10 +618,10 @@ pub fn demo_session() -> Session {
             // avatar_url path — no demo-specific logic needed in UI code.
             avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
             presence: PresenceStatus::Online,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
         },
         token: "demo-token-not-real".to_string(),
-        backend: BackendType::Demo,
+        backend: BackendType::from("demo"),
         icon_emoji: Some("🐱".to_string()),
         instance_id: DEMO_INSTANCE_ID.to_string(),
         backend_url: None,
@@ -162,10 +637,10 @@ pub fn demo2_session() -> Session {
             display_name: "Dog (demo)".to_string(),
             avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
             presence: PresenceStatus::Online,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
         },
         token: "demo2-token-not-real".to_string(),
-        backend: BackendType::Demo,
+        backend: BackendType::from("demo"),
         icon_emoji: Some("🐶".to_string()),
         instance_id: DEMO_INSTANCE_ID.to_string(),
         backend_url: None,
@@ -255,7 +730,7 @@ pub fn demo_users() -> Vec<User> {
             display_name: name.to_string(),
             avatar_url: Some(avatar_url.clone()),
             presence: *presence,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
         })
         .collect()
 }
@@ -286,7 +761,7 @@ pub fn demo_servers() -> Vec<Server> {
                     ],
                 },
             ],
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             unread_count: 5,
             mention_count: 2,
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -306,7 +781,7 @@ pub fn demo_servers() -> Vec<Server> {
                     "ch-voice-gaming".to_string(),
                 ],
             }],
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             unread_count: 12,
             mention_count: 0,
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -325,7 +800,7 @@ pub fn demo_servers() -> Vec<Server> {
                     "ch-production".to_string(),
                 ],
             }],
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             unread_count: 0,
             mention_count: 0,
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -362,7 +837,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     channel_ids: vec!["ch2-help".to_string(), "ch2-voice-oss".to_string()],
                 },
             ],
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             unread_count: 14,
             mention_count: 3,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -382,7 +857,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     "ch2-voice-book".to_string(),
                 ],
             }],
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             unread_count: 7,
             mention_count: 0,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -402,7 +877,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     "ch2-show-your-dish".to_string(),
                 ],
             }],
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             unread_count: 0,
             mention_count: 0,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -422,7 +897,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     "ch2-voice-workout".to_string(),
                 ],
             }],
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             unread_count: 2,
             mention_count: 1,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -650,7 +1125,7 @@ pub fn demo2_notifications() -> Vec<Notification> {
             },
             read: false,
             timestamp: now - Duration::hours(2),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             preview: "New discussion in #current-read".to_string(),
         },
@@ -662,7 +1137,7 @@ pub fn demo2_notifications() -> Vec<Notification> {
             },
             read: false,
             timestamp: now - Duration::hours(4),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             preview: "Bob posted a new workout challenge".to_string(),
         },
@@ -1198,7 +1673,7 @@ pub fn demo_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -1215,7 +1690,7 @@ pub fn demo_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
     ]
@@ -1251,7 +1726,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
         edited: false,
                 }),
                 unread_count: if i < 2 { 1 } else { 0 },
-                backend: BackendType::Demo,
+                backend: BackendType::from("demo"),
                 account_id: DEMO_ACCOUNT_ID.to_string(),
             }
         })
@@ -1300,7 +1775,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             edited: false,
         }),
         unread_count: 1,
-        backend: BackendType::Demo,
+        backend: BackendType::from("demo"),
         account_id: DEMO_ACCOUNT_ID.to_string(),
     });
 
@@ -1320,7 +1795,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             edited: false,
         }),
         unread_count: 0,
-        backend: BackendType::Demo,
+        backend: BackendType::from("demo"),
         account_id: DEMO_ACCOUNT_ID.to_string(),
     });
 
@@ -1332,7 +1807,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             display_name: "🐶 Dog (demo)".to_string(),
             avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
             presence: PresenceStatus::Online,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
         },
         last_message: Some(Message {
             id: "msg-dm-dog-latest".to_string(),
@@ -1341,7 +1816,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
                 display_name: "🐶 Dog (demo)".to_string(),
                 avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                 presence: PresenceStatus::Online,
-                backend: BackendType::Demo,
+                backend: BackendType::from("demo"),
             },
             content: MessageContent::Text(
                 "bark bark! 🐕 haha, your pull request is almost as good as my naps 😼".to_string(),
@@ -1353,7 +1828,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             edited: false,
         }),
         unread_count: 1,
-        backend: BackendType::Demo,
+        backend: BackendType::from("demo"),
         account_id: DEMO_ACCOUNT_ID.to_string(),
     });
 
@@ -1377,7 +1852,7 @@ pub fn demo_empty_dm_channel_for_user(user_id: &str, account_id: &str) -> Client
         user,
         last_message: None,
         unread_count: 0,
-        backend: BackendType::Demo,
+        backend: BackendType::from("demo"),
         account_id: account_id.to_string(),
     })
 }
@@ -1393,7 +1868,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_id: "ch-general".to_string(),
                 message_id: "msg-ch-general-2".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::minutes(5),
             read: false,
@@ -1406,7 +1881,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_id: "ch-rust".to_string(),
                 message_id: "msg-30".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::minutes(20),
             read: false,
@@ -1418,7 +1893,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::FriendRequest {
                 from_user_id: "user-iris".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::minutes(45),
             read: false,
@@ -1430,7 +1905,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::FriendRequest {
                 from_user_id: "user-jack".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::hours(2),
             read: false,
@@ -1442,7 +1917,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::ServerInvite {
                 server_id: "server-new".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::hours(3),
             read: false,
@@ -1454,7 +1929,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::ServerInvite {
                 server_id: "server-art".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::hours(6),
             read: false,
@@ -1469,7 +1944,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_name: "Dev Voice".to_string(),
                 inviter_user_id: "user-bob".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::hours(1),
             read: false,
@@ -1484,7 +1959,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_name: "Gaming Voice".to_string(),
                 inviter_user_id: "user-diana".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::hours(4),
             read: true,
@@ -1497,7 +1972,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_id: "ch-off-topic".to_string(),
                 message_id: "msg-ch-off-topic-0".to_string(),
             },
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: now - Duration::hours(8),
             read: true,
@@ -1996,7 +2471,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::Demo,
+                    backend: BackendType::from("demo"),
                 },
                 content: MessageContent::Text(
                     "bark bark!! 🐕 LOL pedestrian?? My PRs actually PASS CI cat!! unlike SOME libraries we know 😏"
@@ -2028,7 +2503,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::Demo,
+                    backend: BackendType::from("demo"),
                 },
                 content: MessageContent::Text(
                     "that was ONE TIME and it was CLEARLY a testing artifact!! unlike your hot-reload that breaks EVERY TUESDAY 🙄"
@@ -2060,7 +2535,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::Demo,
+                    backend: BackendType::from("demo"),
                 },
                 content: MessageContent::Text(
                     "not better than YOUR message queueing!! at least mine have RTFM docs 📚 you just have vibes and prayer 😼💀"
@@ -2092,7 +2567,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::Demo,
+                    backend: BackendType::from("demo"),
                 },
                 content: MessageContent::Text(
                     "bark bark! 🐕 haha, your pull request is almost as good as my naps 😼"
@@ -2382,7 +2857,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -2399,7 +2874,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -2416,7 +2891,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -2438,7 +2913,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
     ]
@@ -2464,7 +2939,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -2483,7 +2958,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -2500,7 +2975,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
             }),
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         },
     ]
@@ -3716,11 +4191,11 @@ fn search_demo_messages(query: &MessageSearchQuery, demo2: bool) -> Vec<MessageS
                 display_name: "🐱 Cat (demo)".to_string(),
                 avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
                 presence: PresenceStatus::Online,
-                backend: BackendType::Demo,
+                backend: BackendType::from("demo"),
             },
             last_message: None,
             unread_count: 0,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         });
         channels

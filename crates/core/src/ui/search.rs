@@ -31,14 +31,15 @@ fn user_color(account_id: &str) -> String {
 }
 
 /// Emoji icon for a backend type.
-fn backend_icon(bt: BackendType) -> &'static str {
-    match bt {
-        BackendType::Demo => "🧪",
-        BackendType::Stoat => "🦦",
-        BackendType::Matrix => "🟩",
-        BackendType::Discord => "🟣",
-        BackendType::Teams => "🟦",
-        BackendType::Poly => "🔷",
+fn backend_icon(bt: &BackendType) -> &'static str {
+    match bt.as_str() {
+        "demo" => "🧪",
+        "stoat" => "🦦",
+        "matrix" => "🟩",
+        "discord" => "🟣",
+        "teams" => "🟦",
+        "poly" => "🔷",
+        _ => "💬",
     }
 }
 
@@ -363,6 +364,7 @@ fn ServerNode(
                                     poly_client::ChannelType::Text => "#".to_string(),
                                     poly_client::ChannelType::Voice => "🔊".to_string(),
                                     poly_client::ChannelType::Video => "📹".to_string(),
+                                    poly_client::ChannelType::Forum => "📋".to_string(),
                                 };
                                 let sid_c = server_id.clone();
                                 let chid = ch.id.clone();
@@ -560,9 +562,9 @@ pub fn SearchPage(
                             let avatar_url = session
                                 .and_then(|s| s.user.avatar_url.clone());
                             let icon_color = user_color(aid);
-                            let bt = cm.sessions.get(aid).map(|s| s.backend).unwrap_or(BackendType::Demo);
+                            let bt = cm.sessions.get(aid).map(|s| s.backend.clone()).unwrap_or(BackendType::from("demo"));
                             let backend_name = bt.display_name().to_string();
-                            let backend_icon_str = backend_icon(bt).to_string();
+                            let backend_icon_str = backend_icon(&bt).to_string();
                             let enabled = enabled_accounts.read().contains(aid);
                             drop(cd);
                             drop(cm);

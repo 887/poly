@@ -47,3 +47,11 @@ Cartoon anthropomorphized owl portrait, bust/head-and-shoulders, Bojack Horseman
 ## 10. Axolotl (Pink circle)
 
 Cartoon anthropomorphized axolotl portrait, bust/head-and-shoulders, Bojack Horseman art style, bold black outlines, clean vector-like shading. Pink/salmon skin, signature feathery external gills on each side of head (bright pink/red), wide permanent smile, small dark beady eyes, adorable happy expression. Wearing a tiny flower crown. Solid pink (#F48FB1) circle background. PNG 740x720, transparent corners outside the circle.
+
+## 11. Lemming (Teal circle) — test-stoat server user
+
+Cartoon anthropomorphized lemming portrait, bust/head-and-shoulders, Bojack Horseman art style, bold black outlines, clean vector-like shading. Round chubby face with short brown fur, fluffy white chest, small round ears, bright friendly eyes, slightly bewildered expression. Wearing a puffy winter parka jacket in orange with a teal lining. Solid teal (#26A69A) circle background. PNG 740x720, transparent corners outside the circle.
+
+## 12. Platypus (Amber/Orange circle) — demo_forum client account
+
+Cartoon anthropomorphized platypus portrait, bust/head-and-shoulders, Bojack Horseman art style, bold black outlines, clean vector-like shading. Brown fur, distinctive duck-like bill, small beady eyes, calm confident expression. Wearing a backwards baseball cap in forest green. Solid amber (#FF8F00) circle background. PNG 740x720, transparent corners outside the circle.

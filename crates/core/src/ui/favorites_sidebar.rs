@@ -66,6 +66,7 @@ pub fn FavoritesBar() -> Element {
         .read()
         .nav
         .active_backend
+        .as_ref()
         .map(|b| b.slug().to_string());
     let active_instance_id = app_state.read().nav.active_instance_id.clone();
 

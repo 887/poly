@@ -133,59 +133,64 @@ pub fn backend_server_context_menu_extras(
     let Some(bt) = backend else {
         return rsx! {};
     };
-    match bt {
-        #[cfg(feature = "demo")]
-        BackendType::Demo => rsx! {
-            demo::context_menu::ServerContextMenuExtras {
-                server_id: server_id.to_string(),
-                account_id: account_id.to_string(),
-            }
-        },
-        #[cfg(not(feature = "demo"))]
-        BackendType::Demo => rsx! {},
-
-        #[cfg(feature = "stoat")]
-        BackendType::Stoat => rsx! {
-            stoat::context_menu::ServerContextMenuExtras {
-                server_id: server_id.to_string(),
-                account_id: account_id.to_string(),
-            }
-        },
-        #[cfg(not(feature = "stoat"))]
-        BackendType::Stoat => rsx! {},
-
-        #[cfg(feature = "discord")]
-        BackendType::Discord => rsx! {
-            discord::context_menu::ServerContextMenuExtras {
-                server_id: server_id.to_string(),
-                account_id: account_id.to_string(),
-            }
-        },
-        #[cfg(not(feature = "discord"))]
-        BackendType::Discord => rsx! {},
-
-        #[cfg(feature = "matrix")]
-        BackendType::Matrix => rsx! {
-            matrix::context_menu::ServerContextMenuExtras {
-                server_id: server_id.to_string(),
-                account_id: account_id.to_string(),
-            }
-        },
-        #[cfg(not(feature = "matrix"))]
-        BackendType::Matrix => rsx! {},
-
-        #[cfg(feature = "teams")]
-        BackendType::Teams => rsx! {
-            teams::context_menu::ServerContextMenuExtras {
-                server_id: server_id.to_string(),
-                account_id: account_id.to_string(),
-            }
-        },
-        #[cfg(not(feature = "teams"))]
-        BackendType::Teams => rsx! {},
-
+    match bt.as_str() {
+        "demo" => {
+            #[cfg(feature = "demo")]
+            return rsx! {
+                demo::context_menu::ServerContextMenuExtras {
+                    server_id: server_id.to_string(),
+                    account_id: account_id.to_string(),
+                }
+            };
+            #[cfg(not(feature = "demo"))]
+            rsx! {}
+        }
+        "stoat" => {
+            #[cfg(feature = "stoat")]
+            return rsx! {
+                stoat::context_menu::ServerContextMenuExtras {
+                    server_id: server_id.to_string(),
+                    account_id: account_id.to_string(),
+                }
+            };
+            #[cfg(not(feature = "stoat"))]
+            rsx! {}
+        }
+        "discord" => {
+            #[cfg(feature = "discord")]
+            return rsx! {
+                discord::context_menu::ServerContextMenuExtras {
+                    server_id: server_id.to_string(),
+                    account_id: account_id.to_string(),
+                }
+            };
+            #[cfg(not(feature = "discord"))]
+            rsx! {}
+        }
+        "matrix" => {
+            #[cfg(feature = "matrix")]
+            return rsx! {
+                matrix::context_menu::ServerContextMenuExtras {
+                    server_id: server_id.to_string(),
+                    account_id: account_id.to_string(),
+                }
+            };
+            #[cfg(not(feature = "matrix"))]
+            rsx! {}
+        }
+        "teams" => {
+            #[cfg(feature = "teams")]
+            return rsx! {
+                teams::context_menu::ServerContextMenuExtras {
+                    server_id: server_id.to_string(),
+                    account_id: account_id.to_string(),
+                }
+            };
+            #[cfg(not(feature = "teams"))]
+            rsx! {}
+        }
         // Poly native server — always compiled (our own protocol)
-        BackendType::Poly => rsx! {
+        _ => rsx! {
             poly_native::context_menu::ServerContextMenuExtras {
                 server_id: server_id.to_string(),
                 account_id: account_id.to_string(),

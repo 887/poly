@@ -390,12 +390,13 @@ pub fn PluginsSettings() -> Element {
                                             // Toggling OFF — actually disconnect all sessions.
                                             let backend_type =
                                                 poly_client::BackendType::from_slug(&toggled);
-                                            if let Some(bt) = backend_type {
+                                            {
+                                                let bt = backend_type;
                                                 // Phase 1 (sync): take handles + clear
                                                 // ClientManager state. No await held.
                                                 let (removed_ids, handles) = client_manager
                                                     .write()
-                                                    .take_accounts_by_backend(bt);
+                                                    .take_accounts_by_backend(bt.clone());
                                                 let backend_slug = bt.slug().to_string();
                                                 // Update local disabled signal immediately for
                                                 // instant UI feedback.

@@ -22,7 +22,7 @@ async fn load_demo() -> poly_plugin_host::PluginBackend {
 #[tokio::test]
 async fn demo_backend_type() {
     let backend = load_demo().await;
-    harness::assert_backend_type(&backend, BackendType::Demo);
+    harness::assert_backend_type(&backend, BackendType::from("demo"));
 }
 
 #[tokio::test]
@@ -45,7 +45,7 @@ async fn demo_authenticate_and_logout() {
 
     // Authenticate
     let session = harness::authenticate_with_token(&mut backend, "demo-token").await;
-    assert_eq!(session.backend, BackendType::Demo);
+    assert_eq!(session.backend, BackendType::from("demo"));
 
     // After auth: is_authenticated should be true
     // NOTE: PluginBackend.is_authenticated() currently returns false always
@@ -69,7 +69,7 @@ async fn demo_session_fields() {
         !session.user.display_name.is_empty(),
         "session.user.display_name"
     );
-    assert_eq!(session.backend, BackendType::Demo);
+    assert_eq!(session.backend, BackendType::from("demo"));
 }
 
 // ─── Servers ───────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ async fn demo_full_lifecycle() {
 
     // 1. Authenticate
     let session = harness::authenticate_with_token(&mut backend, "demo-token").await;
-    assert_eq!(session.backend, BackendType::Demo);
+    assert_eq!(session.backend, BackendType::from("demo"));
 
     // 2. Browse servers
     let servers = harness::get_servers(&backend).await;

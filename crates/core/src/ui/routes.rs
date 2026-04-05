@@ -304,7 +304,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::DmsFriends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -320,7 +320,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             dm_id,
         } => {
             s.nav.view = View::DmsFriends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -357,7 +357,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             dm_id,
         } => {
             s.nav.view = View::DmsFriends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -386,7 +386,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             ..
         } => {
             s.nav.view = View::DmsFriends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -404,7 +404,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             ..
         } => {
             s.nav.view = View::Server;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
@@ -419,7 +419,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::DmsFriends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -431,7 +431,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::DmsFriends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -444,7 +444,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
         } => {
             s.nav.view = View::Server;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
@@ -461,7 +461,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             channel_id,
         } => {
             s.nav.view = View::Server;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
@@ -476,7 +476,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::Friends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav
@@ -489,7 +489,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::Notifications;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -504,7 +504,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::DmsFriends;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -548,7 +548,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             // Account-scoped search — keep account context so Bar 2 stays visible
             // and `SearchPage` can pre-filter to this account.
             s.nav.view = View::Search;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -560,7 +560,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::Settings;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -575,7 +575,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
         } => {
             s.nav.view = View::Settings; // Reuse Settings view — hides channel list
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
@@ -592,7 +592,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             // ChannelList renders) but clear any selected channel so the
             // Outlet renders CreateChannelPage instead of a chat view.
             s.nav.view = View::Server;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
@@ -606,7 +606,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
         } => {
             s.nav.view = View::Settings;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
@@ -623,7 +623,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             ..
         } => {
             s.nav.view = View::Settings;
-            s.nav.active_backend = BackendType::from_slug(backend);
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());

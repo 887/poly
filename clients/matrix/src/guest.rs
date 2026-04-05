@@ -187,10 +187,10 @@ impl Guest for MatrixPlugin {
                         display_name,
                         avatar_url: profile.avatar_url,
                         presence: wit::PresenceStatus::Online,
-                        backend: wit::BackendType::Matrix,
+                        backend: wit::BackendType::from("matrix"),
                     },
                     token,
-                    backend: wit::BackendType::Matrix,
+                    backend: wit::BackendType::from("matrix"),
                     icon_emoji: Some("\u{1f7e6}".to_string()),
                     instance_id,
                     backend_url: Some(DEFAULT_HOMESERVER.to_string()),
@@ -257,10 +257,10 @@ impl Guest for MatrixPlugin {
                         display_name,
                         avatar_url: profile.avatar_url,
                         presence: wit::PresenceStatus::Online,
-                        backend: wit::BackendType::Matrix,
+                        backend: wit::BackendType::from("matrix"),
                     },
                     token: login.access_token,
-                    backend: wit::BackendType::Matrix,
+                    backend: wit::BackendType::from("matrix"),
                     icon_emoji: Some("\u{1f7e6}".to_string()),
                     instance_id,
                     backend_url: Some(DEFAULT_HOMESERVER.to_string()),
@@ -365,7 +365,7 @@ impl Guest for MatrixPlugin {
             display_name,
             avatar_url: profile.avatar_url,
             presence: wit::PresenceStatus::Offline,
-            backend: wit::BackendType::Matrix,
+            backend: wit::BackendType::from("matrix"),
         })
     }
 
@@ -429,7 +429,7 @@ impl Guest for MatrixPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Matrix
+        wit::BackendType::from("matrix")
     }
 
     fn get_backend_name() -> String {

@@ -158,7 +158,7 @@ impl ClientBackend for DiscordClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::Discord
+        BackendType::from("discord")
     }
 
     fn backend_name(&self) -> &str {

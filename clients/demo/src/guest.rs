@@ -35,12 +35,12 @@ thread_local! {
 
 fn to_wit_backend_type(bt: pc::BackendType) -> wit::BackendType {
     match bt {
-        pc::BackendType::Stoat => wit::BackendType::Stoat,
-        pc::BackendType::Matrix => wit::BackendType::Matrix,
-        pc::BackendType::Discord => wit::BackendType::Discord,
-        pc::BackendType::Teams => wit::BackendType::Teams,
-        pc::BackendType::Demo => wit::BackendType::Demo,
-        pc::BackendType::Poly => wit::BackendType::Poly,
+        pc::BackendType::from("stoat") => wit::BackendType::from("stoat"),
+        pc::BackendType::from("matrix") => wit::BackendType::from("matrix"),
+        pc::BackendType::from("discord") => wit::BackendType::from("discord"),
+        pc::BackendType::from("teams") => wit::BackendType::from("teams"),
+        pc::BackendType::from("demo") => wit::BackendType::from("demo"),
+        pc::BackendType::from("poly") => wit::BackendType::from("poly"),
     }
 }
 
@@ -59,6 +59,7 @@ fn to_wit_channel_type(ct: pc::ChannelType) -> wit::ChannelType {
         pc::ChannelType::Text => wit::ChannelType::Text,
         pc::ChannelType::Voice => wit::ChannelType::Voice,
         pc::ChannelType::Video => wit::ChannelType::Video,
+        pc::ChannelType::Forum => wit::ChannelType::Forum,
     }
 }
 
@@ -545,7 +546,7 @@ impl MessengerClientGuest for DemoPlugin {
             user: session.user,
             last_message: None,
             unread_count: 0,
-            backend: pc::BackendType::Demo,
+            backend: pc::BackendType::from("demo"),
             account_id: crate::data::DEMO_ACCOUNT_ID.to_string(),
         }))
     }
@@ -579,7 +580,7 @@ impl MessengerClientGuest for DemoPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Demo
+        wit::BackendType::from("demo")
     }
 
     fn get_backend_name() -> String {

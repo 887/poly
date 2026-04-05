@@ -15,25 +15,25 @@ use poly_client::{self as pc};
 
 /// Convert WIT `BackendType` → poly-client `BackendType`.
 pub fn from_wit_backend_type(bt: wit::BackendType) -> pc::BackendType {
-    match bt {
-        wit::BackendType::Stoat => pc::BackendType::Stoat,
-        wit::BackendType::Matrix => pc::BackendType::Matrix,
-        wit::BackendType::Discord => pc::BackendType::Discord,
-        wit::BackendType::Teams => pc::BackendType::Teams,
-        wit::BackendType::Demo => pc::BackendType::Demo,
-        wit::BackendType::Poly => pc::BackendType::Poly,
-    }
+    pc::BackendType::from(match bt {
+        wit::BackendType::Stoat => "stoat",
+        wit::BackendType::Matrix => "matrix",
+        wit::BackendType::Discord => "discord",
+        wit::BackendType::Teams => "teams",
+        wit::BackendType::Demo => "demo",
+        wit::BackendType::Poly => "poly",
+    })
 }
 
 /// Convert poly-client `BackendType` → WIT `BackendType`.
-pub fn to_wit_backend_type(bt: pc::BackendType) -> wit::BackendType {
-    match bt {
-        pc::BackendType::Stoat => wit::BackendType::Stoat,
-        pc::BackendType::Matrix => wit::BackendType::Matrix,
-        pc::BackendType::Discord => wit::BackendType::Discord,
-        pc::BackendType::Teams => wit::BackendType::Teams,
-        pc::BackendType::Demo => wit::BackendType::Demo,
-        pc::BackendType::Poly => wit::BackendType::Poly,
+pub fn to_wit_backend_type(bt: &pc::BackendType) -> wit::BackendType {
+    match bt.as_str() {
+        "stoat" => wit::BackendType::Stoat,
+        "matrix" => wit::BackendType::Matrix,
+        "discord" => wit::BackendType::Discord,
+        "teams" => wit::BackendType::Teams,
+        "demo" => wit::BackendType::Demo,
+        "poly" | _ => wit::BackendType::Poly,
     }
 }
 
@@ -69,6 +69,7 @@ pub fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
         wit::ChannelType::Text => pc::ChannelType::Text,
         wit::ChannelType::Voice => pc::ChannelType::Voice,
         wit::ChannelType::Video => pc::ChannelType::Video,
+        wit::ChannelType::Forum => pc::ChannelType::Forum,
     }
 }
 
@@ -92,7 +93,7 @@ pub fn to_wit_user(u: &pc::User) -> wit::User {
         display_name: u.display_name.clone(),
         avatar_url: u.avatar_url.clone(),
         presence: to_wit_presence(u.presence),
-        backend: to_wit_backend_type(u.backend),
+        backend: to_wit_backend_type(&u.backend),
     }
 }
 

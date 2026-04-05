@@ -160,6 +160,7 @@ impl StoatState {
 
         let stoat_id = "STOAT01".to_string();
         let raccoon_id = "RACCOON01".to_string();
+        let lemming_id = "LEMMING01".to_string();
 
         // Users
         self.users.insert(
@@ -194,6 +195,22 @@ impl StoatState {
                 online: true,
             },
         );
+        self.users.insert(
+            lemming_id.clone(),
+            User {
+                id: lemming_id.clone(),
+                username: "lemming".into(),
+                discriminator: "0003".into(),
+                display_name: Some("Lemming".into()),
+                avatar_url: Some("lemming".into()),
+                password: "testpass123".into(),
+                status: Some(UserStatus {
+                    text: Some("Following the crowd off the cliff 🐾".into()),
+                    presence: "Online".into(),
+                }),
+                online: true,
+            },
+        );
 
         // Server 1: The Burrow
         let srv1_id = "SRV001".to_string();
@@ -218,7 +235,7 @@ impl StoatState {
                     title: "Text Channels".into(),
                     channels: vec![gen1_id.clone(), random1_id.clone(), memes1_id.clone()],
                 }],
-                members: vec![stoat_id.clone(), raccoon_id.clone()],
+                members: vec![stoat_id.clone(), raccoon_id.clone(), lemming_id.clone()],
             },
         );
 
@@ -243,7 +260,7 @@ impl StoatState {
                     title: "Text Channels".into(),
                     channels: vec![gen2_id.clone(), food_id.clone()],
                 }],
-                members: vec![stoat_id.clone(), raccoon_id.clone()],
+                members: vec![stoat_id.clone(), raccoon_id.clone(), lemming_id.clone()],
             },
         );
 
@@ -314,6 +331,17 @@ impl StoatState {
         self.add_message(&dm_id, &raccoon_id, "My hands are DEXTEROUS not tiny 😤");
         self.add_message(&dm_id, &stoat_id, "Sure thing, little grabby paws.");
         self.add_message(&dm_id, &raccoon_id, "I will open every jar in your burrow while you sleep.");
+
+        // Lemming joins the conversation in The Burrow #general
+        self.add_message(&gen1_id, &lemming_id, "Hi everyone! New here. Just followed the others over.");
+        self.add_message(&gen1_id, &stoat_id, "Followed who exactly?");
+        self.add_message(&gen1_id, &lemming_id, "I... honestly don't remember. There were a lot of us.");
+        self.add_message(&gen1_id, &raccoon_id, "Classic lemming energy 🐭");
+
+        // Lemming in #memes
+        self.add_message(&memes1_id, &lemming_id, "ok but has anyone else just walked off a cliff for no reason");
+        self.add_message(&memes1_id, &raccoon_id, "...is that a joke or");
+        self.add_message(&memes1_id, &lemming_id, "yes. mostly.");
     }
 
     /// Wipe all data to empty state.

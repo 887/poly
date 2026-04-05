@@ -702,7 +702,7 @@ pub(crate) async fn open_message_hit(
                 (
                     account_id.clone(),
                     backend,
-                    app_state.read().nav.active_backend,
+                    app_state.read().nav.active_backend.clone(),
                 )
             })
     } else {
@@ -734,9 +734,9 @@ pub(crate) async fn open_message_hit(
     };
     let backend_type = target_server
         .as_ref()
-        .map(|server| server.backend)
+        .map(|server| server.backend.clone())
         .or(fallback_backend)
-        .unwrap_or(BackendType::Demo);
+        .unwrap_or(BackendType::from("demo"));
     drop(guard);
 
     chat_data.write().loading = false;

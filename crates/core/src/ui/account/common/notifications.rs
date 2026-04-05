@@ -75,14 +75,14 @@ pub fn NotificationsView() -> Element {
     let notifications_mark_read = t("notifications-mark-read");
 
     // Collect distinct backends present in notifications for filter
-    let mut backends: Vec<BackendType> = notifications.iter().map(|n| n.backend).collect();
+    let mut backends: Vec<BackendType> = notifications.iter().map(|n| n.backend.clone()).collect();
     backends.sort_by_key(|b| format!("{b:?}"));
     backends.dedup();
 
     // Apply filter
     let filtered: Vec<_> = notifications
         .iter()
-        .filter(|n| filter_backend.read().is_none_or(|f| n.backend == f))
+        .filter(|n| filter_backend.read().as_ref().map_or(true, |f| n.backend == *f))
         .filter(|n| kind_filter.read().matches(&n.kind))
         .filter(|n| !*show_unread_only.read() || !n.read)
         .cloned()
@@ -141,11 +141,11 @@ pub fn NotificationsView() -> Element {
                         button {
                             class: "special-page-sidebar-button",
                             onclick: move |_| {
-                                let backend_filter = *filter_backend.read();
+                                let backend_filter = filter_backend.read().clone();
                                 let active_kind = *kind_filter.read();
                                 let mut cd = chat_data.write();
                                 for notif in &mut cd.notifications {
-                                    if backend_filter.is_none_or(|backend| notif.backend == backend)
+                                    if backend_filter.as_ref().map_or(true, |backend| notif.backend == *backend)
                                         && active_kind.matches(&notif.kind)
                                     {
                                         notif.read = true;
@@ -172,7 +172,7 @@ pub fn NotificationsView() -> Element {
                         if backends.len() > 1 {
                             NotificationFilter {
                                 backends: backends.clone(),
-                                selected: *filter_backend.read(),
+                                selected: filter_backend.read().clone(),
                                 on_change: move |b| filter_backend.set(b),
                             }
                         }
@@ -226,7 +226,7 @@ fn NotificationFilter(
                 if val.is_empty() {
                     on_change.call(None);
                 } else {
-                    let matched = backends.iter().find(|b| format!("{b:?}") == val).copied();
+                    let matched = backends.iter().find(|b| format!("{b:?}") == val).cloned();
                     on_change.call(matched);
                 }
             },

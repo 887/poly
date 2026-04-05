@@ -25,11 +25,11 @@ fn u64_arg(args: &Value, key: &str) -> Option<u64> {
 
 fn parse_backend_type(s: &str) -> Option<BackendType> {
     match s {
-        "stoat" => Some(BackendType::Stoat),
-        "matrix" => Some(BackendType::Matrix),
-        "discord" => Some(BackendType::Discord),
-        "teams" => Some(BackendType::Teams),
-        "poly" => Some(BackendType::Poly),
+        "stoat" => Some(BackendType::from("stoat")),
+        "matrix" => Some(BackendType::from("matrix")),
+        "discord" => Some(BackendType::from("discord")),
+        "teams" => Some(BackendType::from("teams")),
+        "poly" => Some(BackendType::from("poly")),
         _ => None,
     }
 }

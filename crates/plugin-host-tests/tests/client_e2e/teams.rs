@@ -15,7 +15,7 @@ async fn load_teams() -> poly_plugin_host::PluginBackend {
 #[tokio::test]
 async fn teams_backend_type() {
     let backend = load_teams().await;
-    harness::assert_backend_type(&backend, BackendType::Teams);
+    harness::assert_backend_type(&backend, BackendType::from("teams"));
 }
 
 #[tokio::test]

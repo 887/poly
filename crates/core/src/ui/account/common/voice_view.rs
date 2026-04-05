@@ -153,8 +153,8 @@ async fn join_voice_channel(
 
     let voice_backend = current_server
         .as_ref()
-        .map(|s| s.backend)
-        .unwrap_or(poly_client::BackendType::Demo);
+        .map(|s| s.backend.clone())
+        .unwrap_or(poly_client::BackendType::from("demo"));
 
     // Fetch current participants from backend
     let mut participants = {
@@ -273,6 +273,7 @@ pub fn VoiceChannelView() -> Element {
         ChannelType::Voice => "🔊",
         ChannelType::Video => "📹",
         ChannelType::Text => "#",
+        ChannelType::Forum => "📋",
     };
 
     rsx! {

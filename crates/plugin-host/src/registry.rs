@@ -842,7 +842,7 @@ impl ClientBackend for PluginBackend {
     }
 
     fn backend_type(&self) -> BackendType {
-        self.cached_backend_type
+        self.cached_backend_type.clone()
     }
 
     fn backend_name(&self) -> &str {

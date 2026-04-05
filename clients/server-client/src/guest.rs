@@ -164,7 +164,7 @@ impl Guest for PolyServerPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Poly
+        wit::BackendType::from("poly")
     }
 
     fn get_backend_name() -> String {

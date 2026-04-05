@@ -125,7 +125,7 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
 #[tokio::test]
 async fn stoat_backend_type() {
     let backend = load_stoat().await;
-    harness::assert_backend_type(&backend, BackendType::Stoat);
+    harness::assert_backend_type(&backend, BackendType::from("stoat"));
 }
 
 #[tokio::test]
@@ -149,7 +149,7 @@ async fn stoat_authenticate_email_password_uses_real_guest_path() {
     assert_eq!(session.id, "session_1");
     assert_eq!(session.user.id, "user_1");
     assert_eq!(session.user.display_name, "Stoaty McStoat");
-    assert_eq!(session.backend, BackendType::Stoat);
+    assert_eq!(session.backend, BackendType::from("stoat"));
     assert_eq!(session.icon_emoji.as_deref(), Some("🦦"));
     assert_eq!(
         session.backend_url.as_deref(),
@@ -169,7 +169,7 @@ async fn stoat_authenticate_token_uses_real_guest_path() {
         .expect("Stoat mocked guest token auth should succeed");
 
     assert_eq!(session.user.id, "user_1");
-    assert_eq!(session.backend, BackendType::Stoat);
+    assert_eq!(session.backend, BackendType::from("stoat"));
 }
 
 #[tokio::test]

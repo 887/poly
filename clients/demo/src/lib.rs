@@ -247,7 +247,7 @@ impl ClientBackend for DemoClient {
             user: session.user,
             last_message: None,
             unread_count: 0,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: data::DEMO_ACCOUNT_ID.to_string(),
         })
     }
@@ -432,7 +432,7 @@ impl ClientBackend for DemoClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::Demo
+        BackendType::from("demo")
     }
 
     fn backend_name(&self) -> &str {
@@ -615,7 +615,7 @@ impl ClientBackend for DemoClient2 {
                 display_name: "🐱 Cat (demo)".to_string(),
                 avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
                 presence: PresenceStatus::Online,
-                backend: BackendType::Demo,
+                backend: BackendType::from("demo"),
             },
             last_message: Some(Message {
                 id: "msg-dm-cat-latest".to_string(),
@@ -624,7 +624,7 @@ impl ClientBackend for DemoClient2 {
                     display_name: "🐱 Cat (demo)".to_string(),
                     avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::Demo,
+                    backend: BackendType::from("demo"),
                 },
                 content: MessageContent::Text(
                     "fair! 😹 but you have to admit the feature flag organization is *clean* even if it's stolen from my 2023 design"
@@ -637,7 +637,7 @@ impl ClientBackend for DemoClient2 {
                 edited: false,
             }),
             unread_count: 1,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: data::DEMO2_ACCOUNT_ID.to_string(),
         });
 
@@ -662,7 +662,7 @@ impl ClientBackend for DemoClient2 {
             user: session.user,
             last_message: None,
             unread_count: 0,
-            backend: BackendType::Demo,
+            backend: BackendType::from("demo"),
             account_id: data::DEMO2_ACCOUNT_ID.to_string(),
         })
     }
@@ -698,10 +698,226 @@ impl ClientBackend for DemoClient2 {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::Demo
+        BackendType::from("demo")
     }
 
     fn backend_name(&self) -> &str {
         "Demo (Dog)"
+    }
+}
+
+/// Third demo messenger client — the "lemming" account (demo_forum / 🐭).
+///
+/// Models a Lemmy-style forum with communities as servers and forum channels
+/// as post boards. Uses the `demo_forum` backend type so it appears as a
+/// distinct plugin from the regular `demo` backend.
+#[cfg(feature = "native")]
+pub struct DemoClient3 {
+    authenticated: bool,
+    session: Option<Session>,
+}
+
+#[cfg(feature = "native")]
+impl DemoClient3 {
+    /// Create a new demo_forum client.
+    pub fn new() -> Self {
+        Self {
+            authenticated: false,
+            session: None,
+        }
+    }
+}
+
+#[cfg(feature = "native")]
+impl Default for DemoClient3 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl ClientBackend for DemoClient3 {
+    async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
+        let session = data::demo3_session();
+        self.session = Some(session.clone());
+        self.authenticated = true;
+        Ok(session)
+    }
+
+    async fn logout(&mut self) -> ClientResult<()> {
+        self.session = None;
+        self.authenticated = false;
+        Ok(())
+    }
+
+    fn is_authenticated(&self) -> bool {
+        self.authenticated
+    }
+
+    async fn get_servers(&self) -> ClientResult<Vec<Server>> {
+        Ok(data::demo3_servers())
+    }
+
+    async fn get_server(&self, id: &str) -> ClientResult<Server> {
+        data::demo3_servers()
+            .into_iter()
+            .find(|s| s.id == id)
+            .ok_or_else(|| ClientError::NotFound(format!("Server {id}")))
+    }
+
+    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
+        Ok(data::demo3_channels(server_id))
+    }
+
+    async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
+        for server in data::demo3_servers() {
+            for channel in data::demo3_channels(&server.id) {
+                if channel.id == id {
+                    return Ok(channel);
+                }
+            }
+        }
+        Err(ClientError::NotFound(format!("Channel {id}")))
+    }
+
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        Ok(data::demo_sent_message(channel_id, content))
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        Ok(data::demo_sent_reply_message(
+            channel_id,
+            reply_to_message_id,
+            content,
+        ))
+    }
+
+    async fn get_messages(
+        &self,
+        channel_id: &str,
+        _query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        // Check DM channels first, then forum channels
+        let dm_msgs = data::demo3_dm_messages(channel_id);
+        if !dm_msgs.is_empty() {
+            return Ok(dm_msgs);
+        }
+        Ok(data::demo3_messages(channel_id))
+    }
+
+    async fn search_messages(
+        &self,
+        _query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Ok(vec![])
+    }
+
+    async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(vec![])
+    }
+
+    async fn get_available_emojis(&self, _channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(vec![])
+    }
+
+    async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(vec![])
+    }
+
+    async fn get_user(&self, id: &str) -> ClientResult<User> {
+        Err(ClientError::NotFound(format!("User {id}")))
+    }
+
+    async fn get_friends(&self) -> ClientResult<Vec<User>> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
+        Ok(vec![])
+    }
+
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        Ok(vec![])
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        Ok(data::demo3_dm_channels())
+    }
+
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        data::demo3_dm_channels()
+            .into_iter()
+            .find(|dm| dm.user.id == user_id)
+            .ok_or_else(|| ClientError::NotFound(format!("DM user {user_id}")))
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        let session = self.session.clone().unwrap_or_else(data::demo3_session);
+        Ok(DmChannel {
+            id: "dm-demo3-saved-self".to_string(),
+            user: session.user,
+            last_message: None,
+            unread_count: 0,
+            backend: BackendType::from(data::DEMO_FORUM_BACKEND),
+            account_id: data::DEMO3_ACCOUNT_ID.to_string(),
+        })
+    }
+
+    async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
+        Ok(data::demo3_notifications())
+    }
+
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Online)
+    }
+
+    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn get_voice_participants(
+        &self,
+        _channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        Ok(vec![])
+    }
+
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
+        Box::pin(futures::stream::empty())
+    }
+
+    fn backend_type(&self) -> BackendType {
+        BackendType::from(data::DEMO_FORUM_BACKEND)
+    }
+
+    fn backend_name(&self) -> &str {
+        "Demo Forum (Platypus)"
     }
 }

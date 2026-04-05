@@ -384,7 +384,7 @@ fn ServerBanner(
         .unwrap_or_default();
     let supports_channels_roles = current_server
         .as_ref()
-        .is_some_and(|server| server.backend == BackendType::Demo);
+        .is_some_and(|server| server.backend == BackendType::from("demo"));
 
     rsx! {
         div { class: "server-banner-sidebar",
@@ -617,7 +617,7 @@ fn DMFriendsView() -> Element {
                 let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
                     match (
-                        nav.active_backend,
+                        nav.active_backend.clone(),
                         nav.active_instance_id.clone(),
                         nav.active_account_id.clone(),
                     ) {
@@ -643,7 +643,7 @@ fn DMFriendsView() -> Element {
                 let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
                     match (
-                        nav.active_backend,
+                        nav.active_backend.clone(),
                         nav.active_instance_id.clone(),
                         nav.active_account_id.clone(),
                     ) {
@@ -727,7 +727,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
         // Backend slug for route construction.
         let backend_slug = server.backend.slug().to_string();
         // Demo backend does not support channel creation — hide the button for it.
-        let can_create = !matches!(server.backend, BackendType::Demo);
+        let can_create = server.backend != "demo";
         let server_id = server.id.clone();
 
         rsx! {
@@ -1096,6 +1096,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
         .read()
         .nav
         .active_backend
+        .as_ref()
         .map(|b| b.slug().to_string())
         .unwrap_or_else(|| "demo".to_string());
     let instance_id_for_menu = app_state.read().nav.active_instance_id.clone().unwrap_or_default();
@@ -1109,6 +1110,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
         ChannelType::Text => "#",
         ChannelType::Voice => "🔊",
         ChannelType::Video => "📹",
+        ChannelType::Forum => "📋",
     };
 
     // Active wins over unread; unread class makes the channel name bold.
@@ -1258,7 +1260,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
                     match (
-                        nav.active_backend,
+                        nav.active_backend.clone(),
                         nav.active_instance_id.clone(),
                         nav.active_account_id.clone(),
                     ) {

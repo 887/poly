@@ -152,7 +152,7 @@ impl ClientBackend for TeamsClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::Teams
+        BackendType::from("teams")
     }
 
     fn backend_name(&self) -> &str {

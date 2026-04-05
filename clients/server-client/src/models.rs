@@ -92,6 +92,7 @@ pub struct ServerDetail {
 pub enum ChannelKind {
     Text,
     Voice,
+    Forum,
 }
 
 /// A channel (server channel or DM/group) — wire format.
