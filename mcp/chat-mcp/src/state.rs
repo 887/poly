@@ -103,11 +103,23 @@ fn create_backend(
             Ok((Box::new(client), BackendType::from("lemmy")))
         }
         "hackernews" | "hn" => {
-            let client = poly_hackernews::HackerNewsClient::with_base_url(url);
+            // HN API paths live under /v0/ — append it if not already present.
+            let hn_url = if url.ends_with("/v0") || url.contains("/v0/") {
+                url.to_string()
+            } else {
+                format!("{}/v0", url.trim_end_matches('/'))
+            };
+            let client = poly_hackernews::HackerNewsClient::with_base_url(hn_url);
             Ok((Box::new(client), BackendType::from("hackernews")))
         }
-        "discord" => anyhow::bail!("Discord client not yet implemented"),
-        "teams" => anyhow::bail!("Teams client not yet implemented"),
+        "discord" => {
+            let client = poly_discord::DiscordClient::with_base_url(url.to_string());
+            Ok((Box::new(client), BackendType::from("discord")))
+        }
+        "teams" => {
+            let client = poly_teams::TeamsClient::with_base_url(url.to_string());
+            Ok((Box::new(client), BackendType::from("teams")))
+        }
         "poly" => {
             // For MCP, we need the caller to provide private key bytes.
             // For now, generate an ephemeral key.

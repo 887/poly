@@ -56,7 +56,8 @@ pub struct StoatRootFeatures {
 pub struct StoatServiceFeature {
     /// Whether the service is enabled.
     pub enabled: bool,
-    /// Service base URL.
+    /// Service base URL (absent when the service is disabled).
+    #[serde(default)]
     pub url: String,
 }
 

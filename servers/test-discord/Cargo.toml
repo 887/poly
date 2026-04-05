@@ -9,6 +9,10 @@ description = "Mock Discord API server for Poly testing"
 name = "poly-test-discord"
 path = "src/main.rs"
 
+[lib]
+name = "poly_test_discord"
+path = "src/lib.rs"
+
 [dependencies]
 poly-test-common = { path = "../test-common" }
 

@@ -37,7 +37,8 @@ native = [
 ]
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "time", "net"] }
+poly-test-hackernews = { path = "../../servers/test-hackernews" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "net"] }
 axum = { workspace = true }
 serde_json = { workspace = true }
 

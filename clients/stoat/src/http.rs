@@ -37,6 +37,9 @@ pub struct StoatHttpClient {
     config: StoatConfig,
     http: Client,
     session: Arc<RwLock<Option<StoatSessionState>>>,
+    /// WebSocket URL obtained from the server's root config (GET /).
+    /// Set after successful authentication.
+    ws_url: Arc<RwLock<Option<String>>>,
 }
 
 impl StoatHttpClient {
@@ -47,6 +50,7 @@ impl StoatHttpClient {
             config,
             http: Client::new(),
             session: Arc::new(RwLock::new(None)),
+            ws_url: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -60,6 +64,20 @@ impl StoatHttpClient {
     #[must_use]
     pub fn websocket_url(&self) -> String {
         self.config.websocket_url()
+    }
+
+    /// WebSocket URL as returned by the server's root config (GET /).
+    /// Populated after successful authentication.
+    #[must_use]
+    pub fn ws_url(&self) -> Option<String> {
+        self.ws_url.read().ok().and_then(|g| g.clone())
+    }
+
+    /// Store the WebSocket URL obtained from the server's root config.
+    pub fn set_ws_url(&self, url: String) {
+        if let Ok(mut guard) = self.ws_url.write() {
+            *guard = Some(url);
+        }
     }
 
     /// Stable instance identifier derived from the configured base URL.
@@ -180,6 +198,7 @@ impl StoatHttpClient {
             self.fetch_self_with_token(&login.token),
             self.fetch_server_config(),
         )?;
+        self.set_ws_url(root_config.ws.clone());
         let authenticated = StoatAuthenticatedSession {
             session_id: login.session_id,
             user_id: login.user_id,
@@ -208,6 +227,7 @@ impl StoatHttpClient {
             self.fetch_server_config(),
         )
         .await?;
+        self.set_ws_url(root_config.ws.clone());
         let session = StoatAuthenticatedSession {
             // TODO(phase-3.1.2.2): fetch session inventory from Stoat when we
             // need an exact session identifier for token-restore flows.

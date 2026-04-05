@@ -104,8 +104,115 @@ impl DiscordState {
     /// Seed demo data: Koala + Kangaroo, 2 guilds, channels, messages.
     /// Idempotent — skips if data already present.
     pub fn seed(&self) {
-        // TODO(4.5.12): Populate demo data
+        if !self.users.is_empty() {
+            return;
+        }
         tracing::info!("seeding Discord demo data");
+
+        // Users
+        self.users.insert("U001".into(), User {
+            id: "U001".into(),
+            username: "koala".into(),
+            discriminator: "0001".into(),
+            avatar: None,
+            password: "testpass123".into(),
+        });
+        self.users.insert("U002".into(), User {
+            id: "U002".into(),
+            username: "kangaroo".into(),
+            discriminator: "0002".into(),
+            avatar: None,
+            password: "testpass123".into(),
+        });
+        self.users.insert("U003".into(), User {
+            id: "U003".into(),
+            username: "wallaby".into(),
+            discriminator: "0003".into(),
+            avatar: None,
+            password: "testpass123".into(),
+        });
+
+        // Channels for guild G001
+        self.channels.insert("CH001".into(), Channel {
+            id: "CH001".into(),
+            name: "general".into(),
+            guild_id: Some("G001".into()),
+            channel_type: 0,
+            parent_id: None,
+        });
+        self.channels.insert("CH002".into(), Channel {
+            id: "CH002".into(),
+            name: "random".into(),
+            guild_id: Some("G001".into()),
+            channel_type: 0,
+            parent_id: None,
+        });
+        // Channel for guild G002
+        self.channels.insert("CH003".into(), Channel {
+            id: "CH003".into(),
+            name: "announcements".into(),
+            guild_id: Some("G002".into()),
+            channel_type: 0,
+            parent_id: None,
+        });
+        // DM channel
+        self.channels.insert("DM001".into(), Channel {
+            id: "DM001".into(),
+            name: "".into(),
+            guild_id: None,
+            channel_type: 1,
+            parent_id: None,
+        });
+
+        // Guilds
+        self.guilds.insert("G001".into(), Guild {
+            id: "G001".into(),
+            name: "Australiana".into(),
+            owner_id: "U001".into(),
+            channels: vec!["CH001".into(), "CH002".into()],
+            members: vec!["U001".into(), "U002".into(), "U003".into()],
+        });
+        self.guilds.insert("G002".into(), Guild {
+            id: "G002".into(),
+            name: "Wildlife Chat".into(),
+            owner_id: "U002".into(),
+            channels: vec!["CH003".into()],
+            members: vec!["U001".into(), "U002".into()],
+        });
+
+        // Messages for CH001
+        self.messages.insert("CH001".into(), vec![
+            Message {
+                id: "M001".into(),
+                content: "G'day everyone!".into(),
+                author_id: "U001".into(),
+                channel_id: "CH001".into(),
+                timestamp: "2026-04-05T10:00:00.000Z".into(),
+            },
+            Message {
+                id: "M002".into(),
+                content: "Crikey, it's good to be here!".into(),
+                author_id: "U002".into(),
+                channel_id: "CH001".into(),
+                timestamp: "2026-04-05T10:01:00.000Z".into(),
+            },
+            Message {
+                id: "M003".into(),
+                content: "Has anyone seen my joey?".into(),
+                author_id: "U003".into(),
+                channel_id: "CH001".into(),
+                timestamp: "2026-04-05T10:02:00.000Z".into(),
+            },
+        ]);
+        self.messages.insert("CH003".into(), vec![
+            Message {
+                id: "M010".into(),
+                content: "Welcome to Wildlife Chat!".into(),
+                author_id: "U002".into(),
+                channel_id: "CH003".into(),
+                timestamp: "2026-04-05T09:00:00.000Z".into(),
+            },
+        ]);
     }
 
     /// Wipe all data to empty state.

@@ -9,6 +9,10 @@ license.workspace = true
 name = "poly-chat-mcp"
 path = "src/main.rs"
 
+[lib]
+name = "poly_chat_mcp"
+path = "src/lib.rs"
+
 [dependencies]
 poly-client = { workspace = true }
 poly-stoat = { workspace = true, features = ["native"] }
@@ -34,6 +38,17 @@ rand = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
 clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+poly-test-discord = { path = "../../servers/test-discord" }
+poly-test-teams = { path = "../../servers/test-teams" }
+poly-test-lemmy = { path = "../../servers/test-lemmy" }
+poly-test-hackernews = { path = "../../servers/test-hackernews" }
+poly-test-stoat = { path = "../../servers/test-stoat" }
+poly-test-matrix = { path = "../../servers/test-matrix" }
+axum = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time"] }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

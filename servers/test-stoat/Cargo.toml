@@ -9,6 +9,10 @@ description = "Mock Stoat/Revolt API server for Poly testing"
 name = "poly-test-stoat"
 path = "src/main.rs"
 
+[lib]
+name = "poly_test_stoat"
+path = "src/lib.rs"
+
 [dependencies]
 poly-test-common = { path = "../test-common" }
 

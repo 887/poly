@@ -9,6 +9,10 @@ description = "Mock Lemmy API server for Poly testing"
 name = "poly-test-lemmy"
 path = "src/main.rs"
 
+[lib]
+name = "poly_test_lemmy"
+path = "src/lib.rs"
+
 [dependencies]
 poly-test-common = { path = "../test-common" }
 
@@ -33,6 +37,7 @@ tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
+dashmap = { workspace = true }
 
 [lints]
 workspace = true

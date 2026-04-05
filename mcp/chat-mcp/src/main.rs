@@ -21,8 +21,7 @@
 //! poly-chat-mcp --stdio
 //! ```
 
-mod state;
-mod tools;
+use poly_chat_mcp::{state, tools};
 
 use std::sync::Arc;
 

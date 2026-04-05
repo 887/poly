@@ -102,8 +102,77 @@ impl TeamsState {
     /// Seed demo data: Sheep + Walrus, 2 teams, channels, chats, messages.
     /// Idempotent — skips if data already present.
     pub fn seed(&self) {
-        // TODO(4.6.13): Populate demo data
+        if !self.users.is_empty() {
+            return;
+        }
         tracing::info!("seeding Teams demo data");
+
+        self.users.insert("U001".into(), User {
+            id: "U001".into(),
+            display_name: "Sheep".into(),
+            email: "sheep@contoso.com".into(),
+            avatar_url: None,
+            password: "testpass123".into(),
+        });
+        self.users.insert("U002".into(), User {
+            id: "U002".into(),
+            display_name: "Walrus".into(),
+            email: "walrus@contoso.com".into(),
+            avatar_url: None,
+            password: "testpass123".into(),
+        });
+
+        self.channels.insert("CH001".into(), Channel {
+            id: "CH001".into(),
+            display_name: "General".into(),
+            team_id: "T001".into(),
+        });
+        self.channels.insert("CH002".into(), Channel {
+            id: "CH002".into(),
+            display_name: "Engineering".into(),
+            team_id: "T001".into(),
+        });
+        self.channels.insert("CH003".into(), Channel {
+            id: "CH003".into(),
+            display_name: "General".into(),
+            team_id: "T002".into(),
+        });
+
+        self.teams.insert("T001".into(), Team {
+            id: "T001".into(),
+            display_name: "Contoso Corp".into(),
+            description: Some("Main company team".into()),
+            members: vec!["U001".into(), "U002".into()],
+        });
+        self.teams.insert("T002".into(), Team {
+            id: "T002".into(),
+            display_name: "Project Alpha".into(),
+            description: Some("Project Alpha team".into()),
+            members: vec!["U001".into()],
+        });
+
+        self.chats.insert("CHAT001".into(), Chat {
+            id: "CHAT001".into(),
+            chat_type: "oneOnOne".into(),
+            members: vec!["U001".into(), "U002".into()],
+        });
+
+        self.messages.insert("CH001".into(), vec![
+            Message {
+                id: "MSG001".into(),
+                body_content: "Good morning team!".into(),
+                from_user_id: "U001".into(),
+                channel_or_chat_id: "CH001".into(),
+                created_date_time: "2026-04-05T09:00:00Z".into(),
+            },
+            Message {
+                id: "MSG002".into(),
+                body_content: "Morning! Ready for the standup?".into(),
+                from_user_id: "U002".into(),
+                channel_or_chat_id: "CH001".into(),
+                created_date_time: "2026-04-05T09:01:00Z".into(),
+            },
+        ]);
     }
 
     /// Wipe all data to empty state.

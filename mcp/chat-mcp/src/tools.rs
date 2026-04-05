@@ -465,9 +465,15 @@ async fn handle_test_signin(args: &Value, pool: &mut BackendPool) -> Value {
                 Ok(v) => v,
                 Err(e) => return err_result(format!("failed to parse token response: {e}")),
             };
-            match body.get("token").and_then(|t| t.as_str()).map(|s| s.to_string()) {
+            // Accept "token" (discord/stoat), "jwt" (lemmy), or "access_token" (matrix).
+            let token_val = body.get("token")
+                .or_else(|| body.get("jwt"))
+                .or_else(|| body.get("access_token"))
+                .and_then(|t| t.as_str())
+                .map(|s| s.to_string());
+            match token_val {
                 Some(t) => t,
-                None => return err_result("test server did not return a token"),
+                None => return err_result("test server did not return a token or jwt"),
             }
         }
         Ok(r) => {

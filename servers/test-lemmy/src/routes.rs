@@ -1,599 +1,481 @@
-//! Hardcoded route handlers for the mock Lemmy test server.
+//! Lemmy API route handlers for the mock test server.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
-use axum::{
-    extract::Query,
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
-    Json,
-};
+use axum::extract::{Query, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::IntoResponse;
+use axum::Json;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
+use std::sync::Arc;
 
-// ── Constants ────────────────────────────────────────────────────────────────
+use crate::state::LemmyState;
 
-const TEST_TOKEN_PREFIX: &str = "test-token-";
-const TEST_USER_ID: i64 = 1;
-const TEST_USER_NAME: &str = "testuser";
-const TEST_USER_DISPLAY: &str = "Test User";
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-// ── Auth helpers ─────────────────────────────────────────────────────────────
-
-fn extract_bearer(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer ").map(str::to_string))
+fn bearer_user_id(state: &LemmyState, headers: &HeaderMap) -> Option<String> {
+    let auth = headers.get("authorization").and_then(|v| v.to_str().ok())?;
+    let token = auth.strip_prefix("Bearer ")?;
+    state.auth.validate(token)
 }
 
-fn require_auth(headers: &HeaderMap) -> Result<String, impl IntoResponse> {
-    extract_bearer(headers).ok_or_else(|| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "missing or invalid Authorization header"})),
-        )
+fn auth_error() -> (StatusCode, Json<Value>) {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(json!({ "error": "not_logged_in" })),
+    )
+}
+
+fn community_view(c: &crate::state::Community) -> Value {
+    json!({
+        "community": {
+            "id": c.id,
+            "name": c.name,
+            "title": c.title,
+            "description": c.description,
+            "icon": c.icon,
+            "actor_id": c.actor_id,
+            "local": true,
+            "removed": false,
+            "deleted": false,
+            "nsfw": false,
+            "hidden": false,
+            "posting_restricted_to_mods": false,
+            "instance_id": 1,
+        },
+        "subscribed": if c.subscribed { "Subscribed" } else { "NotSubscribed" },
+        "blocked": false,
+        "counts": {
+            "id": c.id,
+            "community_id": c.id,
+            "subscribers": 100,
+            "posts": 10,
+            "comments": 50,
+            "published": "2024-01-01T00:00:00Z",
+            "users_active_day": 5,
+            "users_active_week": 15,
+            "users_active_month": 40,
+            "users_active_half_year": 80,
+            "hot_rank": 1000,
+        },
     })
 }
 
-// ── Fixed data ────────────────────────────────────────────────────────────────
-
-fn communities() -> Vec<Value> {
-    vec![
-        json!({
-            "community": {
-                "id": 101,
-                "name": "rust",
-                "title": "Rust Programming Language",
-                "description": "A community for Rust enthusiasts.",
-                "icon": null,
-                "banner": null,
-                "nsfw": false,
-                "removed": false,
-                "deleted": false,
-                "published": "2023-01-01T00:00:00Z"
-            },
-            "subscribed": "Subscribed",
-            "counts": {
-                "id": 101,
-                "community_id": 101,
-                "subscribers": 5000,
-                "posts": 1200,
-                "comments": 9000,
-                "published": "2023-01-01T00:00:00Z",
-                "users_active_day": 50,
-                "users_active_week": 300,
-                "users_active_month": 1000
-            }
-        }),
-        json!({
-            "community": {
-                "id": 102,
-                "name": "opensource",
-                "title": "Open Source",
-                "description": "All things open source.",
-                "icon": null,
-                "banner": null,
-                "nsfw": false,
-                "removed": false,
-                "deleted": false,
-                "published": "2023-02-01T00:00:00Z"
-            },
-            "subscribed": "Subscribed",
-            "counts": {
-                "id": 102,
-                "community_id": 102,
-                "subscribers": 3000,
-                "posts": 500,
-                "comments": 4000,
-                "published": "2023-02-01T00:00:00Z",
-                "users_active_day": 20,
-                "users_active_week": 100,
-                "users_active_month": 400
-            }
-        }),
-        json!({
-            "community": {
-                "id": 103,
-                "name": "linux",
-                "title": "Linux",
-                "description": "The Linux community.",
-                "icon": null,
-                "banner": null,
-                "nsfw": false,
-                "removed": false,
-                "deleted": false,
-                "published": "2023-03-01T00:00:00Z"
-            },
-            "subscribed": "Subscribed",
-            "counts": {
-                "id": 103,
-                "community_id": 103,
-                "subscribers": 8000,
-                "posts": 2000,
-                "comments": 15000,
-                "published": "2023-03-01T00:00:00Z",
-                "users_active_day": 80,
-                "users_active_week": 400,
-                "users_active_month": 1500
-            }
-        }),
-    ]
+fn post_view(p: &crate::state::Post) -> Value {
+    json!({
+        "post": {
+            "id": p.id,
+            "name": p.name,
+            "body": p.body,
+            "url": p.url,
+            "creator_id": p.creator_id,
+            "community_id": p.community_id,
+            "removed": false,
+            "locked": false,
+            "published": p.published,
+            "deleted": false,
+            "nsfw": false,
+            "ap_id": format!("https://lemmy.example.com/post/{}", p.id),
+            "local": true,
+            "embed_title": null,
+            "embed_description": null,
+            "embed_video_url": null,
+            "thumbnail_url": null,
+            "language_id": 0,
+            "featured_community": false,
+            "featured_local": false,
+            "instance_id": 1,
+        },
+        "creator": {
+            "id": p.creator_id,
+            "name": p.creator_name,
+            "display_name": null,
+            "avatar": null,
+            "banned": false,
+            "published": "2024-01-01T00:00:00Z",
+            "actor_id": format!("https://lemmy.example.com/u/{}", p.creator_name),
+            "local": true,
+            "deleted": false,
+            "matrix_user_id": null,
+            "admin": false,
+            "bot_account": false,
+            "instance_id": 1,
+        },
+        "community": {
+            "id": p.community_id,
+            "name": "community",
+            "title": "Community",
+            "removed": false,
+            "published": "2024-01-01T00:00:00Z",
+            "deleted": false,
+            "nsfw": false,
+            "actor_id": format!("https://lemmy.example.com/c/community{}", p.community_id),
+            "local": true,
+            "hidden": false,
+            "posting_restricted_to_mods": false,
+            "instance_id": 1,
+        },
+        "creator_banned_from_community": false,
+        "counts": {
+            "id": p.id,
+            "post_id": p.id,
+            "comments": p.comment_count,
+            "score": p.score,
+            "upvotes": p.score.max(0),
+            "downvotes": 0,
+            "hot_rank": 1000,
+            "hot_rank_active": 1000,
+            "published": p.published,
+            "newest_comment_time_necro": p.published,
+            "newest_comment_time": p.published,
+            "featured_community": false,
+            "featured_local": false,
+            "controversy_rank": 0.0_f64,
+        },
+        "subscribed": "Subscribed",
+        "saved": false,
+        "read": false,
+        "creator_blocked": false,
+        "my_vote": null,
+        "unread_comments": 0,
+    })
 }
 
-fn posts_for_community(community_id: i64) -> Vec<Value> {
-    vec![
-        json!({
-            "post": {
-                "id": community_id * 10 + 1,
-                "name": format!("Welcome to community {community_id}"),
-                "body": "This is the welcome post for the community.",
-                "url": null,
-                "creator_id": 2,
-                "published": "2024-01-15T10:00:00Z",
-                "updated": null,
-                "deleted": false,
-                "nsfw": false,
-                "community_id": community_id
-            },
-            "creator": {
-                "id": 2,
-                "name": "alice",
-                "display_name": "Alice",
-                "avatar": null,
-                "banned": false
-            },
-            "counts": {
-                "post_id": community_id * 10 + 1,
-                "comments": 3,
-                "score": 42,
-                "upvotes": 45,
-                "downvotes": 3,
-                "newest_comment_time": "2024-01-15T12:00:00Z"
-            },
-            "my_vote": null,
-            "saved": false,
-            "read": false
-        }),
-        json!({
-            "post": {
-                "id": community_id * 10 + 2,
-                "name": "Interesting link for this community",
-                "body": null,
-                "url": "https://example.com/interesting",
-                "creator_id": 3,
-                "published": "2024-01-16T09:30:00Z",
-                "updated": null,
-                "deleted": false,
-                "nsfw": false,
-                "community_id": community_id
-            },
-            "creator": {
-                "id": 3,
-                "name": "bob",
-                "display_name": "Bob",
-                "avatar": null,
-                "banned": false
-            },
-            "counts": {
-                "post_id": community_id * 10 + 2,
-                "comments": 1,
-                "score": 10,
-                "upvotes": 11,
-                "downvotes": 1,
-                "newest_comment_time": "2024-01-16T10:00:00Z"
-            },
-            "my_vote": null,
-            "saved": false,
-            "read": false
-        }),
-        json!({
-            "post": {
-                "id": community_id * 10 + 3,
-                "name": "Discussion: best practices",
-                "body": "Let's discuss best practices in this community.",
-                "url": null,
-                "creator_id": 2,
-                "published": "2024-01-17T14:00:00Z",
-                "updated": null,
-                "deleted": false,
-                "nsfw": false,
-                "community_id": community_id
-            },
-            "creator": {
-                "id": 2,
-                "name": "alice",
-                "display_name": "Alice",
-                "avatar": null,
-                "banned": false
-            },
-            "counts": {
-                "post_id": community_id * 10 + 3,
-                "comments": 2,
-                "score": 20,
-                "upvotes": 22,
-                "downvotes": 2,
-                "newest_comment_time": "2024-01-17T16:00:00Z"
-            },
-            "my_vote": null,
-            "saved": false,
-            "read": false
-        }),
-    ]
+// ---------------------------------------------------------------------------
+// Health
+// ---------------------------------------------------------------------------
+
+pub async fn health() -> impl IntoResponse {
+    Json(json!({ "status": "ok", "backend": "lemmy" }))
 }
 
-fn comments_for_post(post_id: i64) -> Vec<Value> {
-    vec![
-        json!({
-            "comment": {
-                "id": post_id * 10 + 1,
-                "content": "Great post! Very informative.",
-                "creator_id": 3,
-                "post_id": post_id,
-                "path": format!("0.{}", post_id * 10 + 1),
-                "published": "2024-01-15T11:00:00Z",
-                "updated": null,
-                "deleted": false,
-                "removed": false
-            },
-            "creator": {
-                "id": 3,
-                "name": "bob",
-                "display_name": "Bob",
-                "avatar": null,
-                "banned": false
-            },
-            "counts": {
-                "comment_id": post_id * 10 + 1,
-                "score": 5,
-                "upvotes": 6,
-                "downvotes": 1,
-                "child_count": 1
-            },
-            "my_vote": null,
-            "saved": false
-        }),
-        json!({
-            "comment": {
-                "id": post_id * 10 + 2,
-                "content": "I agree, thanks for sharing!",
-                "creator_id": 2,
-                "post_id": post_id,
-                "path": format!("0.{}.{}", post_id * 10 + 1, post_id * 10 + 2),
-                "published": "2024-01-15T11:30:00Z",
-                "updated": null,
-                "deleted": false,
-                "removed": false
-            },
-            "creator": {
-                "id": 2,
-                "name": "alice",
-                "display_name": "Alice",
-                "avatar": null,
-                "banned": false
-            },
-            "counts": {
-                "comment_id": post_id * 10 + 2,
-                "score": 3,
-                "upvotes": 3,
-                "downvotes": 0,
-                "child_count": 0
-            },
-            "my_vote": null,
-            "saved": false
-        }),
-        json!({
-            "comment": {
-                "id": post_id * 10 + 3,
-                "content": "Good discussion, everyone.",
-                "creator_id": 4,
-                "post_id": post_id,
-                "path": format!("0.{}", post_id * 10 + 3),
-                "published": "2024-01-15T12:00:00Z",
-                "updated": null,
-                "deleted": false,
-                "removed": false
-            },
-            "creator": {
-                "id": 4,
-                "name": "carol",
-                "display_name": "Carol",
-                "avatar": null,
-                "banned": false
-            },
-            "counts": {
-                "comment_id": post_id * 10 + 3,
-                "score": 2,
-                "upvotes": 2,
-                "downvotes": 0,
-                "child_count": 0
-            },
-            "my_vote": null,
-            "saved": false
-        }),
-    ]
-}
-
-// ── Route handlers ────────────────────────────────────────────────────────────
-
-/// `POST /api/v3/user/login`
-pub async fn login(Json(body): Json<Value>) -> impl IntoResponse {
-    let username = body
-        .get("username_or_email")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-
-    Json(json!({
-        "jwt": format!("{TEST_TOKEN_PREFIX}{username}"),
-        "registration_created": false,
-        "verify_email_sent": false
-    }))
-}
-
-/// `GET /api/v3/site`
-pub async fn get_site(headers: HeaderMap) -> impl IntoResponse {
-    if require_auth(&headers).is_err() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "unauthorized"})),
-        );
-    }
-
-    (
-        StatusCode::OK,
-        Json(json!({
-            "site_view": {
-                "site": {
-                    "id": 1,
-                    "name": "Test Lemmy Instance",
-                    "description": "A test instance for Poly development.",
-                    "published": "2023-01-01T00:00:00Z"
-                }
-            },
-            "my_user": {
-                "local_user_view": {
-                    "local_user": {
-                        "id": TEST_USER_ID,
-                        "person_id": TEST_USER_ID
-                    },
-                    "person": {
-                        "id": TEST_USER_ID,
-                        "name": TEST_USER_NAME,
-                        "display_name": TEST_USER_DISPLAY,
-                        "avatar": null,
-                        "banned": false,
-                        "published": "2023-01-01T00:00:00Z"
-                    }
-                }
-            }
-        })),
-    )
-}
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
-pub struct CommunityListParams {
-    #[serde(rename = "type_")]
-    pub type_: Option<String>,
-    pub limit: Option<u32>,
-    pub page: Option<u32>,
+pub struct LoginRequest {
+    pub username_or_email: String,
+    pub password: String,
 }
 
-/// `GET /api/v3/community/list`
-pub async fn list_communities(
-    headers: HeaderMap,
-    Query(_params): Query<CommunityListParams>,
+/// POST /api/v3/user/login
+pub async fn login(
+    State(state): State<Arc<LemmyState>>,
+    Json(body): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    if require_auth(&headers).is_err() {
-        return (
+    let username = body.username_or_email.trim().to_string();
+    let expected_password = state.passwords.get(&username).map(|p| p.clone());
+
+    match expected_password {
+        Some(pw) if pw == body.password => {
+            let token = state.auth.create_token(&username);
+            (StatusCode::OK, Json(json!({ "jwt": token }))).into_response()
+        }
+        _ => (
             StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "unauthorized"})),
-        );
+            Json(json!({ "error": "incorrect_login" })),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /api/v3/user/logout
+pub async fn logout(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Some(auth) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
+        if let Some(token) = auth.strip_prefix("Bearer ") {
+            state.auth.revoke(token);
+        }
+    }
+    Json(json!({}))
+}
+
+// ---------------------------------------------------------------------------
+// Communities
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Default)]
+pub struct ListCommunitiesQuery {
+    #[allow(dead_code)]
+    pub type_: Option<String>,
+    #[allow(dead_code)]
+    pub limit: Option<i64>,
+    #[allow(dead_code)]
+    pub page: Option<i64>,
+}
+
+/// GET /api/v3/community/list
+pub async fn list_communities(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(_q): Query<ListCommunitiesQuery>,
+) -> impl IntoResponse {
+    // Require auth
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
     }
 
-    (
-        StatusCode::OK,
-        Json(json!({
-            "communities": communities()
-        })),
-    )
+    let communities: Vec<Value> = state
+        .communities
+        .iter()
+        .map(|entry| community_view(entry.value()))
+        .collect();
+
+    Json(json!({ "communities": communities })).into_response()
 }
 
 #[derive(Deserialize)]
-pub struct CommunityParams {
+pub struct GetCommunityQuery {
     pub id: Option<i64>,
     pub name: Option<String>,
 }
 
-/// `GET /api/v3/community`
+/// GET /api/v3/community
 pub async fn get_community(
+    State(state): State<Arc<LemmyState>>,
     headers: HeaderMap,
-    Query(params): Query<CommunityParams>,
+    Query(q): Query<GetCommunityQuery>,
 ) -> impl IntoResponse {
-    if require_auth(&headers).is_err() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "unauthorized"})),
-        );
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
     }
 
-    let community_id = params.id.unwrap_or(101);
-    let all = communities();
-    let found = all
-        .iter()
-        .find(|c| c["community"]["id"].as_i64() == Some(community_id));
-
-    match found {
-        Some(view) => (
-            StatusCode::OK,
-            Json(json!({
-                "community_view": view,
-                "moderators": [],
-                "online": 5
-            })),
-        ),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "community not found"})),
-        ),
-    }
-}
-
-#[derive(Deserialize)]
-pub struct PostListParams {
-    pub community_id: Option<i64>,
-    pub sort: Option<String>,
-    pub limit: Option<u32>,
-    pub page: Option<u32>,
-}
-
-/// `GET /api/v3/post/list`
-pub async fn list_posts(
-    headers: HeaderMap,
-    Query(params): Query<PostListParams>,
-) -> impl IntoResponse {
-    if require_auth(&headers).is_err() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "unauthorized"})),
-        );
-    }
-
-    let community_id = params.community_id.unwrap_or(101);
-    let posts = posts_for_community(community_id);
-
-    (
-        StatusCode::OK,
-        Json(json!({
-            "posts": posts
-        })),
-    )
-}
-
-#[derive(Deserialize)]
-pub struct CommentListParams {
-    pub post_id: Option<i64>,
-    pub sort: Option<String>,
-    pub limit: Option<u32>,
-    pub page: Option<u32>,
-}
-
-/// `GET /api/v3/comment/list`
-pub async fn list_comments(
-    headers: HeaderMap,
-    Query(params): Query<CommentListParams>,
-) -> impl IntoResponse {
-    if require_auth(&headers).is_err() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "unauthorized"})),
-        );
-    }
-
-    let post_id = params.post_id.unwrap_or(1011);
-    let comments = comments_for_post(post_id);
-
-    (
-        StatusCode::OK,
-        Json(json!({
-            "comments": comments
-        })),
-    )
-}
-
-/// `POST /api/v3/comment`
-pub async fn create_comment(headers: HeaderMap, Json(body): Json<Value>) -> impl IntoResponse {
-    if require_auth(&headers).is_err() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "unauthorized"})),
-        );
-    }
-
-    let post_id = body.get("post_id").and_then(|v| v.as_i64()).unwrap_or(0);
-    let content = body
-        .get("content")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let parent_id = body.get("parent_id").and_then(|v| v.as_i64());
-
-    let comment_id = 9000_i64 + post_id;
-    let path = if let Some(pid) = parent_id {
-        format!("0.{pid}.{comment_id}")
+    let community = if let Some(id) = q.id {
+        state.communities.get(&id.to_string()).map(|e| e.clone())
+    } else if let Some(name) = q.name {
+        state
+            .communities
+            .iter()
+            .find(|e| e.value().name == name)
+            .map(|e| e.value().clone())
     } else {
-        format!("0.{comment_id}")
+        None
     };
 
-    (
-        StatusCode::OK,
-        Json(json!({
-            "comment_view": {
-                "comment": {
-                    "id": comment_id,
-                    "content": content,
-                    "creator_id": TEST_USER_ID,
-                    "post_id": post_id,
-                    "path": path,
-                    "published": "2024-01-18T10:00:00Z",
-                    "updated": null,
-                    "deleted": false,
-                    "removed": false
-                },
-                "creator": {
-                    "id": TEST_USER_ID,
-                    "name": TEST_USER_NAME,
-                    "display_name": TEST_USER_DISPLAY,
-                    "avatar": null,
-                    "banned": false
-                },
-                "counts": {
-                    "comment_id": comment_id,
-                    "score": 1,
-                    "upvotes": 1,
-                    "downvotes": 0,
-                    "child_count": 0
-                },
-                "my_vote": 1,
-                "saved": false
-            }
-        })),
-    )
+    match community {
+        Some(c) => Json(json!({ "community_view": community_view(&c), "site": null, "moderators": [], "discussion_languages": [] })).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": "couldnt_find_community" }))).into_response(),
+    }
 }
 
-/// `POST /test/auth/token` — return a JWT for `username` without password check.
-///
-/// Test-server only. Used by `test_signin` MCP tool and UI Quick Login.
-pub async fn test_auth_token(Json(body): Json<Value>) -> impl IntoResponse {
-    let username = body
-        .get("username")
-        .and_then(|v| v.as_str())
-        .unwrap_or("testuser");
+// ---------------------------------------------------------------------------
+// Posts
+// ---------------------------------------------------------------------------
 
-    let jwt = format!("{TEST_TOKEN_PREFIX}{username}");
-    (
-        StatusCode::OK,
-        Json(json!({
-            "result": "Success",
-            "token": jwt.clone(),
-            "jwt": jwt,
-            "user_id": TEST_USER_ID,
-        })),
-    )
+#[derive(Deserialize, Default)]
+pub struct ListPostsQuery {
+    pub community_id: Option<i64>,
+    pub community_name: Option<String>,
+    #[allow(dead_code)]
+    pub limit: Option<i64>,
+    #[allow(dead_code)]
+    pub page: Option<i64>,
+    #[allow(dead_code)]
+    pub sort: Option<String>,
+    #[allow(dead_code)]
+    pub type_: Option<String>,
 }
 
-/// `GET /api/v3/private_message/list`
-pub async fn list_private_messages(headers: HeaderMap) -> impl IntoResponse {
-    if require_auth(&headers).is_err() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "unauthorized"})),
-        );
+/// GET /api/v3/post/list
+pub async fn list_posts(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(q): Query<ListPostsQuery>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
     }
 
-    (
-        StatusCode::OK,
-        Json(json!({
-            "private_messages": []
-        })),
-    )
+    let community_id = if let Some(id) = q.community_id {
+        Some(id.to_string())
+    } else if let Some(name) = q.community_name {
+        state
+            .communities
+            .iter()
+            .find(|e| e.value().name == name)
+            .map(|e| e.value().id.to_string())
+    } else {
+        None
+    };
+
+    let posts: Vec<Value> = match community_id {
+        Some(cid) => state
+            .posts
+            .get(&cid)
+            .map(|posts| posts.iter().map(post_view).collect())
+            .unwrap_or_default(),
+        None => {
+            // Return all posts across all communities
+            state
+                .posts
+                .iter()
+                .flat_map(|entry| entry.value().iter().map(post_view).collect::<Vec<_>>())
+                .collect()
+        }
+    };
+
+    Json(json!({ "posts": posts, "next_page": null })).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Private Messages
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Default)]
+pub struct ListPrivateMessagesQuery {
+    #[allow(dead_code)]
+    pub unread_only: Option<bool>,
+    #[allow(dead_code)]
+    pub limit: Option<i64>,
+    #[allow(dead_code)]
+    pub page: Option<i64>,
+}
+
+/// GET /api/v3/private_message/list
+pub async fn list_private_messages(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(_q): Query<ListPrivateMessagesQuery>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    // Mock server has no private messages — Lemmy federation makes this rare
+    Json(json!({ "private_messages": [] })).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct GetUserQuery {
+    pub username: Option<String>,
+    pub person_id: Option<i64>,
+}
+
+/// GET /api/v3/user
+pub async fn get_user(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(q): Query<GetUserQuery>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    let user = if let Some(username) = q.username {
+        state.users.get(&username).map(|e| e.clone())
+    } else if let Some(pid) = q.person_id {
+        state
+            .users
+            .iter()
+            .find(|e| e.value().id == pid)
+            .map(|e| e.value().clone())
+    } else {
+        None
+    };
+
+    match user {
+        Some(u) => Json(json!({
+            "person_view": {
+                "person": {
+                    "id": u.id,
+                    "name": u.name,
+                    "display_name": u.display_name,
+                    "avatar": u.avatar,
+                    "banned": false,
+                    "published": "2024-01-01T00:00:00Z",
+                    "actor_id": u.actor_id,
+                    "local": true,
+                    "deleted": false,
+                    "bot_account": false,
+                    "instance_id": 1,
+                },
+                "counts": {
+                    "id": u.id,
+                    "person_id": u.id,
+                    "post_count": 10,
+                    "comment_count": 50,
+                    "published": "2024-01-01T00:00:00Z",
+                }
+            },
+            "comments": [],
+            "posts": [],
+            "moderates": [],
+        })).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": "couldnt_find_that_username_or_email" }))).into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Site info (current user)
+// ---------------------------------------------------------------------------
+
+/// GET /api/v3/site — returns current logged-in user info.
+pub async fn get_site(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let user_id = match bearer_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+    let user = state.users.get(&user_id).map(|u| u.clone());
+    match user {
+        Some(u) => Json(json!({
+            "site_view": {
+                "site": { "id": 1, "name": "Test Lemmy" }
+            },
+            "my_user": {
+                "local_user_view": {
+                    "local_user": { "id": u.id, "person_id": u.id },
+                    "person": {
+                        "id": u.id,
+                        "name": u.name,
+                        "display_name": u.display_name,
+                        "avatar": u.avatar,
+                        "banned": false,
+                        "published": "2024-01-01T00:00:00Z",
+                        "actor_id": u.actor_id,
+                        "local": true,
+                        "deleted": false,
+                        "bot_account": false,
+                        "instance_id": 1,
+                    }
+                }
+            }
+        })).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": "user_not_found" }))).into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test-only endpoints
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct TestAuthTokenRequest {
+    pub username: String,
+}
+
+/// POST /test/auth/token — get a token without a password (test only)
+pub async fn test_auth_token(
+    State(state): State<Arc<LemmyState>>,
+    Json(body): Json<TestAuthTokenRequest>,
+) -> impl IntoResponse {
+    if !state.users.contains_key(&body.username) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "user_not_found" })),
+        )
+            .into_response();
+    }
+    let token = state.auth.create_token(&body.username);
+    Json(json!({ "jwt": token })).into_response()
 }

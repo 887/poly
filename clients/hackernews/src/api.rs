@@ -26,10 +26,10 @@ impl HnApiClient {
 
     /// Create a new client pointing at a custom base URL (useful for tests).
     pub fn with_base_url(base_url: String) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .unwrap_or_default();
+        let builder = reqwest::Client::builder();
+        #[cfg(not(target_arch = "wasm32"))]
+        let builder = builder.timeout(std::time::Duration::from_secs(10));
+        let http = builder.build().unwrap_or_default();
 
         Self {
             http,

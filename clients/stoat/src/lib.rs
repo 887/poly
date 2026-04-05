@@ -902,7 +902,63 @@ impl ClientBackend for StoatClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        Box::pin(stream::empty())
+        use tokio::sync::mpsc;
+        use tokio_tungstenite::tungstenite::Message as WsMessage;
+
+        let ws_url = match self.http.ws_url() {
+            Some(url) => url,
+            None => return Box::pin(stream::empty()),
+        };
+        let token = match self.http.session().map(|s| s.token) {
+            Some(t) => t,
+            None => return Box::pin(stream::empty()),
+        };
+
+        let (tx, rx) = mpsc::channel::<ClientEvent>(128);
+
+        tokio::spawn(async move {
+            let (mut ws_stream, _) = match tokio_tungstenite::connect_async(&ws_url).await {
+                Ok(conn) => conn,
+                Err(e) => {
+                    tracing::warn!("Bonfire WS connect failed: {e}");
+                    return;
+                }
+            };
+
+            // Authenticate
+            let auth_msg = serde_json::json!({"type": "Authenticate", "token": token});
+            {
+                use futures::SinkExt;
+                if ws_stream
+                    .send(WsMessage::Text(auth_msg.to_string().into()))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+
+            use futures::StreamExt;
+            while let Some(msg) = ws_stream.next().await {
+                match msg {
+                    Ok(WsMessage::Text(text)) => {
+                        if let Ok(event_json) =
+                            serde_json::from_str::<serde_json::Value>(&text)
+                        {
+                            if let Some(ev) = parse_bonfire_event(event_json) {
+                                if tx.send(ev).await.is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Ok(WsMessage::Close(_)) | Err(_) => break,
+                    _ => {}
+                }
+            }
+        });
+
+        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
     }
 
     fn backend_type(&self) -> BackendType {
@@ -911,6 +967,46 @@ impl ClientBackend for StoatClient {
 
     fn backend_name(&self) -> &str {
         "Stoat"
+    }
+}
+
+#[cfg(feature = "native")]
+fn parse_bonfire_event(json: serde_json::Value) -> Option<ClientEvent> {
+    match json.get("type")?.as_str()? {
+        "Message" => {
+            let channel_id = json.get("channel")?.as_str()?.to_string();
+            let msg_json = json.get("message")?;
+            let id = msg_json.get("_id")?.as_str()?.to_string();
+            let content = msg_json.get("content")?.as_str()?.to_string();
+            let author_id = msg_json.get("author")?.as_str()?.to_string();
+            let message = poly_client::Message {
+                id,
+                author: poly_client::User {
+                    id: author_id,
+                    display_name: String::new(),
+                    avatar_url: None,
+                    presence: poly_client::PresenceStatus::Online,
+                    backend: BackendType::from("stoat"),
+                },
+                content: poly_client::MessageContent::Text(content),
+                timestamp: chrono::Utc::now(),
+                attachments: vec![],
+                reactions: vec![],
+                reply_to: None,
+                edited: false,
+            };
+            Some(ClientEvent::MessageReceived { channel_id, message })
+        }
+        "ChannelStartTyping" => {
+            let channel_id = json.get("id")?.as_str()?.to_string();
+            let user_id = json.get("user")?.as_str()?.to_string();
+            Some(ClientEvent::TypingStarted {
+                channel_id,
+                user_id,
+                timestamp: chrono::Utc::now(),
+            })
+        }
+        _ => None,
     }
 }
 

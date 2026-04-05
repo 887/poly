@@ -3,7 +3,8 @@
 //! Implements the subset of the Revolt API that poly-stoat calls.
 //! All handlers take `State<std::sync::Arc<StoatState>>` and return JSON responses.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query, State, WebSocketUpgrade};
+use axum::extract::ws::{Message as WsMessage, WebSocket};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
@@ -43,20 +44,20 @@ fn revolt_error(
 // ---------------------------------------------------------------------------
 
 /// GET / — Server configuration (ws URL, features, etc.)
-pub async fn server_config() -> impl IntoResponse {
+pub async fn server_config(headers: HeaderMap) -> impl IntoResponse {
+    let host = headers
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost");
     Json(serde_json::json!({
         "revolt": "0.7.0",
         "features": {
             "captcha": { "enabled": false },
             "email": false,
             "invite_only": false,
-            "autumn": {
-                "enabled": true,
-                "url": "http://localhost:9101",
-            },
         },
-        "ws": "ws://localhost:9101/ws",
-        "app": "http://localhost:9101",
+        "ws": format!("ws://{}/bonfire", host),
+        "app": format!("http://{}", host),
         "vapid": "",
     }))
 }
@@ -500,6 +501,27 @@ pub async fn get_messages(
     }
 }
 
+/// GET /channels/:channel_id/messages/:message_id — fetch a single message
+pub async fn get_message(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path((channel_id, message_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    let timeline = match state.messages.get(&channel_id) {
+        Some(t) => t.clone(),
+        None => return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
+    };
+
+    match timeline.iter().find(|m| m.id == message_id) {
+        Some(msg) => Json(message_to_json(msg)).into_response(),
+        None => revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
+    }
+}
+
 /// POST /channels/:id/messages
 pub async fn send_message(
     State(state): State<std::sync::Arc<StoatState>>,
@@ -691,4 +713,147 @@ pub async fn reset(State(state): State<std::sync::Arc<StoatState>>) -> impl Into
 pub async fn reseed(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
     state.reseed();
     Json(serde_json::json!({ "status": "reseeded" }))
+}
+
+// ---------------------------------------------------------------------------
+// Real-time: typing indicator + Bonfire WebSocket
+// ---------------------------------------------------------------------------
+
+/// POST /channels/:id/typing — broadcast a ChannelStartTyping event.
+pub async fn channel_start_typing(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = match session_user(&state, &headers) {
+        Ok(uid) => uid,
+        Err(e) => return e.into_response(),
+    };
+
+    if !state.channels.contains_key(&channel_id) {
+        return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response();
+    }
+
+    state.events.publish(StoatEvent::ChannelStartTyping { channel_id, user_id });
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// GET /bonfire — WebSocket upgrade endpoint (Revolt Bonfire protocol).
+pub async fn bonfire_ws(
+    State(state): State<std::sync::Arc<StoatState>>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| bonfire_handler(socket, state))
+}
+
+async fn bonfire_handler(mut socket: WebSocket, state: std::sync::Arc<StoatState>) {
+    // Step 1: wait for Authenticate message
+    let token = loop {
+        match socket.recv().await {
+            Some(Ok(WsMessage::Text(text))) => {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if json.get("type").and_then(|t| t.as_str()) == Some("Authenticate") {
+                        if let Some(t) = json.get("token").and_then(|t| t.as_str()) {
+                            break t.to_string();
+                        }
+                    }
+                }
+            }
+            Some(Ok(WsMessage::Close(_))) | None => return,
+            _ => {}
+        }
+    };
+
+    // Step 2: validate token
+    let _user_id = match state.auth.validate(&token) {
+        Some(uid) => uid,
+        None => {
+            let _ = socket
+                .send(WsMessage::Text(
+                    serde_json::json!({"type":"InvalidSession"}).to_string().into(),
+                ))
+                .await;
+            return;
+        }
+    };
+
+    // Step 3: send Authenticated
+    if socket
+        .send(WsMessage::Text(
+            serde_json::json!({"type":"Authenticated"}).to_string().into(),
+        ))
+        .await
+        .is_err()
+    {
+        return;
+    }
+
+    // Step 4: subscribe to events and forward to client
+    let mut events_rx = state.events.subscribe();
+
+    loop {
+        tokio::select! {
+            event = events_rx.recv() => {
+                match event {
+                    Ok(ev) => {
+                        let msg = match ev {
+                            StoatEvent::Message { channel_id, message } => {
+                                serde_json::json!({
+                                    "type": "Message",
+                                    "channel": channel_id,
+                                    "message": message,
+                                })
+                            }
+                            StoatEvent::ChannelStartTyping { channel_id, user_id } => {
+                                serde_json::json!({
+                                    "type": "ChannelStartTyping",
+                                    "id": channel_id,
+                                    "user": user_id,
+                                })
+                            }
+                            StoatEvent::MessageUpdate { channel_id, message_id, data } => {
+                                serde_json::json!({
+                                    "type": "MessageUpdate",
+                                    "channel": channel_id,
+                                    "id": message_id,
+                                    "data": data,
+                                })
+                            }
+                            StoatEvent::MessageDelete { channel_id, message_id } => {
+                                serde_json::json!({
+                                    "type": "MessageDelete",
+                                    "channel": channel_id,
+                                    "id": message_id,
+                                })
+                            }
+                            StoatEvent::UserUpdate { user_id, data } => {
+                                serde_json::json!({
+                                    "type": "UserUpdate",
+                                    "id": user_id,
+                                    "data": data,
+                                })
+                            }
+                        };
+                        if socket
+                            .send(WsMessage::Text(msg.to_string().into()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        // Skip lagged events — client may have missed some
+                    }
+                }
+            }
+            client_msg = socket.recv() => {
+                match client_msg {
+                    Some(Ok(WsMessage::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
 }

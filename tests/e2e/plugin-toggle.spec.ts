@@ -87,6 +87,9 @@ test.describe('Stoat plugin toggle', () => {
     const newState = !initialState;
     await expect(checkbox).toBeChecked({ checked: newState });
 
+    // Wait for the async save to complete before reloading.
+    await page.waitForTimeout(600);
+
     // Reload — app should skip wizard (setup_complete persisted in IndexedDB)
     await page.reload();
     await page.waitForSelector('.favorites-sidebar, .main-layout', { timeout: 20_000 });
@@ -146,6 +149,9 @@ test.describe('Matrix plugin toggle', () => {
     await checkbox.click();
     const newState = !initialState;
     await expect(checkbox).toBeChecked({ checked: newState });
+
+    // Wait for the async save to complete before reloading.
+    await page.waitForTimeout(600);
 
     await page.reload();
     await page.waitForSelector('.favorites-sidebar, .main-layout', { timeout: 20_000 });

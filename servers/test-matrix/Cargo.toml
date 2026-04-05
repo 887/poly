@@ -9,6 +9,10 @@ description = "Mock Matrix homeserver for Poly testing"
 name = "poly-test-matrix"
 path = "src/main.rs"
 
+[lib]
+name = "poly_test_matrix"
+path = "src/lib.rs"
+
 [dependencies]
 poly-test-common = { path = "../test-common" }
 

@@ -121,8 +121,14 @@ pub async fn whoami(
         Ok(uid) => uid,
         Err(e) => return e.into_response(),
     };
+    let device_id = state
+        .users
+        .get(&user_id)
+        .map(|u| u.device_id.clone())
+        .unwrap_or_default();
     Json(serde_json::json!({
         "user_id": user_id,
+        "device_id": device_id,
     }))
     .into_response()
 }
@@ -391,20 +397,30 @@ pub async fn sync(
             None => continue,
         };
 
-        let timeline_events: Vec<serde_json::Value> = state
+        let (timeline_events, timeline_len) = state
             .timelines
             .get(room_id)
             .map(|t| {
-                // For initial sync (since=0), return all events
-                // For incremental sync, return events after `since` index
-                if since == 0 {
+                // For initial sync (since=0), return all events.
+                // For incremental sync, filter by the global seq embedded in the
+                // event_id ("$evt{N}") — only return events where N > since.
+                let events = if since == 0 {
                     t.clone()
                 } else {
-                    // since token is the event counter at that point; use it as offset
-                    // For simplicity, return events from index `since` onwards (capped)
-                    let start = (since as usize).min(t.len());
-                    t.get(start..).unwrap_or_default().to_vec()
-                }
+                    t.iter()
+                        .filter(|e| {
+                            e.get("event_id")
+                                .and_then(|id| id.as_str())
+                                .and_then(|s| s.strip_prefix("$evt"))
+                                .and_then(|n| n.parse::<u64>().ok())
+                                .unwrap_or(0)
+                                > since
+                        })
+                        .cloned()
+                        .collect()
+                };
+                let len = t.len();
+                (events, len)
             })
             .unwrap_or_default();
 
@@ -415,12 +431,16 @@ pub async fn sync(
             vec![]
         };
 
+        // prev_batch points to the end of the timeline so that a backwards
+        // /messages request starting there returns all seeded messages.
+        let prev_batch = timeline_len.to_string();
+
         join.insert(
             room_id.clone(),
             serde_json::json!({
                 "timeline": {
                     "events": timeline_events,
-                    "prev_batch": since.to_string(),
+                    "prev_batch": prev_batch,
                     "limited": false,
                 },
                 "state": {
@@ -649,51 +669,58 @@ pub async fn get_account_data(
 }
 
 // ---------------------------------------------------------------------------
-// Lifecycle endpoints
-// ---------------------------------------------------------------------------
-// Test-only easy-signin
+// Test helpers
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
-pub struct TestTokenRequest {
+pub struct TestAuthTokenRequest {
     pub username: String,
 }
 
-/// POST /test/auth/token — return an access token without password verification.
+/// POST /test/auth/token
 ///
-/// Only present in test servers. Used by `test_signin` MCP tool and UI Quick Login.
+/// Looks up a user by `username` (matched against displayname or the local part
+/// of the user_id, e.g. "owl" matches "@owl:localhost").  Creates an auth token
+/// for the resolved user_id and returns it.  Used by integration tests to obtain
+/// a valid access token without going through a real login flow.
 pub async fn test_auth_token(
     State(state): State<std::sync::Arc<MatrixState>>,
-    Json(body): Json<TestTokenRequest>,
+    Json(body): Json<TestAuthTokenRequest>,
 ) -> impl IntoResponse {
-    // Normalize: accept bare "alice" or full "@alice:localhost"
-    let user_id = if body.username.starts_with('@') {
-        body.username.clone()
-    } else {
-        format!("@{}:localhost", body.username)
-    };
-
-    if !state.users.contains_key(&user_id) {
-        return matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "User not found").into_response();
+    // Try exact user_id match first (e.g. "@owl:localhost")
+    if state.users.contains_key(&body.username) {
+        let token = state.auth.create_token(&body.username);
+        return Json(serde_json::json!({
+            "user_id": body.username,
+            "access_token": token,
+        })).into_response();
     }
 
-    let token = state.auth.create_token(&user_id);
-    let device_id = state
-        .users
-        .get(&user_id)
-        .map(|u| u.device_id.clone())
-        .unwrap_or_else(|| "TESTDEVICE".to_string());
+    // Search by displayname or local part of user_id
+    let found = state.users.iter().find(|entry| {
+        entry.displayname == body.username
+            || entry.user_id.trim_start_matches('@')
+                .split(':')
+                .next()
+                .unwrap_or("")
+                == body.username
+    }).map(|entry| (entry.user_id.clone(), entry.device_id.clone()));
 
-    Json(serde_json::json!({
-        "result": "Success",
-        "user_id": user_id,
-        "access_token": token,
-        "token": token,
-        "device_id": device_id,
-    }))
-    .into_response()
+    match found {
+        Some((user_id, device_id)) => {
+            let token = state.auth.create_token(&user_id);
+            Json(serde_json::json!({
+                "user_id": user_id,
+                "device_id": device_id,
+                "access_token": token,
+            })).into_response()
+        }
+        None => matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "User not found").into_response(),
+    }
 }
 
+// ---------------------------------------------------------------------------
+// Lifecycle endpoints
 // ---------------------------------------------------------------------------
 
 /// POST /seed
