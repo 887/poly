@@ -14,6 +14,49 @@
 
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
+
+// ── MCP sidecar configuration ─────────────────────────────────────────────────
+const MCP_PORT = parseInt(process.env.POLY_MCP_PORT || '3010', 10);
+const MCP_ENABLED = process.env.POLY_MCP_ENABLED !== '0'; // default: enabled
+// Path to poly-chat-mcp binary relative to workspace root
+const MCP_BIN = process.env.POLY_CHAT_MCP_BIN
+  || path.join(__dirname, '..', '..', '..', '..', 'target', 'debug', 'poly-chat-mcp');
+
+let mcpProcess = null;
+
+function startMcpSidecar() {
+  if (!MCP_ENABLED) return;
+  if (mcpProcess) return; // already running
+
+  const binPath = MCP_BIN;
+  console.log(`[Poly MCP] Spawning ${binPath} --port ${MCP_PORT}`);
+
+  mcpProcess = spawn(binPath, ['--port', String(MCP_PORT)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env },
+  });
+
+  mcpProcess.stdout.on('data', (d) => process.stdout.write(`[MCP] ${d}`));
+  mcpProcess.stderr.on('data', (d) => process.stderr.write(`[MCP] ${d}`));
+  mcpProcess.on('exit', (code) => {
+    console.log(`[Poly MCP] sidecar exited with code ${code}`);
+    mcpProcess = null;
+  });
+  mcpProcess.on('error', (err) => {
+    // Binary not found is expected in CI / web-only runs
+    console.warn(`[Poly MCP] failed to start: ${err.message}`);
+    mcpProcess = null;
+  });
+}
+
+function stopMcpSidecar() {
+  if (mcpProcess) {
+    mcpProcess.kill('SIGTERM');
+    mcpProcess = null;
+  }
+}
+
 const {
   attachWindowStateListeners,
   registerWindowControlsIpc,
@@ -69,10 +112,24 @@ async function createWindow() {
 
 registerWindowControlsIpc(ipcMain, BrowserWindow);
 
+// MCP status IPC
+ipcMain.handle('poly-mcp-status', () => ({
+  enabled: MCP_ENABLED,
+  port: MCP_PORT,
+  running: mcpProcess !== null && !mcpProcess.killed,
+}));
+
+ipcMain.handle('poly-mcp-restart', () => {
+  stopMcpSidecar();
+  startMcpSidecar();
+  return { port: MCP_PORT };
+});
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
   void createWindow();
+  startMcpSidecar();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -80,6 +137,8 @@ app.whenReady().then(() => {
     }
   });
 });
+
+app.on('will-quit', stopMcpSidecar);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

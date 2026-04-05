@@ -28,5 +28,12 @@ export default defineConfig({
         browserName: 'chromium',
       },
     },
+    {
+      name: 'electron',
+      testMatch: /electron\.spec\.ts/,
+      use: {
+        // Electron tests use the _electron API directly, no browser/viewport needed
+      },
+    },
   ],
 });

@@ -960,3 +960,77 @@
     text-align: center;
     padding: 16px 0;
 }
+/* ===========================
+ * MCP Server Settings
+ * =========================== */
+
+.mcp-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+}
+
+.mcp-status-running {
+    color: var(--color-success, #3ba55c);
+    background: rgba(59, 165, 92, 0.12);
+}
+
+.mcp-status-stopped {
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+}
+
+.mcp-status-web {
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+}
+
+.settings-mcp-restart-btn {
+    margin-left: 8px;
+}
+
+.mcp-config-example {
+    margin-top: 24px;
+}
+
+.mcp-config-block {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow-x: auto;
+    white-space: pre;
+    margin: 10px 0;
+    line-height: 1.5;
+}
+
+.mcp-links {
+    margin-top: 24px;
+}
+
+.mcp-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.mcp-link {
+    font-size: 14px;
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+.mcp-link:hover {
+    text-decoration: underline;
+}
+
+.settings-input-short {
+    width: 100px;
+}

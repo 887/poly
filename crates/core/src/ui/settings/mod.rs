@@ -75,7 +75,7 @@ use voice_video::VoiceVideoSettings;
 
 const NAV_SECTIONS: [(&str, SettingsSection); 12] = [
     ("settings-accounts", SettingsSection::Accounts),
-    ("settings-ai", SettingsSection::Ai),
+    ("settings-mcp", SettingsSection::Ai),
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("settings-backup", SettingsSection::Backup),
     ("settings-identity", SettingsSection::Identity),
@@ -103,17 +103,11 @@ const SETTINGS_NODES: &[(&str, SettingsSection)] = &[
     ("settings-accounts", SettingsSection::Accounts),
     ("settings-add-account", SettingsSection::Accounts),
     ("settings-account-settings", SettingsSection::Accounts),
-    // AI Provider
-    ("settings-ai", SettingsSection::Ai),
-    ("settings-ai-provider", SettingsSection::Ai),
-    ("settings-ai-api-key", SettingsSection::Ai),
-    ("settings-ai-model", SettingsSection::Ai),
-    ("settings-ai-feature-responses", SettingsSection::Ai),
-    ("settings-ai-feature-summaries", SettingsSection::Ai),
-    ("settings-ai-feature-translate", SettingsSection::Ai),
-    ("settings-ai-feature-memory", SettingsSection::Ai),
-    ("settings-ai-feature-outreach", SettingsSection::Ai),
-    ("settings-ai-feature-image-gen", SettingsSection::Ai),
+    // MCP Server
+    ("settings-mcp", SettingsSection::Ai),
+    ("settings-mcp-enable", SettingsSection::Ai),
+    ("settings-mcp-port", SettingsSection::Ai),
+    ("settings-mcp-config-title", SettingsSection::Ai),
     // Voice & Video
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("voice-input-device", SettingsSection::VoiceVideo),

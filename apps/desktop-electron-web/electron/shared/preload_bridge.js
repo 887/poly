@@ -21,6 +21,8 @@ function exposePolyElectronBridge({ contextBridge, ipcRenderer, packageJsonPath 
     toggleMaximize: () => ipcRenderer.send('poly-window-toggle-maximize'),
     closeWindow: () => ipcRenderer.send('poly-window-close'),
     windowState: () => ipcRenderer.invoke('poly-window-state'),
+    mcpStatus: () => ipcRenderer.invoke('poly-mcp-status'),
+    mcpRestart: () => ipcRenderer.invoke('poly-mcp-restart'),
   });
 }
 

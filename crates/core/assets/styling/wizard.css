@@ -61,6 +61,55 @@
     color: var(--text-primary);
 }
 
+/* ===========================
+ * Setup Wizard — 3 Feature Cards
+ * =========================== */
+
+.setup-feature-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    text-align: left;
+    margin-bottom: 32px;
+}
+
+.setup-feature-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 18px 20px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+}
+
+.setup-feature-card-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.setup-feature-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setup-feature-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.setup-feature-card-body {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 0;
+}
+
 .setup-start-btn {
     font-size: 16px;
     padding: 12px 32px;
