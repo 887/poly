@@ -50,7 +50,7 @@ use super::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
 };
 use super::account::{
-    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, FriendsPanel,
+    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, ForumView, FriendsPanel,
     NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
     ServerSettingsPage, VoiceChannelView,
 };
@@ -1312,15 +1312,20 @@ fn ServerChat(
         });
     });
 
-    let is_voice_channel = chat_data
+    let channel_type = chat_data
         .read()
         .current_channel
         .as_ref()
-        .is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
+        .map(|ch| ch.channel_type.clone());
+
+    let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
+    let is_forum = matches!(channel_type, Some(ChannelType::Forum));
 
     rsx! {
-        if is_voice_channel {
+        if is_voice {
             VoiceChannelView {}
+        } else if is_forum {
+            ForumView {}
         } else {
             ChatView {}
         }
