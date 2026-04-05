@@ -320,6 +320,26 @@ const TEST_ACCOUNTS: &[TestAccount] = &[
     },
 ];
 
+/// Authenticate a test account using the appropriate backend client.
+///
+/// Dispatches to the correct client crate based on `backend`.
+/// Non-stoat backends are feature-gated; returns an error if not compiled in.
+async fn test_account_authenticate(
+    backend: &str,
+    base_url: String,
+    email: String,
+    password: String,
+) -> Result<poly_client::SignupCompleted, String> {
+    match backend {
+        "stoat" => poly_stoat::signup::authenticate(base_url, email, password).await,
+        #[cfg(feature = "lemmy")]
+        "lemmy" => poly_lemmy::signup::authenticate(base_url, email, password).await,
+        #[cfg(feature = "hackernews")]
+        "hackernews" => Ok(poly_hackernews::signup::complete_as_guest()),
+        other => Err(format!("backend '{other}' not available in this build")),
+    }
+}
+
 /// Panel shown when `?test=true` — quick-add buttons for test server accounts.
 #[cfg(feature = "stoat")]
 #[component]
@@ -345,10 +365,10 @@ fn TestAccountsPanel() -> Element {
                         let email = acct.email.to_string();
                         let base_url = acct.base_url.to_string();
                         let password = acct.password.to_string();
+                        let backend = acct.backend.to_string();
                         let label = acct.label;
                         let icon = acct.icon;
                         let backend_label = acct.backend_label;
-                        let is_stoat_backend = acct.backend == "stoat";
                         let account_disabled = acct.disabled;
                         let is_busy = status == "connecting...";
                         rsx! {
@@ -364,7 +384,7 @@ fn TestAccountsPanel() -> Element {
                                 }
                                 if account_disabled {
                                     p { class: "test-account-unavailable", "Backend not compiled in this build" }
-                                } else if is_stoat_backend {
+                                } else {
                                     button {
                                         class: "btn btn-primary test-account-btn",
                                         disabled: is_busy,
@@ -377,10 +397,11 @@ fn TestAccountsPanel() -> Element {
                                                 let email = email.clone();
                                                 let base_url = base_url.clone();
                                                 let password = password.clone();
+                                                let backend = backend.clone();
                                                 let on_complete = on_complete.clone();
                                                 spawn(async move {
-                                                    match poly_stoat::signup::authenticate(
-                                                        base_url, email, password,
+                                                    match test_account_authenticate(
+                                                        &backend, base_url, email, password,
                                                     ).await {
                                                         Ok(completed) => {
                                                             if let Some(slot) = statuses.write().get_mut(idx) {
@@ -398,13 +419,6 @@ fn TestAccountsPanel() -> Element {
                                             }
                                         },
                                         if is_busy { "Connecting..." } else { "Add Account" }
-                                    }
-                                } else {
-                                    // Non-stoat backends: show a disabled button until client is wired up
-                                    button {
-                                        class: "btn btn-primary test-account-btn",
-                                        disabled: true,
-                                        "Add Account"
                                     }
                                 }
                                 if !status.is_empty() && status != "connecting..." {

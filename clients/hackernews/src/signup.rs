@@ -27,8 +27,8 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
 
 /// One-click "Add Hacker News" signup page.
 #[component]
+#[allow(unused_variables)]
 fn HackerNewsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
-    let t = ctx.t;
     rsx! {
         h2 { class: "signup-form-title", "Add Hacker News" }
         p { class: "signup-form-desc",
@@ -36,12 +36,6 @@ fn HackerNewsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupConte
         }
 
         div { class: "signup-form",
-            button {
-                class: "signup-nav-back",
-                onclick: move |_| (ctx.navigate_back)(),
-                "{t(\"plugin-hackernews-signup-back\")}"
-            }
-
             p {
                 "Hacker News is a read-only feed. Click below to start browsing the top stories, Ask HN, Show HN, and job posts."
             }

@@ -51,13 +51,6 @@ fn LemmySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -
         p { class: "signup-form-desc", "{t(\"plugin-lemmy-signup-description\")}" }
 
         div { class: "signup-form",
-            button {
-                class: "signup-nav-back",
-                disabled: *submitting.read(),
-                onclick: move |_| (ctx.navigate_back)(),
-                "{t(\"plugin-lemmy-signup-back\")}"
-            }
-
             label { class: "settings-label", "{t(\"plugin-lemmy-signup-url-label\")}" }
             input {
                 class: "settings-input",
