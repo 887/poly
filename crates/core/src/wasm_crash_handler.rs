@@ -2,6 +2,13 @@
 //!
 //! Installs a panic hook plus global browser error listeners so route crashes
 //! become visible in the DOM instead of silently wedging the page.
+//!
+//! Also installs a boot-hang watchdog: a JS `setTimeout` that fires after
+//! `BOOT_HANG_TIMEOUT_MS` milliseconds. If the startup overlay has not
+//! dismissed by then (detected via the `data-poly-startup-phase` DOM attribute
+//! written by the App component), the watchdog shows the crash overlay with a
+//! "not responding" message. This catches infinite Dioxus render loops that
+//! never progress past the loading screen without triggering a Rust panic.
 
 use std::sync::Once;
 
@@ -13,6 +20,10 @@ use web_sys::{Document, Element, Event, Window};
 const OVERLAY_ID: &str = "poly-wasm-crash-overlay";
 const CRASH_STATE_KEY: &str = "__polyCrashState";
 
+/// How long (ms) the boot watchdog waits before declaring a hang.
+/// Normal boots complete in well under a second; 20 s is generous.
+const BOOT_HANG_TIMEOUT_MS: u32 = 20_000;
+
 /// Install the shared browser/WASM crash handler once for the current page.
 pub fn install_wasm_crash_handler() {
     static INSTALLED: Once = Once::new();
@@ -22,7 +33,58 @@ pub fn install_wasm_crash_handler() {
         install_panic_hook();
         install_window_error_listener();
         install_unhandled_rejection_listener();
+        install_boot_hang_watchdog(BOOT_HANG_TIMEOUT_MS);
     });
+}
+
+/// Inject a JS `setTimeout` that shows the crash overlay if the startup
+/// overlay has not dismissed after `timeout_ms` milliseconds.
+///
+/// The check reads `data-poly-startup-phase` from `<html>`, which the App
+/// component sets to `"revealed"` once the startup overlay hides.  If it is
+/// still `"booting"` (or absent) when the timer fires, the app is stuck —
+/// typically due to an infinite Dioxus render loop or a data-loading deadlock
+/// that prevented the overlay from hiding.
+fn install_boot_hang_watchdog(timeout_ms: u32) {
+    // language=JavaScript
+    let js = format!(
+        r#"(function() {{
+    var t = {timeout};
+    window.__polyBootWatchdog = setTimeout(function() {{
+        var phase = document.documentElement.getAttribute('data-poly-startup-phase');
+        if (phase === 'revealed') {{ return; }}
+        var OVERLAY_ID = 'poly-wasm-crash-overlay';
+        if (document.getElementById(OVERLAY_ID)) {{ return; }}
+        var overlay = document.createElement('div');
+        overlay.id = OVERLAY_ID;
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;overflow:auto;padding:28px;background:rgba(10,12,16,0.96);color:#fff;font-family:Inter,system-ui,sans-serif;';
+        var card = document.createElement('div');
+        card.style.cssText = 'max-width:920px;margin:0 auto;background:#1a1f2b;border:1px solid rgba(255,255,255,0.14);border-radius:16px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,0.45);';
+        var h1 = document.createElement('h1');
+        h1.style.cssText = 'margin:0 0 8px 0;font-size:28px;line-height:1.2;';
+        h1.textContent = 'App not responding';
+        var p1 = document.createElement('p');
+        p1.style.cssText = 'margin:0 0 12px 0;color:#d8dee9;font-size:15px;line-height:1.5;';
+        p1.textContent = 'Poly is stuck on the loading screen (\u201cbooting\u201d phase never completed). This usually means a render loop or missing data prevented the app from starting.';
+        var p2 = document.createElement('p');
+        p2.style.cssText = 'margin:0 0 18px 0;color:#8fbcff;font-size:14px;font-weight:600;';
+        p2.textContent = 'Type: boot-hang (startup overlay not dismissed after ' + (t/1000) + 's)';
+        var btn = document.createElement('button');
+        btn.style.cssText = 'border:0;border-radius:10px;padding:12px 16px;background:#4f8cff;color:white;font-size:14px;font-weight:600;cursor:pointer;';
+        btn.textContent = 'Reload';
+        btn.onclick = function() {{ window.location.reload(); }};
+        card.appendChild(h1);
+        card.appendChild(p1);
+        card.appendChild(p2);
+        card.appendChild(btn);
+        overlay.appendChild(card);
+        document.body && document.body.appendChild(overlay);
+        console.error('Poly boot hang: startup overlay still visible after ' + t + 'ms (phase=' + phase + ')');
+    }}, t);
+}})();"#,
+        timeout = timeout_ms,
+    );
+    let _ = js_sys::eval(&js);
 }
 
 fn install_panic_hook() {

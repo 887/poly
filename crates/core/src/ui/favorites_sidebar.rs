@@ -747,10 +747,13 @@ async fn load_server_data_internal(
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
-    // Find first text channel
+    // Find first text or forum channel
     let first_text_channel = channels
         .iter()
-        .find(|c| c.channel_type == poly_client::ChannelType::Text)
+        .find(|c| {
+            c.channel_type == poly_client::ChannelType::Text
+                || c.channel_type == poly_client::ChannelType::Forum
+        })
         .cloned();
 
     chat_data.write().channels = channels;
@@ -881,14 +884,15 @@ pub async fn restore_server_channel(
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
-    // Locate the requested channel; fall back to first text channel if missing.
+    // Locate the requested channel; fall back to first text/forum channel if missing.
     let target = channels
         .iter()
         .find(|c| c.id == channel_id)
         .or_else(|| {
-            channels
-                .iter()
-                .find(|c| c.channel_type == poly_client::ChannelType::Text)
+            channels.iter().find(|c| {
+                c.channel_type == poly_client::ChannelType::Text
+                    || c.channel_type == poly_client::ChannelType::Forum
+            })
         })
         .cloned();
 
@@ -898,7 +902,10 @@ pub async fn restore_server_channel(
         app_state.write().nav.selected_channel = Some(ch.id.clone());
         chat_data.write().current_channel = Some(ch.clone());
 
-        if ch.channel_type == poly_client::ChannelType::Text {
+        if matches!(
+            ch.channel_type,
+            poly_client::ChannelType::Text | poly_client::ChannelType::Forum
+        ) {
             let guard = backend.read().await;
             if let Ok(messages) = guard
                 .get_messages(&ch.id, initial_message_query(ch.unread_count))
