@@ -391,6 +391,47 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 edited: false,
             },
         ],
+        "forum-rust-showcase" => vec![
+            Message {
+                id: "fpost-rust-s1".to_string(),
+                author: User {
+                    id: "demo3-user-self".to_string(),
+                    display_name: "Platypus (demo_forum)".to_string(),
+                    avatar_url: Some(DEMO_PLATYPUS_AVATAR.to_string()),
+                    presence: PresenceStatus::Online,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("Just shipped tinydb v0.2.0! Added snapshot persistence and a simple query API. First crate — any feedback appreciated. Repo link in bio.".to_string()),
+                timestamp: now - Duration::hours(14),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🎉".to_string(), count: 18, me: false },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
+        "forum-linux-rices" => vec![
+            Message {
+                id: "fpost-linux-r1".to_string(),
+                author: User {
+                    id: "demo3-user-arch_user".to_string(),
+                    display_name: "btw_i_use_arch".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::DoNotDisturb,
+                    backend: BackendType::from(DEMO_FORUM_BACKEND),
+                },
+                content: MessageContent::Text("New Hyprland rice — going for a Tokyo Night theme with eww widgets. Waybar transparent, rofi themed. Config on GitHub if anyone wants to copy.".to_string()),
+                timestamp: now - Duration::hours(20),
+                attachments: vec![],
+                reactions: vec![
+                    Reaction { emoji: "🔥".to_string(), count: 45, me: false },
+                    Reaction { emoji: "👀".to_string(), count: 12, me: true },
+                ],
+                reply_to: None,
+                edited: false,
+            },
+        ],
         _ => vec![],
     }
 }
