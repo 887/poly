@@ -141,3 +141,22 @@ browser MCP for a poly MCP — they have different tools (`launch_app`, `rebuild
 `get_last_build_status`, `connect_cdp`, etc.) and manage the full app lifecycle.
 If the poly MCPs are not loaded in the current session, say so — do not fall back
 to chrome-devtools as a replacement.
+
+## Workspace Copies (Parallel Agent Work)
+
+This repo (`workspcacemsg`) has btrfs reflink copies for parallel agent work:
+
+```
+~/workspcacemsg   — primary (has target/, node_modules/, .jj/, .git/)
+~/workspcacemsg2  — parallel agent work (reflinked)
+~/workspcacemsg3  — parallel agent work (reflinked)
+~/workspcacemsg4  — parallel agent work (reflinked)
+~/workspcacemsg5  — parallel agent work (reflinked)
+~/workspcacemsg6  — parallel agent work (reflinked)
+~/workspcacemsg7  — parallel agent work (reflinked)
+~/workspcacemsg8  — parallel agent work (reflinked)
+```
+
+All copies share blocks on disk until files diverge. Agents work in copies 2-8 on
+separate tasks. When done, diff the copy against the primary and apply changes back.
+The primary is the integration point — all finished work merges here.
