@@ -10,9 +10,10 @@ use poly_test_common::{health_handler, CliArgs, TestServerBase};
 mod routes;
 mod state;
 
+use std::sync::Arc;
 use state::StoatState;
 
-fn router(state: StoatState) -> Router {
+fn router(state: Arc<StoatState>) -> Router {
     Router::new()
         .route(
             "/health",
@@ -50,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
     args.init_tracing();
 
-    let state = StoatState::new();
+    let state = Arc::new(StoatState::new());
     if args.seed {
         state.seed();
     }

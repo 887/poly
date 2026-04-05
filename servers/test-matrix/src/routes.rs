@@ -1,7 +1,7 @@
 //! Matrix Client-Server API route handlers.
 //!
 //! Implements the subset of the Matrix CS API that poly-matrix calls.
-//! All handlers take `State<MatrixState>` and return JSON responses.
+//! All handlers take `State<std::sync::Arc<MatrixState>>` and return JSON responses.
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -57,7 +57,7 @@ pub struct LoginIdentifier {
 
 /// POST /_matrix/client/v3/login
 pub async fn login(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     Json(body): Json<LoginRequest>,
 ) -> impl IntoResponse {
     let username = body
@@ -99,7 +99,7 @@ pub async fn login(
 
 /// POST /_matrix/client/v3/logout
 pub async fn logout(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let auth_header = headers
@@ -114,7 +114,7 @@ pub async fn logout(
 
 /// GET /_matrix/client/v3/account/whoami
 pub async fn whoami(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let user_id = match bearer_user(&state, &headers) {
@@ -133,7 +133,7 @@ pub async fn whoami(
 
 /// GET /_matrix/client/v3/profile/:user_id
 pub async fn get_profile(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path(user_id): Path<String>,
 ) -> impl IntoResponse {
@@ -157,7 +157,7 @@ pub async fn get_profile(
 
 /// GET /_matrix/client/v3/joined_rooms
 pub async fn joined_rooms(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let user_id = match bearer_user(&state, &headers) {
@@ -177,7 +177,7 @@ pub async fn joined_rooms(
 
 /// GET /_matrix/client/v3/rooms/:room_id/state
 pub async fn room_state(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
@@ -193,7 +193,7 @@ pub async fn room_state(
 
 /// GET /_matrix/client/v3/rooms/:room_id/members
 pub async fn room_members(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
@@ -229,7 +229,7 @@ pub struct MessagesQuery {
 
 /// GET /_matrix/client/v3/rooms/:room_id/messages
 pub async fn get_messages(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
     Query(params): Query<MessagesQuery>,
@@ -279,7 +279,7 @@ pub async fn get_messages(
 
 /// PUT /_matrix/client/v3/rooms/:room_id/send/:event_type/:txn_id
 pub async fn send_message(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path((room_id, _event_type, _txn_id)): Path<(String, String, String)>,
     Json(body): Json<serde_json::Value>,
@@ -335,7 +335,7 @@ pub struct SyncQuery {
 
 /// GET /_matrix/client/v3/sync
 pub async fn sync(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Query(params): Query<SyncQuery>,
 ) -> impl IntoResponse {
@@ -473,7 +473,7 @@ pub async fn sync(
 
 /// GET /_matrix/client/v1/rooms/:room_id/hierarchy
 pub async fn space_hierarchy(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
@@ -540,7 +540,7 @@ pub struct PublicRoomsQuery {
 
 /// GET /_matrix/client/v3/publicRooms
 pub async fn public_rooms(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Query(params): Query<PublicRoomsQuery>,
 ) -> impl IntoResponse {
@@ -577,7 +577,7 @@ pub async fn public_rooms(
 
 /// POST /_matrix/client/v3/join/:room_id_or_alias
 pub async fn join_room(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path(room_id_or_alias): Path<String>,
 ) -> impl IntoResponse {
@@ -623,7 +623,7 @@ pub async fn join_room(
 
 /// GET /_matrix/client/v3/user/:user_id/account_data/:data_type
 pub async fn get_account_data(
-    State(state): State<MatrixState>,
+    State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path((user_id, data_type)): Path<(String, String)>,
 ) -> impl IntoResponse {
@@ -653,19 +653,19 @@ pub async fn get_account_data(
 // ---------------------------------------------------------------------------
 
 /// POST /seed
-pub async fn seed(State(state): State<MatrixState>) -> impl IntoResponse {
+pub async fn seed(State(state): State<std::sync::Arc<MatrixState>>) -> impl IntoResponse {
     state.seed();
     Json(serde_json::json!({ "status": "seeded" }))
 }
 
 /// POST /reset
-pub async fn reset(State(state): State<MatrixState>) -> impl IntoResponse {
+pub async fn reset(State(state): State<std::sync::Arc<MatrixState>>) -> impl IntoResponse {
     state.reset();
     Json(serde_json::json!({ "status": "reset" }))
 }
 
 /// POST /reseed
-pub async fn reseed(State(state): State<MatrixState>) -> impl IntoResponse {
+pub async fn reseed(State(state): State<std::sync::Arc<MatrixState>>) -> impl IntoResponse {
     state.reseed();
     Json(serde_json::json!({ "status": "reseeded" }))
 }

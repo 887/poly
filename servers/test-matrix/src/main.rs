@@ -11,9 +11,10 @@ use poly_test_common::{health_handler, CliArgs, TestServerBase};
 mod routes;
 mod state;
 
+use std::sync::Arc;
 use state::MatrixState;
 
-fn router(state: MatrixState) -> Router {
+fn router(state: Arc<MatrixState>) -> Router {
     Router::new()
         .route(
             "/health",
@@ -52,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
     args.init_tracing();
 
-    let state = MatrixState::new();
+    let state = Arc::new(MatrixState::new());
     if args.seed {
         state.seed();
     }

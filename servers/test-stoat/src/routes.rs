@@ -1,7 +1,7 @@
 //! Stoat/Revolt REST API route handlers.
 //!
 //! Implements the subset of the Revolt API that poly-stoat calls.
-//! All handlers take `State<StoatState>` and return JSON responses.
+//! All handlers take `State<std::sync::Arc<StoatState>>` and return JSON responses.
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -21,10 +21,9 @@ fn session_user(state: &StoatState, headers: &HeaderMap) -> Result<String, (Stat
     let token = headers
         .get("x-session-token")
         .and_then(|v| v.to_str().ok());
-    state
-        .auth
-        .extract_user_id(token.map(|t| format!("Bearer {t}")).as_deref())
-        .ok_or_else(|| revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession"))
+    // Validate the raw token directly instead of wrapping in Bearer format.
+    let user_id = token.and_then(|t| state.auth.validate(t));
+    user_id.ok_or_else(|| revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession"))
 }
 
 fn revolt_error(
@@ -74,7 +73,7 @@ pub struct LoginRequest {
 
 /// POST /auth/session/login
 pub async fn login(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     Json(body): Json<LoginRequest>,
 ) -> impl IntoResponse {
     let email = body.email.unwrap_or_default();
@@ -101,16 +100,19 @@ pub async fn login(
     let token = state.auth.create_token(&user_id);
 
     Json(serde_json::json!({
+        "result": "Success",
         "_id": token,
         "token": token,
         "user_id": user_id,
+        "name": "Poly",
+        "last_seen": "1970-01-01T00:00:00.000Z",
     }))
     .into_response()
 }
 
 /// POST /auth/session/logout
 pub async fn logout(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     if let Some(token) = headers.get("x-session-token").and_then(|v| v.to_str().ok()) {
@@ -125,7 +127,7 @@ pub async fn logout(
 
 /// GET /users/@me
 pub async fn get_me(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let user_id = match session_user(&state, &headers) {
@@ -141,7 +143,7 @@ pub async fn get_me(
 
 /// GET /users/:id
 pub async fn get_user(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(user_id): Path<String>,
 ) -> impl IntoResponse {
@@ -180,7 +182,7 @@ fn user_to_json(user: &crate::state::User) -> serde_json::Value {
 
 /// GET /users/dms — all DM and group channels for the authenticated user
 pub async fn get_dms(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let user_id = match session_user(&state, &headers) {
@@ -204,7 +206,7 @@ pub async fn get_dms(
 
 /// GET /users/:id/dm — open or get DM with a specific user
 pub async fn get_user_dm(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(target_id): Path<String>,
 ) -> impl IntoResponse {
@@ -237,7 +239,7 @@ pub async fn get_user_dm(
 
 /// GET /servers/:id
 pub async fn get_server(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(server_id): Path<String>,
 ) -> impl IntoResponse {
@@ -265,7 +267,7 @@ pub async fn get_server(
 
 /// GET /servers/:id/members
 pub async fn get_server_members(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(server_id): Path<String>,
 ) -> impl IntoResponse {
@@ -308,7 +310,7 @@ pub async fn get_server_members(
 
 /// GET /channels/:id
 pub async fn get_channel(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(channel_id): Path<String>,
 ) -> impl IntoResponse {
@@ -336,7 +338,7 @@ fn channel_to_json(ch: &crate::state::Channel) -> serde_json::Value {
 
 /// GET /channels/:id/members — group DM members
 pub async fn get_channel_members(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(channel_id): Path<String>,
 ) -> impl IntoResponse {
@@ -372,7 +374,7 @@ pub struct MessagesQuery {
 
 /// GET /channels/:id/messages
 pub async fn get_messages(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(channel_id): Path<String>,
     Query(params): Query<MessagesQuery>,
@@ -439,7 +441,7 @@ pub async fn get_messages(
 
 /// POST /channels/:id/messages
 pub async fn send_message(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
     Path(channel_id): Path<String>,
     Json(body): Json<serde_json::Value>,
@@ -523,7 +525,7 @@ fn message_to_json(msg: &crate::state::Message) -> serde_json::Value {
 
 /// GET /sync/unreads
 pub async fn sync_unreads(
-    State(state): State<StoatState>,
+    State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     if session_user(&state, &headers).is_err() {
@@ -551,19 +553,19 @@ pub async fn sync_unreads(
 // ---------------------------------------------------------------------------
 
 /// POST /seed
-pub async fn seed(State(state): State<StoatState>) -> impl IntoResponse {
+pub async fn seed(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
     state.seed();
     Json(serde_json::json!({ "status": "seeded" }))
 }
 
 /// POST /reset
-pub async fn reset(State(state): State<StoatState>) -> impl IntoResponse {
+pub async fn reset(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
     state.reset();
     Json(serde_json::json!({ "status": "reset" }))
 }
 
 /// POST /reseed
-pub async fn reseed(State(state): State<StoatState>) -> impl IntoResponse {
+pub async fn reseed(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
     state.reseed();
     Json(serde_json::json!({ "status": "reseeded" }))
 }

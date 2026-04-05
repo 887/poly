@@ -1,9 +1,24 @@
 # Phase 5 Plan — Social Agent (MCP Chat Backend)
 
 > **Created:** 2026-04-03
-> **Status:** 🔴 Not Started
+> **Updated:** 2026-04-04
+> **Status:** 🟡 Split into 5.1 + 5.2
 > **Goal:** Turn all connected messenger accounts into an MCP-accessible surface that an AI agent can read, respond to, learn from, and autonomously manage — with personality, memory, mood, scheduling, and approval flows.
 > **Depends on:** Phase 3.x (all client backends functional), Phase 4 (test servers for safe dev/testing)
+>
+> ## Phase Split
+>
+> This plan has been split into two sub-phases:
+>
+> - **[Phase 5.1](phase-5.1-plan.md)** — MCP Backend Server + CLI Tool + End-to-End Testing.
+>   Builds `poly-chat-mcp` (MCP server exposing all backends as tools), `poly-cli` (native CLI for testing),
+>   and verifies end-to-end that accounts connected via MCP appear in the Poly UI.
+>
+> - **[Phase 5.2](phase-5.2-plan.md)** — Social Agent Intelligence + UI.
+>   Personality engine, memory/learning, auto-response pipeline, typing simulation, outreach scheduler,
+>   agent UI panels, AI provider integration, translation, image generation.
+>
+> The original detailed plan below is preserved as reference. The 5.1/5.2 plans are the active documents.
 
 ---
 

@@ -33,6 +33,8 @@ members = [
     "apps/web",
     "apps/desktop-devtools",
     "apps/desktop-web",
+    "tools/poly-cli",
+    "mcp/chat-mcp",
 ]
 
 [workspace.package]
