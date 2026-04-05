@@ -4,7 +4,7 @@
   "skipDangerousModePermissionPrompt": true,
   "permissions": {
     "defaultMode": "bypassPermissions",
-    "additionalDirectories": ["/tmp", "/dev/null"],
+    "additionalDirectories": ["/tmp"],
     "allow": [
       "Bash(*)",
       "Read(*)",
