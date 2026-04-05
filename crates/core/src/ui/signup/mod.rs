@@ -40,6 +40,125 @@ use poly_client::{SignupCompleted, SignupContext};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+// ── Shared signup-commit callback builder ───────────────────────────────────
+
+/// Build the `on_complete` callback that commits a newly authenticated backend
+/// account into the app state (Signal writes, server cache, navigation).
+///
+/// Used by both the normal per-backend signup flow and the quick test-account panel.
+fn build_on_complete(
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) -> Callback<SignupCompleted> {
+    Callback::new(move |completed: SignupCompleted| {
+        let backend_handle: BackendHandle =
+            Arc::new(tokio::sync::RwLock::new(completed.backend));
+        let session = completed.session;
+        spawn(async move {
+            let backend_slug = session.backend.slug().to_string();
+            let account_id  = session.id.clone();
+            let instance_id = session.instance_id.clone();
+            let display_name = session.user.display_name.clone();
+
+            // Persist the account token so it survives app restarts.
+            if let Some(storage) = crate::STORAGE.get() {
+                let at = crate::storage::AccountToken {
+                    backend: backend_slug.clone(),
+                    account_id: account_id.clone(),
+                    token: session.token.clone(),
+                    display_name: session.user.display_name.clone(),
+                    instance_id: session.backend_url.clone(),
+                };
+                if let Err(e) = storage.upsert_account_token(&at).await {
+                    tracing::warn!("Failed to persist backend account token: {e}");
+                }
+            }
+
+            // Build server→account map (async, no Signal lock held).
+            let mut server_map = HashMap::new();
+            {
+                let guard = backend_handle.read().await;
+                if let Ok(servers) = guard.get_servers().await {
+                    for srv in &servers {
+                        server_map.insert(srv.id.clone(), account_id.clone());
+                    }
+                }
+            }
+            // Phase 2: sync Signal writes — no await while lock is held.
+            client_manager.write().commit_backend_account(
+                account_id.clone(),
+                session.clone(),
+                backend_handle.clone(),
+                server_map,
+            );
+            chat_data.write().account_sessions.insert(account_id.clone(), session);
+            // Phase 3: async data load — no Signal lock held during awaits.
+            {
+                let guard = backend_handle.read().await;
+                if let Ok(servers) = guard.get_servers().await {
+                    let cache_records: Vec<crate::storage::OfflineServerRecord> =
+                        servers
+                            .iter()
+                            .map(|srv| crate::storage::OfflineServerRecord {
+                                id: srv.id.clone(),
+                                name: srv.name.clone(),
+                                icon_url: srv.icon_url.clone(),
+                                banner_url: srv.banner_url.clone(),
+                                backend: backend_slug.clone(),
+                                account_id: account_id.clone(),
+                                account_display_name: display_name.clone(),
+                            })
+                            .collect();
+                    let new_ids: Vec<String> =
+                        servers.iter().map(|s| s.id.clone()).collect();
+
+                    let mut cd = chat_data.write();
+                    for id in &new_ids {
+                        if !cd.favorited_server_ids.contains(id) {
+                            cd.favorited_server_ids.push(id.clone());
+                        }
+                    }
+                    cd.servers.extend(servers);
+                    let all_fav_ids = cd.favorited_server_ids.clone();
+                    drop(cd);
+
+                    if let Some(storage) = crate::STORAGE.get()
+                        && let Err(e) =
+                            storage.upsert_offline_server_cache(&cache_records).await
+                    {
+                        tracing::warn!("Failed to cache server metadata: {e}");
+                    }
+                    crate::ui::favorites_sidebar::persist_favorites(all_fav_ids).await;
+                }
+            }
+            {
+                let guard = backend_handle.read().await;
+                if let Ok(dms) = guard.get_dm_channels().await {
+                    chat_data.write().dm_channels.extend(dms);
+                }
+                if let Ok(groups) = guard.get_groups().await {
+                    chat_data.write().groups.extend(groups);
+                }
+                if let Ok(notifs) = guard.get_notifications().await {
+                    chat_data.write().notifications.extend(notifs);
+                }
+                if let Ok(friends) = guard.get_friends().await {
+                    for friend in friends {
+                        if !chat_data.read().friends.iter().any(|f| f.id == friend.id) {
+                            chat_data.write().friends.push(friend);
+                        }
+                    }
+                }
+            }
+            navigator().push(Route::DmsHome {
+                backend: backend_slug,
+                instance_id,
+                account_id,
+            });
+        });
+    })
+}
+
 /// Ensure the Poly signup flow always has an identity key available.
 async fn ensure_poly_signup_identity(client: &str) -> Option<Vec<u8>> {
     let storage = crate::STORAGE.get()?;
@@ -118,6 +237,139 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                     }
                 }
             }
+            // Test accounts quick-add link
+            {
+                let is_active = selected_slug.as_deref() == Some("test");
+                let class = if is_active { "signup-nav-item active" } else { "signup-nav-item" };
+                rsx! {
+                    div { class: "signup-nav-separator" }
+                    div {
+                        class,
+                        onclick: move |_| {
+                            navigator().push(Route::ClientSignup { client: "test".to_string() });
+                        },
+                        span { class: "signup-nav-icon", "\u{1F9EA}" }
+                        span { "Test Accounts" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Test account quick-add panel ─────────────────────────────────────────────
+
+/// Test account definition for the quick-add panel.
+struct TestAccount {
+    icon: &'static str,
+    label: &'static str,
+    _backend: &'static str,
+    base_url: &'static str,
+    email: &'static str,
+    password: &'static str,
+}
+
+const TEST_ACCOUNTS: &[TestAccount] = &[
+    TestAccount {
+        icon: "\u{1F9A6}",
+        label: "Stoat",
+        _backend: "stoat",
+        base_url: "http://localhost:9101",
+        email: "stoat",
+        password: "testpass123",
+    },
+    TestAccount {
+        icon: "\u{1F99D}",
+        label: "Raccoon",
+        _backend: "stoat",
+        base_url: "http://localhost:9101",
+        email: "raccoon",
+        password: "testpass123",
+    },
+];
+
+/// Panel shown when `?test=true` — quick-add buttons for test server accounts.
+#[cfg(feature = "stoat")]
+#[component]
+fn TestAccountsPanel() -> Element {
+    let client_manager = use_context::<Signal<ClientManager>>();
+    let chat_data = use_context::<Signal<ChatData>>();
+    let on_complete = build_on_complete(client_manager, chat_data);
+    let mut statuses: Signal<Vec<String>> = use_signal(|| {
+        TEST_ACCOUNTS.iter().map(|_| String::new()).collect()
+    });
+
+    rsx! {
+        div { class: "signup-content",
+            h2 { class: "signup-form-title", "Test Accounts" }
+            p { class: "signup-form-desc",
+                "Quick-add test server accounts for development. "
+                "Requires test servers running on localhost."
+            }
+            div { class: "test-accounts-grid",
+                for (idx, acct) in TEST_ACCOUNTS.iter().enumerate() {
+                    {
+                        let status = statuses.read().get(idx).cloned().unwrap_or_default();
+                        let email = acct.email.to_string();
+                        let base_url = acct.base_url.to_string();
+                        let password = acct.password.to_string();
+                        let label = acct.label;
+                        let icon = acct.icon;
+                        let is_busy = status == "connecting...";
+                        rsx! {
+                            div { class: "test-account-card",
+                                div { class: "test-account-header",
+                                    span { class: "test-account-icon", "{icon}" }
+                                    div { class: "test-account-info",
+                                        span { class: "test-account-name", "{label}" }
+                                        span { class: "test-account-url", "{base_url}" }
+                                    }
+                                }
+                                button {
+                                    class: "btn btn-primary test-account-btn",
+                                    disabled: is_busy,
+                                    onclick: {
+                                        let on_complete = on_complete.clone();
+                                        move |_| {
+                                            if let Some(slot) = statuses.write().get_mut(idx) {
+                                                *slot = "connecting...".to_string();
+                                            }
+                                            let email = email.clone();
+                                            let base_url = base_url.clone();
+                                            let password = password.clone();
+                                            let on_complete = on_complete.clone();
+                                            spawn(async move {
+                                                match poly_stoat::signup::authenticate(
+                                                    base_url, email, password,
+                                                ).await {
+                                                    Ok(completed) => {
+                                                        if let Some(slot) = statuses.write().get_mut(idx) {
+                                                            *slot = "connected!".to_string();
+                                                        }
+                                                        on_complete.call(completed);
+                                                    }
+                                                    Err(e) => {
+                                                        if let Some(slot) = statuses.write().get_mut(idx) {
+                                                            *slot = format!("error: {e}");
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    },
+                                    if is_busy { "Connecting..." } else { "Add Account" }
+                                }
+                                if !status.is_empty() && status != "connecting..." {
+                                    p {
+                                        class: if status.starts_with("error") { "test-account-error" } else { "test-account-success" },
+                                        "{status}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -145,6 +397,20 @@ pub(crate) fn SignupPickerPage() -> Element {
     }
 }
 
+#[cfg(feature = "stoat")]
+fn test_panel_or_fallback() -> Element {
+    rsx! { TestAccountsPanel {} }
+}
+
+#[cfg(not(feature = "stoat"))]
+fn test_panel_or_fallback() -> Element {
+    rsx! {
+        div { class: "signup-content",
+            p { "Test mode requires the stoat feature to be enabled." }
+        }
+    }
+}
+
 // ── Per-backend form (/signup/:client) ───────────────────────────────────────
 
 /// Per-backend signup dispatch — `/signup/:client` — three-panel layout.
@@ -156,8 +422,8 @@ pub(crate) fn SignupPickerPage() -> Element {
 #[component]
 pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-    let mut client_manager = use_context::<Signal<ClientManager>>();
-    let mut chat_data      = use_context::<Signal<ChatData>>();
+    let client_manager = use_context::<Signal<ClientManager>>();
+    let chat_data      = use_context::<Signal<ChatData>>();
 
     // Load private key async — hooks must run unconditionally before any returns.
     let key_resource = use_resource({
@@ -186,6 +452,17 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
         }
     };
 
+    // `/signup/test` — quick-add test accounts panel.
+    if client == "test" {
+        return rsx! {
+            div { class: "add-account-page",
+                FavoritesBar {}
+                AddAccountNav { selected_slug: Some("test".to_string()) }
+                { test_panel_or_fallback() }
+            }
+        };
+    }
+
     let right_content: Element = if let Some(render) = render_fn {
         // Blank content while the key resource is still loading (usually < 1 frame).
         match key_resource.read().clone() {
@@ -196,122 +473,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                     t: crate::i18n::t,
                     navigate_back: navigate_back_to_settings,
                 };
-                // Build host-side on_complete callback.
-                // Phase 1 (auth) is done by the plugin; Phases 2+3 are owned here.
-                let on_complete = Callback::new(move |completed: SignupCompleted| {
-                    let backend_handle: BackendHandle =
-                        Arc::new(tokio::sync::RwLock::new(completed.backend));
-                    let session = completed.session;
-                    spawn(async move {
-                        let backend_slug = session.backend.slug().to_string();
-                        let account_id  = session.id.clone();
-                        let instance_id = session.instance_id.clone();
-                        // Capture display name before session is moved into account_sessions.
-                        let display_name = session.user.display_name.clone();
-
-                        // Persist the account token so it survives app restarts.
-                        if let Some(storage) = crate::STORAGE.get() {
-                            let at = crate::storage::AccountToken {
-                                backend: backend_slug.clone(),
-                                account_id: account_id.clone(),
-                                token: session.token.clone(),
-                                display_name: session.user.display_name.clone(),
-                                instance_id: session.backend_url.clone(),
-                            };
-                            if let Err(e) = storage.upsert_account_token(&at).await {
-                                tracing::warn!("Failed to persist backend account token: {e}");
-                            }
-                        }
-
-                        // Build server→account map (async, no Signal lock held).
-                        let mut server_map = HashMap::new();
-                        {
-                            let guard = backend_handle.read().await;
-                            if let Ok(servers) = guard.get_servers().await {
-                                for srv in &servers {
-                                    server_map.insert(srv.id.clone(), account_id.clone());
-                                }
-                            }
-                        }
-                        // Phase 2: sync Signal writes — no await while lock is held.
-                        client_manager.write().commit_backend_account(
-                            account_id.clone(),
-                            session.clone(),
-                            backend_handle.clone(),
-                            server_map,
-                        );
-                        chat_data.write().account_sessions.insert(account_id.clone(), session);
-                        // Phase 3: async data load — no Signal lock held during awaits.
-                        {
-                            let guard = backend_handle.read().await;
-                            if let Ok(servers) = guard.get_servers().await {
-                                // Build the offline cache records and new fav IDs
-                                // before consuming `servers` into chat_data.
-                                let cache_records: Vec<crate::storage::OfflineServerRecord> =
-                                    servers
-                                        .iter()
-                                        .map(|srv| crate::storage::OfflineServerRecord {
-                                            id: srv.id.clone(),
-                                            name: srv.name.clone(),
-                                            icon_url: srv.icon_url.clone(),
-                                            banner_url: srv.banner_url.clone(),
-                                                backend: backend_slug.clone(),
-                                            account_id: account_id.clone(),
-                                            account_display_name: display_name.clone(),
-                                        })
-                                        .collect();
-                                let new_ids: Vec<String> =
-                                    servers.iter().map(|s| s.id.clone()).collect();
-
-                                let mut cd = chat_data.write();
-                                for id in &new_ids {
-                                    if !cd.favorited_server_ids.contains(id) {
-                                        cd.favorited_server_ids.push(id.clone());
-                                    }
-                                }
-                                cd.servers.extend(servers);
-                                let all_fav_ids = cd.favorited_server_ids.clone();
-                                drop(cd);
-
-                                // Persist server metadata cache + favourites.
-                                if let Some(storage) = crate::STORAGE.get()
-                                    && let Err(e) =
-                                        storage.upsert_offline_server_cache(&cache_records).await
-                                {
-                                    tracing::warn!(
-                                        "Failed to cache server metadata: {e}"
-                                    );
-                                }
-                                crate::ui::favorites_sidebar::persist_favorites(all_fav_ids)
-                                    .await;
-                            }
-                        }
-                        {
-                            let guard = backend_handle.read().await;
-                            if let Ok(dms) = guard.get_dm_channels().await {
-                                chat_data.write().dm_channels.extend(dms);
-                            }
-                            if let Ok(groups) = guard.get_groups().await {
-                                chat_data.write().groups.extend(groups);
-                            }
-                            if let Ok(notifs) = guard.get_notifications().await {
-                                chat_data.write().notifications.extend(notifs);
-                            }
-                            if let Ok(friends) = guard.get_friends().await {
-                                for friend in friends {
-                                    if !chat_data.read().friends.iter().any(|f| f.id == friend.id) {
-                                        chat_data.write().friends.push(friend);
-                                    }
-                                }
-                            }
-                        }
-                        navigator().push(Route::DmsHome {
-                            backend: backend_slug,
-                            instance_id,
-                            account_id,
-                        });
-                    });
-                });
+                let on_complete = build_on_complete(client_manager, chat_data);
                 rsx! {
                     div { class: "signup-content",
                         { render(on_complete, ctx) }

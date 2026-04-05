@@ -7,7 +7,8 @@ use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupCo
 
 use crate::{OFFICIAL_STOAT_BASE_URL, StoatClient};
 
-async fn authenticate_stoat(
+/// Authenticate against a Stoat/Revolt server. Public so test panels can call it.
+pub async fn authenticate(
     base_url: String,
     email: String,
     password: String,
@@ -100,7 +101,7 @@ fn StoatSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -
                     submitting.set(true);
                     error_msg.set(None);
                     spawn(async move {
-                        match authenticate_stoat(next_base_url, next_email, next_password).await {
+                        match authenticate(next_base_url, next_email, next_password).await {
                             Ok(completed) => on_complete.call(completed),
                             Err(error) => {
                                 error_msg.set(Some(error));

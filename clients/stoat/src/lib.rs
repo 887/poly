@@ -490,9 +490,39 @@ impl ClientBackend for StoatClient {
     }
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        Err(ClientError::NotSupported(
-            "Stoat joined-server discovery requires websocket ready-state or a dedicated collection endpoint".to_string(),
-        ))
+        let (servers, unreads, root_config) = future::try_join3(
+            self.http.fetch_my_servers(),
+            self.http.fetch_unreads(),
+            self.http.fetch_server_config(),
+        )
+        .await?;
+
+        let (account_id, account_display_name) = self.current_account_metadata()?;
+        let unread_index = Self::index_unreads(unreads);
+        let autumn_base_url = root_config.autumn_base_url();
+
+        Ok(servers
+            .into_iter()
+            .map(|s| {
+                let (unread_count, mention_count) = s
+                    .channels
+                    .iter()
+                    .filter_map(|channel_id| unread_index.get(channel_id))
+                    .fold((0_u32, 0_u32), |(unreads_acc, mentions_acc), unread| {
+                        (
+                            unreads_acc.saturating_add(unread.approximate_unread_count()),
+                            mentions_acc.saturating_add(unread.mention_count()),
+                        )
+                    });
+                s.into_poly_server(
+                    account_id.clone(),
+                    account_display_name.clone(),
+                    unread_count,
+                    mention_count,
+                    autumn_base_url,
+                )
+            })
+            .collect())
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {

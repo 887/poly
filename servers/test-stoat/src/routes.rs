@@ -141,6 +141,46 @@ pub async fn get_me(
     }
 }
 
+/// GET /users/@me/servers — list servers the authenticated user belongs to
+pub async fn get_my_servers(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let user_id = match session_user(&state, &headers) {
+        Ok(uid) => uid,
+        Err(e) => return e.into_response(),
+    };
+
+    let servers: Vec<serde_json::Value> = state
+        .servers
+        .iter()
+        .filter(|entry| entry.value().members.contains(&user_id))
+        .map(|entry| {
+            let srv = entry.value();
+            serde_json::json!({
+                "_id": srv.id,
+                "name": srv.name,
+                "owner": srv.owner,
+                "icon": srv.icon_url.as_ref().map(|url| serde_json::json!({
+                    "_id": format!("icon_{}", srv.id),
+                    "tag": "icons",
+                    "filename": "icon.png",
+                    "content_type": "image/png",
+                    "size": 1024,
+                })),
+                "categories": srv.categories.iter().map(|cat| serde_json::json!({
+                    "id": cat.id,
+                    "title": cat.title,
+                    "channels": cat.channels,
+                })).collect::<Vec<_>>(),
+                "channels": srv.channels,
+            })
+        })
+        .collect();
+
+    Json(servers).into_response()
+}
+
 /// GET /users/:id
 pub async fn get_user(
     State(state): State<std::sync::Arc<StoatState>>,
@@ -551,6 +591,23 @@ pub async fn sync_unreads(
 // ---------------------------------------------------------------------------
 // Lifecycle endpoints
 // ---------------------------------------------------------------------------
+
+/// GET /avatars/:id — serve PNG avatar for test users
+pub async fn serve_avatar(Path(id): Path<String>) -> impl IntoResponse {
+    static STOAT_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/stoat.png");
+    static RACCOON_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/raccoon.png");
+
+    let bytes: &[u8] = match id.as_str() {
+        "av_STOAT01" => STOAT_PNG,
+        "av_RACCOON01" => RACCOON_PNG,
+        _ => return (StatusCode::NOT_FOUND, "not found").into_response(),
+    };
+    (
+        StatusCode::OK,
+        [("content-type", "image/png")],
+        bytes,
+    ).into_response()
+}
 
 /// POST /seed
 pub async fn seed(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {

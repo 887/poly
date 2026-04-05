@@ -176,12 +176,15 @@ impl StoatHttpClient {
             .map_err(Self::network_error)?
             .into_success()?;
 
-        let user = self.fetch_self_with_token(&login.token).await?;
+        let (user, root_config) = tokio::try_join!(
+            self.fetch_self_with_token(&login.token),
+            self.fetch_server_config(),
+        )?;
         let authenticated = StoatAuthenticatedSession {
             session_id: login.session_id,
             user_id: login.user_id,
             token: login.token.clone(),
-            user: user.into_poly_user(),
+            user: user.into_poly_user_with_autumn(root_config.autumn_base_url()),
             session_name: login.session_name,
         };
 
@@ -200,14 +203,18 @@ impl StoatHttpClient {
         &self,
         token: String,
     ) -> ClientResult<StoatAuthenticatedSession> {
-        let user = self.fetch_self_with_token(&token).await?;
+        let (user, root_config) = futures::future::try_join(
+            self.fetch_self_with_token(&token),
+            self.fetch_server_config(),
+        )
+        .await?;
         let session = StoatAuthenticatedSession {
             // TODO(phase-3.1.2.2): fetch session inventory from Stoat when we
             // need an exact session identifier for token-restore flows.
             session_id: user.id.clone(),
             user_id: user.id.clone(),
             token: token.clone(),
-            user: user.into_poly_user(),
+            user: user.into_poly_user_with_autumn(root_config.autumn_base_url()),
             session_name: None,
         };
 
@@ -231,6 +238,27 @@ impl StoatHttpClient {
     }
 
     /// Fetch a Stoat server by ID.
+    /// Fetch all servers the authenticated user belongs to.
+    ///
+    /// Uses `GET /users/@me/servers` — a non-standard extension supported by
+    /// Poly test servers. Falls back to `NotSupported` if the endpoint is
+    /// not available.
+    pub async fn fetch_my_servers(&self) -> ClientResult<Vec<StoatServer>> {
+        let response = self
+            .authenticated_request(Method::GET, "/users/@me/servers")?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::NotSupported(
+                "Server listing endpoint not available".to_string(),
+            ));
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
     pub async fn fetch_server(&self, server_id: &str) -> ClientResult<StoatServer> {
         let response = self
             .authenticated_request(Method::GET, &format!("/servers/{server_id}"))?

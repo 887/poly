@@ -87,6 +87,12 @@
     flex-shrink: 0;
 }
 
+.signup-nav-separator {
+    height: 1px;
+    background: var(--border-primary);
+    margin: 8px 12px;
+}
+
 /* Right content panel — mirrors .settings-content */
 .signup-content {
     flex: 1;
@@ -141,6 +147,54 @@
     max-width: 480px;
 }
 
+/* Labels inside the signup form */
+.signup-form .settings-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Text inputs inside the signup form */
+.signup-form .settings-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: var(--radius-md, 6px);
+    border: 1px solid var(--border-primary);
+    background-color: var(--bg-input, var(--bg-tertiary));
+    color: var(--text-primary);
+    font-size: 15px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+
+.signup-form .settings-input:focus {
+    border-color: var(--accent-primary);
+}
+
+.signup-form .settings-input::placeholder {
+    color: var(--text-muted);
+}
+
+.signup-form .settings-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Error messages inside signup forms */
+.signup-form .settings-error {
+    color: var(--accent-danger, #ef4444);
+    font-size: 0.85rem;
+    margin: 0;
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: var(--radius-sm, 4px);
+    border-left: 3px solid var(--accent-danger, #ef4444);
+}
+
 /* Row of action buttons at the bottom of the sign-up step */
 .signup-form-actions {
     display: flex;
@@ -168,6 +222,70 @@
     color: var(--text-muted);
     font-size: 0.9rem;
     margin: 8px 0;
+}
+
+/* ── Test Accounts Panel (?test=true) ────────────────────────────────────── */
+
+.test-accounts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 480px;
+}
+
+.test-account-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md, 6px);
+    border: 1px solid var(--border-primary);
+}
+
+.test-account-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.test-account-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.test-account-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.test-account-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.test-account-url {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+.test-account-btn {
+    align-self: flex-start;
+}
+
+.test-account-error {
+    color: var(--accent-danger, #ef4444);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.test-account-success {
+    color: var(--accent-success, #22c55e);
+    font-size: 0.85rem;
+    margin: 0;
 }
 
 /* ============================================================

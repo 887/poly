@@ -6,6 +6,7 @@
 use axum::routing::{delete, get, post};
 use axum::Router;
 use poly_test_common::{health_handler, CliArgs, TestServerBase};
+use tower_http::cors::CorsLayer;
 
 mod routes;
 mod state;
@@ -26,6 +27,7 @@ fn router(state: Arc<StoatState>) -> Router {
         .route("/auth/session/logout", delete(routes::logout))
         // Users
         .route("/users/@me", get(routes::get_me))
+        .route("/users/@me/servers", get(routes::get_my_servers))
         .route("/users/dms", get(routes::get_dms))
         .route("/users/{id}", get(routes::get_user))
         .route("/users/{id}/dm", get(routes::get_user_dm))
@@ -38,12 +40,15 @@ fn router(state: Arc<StoatState>) -> Router {
         .route("/channels/{id}/messages", get(routes::get_messages).post(routes::send_message))
         // Sync
         .route("/sync/unreads", get(routes::sync_unreads))
+        // Autumn file serving (avatars, etc.)
+        .route("/avatars/{id}", get(routes::serve_avatar))
         // TODO(4.4): WS /ws (Bonfire) — WebSocket endpoint for real-time events
         // Lifecycle
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))
         .route("/reseed", post(routes::reseed))
         .with_state(state)
+        .layer(CorsLayer::very_permissive())
 }
 
 #[tokio::main]

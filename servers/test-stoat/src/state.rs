@@ -169,7 +169,7 @@ impl StoatState {
                 username: "stoat".into(),
                 discriminator: "0001".into(),
                 display_name: Some("Stoat".into()),
-                avatar_url: Some("/avatars/stoat.png".into()),
+                avatar_url: Some("stoat".into()),
                 password: "testpass123".into(),
                 status: Some(UserStatus {
                     text: Some("Hunting voles".into()),
@@ -185,7 +185,7 @@ impl StoatState {
                 username: "raccoon".into(),
                 discriminator: "0002".into(),
                 display_name: Some("Raccoon".into()),
-                avatar_url: Some("/avatars/raccoon.png".into()),
+                avatar_url: Some("raccoon".into()),
                 password: "testpass123".into(),
                 status: Some(UserStatus {
                     text: Some("Rummaging through bins".into()),
@@ -271,20 +271,49 @@ impl StoatState {
             .or_default()
             .push(dm_id.clone());
 
-        // Seed messages
+        // Seed messages — The Burrow #general
         self.add_message(&gen1_id, &stoat_id, "Welcome to The Burrow! Watch your head.");
         self.add_message(&gen1_id, &raccoon_id, "Nice place! Smells like earth and worms.");
         self.add_message(&gen1_id, &stoat_id, "That's the ambiance.");
         self.add_message(&gen1_id, &raccoon_id, "I brought snacks from the dumpster behind Whole Foods.");
         self.add_message(&gen1_id, &stoat_id, "Raccoon, those are just... regular groceries with dents.");
+        self.add_message(&gen1_id, &raccoon_id, "Dented = discounted = free. Basic economics.");
+        self.add_message(&gen1_id, &stoat_id, "That's not how economics works.");
+        self.add_message(&gen1_id, &raccoon_id, "It is in the dumpster economy 📈");
 
+        // The Burrow #random
+        self.add_message(&random1_id, &stoat_id, "Fun fact: stoats can take down rabbits 10x their size.");
+        self.add_message(&random1_id, &raccoon_id, "Fun fact: raccoons can open any trash can ever made.");
+        self.add_message(&random1_id, &stoat_id, "That's not a fact, that's a lifestyle.");
+        self.add_message(&random1_id, &raccoon_id, "Same thing 🦝");
+
+        // The Burrow #memes
+        self.add_message(&memes1_id, &raccoon_id, "just found out stoats do a war dance to confuse prey");
+        self.add_message(&memes1_id, &stoat_id, "It's called the *weasel war dance* and it's a legitimate hunting strategy.");
+        self.add_message(&memes1_id, &raccoon_id, "dude you literally backflip at rabbits until they forget how to run");
+        self.add_message(&memes1_id, &stoat_id, "...it works though.");
+
+        // Midnight Dumpster #general
         self.add_message(&gen2_id, &raccoon_id, "Found an entire pizza behind the mall!");
         self.add_message(&gen2_id, &stoat_id, "How entire are we talking?");
         self.add_message(&gen2_id, &raccoon_id, "Like 6 out of 8 slices. Premium find.");
+        self.add_message(&gen2_id, &stoat_id, "What happened to the other 2?");
+        self.add_message(&gen2_id, &raccoon_id, "Quality control. Had to taste test.");
 
+        // Midnight Dumpster #food-finds
+        self.add_message(&food_id, &raccoon_id, "🍕 Rating: the dumpster behind Italian Palace. 9/10. Fresh bread daily at 10pm.");
+        self.add_message(&food_id, &stoat_id, "You have a rating system?");
+        self.add_message(&food_id, &raccoon_id, "Obviously. I'm a professional. Here's the tier list:");
+        self.add_message(&food_id, &raccoon_id, "S tier: Whole Foods, Trader Joe's\nA tier: Italian restaurants, bakeries\nB tier: Fast food chains\nC tier: Gas stations\nF tier: The place that puts locks on their bins 😤");
+        self.add_message(&food_id, &stoat_id, "This is genuinely impressive and also deeply concerning.");
+
+        // DMs
         self.add_message(&dm_id, &stoat_id, "Hey Raccoon, want to raid the compost bin tonight?");
         self.add_message(&dm_id, &raccoon_id, "Obviously. Meet at midnight?");
         self.add_message(&dm_id, &stoat_id, "Deal. Bring your tiny hands.");
+        self.add_message(&dm_id, &raccoon_id, "My hands are DEXTEROUS not tiny 😤");
+        self.add_message(&dm_id, &stoat_id, "Sure thing, little grabby paws.");
+        self.add_message(&dm_id, &raccoon_id, "I will open every jar in your burrow while you sleep.");
     }
 
     /// Wipe all data to empty state.
