@@ -96,6 +96,7 @@ pub use common::ChannelContextMenu;
 pub use common::ChannelList;
 pub use common::ChatView;
 pub use common::ConversationSearchView;
+pub use common::ForumPostView;
 pub use common::ForumView;
 pub use common::DmUserSidebar;
 pub use common::EmojiPicker;

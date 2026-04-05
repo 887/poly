@@ -66,7 +66,7 @@ pub use channel_context_menu::ChannelContextMenu;
 pub use channel_list::ChannelList;
 pub use chat_view::ChatView;
 pub use conversation_search_view::ConversationSearchView;
-pub use forum_view::ForumView;
+pub use forum_view::{ForumPostView, ForumView};
 pub use direct_call_overlay::OutgoingDirectCallOverlay;
 pub use dm_user_sidebar::DmUserSidebar;
 pub use emoji_picker::EmojiPicker;

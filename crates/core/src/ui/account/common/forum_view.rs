@@ -4,6 +4,8 @@
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
+use crate::ui::favorites_sidebar::restore_server_channel;
+use crate::ui::routes::Route;
 use chrono::DateTime;
 use dioxus::prelude::*;
 use poly_client::{Message, MessageContent, MessageQuery};
@@ -129,7 +131,7 @@ fn score_class(score: i64) -> &'static str {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top-level ForumView
+// Top-level ForumView — post list only, thread navigation via router
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[rustfmt::skip]
@@ -138,10 +140,8 @@ pub fn ForumView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
+    let nav = navigator();
 
-    let mut selected_post: Signal<Option<Message>> = use_signal(|| None);
-    let mut thread_comments: Signal<Vec<Message>> = use_signal(Vec::new);
-    let mut thread_loading: Signal<bool> = use_signal(|| false);
     let mut sort = use_signal(|| ForumSort::Hot);
 
     let snapshot = chat_data.read();
@@ -156,6 +156,22 @@ pub fn ForumView() -> Element {
         .map(|s| format!("{} {}", backend_badge(&s.backend), s.backend.display_name()))
         .unwrap_or_default();
 
+    // Route params for post navigation
+    let route_params = {
+        let s = app_state.read();
+        (
+            s.nav.active_backend.as_ref().map(|b| b.slug().to_string()).unwrap_or_default(),
+            s.nav.active_instance_id.clone().unwrap_or_default(),
+            s.nav.active_account_id.clone().unwrap_or_default(),
+            s.nav.selected_server.clone().unwrap_or_default(),
+            s.nav.selected_channel.clone().unwrap_or_default(),
+        )
+    };
+
+    let account_id = app_state.read().nav.active_account_id.clone();
+    let backend_for_load = account_id.as_deref()
+        .and_then(|aid| client_manager.read().get_backend(aid));
+
     let mut sorted_posts = posts.clone();
     match *sort.read() {
         ForumSort::Hot | ForumSort::Top => sorted_posts.sort_by(|a, b| post_score(b).cmp(&post_score(a))),
@@ -164,115 +180,205 @@ pub fn ForumView() -> Element {
     }
 
     let current_sort = *sort.read();
-    let in_thread = selected_post.read().is_some();
 
     rsx! {
         div { class: "forum-view",
-            // Header
+            // Header with sort tabs
             div { class: "forum-header",
                 div { class: "forum-header-info",
-                    if in_thread {
-                        button {
-                            class: "forum-back-btn",
-                            onclick: move |_| {
-                                selected_post.set(None);
-                                thread_comments.set(vec![]);
-                            },
-                            "← Back"
-                        }
-                        if let Some(ref post) = *selected_post.read() {
-                            span { class: "forum-thread-title",
-                                "{post_text(&post.content).chars().take(60).collect::<String>()}…"
-                            }
-                        }
-                    } else {
-                        span { class: "forum-channel-name", "📋 {channel_name}" }
-                        if !server_name.is_empty() {
-                            span { class: "chat-source-badge", "{server_name}" }
-                        }
+                    span { class: "forum-channel-name", "📋 {channel_name}" }
+                    if !server_name.is_empty() {
+                        span { class: "chat-source-badge", "{server_name}" }
                     }
                 }
-                if !in_thread {
-                    div { class: "forum-sort-tabs",
-                        button {
-                            class: if current_sort == ForumSort::Hot { "forum-sort-tab active" } else { "forum-sort-tab" },
-                            onclick: move |_| sort.set(ForumSort::Hot),
-                            "🔥 Hot"
-                        }
-                        button {
-                            class: if current_sort == ForumSort::Top { "forum-sort-tab active" } else { "forum-sort-tab" },
-                            onclick: move |_| sort.set(ForumSort::Top),
-                            "↑ Top"
-                        }
-                        button {
-                            class: if current_sort == ForumSort::New { "forum-sort-tab active" } else { "forum-sort-tab" },
-                            onclick: move |_| sort.set(ForumSort::New),
-                            "✨ New"
-                        }
-                        button {
-                            class: if current_sort == ForumSort::Old { "forum-sort-tab active" } else { "forum-sort-tab" },
-                            onclick: move |_| sort.set(ForumSort::Old),
-                            "📅 Old"
-                        }
+                div { class: "forum-sort-tabs",
+                    button {
+                        class: if current_sort == ForumSort::Hot { "forum-sort-tab active" } else { "forum-sort-tab" },
+                        onclick: move |_| sort.set(ForumSort::Hot),
+                        "🔥 Hot"
+                    }
+                    button {
+                        class: if current_sort == ForumSort::Top { "forum-sort-tab active" } else { "forum-sort-tab" },
+                        onclick: move |_| sort.set(ForumSort::Top),
+                        "↑ Top"
+                    }
+                    button {
+                        class: if current_sort == ForumSort::New { "forum-sort-tab active" } else { "forum-sort-tab" },
+                        onclick: move |_| sort.set(ForumSort::New),
+                        "✨ New"
+                    }
+                    button {
+                        class: if current_sort == ForumSort::Old { "forum-sort-tab active" } else { "forum-sort-tab" },
+                        onclick: move |_| sort.set(ForumSort::Old),
+                        "📅 Old"
+                    }
+                    button {
+                        class: "forum-refresh-btn",
+                        title: "Refresh posts",
+                        onclick: {
+                            let account_id2 = app_state.read().nav.active_account_id.clone();
+                            let b = account_id2.as_deref()
+                                .and_then(|aid| client_manager.read().get_backend(aid));
+                            let channel_id = app_state.read().nav.selected_channel.clone().unwrap_or_default();
+                            move |_| {
+                                if let Some(ref b) = b {
+                                    let b = b.clone();
+                                    let cid = channel_id.clone();
+                                    let mut cd = chat_data;
+                                    spawn(async move {
+                                        let msgs = b.read().await
+                                            .get_messages(&cid, poly_client::MessageQuery::default())
+                                            .await
+                                            .unwrap_or_default();
+                                        cd.write().messages = msgs;
+                                    });
+                                }
+                            }
+                        },
+                        "↻"
                     }
                 }
             }
 
-            // Content
-            if in_thread {
-                if let Some(post) = selected_post.read().clone() {
-                    ForumThreadView {
-                        post: post.clone(),
-                        comments: thread_comments.read().clone(),
-                        loading: *thread_loading.read(),
+            // Post list
+            div { class: "forum-post-list",
+                if sorted_posts.is_empty() {
+                    div { class: "forum-empty",
+                        div { class: "forum-empty-icon", "📋" }
+                        p { "No posts yet." }
                     }
                 }
-            } else {
-                div { class: "forum-post-list",
-                    if sorted_posts.is_empty() {
-                        div { class: "forum-empty",
-                            div { class: "forum-empty-icon", "📋" }
-                            p { "No posts yet." }
-                        }
-                    }
-                    for post in sorted_posts {
-                        {
-                            let post2 = post.clone();
-                            let post_id = post.id.clone();
-                            let account_id = app_state.read().nav.active_account_id.clone();
-                            let backend = account_id.as_deref()
-                                .and_then(|aid| client_manager.read().get_backend(aid));
-                            rsx! {
-                                ForumPostCard {
-                                    key: "{post_id}",
-                                    post: post2.clone(),
-                                    on_click: move |_| {
-                                        selected_post.set(Some(post2.clone()));
-                                        thread_comments.set(vec![]);
-                                        thread_loading.set(true);
-                                        let pid = post_id.clone();
-                                        if let Some(ref b) = backend {
-                                            let b = b.clone();
-                                            spawn(async move {
-                                                let guard = b.read().await;
-                                                let result = guard
-                                                    .get_messages(&pid, MessageQuery::default())
-                                                    .await
-                                                    .unwrap_or_default();
-                                                thread_comments.set(result);
-                                                thread_loading.set(false);
-                                            });
-                                        } else {
-                                            thread_loading.set(false);
-                                        }
-                                    },
-                                }
+                for post in sorted_posts {
+                    {
+                        let post2 = post.clone();
+                        let post_id = post.id.clone();
+                        let (backend, instance_id, account_id, server_id, channel_id) = route_params.clone();
+                        let nav2 = nav.clone();
+                        let _backend_for_load = backend_for_load.clone();
+                        rsx! {
+                            ForumPostCard {
+                                key: "{post_id}",
+                                post: post2.clone(),
+                                on_click: move |_| {
+                                    nav2.push(Route::ForumPostRoute {
+                                        backend: backend.clone(),
+                                        instance_id: instance_id.clone(),
+                                        account_id: account_id.clone(),
+                                        server_id: server_id.clone(),
+                                        channel_id: channel_id.clone(),
+                                        post_id: post_id.clone(),
+                                    });
+                                },
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ForumPostView — route component: load + render single post + comments
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[rustfmt::skip]
+#[component]
+pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let app_state: Signal<AppState> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+
+    let mut thread_comments: Signal<Vec<Message>> = use_signal(Vec::new);
+    let mut thread_loading: Signal<bool> = use_signal(|| true);
+
+    // Load channel data + comments on mount / when post_id changes.
+    let post_id_clone = post_id.clone();
+    let channel_id_clone = channel_id.clone();
+    use_effect(move || {
+        let pid = post_id_clone.clone();
+        let cid = channel_id_clone.clone();
+
+        // Ensure the server+channel context is loaded (handles direct URL navigation).
+        let server_id = app_state.read().nav.selected_server.clone().unwrap_or_default();
+
+        let account_id = app_state.read().nav.active_account_id.clone();
+        let backend = account_id.as_deref()
+            .and_then(|aid| client_manager.read().get_backend(aid));
+
+        // Check if channel data is already loaded for this channel.
+        let already_loaded = {
+            let snap = chat_data.read();
+            snap.current_channel.as_ref().is_some_and(|ch| ch.id == cid)
+                && snap.current_server.as_ref().is_some_and(|s| s.id == server_id)
+        };
+
+        if !already_loaded {
+            let app_state2 = app_state;
+            let client_manager2 = client_manager;
+            let chat_data2 = chat_data;
+            let backend2 = backend.clone();
+            let pid2 = pid.clone();
+            spawn(async move {
+                restore_server_channel(
+                    server_id,
+                    cid,
+                    app_state2,
+                    client_manager2,
+                    chat_data2,
+                )
+                .await;
+                // After channel loaded, fetch comments.
+                if let Some(ref b) = backend2 {
+                    let b = b.clone();
+                    let result = b.read().await
+                        .get_messages(&pid2, MessageQuery::default())
+                        .await
+                        .unwrap_or_default();
+                    thread_comments.set(result);
+                }
+                thread_loading.set(false);
+            });
+        } else {
+            // Channel already loaded — just fetch comments.
+            if let Some(ref b) = backend {
+                let b = b.clone();
+                spawn(async move {
+                    let result = b.read().await
+                        .get_messages(&pid, MessageQuery::default())
+                        .await
+                        .unwrap_or_default();
+                    thread_comments.set(result);
+                    thread_loading.set(false);
+                });
+            } else {
+                thread_loading.set(false);
+            }
+        }
+    });
+
+    // Find the post in the currently loaded messages.
+    let post = chat_data.read().messages.iter()
+        .find(|m| m.id == post_id)
+        .cloned();
+
+    match post {
+        None => rsx! {
+            div { class: "forum-post-loading",
+                if *thread_loading.read() {
+                    span { "Loading post…" }
+                } else {
+                    span { "Post not found." }
+                }
+            }
+        },
+        Some(p) => rsx! {
+            ForumThreadView {
+                post: p,
+                comments: thread_comments.read().clone(),
+                loading: *thread_loading.read(),
+            }
+        },
     }
 }
 

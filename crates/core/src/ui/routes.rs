@@ -50,10 +50,11 @@ use super::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
 };
 use super::account::{
-    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, ForumView, FriendsPanel,
-    NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
+    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, ForumView, ForumPostView,
+    FriendsPanel, NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
     ServerSettingsPage, VoiceChannelView,
 };
+use super::create_forum_post::CreateForumPostPage;
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
@@ -81,6 +82,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ServerMediaViewerRoute { account_id, .. }
         | Route::ServerHome { account_id, .. }
         | Route::ServerChat { account_id, .. }
+        | Route::ForumPostRoute { account_id, .. }
+        | Route::CreateForumPostRoute { account_id, .. }
         | Route::ServerSettingsRoute { account_id, .. }
         | Route::ServerSettingsSectionRoute { account_id, .. }
         | Route::CreateChannelRoute { account_id, .. }
@@ -205,6 +208,27 @@ pub enum Route {
                 channel_id: String,
                 message_id: String,
                 attachment_index: usize,
+            },
+
+            // ── Forum post thread (deeper than ServerChat — listed after) ──
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/posts/:post_id")]
+            ForumPostRoute {
+                backend: String,
+                instance_id: String,
+                account_id: String,
+                server_id: String,
+                channel_id: String,
+                post_id: String,
+            },
+
+            // ── Create forum post (literal "create-post" segment — listed after) ──
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/create-post")]
+            CreateForumPostRoute {
+                backend: String,
+                instance_id: String,
+                account_id: String,
+                server_id: String,
+                channel_id: String,
             },
 
             #[route("/:backend/:instance_id/:account_id/channels/:server_id")]
@@ -469,6 +493,40 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
+        }
+        Route::ForumPostRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            channel_id,
+            post_id: _,
+        } => {
+            // Keep selected_channel = parent forum channel so sidebar stays highlighted.
+            s.nav.view = View::Server;
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = Some(channel_id.clone());
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::CreateForumPostRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            channel_id,
+        } => {
+            s.nav.view = View::Server;
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = Some(channel_id.clone());
+            // Do NOT record in account_last_routes — create-post is transient
         }
         Route::FriendsRoute {
             backend,
@@ -1565,5 +1623,39 @@ fn CreateChannelRoute(
 ) -> Element {
     rsx! {
         super::create_channel::CreateChannelPage { backend, instance_id, account_id, server_id }
+    }
+}
+
+/// Forum post thread view — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/posts/:post_id`.
+///
+/// Renders inside `ServerLayout` (sidebar visible). The parent `channel_id` is synced into
+/// `AppState.nav.selected_channel` by `sync_route_to_app_state` so the sidebar stays highlighted.
+#[rustfmt::skip]
+#[component]
+fn ForumPostRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+    post_id: String,
+) -> Element {
+    rsx! {
+        ForumPostView { channel_id, post_id }
+    }
+}
+
+/// Create forum post — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/create-post`.
+#[rustfmt::skip]
+#[component]
+fn CreateForumPostRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+) -> Element {
+    rsx! {
+        CreateForumPostPage { backend, instance_id, account_id, server_id, channel_id }
     }
 }

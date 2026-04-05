@@ -726,9 +726,17 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
         // Backend slug for route construction.
         let backend_slug = server.backend.slug().to_string();
-        // Demo backend does not support channel creation — hide the button for it.
+        // Demo backend does not support channel creation — hide the New Channel button for it.
         let can_create = server.backend != "demo";
         let server_id = server.id.clone();
+
+        // Is the current channel a forum channel? If so show forum controls instead.
+        let current_ch_type = chat_data.read().current_channel.as_ref()
+            .map(|ch| ch.channel_type.clone());
+        let is_forum = matches!(current_ch_type, Some(ChannelType::Forum));
+        let current_channel_id = chat_data.read().current_channel.as_ref()
+            .map(|ch| ch.id.clone())
+            .unwrap_or_default();
 
         rsx! {
             // Show uncategorized channels first (Discord-style root section).
@@ -751,8 +759,37 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     }
                 }
             }
-            // "+ New Channel" link → full-page CreateChannelRoute (non-demo only).
-            if can_create {
+            // Forum channel: vertical filter bar + Create Post button.
+            if is_forum {
+                div { class: "forum-sidebar-controls",
+                    div { class: "forum-filter-group",
+                        button { class: "forum-filter-btn active", "Posts" }
+                        button { class: "forum-filter-btn", "Comments" }
+                    }
+                    div { class: "forum-filter-group",
+                        button { class: "forum-filter-btn forum-filter-icon", title: "Show hidden", "👁" }
+                        button { class: "forum-filter-btn forum-filter-icon", title: "Hide NSFW", "🔕" }
+                    }
+                    div { class: "forum-filter-group",
+                        button { class: "forum-filter-btn active", "Subscribed" }
+                        button { class: "forum-filter-btn", "Local" }
+                        button { class: "forum-filter-btn", "All" }
+                    }
+                    Link {
+                        class: "forum-create-post-btn",
+                        to: Route::CreateForumPostRoute {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id,
+                            server_id,
+                            channel_id: current_channel_id,
+                        },
+                        span { "+" }
+                        span { "Create Post" }
+                    }
+                }
+            } else if can_create {
+                // "+ New Channel" link → full-page CreateChannelRoute (non-demo, non-forum only).
                 Link {
                     class: "channel-create-btn",
                     to: Route::CreateChannelRoute {
