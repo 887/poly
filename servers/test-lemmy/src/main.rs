@@ -34,6 +34,8 @@ fn router() -> Router {
             "/api/v3/private_message/list",
             get(routes::list_private_messages),
         )
+        // Test-only easy-signin
+        .route("/test/auth/token", post(routes::test_auth_token))
         .layer(CorsLayer::very_permissive())
 }
 

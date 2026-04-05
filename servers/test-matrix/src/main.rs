@@ -41,6 +41,8 @@ fn router(state: Arc<MatrixState>) -> Router {
         .route("/_matrix/client/v3/join/{roomIdOrAlias}", post(routes::join_room))
         // Account data
         .route("/_matrix/client/v3/user/{userId}/account_data/{dataType}", get(routes::get_account_data))
+        // Test-only easy-signin
+        .route("/test/auth/token", post(routes::test_auth_token))
         // Lifecycle
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))

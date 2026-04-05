@@ -651,6 +651,50 @@ pub async fn get_account_data(
 // ---------------------------------------------------------------------------
 // Lifecycle endpoints
 // ---------------------------------------------------------------------------
+// Test-only easy-signin
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct TestTokenRequest {
+    pub username: String,
+}
+
+/// POST /test/auth/token — return an access token without password verification.
+///
+/// Only present in test servers. Used by `test_signin` MCP tool and UI Quick Login.
+pub async fn test_auth_token(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    Json(body): Json<TestTokenRequest>,
+) -> impl IntoResponse {
+    // Normalize: accept bare "alice" or full "@alice:localhost"
+    let user_id = if body.username.starts_with('@') {
+        body.username.clone()
+    } else {
+        format!("@{}:localhost", body.username)
+    };
+
+    if !state.users.contains_key(&user_id) {
+        return matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "User not found").into_response();
+    }
+
+    let token = state.auth.create_token(&user_id);
+    let device_id = state
+        .users
+        .get(&user_id)
+        .map(|u| u.device_id.clone())
+        .unwrap_or_else(|| "TESTDEVICE".to_string());
+
+    Json(serde_json::json!({
+        "result": "Success",
+        "user_id": user_id,
+        "access_token": token,
+        "token": token,
+        "device_id": device_id,
+    }))
+    .into_response()
+}
+
+// ---------------------------------------------------------------------------
 
 /// POST /seed
 pub async fn seed(State(state): State<std::sync::Arc<MatrixState>>) -> impl IntoResponse {

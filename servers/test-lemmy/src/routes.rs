@@ -560,6 +560,27 @@ pub async fn create_comment(headers: HeaderMap, Json(body): Json<Value>) -> impl
     )
 }
 
+/// `POST /test/auth/token` — return a JWT for `username` without password check.
+///
+/// Test-server only. Used by `test_signin` MCP tool and UI Quick Login.
+pub async fn test_auth_token(Json(body): Json<Value>) -> impl IntoResponse {
+    let username = body
+        .get("username")
+        .and_then(|v| v.as_str())
+        .unwrap_or("testuser");
+
+    let jwt = format!("{TEST_TOKEN_PREFIX}{username}");
+    (
+        StatusCode::OK,
+        Json(json!({
+            "result": "Success",
+            "token": jwt.clone(),
+            "jwt": jwt,
+            "user_id": TEST_USER_ID,
+        })),
+    )
+}
+
 /// `GET /api/v3/private_message/list`
 pub async fn list_private_messages(headers: HeaderMap) -> impl IntoResponse {
     if require_auth(&headers).is_err() {
