@@ -81,7 +81,9 @@ fn reaction_count(msg: &Message, emoji: &str) -> u32 {
 fn post_score(msg: &Message) -> i64 {
     let up = reaction_count(msg, "🔥")
         .max(reaction_count(msg, "❤️"))
-        .max(reaction_count(msg, "👍")) as i64;
+        .max(reaction_count(msg, "👍"))
+        .max(reaction_count(msg, "🎉"))
+        .max(reaction_count(msg, "🦀")) as i64;
     let down = reaction_count(msg, "👎") as i64;
     up - down
 }

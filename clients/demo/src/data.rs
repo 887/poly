@@ -231,6 +231,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reactions: vec![
                     Reaction { emoji: "❤️".to_string(), count: 142, me: false },
                     Reaction { emoji: "🦀".to_string(), count: 89, me: true },
+                    Reaction { emoji: "💬".to_string(), count: 7, me: false },
                 ],
                 reply_to: None,
                 edited: false,
@@ -249,6 +250,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "👍".to_string(), count: 67, me: false },
+                    Reaction { emoji: "💬".to_string(), count: 5, me: false },
                 ],
                 reply_to: None,
                 edited: false,
@@ -325,6 +327,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reactions: vec![
                     Reaction { emoji: "🐧".to_string(), count: 201, me: true },
                     Reaction { emoji: "🎉".to_string(), count: 88, me: false },
+                    Reaction { emoji: "💬".to_string(), count: 4, me: false },
                 ],
                 reply_to: None,
                 edited: false,
@@ -366,6 +369,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reactions: vec![
                     Reaction { emoji: "🔥".to_string(), count: 34, me: false },
                     Reaction { emoji: "👎".to_string(), count: 11, me: false },
+                    Reaction { emoji: "💬".to_string(), count: 5, me: false },
                 ],
                 reply_to: None,
                 edited: false,
