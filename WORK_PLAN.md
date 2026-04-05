@@ -4,34 +4,14 @@
 
 ---
 
-## A — UI Fixes (fast, main agent)
+## A — UI Fixes ✅
 
-- [ ] **A1** Remove `← Choose Backend` back button from stoat signup  
-  File: `clients/stoat/src/signup.rs` lines 51-56 (the button with class `signup-nav-back`)
-
-- [ ] **A2** Test Accounts page: add backend-type label to each card  
-  File: `crates/core/src/ui/signup/mod.rs` — `TEST_ACCOUNTS` const + `TestAccountsPanel` rendering  
-  Currently shows no label identifying which backend (Stoat/Matrix etc.)
-
-- [ ] **A3** Test Accounts page: add accounts for all backends  
-  Add: Matrix (localhost:8448), HN (no login needed), Lemmy (localhost:8536),  
-  Discord (localhost:9102), Teams (localhost:9103)  
-  Note: HN is read-only, login = add with no creds
-
-- [ ] **A4** Plugins page: add `demo_forum` as visible entry "Demo (Forum)"  
-  File: `crates/core/src/ui/settings/plugins.rs` — `NATIVE_BACKENDS` const  
-  Currently demo_forum runs but is invisible in plugins; user wants it shown  
-  Slug: `demo_forum`, available: `true`
-
-- [ ] **A5** Plugins page: add stub entries for HN and Lemmy (`available: cfg!(feature = "hackernews")` etc.)  
-  Both show "not in this build" until the clients are compiled in
-
-- [ ] **A6** Investigate "32 active accounts" on Demo  
-  Code: `plugins.rs` line 357 — counts `sessions` by backend slug.  
-  Demo creates 3 sessions (cat=demo, dog=demo, platypus=demo_forum).  
-  Check if `demo_forum` sessions are being counted under `demo` slug — fix if so.  
-  Root: demo_forum sessions have slug `demo_forum`, so they shouldn't match `demo`.  
-  May be a misread — verify in live app. If real bug, fix the slug comparison.
+- [x] **A1** Remove `← Choose Backend` back button from stoat, lemmy, hackernews signup forms
+- [x] **A2** Test Accounts page: backend label badge on each card
+- [x] **A3** Test Accounts page: Matrix/HN/Lemmy/Discord/Teams entries (disabled when not compiled)
+- [x] **A4** Plugins page: `demo_forum` now visible as "Demo (Forum)"
+- [x] **A5** Plugins page: HN and Lemmy entries (now real, `available: cfg!(feature)`)
+- [x] **A6** Not a real bug — `demo_forum` sessions have slug `demo_forum` and display under their own row; `slug()` returns the raw string so no cross-contamination
 
 ---
 
@@ -95,38 +75,38 @@ Test server:
 
 Reference: `docs/phase-5.1-plan.md`, existing: `mcp/chat-mcp/src/`
 
-### D1 — Audit existing MCP tools
-- [ ] Check `mcp/chat-mcp/src/tools.rs`: does `login` work for stoat test server?
-- [ ] Check `poly-cli` dynamic dispatch works end-to-end
+### D1 — Audit existing MCP tools ✅
+- [x] `login` works for stoat test server (verified end-to-end)
+- [x] `poly-cli` dynamic dispatch works: health → login → list_servers → list_channels → list_dms → get_messages
 
-### D2 — Easy-signin bypass (test server only)
-- [ ] Add `test_signin` MCP tool to `mcp/chat-mcp/src/tools.rs`
+### D2 — Easy-signin bypass (test server only) ✅
+- [x] `test_signin` MCP tool in `mcp/chat-mcp/src/tools.rs`
   - Input: `{backend, url, username}` — no password
   - Guard: only allowed if `url` contains `localhost` or `127.0.0.1`
-  - Internally creates a fake token / calls test server's `/test/auth/token` endpoint
-- [ ] Add matching `/test/auth/token` endpoint to `servers/test-stoat/` (and test-lemmy, test-matrix)
-  - Returns a valid session token for the given username without password check
-  - Route guard: only available in test mode (always on in test servers by design)
+  - Calls `/test/auth/token` → logs in with returned token
+- [x] `/test/auth/token` endpoint on ALL test servers (stoat, matrix, lemmy, discord, teams)
 
-### D3 — Full stoat CLI login flow
-- [ ] `poly-cli login --backend stoat --url http://localhost:9101 --user stoat --pass testpass123`
-- [ ] After login: MCP broadcasts to any connected poly-web UI via SSE/signal
-- [ ] `poly-cli list-servers --account <id>`
-- [ ] `poly-cli list-channels --account <id> --server <server-id>`
-- [ ] `poly-cli list-dms --account <id>`
-- [ ] `poly-cli list-friends --account <id>`
-- [ ] `poly-cli get-messages --account <id> --channel <channel-id>`
+### D3 — Full stoat + lemmy CLI login flow ✅
+- [x] `poly-cli call login --backend stoat --url http://localhost:9101 --username stoat --password testpass123`
+- [x] `poly-cli call list_servers --backend stoat` → 2 servers
+- [x] `poly-cli call list_channels --backend stoat --server_id SRV001` → 3 channels
+- [x] `poly-cli call list_dms --backend stoat` → 1 DM
+- [x] `poly-cli call list_friends --backend stoat` → []
+- [x] `poly-cli call get_messages --backend stoat --channel_id CH001 --limit 3` → messages
+- [x] `poly-cli call test_signin --backend stoat --url http://localhost:9101 --username raccoon` (no password)
+- [x] Lemmy: login → list_servers → list_channels + test_signin verified
+- [ ] MCP → poly-web UI SSE broadcast (future phase)
 
-### D4 — Test account easy-signin in UI
-- [ ] Add "Quick Login" button to test accounts panel (no password needed for localhost)
-- [ ] Calls test server `/test/auth/token` endpoint, bypasses OAuth/password flow
+### D4 — Test account easy-signin in UI ✅
+- [x] `test_account_authenticate()` dispatch in signup/mod.rs
+- [x] stoat, lemmy, hackernews all get working "Add Account" buttons
 
-### D5 — Extend to other backends (post stoat)
-- [ ] matrix test server easy-signin
-- [ ] discord test server easy-signin
-- [ ] teams test server easy-signin
-- [ ] HN: no login needed
-- [ ] lemmy: easy-signin on local test server
+### D5 — Extend to other backends ✅
+- [x] matrix test server: `/test/auth/token` (normalizes @user:localhost)
+- [x] discord test server: `/test/auth/token`
+- [x] teams test server: `/test/auth/token`
+- [x] HN: no login needed (guest session)
+- [x] lemmy: `/test/auth/token` on test server
 
 ---
 
