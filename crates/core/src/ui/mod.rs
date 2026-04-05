@@ -798,10 +798,10 @@ async fn restore_poly_accounts(
                         chat_data.write().dm_channels.extend(dms);
                     }
                     if let Ok(friends) = guard.get_friends().await {
-                        let mut cd = chat_data.write();
                         for friend in friends {
-                            if !cd.friends.iter().any(|f| f.id == friend.id) {
-                                cd.friends.push(friend);
+                            let already = chat_data.read().friends.get(&account_id).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
+                            if !already {
+                                chat_data.write().friends.entry(account_id.clone()).or_default().push(friend);
                             }
                         }
                     }

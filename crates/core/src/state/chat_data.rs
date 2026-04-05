@@ -81,8 +81,8 @@ pub struct ChatData {
     pub dm_channels: Vec<DmChannel>,
     /// Group chats from all backends.
     pub groups: Vec<Group>,
-    /// Friends from all backends.
-    pub friends: Vec<User>,
+    /// Friends per account (account_id → friends list).
+    pub friends: HashMap<String, Vec<User>>,
     /// Whether data is currently loading.
     pub loading: bool,
     /// Currently selected server info (for channel list header).

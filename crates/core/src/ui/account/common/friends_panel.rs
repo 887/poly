@@ -19,9 +19,9 @@ enum FriendsManagementTab {
 
 #[rustfmt::skip]
 #[component]
-pub fn FriendsPanel() -> Element {
+pub fn FriendsPanel(account_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
-    let friends = chat_data.read().friends.clone();
+    let friends = chat_data.read().friends.get(&account_id).cloned().unwrap_or_default();
     let blocked_users = chat_data.read().blocked_users.clone();
 
     let search_filter = use_signal(String::new);

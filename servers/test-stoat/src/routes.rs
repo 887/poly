@@ -101,7 +101,7 @@ pub async fn login(
 
     Json(serde_json::json!({
         "result": "Success",
-        "_id": token,
+        "_id": user_id,
         "token": token,
         "user_id": user_id,
         "name": "Poly",
@@ -136,7 +136,20 @@ pub async fn get_me(
     };
 
     match state.users.get(&user_id) {
-        Some(user) => Json(user_to_json(&user)).into_response(),
+        Some(user) => {
+            // Build friend relations: all other known users are friends.
+            let relations: Vec<(String, String)> = state
+                .users
+                .iter()
+                .filter(|e| e.key() != &user_id)
+                .map(|e| (e.key().clone(), "Friend".to_string()))
+                .collect();
+            let relation_refs: Vec<(&str, &str)> = relations
+                .iter()
+                .map(|(id, status)| (id.as_str(), status.as_str()))
+                .collect();
+            Json(user_to_json_with_relations(&user, &relation_refs)).into_response()
+        }
         None => revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
     }
 }
@@ -198,6 +211,10 @@ pub async fn get_user(
 }
 
 fn user_to_json(user: &crate::state::User) -> serde_json::Value {
+    user_to_json_with_relations(user, &[])
+}
+
+fn user_to_json_with_relations(user: &crate::state::User, relations: &[(&str, &str)]) -> serde_json::Value {
     serde_json::json!({
         "_id": user.id,
         "username": user.username,
@@ -217,6 +234,10 @@ fn user_to_json(user: &crate::state::User) -> serde_json::Value {
             "presence": s.presence,
         })),
         "online": user.online,
+        "relations": relations.iter().map(|(id, status)| serde_json::json!({
+            "_id": id,
+            "status": status,
+        })).collect::<Vec<_>>(),
     })
 }
 

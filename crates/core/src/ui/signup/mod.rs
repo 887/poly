@@ -144,8 +144,9 @@ fn build_on_complete(
                 }
                 if let Ok(friends) = guard.get_friends().await {
                     for friend in friends {
-                        if !chat_data.read().friends.iter().any(|f| f.id == friend.id) {
-                            chat_data.write().friends.push(friend);
+                        let already = chat_data.read().friends.get(&account_id).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
+                        if !already {
+                            chat_data.write().friends.entry(account_id.clone()).or_default().push(friend);
                         }
                     }
                 }

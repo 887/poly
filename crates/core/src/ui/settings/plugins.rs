@@ -434,8 +434,9 @@ pub fn PluginsSettings() -> Element {
                                                                 || !removed_ids
                                                                     .contains(&n.account_id)
                                                         });
-                                                        cd.friends
-                                                            .retain(|u| u.backend != bt);
+                                                        for id in &removed_ids {
+                                                            cd.friends.remove(id.as_str());
+                                                        }
                                                         for id in &removed_ids {
                                                             cd.account_sessions
                                                                 .remove(id.as_str());

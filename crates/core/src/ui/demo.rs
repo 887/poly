@@ -105,8 +105,9 @@ pub(crate) async fn toggle_demo(
                     .retain(|g| g.backend != poly_client::BackendType::Demo);
                 cd.notifications
                     .retain(|n| n.backend != poly_client::BackendType::Demo);
-                cd.friends
-                    .retain(|u| u.backend != poly_client::BackendType::Demo);
+                for aid in &demo_ids {
+                    cd.friends.remove(aid.as_str());
+                }
                 cd.channels.clear();
                 cd.messages.clear();
                 cd.members.clear();
@@ -295,10 +296,10 @@ pub(crate) async fn toggle_demo(
                     chat_data.write().notifications.extend(notifs);
                 }
                 if let Ok(friends) = guard.get_friends().await {
-                    // Deduplicate friends by ID.
                     for friend in friends {
-                        if !chat_data.read().friends.iter().any(|f| f.id == friend.id) {
-                            chat_data.write().friends.push(friend);
+                        let already = chat_data.read().friends.get(aid.as_str()).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
+                        if !already {
+                            chat_data.write().friends.entry(aid.clone()).or_default().push(friend);
                         }
                     }
                 }

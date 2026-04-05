@@ -26,7 +26,8 @@ pub fn NewConversationView() -> Element {
     let friends: Vec<_> = chat_data
         .read()
         .friends
-        .iter()
+        .values()
+        .flatten()
         .filter(|friend| active_backend.is_none_or(|backend| backend == friend.backend))
         .filter(|friend| {
             search_lower.is_empty() || friend.display_name.to_lowercase().contains(&search_lower)

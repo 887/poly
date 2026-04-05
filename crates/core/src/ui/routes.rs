@@ -1332,7 +1332,7 @@ fn ServerChat(
 #[component]
 fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
-        FriendsPanel {}
+        FriendsPanel { account_id }
     }
 }
 

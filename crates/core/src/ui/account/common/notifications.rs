@@ -552,8 +552,8 @@ async fn handle_friend_request_action(
 
     if let Some(friends) = refreshed_friends {
         for friend in friends {
-            if !cd.friends.iter().any(|existing| existing.id == friend.id) {
-                cd.friends.push(friend);
+            if !cd.friends.get(&account_id).map_or(false, |v| v.iter().any(|existing| existing.id == friend.id)) {
+                cd.friends.entry(account_id.clone()).or_default().push(friend);
             }
         }
     }
