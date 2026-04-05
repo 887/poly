@@ -436,6 +436,184 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
     }
 }
 
+/// Return threaded comments for a specific forum post ID.
+///
+/// Each `Message.reply_to.message_id` points to the parent comment (or post) ID.
+/// A flat list — the UI builds the tree by walking `reply_to` links.
+/// Top-level comments have `reply_to: None`.
+pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
+    let now = Utc::now();
+
+    fn forum_user(id: &str, name: &str) -> User {
+        User {
+            id: id.to_string(),
+            display_name: name.to_string(),
+            avatar_url: None,
+            presence: PresenceStatus::Online,
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+        }
+    }
+    fn forum_comment(
+        now: chrono::DateTime<Utc>,
+        id: &str,
+        author: User,
+        text: &str,
+        ts_offset: chrono::Duration,
+        upvotes: u32,
+        downvotes: u32,
+        parent_id: Option<&str>,
+        parent_author: Option<&str>,
+    ) -> Message {
+        let reply_to = parent_id.map(|pid| MessageReplyPreview {
+            message_id: pid.to_string(),
+            author_id: parent_author.unwrap_or("").to_string(),
+            author_display_name: parent_author.unwrap_or("").to_string(),
+            author_avatar_url: None,
+            snippet: String::new(),
+        });
+        let mut reactions = vec![];
+        if upvotes > 0 {
+            reactions.push(Reaction { emoji: "🔥".to_string(), count: upvotes, me: false });
+        }
+        if downvotes > 0 {
+            reactions.push(Reaction { emoji: "👎".to_string(), count: downvotes, me: false });
+        }
+        Message {
+            id: id.to_string(),
+            author,
+            content: MessageContent::Text(text.to_string()),
+            timestamp: now - ts_offset,
+            attachments: vec![],
+            reactions,
+            reply_to,
+            edited: false,
+        }
+    }
+
+    // Convenience macro-like closure — captures `now` legally.
+    let c = |id: &str, author: User, text: &str, offset: chrono::Duration,
+              up: u32, down: u32, parent: Option<&str>, parent_name: Option<&str>| {
+        forum_comment(now, id, author, text, offset, up, down, parent, parent_name)
+    };
+
+    match post_id {
+        "fpost-rust-1" => vec![
+            c("fpost-rust-1-c1",
+                forum_user("u-mem-safety", "mem_safety_enjoyer"),
+                "Embassy is fantastic. We've been running it on nRF52840 for a year. The executor overhead is basically zero — tokio would never fly on a 64k device.",
+                chrono::Duration::hours(2) + chrono::Duration::minutes(45),
+                23, 0, None, None),
+            c("fpost-rust-1-c1r1",
+                forum_user("demo3-user-ferris", "ferris_fan"),
+                "Exactly our setup. The only tricky part was getting USB HID working without std. Had to write a tiny descriptor parser.",
+                chrono::Duration::hours(2) + chrono::Duration::minutes(30),
+                12, 0, Some("fpost-rust-1-c1"), Some("mem_safety_enjoyer")),
+            c("fpost-rust-1-c1r1r1",
+                forum_user("u-mem-safety", "mem_safety_enjoyer"),
+                "Did you use `usb-device` crate? It's surprisingly solid once you get the descriptor right.",
+                chrono::Duration::hours(2) + chrono::Duration::minutes(10),
+                8, 0, Some("fpost-rust-1-c1r1"), Some("ferris_fan")),
+            c("fpost-rust-1-c2",
+                forum_user("u-async-enjoyer", "async_enjoyer"),
+                "RTIC vs Embassy: is there a clear winner now? I've seen Embassy win on ergonomics but RTIC is supposedly better on interrupt latency.",
+                chrono::Duration::hours(2),
+                17, 0, None, None),
+            c("fpost-rust-1-c2r1",
+                forum_user("demo3-user-ferris", "ferris_fan"),
+                "Depends on the use case. Embassy wins on async/await ergonomics. RTIC wins if you're extremely interrupt-bound. For most IoT work, Embassy is the pragmatic choice.",
+                chrono::Duration::hours(1) + chrono::Duration::minutes(48),
+                21, 0, Some("fpost-rust-1-c2"), Some("async_enjoyer")),
+            c("fpost-rust-1-c3",
+                forum_user("u-no-unsafe", "zero_unsafe"),
+                "This is a big milestone. I showed this post to my team — we've been on Arduino for 3 years and the Rust embedded story was our main blocker. Time to reconsider.",
+                chrono::Duration::hours(1) + chrono::Duration::minutes(30),
+                9, 0, None, None),
+            c("fpost-rust-1-c3r1",
+                forum_user("demo3-user-self", "Platypus (demo_forum)"),
+                "The tooling story is night and day from 2 years ago. `probe-rs` just works, `flip-link` solves stack overflow detection, `defmt` is production-grade logging. Go for it.",
+                chrono::Duration::hours(1) + chrono::Duration::minutes(10),
+                14, 0, Some("fpost-rust-1-c3"), Some("zero_unsafe")),
+        ],
+        "fpost-rust-2" => vec![
+            c("fpost-rust-2-c1",
+                forum_user("u-gat-fan", "gat_fan"),
+                "Generic associated types (GATs) please — and make them not require 47 where clauses. That's my one. The workarounds are painful.",
+                chrono::Duration::hours(6) + chrono::Duration::minutes(50),
+                31, 0, None, None),
+            c("fpost-rust-2-c1r1",
+                forum_user("demo3-user-lifetime", "lifetime_enjoyer"),
+                "GATs are stable now but the ergonomics still need work. `impl Trait` in return position helps a lot for the common case.",
+                chrono::Duration::hours(6) + chrono::Duration::minutes(30),
+                18, 2, Some("fpost-rust-2-c1"), Some("gat_fan")),
+            c("fpost-rust-2-c2",
+                forum_user("u-async-traits", "async_trait_hater"),
+                "First-class async traits without the `async_trait` proc macro please. The boxing overhead is real in hot paths and the syntax is terrible.",
+                chrono::Duration::hours(6) + chrono::Duration::minutes(20),
+                45, 1, None, None),
+            c("fpost-rust-2-c2r1",
+                forum_user("u-gat-fan", "gat_fan"),
+                "RPITIT (return-position impl Trait in trait) is landing — did you try it on nightly? It's very close.",
+                chrono::Duration::hours(6),
+                12, 0, Some("fpost-rust-2-c2"), Some("async_trait_hater")),
+            c("fpost-rust-2-c3",
+                forum_user("demo3-user-self", "Platypus (demo_forum)"),
+                "Stable specialization would change my life. I have 3 crates where I need it and have horrible macro workarounds instead.",
+                chrono::Duration::hours(5) + chrono::Duration::minutes(30),
+                22, 0, None, None),
+        ],
+        "fpost-prog-1" => vec![
+            c("fpost-prog-1-c1",
+                forum_user("u-polyrepo", "polyrepo_chad"),
+                "Hard disagree. Monorepos work great at Google scale with Bazel. They're a disaster at 5-10 person startup scale where nobody wants to maintain build tooling.",
+                chrono::Duration::hours(3) + chrono::Duration::minutes(55),
+                28, 3, None, None),
+            c("fpost-prog-1-c1r1",
+                forum_user("demo3-user-devrel", "devrel_nerd"),
+                "Turborepo makes monorepo build caching trivial now. The 'nobody wants to maintain build tooling' complaint was valid 5 years ago, not today.",
+                chrono::Duration::hours(3) + chrono::Duration::minutes(40),
+                19, 1, Some("fpost-prog-1-c1"), Some("polyrepo_chad")),
+            c("fpost-prog-1-c1r1r1",
+                forum_user("u-polyrepo", "polyrepo_chad"),
+                "Turborepo is JS-only. Try that argument with a mixed Rust/Go/Python shop.",
+                chrono::Duration::hours(3) + chrono::Duration::minutes(20),
+                15, 0, Some("fpost-prog-1-c1r1"), Some("devrel_nerd")),
+            c("fpost-prog-1-c1r1r1r1",
+                forum_user("u-bazel-enjoyer", "bazel_enjoyer"),
+                "Bazel handles polyglot fine. The learning curve is steep but if you're doing serious cross-language stuff it's the only real option.",
+                chrono::Duration::hours(3),
+                7, 2, Some("fpost-prog-1-c1r1r1"), Some("polyrepo_chad")),
+            c("fpost-prog-1-c2",
+                forum_user("demo3-user-self", "Platypus (demo_forum)"),
+                "The 'but what about CI time' argument is moot if you have proper remote caching set up. We went monorepo, CI got faster because we stopped rebuilding everything.",
+                chrono::Duration::hours(3) + chrono::Duration::minutes(30),
+                16, 0, None, None),
+        ],
+        "fpost-linux-1" => vec![
+            c("fpost-linux-1-c1",
+                forum_user("u-rustacean-kernel", "rustacean_kernel"),
+                "The GPIO driver PR was a great read. The borrow checker forced them to fix two actual races that the C reviewers had missed. This is the pitch for Rust in kernels.",
+                chrono::Duration::hours(1) + chrono::Duration::minutes(50),
+                67, 0, None, None),
+            c("fpost-linux-1-c1r1",
+                forum_user("demo3-user-tux", "tux_forever"),
+                "Linus was skeptical of Rust in kernel for years. His tone in the thread merged this PR was noticeably different — 'reasonable Rust usage'. That's high praise.",
+                chrono::Duration::hours(1) + chrono::Duration::minutes(35),
+                44, 0, Some("fpost-linux-1-c1"), Some("rustacean_kernel")),
+            c("fpost-linux-1-c2",
+                forum_user("u-c-forever", "c_forever"),
+                "Cool, another language to learn to contribute to the kernel. NACK from me until there's a compelling performance reason not just memory safety.",
+                chrono::Duration::hours(1) + chrono::Duration::minutes(20),
+                3, 22, None, None),
+            c("fpost-linux-1-c2r1",
+                forum_user("u-rustacean-kernel", "rustacean_kernel"),
+                "Memory safety IS a performance reason — fewer CVEs means fewer emergency patches means fewer kernel security bypasses. The TCO argument is there.",
+                chrono::Duration::hours(1),
+                38, 1, Some("fpost-linux-1-c2"), Some("c_forever")),
+        ],
+        _ => vec![],
+    }
+}
+
 /// Generate notifications for the demo_forum (platypus) account.
 pub fn demo3_notifications() -> Vec<Notification> {
     let now = Utc::now();

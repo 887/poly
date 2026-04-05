@@ -808,11 +808,19 @@ impl ClientBackend for DemoClient3 {
         channel_id: &str,
         _query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        // Check DM channels first, then forum channels
+        // DM channels
         let dm_msgs = data::demo3_dm_messages(channel_id);
         if !dm_msgs.is_empty() {
             return Ok(dm_msgs);
         }
+        // Thread comments — channel_id is a post ID (starts with "fpost-")
+        if channel_id.starts_with("fpost-") {
+            let comments = data::demo3_post_comments(channel_id);
+            if !comments.is_empty() {
+                return Ok(comments);
+            }
+        }
+        // Forum post list
         Ok(data::demo3_messages(channel_id))
     }
 
