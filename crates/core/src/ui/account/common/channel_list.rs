@@ -738,43 +738,82 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
             .map(|ch| ch.id.clone())
             .unwrap_or_default();
 
+        // Check if we're currently on the comments route to highlight the right tab.
+        let current_route = use_route::<Route>();
+        let on_comments = matches!(current_route, Route::ForumCommentsRoute { .. });
+
         rsx! {
-            // Show uncategorized channels first (Discord-style root section).
-            if !uncategorized_ids.is_empty() {
-                CategorySection {
-                    cat_name: t("channel-list-text-channels"),
-                    cat_channel_ids: uncategorized_ids,
-                    channels: channels.clone(),
-                }
-            }
-            // Then render all server-defined categories.
-            for category in &server.categories {
-                if visible_category_ids.read().is_empty()
-                    || visible_category_ids.read().contains(&category.id)
-                {
+            // Discord-style categories — hidden for forum backends.
+            if !is_forum {
+                if !uncategorized_ids.is_empty() {
                     CategorySection {
-                        cat_name: category.name.clone(),
-                        cat_channel_ids: category.channel_ids.clone(),
+                        cat_name: t("channel-list-text-channels"),
+                        cat_channel_ids: uncategorized_ids,
                         channels: channels.clone(),
                     }
                 }
+                for category in &server.categories {
+                    if visible_category_ids.read().is_empty()
+                        || visible_category_ids.read().contains(&category.id)
+                    {
+                        CategorySection {
+                            cat_name: category.name.clone(),
+                            cat_channel_ids: category.channel_ids.clone(),
+                            channels: channels.clone(),
+                        }
+                    }
+                }
             }
-            // Forum channel: vertical filter bar + Create Post button.
+            // Forum channel: Posts/Comments tabs + filter controls.
             if is_forum {
                 div { class: "forum-sidebar-controls",
-                    div { class: "forum-filter-group",
-                        button { class: "forum-filter-btn active", "Posts" }
-                        button { class: "forum-filter-btn", "Comments" }
+                    // Posts / Comments nav tabs
+                    div { class: "forum-nav-tabs",
+                        Link {
+                            class: if !on_comments { "forum-nav-tab active" } else { "forum-nav-tab" },
+                            to: Route::ServerChat {
+                                backend: backend_slug.clone(),
+                                instance_id: instance_id.clone(),
+                                account_id: account_id.clone(),
+                                server_id: server_id.clone(),
+                                channel_id: current_channel_id.clone(),
+                            },
+                            "Posts"
+                        }
+                        Link {
+                            class: if on_comments { "forum-nav-tab active" } else { "forum-nav-tab" },
+                            to: Route::ForumCommentsRoute {
+                                backend: backend_slug.clone(),
+                                instance_id: instance_id.clone(),
+                                account_id: account_id.clone(),
+                                server_id: server_id.clone(),
+                                channel_id: current_channel_id.clone(),
+                            },
+                            "Comments"
+                        }
                     }
-                    div { class: "forum-filter-group",
-                        button { class: "forum-filter-btn forum-filter-icon", title: "Show hidden", "👁" }
-                        button { class: "forum-filter-btn forum-filter-icon", title: "Hide NSFW", "🔕" }
+                    // Scope filter — stacked vertically
+                    button { class: "forum-filter-btn active forum-filter-full", "Subscribed" }
+                    button { class: "forum-filter-btn forum-filter-full", "Local" }
+                    button { class: "forum-filter-btn forum-filter-full", "All" }
+                    // Show hidden toggle
+                    button { class: "forum-filter-btn forum-filter-full forum-filter-text",
+                        title: "Toggle hidden posts",
+                        "Show hidden posts"
                     }
-                    div { class: "forum-filter-group",
-                        button { class: "forum-filter-btn active", "Subscribed" }
-                        button { class: "forum-filter-btn", "Local" }
-                        button { class: "forum-filter-btn", "All" }
+                    // Search
+                    Link {
+                        class: "forum-filter-btn forum-filter-full forum-filter-search",
+                        to: Route::ForumSearchRoute {
+                            backend: backend_slug.clone(),
+                            instance_id: instance_id.clone(),
+                            account_id: account_id.clone(),
+                            server_id: server_id.clone(),
+                            channel_id: current_channel_id.clone(),
+                        },
+                        "🔍 Search"
                     }
+                    // Create Post
                     Link {
                         class: "forum-create-post-btn",
                         to: Route::CreateForumPostRoute {

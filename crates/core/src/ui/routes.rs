@@ -54,7 +54,7 @@ use super::account::{
     FriendsPanel, NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
     ServerSettingsPage, VoiceChannelView,
 };
-use super::create_forum_post::CreateForumPostPage;
+use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
 use super::main_layout::MainLayout;
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
@@ -84,6 +84,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ServerChat { account_id, .. }
         | Route::ForumPostRoute { account_id, .. }
         | Route::CreateForumPostRoute { account_id, .. }
+        | Route::ForumSearchRoute { account_id, .. }
+        | Route::ForumCommentsRoute { account_id, .. }
         | Route::ServerSettingsRoute { account_id, .. }
         | Route::ServerSettingsSectionRoute { account_id, .. }
         | Route::CreateChannelRoute { account_id, .. }
@@ -224,6 +226,26 @@ pub enum Route {
             // ── Create forum post (literal "create-post" segment — listed after) ──
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/create-post")]
             CreateForumPostRoute {
+                backend: String,
+                instance_id: String,
+                account_id: String,
+                server_id: String,
+                channel_id: String,
+            },
+
+            // ── Forum search ──
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/search")]
+            ForumSearchRoute {
+                backend: String,
+                instance_id: String,
+                account_id: String,
+                server_id: String,
+                channel_id: String,
+            },
+
+            // ── Forum comments feed ──
+            #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/comments")]
+            ForumCommentsRoute {
                 backend: String,
                 instance_id: String,
                 account_id: String,
@@ -527,6 +549,36 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = Some(channel_id.clone());
             // Do NOT record in account_last_routes — create-post is transient
+        }
+        Route::ForumSearchRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            channel_id,
+        } => {
+            s.nav.view = View::Server;
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = Some(channel_id.clone());
+            // Do NOT record in account_last_routes — search is transient
+        }
+        Route::ForumCommentsRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            channel_id,
+        } => {
+            s.nav.view = View::Server;
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = Some(channel_id.clone());
+            s.nav.account_last_routes.insert(account_id.clone(), route_url);
         }
         Route::FriendsRoute {
             backend,
@@ -1657,5 +1709,41 @@ fn CreateForumPostRoute(
 ) -> Element {
     rsx! {
         CreateForumPostPage { backend, instance_id, account_id, server_id, channel_id }
+    }
+}
+
+/// Forum search — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/search`.
+#[rustfmt::skip]
+#[component]
+fn ForumSearchRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+) -> Element {
+    rsx! {
+        ForumSearchPage { backend, instance_id, account_id, server_id, channel_id }
+    }
+}
+
+/// Forum comments feed — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/comments`.
+#[rustfmt::skip]
+#[allow(unused_variables)]
+#[component]
+fn ForumCommentsRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+) -> Element {
+    rsx! {
+        div { class: "forum-view",
+            div { class: "forum-empty",
+                div { class: "forum-empty-icon", "💬" }
+                p { "Comments feed — coming soon." }
+            }
+        }
     }
 }

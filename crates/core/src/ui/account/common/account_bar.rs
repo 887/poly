@@ -43,6 +43,8 @@ struct AccountBarUserState {
     presence_class: &'static str,
     /// Active account ID — needed by the presence picker to write back the chosen status.
     account_id: Option<String>,
+    /// True for forum-style backends (Lemmy, HN) that have no voice/presence/connection state.
+    is_forum: bool,
 }
 
 fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> AccountBarUserState {
@@ -66,7 +68,10 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
     if let Some(s) = session {
         let name = s.user.display_name.clone();
         let id = s.user.id.clone();
-        let status_text = if is_connected {
+        let is_forum = s.backend.is_forum();
+        let status_text = if is_forum {
+            String::new()
+        } else if is_connected {
             presence.display_name().to_string()
         } else {
             t("user-offline")
@@ -84,6 +89,7 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
             conn_class,
             presence_class,
             account_id: aid.map(str::to_string),
+            is_forum,
         };
     }
     AccountBarUserState {
@@ -95,6 +101,7 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
         conn_class: "disconnected",
         presence_class: "offline",
         account_id: None,
+        is_forum: false,
     }
 }
 
@@ -145,16 +152,17 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
                         "{user.first_char}"
                     }
                 }
-                // Top-right: connection icon badge (visually distinct from a dot).
-                span {
-                    class: "account-conn-icon account-conn-icon--{user.conn_class}",
-                    title: "Connection: {user.conn_class}",
-                    "{conn_icon}"
-                }
-                // Bottom-right: presence dot (colored, user-chosen availability).
-                span {
-                    class: "status-dot presence-dot {user.presence_class}",
-                    title: "Presence: {user.presence_class}",
+                // Forum backends have no persistent connection or presence — hide badges.
+                if !user.is_forum {
+                    span {
+                        class: "account-conn-icon account-conn-icon--{user.conn_class}",
+                        title: "Connection: {user.conn_class}",
+                        "{conn_icon}"
+                    }
+                    span {
+                        class: "status-dot presence-dot {user.presence_class}",
+                        title: "Presence: {user.presence_class}",
+                    }
                 }
             }
             div { class: "account-info",
@@ -353,15 +361,19 @@ pub fn AccountBar() -> Element {
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);
+    let is_forum = user.is_forum;
 
     rsx! {
         div { class: "account-bar",
             AccountBarUserInfo { user }
-            AccountBarControls {
-                is_muted,
-                is_deafened,
-                app_state,
-                chat_data,
+            // Forum backends have no voice — hide mic/speaker/deafen controls.
+            if !is_forum {
+                AccountBarControls {
+                    is_muted,
+                    is_deafened,
+                    app_state,
+                    chat_data,
+                }
             }
         }
     }

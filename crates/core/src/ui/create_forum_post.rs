@@ -1,8 +1,4 @@
-//! Create Forum Post — full-page form rendered inside `ServerLayout`.
-//!
-//! Navigated to from the "+ Create Post" button in the channel list sidebar for
-//! forum channels. The `ChannelList` stays visible on the left.
-//! For now this is a UI-only stub form (no backend API call yet).
+//! Create Forum Post and Forum Search pages, rendered inside `ServerLayout`.
 
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -85,6 +81,83 @@ pub(crate) fn CreateForumPostPage(
                         },
                         "Create"
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Forum search page — search posts within a community.
+#[rustfmt::skip]
+#[component]
+pub(crate) fn ForumSearchPage(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+) -> Element {
+    let nav = navigator();
+    let mut query = use_signal(String::new);
+    let mut scope = use_signal(|| "All".to_string());
+
+    let back_route = Route::ServerChat {
+        backend: backend.clone(),
+        instance_id: instance_id.clone(),
+        account_id: account_id.clone(),
+        server_id: server_id.clone(),
+        channel_id: channel_id.clone(),
+    };
+
+    rsx! {
+        div { class: "forum-search-page",
+            div { class: "forum-search-card",
+                h1 { class: "forum-search-title", "Search" }
+
+                div { class: "forum-search-scope-row",
+                    for label in ["Subscribed", "Local", "All"] {
+                        button {
+                            class: if *scope.read() == label { "forum-filter-btn active" } else { "forum-filter-btn" },
+                            onclick: {
+                                let label = label.to_string();
+                                move |_| scope.set(label.clone())
+                            },
+                            "{label}"
+                        }
+                    }
+                }
+
+                div { class: "forum-search-input-row",
+                    input {
+                        class: "create-forum-post-input forum-search-input",
+                        r#type: "text",
+                        placeholder: "Search…",
+                        autofocus: true,
+                        value: "{query}",
+                        oninput: move |e| query.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter {
+                                // TODO: trigger actual search when backend API available
+                            }
+                        },
+                    }
+                    button {
+                        class: "forum-search-btn",
+                        onclick: move |_| {
+                            // TODO: execute search
+                        },
+                        "Search"
+                    }
+                }
+
+                div { class: "forum-search-results",
+                    span { class: "forum-search-hint", "Enter a query above to search posts." }
+                }
+
+                button {
+                    class: "create-forum-post-cancel",
+                    onclick: move |_| { nav.push(back_route.clone()); },
+                    "← Back"
                 }
             }
         }

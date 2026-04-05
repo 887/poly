@@ -10,6 +10,8 @@ use chrono::DateTime;
 use dioxus::prelude::*;
 use poly_client::{Message, MessageContent, MessageQuery};
 
+const PAGE_SIZE: usize = 20;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Sort
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,9 +20,54 @@ use poly_client::{Message, MessageContent, MessageQuery};
 enum ForumSort {
     #[default]
     Hot,
-    Top,
+    Active,
+    Scaled,
+    Controversial,
     New,
     Old,
+    MostComments,
+    NewComments,
+    TopHour,
+    TopSixHours,
+    TopTwelveHours,
+    TopDay,
+    TopWeek,
+    TopMonth,
+    TopThreeMonths,
+    TopSixMonths,
+    TopNineMonths,
+    TopYear,
+    TopAllTime,
+}
+
+impl ForumSort {
+    fn value(self) -> &'static str {
+        match self {
+            Self::Hot => "hot", Self::Active => "active", Self::Scaled => "scaled",
+            Self::Controversial => "controversial", Self::New => "new", Self::Old => "old",
+            Self::MostComments => "most_comments", Self::NewComments => "new_comments",
+            Self::TopHour => "top_hour", Self::TopSixHours => "top_six_hours",
+            Self::TopTwelveHours => "top_twelve_hours", Self::TopDay => "top_day",
+            Self::TopWeek => "top_week", Self::TopMonth => "top_month",
+            Self::TopThreeMonths => "top_three_months", Self::TopSixMonths => "top_six_months",
+            Self::TopNineMonths => "top_nine_months", Self::TopYear => "top_year",
+            Self::TopAllTime => "top_all_time",
+        }
+    }
+
+    fn from_value(s: &str) -> Self {
+        match s {
+            "active" => Self::Active, "scaled" => Self::Scaled,
+            "controversial" => Self::Controversial, "new" => Self::New, "old" => Self::Old,
+            "most_comments" => Self::MostComments, "new_comments" => Self::NewComments,
+            "top_hour" => Self::TopHour, "top_six_hours" => Self::TopSixHours,
+            "top_twelve_hours" => Self::TopTwelveHours, "top_day" => Self::TopDay,
+            "top_week" => Self::TopWeek, "top_month" => Self::TopMonth,
+            "top_three_months" => Self::TopThreeMonths, "top_six_months" => Self::TopSixMonths,
+            "top_nine_months" => Self::TopNineMonths, "top_year" => Self::TopYear,
+            "top_all_time" => Self::TopAllTime, _ => Self::Hot,
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,6 +190,14 @@ pub fn ForumView() -> Element {
     let nav = navigator();
 
     let mut sort = use_signal(|| ForumSort::Hot);
+    let mut visible_count = use_signal(|| PAGE_SIZE);
+
+    // Reset visible count when channel changes so scroll-position doesn't leak between channels.
+    let channel_id_for_reset = app_state.read().nav.selected_channel.clone().unwrap_or_default();
+    use_effect(move || {
+        let _ = channel_id_for_reset.clone(); // track dependency
+        visible_count.set(PAGE_SIZE);
+    });
 
     let snapshot = chat_data.read();
     let current_channel = snapshot.current_channel.clone();
@@ -169,17 +224,30 @@ pub fn ForumView() -> Element {
     };
 
     let account_id = app_state.read().nav.active_account_id.clone();
-    let backend_for_load = account_id.as_deref()
+    let _backend_for_load = account_id.as_deref()
         .and_then(|aid| client_manager.read().get_backend(aid));
 
     let mut sorted_posts = posts.clone();
     match *sort.read() {
-        ForumSort::Hot | ForumSort::Top => sorted_posts.sort_by(|a, b| post_score(b).cmp(&post_score(a))),
-        ForumSort::New => sorted_posts.sort_by(|a, b| b.timestamp.cmp(&a.timestamp)),
+        ForumSort::Hot | ForumSort::Active | ForumSort::Scaled | ForumSort::Controversial
+        | ForumSort::MostComments | ForumSort::TopHour | ForumSort::TopSixHours
+        | ForumSort::TopTwelveHours | ForumSort::TopDay | ForumSort::TopWeek
+        | ForumSort::TopMonth | ForumSort::TopThreeMonths | ForumSort::TopSixMonths
+        | ForumSort::TopNineMonths | ForumSort::TopYear | ForumSort::TopAllTime => {
+            sorted_posts.sort_by(|a, b| post_score(b).cmp(&post_score(a)))
+        }
+        ForumSort::New | ForumSort::NewComments => {
+            sorted_posts.sort_by(|a, b| b.timestamp.cmp(&a.timestamp))
+        }
         ForumSort::Old => sorted_posts.sort_by(|a, b| a.timestamp.cmp(&b.timestamp)),
     }
 
     let current_sort = *sort.read();
+    let vc = *visible_count.read();
+    let total_posts = sorted_posts.len();
+    let has_more = total_posts > vc;
+    // Drain sorted_posts — must be after total_posts is computed.
+    let visible_posts: Vec<Message> = sorted_posts.into_iter().take(vc).collect();
 
     rsx! {
         div { class: "forum-view",
@@ -192,25 +260,30 @@ pub fn ForumView() -> Element {
                     }
                 }
                 div { class: "forum-sort-tabs",
-                    button {
-                        class: if current_sort == ForumSort::Hot { "forum-sort-tab active" } else { "forum-sort-tab" },
-                        onclick: move |_| sort.set(ForumSort::Hot),
-                        "🔥 Hot"
-                    }
-                    button {
-                        class: if current_sort == ForumSort::Top { "forum-sort-tab active" } else { "forum-sort-tab" },
-                        onclick: move |_| sort.set(ForumSort::Top),
-                        "↑ Top"
-                    }
-                    button {
-                        class: if current_sort == ForumSort::New { "forum-sort-tab active" } else { "forum-sort-tab" },
-                        onclick: move |_| sort.set(ForumSort::New),
-                        "✨ New"
-                    }
-                    button {
-                        class: if current_sort == ForumSort::Old { "forum-sort-tab active" } else { "forum-sort-tab" },
-                        onclick: move |_| sort.set(ForumSort::Old),
-                        "📅 Old"
+                    select {
+                        class: "forum-sort-select",
+                        value: current_sort.value(),
+                        onchange: move |e| sort.set(ForumSort::from_value(&e.value())),
+                        option { value: "hot", "Hot" }
+                        option { value: "active", "Active" }
+                        option { value: "scaled", "Scaled" }
+                        option { value: "controversial", "Controversial" }
+                        option { value: "new", "New" }
+                        option { value: "old", "Old" }
+                        option { value: "most_comments", "Most Comments" }
+                        option { value: "new_comments", "New Comments" }
+                        option { disabled: true, value: "", "──────────────" }
+                        option { value: "top_hour", "Top Hour" }
+                        option { value: "top_six_hours", "Top Six Hours" }
+                        option { value: "top_twelve_hours", "Top Twelve Hours" }
+                        option { value: "top_day", "Top Day" }
+                        option { value: "top_week", "Top Week" }
+                        option { value: "top_month", "Top Month" }
+                        option { value: "top_three_months", "Top Three Months" }
+                        option { value: "top_six_months", "Top Six Months" }
+                        option { value: "top_nine_months", "Top Nine Months" }
+                        option { value: "top_year", "Top Year" }
+                        option { value: "top_all_time", "Top All Time" }
                     }
                     button {
                         class: "forum-refresh-btn",
@@ -242,19 +315,18 @@ pub fn ForumView() -> Element {
 
             // Post list
             div { class: "forum-post-list",
-                if sorted_posts.is_empty() {
+                if visible_posts.is_empty() {
                     div { class: "forum-empty",
                         div { class: "forum-empty-icon", "📋" }
                         p { "No posts yet." }
                     }
                 }
-                for post in sorted_posts {
+                for post in visible_posts {
                     {
                         let post2 = post.clone();
                         let post_id = post.id.clone();
-                        let (backend, instance_id, account_id, server_id, channel_id) = route_params.clone();
+                        let (backend, instance_id, account_id2, server_id, channel_id) = route_params.clone();
                         let nav2 = nav.clone();
-                        let _backend_for_load = backend_for_load.clone();
                         rsx! {
                             ForumPostCard {
                                 key: "{post_id}",
@@ -263,7 +335,7 @@ pub fn ForumView() -> Element {
                                     nav2.push(Route::ForumPostRoute {
                                         backend: backend.clone(),
                                         instance_id: instance_id.clone(),
-                                        account_id: account_id.clone(),
+                                        account_id: account_id2.clone(),
                                         server_id: server_id.clone(),
                                         channel_id: channel_id.clone(),
                                         post_id: post_id.clone(),
@@ -271,6 +343,15 @@ pub fn ForumView() -> Element {
                                 },
                             }
                         }
+                    }
+                }
+                // Load-more sentinel: visible when there are more posts; clicking loads next page.
+                if has_more {
+                    div {
+                        class: "forum-load-more",
+                        id: "forum-scroll-sentinel",
+                        onclick: move |_| visible_count.set(vc + PAGE_SIZE),
+                        "Load more ({total_posts - vc} remaining)"
                     }
                 }
             }

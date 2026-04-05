@@ -57,6 +57,14 @@ impl BackendId {
     pub fn from_slug(s: &str) -> Self {
         Self(s.to_string())
     }
+
+    /// Returns `true` for forum-style backends (Lemmy, Hacker News, etc.) that use
+    /// stateless HTTP polling rather than persistent WebSocket/XMPP connections.
+    ///
+    /// Forum backends do not support voice, presence, or real-time connection status.
+    pub fn is_forum(&self) -> bool {
+        matches!(self.0.as_str(), "demo_forum" | "hackernews" | "lemmy")
+    }
 }
 
 impl std::fmt::Display for BackendId {
