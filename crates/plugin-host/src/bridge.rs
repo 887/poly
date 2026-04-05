@@ -33,7 +33,7 @@ pub fn to_wit_backend_type(bt: &pc::BackendType) -> wit::BackendType {
         "discord" => wit::BackendType::Discord,
         "teams" => wit::BackendType::Teams,
         "demo" => wit::BackendType::Demo,
-        "poly" | _ => wit::BackendType::Poly,
+        _ => wit::BackendType::Poly,
     }
 }
 

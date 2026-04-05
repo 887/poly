@@ -902,63 +902,71 @@ impl ClientBackend for StoatClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        use tokio::sync::mpsc;
-        use tokio_tungstenite::tungstenite::Message as WsMessage;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use tokio::sync::mpsc;
+            use tokio_tungstenite::tungstenite::Message as WsMessage;
 
-        let ws_url = match self.http.ws_url() {
-            Some(url) => url,
-            None => return Box::pin(stream::empty()),
-        };
-        let token = match self.http.session().map(|s| s.token) {
-            Some(t) => t,
-            None => return Box::pin(stream::empty()),
-        };
-
-        let (tx, rx) = mpsc::channel::<ClientEvent>(128);
-
-        tokio::spawn(async move {
-            let (mut ws_stream, _) = match tokio_tungstenite::connect_async(&ws_url).await {
-                Ok(conn) => conn,
-                Err(e) => {
-                    tracing::warn!("Bonfire WS connect failed: {e}");
-                    return;
-                }
+            let ws_url = match self.http.ws_url() {
+                Some(url) => url,
+                None => return Box::pin(stream::empty()),
+            };
+            let token = match self.http.session().map(|s| s.token) {
+                Some(t) => t,
+                None => return Box::pin(stream::empty()),
             };
 
-            // Authenticate
-            let auth_msg = serde_json::json!({"type": "Authenticate", "token": token});
-            {
-                use futures::SinkExt;
-                if ws_stream
-                    .send(WsMessage::Text(auth_msg.to_string().into()))
-                    .await
-                    .is_err()
-                {
-                    return;
-                }
-            }
+            let (tx, rx) = mpsc::channel::<ClientEvent>(128);
 
-            use futures::StreamExt;
-            while let Some(msg) = ws_stream.next().await {
-                match msg {
-                    Ok(WsMessage::Text(text)) => {
-                        if let Ok(event_json) =
-                            serde_json::from_str::<serde_json::Value>(&text)
-                        {
-                            if let Some(ev) = parse_bonfire_event(event_json) {
-                                if tx.send(ev).await.is_err() {
-                                    break;
+            tokio::spawn(async move {
+                let (mut ws_stream, _) = match tokio_tungstenite::connect_async(&ws_url).await {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        tracing::warn!("Bonfire WS connect failed: {e}");
+                        return;
+                    }
+                };
+
+                // Authenticate
+                let auth_msg = serde_json::json!({"type": "Authenticate", "token": token});
+                {
+                    use futures::SinkExt;
+                    if ws_stream
+                        .send(WsMessage::Text(auth_msg.to_string().into()))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+
+                use futures::StreamExt;
+                while let Some(msg) = ws_stream.next().await {
+                    match msg {
+                        Ok(WsMessage::Text(text)) => {
+                            if let Ok(event_json) =
+                                serde_json::from_str::<serde_json::Value>(&text)
+                            {
+                                if let Some(ev) = parse_bonfire_event(event_json) {
+                                    if tx.send(ev).await.is_err() {
+                                        break;
+                                    }
                                 }
                             }
                         }
+                        Ok(WsMessage::Close(_)) | Err(_) => break,
+                        _ => {}
                     }
-                    Ok(WsMessage::Close(_)) | Err(_) => break,
-                    _ => {}
                 }
-            }
-        });
+            });
 
-        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            // WebSocket transport is native-only; WASM builds return an empty stream.
+            Box::pin(stream::empty())
+        }
     }
 
     fn backend_type(&self) -> BackendType {

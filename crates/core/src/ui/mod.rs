@@ -701,6 +701,7 @@ async fn restore_poly_accounts(
     storage: &crate::storage::Storage,
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
+    app_state: Signal<AppState>,
 ) {
     use crate::client_manager::BackendHandle;
     use poly_client::ClientBackend as _;
@@ -827,6 +828,16 @@ async fn restore_poly_accounts(
                 }
 
                 tracing::info!("Restored poly account: {account_id}");
+
+                // Start the background event stream so real-time events are
+                // delivered for this account without requiring demo to be active.
+                crate::ui::demo::spawn_event_stream_listener(
+                    account_id,
+                    backend_handle,
+                    app_state,
+                    chat_data,
+                    client_manager,
+                );
             }
             Err(e) => {
                 tracing::warn!(
@@ -976,7 +987,7 @@ async fn init_storage(
                     // Restore poly server accounts from persisted tokens.
                     // This runs after demo restore so both can coexist.
                     #[cfg(feature = "server")]
-                    restore_poly_accounts(&storage, client_manager, chat_data).await;
+                    restore_poly_accounts(&storage, client_manager, chat_data, app_state).await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),

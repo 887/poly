@@ -457,6 +457,7 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             backend: BackendType::from(DEMO_FORUM_BACKEND),
         }
     }
+    #[allow(clippy::too_many_arguments)]
     fn forum_comment(
         now: chrono::DateTime<Utc>,
         id: &str,

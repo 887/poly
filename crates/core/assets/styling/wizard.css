@@ -526,3 +526,77 @@ select {
     background: var(--bg-hover);
 }
 
+/* ===========================
+ * Translation Settings
+ * =========================== */
+
+.translation-provider-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+}
+
+.translation-provider-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.translation-provider-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.translation-provider-body {
+    margin: 0;
+}
+
+.translation-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.translation-badge-available {
+    background-color: color-mix(in srgb, var(--accent-success) 15%, transparent);
+    color: var(--accent-success);
+}
+
+.translation-badge-unavailable {
+    background-color: color-mix(in srgb, var(--text-muted) 15%, transparent);
+    color: var(--text-muted);
+}
+
+.translation-badge-checking {
+    background-color: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+    color: var(--accent-warning);
+}
+
+.translation-bergamot-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.translation-size-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.translation-coming-soon {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 4px 0 0;
+}
+

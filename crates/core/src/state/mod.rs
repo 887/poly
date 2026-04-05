@@ -236,6 +236,8 @@ pub enum SettingsSection {
     VoiceVideo,
     /// Diagnostics — connection stats, storage usage, account health.
     Diagnostics,
+    /// On-device translation (Bergamot / browser built-in).
+    Translation,
     /// Plugin manager — view and manage loaded client plugins.
     ///
     /// Plugin-provided settings pages are registered dynamically at runtime
@@ -255,6 +257,7 @@ impl SettingsSection {
             Self::Theme | Self::Appearance => "theme",
             Self::Media => "media",
             Self::Ai => "ai",
+            Self::Translation => "translation",
             Self::Language => "language",
             Self::Layout => "layout",
             Self::General => "general",
@@ -274,6 +277,7 @@ impl SettingsSection {
             "theme" => Self::Theme,
             "media" => Self::Media,
             "ai" => Self::Ai,
+            "translation" => Self::Translation,
             "language" => Self::Language,
             "layout" => Self::Layout,
             "general" => Self::General,

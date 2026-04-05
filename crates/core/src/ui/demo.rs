@@ -406,8 +406,8 @@ pub(crate) async fn toggle_demo(
 /// - [`poly_client::ClientEvent::PresenceChanged`] — updates presence on matching members.
 /// - Other events are silently ignored for now.
 ///
-/// The task exits automatically when `client_manager.demo_active` becomes false
-/// (checked after each event) so there is no orphan task after demo is toggled off.
+/// The task exits automatically when the account is removed from `ClientManager`
+/// (checked after each event). Works for demo and real backends alike.
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
@@ -429,11 +429,8 @@ pub(crate) fn spawn_event_stream_listener(
         tracing::debug!("Event stream started for account: {account_id}");
 
         while let Some(event) = stream.next().await {
-            // Stop the listener when demo is deactivated (or account removed).
-            let still_active = {
-                let cm = client_manager.read();
-                cm.demo_active && cm.get_backend(&account_id).is_some()
-            };
+            // Stop the listener when the account is removed from ClientManager.
+            let still_active = client_manager.read().get_backend(&account_id).is_some();
             if !still_active {
                 break;
             }

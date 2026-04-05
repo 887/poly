@@ -42,6 +42,7 @@ pub(super) fn AiSettings() -> Element {
             })();
             "#,
         );
+        #[allow(clippy::indexing_slicing)] // serde_json Value[str] returns Null, never panics
         if let Ok(val) = eval.recv::<serde_json::Value>().await {
             status.set(McpStatus {
                 running: val["running"].as_bool().unwrap_or(false),

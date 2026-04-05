@@ -44,6 +44,7 @@ pub(crate) use plugin_settings::stoat_settings_render_fn;
 pub(crate) use plugin_settings::poly_settings_render_fn;
 mod plugins;
 mod theme;
+mod translation;
 mod voice_video;
 
 use crate::i18n::t;
@@ -68,12 +69,13 @@ use language::LanguageSettings;
 use media::MediaSettings;
 use plugins::PluginsSettings;
 use theme::ThemeSettings;
+use translation::TranslationSettings;
 use voice_video::VoiceVideoSettings;
 
 // plugin_settings is used via the dynamic registry — no compile-time import
 // of specific plugin components into the host.
 
-const NAV_SECTIONS: [(&str, SettingsSection); 12] = [
+const NAV_SECTIONS: [(&str, SettingsSection); 13] = [
     ("settings-accounts", SettingsSection::Accounts),
     ("settings-mcp", SettingsSection::Ai),
     ("settings-voice-video", SettingsSection::VoiceVideo),
@@ -81,6 +83,7 @@ const NAV_SECTIONS: [(&str, SettingsSection); 12] = [
     ("settings-identity", SettingsSection::Identity),
     ("settings-theme", SettingsSection::Theme),
     ("settings-media", SettingsSection::Media),
+    ("settings-translation", SettingsSection::Translation),
     ("settings-language", SettingsSection::Language),
     ("settings-layout", SettingsSection::Layout),
     ("settings-general", SettingsSection::General),
@@ -140,6 +143,10 @@ const SETTINGS_NODES: &[(&str, SettingsSection)] = &[
     // Media
     ("settings-media", SettingsSection::Media),
     ("settings-media-active-provider", SettingsSection::Media),
+    // Translation
+    ("settings-translation", SettingsSection::Translation),
+    ("settings-translation-browser-title", SettingsSection::Translation),
+    ("settings-translation-bergamot-title", SettingsSection::Translation),
     // Language
     ("settings-language", SettingsSection::Language),
     // Layout
@@ -251,6 +258,7 @@ fn install_settings_scroll_spy(
                 "settings-section-identity",
                 "settings-section-theme",
                 "settings-section-media",
+                "settings-section-translation",
                 "settings-section-language",
                 "settings-section-layout",
                 "settings-section-general",
@@ -455,6 +463,9 @@ fn SettingsAllSections(search_query: String) -> Element {
                             },
                             SettingsSection::Ai => rsx! {
                                 AiSettings {}
+                            },
+                            SettingsSection::Translation => rsx! {
+                                TranslationSettings {}
                             },
                             SettingsSection::Language => rsx! {
                                 LanguageSettings {}

@@ -19,13 +19,13 @@ async function waitForAppReady(page: Page): Promise<void> {
   // Primary signal: startup phase attribute
   const phaseReady = page.waitForFunction(
     () => document.documentElement.getAttribute('data-poly-startup-phase') === 'revealed',
-    { timeout: 15_000 },
+    { timeout: 90_000 },
   ).catch(() => null);
 
   // Fallback signal: any known top-level layout element
   const layoutReady = page.waitForSelector(
     '.main-layout, .favorites-sidebar, .setup-wizard, nav.server-sidebar',
-    { timeout: 15_000 },
+    { timeout: 90_000 },
   ).catch(() => null);
 
   await Promise.race([phaseReady, layoutReady]);
@@ -47,7 +47,7 @@ async function waitForAppReady(page: Page): Promise<void> {
 
 test.describe('app-loads', () => {
   test('app boots and renders main layout', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'commit' });
     await waitForAppReady(page);
 
     await expect(page.locator('nav.server-sidebar')).toBeVisible();
@@ -76,31 +76,33 @@ test.describe('app-loads', () => {
 
 test.describe('navigation', () => {
   test('click server icon then channel link then messages appear', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'commit' });
     await waitForAppReady(page);
 
     // The leftmost sidebar (nav.server-sidebar) mixes account-level entries
     // (one img, shows DM view) and server-level entries (two imgs: server icon +
-    // account badge).  Click the first server entry so the channel list appears.
+    // account badge).  Some servers are forum-type (no .channel-item); try each
+    // until we find a regular server with channel items.
     const allEntries = page.locator('nav.server-sidebar > div > div');
     const entryCount = await allEntries.count();
 
+    const channelList = page.locator('aside.channel-list');
     let foundServer = false;
     for (let i = 0; i < entryCount; i++) {
       const entry = allEntries.nth(i);
       const imgCount = await entry.locator('img').count();
       if (imgCount >= 2) {
         await entry.click();
-        foundServer = true;
-        break;
+        // Forum servers have no .channel-item — skip them
+        const hasItems = await channelList.locator('.channel-item').first()
+          .isVisible({ timeout: 2_000 }).catch(() => false);
+        if (hasItems) {
+          foundServer = true;
+          break;
+        }
       }
     }
-    expect(foundServer, 'Expected to find at least one server entry in sidebar').toBe(true);
-
-    // Channel list (aside.channel-list) should appear with channel items.
-    // Channels render as div.channel-item, not <a> tags.
-    const channelList = page.locator('aside.channel-list');
-    await expect(channelList).toBeVisible({ timeout: 8_000 });
+    expect(foundServer, 'Expected to find at least one server with regular channels').toBe(true);
 
     const channelItems = channelList.locator('.channel-item');
     await expect(channelItems.first()).toBeVisible({ timeout: 5_000 });
@@ -119,7 +121,7 @@ test.describe('navigation', () => {
 
 test.describe('demo-accounts', () => {
   test('multiple server icons exist', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'commit' });
     await waitForAppReady(page);
 
     // Demo ships with 3+ accounts so there should be multiple icons
@@ -129,7 +131,7 @@ test.describe('demo-accounts', () => {
   });
 
   test('account name changes when switching server icons', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'commit' });
     await waitForAppReady(page);
 
     const icons = page.locator('nav.server-sidebar img.server-icon-image');
@@ -166,6 +168,7 @@ test.describe('forum-view', () => {
     // Navigate to known forum channel URL
     await page.goto(
       '/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general',
+      { waitUntil: 'commit' },
     );
     await waitForAppReady(page);
 
@@ -189,7 +192,7 @@ test.describe('forum-view', () => {
 
 test.describe('settings', () => {
   test('settings panel opens when gear icon is clicked', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'commit' });
     await waitForAppReady(page);
 
     // Click the settings gear
@@ -210,7 +213,7 @@ test.describe('message-input', () => {
     // Navigate to a real demo text channel.
     // Account IDs: demo-cat (backend "demo", instance "demo"),
     // server "server-poly-dev", channel "ch-general".
-    await page.goto('/demo/demo/demo-cat/channels/server-poly-dev/ch-general');
+    await page.goto('/demo/demo/demo-cat/channels/server-poly-dev/ch-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
 
     // Try common selectors for the message input

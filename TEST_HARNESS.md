@@ -38,8 +38,12 @@ Expected: `Client build completed successfully!`
 
 ## 4. Unit tests
 
+`cargo test --workspace` does not work because the repo mixes native and WASM targets
+(dependency conflicts). Run each testable crate individually instead:
+
 ```bash
-cargo test --workspace 2>&1
+cargo test -p poly-core -p poly-demo -p poly-stoat -p poly-plugin-host 2>&1
+cargo test -p poly-plugin-loader-tests --tests 2>&1
 ```
 
 Expected: all tests pass. Report any failures with test name + stderr.

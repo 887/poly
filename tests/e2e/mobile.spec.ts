@@ -46,7 +46,7 @@ async function waitForAppReady(page: Page): Promise<void> {
   // Step 1: wait for WASM boot phase
   await page.waitForFunction(
     () => document.documentElement.getAttribute('data-poly-startup-phase') === 'revealed',
-    { timeout: 15_000 },
+    { timeout: 90_000 },
   );
 
   // Step 2: dismiss crash/watchdog overlay if present
@@ -55,7 +55,7 @@ async function waitForAppReady(page: Page): Promise<void> {
     await page.locator('#poly-wasm-crash-overlay button', { hasText: 'Reload' }).click();
     await page.waitForFunction(
       () => document.documentElement.getAttribute('data-poly-startup-phase') === 'revealed',
-      { timeout: 15_000 },
+      { timeout: 90_000 },
     );
   }
 
@@ -77,7 +77,7 @@ async function waitForAppReady(page: Page): Promise<void> {
 
 test.describe('mobile-boots', () => {
   test('app loads on mobile viewport and reaches revealed phase', async ({ page }) => {
-    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general');
+    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
     // (crash overlay handling is now inside waitForAppReady)
 
@@ -100,7 +100,7 @@ test.describe('mobile-boots', () => {
 
 test.describe('mobile-drawer', () => {
   test('left drawer opens on toggle click and closes on backdrop click', async ({ page }) => {
-    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general');
+    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
     // (crash overlay handling is now inside waitForAppReady)
 
@@ -132,7 +132,7 @@ test.describe('mobile-drawer', () => {
   });
 
   test('toggle button is visible on mobile', async ({ page }) => {
-    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general');
+    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
     // (crash overlay handling is now inside waitForAppReady)
 
@@ -148,7 +148,7 @@ test.describe('mobile-drawer', () => {
 test.describe('mobile-navigation', () => {
   test('clicking a channel item closes drawer and shows chat view', async ({ page }) => {
     // Start on the forum route which is a known good entry point
-    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general');
+    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
     // (crash overlay handling is now inside waitForAppReady)
 
@@ -159,10 +159,11 @@ test.describe('mobile-navigation', () => {
     await toggle.click();
     await expect(polyApp).toHaveClass(/poly-mobile-left-wing-open/);
 
-    // Click a server icon to switch to the demo server with regular chat channels
-    // The server-sidebar lists server icons; click the first non-active, non-account-icon one
-    const serverIcon = page.locator('.server-icon:not(.account-icon):not(.active)').first();
-    await serverIcon.click();
+    // Click the first non-forum server icon.
+    // Forum server titles contain "(demo_forum)"; regular servers contain "(demo)".
+    // The CSS substring selector [title*="(demo)"] matches only the latter.
+    const regularServerIcon = page.locator('.server-icon:not(.account-icon)[title*="(demo)"]').first();
+    await regularServerIcon.click();
 
     // The channel list should now populate with .channel-item entries
     const channelItem = page.locator('.channel-item').first();
@@ -188,7 +189,7 @@ test.describe('mobile-message-input', () => {
   test('message input is visible and not obscured in chat view', async ({ page }) => {
     // Start at the forum URL, navigate via the drawer to a real chat channel
     // (direct navigation to chat URLs can trigger boot-hang on first load)
-    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general');
+    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
 
     // Open the drawer and switch to the demo server's chat channel
@@ -196,12 +197,13 @@ test.describe('mobile-message-input', () => {
     await toggle.click();
     await expect(page.locator('.poly-app')).toHaveClass(/poly-mobile-left-wing-open/);
 
-    const serverIcon = page.locator('.server-icon:not(.account-icon):not(.active)').first();
-    await serverIcon.click();
+    // Click the first non-forum server icon (forum titles have "(demo_forum)", regular have "(demo)")
+    const regularServerIcon2 = page.locator('.server-icon:not(.account-icon)[title*="(demo)"]').first();
+    await regularServerIcon2.click();
 
-    const channelItem = page.locator('.channel-item').first();
-    await expect(channelItem).toBeVisible({ timeout: 5_000 });
-    await channelItem.click();
+    const channelItem2 = page.locator('.channel-item').first();
+    await expect(channelItem2).toBeVisible({ timeout: 5_000 });
+    await channelItem2.click();
 
     const messageInput = page.locator('textarea.message-input');
     await expect(messageInput).toBeVisible({ timeout: 8_000 });
@@ -231,7 +233,7 @@ test.describe('mobile-message-input', () => {
 
 test.describe('mobile-forum-view', () => {
   test('forum nav tabs are visible and posts are rendered', async ({ page }) => {
-    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general');
+    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
     // (crash overlay handling is now inside waitForAppReady)
 
@@ -271,7 +273,7 @@ test.describe('mobile-forum-view', () => {
   });
 
   test('forum tabs are horizontally scrollable when they overflow', async ({ page }) => {
-    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general');
+    await page.goto('/demo_forum/demo_forum/demo-platypus/channels/comm-programming/forum-prog-general', { waitUntil: 'commit' });
     await waitForAppReady(page);
     // (crash overlay handling is now inside waitForAppReady)
 

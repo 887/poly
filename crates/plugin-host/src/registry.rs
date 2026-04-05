@@ -801,11 +801,14 @@ impl ClientBackend for PluginBackend {
 
         // Install the event sender in the host state so emit-event can use it.
         // Also take ownership of the WS inbound receiver.
-        let ws_inbound_rx = {
-            let store_clone = store.clone();
-            let mut guard = store_clone.blocking_lock();
+        // Use try_lock — the store is never contended at event_stream() call time,
+        // and blocking_lock() would panic when called from within a tokio runtime.
+        let ws_inbound_rx = if let Ok(mut guard) = store.try_lock() {
             guard.data_mut().event_tx = Some(event_tx);
             guard.data_mut().ws_inbound_rx.take()
+        } else {
+            tracing::warn!("event_stream: store was contended, event delivery may be delayed");
+            None
         };
 
         // Spawn the WS data forwarding loop

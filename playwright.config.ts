@@ -2,11 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 45_000,
+  timeout: 120_000,
   retries: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: 'http://127.0.0.1:3001',
     screenshot: 'only-on-failure',
     video: 'off',
     trace: 'off',

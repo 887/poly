@@ -4,7 +4,7 @@ import { test, expect, Page } from '@playwright/test';
 // Dioxus is a client-side SPA — direct URL navigation doesn't work
 // without the app being fully loaded first.
 async function goToPlugins(page: Page) {
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'commit' });
 
   // Wait for the WASM app to load (either wizard or main app)
   await page.waitForSelector('.setup-wizard, .main-layout, .favorites-sidebar', { timeout: 20_000 });

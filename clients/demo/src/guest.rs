@@ -34,13 +34,13 @@ thread_local! {
 // ─── Bridge: poly-client → WIT types (for return values) ──────────
 
 fn to_wit_backend_type(bt: pc::BackendType) -> wit::BackendType {
-    match bt {
-        pc::BackendType::from("stoat") => wit::BackendType::from("stoat"),
-        pc::BackendType::from("matrix") => wit::BackendType::from("matrix"),
-        pc::BackendType::from("discord") => wit::BackendType::from("discord"),
-        pc::BackendType::from("teams") => wit::BackendType::from("teams"),
-        pc::BackendType::from("demo") => wit::BackendType::from("demo"),
-        pc::BackendType::from("poly") => wit::BackendType::from("poly"),
+    match bt.as_str() {
+        "stoat" => wit::BackendType::Stoat,
+        "matrix" => wit::BackendType::Matrix,
+        "discord" => wit::BackendType::Discord,
+        "teams" => wit::BackendType::Teams,
+        "demo" => wit::BackendType::Demo,
+        _ => wit::BackendType::Poly,
     }
 }
 
@@ -69,7 +69,7 @@ fn to_wit_user(u: &pc::User) -> wit::User {
         display_name: u.display_name.clone(),
         avatar_url: u.avatar_url.clone(),
         presence: to_wit_presence(u.presence),
-        backend: to_wit_backend_type(u.backend),
+        backend: to_wit_backend_type(u.backend.clone()),
     }
 }
 
@@ -580,7 +580,7 @@ impl MessengerClientGuest for DemoPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::from("demo")
+        wit::BackendType::Demo
     }
 
     fn get_backend_name() -> String {

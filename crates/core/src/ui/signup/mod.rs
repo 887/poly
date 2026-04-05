@@ -49,6 +49,7 @@ use std::sync::Arc;
 fn build_on_complete(
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
+    app_state: Signal<crate::state::AppState>,
 ) -> Callback<SignupCompleted> {
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
@@ -151,6 +152,16 @@ fn build_on_complete(
                     }
                 }
             }
+            // Start the background event stream for this account so real-time
+            // events (messages, presence) are delivered without demo being active.
+            crate::ui::demo::spawn_event_stream_listener(
+                account_id.clone(),
+                backend_handle,
+                app_state,
+                chat_data,
+                client_manager,
+            );
+
             navigator().push(Route::DmsHome {
                 backend: backend_slug,
                 instance_id,
@@ -331,6 +342,7 @@ async fn test_account_authenticate(
     password: String,
 ) -> Result<poly_client::SignupCompleted, String> {
     match backend {
+        #[cfg(feature = "stoat")]
         "stoat" => poly_stoat::signup::authenticate(base_url, email, password).await,
         #[cfg(feature = "lemmy")]
         "lemmy" => poly_lemmy::signup::authenticate(base_url, email, password).await,
@@ -346,7 +358,8 @@ async fn test_account_authenticate(
 fn TestAccountsPanel() -> Element {
     let client_manager = use_context::<Signal<ClientManager>>();
     let chat_data = use_context::<Signal<ChatData>>();
-    let on_complete = build_on_complete(client_manager, chat_data);
+    let app_state = use_context::<Signal<crate::state::AppState>>();
+    let on_complete = build_on_complete(client_manager, chat_data, app_state);
     let mut statuses: Signal<Vec<String>> = use_signal(|| {
         TEST_ACCOUNTS.iter().map(|_| String::new()).collect()
     });
@@ -486,6 +499,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let client_manager = use_context::<Signal<ClientManager>>();
     let chat_data      = use_context::<Signal<ChatData>>();
+    let app_state      = use_context::<Signal<crate::state::AppState>>();
 
     // Load private key async — hooks must run unconditionally before any returns.
     let key_resource = use_resource({
@@ -535,7 +549,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                     t: crate::i18n::t,
                     navigate_back: navigate_back_to_settings,
                 };
-                let on_complete = build_on_complete(client_manager, chat_data);
+                let on_complete = build_on_complete(client_manager, chat_data, app_state);
                 rsx! {
                     div { class: "signup-content",
                         { render(on_complete, ctx) }
