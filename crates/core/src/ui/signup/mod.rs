@@ -263,29 +263,60 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 /// Test account definition for the quick-add panel.
 struct TestAccount {
     icon: &'static str,
+    /// Display name for the account (e.g. username).
     label: &'static str,
-    _backend: &'static str,
+    /// Human-readable backend name shown as a badge (e.g. "Stoat", "Matrix").
+    backend_label: &'static str,
+    /// Backend slug used for routing (unused at runtime but documents the backend).
+    backend: &'static str,
     base_url: &'static str,
     email: &'static str,
     password: &'static str,
+    /// When true the card is shown but the button is disabled (backend not yet compiled in).
+    disabled: bool,
 }
 
 const TEST_ACCOUNTS: &[TestAccount] = &[
+    // ── Stoat (localhost:9101) ──────────────────────────────────────────
     TestAccount {
-        icon: "\u{1F9A6}",
-        label: "Stoat",
-        _backend: "stoat",
-        base_url: "http://localhost:9101",
-        email: "stoat",
-        password: "testpass123",
+        icon: "\u{1F9A6}", label: "Stoat", backend_label: "Stoat",
+        backend: "stoat", base_url: "http://localhost:9101",
+        email: "stoat", password: "testpass123", disabled: false,
     },
     TestAccount {
-        icon: "\u{1F99D}",
-        label: "Raccoon",
-        _backend: "stoat",
-        base_url: "http://localhost:9101",
-        email: "raccoon",
-        password: "testpass123",
+        icon: "\u{1F99D}", label: "Raccoon", backend_label: "Stoat",
+        backend: "stoat", base_url: "http://localhost:9101",
+        email: "raccoon", password: "testpass123", disabled: false,
+    },
+    // ── Matrix (localhost:8448) ─────────────────────────────────────────
+    TestAccount {
+        icon: "\u{1F7E9}", label: "Alice", backend_label: "Matrix",
+        backend: "matrix", base_url: "http://localhost:8448",
+        email: "@alice:localhost", password: "testpass123", disabled: !cfg!(feature = "matrix"),
+    },
+    // ── Hacker News (public API, no auth) ──────────────────────────────
+    TestAccount {
+        icon: "\u{1F536}", label: "Guest", backend_label: "Hacker News",
+        backend: "hackernews", base_url: "https://hacker-news.firebaseio.com",
+        email: "", password: "", disabled: !cfg!(feature = "hackernews"),
+    },
+    // ── Lemmy (localhost:8536) ──────────────────────────────────────────
+    TestAccount {
+        icon: "\u{1F43E}", label: "Lemmy User", backend_label: "Lemmy",
+        backend: "lemmy", base_url: "http://localhost:8536",
+        email: "testuser", password: "testpass123", disabled: !cfg!(feature = "lemmy"),
+    },
+    // ── Discord stub (localhost:9102) ───────────────────────────────────
+    TestAccount {
+        icon: "\u{1F7E3}", label: "Discord User", backend_label: "Discord",
+        backend: "discord", base_url: "http://localhost:9102",
+        email: "discord_test", password: "testpass123", disabled: !cfg!(feature = "discord"),
+    },
+    // ── Teams stub (localhost:9103) ─────────────────────────────────────
+    TestAccount {
+        icon: "\u{1F7E6}", label: "Teams User", backend_label: "Microsoft Teams",
+        backend: "teams", base_url: "http://localhost:9103",
+        email: "teams_test", password: "testpass123", disabled: !cfg!(feature = "teams"),
     },
 ];
 
@@ -316,49 +347,65 @@ fn TestAccountsPanel() -> Element {
                         let password = acct.password.to_string();
                         let label = acct.label;
                         let icon = acct.icon;
+                        let backend_label = acct.backend_label;
+                        let is_stoat_backend = acct.backend == "stoat";
+                        let account_disabled = acct.disabled;
                         let is_busy = status == "connecting...";
                         rsx! {
-                            div { class: "test-account-card",
+                            div {
+                                class: if account_disabled { "test-account-card test-account-disabled" } else { "test-account-card" },
                                 div { class: "test-account-header",
                                     span { class: "test-account-icon", "{icon}" }
                                     div { class: "test-account-info",
                                         span { class: "test-account-name", "{label}" }
+                                        span { class: "test-account-backend", "{backend_label}" }
                                         span { class: "test-account-url", "{base_url}" }
                                     }
                                 }
-                                button {
-                                    class: "btn btn-primary test-account-btn",
-                                    disabled: is_busy,
-                                    onclick: {
-                                        let on_complete = on_complete.clone();
-                                        move |_| {
-                                            if let Some(slot) = statuses.write().get_mut(idx) {
-                                                *slot = "connecting...".to_string();
-                                            }
-                                            let email = email.clone();
-                                            let base_url = base_url.clone();
-                                            let password = password.clone();
+                                if account_disabled {
+                                    p { class: "test-account-unavailable", "Backend not compiled in this build" }
+                                } else if is_stoat_backend {
+                                    button {
+                                        class: "btn btn-primary test-account-btn",
+                                        disabled: is_busy,
+                                        onclick: {
                                             let on_complete = on_complete.clone();
-                                            spawn(async move {
-                                                match poly_stoat::signup::authenticate(
-                                                    base_url, email, password,
-                                                ).await {
-                                                    Ok(completed) => {
-                                                        if let Some(slot) = statuses.write().get_mut(idx) {
-                                                            *slot = "connected!".to_string();
-                                                        }
-                                                        on_complete.call(completed);
-                                                    }
-                                                    Err(e) => {
-                                                        if let Some(slot) = statuses.write().get_mut(idx) {
-                                                            *slot = format!("error: {e}");
-                                                        }
-                                                    }
+                                            move |_| {
+                                                if let Some(slot) = statuses.write().get_mut(idx) {
+                                                    *slot = "connecting...".to_string();
                                                 }
-                                            });
-                                        }
-                                    },
-                                    if is_busy { "Connecting..." } else { "Add Account" }
+                                                let email = email.clone();
+                                                let base_url = base_url.clone();
+                                                let password = password.clone();
+                                                let on_complete = on_complete.clone();
+                                                spawn(async move {
+                                                    match poly_stoat::signup::authenticate(
+                                                        base_url, email, password,
+                                                    ).await {
+                                                        Ok(completed) => {
+                                                            if let Some(slot) = statuses.write().get_mut(idx) {
+                                                                *slot = "connected!".to_string();
+                                                            }
+                                                            on_complete.call(completed);
+                                                        }
+                                                        Err(e) => {
+                                                            if let Some(slot) = statuses.write().get_mut(idx) {
+                                                                *slot = format!("error: {e}");
+                                                            }
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        if is_busy { "Connecting..." } else { "Add Account" }
+                                    }
+                                } else {
+                                    // Non-stoat backends: show a disabled button until client is wired up
+                                    button {
+                                        class: "btn btn-primary test-account-btn",
+                                        disabled: true,
+                                        "Add Account"
+                                    }
                                 }
                                 if !status.is_empty() && status != "connecting..." {
                                     p {

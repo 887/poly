@@ -13,6 +13,8 @@ discord = ["dep:poly-discord"]
 teams = ["dep:poly-teams"]
 demo = ["dep:poly-demo"]
 server = ["dep:poly-server-client"]
+hackernews = []   # wired in when poly-hackernews client lands
+lemmy = []        # wired in when poly-lemmy client lands
 native-nav = []                     # Back/forward nav buttons (desktop/mobile only, not web)
 storage-sqlite = ["dep:sqlite"]
 storage-surreal = ["dep:surrealdb"]
@@ -31,6 +33,8 @@ poly-matrix = { workspace = true, optional = true }
 poly-discord = { workspace = true, optional = true }
 poly-teams = { workspace = true, optional = true }
 poly-server-client = { workspace = true, optional = true }
+# poly-hackernews = { workspace = true, optional = true }   # wired in when poly-hackernews client lands
+# poly-lemmy = { workspace = true, optional = true }         # wired in when poly-lemmy client lands
 
 # Crypto
 ed25519-dalek = { workspace = true }

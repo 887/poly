@@ -71,6 +71,27 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
         description: "Self-hosted Poly backup / sync server with E2E encryption.",
         available: cfg!(feature = "server"),
     },
+    NativeBackend {
+        slug: "demo_forum",
+        icon: "🧪",
+        name: "Demo (Forum)",
+        description: "Built-in mock forum data for exploring the Lemmy-style forum UI.",
+        available: true,
+    },
+    NativeBackend {
+        slug: "hackernews",
+        icon: "🔶",
+        name: "Hacker News",
+        description: "Read Hacker News stories and threaded discussions.",
+        available: cfg!(feature = "hackernews"),
+    },
+    NativeBackend {
+        slug: "lemmy",
+        icon: "🐾",
+        name: "Lemmy",
+        description: "Federated link aggregator. Connect to any Lemmy instance.",
+        available: cfg!(feature = "lemmy"),
+    },
 ];
 
 /// Compile-time backend descriptor (only const-compatible types).
