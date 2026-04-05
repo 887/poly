@@ -43,6 +43,8 @@ fn router(state: Arc<StoatState>) -> Router {
         // Autumn file serving (avatars, etc.)
         .route("/avatars/{id}", get(routes::serve_avatar))
         // TODO(4.4): WS /ws (Bonfire) — WebSocket endpoint for real-time events
+        // Test-only easy-signin
+        .route("/test/auth/token", post(routes::test_auth_token))
         // Lifecycle
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))

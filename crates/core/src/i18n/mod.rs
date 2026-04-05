@@ -150,6 +150,28 @@ fn register_native_plugin_ftl() {
         }
         tracing::debug!("Native poly-server-client plugin FTL registered for all locales");
     }
+
+    #[cfg(feature = "lemmy")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_lemmy::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("lemmy", locale, src);
+            }
+        }
+        tracing::debug!("Native lemmy plugin FTL registered for all locales");
+    }
+
+    #[cfg(feature = "hackernews")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_hackernews::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("hackernews", locale, src);
+            }
+        }
+        tracing::debug!("Native hackernews plugin FTL registered for all locales");
+    }
 }
 
 /// Load `.ftl` resources for a locale into the bundle store.

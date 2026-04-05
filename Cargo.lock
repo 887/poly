@@ -6129,6 +6129,8 @@ dependencies = [
  "clap 4.6.0",
  "poly-client",
  "poly-discord",
+ "poly-hackernews",
+ "poly-lemmy",
  "poly-matrix",
  "poly-server-client",
  "poly-stoat",
@@ -6201,6 +6203,8 @@ dependencies = [
  "poly-client",
  "poly-demo",
  "poly-discord",
+ "poly-hackernews",
+ "poly-lemmy",
  "poly-matrix",
  "poly-plugin-host",
  "poly-server-client",
@@ -6370,6 +6374,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly-hackernews"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "dioxus",
+ "futures",
+ "poly-client",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "poly-ios"
 version = "0.1.0"
 dependencies = [
@@ -6378,6 +6400,26 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "poly-lemmy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "dioxus",
+ "futures",
+ "poly-client",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wit-bindgen 0.53.1",
 ]
 
 [[package]]
@@ -6563,6 +6605,38 @@ dependencies = [
  "axum",
  "chrono",
  "dashmap",
+ "poly-test-common",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "poly-test-hackernews"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "poly-test-common",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "poly-test-lemmy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
  "poly-test-common",
  "serde",
  "serde_json",

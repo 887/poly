@@ -98,6 +98,14 @@ fn create_backend(
                 .map_err(|e| anyhow::anyhow!("matrix config: {e}"))?;
             Ok((Box::new(client), BackendType::from("matrix")))
         }
+        "lemmy" => {
+            let client = poly_lemmy::LemmyClient::new(url);
+            Ok((Box::new(client), BackendType::from("lemmy")))
+        }
+        "hackernews" | "hn" => {
+            let client = poly_hackernews::HackerNewsClient::with_base_url(url);
+            Ok((Box::new(client), BackendType::from("hackernews")))
+        }
         "discord" => anyhow::bail!("Discord client not yet implemented"),
         "teams" => anyhow::bail!("Teams client not yet implemented"),
         "poly" => {

@@ -30,6 +30,8 @@ fn parse_backend_type(s: &str) -> Option<BackendType> {
         "discord" => Some(BackendType::from("discord")),
         "teams" => Some(BackendType::from("teams")),
         "poly" => Some(BackendType::from("poly")),
+        "lemmy" => Some(BackendType::from("lemmy")),
+        "hackernews" | "hn" => Some(BackendType::from("hackernews")),
         _ => None,
     }
 }
@@ -170,6 +172,23 @@ pub fn tool_list() -> Vec<Value> {
             }
         }),
 
+        // Test server easy-signin (localhost only, no password required)
+        json!({
+            "name": "test_signin",
+            "description": "Sign in to a localhost test server without a password. \
+                            Only works on localhost/127.0.0.1 URLs. \
+                            Calls /test/auth/token to get a session token.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string", "description": "Backend type: stoat, matrix, etc." },
+                    "url": { "type": "string", "description": "Test server URL (must be localhost or 127.0.0.1)" },
+                    "username": { "type": "string", "description": "Username (no password required)" }
+                },
+                "required": ["backend", "url", "username"]
+            }
+        }),
+
         // Test server tools
         json!({
             "name": "test_health",
@@ -211,6 +230,7 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool) -> Value
         "get_user" => handle_get_user(args, pool).await,
         "send_message" => handle_send_message(args, pool).await,
 
+        "test_signin" => handle_test_signin(args, pool).await,
         "test_health" => handle_test_lifecycle(args, "health").await,
         "test_reseed" => handle_test_lifecycle(args, "reseed").await,
 
@@ -407,6 +427,67 @@ async fn handle_send_message(args: &Value, pool: &BackendPool) -> Value {
     }
 }
 
+// ─── Test server easy-signin ─────────────────────────────────────────────────
+
+/// Sign in to a localhost test server without a password.
+/// Calls `POST /test/auth/token`, then logs in with the returned token.
+async fn handle_test_signin(args: &Value, pool: &mut BackendPool) -> Value {
+    let backend = match str_arg(args, "backend") {
+        Some(b) => b,
+        None => return err_result("missing 'backend'"),
+    };
+    let url = match str_arg(args, "url") {
+        Some(u) => u,
+        None => return err_result("missing 'url'"),
+    };
+    let username = match str_arg(args, "username") {
+        Some(u) => u,
+        None => return err_result("missing 'username'"),
+    };
+
+    // Safety guard: only allow localhost/loopback URLs.
+    if !url.contains("localhost") && !url.contains("127.0.0.1") {
+        return err_result("test_signin is only allowed on localhost/127.0.0.1 URLs");
+    }
+
+    // Call /test/auth/token on the test server.
+    let token_url = format!("{}/test/auth/token", url.trim_end_matches('/'));
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&token_url)
+        .json(&serde_json::json!({ "username": username }))
+        .send()
+        .await;
+
+    let token = match resp {
+        Ok(r) if r.status().is_success() => {
+            let body: serde_json::Value = match r.json().await {
+                Ok(v) => v,
+                Err(e) => return err_result(format!("failed to parse token response: {e}")),
+            };
+            match body.get("token").and_then(|t| t.as_str()).map(|s| s.to_string()) {
+                Some(t) => t,
+                None => return err_result("test server did not return a token"),
+            }
+        }
+        Ok(r) => {
+            let status = r.status();
+            let body = r.text().await.unwrap_or_default();
+            return err_result(format!("test server returned {status}: {body}"));
+        }
+        Err(e) => return err_result(format!("failed to reach test server: {e}")),
+    };
+
+    // Log in using the token (skips password verification).
+    match pool.login(backend, url, poly_client::AuthCredentials::Token(token)).await {
+        Ok(session) => {
+            let result = serde_json::to_string_pretty(&session).unwrap_or_default();
+            ok_result(format!("Signed in as {username} (no password).\n{result}"))
+        }
+        Err(e) => err_result(format!("Login with token failed: {e}")),
+    }
+}
+
 // ─── Test server lifecycle ───────────────────────────────────────────────────
 
 const TEST_PORTS: &[(&str, u16)] = &[
@@ -415,6 +496,8 @@ const TEST_PORTS: &[(&str, u16)] = &[
     ("discord", 9102),
     ("teams", 9103),
     ("poly", 9104),
+    ("lemmy", 8536),
+    ("hackernews", 8537),
 ];
 
 async fn handle_test_lifecycle(args: &Value, endpoint: &str) -> Value {

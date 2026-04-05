@@ -1,0 +1,55 @@
+[package]
+name = "poly-lemmy"
+description = "Lemmy federated forum client for Poly — builds as native lib or WASM plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["native"]
+native = [
+    "dep:dioxus",
+    "dep:async-trait",
+    "dep:futures",
+    "dep:tokio",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:chrono",
+    "dep:uuid",
+    "dep:thiserror",
+    "dep:tracing",
+    "dep:reqwest",
+]
+
+[dependencies]
+poly-client = { workspace = true }
+dioxus = { workspace = true, optional = true }
+
+# Native-only dependencies (feature-gated)
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true, features = ["js"] }
+futures = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+
+# WASM plugin guest bindings (WASI targets only)
+[target.'cfg(target_os = "wasi")'.dependencies]
+wit-bindgen = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time", "net"] }
+
+[lints]
+workspace = true

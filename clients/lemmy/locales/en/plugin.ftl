@@ -1,0 +1,11 @@
+plugin-lemmy-signup-title = Connect to Lemmy
+plugin-lemmy-signup-description = Enter your Lemmy instance URL, username, and password.
+plugin-lemmy-signup-back = ← Back
+plugin-lemmy-signup-url-label = Instance URL
+plugin-lemmy-signup-url-placeholder = https://lemmy.ml
+plugin-lemmy-signup-username-label = Username
+plugin-lemmy-signup-username-placeholder = your-username
+plugin-lemmy-signup-password-label = Password
+plugin-lemmy-signup-password-placeholder = ••••••••
+plugin-lemmy-signup-connecting = Connecting…
+plugin-lemmy-signup-connect-btn = Connect

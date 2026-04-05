@@ -617,6 +617,24 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
     });
+
+    #[cfg(feature = "lemmy")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "lemmy",
+        icon: "🐱",
+        name_key: "plugin-lemmy-signup-name",
+        desc_key: "plugin-lemmy-signup-desc",
+        render: poly_lemmy::signup::signup_render_fn,
+    });
+
+    #[cfg(feature = "hackernews")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "hackernews",
+        icon: "🔶",
+        name_key: "plugin-hackernews-signup-name",
+        desc_key: "plugin-hackernews-signup-desc",
+        render: poly_hackernews::signup::signup_render_fn,
+    });
 }
 
 /// Register all native backend plugin settings pages into `ClientManager`.

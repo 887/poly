@@ -10,6 +10,8 @@ members = [
     "clients/matrix",
     "clients/discord",
     "clients/teams",
+    "clients/lemmy",
+    "clients/hackernews",
     "clients/server-client",
     "servers/backup-server",
     "servers/server",
@@ -19,6 +21,8 @@ members = [
     "servers/test-discord",
     "servers/test-teams",
     "servers/test-poly",
+    "servers/test-lemmy",
+    "servers/test-hackernews",
     "servers/test-runner",
     "mcp/devtools-protocol",
     "mcp/desktop-devtools-mcp",
@@ -181,6 +185,8 @@ poly-stoat = { path = "clients/stoat" }
 poly-matrix = { path = "clients/matrix" }
 poly-discord = { path = "clients/discord" }
 poly-teams = { path = "clients/teams" }
+poly-lemmy = { path = "clients/lemmy" }
+poly-hackernews = { path = "clients/hackernews" }
 poly-backup-server = { path = "servers/backup-server" }
 poly-server = { path = "servers/server" }
 poly-test-common = { path = "servers/test-common" }

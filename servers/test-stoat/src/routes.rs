@@ -632,6 +632,49 @@ pub async fn serve_avatar(Path(id): Path<String>) -> impl IntoResponse {
     ).into_response()
 }
 
+// ---------------------------------------------------------------------------
+// Test-only easy-signin (no password required)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct TestTokenRequest {
+    pub username: String,
+}
+
+/// POST /test/auth/token — return a session token without password verification.
+///
+/// Only present in test servers (localhost, never deployed to production).
+/// Used by `test_signin` MCP tool and the UI "Quick Login" button.
+pub async fn test_auth_token(
+    State(state): State<std::sync::Arc<StoatState>>,
+    Json(body): Json<TestTokenRequest>,
+) -> impl IntoResponse {
+    let user = state
+        .users
+        .iter()
+        .find(|entry| entry.username == body.username || entry.id == body.username);
+
+    let user = match user {
+        Some(u) => u,
+        None => return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
+    };
+
+    let user_id = user.id.clone();
+    let display_name = user.display_name.clone();
+    drop(user);
+
+    let token = state.auth.create_token(&user_id);
+
+    Json(serde_json::json!({
+        "result": "Success",
+        "_id": user_id,
+        "token": token,
+        "user_id": user_id,
+        "display_name": display_name,
+    }))
+    .into_response()
+}
+
 /// POST /seed
 pub async fn seed(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
     state.seed();

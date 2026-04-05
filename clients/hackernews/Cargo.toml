@@ -1,0 +1,45 @@
+[package]
+name = "poly-hackernews"
+description = "Hacker News client for Poly — read-only forum backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+poly-client = { workspace = true }
+dioxus = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+
+[features]
+default = ["native"]
+native = [
+    "dep:dioxus",
+    "dep:async-trait",
+    "dep:futures",
+    "dep:tokio",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:chrono",
+    "dep:thiserror",
+    "dep:tracing",
+    "dep:reqwest",
+]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "time", "net"] }
+axum = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

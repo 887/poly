@@ -1,0 +1,36 @@
+[package]
+name = "poly-test-hackernews"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Mock Hacker News Firebase API server for Poly testing"
+
+[[bin]]
+name = "poly-test-hackernews"
+path = "src/main.rs"
+
+[dependencies]
+poly-test-common = { path = "../test-common" }
+
+# Async runtime
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "net",
+    "signal",
+] }
+
+# Web framework
+axum = { workspace = true }
+tower-http = { workspace = true, features = ["cors", "trace"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true
