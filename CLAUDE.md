@@ -23,6 +23,40 @@
 
 ---
 
+## Agent Orchestration
+
+This project uses a three-tier agent model:
+
+| Role | Model tier | When to use |
+|------|-----------|-------------|
+| **Orchestrator** | Current session (default, most capable) | Planning, architectural decisions, talking to the user |
+| **Coding agent** | `model: "sonnet"` | Implementation tasks, file edits, refactors |
+| **Testing agent** | `model: "haiku"` | Running TEST_HARNESS.md, smoke tests, deterministic checks |
+
+### Rules
+- The orchestrator directs, delegates, and integrates — it does NOT do all the work itself.
+- Spawn coding agents (sonnet-tier) for isolated implementation tasks that can run in
+  parallel, using `isolation: "worktree"` so they work in separate copies.
+- **Always run tests via a haiku-tier subagent** — pass `TEST_HARNESS.md` as the task.
+  Haiku is fast and cheap; use it freely for verification loops.
+- The user may type instructions to the main agent while subagents are running. This is
+  intentional — process new instructions in parallel with ongoing delegated work.
+- Tier names (`"haiku"`, `"sonnet"`, `"opus"`) are version-agnostic aliases in the
+  Agent tool and will continue to refer to the appropriate tier as models evolve.
+
+### Test harness
+Run `TEST_HARNESS.md` via a haiku subagent after any non-trivial code change:
+
+```
+Agent tool → subagent_type: "general-purpose", model: "haiku"
+prompt: "Read /home/laragana/workspcacemsg/TEST_HARNESS.md and execute every step.
+         Report results as the table described at the bottom of the file."
+```
+
+For UI-only changes (CSS / RSX), skip step 4 (unit tests) but always run step 3 (WASM build).
+
+---
+
 ## Priority 2 — Use Jujutsu (jj) Instead of Git
 
 - **Always use `jj` commands** for version control, never raw `git`
