@@ -679,23 +679,26 @@ fn FavoriteServerIcon(
             } else {
                 span { class: "source-badge", "A" }
             }
-            // Bottom-left: account connection status emoji icon
-            span {
-                class: "account-conn-icon account-conn-icon--{_account_conn_class}",
-                title: "Account connection: {_account_conn_class}",
-                "{conn_icon}"
+            // Bottom-left: account connection status emoji icon (not for forum)
+            if backend_slug != "demo_forum" {
+                span {
+                    class: "account-conn-icon account-conn-icon--{_account_conn_class}",
+                    title: "Account connection: {_account_conn_class}",
+                    "{conn_icon}"
+                }
             }
             // Top-left: mention count badge
             if mention > 0 {
                 span { class: "badge mention-count-badge", "@{mention}" }
             } else if unread > 0 {
-                // No mention, but unread: show count instead
                 span { class: "badge mention-count-badge", "{unread}" }
             }
-            // Bottom-right: presence dot (account owner's availability)
-            span {
-                class: "status-dot presence-dot {account_presence_class}",
-                title: "Presence: {account_presence_class}",
+            // Bottom-right: presence dot (not for forum)
+            if backend_slug != "demo_forum" {
+                span {
+                    class: "status-dot presence-dot {account_presence_class}",
+                    title: "Presence: {account_presence_class}",
+                }
             }
         }
     }
