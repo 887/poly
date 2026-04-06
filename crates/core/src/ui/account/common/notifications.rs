@@ -114,7 +114,7 @@ pub fn NotificationsView(account_id: String) -> Element {
                         NotificationSidebarButton {
                             key: "{filter.label_key()}",
                             label: t(filter.label_key()),
-                            count: notifications.iter().filter(|notification| filter.matches(&notification.kind)).count(),
+                            count: notifications.iter().filter(|n| !n.read && filter.matches(&n.kind)).count(),
                             active: *kind_filter.read() == filter,
                             onclick: move |_| kind_filter.set(filter),
                         }
