@@ -365,16 +365,6 @@ fn NotificationItemContent(
                                 },
                                 "{t(\"notifications-decline\")}"
                             }
-                            button {
-                                class: "btn btn-ghost btn-sm notif-action-read",
-                                onclick: {
-                                    let nid = mark_id.clone();
-                                    move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
-                                    }
-                                },
-                                "{t(\"notifications-mark-read\")}"
-                            }
                         }
                     }
                     NotificationKind::VoiceChannelInvite { channel_name, .. } => {
