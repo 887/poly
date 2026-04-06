@@ -140,7 +140,7 @@ fn build_on_complete(
                     chat_data.write().groups.extend(groups);
                 }
                 if let Ok(notifs) = guard.get_notifications().await {
-                    chat_data.write().notifications.extend(notifs);
+                    chat_data.write().notifications.extend(notifs.into_iter().filter(|n| !n.read));
                 }
                 if let Ok(friends) = guard.get_friends().await {
                     for friend in friends {

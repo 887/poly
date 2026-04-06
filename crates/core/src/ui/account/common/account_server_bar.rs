@@ -139,12 +139,12 @@ pub fn AccountServerBar() -> Element {
         get_ordered_servers(&cd, &account_id, &account_servers)
     };
 
-    // Count unread notifications for this account
+    // Count notifications for this account
     let notif_count = chat_data
         .read()
         .notifications
         .iter()
-        .filter(|n| !n.read && n.account_id == account_id)
+        .filter(|n| n.account_id == account_id)
         .count();
 
     rsx! {

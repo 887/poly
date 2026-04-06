@@ -63,7 +63,6 @@ impl NotificationMenuFilter {
 #[component]
 pub fn NotificationsView(account_id: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
-    let mut show_unread_only = use_signal(|| false);
     let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
     let notifications = chat_data.read().notifications.iter()
         .filter(|n| n.account_id == account_id)
@@ -71,21 +70,16 @@ pub fn NotificationsView(account_id: String) -> Element {
         .collect::<Vec<_>>();
     let notifications_title = t("notifications-title");
     let notifications_empty = t("notifications-empty");
-    let notifications_unread_label = t("notifications-unread-count");
-    let notifications_show_all = t("notifications-show-all");
-    let notifications_show_unread = t("notifications-show-unread");
     let notifications_mark_read = t("notifications-mark-read");
 
     // Apply filter
     let filtered: Vec<_> = notifications
         .iter()
         .filter(|n| kind_filter.read().matches(&n.kind))
-        .filter(|n| !*show_unread_only.read() || !n.read)
         .cloned()
         .collect();
 
-    let has_unread = notifications.iter().any(|n| !n.read);
-    let unread_count = notifications.iter().filter(|n| !n.read).count();
+    let total_count = notifications.len();
     let sidebar_filters = [
         NotificationMenuFilter::All,
         NotificationMenuFilter::Mentions,
@@ -103,47 +97,28 @@ pub fn NotificationsView(account_id: String) -> Element {
             sidebar: rsx! {
                 div { class: "special-page-sidebar-header",
                     h2 { class: "special-page-sidebar-title", "{notifications_title}" }
-                    if unread_count > 0 {
-                        p { class: "special-page-sidebar-description", "{unread_count} {notifications_unread_label}" }
-                    } else {
-                        p { class: "special-page-sidebar-description", "{notifications_empty}" }
-                    }
+                    p { class: "special-page-sidebar-description", "{notifications_empty}" }
                 }
                 div { class: "special-page-sidebar-nav",
                     for filter in sidebar_filters {
                         NotificationSidebarButton {
                             key: "{filter.label_key()}",
                             label: t(filter.label_key()),
-                            count: notifications.iter().filter(|n| !n.read && filter.matches(&n.kind)).count(),
+                            count: notifications.iter().filter(|n| filter.matches(&n.kind)).count(),
                             active: *kind_filter.read() == filter,
                             onclick: move |_| kind_filter.set(filter),
                         }
                     }
                 }
                 div { class: "special-page-sidebar-section notifications-sidebar-actions",
-                    button {
-                        class: if *show_unread_only.read() { "special-page-sidebar-button active" } else { "special-page-sidebar-button" },
-                        onclick: move |_| {
-                            let current = *show_unread_only.read();
-                            show_unread_only.set(!current);
-                        },
-                        if *show_unread_only.read() {
-                            "{notifications_show_all}"
-                        } else {
-                            "{notifications_show_unread}"
-                        }
-                    }
-                    if has_unread {
+                    if total_count > 0 {
                         button {
                             class: "special-page-sidebar-button",
                             onclick: move |_| {
                                 let active_kind = *kind_filter.read();
-                                let mut cd = chat_data.write();
-                                for notif in &mut cd.notifications {
-                                    if notif.account_id == account_id && active_kind.matches(&notif.kind) {
-                                        notif.read = true;
-                                    }
-                                }
+                                chat_data.write().notifications.retain(|n| {
+                                    !(n.account_id == account_id && active_kind.matches(&n.kind))
+                                });
                             },
                             "{notifications_mark_read}"
                         }
@@ -157,8 +132,8 @@ pub fn NotificationsView(account_id: String) -> Element {
                         div { class: "notifications-title-row",
                             h2 { class: "notifications-title",
                                 "{notifications_title}"
-                                if unread_count > 0 {
-                                    span { class: "notif-badge", " {unread_count}" }
+                                if total_count > 0 {
+                                    span { class: "notif-badge", " {total_count}" }
                                 }
                             }
                         }
@@ -248,16 +223,10 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
                 {
                     let badge = backend_badge(&notif.backend);
                     let preview = notif.preview.clone();
-                    let is_unread = !notif.read;
                     let time_ago = format_time_ago(notif.timestamp);
                     let notif_id = notif.id.clone();
-                    let item_class = if is_unread {
-                        "notification-item unread"
-                    } else {
-                        "notification-item"
-                    };
                     rsx! {
-                        div { class: "{item_class}",
+                        div { class: "notification-item",
                             NotificationItemContent {
                                 notif_id: notif_id.clone(),
                                 account_id: notif.account_id.clone(),
@@ -265,7 +234,6 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
                                 badge: badge.to_string(),
                                 preview,
                                 time_ago,
-                                is_unread,
                                 chat_data,
                                 client_manager,
                             }
@@ -287,7 +255,6 @@ fn NotificationItemContent(
     badge: String,
     preview: String,
     time_ago: String,
-    is_unread: bool,
     mut chat_data: Signal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) -> Element {
@@ -299,7 +266,6 @@ fn NotificationItemContent(
         NotificationKind::Other(_) => ("🔔", "Notification"),
     };
 
-    // Helper: dismiss a notification (mark read and remove from list)
     let dismiss_id = notif_id.clone();
     let accept_id = notif_id.clone();
     let mark_id = notif_id.clone();
@@ -399,6 +365,16 @@ fn NotificationItemContent(
                                 },
                                 "{t(\"notifications-decline\")}"
                             }
+                            button {
+                                class: "btn btn-ghost btn-sm notif-action-read",
+                                onclick: {
+                                    let nid = mark_id.clone();
+                                    move |_| {
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                    }
+                                },
+                                "{t(\"notifications-mark-read\")}"
+                            }
                         }
                     }
                     NotificationKind::VoiceChannelInvite { channel_name, .. } => {
@@ -409,8 +385,6 @@ fn NotificationItemContent(
                                 onclick: {
                                     let nid = accept_id.clone();
                                     move |_| {
-                                        // Dismiss the invite; navigation to voice channel
-                                        // is handled by the calling context (TODO: deep link).
                                         chat_data.write().notifications.retain(|n| n.id != nid);
                                     }
                                 },
@@ -429,24 +403,17 @@ fn NotificationItemContent(
                         }
                     }
                     NotificationKind::Mention { .. } | NotificationKind::Other(_) => {
-                        if is_unread {
-                            rsx! {
-                                button {
-                                    class: "btn btn-ghost btn-sm notif-action-read",
-                                    onclick: {
-                                        let nid = mark_id.clone();
-                                        move |_| {
-                                            let mut cd = chat_data.write();
-                                            if let Some(n) = cd.notifications.iter_mut().find(|n| n.id == nid) {
-                                                n.read = true;
-                                            }
-                                        }
-                                    },
-                                    "{t(\"notifications-mark-read\")}"
-                                }
+                        rsx! {
+                            button {
+                                class: "btn btn-ghost btn-sm notif-action-read",
+                                onclick: {
+                                    let nid = mark_id.clone();
+                                    move |_| {
+                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                    }
+                                },
+                                "{t(\"notifications-mark-read\")}"
                             }
-                        } else {
-                            rsx! {}
                         }
                     }
                 }

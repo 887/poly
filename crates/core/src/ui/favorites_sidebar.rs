@@ -296,7 +296,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .read()
         .notifications
         .iter()
-        .filter(|n| !n.read && n.account_id == account_id)
+        .filter(|n| n.account_id == account_id)
         .count() as u32;
 
     // Resolve backend slug and instance_id for routing — read from the session.
