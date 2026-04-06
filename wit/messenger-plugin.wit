@@ -39,6 +39,8 @@ interface types {
         video,
         /// Forum channel (Lemmy/Reddit-style: posts with threaded comments).
         forum,
+        /// Hacker News–style feed channel (title + URL + score + comments).
+        hacker-news,
     }
 
     /// The user-chosen availability / presence status for an account.

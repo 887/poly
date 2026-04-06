@@ -753,12 +753,13 @@ async fn load_server_data_internal(
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
-    // Find first text or forum channel
+    // Find first text, forum, or HN channel
     let first_text_channel = channels
         .iter()
         .find(|c| {
             c.channel_type == poly_client::ChannelType::Text
                 || c.channel_type == poly_client::ChannelType::Forum
+                || c.channel_type == poly_client::ChannelType::HackerNews
         })
         .cloned();
 
@@ -898,6 +899,7 @@ pub async fn restore_server_channel(
             channels.iter().find(|c| {
                 c.channel_type == poly_client::ChannelType::Text
                     || c.channel_type == poly_client::ChannelType::Forum
+                    || c.channel_type == poly_client::ChannelType::HackerNews
             })
         })
         .cloned();
@@ -910,7 +912,9 @@ pub async fn restore_server_channel(
 
         if matches!(
             ch.channel_type,
-            poly_client::ChannelType::Text | poly_client::ChannelType::Forum
+            poly_client::ChannelType::Text
+                | poly_client::ChannelType::Forum
+                | poly_client::ChannelType::HackerNews
         ) {
             let guard = backend.read().await;
             if let Ok(messages) = guard

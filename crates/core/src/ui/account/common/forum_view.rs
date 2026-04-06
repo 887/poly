@@ -1,5 +1,6 @@
 //! Forum view — Lemmy/Reddit-style post list + threaded comment view
-//! for `ChannelType::Forum` channels.
+//! for `ChannelType::Forum` channels, and Hacker News feed view for
+//! `ChannelType::HackerNews` channels.
 
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::{backend_badge, user_color};
@@ -8,7 +9,7 @@ use crate::ui::favorites_sidebar::restore_server_channel;
 use crate::ui::routes::Route;
 use chrono::DateTime;
 use dioxus::prelude::*;
-use poly_client::{Message, MessageContent, MessageQuery};
+use poly_client::{ChannelType, Message, MessageContent, MessageQuery};
 
 const PAGE_SIZE: usize = 20;
 
@@ -178,12 +179,187 @@ fn score_class(score: i64) -> &'static str {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top-level ForumView — post list only, thread navigation via router
+// Top-level ForumView — dispatches to HN feed or Lemmy forum based on channel type
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[rustfmt::skip]
 #[component]
 pub fn ForumView() -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let is_hn = chat_data.read().current_channel.as_ref()
+        .is_some_and(|ch| ch.channel_type == ChannelType::HackerNews);
+    if is_hn { rsx! { HnFeedView {} } } else { rsx! { LemmyForumView {} } }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hacker News feed view — filter input, infinite scroll, no Lemmy sort dropdown
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[rustfmt::skip]
+#[component]
+fn HnFeedView() -> Element {
+    let chat_data: Signal<ChatData> = use_context();
+    let app_state: Signal<AppState> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
+    let nav = navigator();
+
+    let mut filter = use_signal(String::new);
+    let mut visible_count = use_signal(|| PAGE_SIZE);
+
+    let channel_id_for_reset = app_state.read().nav.selected_channel.clone().unwrap_or_default();
+    use_effect(move || {
+        let _ = channel_id_for_reset.clone();
+        visible_count.set(PAGE_SIZE);
+        filter.set(String::new());
+    });
+
+    let snapshot = chat_data.read();
+    let current_channel = snapshot.current_channel.clone();
+    let current_server = snapshot.current_server.clone();
+    let posts = snapshot.messages.clone();
+    drop(snapshot);
+
+    let channel_name = current_channel.as_ref().map(|ch| ch.name.clone()).unwrap_or_default();
+    let server_name = current_server
+        .as_ref()
+        .map(|s| format!("{} {}", backend_badge(&s.backend), s.backend.display_name()))
+        .unwrap_or_default();
+
+    let route_params = {
+        let s = app_state.read();
+        (
+            s.nav.active_backend.as_ref().map(|b| b.slug().to_string()).unwrap_or_default(),
+            s.nav.active_instance_id.clone().unwrap_or_default(),
+            s.nav.active_account_id.clone().unwrap_or_default(),
+            s.nav.selected_server.clone().unwrap_or_default(),
+            s.nav.selected_channel.clone().unwrap_or_default(),
+        )
+    };
+
+    let filter_text = filter.read().to_lowercase();
+    let filtered: Vec<Message> = if filter_text.is_empty() {
+        posts
+    } else {
+        posts.into_iter().filter(|p| post_text(&p.content).to_lowercase().contains(&filter_text)).collect()
+    };
+
+    let vc = *visible_count.read();
+    let total = filtered.len();
+    let has_more = total > vc;
+    let visible_posts: Vec<Message> = filtered.into_iter().take(vc).collect();
+
+    rsx! {
+        div { class: "forum-view",
+            div { class: "forum-header",
+                div { class: "forum-header-info",
+                    span { class: "forum-channel-name", "🟠 {channel_name}" }
+                    if !server_name.is_empty() {
+                        span { class: "chat-source-badge", "{server_name}" }
+                    }
+                }
+                div { class: "hn-feed-controls",
+                    input {
+                        class: "hn-filter-input",
+                        r#type: "text",
+                        placeholder: "Filter posts…",
+                        value: "{filter.read()}",
+                        oninput: move |e| {
+                            filter.set(e.value());
+                            visible_count.set(PAGE_SIZE);
+                        },
+                    }
+                    button {
+                        class: "forum-refresh-btn",
+                        title: "Refresh",
+                        onclick: {
+                            let account_id = app_state.read().nav.active_account_id.clone();
+                            let b = account_id.as_deref()
+                                .and_then(|aid| client_manager.read().get_backend(aid));
+                            let channel_id = app_state.read().nav.selected_channel.clone().unwrap_or_default();
+                            move |_| {
+                                if let Some(ref b) = b {
+                                    let b = b.clone();
+                                    let cid = channel_id.clone();
+                                    let mut cd = chat_data;
+                                    spawn(async move {
+                                        let msgs = b.read().await
+                                            .get_messages(&cid, MessageQuery::default())
+                                            .await
+                                            .unwrap_or_default();
+                                        cd.write().messages = msgs;
+                                    });
+                                }
+                            }
+                        },
+                        "↻"
+                    }
+                }
+            }
+            div {
+                class: "hn-feed-list",
+                onscroll: move |_| {
+                    if has_more {
+                        spawn(async move {
+                            let near = document::eval(
+                                "(function(){var e=document.querySelector('.hn-feed-list');\
+                                return e?(e.scrollTop+e.clientHeight>=e.scrollHeight-400):false;})()"
+                            )
+                            .await
+                            .ok()
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                            if near { visible_count.set(vc + PAGE_SIZE); }
+                        });
+                    }
+                },
+                if visible_posts.is_empty() {
+                    div { class: "forum-empty",
+                        div { class: "forum-empty-icon", "🟠" }
+                        p { "No posts." }
+                    }
+                }
+                for post in visible_posts {
+                    {
+                        let post2 = post.clone();
+                        let post_id = post.id.clone();
+                        let (backend, instance_id, account_id2, server_id, channel_id) = route_params.clone();
+                        let nav2 = nav.clone();
+                        rsx! {
+                            ForumPostCard {
+                                key: "{post_id}",
+                                post: post2.clone(),
+                                on_click: move |_| {
+                                    nav2.push(Route::ForumPostRoute {
+                                        backend: backend.clone(),
+                                        instance_id: instance_id.clone(),
+                                        account_id: account_id2.clone(),
+                                        server_id: server_id.clone(),
+                                        channel_id: channel_id.clone(),
+                                        post_id: post_id.clone(),
+                                    });
+                                },
+                            }
+                        }
+                    }
+                }
+                if has_more {
+                    div { class: "forum-load-more hn-load-more", id: "forum-scroll-sentinel",
+                        onclick: move |_| visible_count.set(vc + PAGE_SIZE),
+                        "Loading more…"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lemmy/Reddit-style forum view (original implementation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[rustfmt::skip]
+#[component]
+fn LemmyForumView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();

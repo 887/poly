@@ -68,7 +68,7 @@ pub fn build_channels() -> Vec<Channel> {
         .map(|&feed| Channel {
             id: feed.channel_id().to_string(),
             name: feed.display_name().to_string(),
-            channel_type: ChannelType::Forum,
+            channel_type: ChannelType::HackerNews,
             server_id: SERVER_ID.to_string(),
             unread_count: 0,
             mention_count: 0,

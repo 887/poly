@@ -328,6 +328,11 @@ pub enum ChannelType {
     /// Each post is a top-level message; replies form a thread.
     /// Used by Lemmy, Reddit, and Discord Forums.
     Forum,
+    /// Hacker News–style feed channel (title + URL + score + comment count).
+    ///
+    /// Rendered with HN-specific UI: Discord-style channel list sidebar,
+    /// client-side text filter instead of Lemmy sort dropdown, infinite scroll.
+    HackerNews,
 }
 
 /// A channel within a server.

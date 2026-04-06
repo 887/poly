@@ -70,6 +70,7 @@ pub fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
         wit::ChannelType::Voice => pc::ChannelType::Voice,
         wit::ChannelType::Video => pc::ChannelType::Video,
         wit::ChannelType::Forum => pc::ChannelType::Forum,
+        wit::ChannelType::HackerNews => pc::ChannelType::HackerNews,
     }
 }
 

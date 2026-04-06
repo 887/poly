@@ -619,7 +619,7 @@ impl ClientBackend for PolyServerBackend {
         let kind_str = match channel_type {
             ChannelType::Text => "text",
             ChannelType::Voice | ChannelType::Video => "voice",
-            ChannelType::Forum => "forum",
+            ChannelType::Forum | ChannelType::HackerNews => "forum",
         };
         let wire = self
             .http

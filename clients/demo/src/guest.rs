@@ -60,6 +60,7 @@ fn to_wit_channel_type(ct: pc::ChannelType) -> wit::ChannelType {
         pc::ChannelType::Voice => wit::ChannelType::Voice,
         pc::ChannelType::Video => wit::ChannelType::Video,
         pc::ChannelType::Forum => wit::ChannelType::Forum,
+        pc::ChannelType::HackerNews => wit::ChannelType::HackerNews,
     }
 }
 

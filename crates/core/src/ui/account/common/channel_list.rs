@@ -726,11 +726,13 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
         // Backend slug for route construction.
         let backend_slug = server.backend.slug().to_string();
-        // Demo backend does not support channel creation — hide the New Channel button for it.
-        let can_create = server.backend != "demo";
+        let is_hn = server.backend.slug() == "hackernews";
+        // Demo and HN backends do not support channel creation.
+        let can_create = server.backend != "demo" && !is_hn;
         let server_id = server.id.clone();
 
-        // Is the current channel a forum channel? If so show forum controls instead.
+        // Is the current channel a (Lemmy-style) forum channel?
+        // HackerNews uses its own sidebar, so it is excluded here.
         let current_ch_type = chat_data.read().current_channel.as_ref()
             .map(|ch| ch.channel_type);
         let is_forum = matches!(current_ch_type, Some(ChannelType::Forum));
@@ -742,7 +744,8 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
         let on_comments = matches!(current_route, Route::ForumCommentsRoute { .. });
 
         rsx! {
-            // Discord-style categories — hidden for forum backends.
+            // Discord-style categories: shown for all backends, including HN.
+            // Hidden only for Lemmy/forum backends whose sidebar replaces categories.
             if !is_forum {
                 if !uncategorized_ids.is_empty() {
                     CategorySection {
@@ -762,8 +765,18 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                         }
                     }
                 }
+                // HN-specific footer: Algolia search link.
+                if is_hn {
+                    a {
+                        class: "hn-algolia-link",
+                        href: "https://hn.algolia.com/",
+                        target: "_blank",
+                        rel: "noopener noreferrer",
+                        "🔍 Search on Algolia"
+                    }
+                }
             }
-            // Forum channel: Posts/Comments tabs + filter controls.
+            // Forum (Lemmy-style) sidebar: Posts/Comments tabs + scope filters.
             if is_forum {
                 div { class: "forum-sidebar-controls",
                     // Posts / Comments nav tabs
@@ -800,19 +813,6 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                         title: "Toggle hidden posts",
                         "Show hidden posts"
                     }
-                    // Search
-                    // TODO: ForumSearchRoute not yet implemented
-                    // Link {
-                    //     class: "forum-filter-btn forum-filter-full forum-filter-search",
-                    //     to: Route::ForumSearchRoute {
-                    //         backend: backend_slug.clone(),
-                    //         instance_id: instance_id.clone(),
-                    //         account_id: account_id.clone(),
-                    //         server_id: server_id.clone(),
-                    //         channel_id: current_channel_id.clone(),
-                    //     },
-                    //     "🔍 Search"
-                    // }
                     Link {
                         class: "forum-create-post-btn",
                         to: Route::CreateForumPostRoute {
@@ -827,7 +827,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     }
                 }
             } else if can_create {
-                // "+ New Channel" link → full-page CreateChannelRoute (non-demo, non-forum only).
+                // "+ New Channel" link → full-page CreateChannelRoute (non-demo, non-HN only).
                 Link {
                     class: "channel-create-btn",
                     to: Route::CreateChannelRoute {
@@ -1185,7 +1185,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
         ChannelType::Text => "#",
         ChannelType::Voice => "🔊",
         ChannelType::Video => "📹",
-        ChannelType::Forum => "📋",
+        ChannelType::Forum | ChannelType::HackerNews => "📋",
     };
 
     // Active wins over unread; unread class makes the channel name bold.
