@@ -89,7 +89,7 @@ const WINDOW_OPTIONS = {
 async function createWindow() {
   const win = new BrowserWindow(WINDOW_OPTIONS);
 
-  attachWindowStateListeners(win);
+  attachWindowStateListeners(win, { showOnReady: !process.env.PLAYWRIGHT_ELECTRON });
 
   // Always load from the dx serve dev server.
   const devPort = process.env.POLY_DEV_SERVE_PORT || '3001';
