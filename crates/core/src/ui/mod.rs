@@ -641,6 +641,29 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
     });
 }
 
+/// Register test account entries from all compiled-in native plugins.
+fn register_native_test_accounts(#[allow(unused_variables)] client_manager: &mut Signal<ClientManager>) {
+    #[cfg(feature = "stoat")]
+    for entry in poly_stoat::signup::get_test_accounts() {
+        client_manager.write().register_test_account(*entry);
+    }
+
+    #[cfg(feature = "matrix")]
+    for entry in poly_matrix::signup::get_test_accounts() {
+        client_manager.write().register_test_account(*entry);
+    }
+
+    #[cfg(feature = "discord")]
+    for entry in poly_discord::signup::get_test_accounts() {
+        client_manager.write().register_test_account(*entry);
+    }
+
+    #[cfg(feature = "teams")]
+    for entry in poly_teams::signup::get_test_accounts() {
+        client_manager.write().register_test_account(*entry);
+    }
+}
+
 /// Register all native backend plugin settings pages into `ClientManager`.
 ///
 /// Called once at `App` mount (via `use_effect`), immediately after
@@ -1284,6 +1307,7 @@ pub fn App() -> Element {
     // the Plugin Settings nav, even before the user has activated the plugin.
     use_effect(move || {
         register_native_signup_entries(&mut client_manager);
+        register_native_test_accounts(&mut client_manager);
         register_native_plugin_settings(&mut client_manager);
     });
 

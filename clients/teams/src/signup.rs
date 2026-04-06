@@ -21,6 +21,52 @@ pub async fn authenticate(
     })
 }
 
+fn sheep_auth(
+    u: String,
+    t: String,
+    _p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+> {
+    Box::pin(async move { authenticate(u, t).await })
+}
+
+fn walrus_auth(
+    u: String,
+    t: String,
+    _p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+> {
+    Box::pin(async move { authenticate(u, t).await })
+}
+
+/// Test accounts for the Teams local dev server (port 9103).
+pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+    use poly_client::TestAccountEntry;
+    const ACCOUNTS: &[TestAccountEntry] = &[
+        TestAccountEntry {
+            icon: "🐑",
+            label: "Sheep",
+            server_label: "Teams — localhost:9103",
+            base_url: "http://localhost:9103",
+            username: "sheep-test-token",
+            password: "",
+            authenticate: sheep_auth,
+        },
+        TestAccountEntry {
+            icon: "🦭",
+            label: "Walrus",
+            server_label: "Teams — localhost:9103",
+            base_url: "http://localhost:9103",
+            username: "walrus-test-token",
+            password: "",
+            authenticate: walrus_auth,
+        },
+    ];
+    ACCOUNTS
+}
+
 /// Render entry-point stored in `SignupEntry::render`.
 pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
     rsx! {

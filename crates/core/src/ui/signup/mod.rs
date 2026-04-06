@@ -269,46 +269,18 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 
 // ── Test account quick-add panel ─────────────────────────────────────────────
 
-#[allow(dead_code)]
-/// Test account definition for the quick-add panel.
-struct TestAccount {
-    icon: &'static str,
-    label: &'static str,
-    _backend: &'static str,
-    base_url: &'static str,
-    email: &'static str,
-    password: &'static str,
-}
-
-#[allow(dead_code)]
-const TEST_ACCOUNTS: &[TestAccount] = &[
-    TestAccount {
-        icon: "\u{1F9A6}",
-        label: "Stoat",
-        _backend: "stoat",
-        base_url: "http://localhost:9101",
-        email: "stoat",
-        password: "testpass123",
-    },
-    TestAccount {
-        icon: "\u{1F99D}",
-        label: "Raccoon",
-        _backend: "stoat",
-        base_url: "http://localhost:9101",
-        email: "raccoon",
-        password: "testpass123",
-    },
-];
-
-/// Panel shown when `?test=true` — quick-add buttons for test server accounts.
-#[cfg(feature = "stoat")]
+/// Panel shown at `/signup/test` — quick-add buttons for all registered test accounts.
 #[component]
 fn TestAccountsPanel() -> Element {
     let client_manager = use_context::<Signal<ClientManager>>();
     let chat_data = use_context::<Signal<ChatData>>();
     let on_complete = build_on_complete(client_manager, chat_data);
-    let mut statuses: Signal<Vec<String>> = use_signal(|| {
-        TEST_ACCOUNTS.iter().map(|_| String::new()).collect()
+    let entries: Vec<poly_client::TestAccountEntry> = client_manager
+        .read()
+        .test_account_entries
+        .to_vec();
+    let statuses: Signal<Vec<String>> = use_signal(|| {
+        entries.iter().map(|_| String::new()).collect()
     });
 
     rsx! {
@@ -319,59 +291,51 @@ fn TestAccountsPanel() -> Element {
                 "Requires test servers running on localhost."
             }
             div { class: "test-accounts-grid",
-                for (idx, acct) in TEST_ACCOUNTS.iter().enumerate() {
+                for (idx, acct) in entries.iter().enumerate() {
                     {
-                        let status = statuses.read().get(idx).cloned().unwrap_or_default();
-                        let email = acct.email.to_string();
-                        let base_url = acct.base_url.to_string();
-                        let password = acct.password.to_string();
-                        let label = acct.label;
                         let icon = acct.icon;
-                        let is_busy = status == "connecting...";
+                        let label = acct.label.to_string();
+                        let server_label = acct.server_label.to_string();
+                        let base_url = acct.base_url.to_string();
+                        let username = acct.username.to_string();
+                        let password = acct.password.to_string();
+                        let auth_fn = acct.authenticate;
+                        let status = statuses.read().get(idx).cloned().unwrap_or_default();
+                        let on_complete2 = on_complete.clone();
                         rsx! {
                             div { class: "test-account-card",
                                 div { class: "test-account-header",
                                     span { class: "test-account-icon", "{icon}" }
                                     div { class: "test-account-info",
                                         span { class: "test-account-name", "{label}" }
-                                        span { class: "test-account-url", "{base_url}" }
+                                        span { class: "test-account-url", "{server_label}" }
                                     }
                                 }
                                 button {
                                     class: "btn btn-primary test-account-btn",
-                                    disabled: is_busy,
-                                    onclick: {
-                                        let on_complete = on_complete.clone();
-                                        move |_| {
-                                            if let Some(slot) = statuses.write().get_mut(idx) {
-                                                *slot = "connecting...".to_string();
-                                            }
-                                            let email = email.clone();
-                                            let base_url = base_url.clone();
-                                            let password = password.clone();
-                                            let on_complete = on_complete.clone();
-                                            spawn(async move {
-                                                match poly_stoat::signup::authenticate(
-                                                    base_url, email, password,
-                                                ).await {
-                                                    Ok(completed) => {
-                                                        if let Some(slot) = statuses.write().get_mut(idx) {
-                                                            *slot = "connected!".to_string();
-                                                        }
-                                                        on_complete.call(completed);
-                                                    }
-                                                    Err(e) => {
-                                                        if let Some(slot) = statuses.write().get_mut(idx) {
-                                                            *slot = format!("error: {e}");
-                                                        }
-                                                    }
+                                    disabled: status == "loading",
+                                    onclick: move |_| {
+                                        let bu = base_url.clone();
+                                        let un = username.clone();
+                                        let pw = password.clone();
+                                        let oc = on_complete2.clone();
+                                        let mut statuses2 = statuses;
+                                        statuses2.write()[idx] = "loading".to_string();
+                                        spawn(async move {
+                                            match (auth_fn)(bu, un, pw).await {
+                                                Ok(completed) => {
+                                                    statuses2.write()[idx] = "ok".to_string();
+                                                    oc.call(completed);
                                                 }
-                                            });
-                                        }
+                                                Err(e) => {
+                                                    statuses2.write()[idx] = format!("error: {e}");
+                                                }
+                                            }
+                                        });
                                     },
-                                    if is_busy { "Connecting..." } else { "Add Account" }
+                                    if status == "loading" { "Connecting…" } else { "Add Account" }
                                 }
-                                if !status.is_empty() && status != "connecting..." {
+                                if !status.is_empty() && status != "loading" {
                                     p {
                                         class: if status.starts_with("error") { "test-account-error" } else { "test-account-success" },
                                         "{status}"
@@ -380,6 +344,9 @@ fn TestAccountsPanel() -> Element {
                             }
                         }
                     }
+                }
+                if entries.is_empty() {
+                    p { class: "signup-form-desc", "No test accounts registered. Enable test plugins to see test accounts here." }
                 }
             }
         }
@@ -405,20 +372,6 @@ pub(crate) fn SignupPickerPage() -> Element {
                     p { class: "signup-placeholder-text", "{t(\"signup-picker-description\")}" }
                 }
             }
-        }
-    }
-}
-
-#[cfg(feature = "stoat")]
-fn test_panel_or_fallback() -> Element {
-    rsx! { TestAccountsPanel {} }
-}
-
-#[cfg(not(feature = "stoat"))]
-fn test_panel_or_fallback() -> Element {
-    rsx! {
-        div { class: "signup-content",
-            p { "Test mode requires the stoat feature to be enabled." }
         }
     }
 }
@@ -470,7 +423,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
             div { class: "add-account-page",
                 FavoritesBar {}
                 AddAccountNav { selected_slug: Some("test".to_string()) }
-                { test_panel_or_fallback() }
+                TestAccountsPanel {}
             }
         };
     }

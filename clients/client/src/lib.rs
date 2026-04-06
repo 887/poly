@@ -437,3 +437,38 @@ pub struct SignupCompleted {
     /// The host wraps this in `BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>`.
     pub backend: Box<dyn ClientBackend + Send + Sync>,
 }
+
+/// Type alias for the boxed-future authenticate fn stored in a `TestAccountEntry`.
+///
+/// Takes (base_url, username_or_token, password_or_empty) and returns a
+/// pinned future. Each plugin implements this with their own auth logic.
+pub type TestAuthFn = fn(
+    String,
+    String,
+    String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<SignupCompleted, String>> + Send>,
+>;
+
+/// A single pre-configured test account for local development.
+///
+/// Registered by each native plugin via [`ClientManager::register_test_account`].
+/// The Test Accounts panel reads these at runtime — core has no compile-time
+/// knowledge of which plugins provide test accounts.
+#[derive(Clone, Copy, Debug)]
+pub struct TestAccountEntry {
+    /// Animal emoji icon (e.g. "🦉").
+    pub icon: &'static str,
+    /// Display name shown in the card (e.g. "Owl").
+    pub label: &'static str,
+    /// Backend/server description shown as subtitle (e.g. "Matrix — localhost:9100").
+    pub server_label: &'static str,
+    /// Base URL of the test server.
+    pub base_url: &'static str,
+    /// Username, email, or token (first credential).
+    pub username: &'static str,
+    /// Password or empty string for token-only backends.
+    pub password: &'static str,
+    /// Async auth function — wraps the plugin's actual auth, returns `SignupCompleted`.
+    pub authenticate: TestAuthFn,
+}

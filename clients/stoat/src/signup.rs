@@ -25,6 +25,52 @@ pub async fn authenticate(
     })
 }
 
+fn stoat_auth(
+    u: String,
+    e: String,
+    p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+> {
+    Box::pin(async move { authenticate(u, e, p).await })
+}
+
+fn raccoon_auth(
+    u: String,
+    e: String,
+    p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+> {
+    Box::pin(async move { authenticate(u, e, p).await })
+}
+
+/// Test accounts for the Stoat local dev server (port 9101).
+pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+    use poly_client::TestAccountEntry;
+    const ACCOUNTS: &[TestAccountEntry] = &[
+        TestAccountEntry {
+            icon: "🦦",
+            label: "Stoat",
+            server_label: "Stoat — localhost:9101",
+            base_url: "http://localhost:9101",
+            username: "stoat",
+            password: "testpass123",
+            authenticate: stoat_auth,
+        },
+        TestAccountEntry {
+            icon: "🦝",
+            label: "Raccoon",
+            server_label: "Stoat — localhost:9101",
+            base_url: "http://localhost:9101",
+            username: "raccoon",
+            password: "testpass123",
+            authenticate: raccoon_auth,
+        },
+    ];
+    ACCOUNTS
+}
+
 /// Render entry-point stored in `SignupEntry::render`.
 pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
     rsx! {

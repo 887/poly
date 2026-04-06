@@ -22,6 +22,9 @@ mod config;
 #[cfg(feature = "native")]
 mod http;
 
+#[cfg(feature = "native")]
+pub mod signup;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
 #[cfg(target_os = "wasi")]

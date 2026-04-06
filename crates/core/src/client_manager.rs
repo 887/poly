@@ -10,7 +10,7 @@
 use dioxus::prelude::{Callback, Element};
 use poly_client::{
     AccountPresence, AuthCredentials, BackendType, ClientBackend, ConnectionStatus, Server,
-    Session, SignupCompleted, SignupContext,
+    Session, SignupCompleted, SignupContext, TestAccountEntry,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -118,6 +118,8 @@ pub struct ClientManager {
     /// of any specific backend — each plugin registers itself via
     /// [`register_signup_entry`].
     pub signup_entries: Vec<SignupEntry>,
+    /// Test accounts registered by native plugins for the quick-add dev panel.
+    pub test_account_entries: Vec<TestAccountEntry>,
 }
 
 impl Clone for ClientManager {
@@ -132,6 +134,7 @@ impl Clone for ClientManager {
             plugin_settings: self.plugin_settings.clone(),
             disabled_native_backends: self.disabled_native_backends.clone(),
             signup_entries: self.signup_entries.clone(),
+            test_account_entries: self.test_account_entries.clone(),
         }
     }
 }
@@ -165,6 +168,7 @@ impl ClientManager {
             plugin_settings: Vec::new(),
             disabled_native_backends: Vec::new(),
             signup_entries: Vec::new(),
+            test_account_entries: Vec::new(),
         }
     }
 
@@ -435,6 +439,11 @@ impl ClientManager {
         self.signup_entries.retain(|e| e.slug != entry.slug);
         self.signup_entries.push(entry);
         tracing::debug!("Signup entry registered: {}", entry.slug);
+    }
+
+    /// Register a test account entry from a native plugin.
+    pub fn register_test_account(&mut self, entry: TestAccountEntry) {
+        self.test_account_entries.push(entry);
     }
 
     /// Replace the in-memory disabled native backend list.

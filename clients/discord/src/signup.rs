@@ -21,6 +21,52 @@ pub async fn authenticate(
     })
 }
 
+fn koala_auth(
+    u: String,
+    t: String,
+    _p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+> {
+    Box::pin(async move { authenticate(u, t).await })
+}
+
+fn kangaroo_auth(
+    u: String,
+    t: String,
+    _p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+> {
+    Box::pin(async move { authenticate(u, t).await })
+}
+
+/// Test accounts for the Discord local dev server (port 9102).
+pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+    use poly_client::TestAccountEntry;
+    const ACCOUNTS: &[TestAccountEntry] = &[
+        TestAccountEntry {
+            icon: "🐨",
+            label: "Koala",
+            server_label: "Discord — localhost:9102",
+            base_url: "http://localhost:9102",
+            username: "koala-test-token",
+            password: "",
+            authenticate: koala_auth,
+        },
+        TestAccountEntry {
+            icon: "🦘",
+            label: "Kangaroo",
+            server_label: "Discord — localhost:9102",
+            base_url: "http://localhost:9102",
+            username: "kangaroo-test-token",
+            password: "",
+            authenticate: kangaroo_auth,
+        },
+    ];
+    ACCOUNTS
+}
+
 /// Render entry-point stored in `SignupEntry::render`.
 pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
     rsx! {
