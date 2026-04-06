@@ -290,21 +290,14 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .map(|s| s.user.display_name.clone())
         .unwrap_or_else(|| account_id.clone());
 
-    // Count unread DMs + notifications for this account
-    let dm_unreads: u32 = chat_data
-        .read()
-        .dm_channels
-        .iter()
-        .filter(|dm| dm.account_id == account_id)
-        .map(|dm| dm.unread_count)
-        .sum();
-    let notif_unreads = chat_data
+    // Show unread notification count only — matches the bell badge in account server bar.
+    // DM unread counts are surfaced separately in Bar 2.
+    let total_unreads = chat_data
         .read()
         .notifications
         .iter()
         .filter(|n| !n.read && n.account_id == account_id)
         .count() as u32;
-    let total_unreads = dm_unreads.saturating_add(notif_unreads);
 
     // Resolve backend slug and instance_id for routing — read from the session.
     let aid_for_click = account_id.clone();
