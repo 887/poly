@@ -30,7 +30,7 @@ use crate::ui::account::common::chat_history::{
 };
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
-use poly_client::{AccountPresence, ConnectionStatus};
+use poly_client::{AccountPresence, BackendType, ConnectionStatus};
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
@@ -158,8 +158,8 @@ pub fn FavoritesBar() -> Element {
                                 account_id: server.account_id.clone(),
                                 account_display_name: server.account_display_name.clone(),
                                 backend_name: server.backend.display_name().to_string(),
-                                unread: server.unread_count,
-                                mention: server.mention_count,
+                                unread: if server.backend == BackendType::from("demo_forum") { 0 } else { server.unread_count },
+                                mention: if server.backend == BackendType::from("demo_forum") { 0 } else { server.mention_count },
                                 icon_url: server.icon_url.clone(),
                             }
                         }
@@ -257,6 +257,12 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .copied()
         .unwrap_or(AccountPresence::Online)
         .css_class();
+
+    let is_forum_account = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .map_or(false, |s| s.backend == BackendType::from("demo_forum"));
 
     let color = user_color(&account_id);
 
@@ -383,23 +389,27 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     "{icon_label}"
                 }
             }
-            // Bottom-left: connection status emoji icon
-            span {
-                class: "account-conn-icon account-conn-icon--{conn_class}",
-                title: "Connection: {conn_class}",
-                "{conn_icon}"
+            // Bottom-left: connection status emoji icon (not shown for forum accounts)
+            if !is_forum_account {
+                span {
+                    class: "account-conn-icon account-conn-icon--{conn_class}",
+                    title: "Connection: {conn_class}",
+                    "{conn_icon}"
+                }
             }
-            // Top-left: notification count badge
-            if total_unreads > 0 {
+            // Top-left: notification count badge (not shown for forum accounts)
+            if !is_forum_account && total_unreads > 0 {
                 span {
                     class: "badge mention-count-badge",
                     "{total_unreads}"
                 }
             }
-            // Bottom-right: presence dot (online/away/dnd/etc.)
-            span {
-                class: "status-dot presence-dot {presence_class}",
-                title: "Presence: {presence_class}",
+            // Bottom-right: presence dot (not shown for forum accounts)
+            if !is_forum_account {
+                span {
+                    class: "status-dot presence-dot {presence_class}",
+                    title: "Presence: {presence_class}",
+                }
             }
         }
     }

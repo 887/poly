@@ -333,8 +333,12 @@ pub(crate) async fn toggle_demo(
                 if let Ok(groups) = guard.get_groups().await {
                     chat_data.write().groups.extend(groups);
                 }
-                if let Ok(notifs) = guard.get_notifications().await {
-                    chat_data.write().notifications.extend(notifs.into_iter().filter(|n| !n.read));
+                let is_forum = chat_data.read().account_sessions.get(aid)
+                    .map_or(false, |s| s.backend == poly_client::BackendType::from("demo_forum"));
+                if !is_forum {
+                    if let Ok(notifs) = guard.get_notifications().await {
+                        chat_data.write().notifications.extend(notifs.into_iter().filter(|n| !n.read));
+                    }
                 }
                 if let Ok(friends) = guard.get_friends().await {
                     for friend in friends {
