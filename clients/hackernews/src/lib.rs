@@ -145,12 +145,14 @@ impl ClientBackend for HackerNewsClient {
     // --- Servers ---
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        Ok(vec![build_server()])
+        let account_id = self.session.as_ref().map(|s| s.id.as_str()).unwrap_or("hn-anonymous");
+        Ok(vec![build_server(account_id)])
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
         if id == "hn" {
-            Ok(build_server())
+            let account_id = self.session.as_ref().map(|s| s.id.as_str()).unwrap_or("hn-anonymous");
+            Ok(build_server(account_id))
         } else {
             Err(ClientError::NotFound(format!("server not found: {id}")))
         }

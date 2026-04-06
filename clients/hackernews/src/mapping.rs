@@ -8,11 +8,13 @@ use poly_client::{
 
 use crate::types::{HnFeed, HnItem, HnItemType, HnUser};
 
-const ACCOUNT_ID: &str = "hackernews";
-const SERVER_ID: &str = "hn";
+pub(crate) const SERVER_ID: &str = "hn";
 
 /// Build the static "Hacker News" virtual server.
-pub fn build_server() -> Server {
+///
+/// `account_id` must be the real session id (e.g. "hn-anonymous" or
+/// "hn-{username}") so that route URLs and backend lookups stay in sync.
+pub fn build_server(account_id: &str) -> Server {
     Server {
         id: SERVER_ID.to_string(),
         name: "Hacker News".to_string(),
@@ -45,7 +47,7 @@ pub fn build_server() -> Server {
         backend: BackendType::from("hackernews"),
         unread_count: 0,
         mention_count: 0,
-        account_id: ACCOUNT_ID.to_string(),
+        account_id: account_id.to_string(),
         account_display_name: "Hacker News".to_string(),
     }
 }
