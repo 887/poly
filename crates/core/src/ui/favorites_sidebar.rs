@@ -30,7 +30,7 @@ use crate::ui::account::common::chat_history::{
 };
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
-use poly_client::{AccountPresence, BackendType, ConnectionStatus};
+use poly_client::{AccountPresence, ConnectionStatus};
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
@@ -158,8 +158,8 @@ pub fn FavoritesBar() -> Element {
                                 account_id: server.account_id.clone(),
                                 account_display_name: server.account_display_name.clone(),
                                 backend_name: server.backend.display_name().to_string(),
-                                unread: if server.backend == BackendType::from("demo_forum") { 0 } else { server.unread_count },
-                                mention: if server.backend == BackendType::from("demo_forum") { 0 } else { server.mention_count },
+                                unread: if server.backend.is_forum() { 0 } else { server.unread_count },
+                                mention: if server.backend.is_forum() { 0 } else { server.mention_count },
                                 icon_url: server.icon_url.clone(),
                             }
                         }
@@ -262,7 +262,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .read()
         .account_sessions
         .get(&account_id)
-        .map_or(false, |s| s.backend == BackendType::from("demo_forum"));
+        .map_or(false, |s| s.backend.is_forum());
 
     let color = user_color(&account_id);
 
@@ -680,7 +680,7 @@ fn FavoriteServerIcon(
                 span { class: "source-badge", "A" }
             }
             // Bottom-left: account connection status emoji icon (not for forum)
-            if backend_slug != "demo_forum" {
+            if !poly_client::BackendType::from_slug(&backend_slug).is_forum() {
                 span {
                     class: "account-conn-icon account-conn-icon--{_account_conn_class}",
                     title: "Account connection: {_account_conn_class}",
@@ -694,7 +694,7 @@ fn FavoriteServerIcon(
                 span { class: "badge mention-count-badge", "{unread}" }
             }
             // Bottom-right: presence dot (not for forum)
-            if backend_slug != "demo_forum" {
+            if !poly_client::BackendType::from_slug(&backend_slug).is_forum() {
                 span {
                     class: "status-dot presence-dot {account_presence_class}",
                     title: "Presence: {account_presence_class}",

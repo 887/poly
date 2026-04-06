@@ -1340,7 +1340,7 @@ fn ServerHome(
         let is_voice = server_matches
             && cd.current_channel.as_ref().is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
         let is_forum = server_matches
-            && cd.current_server.as_ref().is_some_and(|s| s.backend == BackendType::from("demo_forum"));
+            && cd.current_server.as_ref().is_some_and(|s| s.backend.is_forum());
         (is_voice, is_forum)
     };
 
@@ -1430,7 +1430,7 @@ fn ServerChat(
         .map(|ch| ch.channel_type.clone());
 
     let is_forum_backend = chat_data.read().current_server.as_ref()
-        .is_some_and(|s| s.backend == BackendType::from("demo_forum"));
+        .is_some_and(|s| s.backend.is_forum());
     let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
     let is_forum = is_forum_backend || matches!(channel_type, Some(ChannelType::Forum));
 

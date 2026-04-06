@@ -180,8 +180,8 @@ pub fn AccountServerBar() -> Element {
                     backend_slug: server.backend.slug().to_string(),
                     instance_id: instance_id.clone(),
                     account_id: server.account_id.clone(),
-                    unread: if server.backend == poly_client::BackendType::from("demo_forum") { 0 } else { server.unread_count },
-                    mention: if server.backend == poly_client::BackendType::from("demo_forum") { 0 } else { server.mention_count },
+                    unread: if server.backend.is_forum() { 0 } else { server.unread_count },
+                    mention: if server.backend.is_forum() { 0 } else { server.mention_count },
                     is_selected: selected_server.as_deref() == Some(server.id.as_str()),
                     icon_url: server.icon_url.clone(),
                 }

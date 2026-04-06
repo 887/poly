@@ -334,7 +334,7 @@ pub(crate) async fn toggle_demo(
                     chat_data.write().groups.extend(groups);
                 }
                 let is_forum = chat_data.read().account_sessions.get(aid)
-                    .map_or(false, |s| s.backend == poly_client::BackendType::from("demo_forum"));
+                    .map_or(false, |s| s.backend.is_forum());
                 if !is_forum {
                     if let Ok(notifs) = guard.get_notifications().await {
                         chat_data.write().notifications.extend(notifs.into_iter().filter(|n| !n.read));
