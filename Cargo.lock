@@ -6230,6 +6230,7 @@ dependencies = [
  "tracing",
  "unic-langid",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
  "x25519-dalek",
 ]

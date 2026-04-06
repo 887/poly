@@ -1,7 +1,9 @@
 //! In-memory TTL cache for HN items and feed ID lists.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 
 use crate::types::{HnFeed, HnItem, HnUser};
 
@@ -12,6 +14,7 @@ const USER_TTL: Duration = Duration::from_secs(1800);
 
 struct Entry<T> {
     value: T,
+    #[cfg(not(target_arch = "wasm32"))]
     inserted_at: Instant,
     ttl: Duration,
 }
@@ -20,13 +23,19 @@ impl<T> Entry<T> {
     fn new(value: T, ttl: Duration) -> Self {
         Self {
             value,
+            #[cfg(not(target_arch = "wasm32"))]
             inserted_at: Instant::now(),
             ttl,
         }
     }
 
     fn is_expired(&self) -> bool {
-        self.inserted_at.elapsed() > self.ttl
+        // std::time::Instant is not available on wasm32-unknown-unknown.
+        // Browser sessions are short-lived, so skipping TTL eviction is safe.
+        #[cfg(target_arch = "wasm32")]
+        { let _ = &self.ttl; false }
+        #[cfg(not(target_arch = "wasm32"))]
+        { self.inserted_at.elapsed() > self.ttl }
     }
 }
 

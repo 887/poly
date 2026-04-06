@@ -96,6 +96,20 @@ fn install_panic_hook() {
         if message.trim().is_empty() {
             message = crate::i18n::t("wasm-crash-generic-message");
         }
+
+        // Write to localStorage so the info survives the page reload caused
+        // by the subsequent `unreachable` opcode clearing the JS context.
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                let entry = format!(
+                    "PANIC|{}|{}",
+                    location.as_deref().unwrap_or("unknown"),
+                    message
+                );
+                let _ = storage.set_item("poly.lastPanic", &entry);
+            }
+        }
+
         report_crash("panic", &message, location.as_deref());
     }));
 }
@@ -186,6 +200,28 @@ fn clear_previous_crash_state() {
 }
 
 fn report_crash(kind: &str, message: &str, location: Option<&str>) {
+    // Never overwrite a Rust panic with a subsequent window-error/rejection.
+    // The panic hook fires first and carries the real source location;
+    // window.onerror fires immediately after (triggered by the `unreachable`
+    // opcode wasm-bindgen executes after the hook) and would clobber it.
+    if kind != "panic" {
+        if let Some(window) = web_sys::window() {
+            if let Ok(state) =
+                Reflect::get(&window, &wasm_bindgen::JsValue::from_str(CRASH_STATE_KEY))
+            {
+                if !state.is_undefined() && !state.is_null() {
+                    if let Ok(existing_kind) =
+                        Reflect::get(&state, &wasm_bindgen::JsValue::from_str("kind"))
+                    {
+                        if existing_kind.as_string().as_deref() == Some("panic") {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let title = crate::i18n::t("wasm-crash-title");
     let description = crate::i18n::t("wasm-crash-description");
     let details_label = crate::i18n::t("wasm-crash-details-label");

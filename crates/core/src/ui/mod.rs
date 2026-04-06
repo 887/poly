@@ -734,6 +734,95 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
 
 /// Restore all persisted poly-server accounts from the token store.
 ///
+/// Restore persisted HackerNews accounts on app startup.
+///
+/// HN requires no authentication, so every stored HN token can be re-activated
+/// instantly without a network round-trip. The token value is the HN username
+/// for named accounts and an empty string for anonymous accounts.
+///
+/// Populates `ClientManager` with a live backend, registers the HN server in
+/// the `server_account_map`, and adds the server to `chat_data.servers` so the
+/// favorites bar renders immediately.
+#[cfg(feature = "hackernews")]
+async fn restore_hackernews_accounts(
+    storage: &crate::storage::Storage,
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    use crate::client_manager::BackendHandle;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    let Ok(tokens) = storage.get_account_tokens().await else {
+        return;
+    };
+
+    let hn_tokens: Vec<_> = tokens
+        .into_iter()
+        .filter(|t| t.backend == "hackernews")
+        .collect();
+
+    if hn_tokens.is_empty() {
+        return;
+    }
+
+    tracing::info!(
+        "Restoring {} HackerNews account(s) from storage",
+        hn_tokens.len()
+    );
+
+    for token in hn_tokens {
+        let mut backend = poly_hackernews::HackerNewsClient::new();
+        let session = if token.token.is_empty() {
+            backend.guest_session()
+        } else {
+            backend.named_session(token.token.clone())
+        };
+        let account_id = session.id.clone();
+
+        let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(
+            Box::new(backend) as Box<dyn poly_client::ClientBackend + Send + Sync>,
+        ));
+
+        // Build server→account map without holding any Signal lock.
+        let mut server_map = HashMap::new();
+        let servers = {
+            let guard = backend_handle.read().await;
+            guard.get_servers().await.unwrap_or_default()
+        };
+        for srv in &servers {
+            server_map.insert(srv.id.clone(), account_id.clone());
+        }
+
+        // Commit synchronously — no await while Signal lock is held.
+        client_manager.write().commit_backend_account(
+            account_id.clone(),
+            session.clone(),
+            backend_handle,
+            server_map,
+        );
+        chat_data
+            .write()
+            .account_sessions
+            .insert(account_id.clone(), session);
+
+        // Add servers to chat_data and favorited list.
+        {
+            let mut cd = chat_data.write();
+            for srv in &servers {
+                if !cd.servers.iter().any(|s| s.id == srv.id) {
+                    cd.servers.push(srv.clone());
+                }
+                if !cd.favorited_server_ids.contains(&srv.id) {
+                    cd.favorited_server_ids.push(srv.id.clone());
+                }
+            }
+        }
+
+        tracing::info!("Restored HackerNews account: {account_id}");
+    }
+}
+
 /// Called during `init_storage` when `setup_complete` is true.
 /// For each stored `AccountToken` with `backend == "poly"` and a valid
 /// `instance_id` (the base URL), this function:
@@ -1033,6 +1122,10 @@ async fn init_storage(
                     // This runs after demo restore so both can coexist.
                     #[cfg(feature = "server")]
                     restore_poly_accounts(&storage, client_manager, chat_data).await;
+
+                    // Restore HackerNews accounts (no-auth, instant reconnect).
+                    #[cfg(feature = "hackernews")]
+                    restore_hackernews_accounts(&storage, client_manager, chat_data).await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),
@@ -1361,13 +1454,21 @@ pub fn App() -> Element {
                 let elapsed_ms = js_sys::Date::now() - *startup_overlay_started.read();
                 let remaining_ms = startup_overlay_config
                     .min_visible_ms
-                    .saturating_sub(elapsed_ms.max(0.0) as u32);
-                let _ = document::eval(&format!(
-                    "setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => dioxus.send(true))), {});",
-                    remaining_ms
-                ))
-                .recv::<bool>()
-                .await;
+                    .saturating_sub(elapsed_ms.max(0.0) as u32) as i32;
+                // Use a raw Promise-based sleep. The document::eval approach is broken
+                // because Dioxus wraps eval in `async function(dioxus) { {code}; dioxus.close(); }`
+                // which calls close() before the setTimeout fires, killing the channel.
+                let sleep = js_sys::Promise::new(&mut |resolve, _| {
+                    let _ = web_sys::window()
+                        .and_then(|w| {
+                            w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                &resolve,
+                                remaining_ms,
+                            )
+                            .ok()
+                        });
+                });
+                let _ = wasm_bindgen_futures::JsFuture::from(sleep).await;
             }
             startup_overlay_visible.set(false);
             startup_overlay_finished.set(true);
