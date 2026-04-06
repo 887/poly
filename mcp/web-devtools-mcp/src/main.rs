@@ -878,6 +878,38 @@ impl ChromeCdpBackend {
             .await;
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
 
+        // ── Invalidate stale CSS: clean poly-core if any CSS is newer than WASM ──
+        // asset!() bakes content-hash URLs into the WASM binary at compile time.
+        // If CSS files changed while dx serve was down, the cached WASM has stale
+        // hash URLs. Cleaning poly-core forces a recompile so asset!() re-hashes
+        // with the current file content — hot reload while dx serve is running is
+        // unaffected by this check.
+        let ws_opt: Option<String> = self.workspace.lock().await.clone();
+        if let Some(ws) = ws_opt.as_deref() {
+            let wasm_bin = format!(
+                "{ws}/target/dx/poly-web/debug/web/public/wasm/poly-web_bg.wasm"
+            );
+            let css_dir = format!("{ws}/crates/core/assets/styling");
+            let wasm_mtime = std::fs::metadata(&wasm_bin)
+                .and_then(|m| m.modified())
+                .ok();
+            let any_css_newer = std::fs::read_dir(&css_dir)
+                .map(|rd| {
+                    rd.flatten().any(|e| {
+                        e.path().extension().map(|x| x == "css").unwrap_or(false)
+                            && e.metadata().and_then(|m| m.modified()).ok() > wasm_mtime
+                    })
+                })
+                .unwrap_or(false);
+            if any_css_newer {
+                let _ = tokio::process::Command::new("cargo")
+                    .args(["clean", "-p", "poly-core"])
+                    .current_dir(ws)
+                    .status()
+                    .await;
+            }
+        }
+
         // ── Spawn fresh dx serve ──────────────────────────────────────────────
         let mut child = match tokio::process::Command::new("dx")
             .args([

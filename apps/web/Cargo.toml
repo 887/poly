@@ -10,7 +10,7 @@ name = "poly-web"
 path = "src/main.rs"
 
 [dependencies]
-poly-core = { workspace = true, features = ["demo", "server", "stoat", "lemmy", "hackernews"] }
+poly-core = { workspace = true, features = ["demo", "server", "stoat", "lemmy", "hackernews", "matrix", "discord", "teams"] }
 dioxus = { workspace = true, features = ["web"] }
 tracing = { workspace = true }
 

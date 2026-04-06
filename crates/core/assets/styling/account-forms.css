@@ -7,7 +7,8 @@
 /* Full-viewport container — flex row like .settings-page but full-screen */
 .add-account-page {
     display: flex;
-    height: 100vh;
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     background: var(--bg-primary);
 }
@@ -282,33 +283,36 @@
     margin: 8px 0;
 }
 
-/* ── Test Accounts Panel (?test=true) ────────────────────────────────────── */
+/* ── Test Accounts Panel (/signup/test) ──────────────────────────────────── */
 
 .test-accounts-grid {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
     gap: 12px;
-    max-width: 480px;
+    align-content: start;
 }
 
 .test-account-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 16px;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 12px 12px;
     background: var(--bg-secondary);
     border-radius: var(--radius-md, 6px);
     border: 1px solid var(--border-primary);
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 
-.test-account-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+.test-account-card:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
 }
 
 .test-account-icon {
-    font-size: 2rem;
+    font-size: 2.5rem;
     line-height: 1;
 }
 
@@ -316,33 +320,38 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    width: 100%;
+    flex: 1;
 }
 
 .test-account-name {
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary);
 }
 
 .test-account-url {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     font-family: monospace;
+    word-break: break-all;
 }
 
 .test-account-btn {
-    align-self: flex-start;
+    width: 100%;
+    margin-top: auto;
 }
 
 .test-account-error {
     color: var(--accent-danger, #ef4444);
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     margin: 0;
+    word-break: break-word;
 }
 
 .test-account-success {
     color: var(--accent-success, #22c55e);
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     margin: 0;
 }
 

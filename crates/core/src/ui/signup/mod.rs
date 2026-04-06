@@ -304,12 +304,10 @@ fn TestAccountsPanel() -> Element {
                         let on_complete2 = on_complete.clone();
                         rsx! {
                             div { class: "test-account-card",
-                                div { class: "test-account-header",
-                                    span { class: "test-account-icon", "{icon}" }
-                                    div { class: "test-account-info",
-                                        span { class: "test-account-name", "{label}" }
-                                        span { class: "test-account-url", "{server_label}" }
-                                    }
+                                span { class: "test-account-icon", "{icon}" }
+                                div { class: "test-account-info",
+                                    span { class: "test-account-name", "{label}" }
+                                    span { class: "test-account-url", "{server_label}" }
                                 }
                                 button {
                                     class: "btn btn-primary test-account-btn",

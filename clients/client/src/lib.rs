@@ -446,9 +446,7 @@ pub type TestAuthFn = fn(
     String,
     String,
     String,
-) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Result<SignupCompleted, String>> + Send>,
->;
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<SignupCompleted, String>>>>;
 
 /// A single pre-configured test account for local development.
 ///

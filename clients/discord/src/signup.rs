@@ -26,7 +26,7 @@ fn koala_auth(
     t: String,
     _p: String,
 ) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
     Box::pin(async move { authenticate(u, t).await })
 }
@@ -36,7 +36,7 @@ fn kangaroo_auth(
     t: String,
     _p: String,
 ) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
     Box::pin(async move { authenticate(u, t).await })
 }

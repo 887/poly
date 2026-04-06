@@ -30,7 +30,7 @@ fn stoat_auth(
     e: String,
     p: String,
 ) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
     Box::pin(async move { authenticate(u, e, p).await })
 }
@@ -40,7 +40,7 @@ fn raccoon_auth(
     e: String,
     p: String,
 ) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>> + Send>,
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
     Box::pin(async move { authenticate(u, e, p).await })
 }
