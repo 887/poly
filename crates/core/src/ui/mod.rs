@@ -617,24 +617,6 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
     });
-
-    #[cfg(feature = "lemmy")]
-    client_manager.write().register_signup_entry(SignupEntry {
-        slug: "lemmy",
-        icon: "🐱",
-        name_key: "plugin-lemmy-signup-name",
-        desc_key: "plugin-lemmy-signup-desc",
-        render: poly_lemmy::signup::signup_render_fn,
-    });
-
-    #[cfg(feature = "hackernews")]
-    client_manager.write().register_signup_entry(SignupEntry {
-        slug: "hackernews",
-        icon: "🔶",
-        name_key: "plugin-hackernews-signup-name",
-        desc_key: "plugin-hackernews-signup-desc",
-        render: poly_hackernews::signup::signup_render_fn,
-    });
 }
 
 /// Register all native backend plugin settings pages into `ClientManager`.
@@ -701,7 +683,6 @@ async fn restore_poly_accounts(
     storage: &crate::storage::Storage,
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
-    app_state: Signal<AppState>,
 ) {
     use crate::client_manager::BackendHandle;
     use poly_client::ClientBackend as _;
@@ -811,33 +792,32 @@ async fn restore_poly_accounts(
                     crate::ui::favorites_sidebar::persist_favorites(all_fav_ids).await;
                 }
 
-                // Fetch DMs and friends in background.
+                // Fetch DMs, groups, friends, blocked users and content policy.
                 {
                     let guard = backend_handle.read().await;
                     if let Ok(dms) = guard.get_dm_channels().await {
                         chat_data.write().dm_channels.extend(dms);
                     }
+                    if let Ok(groups) = guard.get_groups().await {
+                        chat_data.write().groups.extend(groups);
+                    }
                     if let Ok(friends) = guard.get_friends().await {
                         for friend in friends {
-                            let already = chat_data.read().friends.get(&account_id).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
+                            let already = chat_data.read().friends.get(&account_id).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
                             if !already {
                                 chat_data.write().friends.entry(account_id.clone()).or_default().push(friend);
                             }
                         }
                     }
+                    if let Ok(blocked) = guard.get_blocked_users().await {
+                        chat_data.write().blocked_users.insert(account_id.clone(), blocked);
+                    }
+                    if let Ok(policy) = guard.get_content_policy().await {
+                        chat_data.write().content_policy = policy;
+                    }
                 }
 
                 tracing::info!("Restored poly account: {account_id}");
-
-                // Start the background event stream so real-time events are
-                // delivered for this account without requiring demo to be active.
-                crate::ui::demo::spawn_event_stream_listener(
-                    account_id,
-                    backend_handle,
-                    app_state,
-                    chat_data,
-                    client_manager,
-                );
             }
             Err(e) => {
                 tracing::warn!(
@@ -987,7 +967,7 @@ async fn init_storage(
                     // Restore poly server accounts from persisted tokens.
                     // This runs after demo restore so both can coexist.
                     #[cfg(feature = "server")]
-                    restore_poly_accounts(&storage, client_manager, chat_data, app_state).await;
+                    restore_poly_accounts(&storage, client_manager, chat_data).await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),

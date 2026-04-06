@@ -20,7 +20,7 @@ use crate::state::{AppState, ChannelContextMenuState, ChatData, View};
 use crate::ui::main_layout::close_mobile_drawer;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
-use poly_client::{BackendType, Channel, ChannelType, DmChannel, Server, User, VoiceParticipant};
+use poly_client::{Channel, ChannelType, DmChannel, Server, User, VoiceParticipant};
 
 fn dm_last_incoming_timestamp(dm: &DmChannel) -> Option<DateTime<Utc>> {
     dm.last_message
@@ -384,7 +384,7 @@ fn ServerBanner(
         .unwrap_or_default();
     let supports_channels_roles = current_server
         .as_ref()
-        .is_some_and(|server| server.backend == BackendType::from("demo"));
+        .is_some_and(|server| server.backend.to_string() == "demo");
 
     rsx! {
         div { class: "server-banner-sidebar",
@@ -732,13 +732,12 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
         // Is the current channel a forum channel? If so show forum controls instead.
         let current_ch_type = chat_data.read().current_channel.as_ref()
-            .map(|ch| ch.channel_type.clone());
+            .map(|ch| ch.channel_type);
         let is_forum = matches!(current_ch_type, Some(ChannelType::Forum));
         let current_channel_id = chat_data.read().current_channel.as_ref()
             .map(|ch| ch.id.clone())
             .unwrap_or_default();
 
-        // Check if we're currently on the comments route to highlight the right tab.
         let current_route = use_route::<Route>();
         let on_comments = matches!(current_route, Route::ForumCommentsRoute { .. });
 
@@ -802,18 +801,18 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                         "Show hidden posts"
                     }
                     // Search
-                    Link {
-                        class: "forum-filter-btn forum-filter-full forum-filter-search",
-                        to: Route::ForumSearchRoute {
-                            backend: backend_slug.clone(),
-                            instance_id: instance_id.clone(),
-                            account_id: account_id.clone(),
-                            server_id: server_id.clone(),
-                            channel_id: current_channel_id.clone(),
-                        },
-                        "🔍 Search"
-                    }
-                    // Create Post
+                    // TODO: ForumSearchRoute not yet implemented
+                    // Link {
+                    //     class: "forum-filter-btn forum-filter-full forum-filter-search",
+                    //     to: Route::ForumSearchRoute {
+                    //         backend: backend_slug.clone(),
+                    //         instance_id: instance_id.clone(),
+                    //         account_id: account_id.clone(),
+                    //         server_id: server_id.clone(),
+                    //         channel_id: current_channel_id.clone(),
+                    //     },
+                    //     "🔍 Search"
+                    // }
                     Link {
                         class: "forum-create-post-btn",
                         to: Route::CreateForumPostRoute {

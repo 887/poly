@@ -115,6 +115,7 @@ pub(crate) async fn toggle_demo(
                 });
                 for aid in &demo_ids {
                     cd.friends.remove(aid.as_str());
+                    cd.blocked_users.remove(aid.as_str());
                 }
                 cd.channels.clear();
                 cd.messages.clear();
@@ -345,9 +346,9 @@ pub(crate) async fn toggle_demo(
                 }
                 // Load content policy and blocked users for the first account only.
                 // (content policy is per-account; use the first demo account's data.)
-                if chat_data.read().blocked_users.is_empty() {
+                if !chat_data.read().blocked_users.contains_key(aid.as_str()) {
                     chat_data.write().content_policy = poly_demo::data::demo_content_policy();
-                    chat_data.write().blocked_users = poly_demo::data::demo_blocked_users();
+                    chat_data.write().blocked_users.insert(aid.clone(), poly_demo::data::demo_blocked_users());
                 }
                 // Load voice participants for all voice channels.
                 let servers_snapshot = chat_data.read().servers.clone();
@@ -406,8 +407,8 @@ pub(crate) async fn toggle_demo(
 /// - [`poly_client::ClientEvent::PresenceChanged`] — updates presence on matching members.
 /// - Other events are silently ignored for now.
 ///
-/// The task exits automatically when the account is removed from `ClientManager`
-/// (checked after each event). Works for demo and real backends alike.
+/// The task exits automatically when `client_manager.demo_active` becomes false
+/// (checked after each event) so there is no orphan task after demo is toggled off.
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
@@ -429,8 +430,11 @@ pub(crate) fn spawn_event_stream_listener(
         tracing::debug!("Event stream started for account: {account_id}");
 
         while let Some(event) = stream.next().await {
-            // Stop the listener when the account is removed from ClientManager.
-            let still_active = client_manager.read().get_backend(&account_id).is_some();
+            // Stop the listener when demo is deactivated (or account removed).
+            let still_active = {
+                let cm = client_manager.read();
+                cm.demo_active && cm.get_backend(&account_id).is_some()
+            };
             if !still_active {
                 break;
             }

@@ -15,7 +15,6 @@ use super::super::super::routes::Route;
 use super::chat_history::{
     ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE, read_message_list_anchor,
     remember_message_list_scroll_position, request_preserve_message_anchor,
-    request_preserve_scroll_position, request_preserve_scroll_position_from_bottom,
     request_scroll_to_bottom, request_scroll_to_bottom_deferred, unread_marker_message_id,
 };
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
@@ -1868,6 +1867,7 @@ fn estimate_message_row_height(
     height
 }
 
+#[allow(dead_code)]
 fn estimate_message_block_height(
     messages: &[Message],
     start_idx: usize,

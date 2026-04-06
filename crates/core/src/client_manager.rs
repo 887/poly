@@ -260,8 +260,8 @@ impl ClientManager {
         self.sessions
             .iter()
             .filter(|(_, s)| {
-                s.backend == BackendType::from("demo")
-                    || s.backend == BackendType::from("demo_forum")
+                s.backend.to_string() == "demo"
+                    || s.backend.to_string() == "demo_forum"
             })
             .map(|(id, _)| id.clone())
             .collect()

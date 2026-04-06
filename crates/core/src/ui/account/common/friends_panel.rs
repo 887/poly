@@ -22,7 +22,7 @@ enum FriendsManagementTab {
 pub fn FriendsPanel(account_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let friends = chat_data.read().friends.get(&account_id).cloned().unwrap_or_default();
-    let blocked_users = chat_data.read().blocked_users.clone();
+    let blocked_users = chat_data.read().blocked_users.get(&account_id).cloned().unwrap_or_default();
 
     let search_filter = use_signal(String::new);
     let account_filter = use_signal(|| None::<String>);

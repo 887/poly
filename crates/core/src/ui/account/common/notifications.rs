@@ -57,16 +57,18 @@ impl NotificationMenuFilter {
 
 /// Notifications view component.
 ///
-/// Shows aggregated notifications from all connected accounts/backends,
-/// with filtering by backend and mark-read actions.
+/// Shows notifications scoped to the given account, with filtering by kind
+/// and mark-read actions.
 #[rustfmt::skip]
 #[component]
-pub fn NotificationsView() -> Element {
+pub fn NotificationsView(account_id: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
-    let mut filter_backend = use_signal(|| None::<BackendType>);
     let mut show_unread_only = use_signal(|| false);
     let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
-    let notifications = chat_data.read().notifications.clone();
+    let notifications = chat_data.read().notifications.iter()
+        .filter(|n| n.account_id == account_id)
+        .cloned()
+        .collect::<Vec<_>>();
     let notifications_title = t("notifications-title");
     let notifications_empty = t("notifications-empty");
     let notifications_unread_label = t("notifications-unread-count");
@@ -74,15 +76,9 @@ pub fn NotificationsView() -> Element {
     let notifications_show_unread = t("notifications-show-unread");
     let notifications_mark_read = t("notifications-mark-read");
 
-    // Collect distinct backends present in notifications for filter
-    let mut backends: Vec<BackendType> = notifications.iter().map(|n| n.backend.clone()).collect();
-    backends.sort_by_key(|b| format!("{b:?}"));
-    backends.dedup();
-
     // Apply filter
     let filtered: Vec<_> = notifications
         .iter()
-        .filter(|n| filter_backend.read().as_ref().map_or(true, |f| n.backend == *f))
         .filter(|n| kind_filter.read().matches(&n.kind))
         .filter(|n| !*show_unread_only.read() || !n.read)
         .cloned()
@@ -141,13 +137,10 @@ pub fn NotificationsView() -> Element {
                         button {
                             class: "special-page-sidebar-button",
                             onclick: move |_| {
-                                let backend_filter = filter_backend.read().clone();
                                 let active_kind = *kind_filter.read();
                                 let mut cd = chat_data.write();
                                 for notif in &mut cd.notifications {
-                                    if backend_filter.as_ref().map_or(true, |backend| notif.backend == *backend)
-                                        && active_kind.matches(&notif.kind)
-                                    {
+                                    if notif.account_id == account_id && active_kind.matches(&notif.kind) {
                                         notif.read = true;
                                     }
                                 }
@@ -167,13 +160,6 @@ pub fn NotificationsView() -> Element {
                                 if unread_count > 0 {
                                     span { class: "notif-badge", " {unread_count}" }
                                 }
-                            }
-                        }
-                        if backends.len() > 1 {
-                            NotificationFilter {
-                                backends: backends.clone(),
-                                selected: filter_backend.read().clone(),
-                                on_change: move |b| filter_backend.set(b),
                             }
                         }
                     }

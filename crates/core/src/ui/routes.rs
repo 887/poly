@@ -1334,20 +1334,21 @@ fn ServerHome(
     // `VoiceChannelView` to render immediately — before `load_server_data`
     // runs — which triggers `getUserMedia` / audio-device access and can
     // hard-crash Chromium on Linux.
-    let is_voice_channel = {
+    let (is_voice_channel, is_forum_server) = {
         let cd = chat_data.read();
-        cd.current_server
-            .as_ref()
-            .is_some_and(|s| s.id == server_id)
-            && cd
-                .current_channel
-                .as_ref()
-                .is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video))
+        let server_matches = cd.current_server.as_ref().is_some_and(|s| s.id == server_id);
+        let is_voice = server_matches
+            && cd.current_channel.as_ref().is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
+        let is_forum = server_matches
+            && cd.current_server.as_ref().is_some_and(|s| s.backend == BackendType::from("demo_forum"));
+        (is_voice, is_forum)
     };
 
     rsx! {
         if is_voice_channel {
             VoiceChannelView {}
+        } else if is_forum_server {
+            ForumView {}
         } else {
             ChatView {}
         }
@@ -1428,8 +1429,10 @@ fn ServerChat(
         .as_ref()
         .map(|ch| ch.channel_type.clone());
 
+    let is_forum_backend = chat_data.read().current_server.as_ref()
+        .is_some_and(|s| s.backend == BackendType::from("demo_forum"));
     let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
-    let is_forum = matches!(channel_type, Some(ChannelType::Forum));
+    let is_forum = is_forum_backend || matches!(channel_type, Some(ChannelType::Forum));
 
     rsx! {
         if is_voice {
@@ -1463,9 +1466,9 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
 #[rustfmt::skip]
 #[component]
 fn NotificationsRoute(backend: String, instance_id: String, account_id: String) -> Element {
-    let _route_identity = (backend, instance_id, account_id);
+    let _ = (backend, instance_id);
     rsx! {
-        NotificationsView {}
+        NotificationsView { account_id }
     }
 }
 

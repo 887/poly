@@ -49,7 +49,6 @@ use std::sync::Arc;
 fn build_on_complete(
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
-    app_state: Signal<crate::state::AppState>,
 ) -> Callback<SignupCompleted> {
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
@@ -151,17 +150,13 @@ fn build_on_complete(
                         }
                     }
                 }
+                if let Ok(blocked) = guard.get_blocked_users().await {
+                    chat_data.write().blocked_users.insert(account_id.clone(), blocked);
+                }
+                if let Ok(policy) = guard.get_content_policy().await {
+                    chat_data.write().content_policy = policy;
+                }
             }
-            // Start the background event stream for this account so real-time
-            // events (messages, presence) are delivered without demo being active.
-            crate::ui::demo::spawn_event_stream_listener(
-                account_id.clone(),
-                backend_handle,
-                app_state,
-                chat_data,
-                client_manager,
-            );
-
             navigator().push(Route::DmsHome {
                 backend: backend_slug,
                 instance_id,
@@ -271,86 +266,36 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 
 // ── Test account quick-add panel ─────────────────────────────────────────────
 
+#[allow(dead_code)]
 /// Test account definition for the quick-add panel.
 struct TestAccount {
     icon: &'static str,
-    /// Display name for the account (e.g. username).
     label: &'static str,
-    /// Human-readable backend name shown as a badge (e.g. "Stoat", "Matrix").
-    backend_label: &'static str,
-    /// Backend slug used for routing (unused at runtime but documents the backend).
-    backend: &'static str,
+    _backend: &'static str,
     base_url: &'static str,
     email: &'static str,
     password: &'static str,
-    /// When true the card is shown but the button is disabled (backend not yet compiled in).
-    disabled: bool,
 }
 
+#[allow(dead_code)]
 const TEST_ACCOUNTS: &[TestAccount] = &[
-    // ── Stoat (localhost:9101) ──────────────────────────────────────────
     TestAccount {
-        icon: "\u{1F9A6}", label: "Stoat", backend_label: "Stoat",
-        backend: "stoat", base_url: "http://localhost:9101",
-        email: "stoat", password: "testpass123", disabled: false,
+        icon: "\u{1F9A6}",
+        label: "Stoat",
+        _backend: "stoat",
+        base_url: "http://localhost:9101",
+        email: "stoat",
+        password: "testpass123",
     },
     TestAccount {
-        icon: "\u{1F99D}", label: "Raccoon", backend_label: "Stoat",
-        backend: "stoat", base_url: "http://localhost:9101",
-        email: "raccoon", password: "testpass123", disabled: false,
-    },
-    // ── Matrix (localhost:8448) ─────────────────────────────────────────
-    TestAccount {
-        icon: "\u{1F7E9}", label: "Alice", backend_label: "Matrix",
-        backend: "matrix", base_url: "http://localhost:8448",
-        email: "@alice:localhost", password: "testpass123", disabled: !cfg!(feature = "matrix"),
-    },
-    // ── Hacker News (public API, no auth) ──────────────────────────────
-    TestAccount {
-        icon: "\u{1F536}", label: "Guest", backend_label: "Hacker News",
-        backend: "hackernews", base_url: "https://hacker-news.firebaseio.com",
-        email: "", password: "", disabled: !cfg!(feature = "hackernews"),
-    },
-    // ── Lemmy (localhost:8536) ──────────────────────────────────────────
-    TestAccount {
-        icon: "\u{1F43E}", label: "Lemmy User", backend_label: "Lemmy",
-        backend: "lemmy", base_url: "http://localhost:8536",
-        email: "testuser", password: "testpass123", disabled: !cfg!(feature = "lemmy"),
-    },
-    // ── Discord stub (localhost:9102) ───────────────────────────────────
-    TestAccount {
-        icon: "\u{1F7E3}", label: "Discord User", backend_label: "Discord",
-        backend: "discord", base_url: "http://localhost:9102",
-        email: "discord_test", password: "testpass123", disabled: !cfg!(feature = "discord"),
-    },
-    // ── Teams stub (localhost:9103) ─────────────────────────────────────
-    TestAccount {
-        icon: "\u{1F7E6}", label: "Teams User", backend_label: "Microsoft Teams",
-        backend: "teams", base_url: "http://localhost:9103",
-        email: "teams_test", password: "testpass123", disabled: !cfg!(feature = "teams"),
+        icon: "\u{1F99D}",
+        label: "Raccoon",
+        _backend: "stoat",
+        base_url: "http://localhost:9101",
+        email: "raccoon",
+        password: "testpass123",
     },
 ];
-
-/// Authenticate a test account using the appropriate backend client.
-///
-/// Dispatches to the correct client crate based on `backend`.
-/// Non-stoat backends are feature-gated; returns an error if not compiled in.
-async fn test_account_authenticate(
-    backend: &str,
-    base_url: String,
-    email: String,
-    password: String,
-) -> Result<poly_client::SignupCompleted, String> {
-    match backend {
-        #[cfg(feature = "stoat")]
-        "stoat" => poly_stoat::signup::authenticate(base_url, email, password).await,
-        #[cfg(feature = "lemmy")]
-        "lemmy" => poly_lemmy::signup::authenticate(base_url, email, password).await,
-        #[cfg(feature = "hackernews")]
-        "hackernews" => Ok(poly_hackernews::signup::complete_as_guest()),
-        other => Err(format!("backend '{other}' not available in this build")),
-    }
-}
 
 /// Panel shown when `?test=true` — quick-add buttons for test server accounts.
 #[cfg(feature = "stoat")]
@@ -358,8 +303,7 @@ async fn test_account_authenticate(
 fn TestAccountsPanel() -> Element {
     let client_manager = use_context::<Signal<ClientManager>>();
     let chat_data = use_context::<Signal<ChatData>>();
-    let app_state = use_context::<Signal<crate::state::AppState>>();
-    let on_complete = build_on_complete(client_manager, chat_data, app_state);
+    let on_complete = build_on_complete(client_manager, chat_data);
     let mut statuses: Signal<Vec<String>> = use_signal(|| {
         TEST_ACCOUNTS.iter().map(|_| String::new()).collect()
     });
@@ -378,61 +322,51 @@ fn TestAccountsPanel() -> Element {
                         let email = acct.email.to_string();
                         let base_url = acct.base_url.to_string();
                         let password = acct.password.to_string();
-                        let backend = acct.backend.to_string();
                         let label = acct.label;
                         let icon = acct.icon;
-                        let backend_label = acct.backend_label;
-                        let account_disabled = acct.disabled;
                         let is_busy = status == "connecting...";
                         rsx! {
-                            div {
-                                class: if account_disabled { "test-account-card test-account-disabled" } else { "test-account-card" },
+                            div { class: "test-account-card",
                                 div { class: "test-account-header",
                                     span { class: "test-account-icon", "{icon}" }
                                     div { class: "test-account-info",
                                         span { class: "test-account-name", "{label}" }
-                                        span { class: "test-account-backend", "{backend_label}" }
                                         span { class: "test-account-url", "{base_url}" }
                                     }
                                 }
-                                if account_disabled {
-                                    p { class: "test-account-unavailable", "Backend not compiled in this build" }
-                                } else {
-                                    button {
-                                        class: "btn btn-primary test-account-btn",
-                                        disabled: is_busy,
-                                        onclick: {
+                                button {
+                                    class: "btn btn-primary test-account-btn",
+                                    disabled: is_busy,
+                                    onclick: {
+                                        let on_complete = on_complete.clone();
+                                        move |_| {
+                                            if let Some(slot) = statuses.write().get_mut(idx) {
+                                                *slot = "connecting...".to_string();
+                                            }
+                                            let email = email.clone();
+                                            let base_url = base_url.clone();
+                                            let password = password.clone();
                                             let on_complete = on_complete.clone();
-                                            move |_| {
-                                                if let Some(slot) = statuses.write().get_mut(idx) {
-                                                    *slot = "connecting...".to_string();
-                                                }
-                                                let email = email.clone();
-                                                let base_url = base_url.clone();
-                                                let password = password.clone();
-                                                let backend = backend.clone();
-                                                let on_complete = on_complete.clone();
-                                                spawn(async move {
-                                                    match test_account_authenticate(
-                                                        &backend, base_url, email, password,
-                                                    ).await {
-                                                        Ok(completed) => {
-                                                            if let Some(slot) = statuses.write().get_mut(idx) {
-                                                                *slot = "connected!".to_string();
-                                                            }
-                                                            on_complete.call(completed);
+                                            spawn(async move {
+                                                match poly_stoat::signup::authenticate(
+                                                    base_url, email, password,
+                                                ).await {
+                                                    Ok(completed) => {
+                                                        if let Some(slot) = statuses.write().get_mut(idx) {
+                                                            *slot = "connected!".to_string();
                                                         }
-                                                        Err(e) => {
-                                                            if let Some(slot) = statuses.write().get_mut(idx) {
-                                                                *slot = format!("error: {e}");
-                                                            }
+                                                        on_complete.call(completed);
+                                                    }
+                                                    Err(e) => {
+                                                        if let Some(slot) = statuses.write().get_mut(idx) {
+                                                            *slot = format!("error: {e}");
                                                         }
                                                     }
-                                                });
-                                            }
-                                        },
-                                        if is_busy { "Connecting..." } else { "Add Account" }
-                                    }
+                                                }
+                                            });
+                                        }
+                                    },
+                                    if is_busy { "Connecting..." } else { "Add Account" }
                                 }
                                 if !status.is_empty() && status != "connecting..." {
                                     p {
@@ -499,7 +433,6 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let client_manager = use_context::<Signal<ClientManager>>();
     let chat_data      = use_context::<Signal<ChatData>>();
-    let app_state      = use_context::<Signal<crate::state::AppState>>();
 
     // Load private key async — hooks must run unconditionally before any returns.
     let key_resource = use_resource({
@@ -549,7 +482,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                     t: crate::i18n::t,
                     navigate_back: navigate_back_to_settings,
                 };
-                let on_complete = build_on_complete(client_manager, chat_data, app_state);
+                let on_complete = build_on_complete(client_manager, chat_data);
                 rsx! {
                     div { class: "signup-content",
                         { render(on_complete, ctx) }
