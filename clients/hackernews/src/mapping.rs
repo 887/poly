@@ -18,7 +18,7 @@ pub fn build_server(account_id: &str) -> Server {
     Server {
         id: SERVER_ID.to_string(),
         name: "Hacker News".to_string(),
-        icon_url: None,
+        icon_url: Some("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23ff6600'/%3E%3Ctext x='20' y='27' font-family='sans-serif' font-size='15' font-weight='bold' text-anchor='middle' fill='white'%3EHN%3C/text%3E%3C/svg%3E".to_string()),
         banner_url: None,
         categories: vec![
             Category {
