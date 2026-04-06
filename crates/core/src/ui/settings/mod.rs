@@ -42,6 +42,10 @@ pub(crate) use plugin_settings::stoat_settings_render_fn;
 // Re-export the poly server render function so ui/mod.rs can register it at startup.
 #[cfg(feature = "server")]
 pub(crate) use plugin_settings::poly_settings_render_fn;
+#[cfg(feature = "hackernews")]
+pub(crate) use plugin_settings::hackernews_settings_render_fn;
+#[cfg(feature = "lemmy")]
+pub(crate) use plugin_settings::lemmy_settings_render_fn;
 mod plugins;
 mod theme;
 mod translation;

@@ -210,11 +210,11 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
     let client_manager = use_context::<Signal<ClientManager>>();
     let manager = client_manager.read();
     let disabled = manager.disabled_native_backends.clone();
-    let entries: Vec<(String, String, String)> = manager
+    let entries: Vec<(String, String, String, String)> = manager
         .signup_entries
         .iter()
         .filter(|entry| !disabled.iter().any(|slug| slug == entry.slug))
-        .map(|e| (e.slug.to_string(), t(e.name_key), e.icon.to_string()))
+        .map(|e| (e.slug.to_string(), t(e.name_key), e.icon.to_string(), t(e.desc_key)))
         .collect();
 
     rsx! {
@@ -228,7 +228,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                 h3 { class: "signup-nav-title", "{t(\"signup-picker-title\")}" }
                 p { class: "signup-nav-subtitle", "{t(\"signup-picker-description\")}" }
             }
-            for (slug, name, icon) in entries {
+            for (slug, name, icon, desc) in entries {
                 {
                     let is_active = selected_slug.as_deref() == Some(slug.as_str());
                     let class = if is_active { "signup-nav-item active" } else { "signup-nav-item" };
@@ -239,7 +239,10 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                                 navigator().push(Route::ClientSignup { client: slug.clone() });
                             },
                             span { class: "signup-nav-icon", "{icon}" }
-                            span { "{name}" }
+                            div { class: "signup-nav-item-text",
+                                span { class: "signup-nav-item-name", "{name}" }
+                                span { class: "signup-nav-item-desc", "{desc}" }
+                            }
                         }
                     }
                 }

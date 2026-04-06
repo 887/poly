@@ -1,0 +1,12 @@
+plugin-hackernews-signup-name = Hacker News
+plugin-hackernews-signup-desc = Browse anonymously or with your HN username.
+plugin-hackernews-title = Hacker News
+plugin-hackernews-signup-title = Add Hacker News
+plugin-hackernews-signup-tab-anonymous = Anonymous
+plugin-hackernews-signup-tab-account = With Username
+plugin-hackernews-signup-anonymous-desc = No account needed. Browse top stories, Ask HN, Show HN, and jobs.
+plugin-hackernews-signup-anonymous-btn = Add Hacker News
+plugin-hackernews-signup-account-desc = Enter your HN username to personalize your session.
+plugin-hackernews-signup-username-label = HN Username
+plugin-hackernews-signup-username-placeholder = your-username
+plugin-hackernews-signup-account-btn = Add Hacker News

@@ -37,9 +37,12 @@ use std::pin::Pin;
 #[cfg(feature = "native")]
 use types::HnFeed;
 
-/// Return FTL translation source for the HN client plugin (empty — HN UI uses core strings).
-pub fn plugin_translations(_locale: &str) -> String {
-    String::new()
+/// Return FTL translation source for the HN client plugin.
+pub fn plugin_translations(locale: &str) -> String {
+    match locale {
+        "en" => include_str!("../locales/en/plugin.ftl").to_string(),
+        _ => String::new(),
+    }
 }
 
 /// Hacker News read-only client.
@@ -67,6 +70,27 @@ impl HackerNewsClient {
             api: HnApiClient::with_base_url(base_url.into()),
             session: None,
         }
+    }
+
+    /// Build a named session for a named HN user.
+    pub fn named_session(&mut self, username: String) -> Session {
+        let session = Session {
+            id: format!("hn-{}", username),
+            user: User {
+                id: username.clone(),
+                display_name: username.clone(),
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: BackendType::from("hackernews"),
+            },
+            token: username.clone(),
+            backend: BackendType::from("hackernews"),
+            icon_emoji: Some("🔶".to_string()),
+            instance_id: "news.ycombinator.com".to_string(),
+            backend_url: Some("https://hacker-news.firebaseio.com".to_string()),
+        };
+        self.session = Some(session.clone());
+        session
     }
 
     /// Build a guest session (no auth required).

@@ -78,6 +78,10 @@ pub(crate) use settings::stoat_settings_render_fn;
 // Re-export the poly server settings render function for the same reason.
 #[cfg(feature = "server")]
 pub(crate) use settings::poly_settings_render_fn;
+#[cfg(feature = "hackernews")]
+pub(crate) use settings::hackernews_settings_render_fn;
+#[cfg(feature = "lemmy")]
+pub(crate) use settings::lemmy_settings_render_fn;
 mod runtime_js;
 mod setup_wizard;
 mod voice_banner;
@@ -617,6 +621,24 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
     });
+
+    #[cfg(feature = "hackernews")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "hackernews",
+        icon: "🔶",
+        name_key: "plugin-hackernews-signup-name",
+        desc_key: "plugin-hackernews-signup-desc",
+        render: poly_hackernews::signup::signup_render_fn,
+    });
+
+    #[cfg(feature = "lemmy")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "lemmy",
+        icon: "🐾",
+        name_key: "plugin-lemmy-signup-name",
+        desc_key: "plugin-lemmy-signup-desc",
+        render: poly_lemmy::signup::signup_render_fn,
+    });
 }
 
 /// Register all native backend plugin settings pages into `ClientManager`.
@@ -662,6 +684,26 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
             nav_label_key: "plugin-poly-title",
             nav_icon: "🔷",
             render: poly_settings_render_fn,
+        });
+
+    #[cfg(feature = "hackernews")]
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "hackernews",
+            nav_label_key: "plugin-hackernews-title",
+            nav_icon: "🔶",
+            render: hackernews_settings_render_fn,
+        });
+
+    #[cfg(feature = "lemmy")]
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "lemmy",
+            nav_label_key: "plugin-lemmy-title",
+            nav_icon: "🐾",
+            render: lemmy_settings_render_fn,
         });
 }
 

@@ -1,3 +1,6 @@
+plugin-lemmy-signup-name = Lemmy
+plugin-lemmy-signup-desc = Connect to any Lemmy instance with username and password.
+plugin-lemmy-title = Lemmy
 plugin-lemmy-signup-title = Connect to Lemmy
 plugin-lemmy-signup-description = Enter your Lemmy instance URL, username, and password.
 plugin-lemmy-signup-back = ← Back

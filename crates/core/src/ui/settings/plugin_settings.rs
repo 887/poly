@@ -228,3 +228,47 @@ pub fn poly_settings_render_fn() -> Element {
         PolyServerPluginSettings {}
     }
 }
+
+// ── Hacker News plugin settings ───────────────────────────────────────────────
+
+#[cfg(feature = "hackernews")]
+#[component]
+pub fn HackerNewsPluginSettings() -> Element {
+    rsx! {
+        div { class: "plugin-settings-section",
+            h3 { class: "plugin-settings-title", "Hacker News" }
+            p { class: "plugin-settings-desc",
+                "Read-only Hacker News client. Browse top stories, Ask HN, Show HN, and job posts. No write access."
+            }
+        }
+    }
+}
+
+#[cfg(feature = "hackernews")]
+pub fn hackernews_settings_render_fn() -> Element {
+    rsx! {
+        HackerNewsPluginSettings {}
+    }
+}
+
+// ── Lemmy plugin settings ─────────────────────────────────────────────────────
+
+#[cfg(feature = "lemmy")]
+#[component]
+pub fn LemmyPluginSettings() -> Element {
+    rsx! {
+        div { class: "plugin-settings-section",
+            h3 { class: "plugin-settings-title", "Lemmy" }
+            p { class: "plugin-settings-desc",
+                "Federated link aggregator. Connect to any Lemmy instance with your credentials."
+            }
+        }
+    }
+}
+
+#[cfg(feature = "lemmy")]
+pub fn lemmy_settings_render_fn() -> Element {
+    rsx! {
+        LemmyPluginSettings {}
+    }
+}
