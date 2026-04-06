@@ -1551,8 +1551,15 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         let is_channel_switch =
             history_state.read().channel_id.as_deref() != Some(&active_channel_id);
 
+        // Compute messages here so the guard below can check is_empty() for empty channels.
+        let messages = chat_snapshot.messages.clone();
+
+        // Guard: skip if history_state is already up-to-date for this channel.
+        // Without the `messages.is_empty()` arm, empty channels loop forever:
+        // messages_loaded stays false → guard never fires → history_state.set() every
+        // iteration → triggers this effect again → infinite spin.
         if history_state.read().channel_id.as_deref() == Some(&active_channel_id)
-            && history_state.read().messages_loaded
+            && (history_state.read().messages_loaded || messages.is_empty())
         {
             return;
         }
@@ -1570,7 +1577,6 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             scrolled_from_bottom.set(false);
             new_messages_while_scrolled_up.set(0);
         }
-        let messages = chat_snapshot.messages.clone();
         let unread_count = current_channel_unread_count(
             Some(&active_channel_id),
             chat_snapshot.current_channel.as_ref(),
