@@ -309,7 +309,9 @@ impl ClientBackend for HackerNewsClient {
 
 #[cfg(feature = "native")]
 impl HackerNewsClient {
-    /// Fetch the top-level comments for a story and return them as messages.
+    /// Fetch the full comment tree for a story using BFS, up to `limit` total
+    /// comments. Each fetched comment records its parent ID so the UI can
+    /// render nested threads correctly.
     async fn get_comment_thread(
         &self,
         story_id: u64,
@@ -321,19 +323,53 @@ impl HackerNewsClient {
             .await?
             .ok_or_else(|| ClientError::NotFound(format!("story not found: {story_id}")))?;
 
-        let kid_ids: Vec<u64> = story
-            .kids
-            .unwrap_or_default()
-            .into_iter()
-            .take(limit)
-            .collect();
-
-        if kid_ids.is_empty() {
+        let top_kids = story.kids.unwrap_or_default();
+        if top_kids.is_empty() {
             return Ok(Vec::new());
         }
 
-        let items = self.api.get_items_batch(&kid_ids).await?;
-        let messages = items.iter().map(hn_comment_to_message).collect();
+        // BFS queue: (item_id, parent_id). Top-level comments parent = story_id.
+        let mut queue: Vec<(u64, u64)> = top_kids
+            .into_iter()
+            .map(|id| (id, story_id))
+            .collect();
+
+        // Collected (item, parent_id) pairs.
+        let mut collected: Vec<(types::HnItem, u64)> = Vec::new();
+        let max = limit.max(1).min(300);
+
+        while !queue.is_empty() && collected.len() < max {
+            let remaining = max - collected.len();
+            let batch_pairs: Vec<(u64, u64)> = queue
+                .drain(..queue.len().min(remaining))
+                .collect();
+            let ids: Vec<u64> = batch_pairs.iter().map(|(id, _)| *id).collect();
+            let id_to_parent: std::collections::HashMap<u64, u64> =
+                batch_pairs.into_iter().collect();
+
+            let items = self.api.get_items_batch(&ids).await?;
+            for item in items {
+                // Enqueue this item's children for the next BFS round.
+                if let Some(kids) = &item.kids {
+                    for &kid in kids {
+                        queue.push((kid, item.id));
+                    }
+                }
+                let parent = id_to_parent.get(&item.id).copied().unwrap_or(story_id);
+                collected.push((item, parent));
+            }
+        }
+
+        let messages = collected
+            .iter()
+            .map(|(item, parent)| {
+                hn_comment_to_message(
+                    item,
+                    if *parent == story_id { None } else { Some(*parent) },
+                    story_id,
+                )
+            })
+            .collect();
         Ok(messages)
     }
 }

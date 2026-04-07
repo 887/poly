@@ -590,7 +590,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                     let b = b.clone();
                     let comment_channel = format!("hn-post-{pid2}");
                     let result = b.read().await
-                        .get_messages(&comment_channel, MessageQuery::default())
+                        .get_messages(&comment_channel, MessageQuery { limit: Some(200), ..Default::default() })
                         .await
                         .unwrap_or_default();
                     thread_comments.set(result);
@@ -604,7 +604,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                 spawn(async move {
                     let comment_channel = format!("hn-post-{pid}");
                     let result = b.read().await
-                        .get_messages(&comment_channel, MessageQuery::default())
+                        .get_messages(&comment_channel, MessageQuery { limit: Some(200), ..Default::default() })
                         .await
                         .unwrap_or_default();
                     thread_comments.set(result);

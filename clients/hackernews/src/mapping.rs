@@ -2,8 +2,8 @@
 
 use chrono::{DateTime, TimeZone, Utc};
 use poly_client::{
-    Attachment, BackendType, Category, Channel, ChannelType, Message, MessageContent, Reaction,
-    Server, User, PresenceStatus,
+    Attachment, BackendType, Category, Channel, ChannelType, Message, MessageContent,
+    MessageReplyPreview, Reaction, Server, User, PresenceStatus,
 };
 
 use crate::types::{HnFeed, HnItem, HnItemType, HnUser};
@@ -128,6 +128,21 @@ pub fn strip_html(html: &str) -> String {
                 } else if entity.starts_with("#39;") {
                     result.push('\'');
                     for _ in 0..4 {
+                        chars.next();
+                    }
+                } else if entity.starts_with("#x27;") {
+                    result.push('\'');
+                    for _ in 0..5 {
+                        chars.next();
+                    }
+                } else if entity.starts_with("#x2F;") || entity.starts_with("#x2f;") {
+                    result.push('/');
+                    for _ in 0..5 {
+                        chars.next();
+                    }
+                } else if entity.starts_with("apos;") {
+                    result.push('\'');
+                    for _ in 0..5 {
                         chars.next();
                     }
                 } else {
@@ -264,7 +279,12 @@ pub fn hn_item_to_message(item: &HnItem) -> Message {
 }
 
 /// Convert a HN comment item to a Poly Message.
-pub fn hn_comment_to_message(item: &HnItem) -> Message {
+/// Convert a HN comment item to a Poly `Message`.
+///
+/// `parent_id` is the numeric ID of the parent comment (or story for top-level
+/// comments). Pass `None` for top-level comments so `reply_to` stays `None`
+/// and `build_comment_tree` correctly places them at the root.
+pub fn hn_comment_to_message(item: &HnItem, parent_id: Option<u64>, story_id: u64) -> Message {
     let text = if item.deleted.unwrap_or(false) {
         "[deleted]".to_string()
     } else if item.dead.unwrap_or(false) {
@@ -279,6 +299,17 @@ pub fn hn_comment_to_message(item: &HnItem) -> Message {
     let author = hn_author_to_user(item.by.as_deref());
     let timestamp = timestamp_from_unix(item.time);
 
+    // Only set reply_to for non-top-level comments (parent ≠ story).
+    let reply_to = parent_id
+        .filter(|&pid| pid != story_id)
+        .map(|pid| MessageReplyPreview {
+            message_id: pid.to_string(),
+            author_id: String::new(),
+            author_display_name: String::new(),
+            author_avatar_url: None,
+            snippet: String::new(),
+        });
+
     Message {
         id: item.id.to_string(),
         author,
@@ -286,7 +317,7 @@ pub fn hn_comment_to_message(item: &HnItem) -> Message {
         timestamp,
         attachments: Vec::new(),
         reactions: Vec::new(),
-        reply_to: None,
+        reply_to,
         edited: false,
     }
 }
