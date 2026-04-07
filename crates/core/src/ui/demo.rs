@@ -400,6 +400,84 @@ pub(crate) async fn toggle_demo(
     }
 }
 
+/// Re-activate the Forum Demo (DemoClient3 / demo-platypus) after it was toggled off
+/// independently of the main demo toggle.
+///
+/// Mirrors the platypus activation branch inside [`toggle_demo`] but operates on
+/// the forum account alone. Safe to call when the main demo (cat + dog) is active or
+/// inactive — it only touches the `demo-platypus` entry.
+#[cfg(feature = "demo")]
+pub(crate) async fn toggle_demo_forum_on(
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    // Guard: bail if platypus is already registered.
+    if client_manager.read().sessions.contains_key("demo-platypus") {
+        return;
+    }
+
+    // Phase 1: async auth — no Signal lock held.
+    let result: Result<(poly_client::Session, BackendHandle), String> = async {
+        let mut client = poly_demo::DemoClient3::new();
+        let session = client
+            .authenticate(poly_client::AuthCredentials::Token(
+                "demo3-token".to_string(),
+            ))
+            .await
+            .map_err(|e| format!("Forum Demo auth failed: {e}"))?;
+        let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
+            Box::new(client) as Box<dyn poly_client::ClientBackend>,
+        ));
+        Ok((session, handle))
+    }
+    .await;
+
+    let (session, handle) = match result {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("{e}");
+            return;
+        }
+    };
+
+    // Fetch servers (no Signal lock — plain tokio RwLock).
+    let servers = {
+        let guard = handle.read().await;
+        guard.get_servers().await.unwrap_or_default()
+    };
+    let server_map: std::collections::HashMap<String, String> = servers
+        .iter()
+        .map(|s| (s.id.clone(), "demo-platypus".to_string()))
+        .collect();
+
+    // Phase 2: commit synchronously (brief write, no await).
+    client_manager.write().commit_backend_account(
+        "demo-platypus".to_string(),
+        session.clone(),
+        handle,
+        server_map,
+    );
+    chat_data
+        .write()
+        .account_sessions
+        .insert("demo-platypus".to_string(), session);
+
+    // Populate servers + favorites.
+    {
+        let mut cd = chat_data.write();
+        for srv in servers {
+            if !cd.servers.iter().any(|s| s.id == srv.id) {
+                cd.servers.push(srv.clone());
+            }
+            if !cd.favorited_server_ids.contains(&srv.id) {
+                cd.favorited_server_ids.push(srv.id.clone());
+            }
+        }
+    }
+
+    tracing::info!("Forum Demo (demo-platypus) re-activated");
+}
+
 /// Start a background event-stream listener for a single backend account.
 ///
 /// Spawns a Dioxus task that polls the backend's

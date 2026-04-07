@@ -32,8 +32,15 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
     NativeBackend {
         slug: "demo",
         icon: "🧪",
-        name: "Demo",
+        name: "Messenger Demo",
         description: "Built-in mock data for exploring Poly without real accounts.",
+        available: true,
+    },
+    NativeBackend {
+        slug: "demo_forum",
+        icon: "🧪",
+        name: "Forum Demo",
+        description: "Built-in mock forum data for exploring the Lemmy-style forum UI.",
         available: true,
     },
     NativeBackend {
@@ -70,13 +77,6 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
         name: "Poly Server",
         description: "Self-hosted Poly backup / sync server with E2E encryption.",
         available: cfg!(feature = "server"),
-    },
-    NativeBackend {
-        slug: "demo_forum",
-        icon: "🧪",
-        name: "Demo (Forum)",
-        description: "Built-in mock forum data for exploring the Lemmy-style forum UI.",
-        available: true,
     },
     NativeBackend {
         slug: "hackernews",
@@ -474,14 +474,22 @@ pub fn PluginsSettings() -> Element {
                                                             .retain(|fid| live_server_ids.contains(fid));
                                                     }
                                                     // Phase 4: remove stored tokens.
-                                                    if let Some(storage) = crate::STORAGE.get() {
-                                                        for id in &removed_ids {
-                                                            let _ = storage
-                                                                .remove_account_token(
-                                                                    &backend_slug,
-                                                                    id,
-                                                                )
-                                                                .await;
+                                                    // Skip for self-initializing backends
+                                                    // (demo_forum, hackernews) so they can
+                                                    // be restored when re-enabled without a
+                                                    // full signup flow.
+                                                    let is_self_init = backend_slug == "demo_forum"
+                                                        || backend_slug == "hackernews";
+                                                    if !is_self_init {
+                                                        if let Some(storage) = crate::STORAGE.get() {
+                                                            for id in &removed_ids {
+                                                                let _ = storage
+                                                                    .remove_account_token(
+                                                                        &backend_slug,
+                                                                        id,
+                                                                    )
+                                                                    .await;
+                                                            }
                                                         }
                                                     }
                                                     // Phase 5: persist the disabled state.
@@ -507,6 +515,30 @@ pub fn PluginsSettings() -> Element {
                                                 s.wasm_plugins = wasm;
                                                 save_settings(&s).await;
                                             });
+                                            // Re-initialize self-activating backends that
+                                            // don't require a signup flow.
+                                            if toggled == "demo_forum" {
+                                                spawn(async move {
+                                                    crate::ui::demo::toggle_demo_forum_on(
+                                                        client_manager,
+                                                        chat_data,
+                                                    )
+                                                    .await;
+                                                });
+                                            }
+                                            #[cfg(feature = "hackernews")]
+                                            if toggled == "hackernews" {
+                                                if let Some(storage) = crate::STORAGE.get() {
+                                                    spawn(async move {
+                                                        crate::ui::restore_hackernews_accounts(
+                                                            storage,
+                                                            client_manager,
+                                                            chat_data,
+                                                        )
+                                                        .await;
+                                                    });
+                                                }
+                                            }
                                         }
                                     }
                                 },

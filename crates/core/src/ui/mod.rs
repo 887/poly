@@ -744,7 +744,7 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
 /// the `server_account_map`, and adds the server to `chat_data.servers` so the
 /// favorites bar renders immediately.
 #[cfg(feature = "hackernews")]
-async fn restore_hackernews_accounts(
+pub(crate) async fn restore_hackernews_accounts(
     storage: &crate::storage::Storage,
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
