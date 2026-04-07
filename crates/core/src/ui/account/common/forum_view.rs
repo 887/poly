@@ -774,8 +774,11 @@ fn ForumComment(node: ForumCommentNode) -> Element {
     let depth = node.depth;
     let children = node.children.clone();
 
+    let mut collapsed = use_signal(|| false);
+
     let score = post_score(msg);
     let sc = score_class(score);
+    let show_score = msg.author.backend.slug() != "hackernews" && score != 0;
     let author_name = msg.author.display_name.clone();
     let author_initial = author_name.chars().next().unwrap_or('?').to_uppercase().to_string();
     let avatar_url = msg.author.avatar_url.clone();
@@ -792,11 +795,29 @@ fn ForumComment(node: ForumCommentNode) -> Element {
         _ => "#a78bfa",
     };
 
+    // Count total descendants for the collapsed summary.
+    fn count_descendants(nodes: &[ForumCommentNode]) -> usize {
+        nodes.iter().fold(0, |acc, n| acc + 1 + count_descendants(&n.children))
+    }
+    let descendant_count = count_descendants(&children);
+    let is_collapsed = *collapsed.read();
+    let toggle_label = if is_collapsed { "[+]" } else { "[-]" };
+    let collapsed_hint = if is_collapsed && descendant_count > 0 {
+        format!(" ({descendant_count} hidden)")
+    } else {
+        String::new()
+    };
+
     rsx! {
         div {
             class: "forum-comment",
             style: "margin-left: {indent_px}px; border-left: 2px solid {border_color};",
             div { class: "forum-comment-header",
+                button {
+                    class: "forum-comment-collapse",
+                    onclick: move |_| collapsed.set(!is_collapsed),
+                    "{toggle_label}"
+                }
                 if let Some(ref url) = avatar_url {
                     img { class: "forum-comment-avatar", src: "{url}", alt: "{author_name}" }
                 } else {
@@ -808,11 +829,18 @@ fn ForumComment(node: ForumCommentNode) -> Element {
                 }
                 span { class: "forum-comment-author", "{author_name}" }
                 span { class: "forum-comment-time", "· {time_str}" }
-                span { class: "{sc} forum-comment-score", "{score_label}" }
+                if show_score {
+                    span { class: "{sc} forum-comment-score", "{score_label}" }
+                }
+                if !collapsed_hint.is_empty() {
+                    span { class: "forum-comment-collapsed-hint", "{collapsed_hint}" }
+                }
             }
-            p { class: "forum-comment-body", "{text}" }
-            for child in children {
-                ForumComment { node: child.clone() }
+            if !is_collapsed {
+                p { class: "forum-comment-body", "{text}" }
+                for child in children {
+                    ForumComment { node: child.clone() }
+                }
             }
         }
     }
