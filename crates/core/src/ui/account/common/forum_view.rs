@@ -588,8 +588,9 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                 // After channel loaded, fetch comments.
                 if let Some(ref b) = backend2 {
                     let b = b.clone();
+                    let comment_channel = format!("hn-post-{pid2}");
                     let result = b.read().await
-                        .get_messages(&pid2, MessageQuery::default())
+                        .get_messages(&comment_channel, MessageQuery::default())
                         .await
                         .unwrap_or_default();
                     thread_comments.set(result);
@@ -601,8 +602,9 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
             if let Some(ref b) = backend {
                 let b = b.clone();
                 spawn(async move {
+                    let comment_channel = format!("hn-post-{pid}");
                     let result = b.read().await
-                        .get_messages(&pid, MessageQuery::default())
+                        .get_messages(&comment_channel, MessageQuery::default())
                         .await
                         .unwrap_or_default();
                     thread_comments.set(result);
