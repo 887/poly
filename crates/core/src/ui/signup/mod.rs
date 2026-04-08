@@ -55,6 +55,11 @@ fn build_on_complete(
             Arc::new(tokio::sync::RwLock::new(completed.backend));
         let session = completed.session;
         spawn(async move {
+            // Guard: reject duplicate session IDs (e.g. two anonymous HN accounts).
+            if client_manager.read().sessions.contains_key(&session.id) {
+                tracing::warn!("signup: session '{}' already exists — ignoring duplicate", session.id);
+                return;
+            }
             let backend_slug = session.backend.slug().to_string();
             let account_id  = session.id.clone();
             let instance_id = session.instance_id.clone();
