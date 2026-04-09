@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [features]
 default = ["db-sqlite"]
-db-surreal = ["dep:surrealdb"]
+db-surreal = ["dep:surrealdb", "surrealdb?/protocol-ws"]
 db-sqlite = ["dep:sqlite"]
 
 [dependencies]
@@ -31,7 +31,7 @@ tower-http = { workspace = true, features = ["cors", "trace"] }
 tower = { workspace = true, features = ["util"] }
 
 # Database — one of these is active depending on feature flags.
-surrealdb = { workspace = true, features = ["kv-surrealkv"], optional = true }
+surrealdb = { workspace = true, optional = true }
 sqlite = { workspace = true, optional = true }
 
 # Serialization

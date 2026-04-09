@@ -1,9 +1,10 @@
-//! SurrealDB backend using SurrealKV (embedded, no external process).
+//! SurrealDB backend — connects to a running SurrealDB daemon over WebSocket.
 
 use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use surrealdb::Surreal;
-use surrealdb::engine::local::{Db as SurrealDb, SurrealKv};
+use surrealdb::engine::remote::ws::{Client, Ws};
+use surrealdb::opt::auth::Root;
 use surrealdb::types::{Number, RecordIdKey, Value};
 use surrealdb::IndexedResults;
 use tracing::info;
@@ -12,16 +13,17 @@ use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::*;
 
-/// SurrealDB database handle.
+/// SurrealDB database handle (remote WebSocket connection).
 #[derive(Clone)]
 pub struct Db {
-    inner: Surreal<SurrealDb>,
+    inner: Surreal<Client>,
 }
 
 impl Db {
     pub async fn init(config: &Config) -> anyhow::Result<Self> {
-        info!("Opening SurrealKV at {}", config.db_path);
-        let inner = Surreal::new::<SurrealKv>(&config.db_path).await?;
+        info!("Connecting to SurrealDB at {}", config.surreal_url);
+        let inner = Surreal::new::<Ws>(&config.surreal_url).await?;
+        inner.signin(Root { username: &config.surreal_user, password: &config.surreal_pass }).await?;
         inner.use_ns("poly").use_db("server").await?;
         inner.query(SCHEMA).await?.check()?;
         info!("Database schema applied");

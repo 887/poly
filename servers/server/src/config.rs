@@ -3,8 +3,14 @@
 pub struct Config {
     /// Address to bind the HTTP server on (e.g. `0.0.0.0:7080`).
     pub bind_addr: String,
-    /// Path to the SurrealKV data directory.
+    /// Path to the SQLite database file.
     pub db_path: String,
+    /// SurrealDB WebSocket endpoint (e.g. `ws://localhost:8000`).
+    pub surreal_url: String,
+    /// SurrealDB username (for network connection).
+    pub surreal_user: String,
+    /// SurrealDB password (for network connection).
+    pub surreal_pass: String,
     /// Human-readable server name shown in `/server-info`.
     pub server_name: String,
     /// If true, signup requires an invite code.
@@ -23,7 +29,13 @@ impl Config {
     pub fn from_env() -> Self {
         Self {
             bind_addr: std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:7080".to_owned()),
-            db_path: std::env::var("DB_PATH").unwrap_or_else(|_| "poly-server-data".to_owned()),
+            db_path: std::env::var("DB_PATH").unwrap_or_else(|_| "poly-server.db".to_owned()),
+            surreal_url: std::env::var("SURREAL_URL")
+                .unwrap_or_else(|_| "ws://localhost:8000".to_owned()),
+            surreal_user: std::env::var("SURREAL_USER")
+                .unwrap_or_else(|_| "root".to_owned()),
+            surreal_pass: std::env::var("SURREAL_PASS")
+                .unwrap_or_else(|_| "root".to_owned()),
             server_name: std::env::var("SERVER_NAME")
                 .unwrap_or_else(|_| "My Poly Server".to_owned()),
             invite_only: std::env::var("INVITE_ONLY")
