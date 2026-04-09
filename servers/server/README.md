@@ -25,21 +25,29 @@ or as a fallback when third-party services block access.
 | File/image uploads | ✅ |
 | Friend requests | ✅ |
 | Invite codes | ✅ |
-| SurrealDB + SurrealKV (embedded) | ✅ |
+| SQLite (default, zero deps) | ✅ |
+| SurrealDB network (`ws://`) | ✅ |
+| SurrealDB embedded (`surrealkv://`) | ✅ |
 
 ---
 
 ## Quick Start
 
 ```bash
-# Dev (with logging)
+# Dev — SQLite, logging (default)
 RUST_LOG=debug cargo run -p poly-server
 
-# Production — override defaults via env
-POLY_SERVER_BIND=0.0.0.0:7080 \
-POLY_SERVER_DB_PATH=/var/lib/poly-server/db \
-POLY_SERVER_JWT_SECRET=$(openssl rand -hex 32) \
-POLY_SERVER_NAME="My Poly Server" \
+# Dev — connect to local SurrealDB daemon
+RUST_LOG=debug cargo run -p poly-server --no-default-features --features db-surreal
+
+# Dev — embedded SurrealKV (no external process)
+RUST_LOG=debug SURREAL_URL=surrealkv://./poly-server-data \
+  cargo run -p poly-server --no-default-features --features db-surreal
+
+# Production
+BIND_ADDR=0.0.0.0:7080 \
+JWT_SECRET=$(openssl rand -hex 32) \
+SERVER_NAME="My Poly Server" \
 cargo run --release -p poly-server
 ```
 
@@ -51,13 +59,26 @@ The server is now available at `http://localhost:7080`.
 
 | Variable | Default | Description |
 |---|---|---|
-| `POLY_SERVER_BIND` | `127.0.0.1:7080` | Listen address |
-| `POLY_SERVER_DB_PATH` | `./data/poly.db` | SurrealKV data directory |
-| `POLY_SERVER_NAME` | `Poly Server` | Server display name |
-| `POLY_SERVER_INVITE_ONLY` | `false` | Restrict registration to invite codes |
-| `POLY_SERVER_JWT_SECRET` | *random (dev)* | JWT signing secret (set in production!) |
-| `POLY_SERVER_JWT_EXPIRY_SECS` | `2592000` (30 days) | Token lifetime |
+| `BIND_ADDR` | `127.0.0.1:7080` | Listen address |
+| `JWT_SECRET` | *(dev placeholder)* | JWT signing secret — **set this in production** |
+| `JWT_EXPIRY_SECS` | `2592000` (30 days) | Token lifetime |
+| `SERVER_NAME` | `My Poly Server` | Server display name |
+| `INVITE_ONLY` | `false` | Restrict registration to invite codes |
 | `POLY_SERVER_UPLOADS_DIR` | `./data/uploads` | Attachment storage directory |
+
+### Database (SQLite — default)
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_PATH` | `poly-server.db` | SQLite file path |
+
+### Database (SurrealDB — `--features db-surreal --no-default-features`)
+
+| Variable | Default | Description |
+|---|---|---|
+| `SURREAL_URL` | `ws://localhost:8000` | Connection URL. Use `ws://` for a running daemon, `surrealkv://./path` for embedded. |
+| `SURREAL_USER` | `root` | SurrealDB username (network mode only) |
+| `SURREAL_PASS` | `root` | SurrealDB password (network mode only) |
 
 ---
 
@@ -180,4 +201,4 @@ poly-server/
     └── integration.rs  — End-to-end test suite
 ```
 
-All data lives in a SurrealKV embedded database — zero external dependencies beyond the binary itself.
+Default build uses SQLite — zero external dependencies. Enable `db-surreal` for SurrealDB, either connecting to a running daemon (`ws://`) or using embedded SurrealKV (`surrealkv://`).
