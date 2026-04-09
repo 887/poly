@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [features]
 default = ["db-sqlite"]
-db-surreal = ["dep:surrealdb", "surrealdb?/protocol-ws"]
+db-surreal = ["dep:surrealdb", "surrealdb?/protocol-ws", "surrealdb?/kv-surrealkv", "surrealdb?/any"]
 db-sqlite = ["dep:sqlite"]
 
 [dependencies]

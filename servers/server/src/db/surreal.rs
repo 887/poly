@@ -1,9 +1,15 @@
-//! SurrealDB backend — connects to a running SurrealDB daemon over WebSocket.
+//! SurrealDB backend.
+//!
+//! The connection is driven by `Config::surreal_url`:
+//! - `ws://host:port` or `wss://host:port` — connects to a running SurrealDB daemon.
+//! - `surrealkv://./path/to/data` — embedded SurrealKV (no external process).
+//!
+//! Both modes use the same `Surreal<Any>` handle so all query code is shared.
 
 use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use surrealdb::Surreal;
-use surrealdb::engine::remote::ws::{Client, Ws};
+use surrealdb::engine::any::Any;
 use surrealdb::opt::auth::Root;
 use surrealdb::types::{Number, RecordIdKey, Value};
 use surrealdb::IndexedResults;
@@ -13,17 +19,20 @@ use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::*;
 
-/// SurrealDB database handle (remote WebSocket connection).
+/// SurrealDB database handle.
 #[derive(Clone)]
 pub struct Db {
-    inner: Surreal<Client>,
+    inner: Surreal<Any>,
 }
 
 impl Db {
     pub async fn init(config: &Config) -> anyhow::Result<Self> {
         info!("Connecting to SurrealDB at {}", config.surreal_url);
-        let inner = Surreal::new::<Ws>(&config.surreal_url).await?;
-        inner.signin(Root { username: &config.surreal_user, password: &config.surreal_pass }).await?;
+        let inner = surrealdb::engine::any::connect(&config.surreal_url).await?;
+        // Only sign in for remote connections; embedded SurrealKV handles auth internally.
+        if config.surreal_url.starts_with("ws://") || config.surreal_url.starts_with("wss://") {
+            inner.signin(Root { username: &config.surreal_user, password: &config.surreal_pass }).await?;
+        }
         inner.use_ns("poly").use_db("server").await?;
         inner.query(SCHEMA).await?.check()?;
         info!("Database schema applied");

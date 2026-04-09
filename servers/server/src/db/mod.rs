@@ -1,8 +1,8 @@
 //! Database abstraction layer.
 //!
 //! Two backends, selected at compile time:
-//! - `db-surreal` (default): SurrealDB with SurrealKV — production backend.
-//! - `db-sqlite`: SQLite — lightweight backend for tests and development.
+//! - `db-surreal`: SurrealDB — supports both network (`ws://`) and embedded (`surrealkv://`) via `SURREAL_URL`.
+//! - `db-sqlite` (default): SQLite — lightweight, zero external dependencies.
 //!
 //! Both export the same `Db` type with identical async methods.
 //! Handlers never touch raw queries — they call `state.db.some_operation()`.
