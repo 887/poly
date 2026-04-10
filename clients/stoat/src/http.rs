@@ -12,7 +12,7 @@ use crate::api::{
 };
 use crate::config::StoatConfig;
 use poly_client::{Attachment, ClientError, ClientResult, MessageQuery};
-use reqwest::{Client, Method, RequestBuilder, multipart};
+use poly_host_bridge::http::{HttpClient, HttpError, Method, RequestBuilder, Response};
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
 
@@ -35,7 +35,7 @@ pub struct StoatSessionState {
 #[derive(Debug, Clone)]
 pub struct StoatHttpClient {
     config: StoatConfig,
-    http: Client,
+    http: HttpClient,
     session: Arc<RwLock<Option<StoatSessionState>>>,
     /// WebSocket URL obtained from the server's root config (GET /).
     /// Set after successful authentication.
@@ -48,7 +48,7 @@ impl StoatHttpClient {
     pub fn new(config: StoatConfig) -> Self {
         Self {
             config,
-            http: Client::new(),
+            http: HttpClient::new(),
             session: Arc::new(RwLock::new(None)),
             ws_url: Arc::new(RwLock::new(None)),
         }
@@ -599,12 +599,17 @@ impl StoatHttpClient {
             ClientError::NotSupported("Stoat attachment send requires raw upload bytes".to_string())
         })?;
 
-        let part = multipart::Part::bytes(upload_bytes)
-            .file_name(attachment.filename.clone())
-            .mime_str(&attachment.content_type)
-            .map_err(|err| {
-                ClientError::Internal(format!("invalid Stoat attachment MIME type: {err}"))
-            })?;
+        let boundary = format!(
+            "----polystoatboundary{}",
+            uuid::Uuid::new_v4().simple()
+        );
+        let body = encode_multipart_file(
+            &boundary,
+            "file",
+            &attachment.filename,
+            &attachment.content_type,
+            &upload_bytes,
+        );
 
         let response = self
             .http
@@ -613,7 +618,11 @@ impl StoatHttpClient {
                 autumn_base_url.trim_end_matches('/')
             ))
             .header(STOAT_SESSION_TOKEN_HEADER, token)
-            .multipart(multipart::Form::new().part("file", part))
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(body)
             .send()
             .await
             .map_err(Self::network_error)?;
@@ -663,11 +672,11 @@ impl StoatHttpClient {
         self.clear_session()
     }
 
-    fn network_error(error: reqwest::Error) -> ClientError {
+    fn network_error(error: HttpError) -> ClientError {
         ClientError::Network(error.to_string())
     }
 
-    async fn parse_error(response: reqwest::Response) -> ClientError {
+    async fn parse_error(response: Response) -> ClientError {
         let status = response.status();
         let retry_after_ms = response
             .headers()
@@ -694,6 +703,35 @@ impl StoatHttpClient {
     }
 }
 
+/// Hand-encode a single-file `multipart/form-data` body so we can ship it
+/// through the host bridge as a raw byte body. The host bridge protocol
+/// doesn't have a multipart variant, so we serialize once on the WASM side
+/// and let the native shell forward the bytes verbatim.
+fn encode_multipart_file(
+    boundary: &str,
+    field_name: &str,
+    filename: &str,
+    content_type: &str,
+    bytes: &[u8],
+) -> Vec<u8> {
+    let mut body: Vec<u8> = Vec::with_capacity(bytes.len() + 256);
+    body.extend_from_slice(b"--");
+    body.extend_from_slice(boundary.as_bytes());
+    body.extend_from_slice(b"\r\n");
+    body.extend_from_slice(
+        format!(
+            "Content-Disposition: form-data; name=\"{field_name}\"; filename=\"{filename}\"\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(format!("Content-Type: {content_type}\r\n\r\n").as_bytes());
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(b"\r\n--");
+    body.extend_from_slice(boundary.as_bytes());
+    body.extend_from_slice(b"--\r\n");
+    body
+}
+
 fn extract_error_detail(value: &Value) -> Option<String> {
     value
         .get("error")
@@ -714,11 +752,12 @@ fn extract_error_detail(value: &Value) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::StoatHttpClient;
     use crate::api::StoatRootConfig;
     use crate::config::StoatConfig;
-    use reqwest::Method;
+    use poly_host_bridge::http::Method;
     use serde_json::json;
 
     #[test]
@@ -726,11 +765,10 @@ mod tests {
         let client = StoatConfig::new("https://chat.example.test/api/")
             .map(StoatHttpClient::new)
             .map_err(|error| error.to_string())
-            .and_then(|http| {
+            .map(|http| {
                 http.request(Method::GET, "servers")
-                    .build()
-                    .map(|request| request.url().to_string())
-                    .map_err(|error| error.to_string())
+                    .url_ref()
+                    .to_string()
             });
         assert_eq!(
             client,
@@ -746,18 +784,13 @@ mod tests {
             .and_then(|http| {
                 http.set_session_token("session-123".to_string())
                     .map_err(|error| error.to_string())?;
-                http.authenticated_request(Method::GET, "/servers")
-                    .map_err(|error| error.to_string())?
-                    .build()
-                    .map_err(|error| error.to_string())
-                    .and_then(|request| {
-                        request
-                            .headers()
-                            .get("x-session-token")
-                            .and_then(|value| value.to_str().ok())
-                            .map(std::string::ToString::to_string)
-                            .ok_or_else(|| "missing x-session-token header".to_string())
-                    })
+                let builder = http
+                    .authenticated_request(Method::GET, "/servers")
+                    .map_err(|error| error.to_string())?;
+                builder
+                    .header_value("x-session-token")
+                    .map(std::string::ToString::to_string)
+                    .ok_or_else(|| "missing x-session-token header".to_string())
             });
         assert_eq!(client, Ok("session-123".to_string()));
     }

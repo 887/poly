@@ -10,12 +10,15 @@ name = "poly-desktop"
 path = "src/main.rs"
 
 [dependencies]
-poly-core = { workspace = true, features = ["demo", "native-nav"] }
+# `github` is enabled on both targets:
+# - native build talks to `gh` directly via tokio::process
+# - wasm build (run inside the apps/desktop-web Wry shell) calls the
+#   localhost /gh subprocess bridge that the shell exposes on port 9223
+poly-core = { workspace = true, features = ["demo", "native-nav", "github"] }
 tracing = { workspace = true }
 
 # Native (Wry) build
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-poly-core = { workspace = true, features = ["github"] }
 dioxus = { workspace = true, features = ["desktop"] }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }

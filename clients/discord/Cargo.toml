@@ -17,7 +17,7 @@ native = [
     "dep:tokio",
     "dep:serde",
     "dep:serde_json",
-    "dep:reqwest",
+    "dep:poly-host-bridge",
     "dep:chrono",
     "dep:uuid",
     "dep:thiserror",
@@ -26,12 +26,12 @@ native = [
 
 [dependencies]
 poly-client = { workspace = true }
+poly-host-bridge = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }
 
 # Native-only dependencies (feature-gated)
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["js"] }
@@ -49,6 +49,9 @@ poly-test-discord = { path = "../../servers/test-discord" }
 axum = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
+# Integration tests talk to the test server directly (native), so they keep
+# using reqwest as a dev-dependency.
+reqwest = { workspace = true }
 
 [lints]
 workspace = true

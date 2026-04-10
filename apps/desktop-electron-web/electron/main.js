@@ -61,6 +61,14 @@ const {
   attachWindowStateListeners,
   registerWindowControlsIpc,
 } = require('./shared/main_process');
+const hostBridge = require('./host_bridge');
+
+// ── Poly host bridge ──────────────────────────────────────────────────────────
+// Generic JSON-over-HTTP endpoint mirroring crates/host-bridge. Lets WASM-side
+// plugins running in the renderer call host-api operations (exec-command,
+// http-request, …) by POSTing to http://127.0.0.1:9333/host. Same wire format
+// as the Wry shell, so the same client code works in either container.
+let hostBridgeServer = null;
 
 // ── Always-on remote debugging ────────────────────────────────────────────────
 // CDP port: default 9224 (same as the MCP expects).  Override with env var.
@@ -130,6 +138,7 @@ app.whenReady().then(() => {
 
   void createWindow();
   startMcpSidecar();
+  hostBridgeServer = hostBridge.start();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -138,7 +147,13 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('will-quit', stopMcpSidecar);
+app.on('will-quit', () => {
+  stopMcpSidecar();
+  if (hostBridgeServer) {
+    hostBridgeServer.close();
+    hostBridgeServer = null;
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

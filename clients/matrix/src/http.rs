@@ -11,7 +11,7 @@ use crate::api::{
 };
 use crate::config::MatrixConfig;
 use poly_client::{ClientError, ClientResult};
-use reqwest::{Client, Method, RequestBuilder};
+use poly_host_bridge::http::{HttpClient, Method, RequestBuilder, Response};
 use std::sync::{Arc, RwLock};
 
 /// Matrix session state persisted across requests.
@@ -33,7 +33,7 @@ pub struct MatrixSessionState {
 #[derive(Debug, Clone)]
 pub struct MatrixHttpClient {
     config: MatrixConfig,
-    http: Client,
+    http: HttpClient,
     session: Arc<RwLock<Option<MatrixSessionState>>>,
 }
 
@@ -43,7 +43,7 @@ impl MatrixHttpClient {
     pub fn new(config: MatrixConfig) -> Self {
         Self {
             config,
-            http: Client::new(),
+            http: HttpClient::new(),
             session: Arc::new(RwLock::new(None)),
         }
     }
@@ -462,11 +462,11 @@ impl MatrixHttpClient {
     // Error handling
     // -----------------------------------------------------------------------
 
-    fn network_error(error: reqwest::Error) -> ClientError {
+    fn network_error(error: poly_host_bridge::http::HttpError) -> ClientError {
         ClientError::Network(error.to_string())
     }
 
-    async fn parse_error(response: reqwest::Response) -> ClientError {
+    async fn parse_error(response: Response) -> ClientError {
         let status = response.status();
         let payload = response.json::<serde_json::Value>().await.ok();
 
@@ -512,20 +512,14 @@ fn build_path(base: &str, params: &[(&str, String)]) -> String {
 mod tests {
     use super::*;
     use crate::config::MatrixConfig;
-    use reqwest::Method;
 
     #[test]
     fn request_uses_normalized_base_url() {
         let config = MatrixConfig::new("https://matrix.example.test/").unwrap();
         let client = MatrixHttpClient::new(config);
-        let url = client
-            .request(Method::GET, "/_matrix/client/v3/login")
-            .build()
-            .unwrap()
-            .url()
-            .to_string();
+        let builder = client.request(Method::GET, "/_matrix/client/v3/login");
         assert_eq!(
-            url,
+            builder.url_ref(),
             "https://matrix.example.test/_matrix/client/v3/login"
         );
     }
@@ -544,17 +538,10 @@ mod tests {
             })
             .unwrap();
 
-        let request = client
+        let builder = client
             .authenticated_request(Method::GET, "/_matrix/client/v3/sync")
-            .unwrap()
-            .build()
             .unwrap();
-
-        let auth = request
-            .headers()
-            .get("authorization")
-            .and_then(|v| v.to_str().ok())
-            .unwrap();
+        let auth = builder.header_value("authorization").unwrap();
         assert_eq!(auth, "Bearer syt_test_token");
     }
 

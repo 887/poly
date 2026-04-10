@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/core",
+    "crates/host-bridge",
     "crates/plugin-host",
     "crates/plugin-host-tests",
     "clients/client",
@@ -180,6 +181,7 @@ wry = "0.53"
 
 # Internal crates
 poly-core = { path = "crates/core" }
+poly-host-bridge = { path = "crates/host-bridge" }
 poly-plugin-host = { path = "crates/plugin-host" }
 poly-client = { path = "clients/client" }
 poly-demo = { path = "clients/demo" }

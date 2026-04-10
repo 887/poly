@@ -21,7 +21,10 @@ tokio = { workspace = true, features = [
     "fs",
 ] }
 axum = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+poly-host-bridge = { workspace = true }
 anyhow = { workspace = true }
 webkit2gtk = { workspace = true }
 cairo-rs = { workspace = true }

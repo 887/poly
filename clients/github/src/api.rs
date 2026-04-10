@@ -2,23 +2,35 @@
 //!
 //! All requests go through `gh api <endpoint>` (or `gh api -H ... <endpoint>`).
 //! No tokens are extracted from `gh` — credentials live in the user's gh
-//! configuration. We only call the CLI directly with `tokio::process::Command`,
-//! so there is no shell involved and shell metacharacters in argv are inert.
+//! configuration.
 //!
 //! GitHub Enterprise (GHE) is supported by passing `--hostname <host>`.
-
-use std::process::Stdio;
+//!
+//! ## Native vs WASM
+//!
+//! On native targets [`GhCli::api_raw`] runs the `gh` binary directly with
+//! [`tokio::process::Command`] — no shell, so argv metacharacters stay inert.
+//!
+//! On wasm32 (the dioxus web build that runs inside the Wry / Electron shells)
+//! [`GhCli::api_raw`] cannot spawn processes, so it routes through the
+//! [`poly_host_bridge`] client, which POSTs an `exec-command` [`HostCall`]
+//! to the native shell's generic `/host` endpoint. The shell runs `gh` on
+//! the user's behalf and returns the exit code + stdout/stderr. The same
+//! bridge handles every other host-api operation, so this code is not
+//! github-specific. Convenience methods built on top (`auth_status_login`,
+//! `list_user_repos`, …) are target-agnostic.
+//!
+//! [`HostCall`]: poly_host_bridge::HostCall
 
 use serde::de::DeserializeOwned;
 use thiserror::Error;
-use tokio::process::Command;
 
 use crate::types::{GhContents, GhIssue, GhIssueComment, GhRepo, GhUser};
 
 /// All errors the gh CLI wrapper can return.
 #[derive(Debug, Error)]
 pub enum GhError {
-    /// Failed to spawn the `gh` binary (not installed / not on PATH).
+    /// Failed to spawn / reach the `gh` transport (native: subprocess; WASM: bridge).
     #[error("failed to spawn gh CLI: {0}")]
     Spawn(String),
     /// `gh` exited with a non-zero status; the message is the captured stderr.
@@ -71,8 +83,12 @@ impl GhCli {
         serde_json::from_slice(&bytes).map_err(|e| GhError::Parse(e.to_string()))
     }
 
-    /// Run `gh api <endpoint>` and return the raw stdout bytes.
+    /// Native: run `gh api <endpoint>` as a subprocess and return raw stdout.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn api_raw(&self, endpoint: &str, extra_args: &[&str]) -> Result<Vec<u8>, GhError> {
+        use std::process::Stdio;
+        use tokio::process::Command;
+
         let mut cmd = Command::new("gh");
         cmd.arg("api");
         if let Some(host) = &self.hostname {
@@ -99,6 +115,45 @@ impl GhCli {
         }
 
         Ok(output.stdout)
+    }
+
+    /// WASM: route the `gh` invocation through the abstract host bridge that
+    /// the native shell (Wry / Electron / future iOS / Android) exposes at
+    /// `/host`. We send a single [`HostCall::ExecCommand`] and the shell runs
+    /// the binary on our behalf. No GitHub-specific protocol shape — every
+    /// host-api operation goes through the same endpoint.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn api_raw(&self, endpoint: &str, extra_args: &[&str]) -> Result<Vec<u8>, GhError> {
+        use poly_host_bridge::{BridgeError, Client};
+
+        let mut args: Vec<String> = Vec::with_capacity(4 + extra_args.len());
+        args.push("api".to_string());
+        if let Some(host) = &self.hostname {
+            args.push("--hostname".to_string());
+            args.push(host.clone());
+        }
+        args.push(endpoint.to_string());
+        for a in extra_args {
+            args.push((*a).to_string());
+        }
+
+        let client = Client::new();
+        let (exit_code, stdout, stderr) = client.exec("gh", args).await.map_err(|e| match e {
+            BridgeError::Unreachable { url, source } => GhError::Spawn(format!(
+                "host bridge unreachable at {url}: {source} — this build of Poly \
+                 needs a native shell (apps/desktop-web, apps/desktop-electron-web, …) \
+                 to forward gh CLI calls."
+            )),
+            other => GhError::Spawn(other.to_string()),
+        })?;
+
+        if exit_code != 0 {
+            return Err(GhError::Exit {
+                code: exit_code,
+                stderr: String::from_utf8_lossy(&stderr).into_owned(),
+            });
+        }
+        Ok(stdout)
     }
 
     /// Check whether the user is authenticated against this instance.
@@ -132,9 +187,7 @@ impl GhCli {
         owner: &str,
         repo: &str,
     ) -> Result<Vec<GhIssue>, GhError> {
-        let endpoint = format!(
-            "/repos/{owner}/{repo}/issues?state=all&per_page=50&sort=updated"
-        );
+        let endpoint = format!("/repos/{owner}/{repo}/issues?state=all&per_page=50&sort=updated");
         self.api_get(&endpoint, &[]).await
     }
 

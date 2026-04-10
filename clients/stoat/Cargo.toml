@@ -21,19 +21,19 @@ native = [
     "dep:uuid",
     "dep:thiserror",
     "dep:tracing",
-    "dep:reqwest",
+    "dep:poly-host-bridge",
     "dep:tokio-tungstenite",
     "dep:tokio-stream",
 ]
 
 [dependencies]
 poly-client = { workspace = true }
+poly-host-bridge = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }
 
 # Native-only dependencies (feature-gated)
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true, features = ["multipart"] }
 tokio = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["js"] }

@@ -56,7 +56,7 @@ use http::StoatHttpClient;
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
-use reqwest::{Method, RequestBuilder};
+use poly_host_bridge::http::{Method, RequestBuilder};
 #[cfg(feature = "native")]
 use std::collections::HashMap;
 #[cfg(feature = "native")]
@@ -1223,12 +1223,11 @@ mod tests {
     fn request_builder_uses_configured_base_url() {
         let client = StoatClient::with_base_url("https://chat.example.test/api");
         assert_eq!(
-            client.map_err(|error| error.to_string()).and_then(|stoat| {
+            client.map_err(|error| error.to_string()).map(|stoat| {
                 stoat
                     .request_builder(Method::GET, "/servers")
-                    .build()
-                    .map(|request| request.url().to_string())
-                    .map_err(|error| error.to_string())
+                    .url_ref()
+                    .to_string()
             }),
             Ok("https://chat.example.test/api/servers".to_string())
         );

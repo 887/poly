@@ -8,7 +8,7 @@ use poly_client::{
     Attachment, BackendType, Category, Channel, ChannelType, ClientError, ClientResult, DmChannel,
     Message, MessageContent, PresenceStatus, Reaction, Server, User,
 };
-use reqwest::Client;
+use poly_host_bridge::http::{HttpClient, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 
@@ -383,7 +383,7 @@ pub struct LemmySession {
 /// Low-level Lemmy REST API client.
 pub struct LemmyHttpClient {
     base_url: String,
-    http: Client,
+    http: HttpClient,
     session: Arc<RwLock<Option<LemmySession>>>,
 }
 
@@ -397,7 +397,7 @@ impl LemmyHttpClient {
         }
         Self {
             base_url: url,
-            http: Client::new(),
+            http: HttpClient::new(),
             session: Arc::new(RwLock::new(None)),
         }
     }
@@ -457,7 +457,7 @@ impl LemmyHttpClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::AuthFailed(format!(
@@ -468,7 +468,7 @@ impl LemmyHttpClient {
 
         resp.json::<LoginResponse>()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     /// `GET /api/v3/site` — fetch current user info.
@@ -480,7 +480,7 @@ impl LemmyHttpClient {
             .bearer_auth(&jwt)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::Network(format!(
@@ -491,7 +491,7 @@ impl LemmyHttpClient {
 
         resp.json::<SiteResponse>()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     /// `GET /api/v3/community/list?type_=Subscribed&limit=50`
@@ -503,7 +503,7 @@ impl LemmyHttpClient {
             .bearer_auth(&jwt)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::Network(format!(
@@ -514,7 +514,7 @@ impl LemmyHttpClient {
 
         resp.json::<CommunityListResponse>()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     /// `GET /api/v3/community?id={id}`
@@ -527,9 +527,9 @@ impl LemmyHttpClient {
             .bearer_auth(&jwt)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        if resp.status() == StatusCode::NOT_FOUND {
             return Err(ClientError::NotFound(format!(
                 "community {community_id} not found"
             )));
@@ -550,7 +550,7 @@ impl LemmyHttpClient {
         resp.json::<SingleCommunityResponse>()
             .await
             .map(|r| r.community_view)
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     /// `GET /api/v3/post/list?community_id={id}&sort=Hot&limit=20`
@@ -565,7 +565,7 @@ impl LemmyHttpClient {
             .bearer_auth(&jwt)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::Network(format!(
@@ -576,7 +576,7 @@ impl LemmyHttpClient {
 
         resp.json::<PostListResponse>()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     /// `GET /api/v3/comment/list?post_id={id}&sort=Hot&limit=50`
@@ -591,7 +591,7 @@ impl LemmyHttpClient {
             .bearer_auth(&jwt)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::Network(format!(
@@ -602,7 +602,7 @@ impl LemmyHttpClient {
 
         resp.json::<CommentListResponse>()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     /// `GET /api/v3/private_message/list?limit=50`
@@ -614,7 +614,7 @@ impl LemmyHttpClient {
             .bearer_auth(&jwt)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::Network(format!(
@@ -625,7 +625,7 @@ impl LemmyHttpClient {
 
         resp.json::<PrivateMessageListResponse>()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     /// `POST /api/v3/comment` — create a new comment on a post.
@@ -649,7 +649,7 @@ impl LemmyHttpClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))?;
+            .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::Network(format!(
@@ -666,6 +666,6 @@ impl LemmyHttpClient {
         resp.json::<CommentResponse>()
             .await
             .map(|r| r.comment_view)
-            .map_err(|e: reqwest::Error| ClientError::Network(e.to_string()))
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 }

@@ -1,9 +1,15 @@
 //! HTTP client for the HN Firebase API.
+//!
+//! All requests go through [`poly_host_bridge::http::HttpClient`], which on
+//! native is a thin reqwest wrapper and on wasm32 routes through the Poly
+//! host bridge so we don't inherit the browser fetch sandbox (no CORS, no
+//! locked User-Agent, full header control).
 
 use std::sync::{Arc, Mutex};
 
 use futures::future;
 use poly_client::{ClientError, ClientResult};
+use poly_host_bridge::http::HttpClient;
 
 use crate::cache::HnCache;
 use crate::types::{HnFeed, HnItem, HnUpdates, HnUser};
@@ -13,7 +19,7 @@ const MAX_CONCURRENT: usize = 10;
 /// HTTP client for the Hacker News Firebase API.
 #[derive(Clone)]
 pub struct HnApiClient {
-    http: reqwest::Client,
+    http: HttpClient,
     base_url: String,
     cache: Arc<Mutex<HnCache>>,
 }
@@ -26,10 +32,17 @@ impl HnApiClient {
 
     /// Create a new client pointing at a custom base URL (useful for tests).
     pub fn with_base_url(base_url: String) -> Self {
-        let builder = reqwest::Client::builder();
+        // The HttpClient builder honours timeouts on native; the bridge
+        // transport relies on the native shell's reqwest defaults, so the
+        // timeout knob is silently ignored on wasm32. Falling back to the
+        // default client when the builder errors keeps construction
+        // infallible at the call site.
+        let mut builder = poly_host_bridge::http::HttpClientBuilder::new();
         #[cfg(not(target_arch = "wasm32"))]
-        let builder = builder.timeout(std::time::Duration::from_secs(10));
-        let http = builder.build().unwrap_or_default();
+        {
+            builder = builder.timeout(std::time::Duration::from_secs(10));
+        }
+        let http = builder.build().unwrap_or_else(|_| HttpClient::new());
 
         Self {
             http,

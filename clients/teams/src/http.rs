@@ -3,13 +3,14 @@
 use std::sync::Mutex;
 
 use poly_client::ClientError;
+use poly_host_bridge::http::HttpClient;
 
 use crate::api::{GraphChannel, GraphChat, GraphCollection, GraphMessage, GraphTeam, GraphUser};
 
 pub struct TeamsHttpClient {
     base_url: String,
     token: Mutex<Option<String>>,
-    http: reqwest::Client,
+    http: HttpClient,
 }
 
 impl TeamsHttpClient {
@@ -17,7 +18,7 @@ impl TeamsHttpClient {
         Self {
             base_url,
             token: Mutex::new(None),
-            http: reqwest::Client::new(),
+            http: HttpClient::new(),
         }
     }
 

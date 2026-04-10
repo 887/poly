@@ -10,29 +10,22 @@ crate-type = ["rlib"]
 
 [dependencies]
 poly-client = { workspace = true }
-dioxus = { workspace = true, optional = true }
-serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = ["process", "rt-multi-thread"] }
-chrono = { workspace = true, optional = true }
-futures = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }
-tracing = { workspace = true, optional = true }
-async-trait = { workspace = true, optional = true }
+poly-host-bridge = { workspace = true }
+dioxus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+# Always-on tokio (workspace default = rt/macros/sync/time/io-util — WASM safe).
+# The native target adds `process` + `rt-multi-thread` for the subprocess path.
+tokio = { workspace = true }
 
-[features]
-default = ["native"]
-native = [
-    "dep:dioxus",
-    "dep:async-trait",
-    "dep:futures",
-    "dep:tokio",
-    "dep:serde",
-    "dep:serde_json",
-    "dep:chrono",
-    "dep:thiserror",
-    "dep:tracing",
-]
+# Native: subprocess support for the gh CLI.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 
 [lints]
 workspace = true

@@ -14,34 +14,33 @@
 //!
 //! Code search is intentionally external — clients should open
 //! `https://{instance}/{owner}/{repo}/search?type=code&q=…` for that.
+//!
+//! ## Native vs WASM
+//!
+//! On native targets the [`api`] module spawns the user's `gh` CLI directly
+//! via [`tokio::process::Command`]. On wasm32 (the dioxus web build that runs
+//! inside the Wry / Electron shells) the same module instead POSTs to a
+//! localhost subprocess bridge exposed by the native shell at
+//! `http://127.0.0.1:9223/gh`. The shell forwards each call to its own
+//! `gh` binary and pipes stdout/stderr/exit_code back to the WASM frontend,
+//! so the rest of the crate is target-agnostic.
 
-#[cfg(feature = "native")]
 mod api;
-#[cfg(feature = "native")]
 mod mapping;
-#[cfg(feature = "native")]
 pub mod signup;
-#[cfg(feature = "native")]
 mod types;
 
-#[cfg(feature = "native")]
 use std::pin::Pin;
 
-#[cfg(feature = "native")]
 use async_trait::async_trait;
-#[cfg(feature = "native")]
 use futures::stream::{self, Stream};
-#[cfg(feature = "native")]
 use poly_client::*;
 
-#[cfg(feature = "native")]
 pub use api::{GhCli, GhError};
-#[cfg(feature = "native")]
 pub use mapping::BACKEND_SLUG;
 
 /// Number of years of `pushed_at` activity required for a repo to surface
 /// in the server list. Two years matches the user's stated requirement.
-#[cfg(feature = "native")]
 const ACTIVITY_WINDOW_YEARS: i64 = 2;
 
 /// Return FTL translation source for the GitHub client plugin.
@@ -57,7 +56,6 @@ pub fn plugin_translations(locale: &str) -> String {
 /// Each instance wraps one `gh` CLI configuration. Construct with
 /// [`GitHubClient::dotcom`] for github.com or [`GitHubClient::enterprise`]
 /// for a GHE hostname.
-#[cfg(feature = "native")]
 pub struct GitHubClient {
     cli: GhCli,
     session: Option<Session>,
@@ -65,7 +63,6 @@ pub struct GitHubClient {
     repos: tokio::sync::Mutex<Vec<types::GhRepo>>,
 }
 
-#[cfg(feature = "native")]
 impl GitHubClient {
     /// Wrap the user's gh CLI for github.com.
     #[must_use]
@@ -137,14 +134,12 @@ impl GitHubClient {
     }
 }
 
-#[cfg(feature = "native")]
 impl Default for GitHubClient {
     fn default() -> Self {
         Self::dotcom()
     }
 }
 
-#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl ClientBackend for GitHubClient {
@@ -196,13 +191,7 @@ impl ClientBackend for GitHubClient {
         cache
             .iter()
             .find(|r| mapping::server_id_for_repo(r) == id)
-            .map(|r| {
-                mapping::server_from_repo(
-                    r,
-                    self.session_id(),
-                    self.session_login(),
-                )
-            })
+            .map(|r| mapping::server_from_repo(r, self.session_id(), self.session_login()))
             .ok_or_else(|| ClientError::NotFound(format!("repo {id}")))
     }
 
@@ -394,9 +383,8 @@ impl ClientBackend for GitHubClient {
     // --- Code repository channels ---
 
     async fn list_files(&self, channel_id: &str, path: &str) -> ClientResult<Vec<FileEntry>> {
-        let (owner, repo) = mapping::parse_code_channel(channel_id).ok_or_else(|| {
-            ClientError::NotFound(format!("not a code channel: {channel_id}"))
-        })?;
+        let (owner, repo) = mapping::parse_code_channel(channel_id)
+            .ok_or_else(|| ClientError::NotFound(format!("not a code channel: {channel_id}")))?;
         let contents = self
             .cli
             .get_contents(&owner, &repo, path)
@@ -418,9 +406,8 @@ impl ClientBackend for GitHubClient {
     }
 
     async fn read_file(&self, channel_id: &str, path: &str) -> ClientResult<FileContent> {
-        let (owner, repo) = mapping::parse_code_channel(channel_id).ok_or_else(|| {
-            ClientError::NotFound(format!("not a code channel: {channel_id}"))
-        })?;
+        let (owner, repo) = mapping::parse_code_channel(channel_id)
+            .ok_or_else(|| ClientError::NotFound(format!("not a code channel: {channel_id}")))?;
         let contents = self
             .cli
             .get_contents(&owner, &repo, path)
@@ -431,7 +418,7 @@ impl ClientBackend for GitHubClient {
             types::GhContents::Dir(_) => {
                 return Err(ClientError::NotFound(format!(
                     "{path} is a directory, not a file"
-                )))
+                )));
             }
         };
         let bytes = match (entry.encoding.as_deref(), entry.content) {
@@ -447,7 +434,6 @@ impl ClientBackend for GitHubClient {
     }
 }
 
-#[cfg(feature = "native")]
 fn kind_from_string(s: &str) -> FileKind {
     match s {
         "dir" => FileKind::Directory,
@@ -457,25 +443,21 @@ fn kind_from_string(s: &str) -> FileKind {
     }
 }
 
-#[cfg(feature = "native")]
 fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
     s.split_once('-')
         .map(|(o, r)| (o.to_string(), r.to_string()))
         .ok_or_else(|| ClientError::NotFound(format!("malformed owner-repo segment: {s}")))
 }
 
-#[cfg(feature = "native")]
 fn decode_b64(s: &str) -> Vec<u8> {
     // GitHub returns base64 with embedded newlines; strip them.
     let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
     decode_b64_simple(&cleaned)
 }
 
-#[cfg(feature = "native")]
 #[allow(clippy::indexing_slicing)]
 fn decode_b64_simple(input: &str) -> Vec<u8> {
-    const TABLE: &[u8] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut lookup = [255u8; 256];
     for (i, &b) in TABLE.iter().enumerate() {
         lookup[b as usize] = i as u8;
