@@ -366,6 +366,7 @@ fn ServerNode(
                                     poly_client::ChannelType::Video => "📹".to_string(),
                                     poly_client::ChannelType::Forum
                                     | poly_client::ChannelType::HackerNews => "📋".to_string(),
+                                    poly_client::ChannelType::Code => "📁".to_string(),
                                 };
                                 let sid_c = server_id.clone();
                                 let chid = ch.id.clone();

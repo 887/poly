@@ -1427,16 +1427,19 @@ fn ServerChat(
         .read()
         .current_channel
         .as_ref()
-        .map(|ch| ch.channel_type.clone());
+        .map(|ch| ch.channel_type);
 
     let is_forum_backend = chat_data.read().current_server.as_ref()
         .is_some_and(|s| s.backend.is_forum());
     let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
     let is_forum = is_forum_backend || matches!(channel_type, Some(ChannelType::Forum));
+    let is_code = matches!(channel_type, Some(ChannelType::Code));
 
     rsx! {
         if is_voice {
             VoiceChannelView {}
+        } else if is_code {
+            super::code_explorer::CodeExplorerView {}
         } else if is_forum {
             ForumView {}
         } else {

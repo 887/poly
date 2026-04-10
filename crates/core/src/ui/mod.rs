@@ -60,6 +60,7 @@ pub mod account;
 pub(crate) mod create_channel;
 pub(crate) mod create_forum_post;
 pub(crate) mod create_server;
+pub(crate) mod code_explorer;
 pub(crate) mod demo;
 mod electron_titlebar;
 mod favorites_sidebar;
@@ -80,6 +81,8 @@ pub(crate) use settings::stoat_settings_render_fn;
 pub(crate) use settings::poly_settings_render_fn;
 #[cfg(feature = "hackernews")]
 pub(crate) use settings::hackernews_settings_render_fn;
+#[cfg(feature = "github")]
+pub(crate) use settings::github_settings_render_fn;
 #[cfg(feature = "lemmy")]
 pub(crate) use settings::lemmy_settings_render_fn;
 mod runtime_js;
@@ -639,6 +642,15 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         desc_key: "plugin-lemmy-signup-desc",
         render: poly_lemmy::signup::signup_render_fn,
     });
+
+    #[cfg(feature = "github")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "github",
+        icon: "🐙",
+        name_key: "plugin-github-signup-name",
+        desc_key: "plugin-github-signup-desc",
+        render: poly_github::signup::signup_render_fn,
+    });
 }
 
 /// Register test account entries from all compiled-in native plugins.
@@ -727,6 +739,16 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
             nav_label_key: "plugin-lemmy-title",
             nav_icon: "🐾",
             render: lemmy_settings_render_fn,
+        });
+
+    #[cfg(feature = "github")]
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "github",
+            nav_label_key: "plugin-github-title",
+            nav_icon: "🐙",
+            render: github_settings_render_fn,
         });
 }
 
@@ -820,6 +842,100 @@ pub(crate) async fn restore_hackernews_accounts(
         }
 
         tracing::info!("Restored HackerNews account: {account_id}");
+    }
+}
+
+/// Restore persisted GitHub accounts on app startup.
+///
+/// GitHub auth lives entirely in the user's `gh` CLI — no token is read or
+/// stored by Poly. The stored `AccountToken.instance_id` is the GHE hostname
+/// (or `"github.com"`); we re-run `gh api /user` against that instance to
+/// rebuild the session.
+#[cfg(feature = "github")]
+pub(crate) async fn restore_github_accounts(
+    storage: &crate::storage::Storage,
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    use crate::client_manager::BackendHandle;
+    use poly_client::{AuthCredentials, ClientBackend as _};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    let Ok(tokens) = storage.get_account_tokens().await else {
+        return;
+    };
+
+    let gh_tokens: Vec<_> = tokens.into_iter().filter(|t| t.backend == "github").collect();
+    if gh_tokens.is_empty() {
+        return;
+    }
+
+    tracing::info!(
+        "Restoring {} GitHub account(s) via gh CLI",
+        gh_tokens.len()
+    );
+
+    for token in gh_tokens {
+        let mut backend = match token.instance_id.as_deref() {
+            Some(host) if host != "github.com" && !host.is_empty() => {
+                poly_github::GitHubClient::enterprise(host.to_string())
+            }
+            _ => poly_github::GitHubClient::dotcom(),
+        };
+        let session = match backend
+            .authenticate(AuthCredentials::Token(String::new()))
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(
+                    "Skipping GitHub account {}: {}",
+                    token.account_id,
+                    e
+                );
+                continue;
+            }
+        };
+        let account_id = session.id.clone();
+
+        let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(
+            Box::new(backend) as Box<dyn poly_client::ClientBackend + Send + Sync>,
+        ));
+
+        let mut server_map = HashMap::new();
+        let servers = {
+            let guard = backend_handle.read().await;
+            guard.get_servers().await.unwrap_or_default()
+        };
+        for srv in &servers {
+            server_map.insert(srv.id.clone(), account_id.clone());
+        }
+
+        client_manager.write().commit_backend_account(
+            account_id.clone(),
+            session.clone(),
+            backend_handle,
+            server_map,
+        );
+        chat_data
+            .write()
+            .account_sessions
+            .insert(account_id.clone(), session);
+
+        {
+            let mut cd = chat_data.write();
+            for srv in &servers {
+                if !cd.servers.iter().any(|s| s.id == srv.id) {
+                    cd.servers.push(srv.clone());
+                }
+                if !cd.favorited_server_ids.contains(&srv.id) {
+                    cd.favorited_server_ids.push(srv.id.clone());
+                }
+            }
+        }
+
+        tracing::info!("Restored GitHub account: {account_id}");
     }
 }
 
@@ -1126,6 +1242,10 @@ async fn init_storage(
                     // Restore HackerNews accounts (no-auth, instant reconnect).
                     #[cfg(feature = "hackernews")]
                     restore_hackernews_accounts(&storage, client_manager, chat_data).await;
+
+                    // Restore GitHub accounts via the gh CLI (no token in storage).
+                    #[cfg(feature = "github")]
+                    restore_github_accounts(&storage, client_manager, chat_data).await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),

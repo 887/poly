@@ -727,8 +727,9 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
         // Backend slug for route construction.
         let backend_slug = server.backend.slug().to_string();
         let is_hn = server.backend.slug() == "hackernews";
-        // Demo and HN backends do not support channel creation.
-        let can_create = server.backend != "demo" && !is_hn;
+        let is_github = server.backend.slug() == "github";
+        // Read-only and demo backends do not support channel creation.
+        let can_create = server.backend != "demo" && !is_hn && !is_github;
         let server_id = server.id.clone();
 
         // Is the current channel a (Lemmy-style) forum channel?
@@ -1186,6 +1187,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
         ChannelType::Voice => "🔊",
         ChannelType::Video => "📹",
         ChannelType::Forum | ChannelType::HackerNews => "📋",
+        ChannelType::Code => "📁",
     };
 
     // Active wins over unread; unread class makes the channel name bold.

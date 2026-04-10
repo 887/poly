@@ -63,7 +63,10 @@ impl BackendId {
     ///
     /// Forum backends do not support voice, presence, or real-time connection status.
     pub fn is_forum(&self) -> bool {
-        matches!(self.0.as_str(), "demo_forum" | "hackernews" | "lemmy")
+        matches!(
+            self.0.as_str(),
+            "demo_forum" | "hackernews" | "lemmy" | "github"
+        )
     }
 }
 
@@ -333,6 +336,141 @@ pub enum ChannelType {
     /// Rendered with HN-specific UI: Discord-style channel list sidebar,
     /// client-side text filter instead of Lemmy sort dropdown, infinite scroll.
     HackerNews,
+    /// Code repository explorer (file tree + file content view).
+    ///
+    /// Rendered as a two-pane explorer instead of a message log.
+    /// Used by GitHub / GitHub Enterprise repo channels.
+    Code,
+}
+
+/// Kind of a file system entry returned by [`ClientBackend::list_files`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FileKind {
+    /// Regular file.
+    File,
+    /// Directory.
+    Directory,
+    /// Symbolic link.
+    Symlink,
+    /// Git submodule pointer.
+    Submodule,
+}
+
+/// One entry in a directory listing returned by [`ClientBackend::list_files`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileEntry {
+    /// Repository-relative path of the entry (e.g. `"src/lib.rs"`).
+    pub path: String,
+    /// Display name (basename) of the entry.
+    pub name: String,
+    /// Kind of entry — file, directory, symlink, submodule.
+    pub kind: FileKind,
+    /// File size in bytes. `0` for directories.
+    pub size: u64,
+}
+
+/// Raw file content returned by [`ClientBackend::read_file`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileContent {
+    /// Repository-relative path of the file.
+    pub path: String,
+    /// Raw file bytes (may be binary; UI decodes as needed).
+    pub bytes: Vec<u8>,
+    /// Whether the response was truncated by a backend size limit.
+    pub truncated: bool,
+}
+
+/// Output of a host-mediated subprocess invocation made by a plugin.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecOutput {
+    /// Process exit code.
+    pub exit_code: i32,
+    /// Captured stdout bytes.
+    pub stdout: Vec<u8>,
+    /// Captured stderr bytes.
+    pub stderr: Vec<u8>,
+}
+
+/// Capability flags describing what a backend supports.
+///
+/// Used by the UI to hide controls that don't make sense for a given backend
+/// (e.g. the mic / speaker buttons for read-only news feeds).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackendCapabilities {
+    /// Backend exposes voice channels and supports joining them.
+    pub supports_voice: bool,
+    /// Backend exposes video channels.
+    pub supports_video: bool,
+    /// Backend supports direct messages.
+    pub supports_dms: bool,
+    /// Backend supports group DMs.
+    pub supports_groups: bool,
+    /// Backend allows the user to send / post messages (write access).
+    pub supports_send_messages: bool,
+    /// Backend reports user presence (online / idle / etc.).
+    pub supports_presence: bool,
+    /// Backend supports server-side message search.
+    pub supports_search: bool,
+    /// Backend supports message reactions.
+    pub supports_reactions: bool,
+    /// Backend reports typing indicators.
+    pub supports_typing_indicators: bool,
+    /// Backend supports file uploads attached to messages.
+    pub supports_file_upload: bool,
+}
+
+impl BackendCapabilities {
+    /// All capabilities enabled — sensible default for full chat backends.
+    pub const ALL: Self = Self {
+        supports_voice: true,
+        supports_video: true,
+        supports_dms: true,
+        supports_groups: true,
+        supports_send_messages: true,
+        supports_presence: true,
+        supports_search: true,
+        supports_reactions: true,
+        supports_typing_indicators: true,
+        supports_file_upload: true,
+    };
+
+    /// All capabilities disabled — sensible default for read-only feeds.
+    pub const NONE: Self = Self {
+        supports_voice: false,
+        supports_video: false,
+        supports_dms: false,
+        supports_groups: false,
+        supports_send_messages: false,
+        supports_presence: false,
+        supports_search: false,
+        supports_reactions: false,
+        supports_typing_indicators: false,
+        supports_file_upload: false,
+    };
+}
+
+impl Default for BackendCapabilities {
+    fn default() -> Self {
+        Self::ALL
+    }
+}
+
+/// A plugin's self-declared manifest.
+///
+/// Purely informational — the host does NOT enforce these declarations at
+/// runtime. They exist so users can inspect what a loaded plugin says it
+/// will do (subprocess programs, HTTP host patterns, description).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct PluginManifest {
+    /// Subprocess programs the plugin spawns via the `exec-command` host fn.
+    pub exec_programs: Vec<String>,
+    /// HTTP host patterns the plugin calls (e.g. `"api.github.com"`).
+    /// Empty list means no HTTP.
+    pub http_hosts: Vec<String>,
+    /// Free-text description of the plugin and its access needs.
+    pub description: String,
+    /// Optional homepage / source URL.
+    pub homepage: Option<String>,
 }
 
 /// A channel within a server.

@@ -272,3 +272,79 @@ pub fn lemmy_settings_render_fn() -> Element {
         LemmyPluginSettings {}
     }
 }
+
+// ── GitHub plugin settings ────────────────────────────────────────────────────
+
+#[cfg(feature = "github")]
+#[component]
+pub fn GitHubPluginSettings() -> Element {
+    use poly_client::ClientBackend as _;
+    let client = poly_github::GitHubClient::dotcom();
+    let manifest = client.plugin_manifest();
+    rsx! {
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🐙" }
+                h2 { class: "plugin-section-title", "{t(\"plugin-github-title\")}" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
+                "Read-only GitHub / GHE client. Browses repos, issues, pull requests, and source code through your local gh CLI."
+            }
+            PluginManifestPanel { manifest }
+        }
+    }
+}
+
+#[cfg(feature = "github")]
+pub fn github_settings_render_fn() -> Element {
+    rsx! {
+        GitHubPluginSettings {}
+    }
+}
+
+/// Render a plugin's declared manifest (informational only — not enforced).
+///
+/// Lists the external programs the plugin claims it may invoke and the HTTP
+/// hosts it claims it may contact, plus the plugin's homepage. The manifest
+/// is purely for transparency: the host does NOT sandbox or block based on it.
+#[component]
+pub fn PluginManifestPanel(manifest: poly_client::PluginManifest) -> Element {
+    let exec_list = manifest.exec_programs.join(", ");
+    let host_list = if manifest.http_hosts.is_empty() {
+        "(none)".to_string()
+    } else {
+        manifest.http_hosts.join(", ")
+    };
+    let exec_display = if manifest.exec_programs.is_empty() {
+        "(none)".to_string()
+    } else {
+        exec_list
+    };
+    rsx! {
+        div { class: "plugin-manifest-panel",
+            h3 { class: "plugin-manifest-title", "Plugin manifest" }
+            p { class: "plugin-manifest-note",
+                "Declarative — these values describe what the plugin says it does. The host does not enforce them."
+            }
+            p { class: "plugin-manifest-row",
+                strong { "Description: " }
+                "{manifest.description}"
+            }
+            p { class: "plugin-manifest-row",
+                strong { "External programs: " }
+                code { "{exec_display}" }
+            }
+            p { class: "plugin-manifest-row",
+                strong { "HTTP hosts: " }
+                code { "{host_list}" }
+            }
+            if let Some(home) = manifest.homepage {
+                p { class: "plugin-manifest-row",
+                    strong { "Homepage: " }
+                    a { href: "{home}", target: "_blank", rel: "noopener", "{home}" }
+                }
+            }
+        }
+    }
+}

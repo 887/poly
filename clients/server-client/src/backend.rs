@@ -620,6 +620,7 @@ impl ClientBackend for PolyServerBackend {
             ChannelType::Text => "text",
             ChannelType::Voice | ChannelType::Video => "voice",
             ChannelType::Forum | ChannelType::HackerNews => "forum",
+            ChannelType::Code => "code",
         };
         let wire = self
             .http

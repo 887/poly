@@ -42,6 +42,7 @@ const PARTIALS: &[&str] = &[
     "user-profile-modal.css",  // Unified user profile modal (global overlay)
     "direct-call-overlay.css", // Route-backed pending direct-call overlay
     "media-viewer.css",        // Route-backed fullscreen message media viewer
+    "code-explorer.css",       // GitHub / code-channel two-pane explorer
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

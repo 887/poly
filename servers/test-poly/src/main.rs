@@ -19,6 +19,9 @@ fn build_config(uploads_dir: &str) -> Config {
     Config {
         bind_addr: "unused".into(), // We bind via TestServerBase
         db_path: ":memory:".to_string(),
+        surreal_url: String::new(),
+        surreal_user: String::new(),
+        surreal_pass: String::new(),
         server_name: "Poly Test Server".into(),
         invite_only: false,
         jwt_secret: "test-secret-for-poly-test-server-do-not-use-in-prod".into(),

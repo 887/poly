@@ -359,6 +359,47 @@ pub trait ClientBackend: Send + Sync {
 
     /// Human-readable name for this backend.
     fn backend_name(&self) -> &str;
+
+    /// Capability flags describing what this backend supports.
+    ///
+    /// The UI uses these flags to hide controls that don't apply (e.g. mic /
+    /// speaker buttons for read-only news feeds, DM picker for backends with
+    /// no DMs). Default returns [`BackendCapabilities::ALL`] — full chat
+    /// backends keep working unchanged; restricted backends override.
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::ALL
+    }
+
+    /// Self-declared plugin manifest. Purely informational.
+    ///
+    /// Native (in-tree) backends return [`PluginManifest::default`]. WASM
+    /// plugins override this with the manifest exported via the WIT
+    /// `get-plugin-manifest` function so the settings UI can display what
+    /// the plugin says it will access.
+    fn plugin_manifest(&self) -> PluginManifest {
+        PluginManifest::default()
+    }
+
+    // --- Code repository channels ---
+
+    /// List entries at the given path within a code-type channel.
+    ///
+    /// `path` is repo-relative; an empty string means the repo root. Backends
+    /// that do not have code channels should return the default
+    /// `Err(ClientError::NotSupported(...))` provided here.
+    async fn list_files(&self, channel_id: &str, path: &str) -> ClientResult<Vec<FileEntry>> {
+        let _ = (channel_id, path);
+        Err(ClientError::NotSupported("list_files".to_string()))
+    }
+
+    /// Read the raw bytes of a file in a code-type channel.
+    ///
+    /// Backends that do not have code channels should return the default
+    /// `Err(ClientError::NotSupported(...))` provided here.
+    async fn read_file(&self, channel_id: &str, path: &str) -> ClientResult<FileContent> {
+        let _ = (channel_id, path);
+        Err(ClientError::NotSupported("read_file".to_string()))
+    }
 }
 
 // ── Signup plugin interface ──────────────────────────────────────────────────

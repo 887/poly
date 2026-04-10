@@ -15,6 +15,7 @@ demo = ["dep:poly-demo"]
 server = ["dep:poly-server-client"]
 hackernews = ["dep:poly-hackernews"]
 lemmy = ["dep:poly-lemmy"]
+github = ["dep:poly-github"]
 native-nav = []                     # Back/forward nav buttons (desktop/mobile only, not web)
 storage-sqlite = ["dep:sqlite"]
 storage-surreal = ["dep:surrealdb"]
@@ -35,6 +36,7 @@ poly-teams = { workspace = true, optional = true }
 poly-server-client = { workspace = true, optional = true }
 poly-hackernews = { workspace = true, optional = true }
 poly-lemmy = { workspace = true, optional = true }
+poly-github = { workspace = true, optional = true }
 
 # Crypto
 ed25519-dalek = { workspace = true }

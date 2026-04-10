@@ -29,6 +29,7 @@ tokio = { workspace = true, features = [
     "sync",
     "time",
     "io-util",
+    "process",
 ] }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }

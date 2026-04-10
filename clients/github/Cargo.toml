@@ -1,0 +1,38 @@
+[package]
+name = "poly-github"
+description = "GitHub / GitHub Enterprise client for Poly — uses the gh CLI as transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+poly-client = { workspace = true }
+dioxus = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["process", "rt-multi-thread"] }
+chrono = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+
+[features]
+default = ["native"]
+native = [
+    "dep:dioxus",
+    "dep:async-trait",
+    "dep:futures",
+    "dep:tokio",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:chrono",
+    "dep:thiserror",
+    "dep:tracing",
+]
+
+[lints]
+workspace = true

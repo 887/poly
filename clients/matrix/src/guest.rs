@@ -187,10 +187,10 @@ impl Guest for MatrixPlugin {
                         display_name,
                         avatar_url: profile.avatar_url,
                         presence: wit::PresenceStatus::Online,
-                        backend: wit::BackendType::from("matrix"),
+                        backend: wit::BackendType::Matrix,
                     },
                     token,
-                    backend: wit::BackendType::from("matrix"),
+                    backend: wit::BackendType::Matrix,
                     icon_emoji: Some("\u{1f7e6}".to_string()),
                     instance_id,
                     backend_url: Some(DEFAULT_HOMESERVER.to_string()),
@@ -257,10 +257,10 @@ impl Guest for MatrixPlugin {
                         display_name,
                         avatar_url: profile.avatar_url,
                         presence: wit::PresenceStatus::Online,
-                        backend: wit::BackendType::from("matrix"),
+                        backend: wit::BackendType::Matrix,
                     },
                     token: login.access_token,
-                    backend: wit::BackendType::from("matrix"),
+                    backend: wit::BackendType::Matrix,
                     icon_emoji: Some("\u{1f7e6}".to_string()),
                     instance_id,
                     backend_url: Some(DEFAULT_HOMESERVER.to_string()),
@@ -365,7 +365,7 @@ impl Guest for MatrixPlugin {
             display_name,
             avatar_url: profile.avatar_url,
             presence: wit::PresenceStatus::Offline,
-            backend: wit::BackendType::from("matrix"),
+            backend: wit::BackendType::Matrix,
         })
     }
 
@@ -429,11 +429,38 @@ impl Guest for MatrixPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::from("matrix")
+        wit::BackendType::Matrix
     }
 
     fn get_backend_name() -> String {
         "Matrix".to_string()
+    }
+
+    fn get_backend_capabilities() -> wit::BackendCapabilities {
+        wit::BackendCapabilities {
+            supports_voice: false,
+            supports_video: false,
+            supports_dms: true,
+            supports_groups: false,
+            supports_send_messages: true,
+            supports_presence: true,
+            supports_search: false,
+            supports_reactions: true,
+            supports_typing_indicators: true,
+            supports_file_upload: false,
+        }
+    }
+
+    fn list_files(_channel_id: String, _path: String) -> Result<Vec<wit::FileEntry>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "matrix has no code channels".to_string(),
+        ))
+    }
+
+    fn read_file(_channel_id: String, _path: String) -> Result<wit::FileContent, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "matrix has no code channels".to_string(),
+        ))
     }
 }
 
@@ -457,6 +484,17 @@ impl PluginMetadataGuest for MatrixPlugin {
 
     fn get_icon() -> String {
         "🟦".to_string()
+    }
+
+    fn get_plugin_manifest() -> crate::wit_bindings::PluginManifest {
+        crate::wit_bindings::PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec!["matrix.org".to_string()],
+            description: "Connect to Matrix, an open decentralized instant messaging protocol. \
+                          Supports text rooms, DMs, and rich message reactions."
+                .to_string(),
+            homepage: Some("https://matrix.org".to_string()),
+        }
     }
 }
 

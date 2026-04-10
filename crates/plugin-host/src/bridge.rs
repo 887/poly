@@ -8,6 +8,7 @@
 //! Convention: `from_wit_*` converts WIT→poly-client, `to_wit_*` converts
 //! poly-client→WIT.
 
+use super::engine::exports::poly::messenger::plugin_metadata as wit_meta;
 use super::engine::poly::messenger::types as wit;
 use poly_client::{self as pc};
 
@@ -71,6 +72,68 @@ pub fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
         wit::ChannelType::Video => pc::ChannelType::Video,
         wit::ChannelType::Forum => pc::ChannelType::Forum,
         wit::ChannelType::HackerNews => pc::ChannelType::HackerNews,
+        wit::ChannelType::Code => pc::ChannelType::Code,
+    }
+}
+
+// ─── File / code-explorer types ────────────────────────────────────
+
+/// Convert WIT `FileKind` → poly-client `FileKind`.
+pub fn from_wit_file_kind(k: wit::FileKind) -> pc::FileKind {
+    match k {
+        wit::FileKind::File => pc::FileKind::File,
+        wit::FileKind::Directory => pc::FileKind::Directory,
+        wit::FileKind::Symlink => pc::FileKind::Symlink,
+        wit::FileKind::Submodule => pc::FileKind::Submodule,
+    }
+}
+
+/// Convert WIT `FileEntry` → poly-client `FileEntry`.
+pub fn from_wit_file_entry(e: wit::FileEntry) -> pc::FileEntry {
+    pc::FileEntry {
+        path: e.path,
+        name: e.name,
+        kind: from_wit_file_kind(e.kind),
+        size: e.size,
+    }
+}
+
+/// Convert WIT `FileContent` → poly-client `FileContent`.
+pub fn from_wit_file_content(c: wit::FileContent) -> pc::FileContent {
+    pc::FileContent {
+        path: c.path,
+        bytes: c.bytes,
+        truncated: c.truncated,
+    }
+}
+
+// ─── BackendCapabilities ───────────────────────────────────────────
+
+/// Convert WIT `BackendCapabilities` → poly-client `BackendCapabilities`.
+pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::BackendCapabilities {
+    pc::BackendCapabilities {
+        supports_voice: c.supports_voice,
+        supports_video: c.supports_video,
+        supports_dms: c.supports_dms,
+        supports_groups: c.supports_groups,
+        supports_send_messages: c.supports_send_messages,
+        supports_presence: c.supports_presence,
+        supports_search: c.supports_search,
+        supports_reactions: c.supports_reactions,
+        supports_typing_indicators: c.supports_typing_indicators,
+        supports_file_upload: c.supports_file_upload,
+    }
+}
+
+// ─── PluginManifest ────────────────────────────────────────────────
+
+/// Convert WIT `PluginManifest` → poly-client `PluginManifest`.
+pub fn from_wit_plugin_manifest(m: wit_meta::PluginManifest) -> pc::PluginManifest {
+    pc::PluginManifest {
+        exec_programs: m.exec_programs,
+        http_hosts: m.http_hosts,
+        description: m.description,
+        homepage: m.homepage,
     }
 }
 

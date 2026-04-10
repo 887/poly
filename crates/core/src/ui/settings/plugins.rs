@@ -92,6 +92,13 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
         description: "Federated link aggregator. Connect to any Lemmy instance.",
         available: cfg!(feature = "lemmy"),
     },
+    NativeBackend {
+        slug: "github",
+        icon: "🐙",
+        name: "GitHub",
+        description: "Browse GitHub / GHE repos via your local gh CLI. Issues, PRs, and code explorer.",
+        available: cfg!(feature = "github"),
+    },
 ];
 
 /// Compile-time backend descriptor (only const-compatible types).
@@ -531,6 +538,19 @@ pub fn PluginsSettings() -> Element {
                                                 if let Some(storage) = crate::STORAGE.get() {
                                                     spawn(async move {
                                                         crate::ui::restore_hackernews_accounts(
+                                                            storage,
+                                                            client_manager,
+                                                            chat_data,
+                                                        )
+                                                        .await;
+                                                    });
+                                                }
+                                            }
+                                            #[cfg(feature = "github")]
+                                            if toggled == "github" {
+                                                if let Some(storage) = crate::STORAGE.get() {
+                                                    spawn(async move {
+                                                        crate::ui::restore_github_accounts(
                                                             storage,
                                                             client_manager,
                                                             chat_data,

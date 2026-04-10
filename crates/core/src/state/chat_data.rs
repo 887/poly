@@ -184,6 +184,7 @@ pub fn backend_badge(backend: &BackendType) -> &'static str {
         "demo_forum" => "📋",
         "poly" => "🔶",
         "hackernews" => "🟠",
+        "github" => "🐙",
         _ => "⬜",
     }
 }

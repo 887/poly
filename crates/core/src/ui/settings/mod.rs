@@ -46,6 +46,8 @@ pub(crate) use plugin_settings::poly_settings_render_fn;
 pub(crate) use plugin_settings::hackernews_settings_render_fn;
 #[cfg(feature = "lemmy")]
 pub(crate) use plugin_settings::lemmy_settings_render_fn;
+#[cfg(feature = "github")]
+pub(crate) use plugin_settings::github_settings_render_fn;
 mod plugins;
 mod theme;
 mod translation;

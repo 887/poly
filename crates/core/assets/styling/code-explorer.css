@@ -1,0 +1,180 @@
+/* Code repository explorer (ChannelType::Code).
+ * Two-pane layout: directory listing on the left, file content on the right.
+ * Used by the github backend, generic enough to work for any code-channel
+ * implementation that exposes list_files / read_file.
+ */
+
+.code-explorer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.code-explorer-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.code-explorer-toolbar .code-explorer-up {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+.code-explorer-path {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.code-explorer-search {
+    font-size: 0.8rem;
+    text-decoration: none;
+    padding: 0.25rem 0.6rem;
+}
+
+.code-explorer-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.code-explorer-tree {
+    flex: 0 0 280px;
+    border-right: 1px solid var(--border-color);
+    overflow: auto;
+    background: var(--bg-secondary);
+}
+
+.code-explorer-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0;
+}
+
+.code-explorer-entry {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.9rem;
+}
+
+.code-explorer-entry:hover {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.code-explorer-entry.selected {
+    background: var(--accent-bg, rgba(99, 102, 241, 0.18));
+    color: var(--accent-text, var(--text-primary));
+}
+
+.code-explorer-icon {
+    flex: 0 0 1.2rem;
+    text-align: center;
+}
+
+.code-explorer-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.code-explorer-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0.75rem 1rem;
+    min-width: 0;
+}
+
+.code-explorer-filename {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.code-explorer-source {
+    background: var(--bg-secondary);
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    overflow: auto;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85rem;
+    line-height: 1.45;
+    white-space: pre;
+    max-height: 100%;
+}
+
+.code-explorer-loading,
+.code-explorer-error {
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.code-explorer-error {
+    color: var(--text-error, #f08080);
+}
+
+@media (max-width: 720px) {
+    .code-explorer-body {
+        flex-direction: column;
+    }
+    .code-explorer-tree {
+        flex: 0 0 40%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+}
+
+/* Plugin manifest informational panel — shown on plugin settings pages.
+ * The manifest is declarative; the host does not enforce it. The visual
+ * treatment makes that explicit so users don't read it as a sandbox claim.
+ */
+.plugin-manifest-panel {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+}
+
+.plugin-manifest-title {
+    margin: 0 0 0.25rem;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.plugin-manifest-note {
+    margin: 0 0 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.plugin-manifest-row {
+    margin: 0.25rem 0;
+    font-size: 0.85rem;
+}
+
+.plugin-manifest-row code {
+    font-family: var(--font-mono, monospace);
+    background: var(--bg-primary);
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+}

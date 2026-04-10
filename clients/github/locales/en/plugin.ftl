@@ -1,0 +1,12 @@
+plugin-github-signup-name = GitHub
+plugin-github-signup-desc = Browse your repos, issues, and PRs through the gh CLI.
+plugin-github-title = GitHub
+plugin-github-signup-title = Add GitHub
+plugin-github-signup-tab-dotcom = github.com
+plugin-github-signup-tab-enterprise = GitHub Enterprise
+plugin-github-signup-dotcom-desc = Uses your local `gh` CLI session. Run `gh auth login` first if you haven't already.
+plugin-github-signup-enterprise-desc = Enter your GHE hostname (e.g. github.example.com). Run `gh auth login --hostname <host>` first.
+plugin-github-signup-hostname-label = GHE Hostname
+plugin-github-signup-hostname-placeholder = github.example.com
+plugin-github-signup-connect-btn = Connect via gh CLI
+plugin-github-signup-connecting = Checking gh auth…

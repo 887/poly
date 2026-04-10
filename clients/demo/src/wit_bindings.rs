@@ -18,6 +18,7 @@ wit_bindgen::generate!({
 
 pub use exports::poly::messenger::messenger_client::Guest as MessengerClientGuest;
 pub use exports::poly::messenger::plugin_metadata::Guest as PluginMetadataGuest;
+pub use exports::poly::messenger::plugin_metadata::PluginManifest;
 pub use exports::poly::messenger::plugin_metadata::SettingDescriptor;
 pub use exports::poly::messenger::plugin_metadata::SettingKind;
 pub use poly::messenger::types as wit;

@@ -19,16 +19,6 @@
       "command": "/home/laragana/workspcacemsg/target/debug/poly-electron-devtools-mcp",
       "args": [],
       "env": {}
-    },
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics"],
-      "env": {}
-    },
-    "chrome-devtools-headless": {
-      "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics", "--headless"],
-      "env": {}
     }
   }
 }

@@ -61,6 +61,7 @@ fn to_wit_channel_type(ct: pc::ChannelType) -> wit::ChannelType {
         pc::ChannelType::Video => wit::ChannelType::Video,
         pc::ChannelType::Forum => wit::ChannelType::Forum,
         pc::ChannelType::HackerNews => wit::ChannelType::HackerNews,
+        pc::ChannelType::Code => wit::ChannelType::Code,
     }
 }
 
@@ -587,6 +588,33 @@ impl MessengerClientGuest for DemoPlugin {
     fn get_backend_name() -> String {
         "Demo".to_string()
     }
+
+    fn get_backend_capabilities() -> wit::BackendCapabilities {
+        wit::BackendCapabilities {
+            supports_voice: true,
+            supports_video: true,
+            supports_dms: true,
+            supports_groups: true,
+            supports_send_messages: true,
+            supports_presence: true,
+            supports_search: true,
+            supports_reactions: true,
+            supports_typing_indicators: true,
+            supports_file_upload: true,
+        }
+    }
+
+    fn list_files(_channel_id: String, _path: String) -> Result<Vec<wit::FileEntry>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "demo plugin has no code channels".to_string(),
+        ))
+    }
+
+    fn read_file(_channel_id: String, _path: String) -> Result<wit::FileContent, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "demo plugin has no code channels".to_string(),
+        ))
+    }
 }
 
 // ─── Plugin Metadata Implementation ───────────────────────────────
@@ -628,6 +656,15 @@ impl PluginMetadataGuest for DemoPlugin {
 
     fn get_icon() -> String {
         "🧪".to_string()
+    }
+
+    fn get_plugin_manifest() -> crate::wit_bindings::PluginManifest {
+        crate::wit_bindings::PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec![],
+            description: "Demo backend with hardcoded fixture data — no network or subprocess access.".to_string(),
+            homepage: None,
+        }
     }
 }
 

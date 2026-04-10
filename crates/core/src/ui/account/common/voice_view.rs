@@ -274,6 +274,7 @@ pub fn VoiceChannelView() -> Element {
         ChannelType::Video => "📹",
         ChannelType::Text => "#",
         ChannelType::Forum | ChannelType::HackerNews => "📋",
+        ChannelType::Code => "📁",
     };
 
     rsx! {

@@ -15,6 +15,7 @@ tracing = { workspace = true }
 
 # Native (Wry) build
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+poly-core = { workspace = true, features = ["github"] }
 dioxus = { workspace = true, features = ["desktop"] }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }

@@ -392,4 +392,39 @@ impl host_api::Host for PluginHostState {
     async fn get_current_time(&mut self) -> String {
         chrono::Utc::now().to_rfc3339()
     }
+
+    /// Spawn a subprocess with no shell involvement.
+    ///
+    /// `program` and `args` are passed directly to `tokio::process::Command`,
+    /// so shell metacharacters (`&&`, `|`, `;`, `$`, backticks) are literal
+    /// argv bytes — there is no path through `/bin/sh -c` and therefore no
+    /// shell-injection surface. Plugins declare which programs they spawn via
+    /// `get-plugin-manifest` for user transparency, but the host does not
+    /// enforce that declaration at runtime; the trust boundary is "you
+    /// installed this plugin."
+    async fn exec_command(
+        &mut self,
+        program: String,
+        args: Vec<String>,
+    ) -> Result<types::ExecOutput, String> {
+        let plugin_id = &self.plugin_id;
+        tracing::debug!(
+            plugin = %plugin_id,
+            program = %program,
+            args = ?args,
+            "exec_command"
+        );
+
+        let output = tokio::process::Command::new(&program)
+            .args(&args)
+            .output()
+            .await
+            .map_err(|e| format!("failed to spawn `{program}`: {e}"))?;
+
+        Ok(types::ExecOutput {
+            exit_code: output.status.code().unwrap_or(-1),
+            stdout: output.stdout,
+            stderr: output.stderr,
+        })
+    }
 }

@@ -134,7 +134,7 @@ fn to_session(
         display_name,
         avatar_url: None,
         presence: map_presence(&user),
-        backend: wit::BackendType::from("stoat"),
+        backend: wit::BackendType::Stoat,
     };
 
     let instance_id = instance_id_for_base_url(base_url);
@@ -150,7 +150,7 @@ fn to_session(
         id: session_id,
         user: wit_user,
         token,
-        backend: wit::BackendType::from("stoat"),
+        backend: wit::BackendType::Stoat,
         icon_emoji: Some("🦦".to_string()),
         instance_id,
         backend_url: Some(base_url.to_string()),
@@ -298,7 +298,7 @@ fn to_wit_user(user: &StoatGuestUser) -> wit::User {
             .unwrap_or_else(|| user.username.clone()),
         avatar_url: None,
         presence: map_presence(user),
-        backend: wit::BackendType::from("stoat"),
+        backend: wit::BackendType::Stoat,
     }
 }
 
@@ -330,7 +330,7 @@ fn open_dm_like_channel(user_id: &str) -> Result<wit::DmChannel, wit::ClientErro
         user: to_wit_user(&dm_user),
         last_message: None,
         unread_count: 0,
-        backend: wit::BackendType::from("stoat"),
+        backend: wit::BackendType::Stoat,
         account_id: session.user_id,
     })
 }
@@ -560,11 +560,38 @@ impl Guest for StoatPlugin {
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::from("stoat")
+        wit::BackendType::Stoat
     }
 
     fn get_backend_name() -> String {
         "Stoat".to_string()
+    }
+
+    fn get_backend_capabilities() -> wit::BackendCapabilities {
+        wit::BackendCapabilities {
+            supports_voice: false,
+            supports_video: false,
+            supports_dms: true,
+            supports_groups: false,
+            supports_send_messages: true,
+            supports_presence: true,
+            supports_search: false,
+            supports_reactions: false,
+            supports_typing_indicators: true,
+            supports_file_upload: false,
+        }
+    }
+
+    fn list_files(_channel_id: String, _path: String) -> Result<Vec<wit::FileEntry>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "stoat has no code channels".to_string(),
+        ))
+    }
+
+    fn read_file(_channel_id: String, _path: String) -> Result<wit::FileContent, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "stoat has no code channels".to_string(),
+        ))
     }
 }
 
@@ -589,6 +616,17 @@ impl PluginMetadataGuest for StoatPlugin {
 
     fn get_icon() -> String {
         "S".to_string()
+    }
+
+    fn get_plugin_manifest() -> crate::wit_bindings::PluginManifest {
+        crate::wit_bindings::PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec!["api.stoat.chat".to_string()],
+            description: "Connect to Stoat, a self-hosted instant messaging platform. \
+                          Supports text channels, group DMs, and presence status."
+                .to_string(),
+            homepage: Some("https://stoat.app".to_string()),
+        }
     }
 }
 

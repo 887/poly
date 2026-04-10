@@ -172,6 +172,17 @@ fn register_native_plugin_ftl() {
         }
         tracing::debug!("Native hackernews plugin FTL registered for all locales");
     }
+
+    #[cfg(feature = "github")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_github::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("github", locale, src);
+            }
+        }
+        tracing::debug!("Native github plugin FTL registered for all locales");
+    }
 }
 
 /// Load `.ftl` resources for a locale into the bundle store.

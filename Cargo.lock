@@ -6209,6 +6209,7 @@ dependencies = [
  "poly-client",
  "poly-demo",
  "poly-discord",
+ "poly-github",
  "poly-hackernews",
  "poly-lemmy",
  "poly-matrix",
@@ -6383,6 +6384,22 @@ dependencies = [
  "tokio-tungstenite 0.26.2",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "poly-github"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "dioxus",
+ "futures",
+ "poly-client",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

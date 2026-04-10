@@ -41,6 +41,69 @@ interface types {
         forum,
         /// Hacker News–style feed channel (title + URL + score + comments).
         hacker-news,
+        /// Code repository explorer (file tree + file content view).
+        code,
+    }
+
+    /// Kind of a file system entry returned by `list-files`.
+    enum file-kind {
+        file,
+        directory,
+        symlink,
+        submodule,
+    }
+
+    /// File / directory entry returned by `list-files`.
+    record file-entry {
+        path: string,
+        name: string,
+        kind: file-kind,
+        size: u64,
+    }
+
+    /// Raw file content returned by `read-file`.
+    record file-content {
+        path: string,
+        bytes: list<u8>,
+        truncated: bool,
+    }
+
+    /// Output of a host-mediated subprocess invocation.
+    record exec-output {
+        exit-code: s32,
+        stdout: list<u8>,
+        stderr: list<u8>,
+    }
+
+    /// Capability flags describing what a backend supports. Used by the UI
+    /// to hide controls that don't make sense for a given backend (e.g.
+    /// the mic/speaker buttons for read-only news feeds).
+    record backend-capabilities {
+        supports-voice: bool,
+        supports-video: bool,
+        supports-dms: bool,
+        supports-groups: bool,
+        supports-send-messages: bool,
+        supports-presence: bool,
+        supports-search: bool,
+        supports-reactions: bool,
+        supports-typing-indicators: bool,
+        supports-file-upload: bool,
+    }
+
+    /// Self-declared plugin manifest. Purely informational — the host does
+    /// NOT enforce these declarations at runtime; they exist so users can
+    /// inspect what a loaded plugin says it will do.
+    record plugin-manifest {
+        /// Subprocess programs the plugin spawns via `exec-command`.
+        exec-programs: list<string>,
+        /// HTTP host patterns the plugin calls (e.g. "api.github.com",
+        /// "*.github.com"). Empty list means no HTTP.
+        http-hosts: list<string>,
+        /// Free-text description of the plugin and its access needs.
+        description: string,
+        /// Optional homepage / source URL.
+        homepage: option<string>,
     }
 
     /// The user-chosen availability / presence status for an account.
@@ -427,7 +490,7 @@ interface types {
 /// through these host-mediated functions. The host can restrict, rate-limit,
 /// and sandbox each plugin's access.
 interface host-api {
-    use types.{log-level, http-response, client-event};
+    use types.{log-level, http-response, client-event, exec-output};
 
     /// Make an HTTP request.
     ///
@@ -483,6 +546,19 @@ interface host-api {
 
     /// Get the current wall-clock time as an RFC3339 string.
     get-current-time: func() -> string;
+
+    /// Spawn a subprocess and wait for it to exit.
+    ///
+    /// Args are passed directly to the process — there is NO shell involved,
+    /// so `&&`, `|`, `;`, `$`, backticks, and other shell metacharacters are
+    /// just literal characters in argv. Plugins declare which programs they
+    /// invoke via `get-plugin-manifest` for user transparency, but the host
+    /// does not enforce that declaration at runtime; the trust boundary is
+    /// "you installed this plugin."
+    exec-command: func(
+        program: string,
+        args: list<string>,
+    ) -> result<exec-output, string>;
 }
 
 // ─── Messenger Client (exports — plugin provides to host) ──────────
@@ -512,6 +588,9 @@ interface messenger-client {
         presence-status,
         client-event,
         backend-type,
+        backend-capabilities,
+        file-entry,
+        file-content,
     };
 
     /// Authenticate with the backend.
@@ -615,6 +694,17 @@ interface messenger-client {
 
     /// Human-readable name for this backend.
     get-backend-name: func() -> string;
+
+    /// Capability flags for this backend (used by the UI to hide controls
+    /// that don't apply, e.g. mic/speaker for read-only news backends).
+    get-backend-capabilities: func() -> backend-capabilities;
+
+    /// List entries at the given path within a code-type channel.
+    /// Path is repo-relative; empty string means the repo root.
+    list-files: func(channel-id: string, path: string) -> result<list<file-entry>, client-error>;
+
+    /// Read the raw bytes of a file in a code-type channel.
+    read-file: func(channel-id: string, path: string) -> result<file-content, client-error>;
 }
 
 // ─── Plugin Metadata (optional exports — host uses if present) ─────
@@ -643,6 +733,8 @@ interface messenger-client {
 /// The host renders each one using the appropriate control widget. The
 /// plugin's FTL keys supply all user-visible labels and descriptions.
 interface plugin-metadata {
+    use types.{plugin-manifest};
+
     /// The type of setting control to render.
     enum setting-kind {
         /// Boolean toggle / checkbox.
@@ -695,6 +787,14 @@ interface plugin-metadata {
 
     /// Return the plugin's icon emoji or short string (e.g. "🧪").
     get-icon: func() -> string;
+
+    /// Return the plugin's self-declared manifest.
+    ///
+    /// Purely informational — the host does NOT use this to enforce access
+    /// at runtime. It exists so users can inspect (in the plugin settings
+    /// panel) which subprocess programs and HTTP hosts a loaded plugin says
+    /// it will use.
+    get-plugin-manifest: func() -> plugin-manifest;
 }
 
 // ─── World Definition ──────────────────────────────────────────────
