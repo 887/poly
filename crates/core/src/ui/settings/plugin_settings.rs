@@ -273,6 +273,74 @@ pub fn lemmy_settings_render_fn() -> Element {
     }
 }
 
+// ── Discord plugin settings ───────────────────────────────────────────────────
+
+/// Settings content for the Discord backend.
+///
+/// Discord is a dev-only plugin: compiled into the repo but not shipped in
+/// release builds. Shown in the settings nav so developers can see the
+/// declared manifest alongside the other native backends.
+#[cfg(feature = "discord")]
+#[rustfmt::skip]
+#[component]
+pub fn DiscordPluginSettings() -> Element {
+    use poly_client::ClientBackend as _;
+    let client = poly_discord::DiscordClient::new();
+    let manifest = client.plugin_manifest();
+    rsx! {
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🟣" }
+                h2 { class: "plugin-section-title", "Discord (dev)" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
+                "Popular gaming and community chat platform. Dev-only — not shipped in release builds."
+            }
+            PluginManifestPanel { manifest }
+        }
+    }
+}
+
+#[cfg(feature = "discord")]
+pub fn discord_settings_render_fn() -> Element {
+    rsx! {
+        DiscordPluginSettings {}
+    }
+}
+
+// ── Teams plugin settings ─────────────────────────────────────────────────────
+
+/// Settings content for the Microsoft Teams backend.
+#[cfg(feature = "teams")]
+#[rustfmt::skip]
+#[component]
+pub fn TeamsPluginSettings() -> Element {
+    use poly_client::ClientBackend as _;
+    let client = poly_teams::TeamsClient::new();
+    let manifest = client.plugin_manifest();
+    rsx! {
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🟦" }
+                h2 { class: "plugin-section-title", "Microsoft Teams (dev)" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
+                "Enterprise communication platform by Microsoft. Dev-only — not shipped in release builds."
+            }
+            PluginManifestPanel { manifest }
+        }
+    }
+}
+
+#[cfg(feature = "teams")]
+pub fn teams_settings_render_fn() -> Element {
+    rsx! {
+        TeamsPluginSettings {}
+    }
+}
+
 // ── GitHub plugin settings ────────────────────────────────────────────────────
 
 #[cfg(feature = "github")]

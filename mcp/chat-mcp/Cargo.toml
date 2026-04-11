@@ -21,6 +21,7 @@ poly-discord = { workspace = true, features = ["native"] }
 poly-teams = { workspace = true, features = ["native"] }
 poly-lemmy = { workspace = true, features = ["native"] }
 poly-hackernews = { workspace = true, features = ["native"] }
+poly-github = { workspace = true }
 poly-server-client = { workspace = true, features = ["native"] }
 tokio = { workspace = true, features = [
     "rt-multi-thread",

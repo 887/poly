@@ -70,8 +70,40 @@ pub fn FavoritesBar() -> Element {
         .map(|b| b.slug().to_string());
     let active_instance_id = app_state.read().nav.active_instance_id.clone();
 
-    // Collect distinct active account IDs for account icons
-    let account_ids = client_manager.read().active_account_ids();
+    // Collect distinct active account IDs for account icons, applying the
+    // user-saved order from `ChatData.account_order` (hydrated at startup
+    // from `AppSettings.account_order`). Accounts not listed in the saved
+    // order are appended by a priority fallback so the default install is
+    // predictable and groups related accounts together:
+    //   0. demo messenger accounts (Cat, Dog)
+    //   1. demo forum accounts (Platypus)
+    //   2. every other account (user-added: HN, poly, etc.), alphabetical
+    // This ordering is what a brand-new user expects: play with the demo
+    // messengers first, see the forum variant next, then their own accounts.
+    let account_ids = {
+        let live: Vec<String> = client_manager.read().active_account_ids();
+        let saved_order = chat_data.read().account_order.clone();
+        let live_set: std::collections::HashSet<_> = live.iter().cloned().collect();
+        let mut ordered: Vec<String> = saved_order
+            .iter()
+            .filter(|id| live_set.contains(*id))
+            .cloned()
+            .collect();
+        let placed: std::collections::HashSet<_> = ordered.iter().cloned().collect();
+        let cd = chat_data.read();
+        let priority = |id: &String| -> u8 {
+            match cd.account_sessions.get(id) {
+                Some(s) if s.backend.to_string() == "demo" => 0,
+                Some(s) if s.backend.to_string() == "demo_forum" => 1,
+                _ => 2,
+            }
+        };
+        let mut rest: Vec<String> =
+            live.into_iter().filter(|id| !placed.contains(id)).collect();
+        rest.sort_by(|a, b| priority(a).cmp(&priority(b)).then_with(|| a.cmp(b)));
+        ordered.extend(rest);
+        ordered
+    };
 
     // Only show servers that have been dragged into favorites.
     let favorited_ids = chat_data.read().favorited_server_ids.clone();
@@ -316,9 +348,118 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         _ => "⚠",
     };
 
+    let is_drag_over_account = chat_data.read().drag_over_id.as_deref()
+        == Some(account_id.as_str())
+        && chat_data.read().drag_source == DragSource::AccountIcon;
+
+    let drag_start_id = account_id.clone();
+    let on_account_drag_start = move |_: Event<DragData>| {
+        let mut cd = chat_data.write();
+        cd.dragging_server_id = Some(drag_start_id.clone());
+        cd.drag_source = DragSource::AccountIcon;
+    };
+
+    let drag_over_id = account_id.clone();
+    let on_account_drag_over = move |evt: Event<DragData>| {
+        if chat_data.read().drag_source != DragSource::AccountIcon {
+            return;
+        }
+        evt.prevent_default();
+        evt.stop_propagation();
+        chat_data.write().drag_over_id = Some(drag_over_id.clone());
+    };
+
+    let drag_leave_id = account_id.clone();
+    let on_account_drag_leave = move |_: Event<DragData>| {
+        let mut cd = chat_data.write();
+        if cd.drag_over_id.as_deref() == Some(drag_leave_id.as_str()) {
+            cd.drag_over_id = None;
+        }
+    };
+
+    let drop_target_id = account_id.clone();
+    let client_manager_for_drop = client_manager;
+    let on_account_drop = move |evt: Event<DragData>| {
+        if chat_data.read().drag_source != DragSource::AccountIcon {
+            return;
+        }
+        evt.prevent_default();
+        evt.stop_propagation();
+        let snapshot = {
+            let mut cd = chat_data.write();
+            let dragging = cd.dragging_server_id.clone();
+            cd.drag_over_id = None;
+            let Some(drag_id) = dragging else {
+                cd.dragging_server_id = None;
+                cd.drag_source = DragSource::None;
+                return;
+            };
+            if drag_id == drop_target_id {
+                cd.dragging_server_id = None;
+                cd.drag_source = DragSource::None;
+                return;
+            }
+            // Seed account_order from the live accounts if empty so we have
+            // something to reorder against. Live list is sorted so the
+            // baseline is deterministic.
+            if cd.account_order.is_empty() {
+                let mut live: Vec<String> = client_manager_for_drop
+                    .read()
+                    .active_account_ids();
+                live.sort();
+                cd.account_order = live;
+            }
+            // Ensure both dragged + target are present in the order vec.
+            if !cd.account_order.contains(&drag_id) {
+                cd.account_order.push(drag_id.clone());
+            }
+            if !cd.account_order.contains(&drop_target_id) {
+                cd.account_order.push(drop_target_id.clone());
+            }
+            if let Some(from) = cd.account_order.iter().position(|x| x == &drag_id) {
+                cd.account_order.remove(from);
+                if let Some(to) =
+                    cd.account_order.iter().position(|x| x == &drop_target_id)
+                {
+                    cd.account_order.insert(to, drag_id);
+                } else {
+                    cd.account_order.push(drag_id);
+                }
+            }
+            cd.dragging_server_id = None;
+            cd.drag_source = DragSource::None;
+            Some(cd.account_order.clone())
+        };
+        if let Some(order) = snapshot {
+            spawn(async move {
+                persist_account_order(order).await;
+            });
+        }
+    };
+
+    let on_account_drag_end = move |_: Event<DragData>| {
+        let mut cd = chat_data.write();
+        cd.dragging_server_id = None;
+        cd.drag_source = DragSource::None;
+        cd.drag_over_id = None;
+    };
+
+    let account_item_class = match (is_active, is_drag_over_account) {
+        (true, true) => "server-icon account-icon active drag-over-target",
+        (true, false) => "server-icon account-icon active",
+        (false, true) => "server-icon account-icon drag-over-target",
+        (false, false) => "server-icon account-icon",
+    };
+
     rsx! {
         div {
-            class: if is_active { "server-icon account-icon active" } else { "server-icon account-icon" },
+            class: "{account_item_class}",
+            draggable: "true",
+            ondragstart: on_account_drag_start,
+            ondragover: on_account_drag_over,
+            ondragleave: on_account_drag_leave,
+            ondrop: on_account_drop,
+            ondragend: on_account_drag_end,
             onclick: move |_| {
                 let aid = aid_for_click.clone();
                 let preserve_drawer_context = mobile_left_drawer_open();
@@ -840,6 +981,25 @@ async fn apply_server_icon_overrides(chat_data: &mut Signal<crate::state::ChatDa
 /// Called after every mutation of `ChatData.favorited_server_ids` to survive
 /// page reloads, app restarts, and offline periods.
 /// No-ops silently if storage is not yet initialised.
+/// Persist the Bar-1 account icon order to `AppSettings.account_order`.
+///
+/// Called after every drag-drop reorder on account icons so users get a
+/// stable, restorable layout across page reloads and app restarts.
+pub(crate) async fn persist_account_order(order: Vec<String>) {
+    let Some(s) = crate::STORAGE.get() else {
+        return;
+    };
+    match s.get_app_settings().await {
+        Ok(mut settings) => {
+            settings.account_order = order;
+            if let Err(e) = s.set_app_settings(&settings).await {
+                tracing::warn!("Failed to persist account_order: {e}");
+            }
+        }
+        Err(e) => tracing::warn!("Failed to read app_settings for account_order persist: {e}"),
+    }
+}
+
 pub(crate) async fn persist_favorites(ids: Vec<String>) {
     let Some(s) = crate::STORAGE.get() else {
         return;

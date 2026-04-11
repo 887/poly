@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 
 use crate::state::BackendPool;
-use poly_client::{AuthCredentials, BackendType, MessageContent, MessageQuery};
+use poly_client::{AuthCredentials, BackendType, ClientBackend, MessageContent, MessageQuery, PluginManifest};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,6 +75,13 @@ pub fn tool_list() -> Vec<Value> {
         json!({
             "name": "list_accounts",
             "description": "List all connected accounts across all backends.",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "list_plugins",
+            "description": "List all chat plugins compiled into this MCP server, with each plugin's \
+                            declared manifest (description, external programs, HTTP hosts, homepage). \
+                            Useful for verifying which backends are available without needing to log in.",
             "inputSchema": { "type": "object", "properties": {} }
         }),
 
@@ -221,6 +228,7 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool) -> Value
         "login" => handle_login(args, pool).await,
         "logout" => handle_logout(args, pool),
         "list_accounts" => ok_result(serde_json::to_string_pretty(&pool.list_accounts()).unwrap_or_default()),
+        "list_plugins" => handle_list_plugins(),
 
         "list_servers" => handle_list_servers(args, pool).await,
         "list_channels" => handle_list_channels(args, pool).await,
@@ -425,6 +433,70 @@ async fn handle_send_message(args: &Value, pool: &BackendPool) -> Value {
         Ok(msg) => ok_result(serde_json::to_string_pretty(&msg).unwrap_or_default()),
         Err(e) => err_result(format!("send_message failed: {e}")),
     }
+}
+
+// ─── List compiled-in plugins ────────────────────────────────────────────────
+
+/// Snapshot one plugin's identity + declared manifest.
+fn plugin_entry(id: &str, name: &str, manifest: PluginManifest) -> Value {
+    json!({
+        "id": id,
+        "name": name,
+        "description": manifest.description,
+        "exec_programs": manifest.exec_programs,
+        "http_hosts": manifest.http_hosts,
+        "homepage": manifest.homepage,
+    })
+}
+
+/// List every chat backend compiled into this MCP, with its declared manifest.
+///
+/// Each plugin is instantiated unauthenticated just long enough to read its
+/// `plugin_manifest()` and `backend_name()`. The instances are dropped before
+/// the function returns — no network or filesystem access happens.
+fn handle_list_plugins() -> Value {
+    let plugins: Vec<Value> = vec![
+        {
+            let c = poly_stoat::StoatClient::with_base_url("http://localhost").ok();
+            match c {
+                Some(c) => plugin_entry("stoat", c.backend_name(), c.plugin_manifest()),
+                None => json!({ "id": "stoat", "error": "failed to construct" }),
+            }
+        },
+        {
+            let c = poly_matrix::MatrixClient::with_homeserver("http://localhost").ok();
+            match c {
+                Some(c) => plugin_entry("matrix", c.backend_name(), c.plugin_manifest()),
+                None => json!({ "id": "matrix", "error": "failed to construct" }),
+            }
+        },
+        {
+            let c = poly_discord::DiscordClient::new();
+            plugin_entry("discord", c.backend_name(), c.plugin_manifest())
+        },
+        {
+            let c = poly_teams::TeamsClient::new();
+            plugin_entry("teams", c.backend_name(), c.plugin_manifest())
+        },
+        {
+            let c = poly_lemmy::LemmyClient::new("https://lemmy.world");
+            plugin_entry("lemmy", c.backend_name(), c.plugin_manifest())
+        },
+        {
+            let c = poly_hackernews::HackerNewsClient::new();
+            plugin_entry("hackernews", c.backend_name(), c.plugin_manifest())
+        },
+        {
+            let c = poly_github::GitHubClient::dotcom();
+            plugin_entry("github", c.backend_name(), c.plugin_manifest())
+        },
+        {
+            let key: [u8; 32] = [0; 32];
+            let c = poly_server_client::PolyServerBackend::new("http://localhost", key);
+            plugin_entry("poly", c.backend_name(), c.plugin_manifest())
+        },
+    ];
+    ok_result(serde_json::to_string_pretty(&plugins).unwrap_or_default())
 }
 
 // ─── Test server easy-signin ─────────────────────────────────────────────────

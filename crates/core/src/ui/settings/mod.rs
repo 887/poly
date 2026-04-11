@@ -48,7 +48,11 @@ pub(crate) use plugin_settings::hackernews_settings_render_fn;
 pub(crate) use plugin_settings::lemmy_settings_render_fn;
 #[cfg(feature = "github")]
 pub(crate) use plugin_settings::github_settings_render_fn;
-mod plugins;
+#[cfg(feature = "discord")]
+pub(crate) use plugin_settings::discord_settings_render_fn;
+#[cfg(feature = "teams")]
+pub(crate) use plugin_settings::teams_settings_render_fn;
+pub(crate) mod plugins;
 mod theme;
 mod translation;
 mod voice_video;

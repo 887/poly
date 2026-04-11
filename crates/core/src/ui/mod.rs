@@ -85,6 +85,10 @@ pub(crate) use settings::hackernews_settings_render_fn;
 pub(crate) use settings::github_settings_render_fn;
 #[cfg(feature = "lemmy")]
 pub(crate) use settings::lemmy_settings_render_fn;
+#[cfg(feature = "discord")]
+pub(crate) use settings::discord_settings_render_fn;
+#[cfg(feature = "teams")]
+pub(crate) use settings::teams_settings_render_fn;
 mod runtime_js;
 mod setup_wizard;
 mod voice_banner;
@@ -750,6 +754,26 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
             nav_icon: "🐙",
             render: github_settings_render_fn,
         });
+
+    #[cfg(feature = "discord")]
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "discord",
+            nav_label_key: "plugin-discord-title",
+            nav_icon: "🟣",
+            render: discord_settings_render_fn,
+        });
+
+    #[cfg(feature = "teams")]
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "teams",
+            nav_label_key: "plugin-teams-title",
+            nav_icon: "🟦",
+            render: teams_settings_render_fn,
+        });
 }
 
 // ── App — async helpers ──────────────────────────────────────────────────────
@@ -1176,8 +1200,25 @@ async fn init_storage(
                 Err(e) => tracing::warn!("Failed to load saved theme config: {e}"),
             }
             match storage.get_app_settings().await {
-                Ok(settings) if settings.setup_complete => {
+                Ok(mut settings) if settings.setup_complete => {
                     tracing::info!("Storage: setup complete, going to main layout");
+                    // Make sure dev-only plugins (Discord/Teams when the `dev-plugins`
+                    // feature is compiled in) exist as real entries inside
+                    // `wasm_plugins` so they persist across reloads through the same
+                    // storage path a user-loaded plugin would use. Also prunes stale
+                    // dev entries whose feature is no longer compiled (e.g. after
+                    // switching to a production build) so the UI never shows a
+                    // dead backend.
+                    if crate::ui::settings::plugins::ensure_dev_plugins_in(&mut settings) {
+                        if let Err(e) = storage.set_app_settings(&settings).await {
+                            tracing::warn!("Failed to persist dev-plugin injection: {e}");
+                        } else {
+                            tracing::info!(
+                                "Injected dev-only plugins into wasm_plugins ({} entries)",
+                                settings.wasm_plugins.len()
+                            );
+                        }
+                    }
                     crate::i18n::set_locale(&settings.locale);
                     *locale_sig.write() = settings.locale.clone();
                     app_state.write().is_setup_complete = true;
@@ -1201,6 +1242,23 @@ async fn init_storage(
                         tracing::info!(
                             "Restored {} favorited server(s) from storage",
                             settings.favorited_server_ids.len()
+                        );
+                    }
+                    // Restore per-account Bar 2 server ordering.
+                    if !settings.account_server_order.is_empty() {
+                        chat_data.write().account_server_order =
+                            settings.account_server_order.clone();
+                        tracing::info!(
+                            "Restored server order for {} account(s) from storage",
+                            settings.account_server_order.len()
+                        );
+                    }
+                    // Restore Bar 1 account icon ordering.
+                    if !settings.account_order.is_empty() {
+                        chat_data.write().account_order = settings.account_order.clone();
+                        tracing::info!(
+                            "Restored account icon order ({} entries) from storage",
+                            settings.account_order.len()
                         );
                     }
                     // Restore the demo client if it was active when the app last closed.
@@ -1274,6 +1332,8 @@ async fn persist_setup_completion(account_id: String) {
         demo_active: true,
         // New install has no favorites yet.
         favorited_server_ids: Vec::new(),
+        account_order: Vec::new(),
+        account_server_order: std::collections::HashMap::new(),
         server_icon_overrides: std::collections::HashMap::new(),
         server_banner_overrides: std::collections::HashMap::new(),
         server_member_list_open: true,

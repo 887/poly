@@ -183,6 +183,28 @@ fn register_native_plugin_ftl() {
         }
         tracing::debug!("Native github plugin FTL registered for all locales");
     }
+
+    #[cfg(feature = "discord")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_discord::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("discord", locale, src);
+            }
+        }
+        tracing::debug!("Native discord plugin FTL registered for all locales");
+    }
+
+    #[cfg(feature = "teams")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_teams::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("teams", locale, src);
+            }
+        }
+        tracing::debug!("Native teams plugin FTL registered for all locales");
+    }
 }
 
 /// Load `.ftl` resources for a locale into the bundle store.

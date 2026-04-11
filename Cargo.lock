@@ -6129,6 +6129,7 @@ dependencies = [
  "clap 4.6.0",
  "poly-client",
  "poly-discord",
+ "poly-github",
  "poly-hackernews",
  "poly-lemmy",
  "poly-matrix",

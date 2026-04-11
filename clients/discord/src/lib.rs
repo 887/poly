@@ -27,8 +27,11 @@ mod wit_bindings;
 mod guest;
 
 /// Return Fluent translations for the given locale.
-pub fn plugin_translations(_locale: &str) -> String {
-    String::new()
+pub fn plugin_translations(locale: &str) -> String {
+    match locale {
+        "en" => include_str!("../locales/en/plugin.ftl").to_string(),
+        _ => String::new(),
+    }
 }
 
 #[cfg(feature = "native")]
@@ -150,6 +153,18 @@ impl ClientBackend for DiscordClient {
 
     fn is_authenticated(&self) -> bool {
         self.account_id.is_some()
+    }
+
+    fn plugin_manifest(&self) -> PluginManifest {
+        PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec!["discord.com".to_string(), "cdn.discordapp.com".to_string()],
+            description: "Discord chat backend. Connects to discord.com with a user token. \
+                          Dev-only: not shipped in release builds because Discord's ToS \
+                          forbids third-party clients on the app store."
+                .to_string(),
+            homepage: Some("https://discord.com".to_string()),
+        }
     }
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {

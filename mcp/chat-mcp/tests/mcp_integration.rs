@@ -783,3 +783,64 @@ async fn matrix_send_message() {
     })).await;
     assert_ok(&result);
 }
+
+// ---------------------------------------------------------------------------
+// list_plugins — verify all compiled-in chat backends are reported
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_plugins_reports_all_compiled_backends() {
+    let mut pool = BackendPool::new();
+    let result = call(&mut pool, "list_plugins", json!({})).await;
+    assert_ok(&result);
+
+    let plugins: Vec<Value> = parse_text(&result);
+    let ids: std::collections::HashSet<String> = plugins
+        .iter()
+        .filter_map(|p| p.get("id").and_then(|v| v.as_str()).map(String::from))
+        .collect();
+
+    // Every backend that's a workspace dependency of poly-chat-mcp must show up.
+    for expected in [
+        "stoat", "matrix", "discord", "teams", "lemmy",
+        "hackernews", "github", "poly",
+    ] {
+        assert!(
+            ids.contains(expected),
+            "expected list_plugins to include {expected}, got {ids:?}"
+        );
+    }
+
+    // Each entry has manifest fields populated (description is mandatory in the
+    // builtin manifests; http_hosts/exec_programs are arrays).
+    for p in &plugins {
+        let id = p.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+        assert!(
+            p.get("name").and_then(|v| v.as_str()).is_some(),
+            "{id} missing 'name'"
+        );
+        assert!(
+            p.get("description").and_then(|v| v.as_str()).is_some(),
+            "{id} missing 'description'"
+        );
+        assert!(
+            p.get("http_hosts").and_then(|v| v.as_array()).is_some(),
+            "{id} 'http_hosts' is not an array"
+        );
+        assert!(
+            p.get("exec_programs").and_then(|v| v.as_array()).is_some(),
+            "{id} 'exec_programs' is not an array"
+        );
+    }
+
+    // Discord and Teams (the dev-only plugins from the user's question) must
+    // both expose non-empty http_hosts so the manifest is actually informative.
+    for dev_plugin in ["discord", "teams"] {
+        let entry = plugins
+            .iter()
+            .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(dev_plugin))
+            .unwrap_or_else(|| panic!("{dev_plugin} entry missing"));
+        let hosts = entry.get("http_hosts").and_then(|v| v.as_array()).unwrap();
+        assert!(!hosts.is_empty(), "{dev_plugin} should declare http_hosts");
+    }
+}

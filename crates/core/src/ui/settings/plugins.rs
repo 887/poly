@@ -104,7 +104,15 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
 /// loaded them as external WASM plugins so it stays visually obvious they
 /// are not first-party Poly backends — and so the production build has
 /// nothing Discord/Teams-shaped to point at during app-store review.
-const DEV_INJECTED_BACKENDS: &[NativeBackend] = &[
+///
+/// At app startup, [`ensure_dev_plugins_in`] copies these into the persisted
+/// [`crate::storage::AppSettings::wasm_plugins`] list using a sentinel URL
+/// (`internal://dev-plugin/<slug>`). The rendering code in `PluginsSettings`
+/// detects that URL prefix and routes the toggle through the same
+/// disabled-native-backends path that the built-in toggles use, so the
+/// `(dev)` rows behave exactly like first-party toggles even though they
+/// look like user-loaded WASM plugins.
+pub(crate) const DEV_INJECTED_BACKENDS: &[NativeBackend] = &[
     #[cfg(feature = "discord")]
     NativeBackend {
         slug: "discord",
@@ -124,13 +132,73 @@ const DEV_INJECTED_BACKENDS: &[NativeBackend] = &[
 ];
 
 /// Compile-time backend descriptor (only const-compatible types).
-struct NativeBackend {
-    slug: &'static str,
-    icon: &'static str,
-    name: &'static str,
-    description: &'static str,
+pub(crate) struct NativeBackend {
+    pub(crate) slug: &'static str,
+    pub(crate) icon: &'static str,
+    pub(crate) name: &'static str,
+    pub(crate) description: &'static str,
     /// Whether this backend was compiled in (feature flag check).
-    available: bool,
+    pub(crate) available: bool,
+}
+
+/// URL scheme used to mark dev-injected entries inside the persisted
+/// [`crate::storage::AppSettings::wasm_plugins`] list. Anything with this
+/// prefix is rendered as a dev backend (Discord/Teams) instead of a real
+/// user-loaded WASM plugin.
+const DEV_PLUGIN_URL_PREFIX: &str = "internal://dev-plugin/";
+
+/// Build the sentinel URL for a dev-injected backend.
+pub(crate) fn dev_injected_url(slug: &str) -> String {
+    format!("{DEV_PLUGIN_URL_PREFIX}{slug}")
+}
+
+/// Extract the backend slug from a dev-injected URL, or `None` if the URL
+/// is a normal user-loaded plugin.
+pub(crate) fn parse_dev_injected_slug(url: &str) -> Option<&str> {
+    url.strip_prefix(DEV_PLUGIN_URL_PREFIX)
+}
+
+/// Look up a dev backend descriptor by slug.
+pub(crate) fn lookup_dev_backend(slug: &str) -> Option<&'static NativeBackend> {
+    DEV_INJECTED_BACKENDS.iter().find(|b| b.slug == slug)
+}
+
+/// Inject any missing dev-only backends (Discord/Teams) into the persisted
+/// `wasm_plugins` list. Returns `true` if `settings` was modified, so the
+/// caller knows whether to write back to storage.
+///
+/// Cleans up stale dev entries whose feature has been turned off (e.g. a
+/// production build still seeing a leftover `discord` row from a previous
+/// dev session) so the UI never shows a backend whose code is not linked
+/// in.
+pub fn ensure_dev_plugins_in(settings: &mut crate::storage::AppSettings) -> bool {
+    let live_dev_slugs: std::collections::HashSet<&'static str> =
+        DEV_INJECTED_BACKENDS.iter().map(|b| b.slug).collect();
+    let before = settings.wasm_plugins.len();
+
+    settings.wasm_plugins.retain(|entry| {
+        if let Some(slug) = parse_dev_injected_slug(&entry.url) {
+            live_dev_slugs.contains(slug)
+        } else {
+            true
+        }
+    });
+
+    let mut changed = settings.wasm_plugins.len() != before;
+
+    for backend in DEV_INJECTED_BACKENDS {
+        let url = dev_injected_url(backend.slug);
+        if !settings.wasm_plugins.iter().any(|e| e.url == url) {
+            let enabled = !settings.disabled_native_backends.iter().any(|s| s == backend.slug);
+            settings.wasm_plugins.push(WasmPluginEntry {
+                url,
+                name: Some(backend.name.to_string()),
+                enabled,
+            });
+            changed = true;
+        }
+    }
+    changed
 }
 
 /// Load current app settings from storage (or return default).
@@ -556,93 +624,106 @@ pub fn PluginsSettings() -> Element {
                 "{t(\"plugins-wasm-description\")}"
             }
             div { class: "plugin-list",
-                if wasm_snap.is_empty() && DEV_INJECTED_BACKENDS.is_empty() {
+                if wasm_snap.is_empty() {
                     div { class: "plugin-empty",
                         "{t(\"plugins-none-loaded\")}"
                     }
                 }
-                for backend in DEV_INJECTED_BACKENDS {
+                for (idx, entry) in wasm_snap.iter().enumerate() {
                     {
-                        let slug = backend.slug.to_string();
-                        let slug_key = slug.clone();
-                        let enabled = !disabled_snap.contains(&slug);
-                        let account_count = client_manager
-                            .read()
-                            .sessions
-                            .values()
-                            .filter(|s| s.backend.slug() == backend.slug)
-                            .count();
-                        rsx! {
-                            div {
-                                key: "{slug_key}",
-                                class: "plugin-row",
-                                label { class: "plugin-row-toggle",
-                                    input {
-                                        r#type: "checkbox",
-                                        checked: enabled,
-                                        onchange: move |_| {
-                                            toggle_native_backend(
-                                                slug.clone(),
-                                                client_manager,
-                                                chat_data,
-                                                disabled,
-                                                wasm_plugins,
-                                            );
-                                        },
-                                    }
-                                }
-                                div { class: "plugin-row-icon", "{backend.icon}" }
-                                div { class: "plugin-row-info",
-                                    div { class: "plugin-row-name", "{backend.name}" }
-                                    div { class: "plugin-row-description", "{backend.description}" }
-                                    if account_count > 0 {
-                                        div { class: "plugin-row-accounts",
-                                            "{t(\"plugins-active-accounts\")}: {account_count}"
+                        if let Some(slug) = parse_dev_injected_slug(&entry.url).map(|s| s.to_string()) {
+                            let backend = lookup_dev_backend(&slug);
+                            let icon = backend.map(|b| b.icon).unwrap_or("🔌").to_string();
+                            let name = backend
+                                .map(|b| b.name.to_string())
+                                .or_else(|| entry.name.clone())
+                                .unwrap_or_else(|| slug.clone());
+                            let description = backend
+                                .map(|b| b.description.to_string())
+                                .unwrap_or_default();
+                            let enabled = !disabled_snap.contains(&slug);
+                            let account_count = client_manager
+                                .read()
+                                .sessions
+                                .values()
+                                .filter(|s| s.backend.slug() == slug.as_str())
+                                .count();
+                            let slug_key = slug.clone();
+                            let slug_for_toggle = slug.clone();
+                            rsx! {
+                                div {
+                                    key: "{slug_key}",
+                                    class: "plugin-row",
+                                    label { class: "plugin-row-toggle",
+                                        input {
+                                            r#type: "checkbox",
+                                            checked: enabled,
+                                            onchange: move |_| {
+                                                toggle_native_backend(
+                                                    slug_for_toggle.clone(),
+                                                    client_manager,
+                                                    chat_data,
+                                                    disabled,
+                                                    wasm_plugins,
+                                                );
+                                            },
                                         }
                                     }
+                                    div { class: "plugin-row-icon", "{icon}" }
+                                    div { class: "plugin-row-info",
+                                        div { class: "plugin-row-name", "{name}" }
+                                        div { class: "plugin-row-description", "{description}" }
+                                        if account_count > 0 {
+                                            div { class: "plugin-row-accounts",
+                                                "{t(\"plugins-active-accounts\")}: {account_count}"
+                                            }
+                                        }
+                                    }
+                                    div { class: "plugin-row-meta",
+                                        span { class: "plugin-type-badge wasm", "{t(\"plugins-type-wasm\")}" }
+                                    }
                                 }
-                                div { class: "plugin-row-meta",
-                                    span { class: "plugin-type-badge wasm", "{t(\"plugins-type-wasm\")}" }
+                            }
+                        } else {
+                            let entry_clone = entry.clone();
+                            rsx! {
+                                WasmPluginRow {
+                                    key: "{idx}",
+                                    index: idx,
+                                    entry: entry_clone,
+                                    on_toggle: move |i: usize| {
+                                        let mut wasm = wasm_plugins.write();
+                                        if let Some(p) = wasm.get_mut(i) {
+                                            p.enabled = !p.enabled;
+                                        }
+                                        let new_wasm = wasm.clone();
+                                        drop(wasm);
+                                        let dis = disabled.read().clone();
+                                        spawn(async move {
+                                            let mut s = load_settings().await;
+                                            s.disabled_native_backends = dis;
+                                            s.wasm_plugins = new_wasm;
+                                            save_settings(&s).await;
+                                        });
+                                    },
+                                    on_remove: move |i: usize| {
+                                        let mut wasm = wasm_plugins.write();
+                                        if i < wasm.len() {
+                                            wasm.remove(i);
+                                        }
+                                        let new_wasm = wasm.clone();
+                                        drop(wasm);
+                                        let dis = disabled.read().clone();
+                                        spawn(async move {
+                                            let mut s = load_settings().await;
+                                            s.disabled_native_backends = dis;
+                                            s.wasm_plugins = new_wasm;
+                                            save_settings(&s).await;
+                                        });
+                                    },
                                 }
                             }
                         }
-                    }
-                }
-                for (idx, entry) in wasm_snap.iter().enumerate() {
-                    WasmPluginRow {
-                        key: "{idx}",
-                        index: idx,
-                        entry: entry.clone(),
-                        on_toggle: move |i: usize| {
-                            let mut wasm = wasm_plugins.write();
-                            if let Some(p) = wasm.get_mut(i) {
-                                p.enabled = !p.enabled;
-                            }
-                            let new_wasm = wasm.clone();
-                            drop(wasm);
-                            let dis = disabled.read().clone();
-                            spawn(async move {
-                                let mut s = load_settings().await;
-                                s.disabled_native_backends = dis;
-                                s.wasm_plugins = new_wasm;
-                                save_settings(&s).await;
-                            });
-                        },
-                        on_remove: move |i: usize| {
-                            let mut wasm = wasm_plugins.write();
-                            if i < wasm.len() {
-                                wasm.remove(i);
-                            }
-                            let new_wasm = wasm.clone();
-                            drop(wasm);
-                            let dis = disabled.read().clone();
-                            spawn(async move {
-                                let mut s = load_settings().await;
-                                s.disabled_native_backends = dis;
-                                s.wasm_plugins = new_wasm;
-                                save_settings(&s).await;
-                            });
-                        },
                     }
                 }
             }

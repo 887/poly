@@ -208,6 +208,18 @@ pub struct AppSettings {
     /// the event stream populates server data.
     #[serde(default)]
     pub favorited_server_ids: Vec<String>,
+    /// User-preferred order of account icons in the Favorites Bar (Bar 1).
+    ///
+    /// Account IDs in display order. Accounts that are active but not in
+    /// this list are appended deterministically (alphabetical) so the UI
+    /// never jumps between page loads. Updated on drag-drop reorder.
+    #[serde(default)]
+    pub account_order: Vec<String>,
+    /// User-preferred order of servers within each account's Bar 2, keyed
+    /// by `account_id`. Restored into `ChatData.account_server_order` at
+    /// startup. Updated whenever the user reorders via drag-drop.
+    #[serde(default)]
+    pub account_server_order: std::collections::HashMap<String, Vec<String>>,
     /// User-defined server icon URL overrides, keyed by server ID.
     ///
     /// Applied on top of the backend-reported `icon_url` after each

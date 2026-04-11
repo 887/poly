@@ -128,6 +128,13 @@ pub struct ChatData {
     /// Populated on first drag within the Account Server Bar. Servers not
     /// listed here appear after the explicitly ordered ones.
     pub account_server_order: HashMap<String, Vec<String>>,
+    /// User-preferred order of account icons in the Favorites Bar (Bar 1).
+    ///
+    /// Hydrated from `AppSettings.account_order` at startup. Accounts not
+    /// listed here are appended alphabetically at render time so the icon
+    /// layout is stable across `HashMap`-based `ClientManager.backends`
+    /// iteration order.
+    pub account_order: Vec<String>,
     /// Users currently typing in the selected channel.
     ///
     /// Each entry is a display name string. Updated by the event stream

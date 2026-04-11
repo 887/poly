@@ -96,6 +96,27 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
         .insert(account_id.to_string(), order);
 }
 
+/// Persist the full per-account Bar-2 server order map to `AppSettings`.
+///
+/// Called after every reorder so the user's drag-drop order survives
+/// page reloads, app restarts, and offline periods.
+pub(crate) async fn persist_account_server_order(
+    order: std::collections::HashMap<String, Vec<String>>,
+) {
+    let Some(s) = crate::STORAGE.get() else {
+        return;
+    };
+    match s.get_app_settings().await {
+        Ok(mut settings) => {
+            settings.account_server_order = order;
+            if let Err(e) = s.set_app_settings(&settings).await {
+                tracing::warn!("Failed to persist account_server_order: {e}");
+            }
+        }
+        Err(e) => tracing::warn!("Failed to read app_settings for Bar 2 order persist: {e}"),
+    }
+}
+
 /// Account server bar — second sidebar column, per-account.
 ///
 /// Only rendered when `active_account_id` is `Some(...)`.
@@ -279,20 +300,30 @@ fn AccountServerIcon(
     let on_drop = move |evt: Event<DragData>| {
         evt.prevent_default();
         evt.stop_propagation();
-        let mut cd = chat_data.write();
-        let dragging = cd.dragging_server_id.clone();
-        let src = cd.drag_source.clone();
-        cd.drag_over_id = None;
-        let Some(drag_id) = dragging else {
+        let snapshot = {
+            let mut cd = chat_data.write();
+            let dragging = cd.dragging_server_id.clone();
+            let src = cd.drag_source.clone();
+            cd.drag_over_id = None;
+            let Some(drag_id) = dragging else {
+                cd.dragging_server_id = None;
+                cd.drag_source = DragSource::None;
+                return;
+            };
+            let did_reorder =
+                matches!(src, DragSource::AccountServer) && drag_id != tid;
+            if did_reorder {
+                apply_bar2_drop(&mut cd, &drag_id, &tid, &aid_drop);
+            }
             cd.dragging_server_id = None;
             cd.drag_source = DragSource::None;
-            return;
+            did_reorder.then(|| cd.account_server_order.clone())
         };
-        if matches!(src, DragSource::AccountServer) && drag_id != tid {
-            apply_bar2_drop(&mut cd, &drag_id, &tid, &aid_drop);
+        if let Some(order) = snapshot {
+            spawn(async move {
+                persist_account_server_order(order).await;
+            });
         }
-        cd.dragging_server_id = None;
-        cd.drag_source = DragSource::None;
     };
 
     let on_drag_end = move |_: Event<DragData>| {
