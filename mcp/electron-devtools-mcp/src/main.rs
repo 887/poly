@@ -589,11 +589,37 @@ impl ElectronCdpBackend {
         app_dir: String,
         electron_dir: String,
     ) {
-        tracing::info!("[bg] dx serve --platform web --port {DX_SERVE_PORT}  in {app_dir}");
+        tracing::info!(
+            "[bg] dx serve --platform web --port {DX_SERVE_PORT} --fullstack  in {app_dir}"
+        );
 
-        // ── Spawn dx serve (long-running) ─────────────────────────────────
+        // ── Spawn dx serve (long-running, fullstack) ─────────────────────
+        //
+        // apps/desktop-electron is a Dioxus fullstack app: the server half
+        // merges `poly_host::router(state)` into the Dioxus router so `/host/*`
+        // is served on the SAME port as the WASM bundle. Electron's renderer
+        // loads http://127.0.0.1:DX_SERVE_PORT/ and reaches the host bridge
+        // there. The `@server --platform server` split is REQUIRED, otherwise
+        // dx builds the server for wasm32-unknown-unknown and fails.
         let mut serve_child = match tokio::process::Command::new("dx")
-            .args(["serve", "--platform", "web", "--port", &DX_SERVE_PORT.to_string()])
+            .args([
+                "serve",
+                "--platform",
+                "web",
+                "--port",
+                &DX_SERVE_PORT.to_string(),
+                "--fullstack",
+                "@client",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,web",
+                "@server",
+                "--platform",
+                "server",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,server",
+            ])
             .current_dir(&app_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -764,9 +790,26 @@ impl ElectronCdpBackend {
         // ── Kill current dx serve ─────────────────────────────────────────
         self.kill_dx_serve().await;
 
-        // ── Restart dx serve ──────────────────────────────────────────────
+        // ── Restart dx serve (fullstack — see bg_serve_and_launch_electron) ──
         let mut serve_child = match tokio::process::Command::new("dx")
-            .args(["serve", "--platform", "web", "--port", &DX_SERVE_PORT.to_string()])
+            .args([
+                "serve",
+                "--platform",
+                "web",
+                "--port",
+                &DX_SERVE_PORT.to_string(),
+                "--fullstack",
+                "@client",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,web",
+                "@server",
+                "--platform",
+                "server",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,server",
+            ])
             .current_dir(&app_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

@@ -33,6 +33,7 @@ use poly_client::{
 use super::bridge;
 use super::engine::{self, MessengerPlugin};
 use super::host_impl::PluginHostState;
+use super::storage::{InMemoryPluginStorage, PluginStorageBackend};
 
 /// Locales the host supports — must match poly-core's `SUPPORTED_LOCALES`.
 /// Stored here to avoid a circular dependency on poly-core.
@@ -50,6 +51,8 @@ pub struct PluginRegistry {
     linker: Linker<PluginHostState>,
     /// Loaded plugin components keyed by plugin ID.
     components: HashMap<String, Component>,
+    /// Default storage backend injected into every new plugin instance.
+    default_storage: Arc<dyn PluginStorageBackend>,
 }
 
 impl PluginRegistry {
@@ -75,7 +78,17 @@ impl PluginRegistry {
             engine,
             linker,
             components: HashMap::new(),
+            default_storage: Arc::new(InMemoryPluginStorage::default()),
         })
+    }
+
+    /// Override the default storage backend for all plugins instantiated by this registry.
+    ///
+    /// Call this before any [`Self::instantiate`] calls. Returns `self` for chaining.
+    #[must_use]
+    pub fn with_default_storage(mut self, storage: Arc<dyn PluginStorageBackend>) -> Self {
+        self.default_storage = storage;
+        self
     }
 
     /// Load a plugin component from raw WASM bytes.
@@ -111,8 +124,11 @@ impl PluginRegistry {
     /// The wrapper implements `ClientBackend` so it can be used in the
     /// existing `ClientManager` infrastructure.
     pub async fn instantiate(&self, plugin_id: &str) -> Result<PluginBackend, String> {
-        self.instantiate_with_host_state(plugin_id, PluginHostState::new(plugin_id))
-            .await
+        self.instantiate_with_host_state(
+            plugin_id,
+            PluginHostState::new_with_storage(plugin_id, self.default_storage.clone()),
+        )
+        .await
     }
 
     /// Instantiate a loaded plugin using a caller-provided host state.

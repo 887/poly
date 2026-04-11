@@ -53,7 +53,23 @@ fn build_on_complete(
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
             Arc::new(tokio::sync::RwLock::new(completed.backend));
-        let session = completed.session;
+        let mut session = completed.session;
+        // Quick-add test accounts sign in against local mock servers that
+        // don't serve real avatar PNGs. Overlay a bundled animal portrait
+        // (Owl, Axolotl, Stoat, …) so the sidebar and Settings → Accounts
+        // list show the cute icon instead of a first-letter bubble.
+        #[cfg(feature = "demo")]
+        if session.user.avatar_url.is_none()
+            || session
+                .user
+                .avatar_url
+                .as_deref()
+                .is_some_and(|u| !u.starts_with("http"))
+        {
+            if let Some(url) = poly_demo::data::test_animal_avatar(&session.user.display_name) {
+                session.user.avatar_url = Some(url);
+            }
+        }
         spawn(async move {
             // Guard: reject duplicate session IDs (e.g. two anonymous HN accounts).
             if client_manager.read().sessions.contains_key(&session.id) {

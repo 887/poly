@@ -1,6 +1,6 @@
 [package]
 name = "poly-desktop-electron"
-description = "Poly desktop app — Dioxus WASM build wrapped in Electron"
+description = "Poly desktop-electron — Dioxus fullstack WASM build wrapped in Electron"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,18 +9,39 @@ license.workspace = true
 name = "poly-desktop-electron"
 path = "src/main.rs"
 
+[features]
+# Default is the client-side profile — matches what `dx build --platform web`
+# compiles. The `server` feature is opted in explicitly by `dx serve
+# --platform web --fullstack @server --features server` so the native
+# server binary pulls the axum + poly-host stack.
+default = ["dev-plugins", "web"]
+# `dev-plugins` mirrors apps/web — opt-in Discord/Teams via poly-core. Kept
+# as a no-op here (poly-core is a workspace dep without those features by
+# default) so the shared MCP command line `--features dev-plugins,web`
+# works for every shell.
+dev-plugins = []
+web = ["dioxus/web", "dioxus/fullstack"]
+server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
+
 [dependencies]
-poly-core = { workspace = true, features = ["demo"] }
-dioxus = { workspace = true, features = ["web"] }
+poly-core = { workspace = true, features = ["demo", "storage-host-bridge"] }
+dioxus = { workspace = true }
 tracing = { workspace = true }
 
-# tracing-subscriber only on native (shouldn't be needed for WASM, kept for parity)
+# Native-only deps for the fullstack server half.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = { workspace = true }
+axum = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["rt-multi-thread", "macros", "signal", "net"] }
+poly-host = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
 
 # getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom04-wasm = { workspace = true }
+web-sys = { workspace = true }
+poly-host-bridge = { workspace = true, features = ["web-direct"] }
 
 [lints]
 workspace = true

@@ -918,17 +918,18 @@ fn ServerLayout() -> Element {
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
     let app_state: Signal<AppState> = use_context();
     let nav = navigator();
-    // Capability guard: backends without DMs (HN, Lemmy, GitHub) redirect
-    // to the root route, which `on_update` sends to the best active view.
+    // Capability guard: backends without DMs (HN, Lemmy, GitHub) render an
+    // unsupported-feature placeholder in place. We must NOT redirect here:
+    // a use_effect → navigator().replace() chain in the guard causes a
+    // cascade (DmsHome → Root → DmsHome) that deadlocks the WASM main thread
+    // when combined with sync_route_to_app_state signal writes. The
+    // favorites-sidebar click handler is responsible for picking the right
+    // landing route for forum/non-DM accounts.
     let caps = poly_client::capabilities_for_slug(&backend);
     if matches!(caps.dms, poly_client::DmSupport::None) {
-        let placeholder_slug = backend.clone();
-        use_effect(move || {
-            navigator().replace(Route::Root);
-        });
         return rsx! {
             FeatureUnsupportedPlaceholder {
-                backend_slug: placeholder_slug,
+                backend_slug: backend.clone(),
                 feature: UnsupportedFeature::Dms,
             }
         };
@@ -1473,13 +1474,9 @@ fn ServerChat(
 fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     let caps = poly_client::capabilities_for_slug(&backend);
     if matches!(caps.friends, poly_client::FriendModel::None) {
-        let placeholder_slug = backend.clone();
-        use_effect(move || {
-            navigator().replace(Route::Root);
-        });
         return rsx! {
             FeatureUnsupportedPlaceholder {
-                backend_slug: placeholder_slug,
+                backend_slug: backend.clone(),
                 feature: UnsupportedFeature::Friends,
             }
         };
@@ -1507,13 +1504,9 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
 fn NotificationsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     let caps = poly_client::capabilities_for_slug(&backend);
     if matches!(caps.notifications, poly_client::NotificationSupport::None) {
-        let placeholder_slug = backend.clone();
-        use_effect(move || {
-            navigator().replace(Route::Root);
-        });
         return rsx! {
             FeatureUnsupportedPlaceholder {
-                backend_slug: placeholder_slug,
+                backend_slug: backend.clone(),
                 feature: UnsupportedFeature::Notifications,
             }
         };
@@ -1711,16 +1704,13 @@ fn PageNotFound(segments: Vec<String>) -> Element {
 #[component]
 fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -> Element {
     // Backends that don't support creating a server (Matrix, Lemmy, HN…)
-    // redirect to root so the user never lands on a broken form.
+    // render an unsupported-feature placeholder instead of redirecting —
+    // redirect chains from use_effect caused main-thread deadlocks.
     let caps = poly_client::capabilities_for_slug(&backend);
     if !caps.create_server {
-        let placeholder_slug = backend.clone();
-        use_effect(move || {
-            navigator().replace(Route::Root);
-        });
         return rsx! {
             FeatureUnsupportedPlaceholder {
-                backend_slug: placeholder_slug,
+                backend_slug: backend.clone(),
                 feature: UnsupportedFeature::CreateServer,
             }
         };

@@ -15,6 +15,11 @@ This binary is launched automatically by `poly-desktop-devtools-mcp` in web-shel
 3. Starts an HTTP eval-bridge on **port 9223** so `poly-desktop-devtools-mcp` can drive the app
 4. On each page load, injects a JS bootstrap that bridges `window.ipc` back to the eval bridge
 
+The shared host-bridge (`/host/*`) is served by the `poly-desktop`
+Dioxus fullstack binary that `dx serve` boots on port 3002 — the same
+port as the WASM bundle. This shell does not run its own host-bridge;
+see `apps/desktop/README.md` for the fullstack server details.
+
 ## Eval-Bridge Architecture
 
 ```
@@ -26,6 +31,8 @@ tokio HTTP server → UserEvent::EvalRequest → EventLoopProxy
 
 ### HTTP Endpoints
 
+Eval / MCP bridge (port **9223**):
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/status` | GET | Health check (returns `"ok"`) |
@@ -35,6 +42,9 @@ tokio HTTP server → UserEvent::EvalRequest → EventLoopProxy
 | `/dom` | GET | Return `document.documentElement.outerHTML` |
 | `/console` | GET | Return buffered console log entries |
 | `/reload` | POST | Navigate webview back to the dev URL |
+
+Host-bridge routes (`/host/*`) are served by the `poly-desktop` fullstack
+binary on port 3002, not by this shell. See `apps/desktop/README.md`.
 
 ## Screenshot
 

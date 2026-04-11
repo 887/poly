@@ -1,6 +1,6 @@
 [package]
 name = "poly-desktop"
-description = "Poly desktop app — Wry (webview) renderer"
+description = "Poly desktop app — Wry (webview) renderer + Dioxus fullstack dev shell"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,24 +9,49 @@ license.workspace = true
 name = "poly-desktop"
 path = "src/main.rs"
 
+[features]
+# Two compile modes:
+# - default (`desktop-native`) — production Wry renderer build.
+# - `server` — native axum fullstack server used by `dx serve --platform
+#   web --fullstack` in dev. Mounts `/host/*` on port 3002 alongside
+#   the WASM bundle so the Wry webview at http://127.0.0.1:3002 has
+#   storage on the same origin.
+default = ["desktop-native"]
+desktop-native = ["dioxus/desktop"]
+# `dx serve --platform web` builds apps/desktop as a WASM bundle that the
+# Wry webview in apps/desktop-web loads on port 3002. `dioxus/fullstack`
+# activates `dioxus-web/hydrate` so the client hydrates the SSR output
+# from the fullstack server instead of re-rendering alongside it.
+web = ["dioxus/web", "dioxus/fullstack"]
+# No-op alias so the shared MCP command line `--features dev-plugins,web`
+# works. The desktop app doesn't bundle Discord/Teams today.
+dev-plugins = []
+server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
+
 [dependencies]
 # `github` is enabled on both targets:
 # - native build talks to `gh` directly via tokio::process
 # - wasm build (run inside the apps/desktop-web Wry shell) calls the
 #   localhost /gh subprocess bridge that the shell exposes on port 9223
-poly-core = { workspace = true, features = ["demo", "native-nav", "github"] }
+poly-core = { workspace = true, features = ["demo", "native-nav", "github", "storage-host-bridge"] }
+dioxus = { workspace = true }
 tracing = { workspace = true }
 
-# Native (Wry) build
+# Native-side deps. `tokio` is always on for the desktop renderer's async
+# pieces; `axum`/`poly-host`/`dioxus-cli-config` only come in under the
+# `server` feature.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus = { workspace = true, features = ["desktop"] }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "net"] }
+axum = { workspace = true, optional = true }
+poly-host = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
 
 # WASM build (used by poly-desktop-web shell via `dx serve --platform web`)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-dioxus = { workspace = true, features = ["web"] }
 getrandom04-wasm = { workspace = true }
+poly-host-bridge = { workspace = true, features = ["web-direct"] }
 
 [lints]
 workspace = true

@@ -39,6 +39,7 @@ members = [
     "apps/web",
     "apps/desktop-devtools",
     "apps/desktop-web",
+    "apps/poly-host",            # Host-bridge daemon for apps/web (serves /host/* on 9333)
     "tools/poly-cli",
     "mcp/chat-mcp",
 ]
@@ -53,6 +54,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 # UI framework
 dioxus = { version = "0.7.3", features = ["router"] }
+dioxus-cli-config = "0.7.3"
 
 # Database
 surrealdb = { version = "3.0.1", default-features = false }
@@ -182,6 +184,7 @@ wry = "0.53"
 # Internal crates
 poly-core = { path = "crates/core" }
 poly-host-bridge = { path = "crates/host-bridge" }
+poly-host = { path = "apps/poly-host" }
 poly-plugin-host = { path = "crates/plugin-host" }
 poly-client = { path = "clients/client" }
 poly-demo = { path = "clients/demo" }

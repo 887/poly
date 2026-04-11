@@ -815,6 +815,63 @@ pub const DEMO_CAT_AVATAR: &str = "/assets/cat.png";
 #[cfg(not(feature = "native"))]
 pub const DEMO_DOG_AVATAR: &str = "/assets/dog.png";
 
+/// Bundled avatar images for the Matrix/Stoat/Discord/Teams test animals.
+/// These reuse the same hand-drawn PNGs that ship with the demo client so
+/// every quick-add test account (Owl, Axolotl, Stoat, Raccoon, Koala,
+/// Kangaroo, Sheep, Walrus) shows its animal portrait in the sidebar and
+/// Settings → Accounts list instead of a plain letter bubble.
+#[cfg(feature = "native")]
+pub const TEST_OWL_AVATAR: Asset = asset!("assets/owl.png");
+#[cfg(feature = "native")]
+pub const TEST_AXOLOTL_AVATAR: Asset = asset!("assets/axolotl.svg");
+#[cfg(feature = "native")]
+pub const TEST_STOAT_AVATAR: Asset = asset!("assets/stoat.png");
+#[cfg(feature = "native")]
+pub const TEST_RACCOON_AVATAR: Asset = asset!("assets/raccoon.png");
+#[cfg(feature = "native")]
+pub const TEST_KOALA_AVATAR: Asset = asset!("assets/koala.png");
+#[cfg(feature = "native")]
+pub const TEST_KANGAROO_AVATAR: Asset = asset!("assets/kangaroo.png");
+#[cfg(feature = "native")]
+pub const TEST_SHEEP_AVATAR: Asset = asset!("assets/sheep.png");
+#[cfg(feature = "native")]
+pub const TEST_WALRUS_AVATAR: Asset = asset!("assets/walrus.png");
+#[cfg(feature = "native")]
+pub const TEST_BEAVER_AVATAR: Asset = asset!("assets/beaver.svg");
+#[cfg(feature = "native")]
+pub const TEST_HEDGEHOG_AVATAR: Asset = asset!("assets/hedgehog.svg");
+
+/// Map a test-animal display name to the bundled avatar URL, if one exists.
+///
+/// Used by the signup-completion hook to override `session.user.avatar_url`
+/// on quick-add test accounts so the sidebar / Settings show the cute animal
+/// portrait rather than the first-letter fallback bubble.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn test_animal_avatar(display_name: &str) -> Option<String> {
+    let key = display_name.trim().to_ascii_lowercase();
+    let asset = match key.as_str() {
+        "owl" => TEST_OWL_AVATAR,
+        "axolotl" => TEST_AXOLOTL_AVATAR,
+        "stoat" => TEST_STOAT_AVATAR,
+        "raccoon" => TEST_RACCOON_AVATAR,
+        "koala" => TEST_KOALA_AVATAR,
+        "kangaroo" => TEST_KANGAROO_AVATAR,
+        "sheep" => TEST_SHEEP_AVATAR,
+        "walrus" => TEST_WALRUS_AVATAR,
+        "beaver" => TEST_BEAVER_AVATAR,
+        "hedgehog" => TEST_HEDGEHOG_AVATAR,
+        _ => return None,
+    };
+    Some(asset.to_string())
+}
+
+#[cfg(not(feature = "native"))]
+#[must_use]
+pub fn test_animal_avatar(_display_name: &str) -> Option<String> {
+    None
+}
+
 /// The demo account ID used for all demo data (cat account).
 pub const DEMO_ACCOUNT_ID: &str = "demo-cat";
 

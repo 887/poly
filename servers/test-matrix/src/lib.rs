@@ -10,6 +10,7 @@ use axum::Router;
 use axum::routing::{get, post, put};
 use poly_test_common::health_handler;
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 
 pub use state::MatrixState;
 
@@ -48,4 +49,5 @@ pub fn router(state: Arc<MatrixState>) -> Router {
         // Test helpers
         .route("/test/auth/token", post(routes::test_auth_token))
         .with_state(state)
+        .layer(CorsLayer::very_permissive())
 }

@@ -8,10 +8,12 @@
 //! to the network, filesystem, or system clock.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use wasmtime::component::ResourceTable;
 
 use super::engine::poly::messenger::host_api;
 use super::engine::poly::messenger::types;
+use super::storage::{InMemoryPluginStorage, PluginStorageBackend};
 
 use poly_client::ClientEvent;
 
@@ -34,11 +36,11 @@ pub struct PluginHostState {
     /// Plugin identifier (e.g., "stoat", "matrix", "demo").
     pub plugin_id: String,
 
-    /// Plugin-scoped key-value storage.
+    /// Plugin-scoped key-value storage backend.
     ///
-    /// Keys are automatically namespaced per-plugin so plugins cannot
-    /// read each other's data.
-    pub storage: HashMap<String, Vec<u8>>,
+    /// Defaults to [`InMemoryPluginStorage`]. Inject a different backend via
+    /// [`PluginHostState::new_with_storage`] or [`crate::registry::PluginRegistry::with_default_storage`].
+    pub storage: Arc<dyn PluginStorageBackend>,
 
     /// Active WebSocket connection handles.
     ///
@@ -106,13 +108,21 @@ pub struct WsInboundData {
 }
 
 impl PluginHostState {
-    /// Create a new host state for a plugin instance.
+    /// Create a new host state for a plugin instance with default in-memory storage.
     pub fn new(plugin_id: &str) -> Self {
+        Self::new_with_storage(plugin_id, Arc::new(InMemoryPluginStorage::default()))
+    }
+
+    /// Create a new host state with a caller-provided storage backend.
+    ///
+    /// Use this when you want a non-default backend (e.g. SQLite) for production,
+    /// or a pre-seeded in-memory store for deterministic testing.
+    pub fn new_with_storage(plugin_id: &str, storage: Arc<dyn PluginStorageBackend>) -> Self {
         let wasi_ctx = wasmtime_wasi::WasiCtxBuilder::new().build();
         let (ws_inbound_tx, ws_inbound_rx) = tokio::sync::mpsc::channel(256);
         Self {
             plugin_id: plugin_id.to_string(),
-            storage: HashMap::new(),
+            storage,
             ws_handles: HashMap::new(),
             next_ws_handle: 1,
             resource_table: ResourceTable::new(),
@@ -361,19 +371,69 @@ impl host_api::Host for PluginHostState {
 
     /// Read from plugin-scoped key-value storage.
     async fn storage_get(&mut self, key: String) -> Option<Vec<u8>> {
-        self.storage.get(&key).cloned()
+        match self.storage.get(&self.plugin_id, &key).await {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(plugin = %self.plugin_id, "storage_get error: {e}");
+                None
+            }
+        }
     }
 
     /// Write to plugin-scoped key-value storage.
     async fn storage_set(&mut self, key: String, value: Vec<u8>) -> Result<(), String> {
-        self.storage.insert(key, value);
-        Ok(())
+        self.storage.set(&self.plugin_id, &key, value).await
     }
 
     /// Delete from plugin-scoped key-value storage.
     async fn storage_delete(&mut self, key: String) -> Result<(), String> {
-        self.storage.remove(&key);
-        Ok(())
+        self.storage.delete(&self.plugin_id, &key).await
+    }
+
+    /// Read a value from per-account plugin-scoped storage.
+    async fn account_storage_get(
+        &mut self,
+        account: String,
+        key: String,
+    ) -> Option<Vec<u8>> {
+        match self
+            .storage
+            .account_get(&self.plugin_id, &account, &key)
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(
+                    plugin = %self.plugin_id,
+                    account = %account,
+                    "account_storage_get error: {e}"
+                );
+                None
+            }
+        }
+    }
+
+    /// Write a value to per-account plugin-scoped storage.
+    async fn account_storage_set(
+        &mut self,
+        account: String,
+        key: String,
+        value: Vec<u8>,
+    ) -> Result<(), String> {
+        self.storage
+            .account_set(&self.plugin_id, &account, &key, value)
+            .await
+    }
+
+    /// Delete a key from per-account plugin-scoped storage.
+    async fn account_storage_delete(
+        &mut self,
+        account: String,
+        key: String,
+    ) -> Result<(), String> {
+        self.storage
+            .account_delete(&self.plugin_id, &account, &key)
+            .await
     }
 
     /// Log a message through the host's tracing system.

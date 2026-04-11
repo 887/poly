@@ -983,7 +983,7 @@ impl ClientBackend for StoatClient {
     }
 }
 
-#[cfg(feature = "native")]
+#[cfg(all(feature = "native", not(target_arch = "wasm32")))]
 fn parse_bonfire_event(json: serde_json::Value) -> Option<ClientEvent> {
     match json.get("type")?.as_str()? {
         "Message" => {

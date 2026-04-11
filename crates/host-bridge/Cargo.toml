@@ -8,6 +8,12 @@ license.workspace = true
 [lib]
 crate-type = ["rlib"]
 
+[features]
+# Default: on wasm32, `HttpClient::new()` routes through the native shell's
+# /host bridge. This feature flips wasm32 to use reqwest/browser-fetch directly
+# — required for apps/web which runs in a real browser with no native shell.
+web-direct = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -24,6 +30,14 @@ serde_urlencoded = "0.7"
 # Native: subprocess + HTTP server-side dispatch needs tokio process / fs.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
+
+# WASM: read `window.location.origin` so the default bridge URL points at the
+# same origin that served the WASM bundle (fullstack apps/web / apps/desktop /
+# apps/desktop-electron all host `/host/*` on their own port). Without this the
+# client would fall back to `http://127.0.0.1:9333`, which is an unreachable
+# cross-origin and breaks F5 persistence in the browser.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { workspace = true, features = ["Window", "Location"] }
 
 [lints]
 workspace = true

@@ -24,6 +24,12 @@ const CRASH_STATE_KEY: &str = "__polyCrashState";
 /// Normal boots complete in well under a second; 20 s is generous.
 const BOOT_HANG_TIMEOUT_MS: u32 = 20_000;
 
+/// How long (ms) the main thread may be unresponsive before the interaction
+/// watchdog declares a hang and shows the crash overlay. 5 s is long enough
+/// to forgive one-off slow renders / GC pauses on low-end hardware but short
+/// enough that a real deadlock surfaces before the user force-quits.
+const INTERACTION_HANG_TIMEOUT_MS: u32 = 5_000;
+
 /// Install the shared browser/WASM crash handler once for the current page.
 pub fn install_wasm_crash_handler() {
     static INSTALLED: Once = Once::new();
@@ -34,7 +40,107 @@ pub fn install_wasm_crash_handler() {
         install_window_error_listener();
         install_unhandled_rejection_listener();
         install_boot_hang_watchdog(BOOT_HANG_TIMEOUT_MS);
+        install_interaction_hang_watchdog(INTERACTION_HANG_TIMEOUT_MS);
     });
+}
+
+/// Inject a JS heartbeat that detects post-boot main-thread deadlocks.
+///
+/// A Web Worker sends a `ping` every 500 ms. The main-thread listener
+/// records `Date.now()` on each message. A second `setInterval` — also on
+/// the main thread — checks the gap between *now* and the last heartbeat;
+/// if the gap exceeds `timeout_ms`, the main thread processed no messages
+/// in that window (definition of a hang) and we show the crash overlay.
+///
+/// The worker itself runs on a separate OS thread so it ticks independently
+/// of main-thread load. The main-thread interval is what actually notices
+/// the gap, which only fires when the main thread resumes — but then it
+/// sees that `Date.now() - lastPing > timeout_ms` and shows the overlay
+/// retroactively. That's fine for the user-visible case: either the thread
+/// recovers (and we warn them the app was just unresponsive) or the thread
+/// stays dead forever and the worker logs to console.
+fn install_interaction_hang_watchdog(timeout_ms: u32) {
+    // language=JavaScript
+    let js = format!(
+        r#"(function() {{
+    if (window.__polyInteractionWatchdogInstalled) {{ return; }}
+    window.__polyInteractionWatchdogInstalled = true;
+
+    var TIMEOUT = {timeout};
+    window.__polyLastHeartbeat = Date.now();
+
+    try {{
+        var workerSrc = 'setInterval(function(){{postMessage(1)}}, 500);';
+        var blob = new Blob([workerSrc], {{ type: 'application/javascript' }});
+        var worker = new Worker(URL.createObjectURL(blob));
+        worker.onmessage = function() {{
+            var now = Date.now();
+            var gap = now - window.__polyLastHeartbeat;
+            window.__polyLastHeartbeat = now;
+            // If the main thread was frozen for longer than the timeout,
+            // record a retroactive hang and surface the overlay now that
+            // it's running again.
+            if (gap > TIMEOUT) {{
+                showHangOverlay(gap);
+            }}
+        }};
+    }} catch (e) {{
+        // Worker creation failed (CSP, private mode). Fall back to a
+        // simple interval — won't catch true deadlocks but will catch
+        // multi-second synchronous work that blocks user interaction.
+        console.warn('Poly interaction watchdog: worker unavailable', e);
+    }}
+
+    // Safety net: a main-thread interval that also checks elapsed time.
+    // When the main thread resumes after a freeze, this interval fires
+    // next tick and notices the gap even if the worker message hasn't
+    // arrived yet (worker messages are queued behind the event loop).
+    setInterval(function() {{
+        var gap = Date.now() - window.__polyLastHeartbeat;
+        if (gap > TIMEOUT) {{
+            showHangOverlay(gap);
+        }}
+    }}, 1000);
+
+    function showHangOverlay(gapMs) {{
+        // Don't double-show if the crash overlay is already visible
+        // (e.g. from a Rust panic or another hang report).
+        var OVERLAY_ID = 'poly-wasm-crash-overlay';
+        if (document.getElementById(OVERLAY_ID)) {{ return; }}
+        // Reset the heartbeat so we don't spam the overlay every tick
+        // while the user is reading it.
+        window.__polyLastHeartbeat = Date.now();
+
+        var overlay = document.createElement('div');
+        overlay.id = OVERLAY_ID;
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;overflow:auto;padding:28px;background:rgba(10,12,16,0.96);color:#fff;font-family:Inter,system-ui,sans-serif;';
+        var card = document.createElement('div');
+        card.style.cssText = 'max-width:920px;margin:0 auto;background:#1a1f2b;border:1px solid rgba(255,255,255,0.14);border-radius:16px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,0.45);';
+        var h1 = document.createElement('h1');
+        h1.style.cssText = 'margin:0 0 8px 0;font-size:28px;line-height:1.2;';
+        h1.textContent = 'App not responding';
+        var p1 = document.createElement('p');
+        p1.style.cssText = 'margin:0 0 12px 0;color:#d8dee9;font-size:15px;line-height:1.5;';
+        p1.textContent = 'Poly\u2019s main thread was blocked for ' + Math.round(gapMs/1000) + ' seconds. This usually means an infinite render loop, a deadlocked Dioxus signal, or a missing async yield.';
+        var p2 = document.createElement('p');
+        p2.style.cssText = 'margin:0 0 18px 0;color:#8fbcff;font-size:14px;font-weight:600;';
+        p2.textContent = 'Type: interaction-hang (' + gapMs + 'ms unresponsive)';
+        var btn = document.createElement('button');
+        btn.style.cssText = 'border:0;border-radius:10px;padding:12px 16px;background:#4f8cff;color:white;font-size:14px;font-weight:600;cursor:pointer;';
+        btn.textContent = 'Reload';
+        btn.onclick = function() {{ window.location.reload(); }};
+        card.appendChild(h1);
+        card.appendChild(p1);
+        card.appendChild(p2);
+        card.appendChild(btn);
+        overlay.appendChild(card);
+        document.body && document.body.appendChild(overlay);
+        console.error('Poly interaction hang: main thread blocked for ' + gapMs + 'ms');
+    }}
+}})();"#,
+        timeout = timeout_ms,
+    );
+    let _ = js_sys::eval(&js);
 }
 
 /// Inject a JS `setTimeout` that shows the crash overlay if the startup

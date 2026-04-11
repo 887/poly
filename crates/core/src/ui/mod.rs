@@ -968,6 +968,131 @@ pub(crate) async fn restore_github_accounts(
     }
 }
 
+/// Restore persisted quick-add test accounts (Matrix / Stoat / Lemmy / …).
+///
+/// Test accounts don't have per-backend restore functions because their
+/// credentials are already embedded in the registered `TestAccountEntry`
+/// list. This iterates registered entries, finds matching stored tokens
+/// by `display_name == entry.label`, and re-runs the same auth function
+/// that the Test Accounts panel would run.
+pub(crate) async fn restore_test_accounts(
+    storage: &crate::storage::Storage,
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    use crate::client_manager::BackendHandle;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    let Ok(tokens) = storage.get_account_tokens().await else {
+        return;
+    };
+    if tokens.is_empty() {
+        return;
+    }
+
+    // Snapshot registered entries so we drop the Signal read guard before
+    // any awaits. `TestAccountEntry` is `Copy`, so this is cheap.
+    let entries: Vec<poly_client::TestAccountEntry> =
+        client_manager.read().test_account_entries.to_vec();
+    if entries.is_empty() {
+        return;
+    }
+
+    // Collect work items: (entry, token) pairs where display_name matches.
+    // A single label can correspond to at most one token since labels are
+    // unique across registered test accounts.
+    let work: Vec<poly_client::TestAccountEntry> = entries
+        .into_iter()
+        .filter(|entry| tokens.iter().any(|t| t.display_name == entry.label))
+        .collect();
+
+    if work.is_empty() {
+        return;
+    }
+
+    tracing::info!("Restoring {} test account(s) from storage", work.len());
+
+    for entry in work {
+        let auth_fn = entry.authenticate;
+        let completed = match (auth_fn)(
+            entry.base_url.to_string(),
+            entry.username.to_string(),
+            entry.password.to_string(),
+        )
+        .await
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to restore test account {}: {e}. Skipping.",
+                    entry.label
+                );
+                continue;
+            }
+        };
+
+        let mut session = completed.session;
+        // Re-apply the bundled animal portrait overlay, same as the
+        // live signup flow in `build_on_complete`.
+        #[cfg(feature = "demo")]
+        if session.user.avatar_url.is_none()
+            || session
+                .user
+                .avatar_url
+                .as_deref()
+                .is_some_and(|u| !u.starts_with("http"))
+        {
+            if let Some(url) = poly_demo::data::test_animal_avatar(&session.user.display_name) {
+                session.user.avatar_url = Some(url);
+            }
+        }
+        let account_id = session.id.clone();
+        // Guard against duplicate account IDs (e.g. if another restore path
+        // already committed this session).
+        if client_manager.read().sessions.contains_key(&account_id) {
+            continue;
+        }
+
+        let backend_handle: BackendHandle =
+            Arc::new(tokio::sync::RwLock::new(completed.backend));
+
+        let mut server_map = HashMap::new();
+        let servers = {
+            let guard = backend_handle.read().await;
+            guard.get_servers().await.unwrap_or_default()
+        };
+        for srv in &servers {
+            server_map.insert(srv.id.clone(), account_id.clone());
+        }
+
+        client_manager.write().commit_backend_account(
+            account_id.clone(),
+            session.clone(),
+            backend_handle,
+            server_map,
+        );
+        chat_data
+            .write()
+            .account_sessions
+            .insert(account_id.clone(), session);
+
+        {
+            let mut cd = chat_data.write();
+            for srv in &servers {
+                if !cd.servers.iter().any(|s| s.id == srv.id) {
+                    cd.servers.push(srv.clone());
+                }
+                if !cd.favorited_server_ids.contains(&srv.id) {
+                    cd.favorited_server_ids.push(srv.id.clone());
+                }
+            }
+        }
+
+        tracing::info!("Restored test account: {} ({account_id})", entry.label);
+    }
+}
+
 /// Called during `init_storage` when `setup_complete` is true.
 /// For each stored `AccountToken` with `backend == "poly"` and a valid
 /// `instance_id` (the base URL), this function:
@@ -1309,6 +1434,11 @@ async fn init_storage(
                     // Restore GitHub accounts via the gh CLI (no token in storage).
                     #[cfg(feature = "github")]
                     restore_github_accounts(&storage, client_manager, chat_data).await;
+
+                    // Restore quick-add test accounts (Matrix/Stoat/Lemmy animals)
+                    // by re-running their registered auth function. Runs last so
+                    // the per-backend restore paths above claim their tokens first.
+                    restore_test_accounts(&storage, client_manager, chat_data).await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),

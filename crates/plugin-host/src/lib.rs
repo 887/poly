@@ -48,5 +48,7 @@ pub mod bridge;
 pub mod engine;
 pub mod host_impl;
 pub mod registry;
+pub mod storage;
 
 pub use registry::{PluginBackend, PluginRegistry, SettingDescriptor, SettingKind};
+pub use storage::{InMemoryPluginStorage, PluginStorageBackend};

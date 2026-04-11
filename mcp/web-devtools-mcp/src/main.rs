@@ -780,6 +780,13 @@ impl ChromeCdpBackend {
         }
 
         // ── Spawn dx serve as a long-running background process ───────────────
+        //
+        // Fullstack mode: apps/web compiles into BOTH a WASM client (booted in
+        // Chrome) AND a native axum server that merges `poly_host::router(state)`
+        // into the Dioxus router on the same port. One process, one port —
+        // `/host/*` lives alongside the WASM bundle. The `@server --platform
+        // server` split is REQUIRED, otherwise dx tries to build the server half
+        // for wasm32-unknown-unknown and fails.
         let mut child = match tokio::process::Command::new("dx")
             .args([
                 "serve",
@@ -787,6 +794,17 @@ impl ChromeCdpBackend {
                 "web",
                 "--port",
                 &WEB_SERVER_PORT.to_string(),
+                "--fullstack",
+                "@client",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,web",
+                "@server",
+                "--platform",
+                "server",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,server",
             ])
             .current_dir(app_dir)
             .stdin(Stdio::null())
@@ -799,7 +817,7 @@ impl ChromeCdpBackend {
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
                     "Failed to spawn dx serve.",
-                    format!("Could not spawn `dx serve --platform web`: {e}"),
+                    format!("Could not spawn `dx serve --platform web --fullstack`: {e}"),
                     None,
                 )
                 .await;
@@ -910,7 +928,7 @@ impl ChromeCdpBackend {
             }
         }
 
-        // ── Spawn fresh dx serve ──────────────────────────────────────────────
+        // ── Spawn fresh dx serve (fullstack — see bg_build_and_launch) ────────
         let mut child = match tokio::process::Command::new("dx")
             .args([
                 "serve",
@@ -918,6 +936,17 @@ impl ChromeCdpBackend {
                 "web",
                 "--port",
                 &WEB_SERVER_PORT.to_string(),
+                "--fullstack",
+                "@client",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,web",
+                "@server",
+                "--platform",
+                "server",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,server",
             ])
             .current_dir(app_dir)
             .stdin(Stdio::null())
@@ -930,7 +959,7 @@ impl ChromeCdpBackend {
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
                     "Failed to spawn dx serve for rebuild.",
-                    format!("Could not spawn `dx serve --platform web`: {e}"),
+                    format!("Could not spawn `dx serve --platform web --fullstack`: {e}"),
                     None,
                 )
                 .await;

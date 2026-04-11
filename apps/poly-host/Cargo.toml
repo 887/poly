@@ -1,0 +1,45 @@
+[package]
+name = "poly-host"
+description = "Poly host-bridge daemon — serves /host/* routes for apps/web + reusable server lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Dual-surface crate: the binary is the standalone daemon (`cargo run -p
+# poly-host`) used with `apps/web`. The library exposes the same Router so
+# `apps/desktop-web` (Wry shell) can mount it on its own port without
+# duplicating SQLite + handler code.
+[lib]
+name = "poly_host"
+path = "src/lib.rs"
+
+[[bin]]
+name = "poly-host"
+path = "src/main.rs"
+
+[dependencies]
+poly-host-bridge = { workspace = true }
+
+axum = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "macros",
+    "signal",
+    "net",
+    "fs",
+] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlite = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+base64 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+
+[lints]
+workspace = true

@@ -19,6 +19,12 @@ github = ["dep:poly-github"]
 native-nav = []                     # Back/forward nav buttons (desktop/mobile only, not web)
 storage-sqlite = ["dep:sqlite"]
 storage-surreal = ["dep:surrealdb"]
+# When set on wasm32, storage operations route through the host bridge
+# (`POST /host/kv/*`) to a native daemon that owns the real database file.
+# Replaces the IndexedDB backend so apps/web shares one SQLite file with
+# apps/desktop / apps/desktop-electron. See
+# `docs/plans/phase-2.21-host-bridge-unification-plan.md`.
+storage-host-bridge = ["dep:poly-host-bridge"]
 
 [dependencies]
 # UI
@@ -101,6 +107,10 @@ js-sys = { workspace = true }
 poly-server-client = { workspace = true, optional = true, features = [
     "wasm-http",
 ] }
+# Enabled by the `storage-host-bridge` feature. On wasm32 this routes every
+# KV op through a native shell's `/host/kv/*` endpoints instead of talking
+# to the browser-local IndexedDB.
+poly-host-bridge = { workspace = true, optional = true, features = ["web-direct"] }
 
 [lints]
 workspace = true

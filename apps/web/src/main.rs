@@ -1,8 +1,19 @@
-//! Poly Web — client-side WASM entry point.
+//! Poly Web — Dioxus fullstack entry point.
 //!
-//! Runs Poly in the browser using Dioxus web (pure WASM, no server component).
-//! Use `dx serve --platform web` for development.
+//! Two compilation targets come out of this one `main.rs`:
+//!
+//! * **WASM client** — `cfg(target_arch = "wasm32")`. Boots the app via
+//!   `dioxus::launch` inside the browser.
+//! * **Native server** — `cfg(not(target_arch = "wasm32"))` with the
+//!   `server` feature. Starts an axum server that serves the WASM bundle
+//!   AND mounts the `/host/*` host-bridge routes on the same port (3000
+//!   under `dx serve`). ONE process, ONE port, no separate daemon.
+//!
+//! Use `dx serve --platform web` for development — dx auto-detects the
+//! `fullstack` feature activation via `dioxus/fullstack` and builds both
+//! sides.
 
+#[cfg(any(target_arch = "wasm32", feature = "server"))]
 use poly_core::ui::App;
 
 #[cfg(target_arch = "wasm32")]
@@ -16,17 +27,64 @@ fn sync_mobile_query_flag_before_launch() {
     let _ = storage.remove_item("poly.forceMobileUi");
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn sync_mobile_query_flag_before_launch() {}
+// ─── WASM client entry ──────────────────────────────────────────────────────
 
+#[cfg(target_arch = "wasm32")]
 fn main() {
-    tracing::info!("Starting Poly Web");
-
-    // i18n::init() also registers native plugin FTL (e.g. demo translations).
+    tracing::info!("Starting Poly Web (WASM client)");
     poly_core::i18n::init();
     poly_core::theme::init();
     sync_mobile_query_flag_before_launch();
     poly_core::install_wasm_crash_handler();
-
     dioxus::launch(App);
+}
+
+// ─── Native fullstack server entry ──────────────────────────────────────────
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "server"))]
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    use axum::Router;
+    use dioxus::prelude::{DioxusRouterExt, ServeConfig};
+
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
+    // Open the shared SQLite file used by every native shell. No port
+    // negotiation, no sidecar: the server binary talks to SQLite directly.
+    let data_dir = poly_host::resolve_data_dir();
+    let db_path = data_dir.join("storage.sqlite3");
+    let state = poly_host::HostState::open(&db_path)?;
+    tracing::info!("poly-web storage: {}", db_path.display());
+
+    // Build the merged router. `serve_dioxus_application` returns a
+    // `Router<()>` that already has its state resolved, so we can `.merge`
+    // it with the `/host/*` router directly.
+    let dioxus_router: Router<()> =
+        Router::new().serve_dioxus_application(ServeConfig::new(), App);
+    let host_router: Router<()> = poly_host::router(state);
+    let merged = host_router.merge(dioxus_router);
+
+    let addr = dioxus_cli_config::fullstack_address_or_localhost();
+    tracing::info!("poly-web fullstack listening on http://{addr}");
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, merged).await?;
+    Ok(())
+}
+
+// ─── Fallback (no server feature, native) ───────────────────────────────────
+//
+// Lets `cargo build -p poly-web` work on native without pulling the server
+// runtime (useful for lints / `cargo check` in CI).
+
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "server")))]
+fn main() {
+    eprintln!(
+        "poly-web binary built without the `server` feature; nothing to run. \
+         Build with `--features server` or use `dx serve --platform web`."
+    );
 }

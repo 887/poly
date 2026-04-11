@@ -5,14 +5,17 @@
 //!
 //! ## Backend selection
 //!
-//! | Target | Backend | Notes |
-//! |---|---|---|
-//! | Native (Linux/macOS/Windows) | SQLite | Default lightweight backend |
-//! | Native + `storage-surreal` | SurrealDB (SurrealKV) | Opt-in compatibility backend |
-//! | WebAssembly | IndexedDB | Persistent browser storage |
+//! | Target | Feature | Backend | Notes |
+//! |---|---|---|---|
+//! | Native (Linux/macOS/Windows) | `storage-sqlite` (default) | SQLite | Default lightweight backend |
+//! | Native | `storage-surreal` | SurrealDB (SurrealKV) | Opt-in compatibility backend |
+//! | WebAssembly | none (default) | IndexedDB | Browser-sandboxed key-value store |
+//! | WebAssembly | `storage-host-bridge` | Host bridge → native daemon | Single SQLite file shared across shells (phase 2.21) |
 //!
 //! The native backends are mutually exclusive; use `--no-default-features` when
-//! building with `storage-surreal`.
+//! building with `storage-surreal`. The `storage-host-bridge` feature overrides
+//! IndexedDB on wasm32 so `apps/web` writes into the same database as
+//! `apps/desktop` instead of a browser-local silo.
 //!
 //! ## Usage
 //!
@@ -62,9 +65,16 @@ mod native_surreal;
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-surreal"))]
 use native_surreal::StorageInner;
 
-#[cfg(target_arch = "wasm32")]
+// On wasm32, `storage-host-bridge` takes precedence over the IndexedDB
+// backend. When neither is enabled we fall back to browser-local IDB.
+#[cfg(all(target_arch = "wasm32", feature = "storage-host-bridge"))]
+mod host_bridge;
+#[cfg(all(target_arch = "wasm32", feature = "storage-host-bridge"))]
+use host_bridge::StorageInner;
+
+#[cfg(all(target_arch = "wasm32", not(feature = "storage-host-bridge")))]
 mod web;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "storage-host-bridge")))]
 use web::StorageInner;
 
 // ── Error type ────────────────────────────────────────────────────────────────

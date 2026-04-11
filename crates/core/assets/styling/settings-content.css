@@ -47,6 +47,10 @@
     flex-shrink: 0;
 }
 
+.accounts-settings-icon--img {
+    object-fit: cover;
+}
+
 .accounts-settings-info {
     display: flex;
     flex-direction: column;

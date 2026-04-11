@@ -510,9 +510,20 @@ impl DesktopHttpBackend {
     /// 3. Launch `poly-desktop-web` (thin Wry shell)
     /// 4. Wait for eval bridge on port 9223 (max 30s)
     async fn bg_serve_and_launch_web_shell(&self, app_dir: &str, workspace: &str) {
-        tracing::info!("[bg] dx serve --platform web --port {WEB_SERVE_PORT}  in {app_dir}");
+        tracing::info!(
+            "[bg] dx serve --platform web --port {WEB_SERVE_PORT} --fullstack  in {app_dir}"
+        );
 
-        // ── Spawn dx serve ────────────────────────────────────────────────────
+        // ── Spawn dx serve (fullstack) ────────────────────────────────────────
+        //
+        // apps/desktop is a Dioxus fullstack app: its server half merges
+        // `poly_host::router(state)` into the Dioxus router, so `/host/*` is
+        // served on the SAME port as the WASM bundle. The Wry thin shell
+        // (`poly-desktop-web`, launched below) is a pure Chromium-like webview
+        // and reaches the host bridge on port WEB_SERVE_PORT — it no longer
+        // runs its own listener on 9333. The `@server --platform server`
+        // split is REQUIRED, otherwise dx builds the server for
+        // wasm32-unknown-unknown and fails.
         let mut serve_child = match tokio::process::Command::new("dx")
             .args([
                 "serve",
@@ -520,6 +531,17 @@ impl DesktopHttpBackend {
                 "web",
                 "--port",
                 &WEB_SERVE_PORT.to_string(),
+                "--fullstack",
+                "@client",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,web",
+                "@server",
+                "--platform",
+                "server",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,server",
             ])
             .current_dir(app_dir)
             .stdin(Stdio::null())
@@ -591,6 +613,12 @@ impl DesktopHttpBackend {
 
         shell_cmd
             .env("POLY_DEV_URL", format!("http://127.0.0.1:{WEB_SERVE_PORT}"))
+            // webkit2gtk's DMA-BUF renderer path trips a "Protocol error (71)
+            // dispatching to Wayland display" on some compositor versions
+            // and kills the window during its first paint. Disabling dmabuf
+            // keeps the GTK Wayland backend but forces webkit to use the
+            // safer shared-memory render path.
+            .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
             .env_remove("ELECTRON_RUN_AS_NODE")
             .env_remove("ELECTRON_NO_ATTACH_CONSOLE")
             .stdin(Stdio::null())
@@ -664,7 +692,7 @@ impl DesktopHttpBackend {
 
         self.kill_dx_serve().await;
 
-        // Restart dx serve
+        // Restart dx serve (fullstack — see bg_serve_and_launch_web_shell)
         let mut serve_child = match tokio::process::Command::new("dx")
             .args([
                 "serve",
@@ -672,6 +700,17 @@ impl DesktopHttpBackend {
                 "web",
                 "--port",
                 &WEB_SERVE_PORT.to_string(),
+                "--fullstack",
+                "@client",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,web",
+                "@server",
+                "--platform",
+                "server",
+                "--no-default-features",
+                "--features",
+                "dev-plugins,server",
             ])
             .current_dir(app_dir)
             .stdin(Stdio::null())

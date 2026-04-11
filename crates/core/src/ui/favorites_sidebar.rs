@@ -306,20 +306,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .get(&account_id)
         .and_then(|s| s.user.avatar_url.clone());
 
-    // Use icon_emoji from session if available, else fall back to first char
-    let icon_label: String = chat_data
-        .read()
-        .account_sessions
-        .get(&account_id)
-        .and_then(|s| s.icon_emoji.clone())
-        .unwrap_or_else(|| {
-            account_id
-                .chars()
-                .next()
-                .map(|c| c.to_uppercase().to_string())
-                .unwrap_or_default()
-        });
-
     // Display name shown in the tooltip when hovering the account icon.
     let display_name: String = chat_data
         .read()
@@ -327,6 +313,22 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .get(&account_id)
         .map(|s| s.user.display_name.clone())
         .unwrap_or_else(|| account_id.clone());
+
+    // Use icon_emoji from session if available, else fall back to the first
+    // letter of the account's display name (NOT the account_id, which starts
+    // with the backend slug — e.g. all Lemmy accounts would collapse to "L").
+    let icon_label: String = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .and_then(|s| s.icon_emoji.clone())
+        .unwrap_or_else(|| {
+            display_name
+                .chars()
+                .next()
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_default()
+        });
 
     // Show unread notification count only — matches the bell badge in account server bar.
     // DM unread counts are surfaced separately in Bar 2.
@@ -487,17 +489,21 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     }
                 }
 
-                // No stored route — fall back to the account's DMs home.
-                // Look up backend slug + instance_id from the stored session.
+                // No stored route — pick a sensible fallback based on the
+                // backend's capabilities. Forum/read-only backends have no
+                // DMs, so routing them to DmsHome would land on an empty
+                // placeholder. Instead, drop forum accounts on their first
+                // server (community) so the user sees content immediately.
                 // IMPORTANT: read the signal once and extract all needed data
                 // before dropping the guard; nested read() calls while an outer
                 // read guard is held cause a runtime borrow panic in WASM.
-                let (backend_slug, instance_id) = {
+                let (backend_slug, instance_id, first_server_id) = {
                     let guard = chat_data.read();
-                    if let Some(session) = guard.account_sessions.get(&aid) {
+                    let (slug, inst) = if let Some(session) =
+                        guard.account_sessions.get(&aid)
+                    {
                         (session.backend.slug().to_string(), session.instance_id.clone())
                     } else {
-                        // Fallback: derive from the first matching server entry.
                         let slug = guard
                             .servers
                             .iter()
@@ -505,14 +511,41 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                             .map(|s| s.backend.slug().to_string())
                             .unwrap_or_else(|| "demo".to_string());
                         (slug, "demo".to_string())
-                    }
+                    };
+                    let first_server = guard
+                        .servers
+                        .iter()
+                        .find(|s| s.account_id == aid)
+                        .map(|s| s.id.clone());
+                    (slug, inst, first_server)
                 };
-                navigator()
-                    .push(Route::DmsHome {
+                let caps = poly_client::capabilities_for_slug(&backend_slug);
+                let fallback_route = if matches!(
+                    caps.dms,
+                    poly_client::DmSupport::None,
+                ) {
+                    if let Some(server_id) = first_server_id {
+                        Route::ServerHome {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id: aid,
+                            server_id,
+                        }
+                    } else {
+                        Route::NotificationsRoute {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id: aid,
+                        }
+                    }
+                } else {
+                    Route::DmsHome {
                         backend: backend_slug,
                         instance_id,
                         account_id: aid,
-                    });
+                    }
+                };
+                navigator().push(fallback_route);
             },
             title: "{display_name}",
             // Render image avatar if available (avatar_url is set by the client;

@@ -50,11 +50,37 @@ use thiserror::Error;
 /// runtime host bridge is unaffected by whether dev tooling is loaded.
 pub const BRIDGE_PORT: u16 = 9333;
 
-/// HTTP path of the host bridge endpoint.
+/// HTTP path of the legacy tagged-union host bridge endpoint.
+///
+/// Kept for one release cycle so existing WASM builds that POST a
+/// `HostCall` tagged union to `/host` keep working. New code should use
+/// the per-category sub-routes under [`BRIDGE_PREFIX`] instead.
 pub const BRIDGE_PATH: &str = "/host";
 
-/// Full default URL of the host bridge.
+/// Path prefix for the per-category multi-route layout introduced in
+/// phase 2.21. See `docs/plans/phase-2.21-host-bridge-unification-plan.md`.
+pub const BRIDGE_PREFIX: &str = "/host";
+
+/// Sub-route for `ExecCommand`.
+pub const ROUTE_EXEC: &str = "/host/exec";
+/// Sub-route for `HttpRequest`.
+pub const ROUTE_HTTP: &str = "/host/http";
+/// Sub-route for app KV `get`.
+pub const ROUTE_KV_GET: &str = "/host/kv/get";
+/// Sub-route for app KV `set`.
+pub const ROUTE_KV_SET: &str = "/host/kv/set";
+/// Sub-route for app KV `delete`.
+pub const ROUTE_KV_DELETE: &str = "/host/kv/delete";
+/// Sub-route for app KV `clear_all`.
+pub const ROUTE_KV_CLEAR: &str = "/host/kv/clear";
+/// Sub-route for the bridge liveness ping.
+pub const ROUTE_STATUS: &str = "/host/status";
+
+/// Full default URL of the legacy `/host` dispatch endpoint.
 pub const BRIDGE_URL: &str = "http://127.0.0.1:9333/host";
+
+/// Base URL every native shell binds for the new route layout.
+pub const BRIDGE_BASE_URL: &str = "http://127.0.0.1:9333";
 
 // ─── Protocol — request side ─────────────────────────────────────────────────
 
@@ -118,6 +144,100 @@ pub enum HostResponse {
     Err(String),
 }
 
+// ─── KV sub-route payloads ───────────────────────────────────────────────────
+
+/// Body for `POST /host/kv/get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KvGetRequest {
+    pub key: String,
+}
+
+/// Body for `POST /host/kv/set`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KvSetRequest {
+    pub key: String,
+    pub value: serde_json::Value,
+}
+
+/// Body for `POST /host/kv/delete`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KvDeleteRequest {
+    pub key: String,
+}
+
+/// Response body for `POST /host/kv/get`. `None` means the key wasn't set.
+///
+/// Wire shape: `{"ok": true, "value": <json-or-null>}` on success,
+/// `{"ok": false, "err": "..."}` on failure. Using a flat struct keeps
+/// the new routes easy to debug with curl.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KvGetResponse {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// Plain OK/err response shared by `set` / `delete` / `clear`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KvVoidResponse {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+// ─── Plugin-KV wire types ─────────────────────────────────────────────────────
+//
+// Plugin-scoped KV separates plugin state from app state. Keys are namespaced
+// by `plugin` (always) and optionally `account` (for per-account credentials
+// etc.), so two plugins can use the same user-facing key without colliding.
+// Values are opaque bytes transported as base64 — the server stores the base64
+// string as a JSON string inside the existing `poly_kv` TEXT payload column,
+// so no schema migration is needed.
+
+/// Body for `POST /host/plugin-kv/get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginKvGetRequest {
+    pub plugin: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    pub key: String,
+}
+
+/// Body for `POST /host/plugin-kv/set`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginKvSetRequest {
+    pub plugin: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    pub key: String,
+    /// Base64-encoded bytes (standard alphabet).
+    pub value_b64: String,
+}
+
+/// Body for `POST /host/plugin-kv/delete`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginKvDeleteRequest {
+    pub plugin: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    pub key: String,
+}
+
+/// Response body for `POST /host/plugin-kv/get`.
+///
+/// `value_b64 = None` means the key was unset. `ok = false` means the
+/// backend errored (details in `err`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginKvGetResponse {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_b64: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /// Errors returned by [`Client::call`].
@@ -155,7 +275,11 @@ pub enum BridgeError {
 #[derive(Debug, Clone)]
 pub struct Client {
     http: reqwest::Client,
+    /// Legacy single-dispatch URL (`…/host`).
     url: String,
+    /// Base URL for the new per-category sub-routes (`…`). Appended
+    /// with `/host/kv/...` etc. when building KV requests.
+    base: String,
 }
 
 impl Default for Client {
@@ -165,22 +289,43 @@ impl Default for Client {
 }
 
 impl Client {
-    /// Build a client targeting the default loopback bridge URL.
+    /// Build a client targeting the default bridge URL.
+    ///
+    /// On native, this is the loopback `http://127.0.0.1:9333` standalone
+    /// daemon. On `wasm32`, it's the origin that served the current
+    /// document (read from `window.location.origin`) — so a fullstack
+    /// shell like `apps/web` on port 3000 gets same-origin `/host/*`
+    /// requests hitting its own axum router instead of a cross-origin
+    /// request to an unreachable sidecar.
+    ///
+    /// Falls back to [`BRIDGE_BASE_URL`] on wasm32 only if `window` or
+    /// `location.origin()` is unavailable (non-browser WASM host).
     #[must_use]
     pub fn new() -> Self {
+        let base = default_base_url();
+        let url = format!("{base}{BRIDGE_PATH}");
         Self {
             http: reqwest::Client::new(),
-            url: BRIDGE_URL.to_string(),
+            url,
+            base,
         }
     }
 
     /// Build a client targeting an explicit bridge URL — useful for tests
-    /// or for shells that bind a non-default port.
+    /// or for shells that bind a non-default port. Both the legacy
+    /// single-dispatch URL and the sub-route base are derived from
+    /// `url`: the last `/host` segment (if any) is stripped to form
+    /// `base`.
     #[must_use]
     pub fn with_url(url: impl Into<String>) -> Self {
+        let url = url.into();
+        let base = url
+            .strip_suffix("/host")
+            .map_or_else(|| url.clone(), str::to_string);
         Self {
             http: reqwest::Client::new(),
-            url: url.into(),
+            url,
+            base,
         }
     }
 
@@ -206,6 +351,103 @@ impl Client {
         match parsed {
             HostResponse::Ok(ok) => Ok(ok),
             HostResponse::Err(msg) => Err(BridgeError::Host(msg)),
+        }
+    }
+
+    /// Ping the bridge liveness endpoint. Returns `Ok(())` if the shell
+    /// is reachable. Used by callers that want to degrade gracefully
+    /// before making real requests.
+    pub async fn status(&self) -> Result<(), BridgeError> {
+        let url = format!("{}{}", self.base, ROUTE_STATUS);
+        self.http
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| BridgeError::Unreachable {
+                url: url.clone(),
+                source: e,
+            })?;
+        Ok(())
+    }
+
+    /// `POST /host/kv/get` — read an app-level KV value.
+    ///
+    /// Returns `Ok(None)` for a missing key, `Ok(Some(value))` on hit,
+    /// or `BridgeError::Host` if the shell reported a backend error.
+    pub async fn kv_get(&self, key: &str) -> Result<Option<serde_json::Value>, BridgeError> {
+        let url = format!("{}{}", self.base, ROUTE_KV_GET);
+        let req = KvGetRequest {
+            key: key.to_string(),
+        };
+        let resp: KvGetResponse = self.post_json(&url, &req).await?;
+        if resp.ok {
+            Ok(resp.value)
+        } else {
+            Err(BridgeError::Host(
+                resp.err.unwrap_or_else(|| "unknown backend error".into()),
+            ))
+        }
+    }
+
+    /// `POST /host/kv/set` — write an app-level KV value.
+    pub async fn kv_set(
+        &self,
+        key: &str,
+        value: serde_json::Value,
+    ) -> Result<(), BridgeError> {
+        let url = format!("{}{}", self.base, ROUTE_KV_SET);
+        let req = KvSetRequest {
+            key: key.to_string(),
+            value,
+        };
+        let resp: KvVoidResponse = self.post_json(&url, &req).await?;
+        Self::expect_ok(resp)
+    }
+
+    /// `POST /host/kv/delete` — delete an app-level KV key.
+    pub async fn kv_delete(&self, key: &str) -> Result<(), BridgeError> {
+        let url = format!("{}{}", self.base, ROUTE_KV_DELETE);
+        let req = KvDeleteRequest {
+            key: key.to_string(),
+        };
+        let resp: KvVoidResponse = self.post_json(&url, &req).await?;
+        Self::expect_ok(resp)
+    }
+
+    /// `POST /host/kv/clear` — wipe all app-level KV entries.
+    pub async fn kv_clear(&self) -> Result<(), BridgeError> {
+        let url = format!("{}{}", self.base, ROUTE_KV_CLEAR);
+        let resp: KvVoidResponse = self.post_json(&url, &serde_json::json!({})).await?;
+        Self::expect_ok(resp)
+    }
+
+    /// Shared POST+decode helper for the sub-routes.
+    async fn post_json<T: serde::de::DeserializeOwned, B: Serialize>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> Result<T, BridgeError> {
+        let resp = self
+            .http
+            .post(url)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| BridgeError::Unreachable {
+                url: url.to_string(),
+                source: e,
+            })?;
+        let text = resp.text().await?;
+        serde_json::from_str(&text).map_err(|e| BridgeError::ParseResponse(e.to_string()))
+    }
+
+    fn expect_ok(resp: KvVoidResponse) -> Result<(), BridgeError> {
+        if resp.ok {
+            Ok(())
+        } else {
+            Err(BridgeError::Host(
+                resp.err.unwrap_or_else(|| "unknown backend error".into()),
+            ))
         }
     }
 
@@ -247,6 +489,20 @@ fn variant_name(ok: &HostOk) -> &'static str {
         HostOk::ExecOutput { .. } => "exec-output",
         HostOk::HttpResponse { .. } => "http-response",
     }
+}
+
+/// Default bridge base URL. On native, the loopback daemon. In a real
+/// browser, the origin that served the WASM bundle.
+#[cfg(not(target_arch = "wasm32"))]
+fn default_base_url() -> String {
+    BRIDGE_BASE_URL.to_string()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn default_base_url() -> String {
+    web_sys::window()
+        .and_then(|w| w.location().origin().ok())
+        .unwrap_or_else(|| BRIDGE_BASE_URL.to_string())
 }
 
 // ─── Server-side dispatcher (Rust shells only) ───────────────────────────────

@@ -1,54 +1,13 @@
 //! Mock Matrix homeserver for Poly testing.
 //!
-//! Implements the subset of the Matrix Client-Server API that poly-matrix calls:
-//! login, sync, rooms, messages, members, profile, spaces, account data.
-//! In-memory state, no federation, no E2EE.
+//! Implements the subset of the Matrix Client-Server API that poly-matrix
+//! calls. In-memory state, no federation. The router is defined in `lib.rs`
+//! so integration tests and the binary share a single source of truth for
+//! route registration and CORS configuration.
 
-use axum::routing::{get, post, put};
-use axum::Router;
-use poly_test_common::{health_handler, CliArgs, TestServerBase};
-
-mod routes;
-mod state;
-
+use poly_test_common::{CliArgs, TestServerBase};
+use poly_test_matrix::{router, MatrixState};
 use std::sync::Arc;
-use state::MatrixState;
-
-fn router(state: Arc<MatrixState>) -> Router {
-    Router::new()
-        .route(
-            "/health",
-            get(|| async { health_handler("matrix").await }),
-        )
-        // Auth
-        .route("/_matrix/client/v3/login", post(routes::login))
-        .route("/_matrix/client/v3/logout", post(routes::logout))
-        .route("/_matrix/client/v3/account/whoami", get(routes::whoami))
-        // Profile
-        .route("/_matrix/client/v3/profile/{userId}", get(routes::get_profile))
-        // Rooms
-        .route("/_matrix/client/v3/joined_rooms", get(routes::joined_rooms))
-        .route("/_matrix/client/v3/rooms/{roomId}/state", get(routes::room_state))
-        .route("/_matrix/client/v3/rooms/{roomId}/members", get(routes::room_members))
-        .route("/_matrix/client/v3/rooms/{roomId}/messages", get(routes::get_messages))
-        .route("/_matrix/client/v3/rooms/{roomId}/send/{eventType}/{txnId}", put(routes::send_message))
-        // Sync
-        .route("/_matrix/client/v3/sync", get(routes::sync))
-        // Spaces
-        .route("/_matrix/client/v1/rooms/{roomId}/hierarchy", get(routes::space_hierarchy))
-        // Directory
-        .route("/_matrix/client/v3/publicRooms", get(routes::public_rooms))
-        .route("/_matrix/client/v3/join/{roomIdOrAlias}", post(routes::join_room))
-        // Account data
-        .route("/_matrix/client/v3/user/{userId}/account_data/{dataType}", get(routes::get_account_data))
-        // Test-only easy-signin
-        .route("/test/auth/token", post(routes::test_auth_token))
-        // Lifecycle
-        .route("/seed", post(routes::seed))
-        .route("/reset", post(routes::reset))
-        .route("/reseed", post(routes::reseed))
-        .with_state(state)
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

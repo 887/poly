@@ -15,23 +15,61 @@ path = "src/main.rs"
 # are NOT shipped in production binaries — both have TOS / app-store-review
 # concerns that would block iOS/Play distribution. The release build script
 # uses `--no-default-features --features production` to strip them.
-default = ["dev-plugins"]
+# Default is the client-side profile so `dx build --platform web` (and
+# rust-analyzer) compiles cleanly. `dx serve --platform web` builds the
+# server half separately — see `Dioxus.toml [[features]]` for the
+# client/server feature split.
+default = ["dev-plugins", "web"]
 dev-plugins = ["poly-core/discord", "poly-core/teams"]
 production = []
+# `web` brings in the WASM renderer; compiled when targeting wasm32.
+# `dioxus/fullstack` activates `dioxus-web/hydrate` so the client hydrates
+# the SSR output from the fullstack server instead of re-rendering next
+# to it (which produces a duplicated .poly-app root).
+web = ["dioxus/web", "dioxus/fullstack"]
+# `server` pulls in the Dioxus fullstack server runtime so `dx serve
+# --platform web` builds this binary as a native axum server. The
+# server binary serves the WASM bundle AND mounts `/host/*` on the
+# same port (3000). One process, one port, no separate daemon.
+server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
 
 [dependencies]
-poly-core = { workspace = true, features = ["demo", "server", "stoat", "lemmy", "hackernews", "matrix", "github"] }
-dioxus = { workspace = true, features = ["web"] }
+poly-core = { workspace = true, features = [
+    "demo",
+    "server",
+    "stoat",
+    "lemmy",
+    "hackernews",
+    "matrix",
+    "github",
+    # poly-web routes storage through the host bridge so every platform
+    # writes to the same SQLite file. In `dx serve --platform web`
+    # fullstack mode, the `/host/*` routes are served by this binary
+    # itself (see `server` feature). In a plain browser, the bridge
+    # client falls back to `fetch` and talks to whichever poly shell
+    # is currently running.
+    "storage-host-bridge",
+] }
+dioxus = { workspace = true }
 tracing = { workspace = true }
 
-# tracing-subscriber only on native (for local dev server if ever added)
+# Native-only deps used by the fullstack server build.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = { workspace = true }
+axum = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["rt-multi-thread", "macros", "signal", "net"] }
+poly-host = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
 
 # getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom04-wasm = { workspace = true }
 web-sys = { workspace = true }
+# apps/web runs in a real browser — no native shell, no /host bridge.
+# Enabling `web-direct` makes HttpClient::new() fall back to browser fetch
+# instead of trying to proxy through the unreachable bridge endpoint.
+poly-host-bridge = { workspace = true, features = ["web-direct"] }
 
 [lints]
 workspace = true

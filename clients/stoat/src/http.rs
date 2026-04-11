@@ -67,7 +67,10 @@ impl StoatHttpClient {
     }
 
     /// WebSocket URL as returned by the server's root config (GET /).
-    /// Populated after successful authentication.
+    /// Populated after successful authentication. Only consumed by the
+    /// native event-stream path in `lib.rs`, so the getter is gated off
+    /// on wasm32 to avoid a dead-code warning.
+    #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
     pub fn ws_url(&self) -> Option<String> {
         self.ws_url.read().ok().and_then(|g| g.clone())

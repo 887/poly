@@ -541,6 +541,19 @@ interface host-api {
     /// Delete a key from plugin-scoped key-value storage.
     storage-delete: func(key: string) -> result<_, string>;
 
+    /// Read a value from per-account plugin-scoped storage.
+    ///
+    /// Keys in this namespace are DISJOINT from the plugin-global `storage-*`
+    /// namespace — a plugin that serves multiple accounts can scope caches,
+    /// tokens, and last-read markers per account without key collisions.
+    account-storage-get: func(account: string, key: string) -> option<list<u8>>;
+
+    /// Write a value to per-account plugin-scoped storage.
+    account-storage-set: func(account: string, key: string, value: list<u8>) -> result<_, string>;
+
+    /// Delete a key from per-account plugin-scoped storage.
+    account-storage-delete: func(account: string, key: string) -> result<_, string>;
+
     /// Log a message through the host's logging system.
     log: func(level: log-level, message: string);
 

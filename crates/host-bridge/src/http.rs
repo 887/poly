@@ -126,7 +126,13 @@ impl HttpClient {
                 inner: HttpInner::Direct(reqwest::Client::new()),
             }
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", feature = "web-direct"))]
+        {
+            Self {
+                inner: HttpInner::Direct(reqwest::Client::new()),
+            }
+        }
+        #[cfg(all(target_arch = "wasm32", not(feature = "web-direct")))]
         {
             Self {
                 inner: HttpInner::Bridge(BridgeClient::new()),
@@ -241,7 +247,9 @@ impl HttpClientBuilder {
     /// Build the configured client.
     pub fn build(self) -> Result<HttpClient, HttpError> {
         let _ = self.user_agent; // tracked but only consumed by Direct path below
-        let use_direct = self.force_direct || cfg!(not(target_arch = "wasm32"));
+        let use_direct = self.force_direct
+            || cfg!(not(target_arch = "wasm32"))
+            || cfg!(all(target_arch = "wasm32", feature = "web-direct"));
         if use_direct {
             let mut builder = reqwest::Client::builder();
             if let Some(ua) = self.user_agent {

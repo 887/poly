@@ -48,16 +48,25 @@ fn AccountRow(
     backend_label: String,
     instance_id: String,
     icon_color: String,
+    avatar_url: Option<String>,
 ) -> Element {
     let icon_char: String = display_name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "?".to_string());
     let emoji = backend_emoji(&backend_slug);
     rsx! {
         div { class: "accounts-settings-row",
-            // Colored icon bubble
-            div {
-                class: "accounts-settings-icon",
-                style: "background: {icon_color}",
-                "{icon_char}"
+            // Avatar image if available; otherwise colored letter bubble
+            if let Some(url) = avatar_url.as_ref() {
+                img {
+                    class: "accounts-settings-icon accounts-settings-icon--img",
+                    src: "{url}",
+                    alt: "{display_name}",
+                }
+            } else {
+                div {
+                    class: "accounts-settings-icon",
+                    style: "background: {icon_color}",
+                    "{icon_char}"
+                }
             }
             // Name + backend label
             div { class: "accounts-settings-info",
@@ -120,6 +129,8 @@ pub(super) fn AccountsSettings() -> Element {
                                 .map(|s| s.instance_id.clone())
                                 .unwrap_or_else(|| "demo".to_string());
                             let icon_color = account_color(&aid);
+                            let avatar_url = session
+                                .and_then(|s| s.user.avatar_url.clone());
                             rsx! {
                                 AccountRow {
                                     key: "{aid}",
@@ -129,6 +140,7 @@ pub(super) fn AccountsSettings() -> Element {
                                     backend_label,
                                     instance_id,
                                     icon_color,
+                                    avatar_url,
                                 }
                             }
                         }

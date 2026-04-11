@@ -34,7 +34,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use axum::response::IntoResponse;
-use poly_host_bridge::{HostCall, HostResponse, dispatch};
 use serde_json::Value;
 use tokio::sync::oneshot;
 
@@ -316,7 +315,11 @@ async fn start_http_server(
                 }
             }),
         )
-        .route("/host", routing::post(http_host_bridge))
+        // NOTE: `/host` no longer lives on the 9223 MCP eval port. The
+        // full `/host/*` route set is served on port 9333 by the
+        // `poly-host` router we spawn separately in `main()`. Moving it
+        // aligns the Wry shell with `poly_host_bridge::BRIDGE_PORT` so
+        // WASM-side callers hit the same URL on every platform.
         .route(
             "/console",
             routing::get({
@@ -354,34 +357,6 @@ async fn start_http_server(
     tracing::info!("Eval bridge HTTP server listening on http://127.0.0.1:{BRIDGE_PORT}");
     axum::serve(listener, app).await?;
     Ok(())
-}
-
-/// Generic Poly host-bridge endpoint.
-///
-/// Accepts a [`HostCall`] (the same JSON shape any other shell — Electron,
-/// future iOS / Android — would accept) and forwards it to the Rust
-/// dispatcher in [`poly_host_bridge`]. The dispatcher mirrors the WIT
-/// `host-api` operations (`exec-command`, `http-request`, …), so any
-/// WASM-side client code that already targets the bridge works here without
-/// modification.
-///
-/// This endpoint is **abstract on purpose** — it does not know about gh,
-/// matrix, or any specific plugin. Plugins build their own [`HostCall`]
-/// requests and route them through this single route.
-async fn http_host_bridge(body: String) -> (axum::http::StatusCode, String) {
-    let call: HostCall = match serde_json::from_str(&body) {
-        Ok(c) => c,
-        Err(e) => {
-            let resp = HostResponse::Err(format!("invalid host-call JSON: {e}"));
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()),
-            );
-        }
-    };
-    let resp = dispatch(call).await;
-    let body = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
-    (axum::http::StatusCode::OK, body)
 }
 
 async fn http_screenshot(
@@ -548,6 +523,10 @@ fn main() {
                 tracing::error!("HTTP server error: {e}");
             }
         });
+        // Host bridge used to live on a separate loopback port (9333) in
+        // this shell. It now rides inside `dx serve --platform web
+        // --fullstack`: the apps/desktop native server binary mounts
+        // `/host/*` on the same 3002 port it already serves WASM from.
     }
 
     // Increment generation on first start

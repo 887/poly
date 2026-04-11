@@ -91,6 +91,50 @@ Built with Rust, Dioxus 0.7.3, and WASM Component Model plugins. Two layers:
 | `apps/desktop` | `apps/desktop-web` (Wry) | 3002 | 9223 (HTTP eval) | `poly-desktop` |
 | `apps/desktop-electron` | `apps/desktop-electron-web` (Electron) | 3001 | 9224 (CDP) | `poly-electron` |
 
+## Host-bridge (`/host/*` — per-shell fullstack port)
+
+Every shell mounts the same `/host/*` route set on the **same port as
+its WASM bundle** — one process, one port. The three UI crates
+(`apps/web`, `apps/desktop`, `apps/desktop-electron`) are Dioxus
+**fullstack** apps: `dx serve --fullstack` builds the WASM client and a
+native axum server from the same `src/main.rs`. The server half merges
+`poly_host::router(state)` into the Dioxus router before binding.
+
+| Shell | Fullstack port | Storage backend |
+|-------|----------------|-----------------|
+| `apps/web` (Chromium) | 3000 | `storage.sqlite3` in the OS data dir |
+| `apps/desktop-electron` (Electron) | 3001 | Same file |
+| `apps/desktop` (Wry, web-shell mode) | 3002 | Same file |
+| `apps/poly-host` (standalone daemon, optional) | 9333 | Same file |
+
+Data dir resolution (via `poly_host::resolve_data_dir()`):
+
+| Platform | Path |
+|----------|------|
+| Linux    | `$XDG_DATA_HOME/poly/storage.sqlite3` → `~/.local/share/poly/storage.sqlite3` |
+| macOS    | `~/Library/Application Support/poly/storage.sqlite3` |
+| Windows  | `%APPDATA%\poly\storage.sqlite3` |
+
+Override with `POLY_DATA_DIR=/some/path`. All shells open the same
+file, so accounts added in one shell show up in the others.
+
+Routes: `GET /host/status`, `POST /host/kv/{get,set,delete,clear}`,
+`POST /host/exec`, `POST /host/http`, `POST /host` (legacy tagged-union
+dispatch, kept one release cycle).
+
+### Running `apps/web` with persistent storage
+
+```bash
+cd apps/web
+dx serve --platform web --fullstack \
+  @client --no-default-features --features "dev-plugins,web" \
+  @server --platform server --no-default-features --features "dev-plugins,server"
+```
+
+The `@server --platform server` flag is REQUIRED — without it dx tries
+to build the server half for `wasm32-unknown-unknown` and fails. See
+`docs/plans/phase-2.21-host-bridge-unification-plan.md`.
+
 ## WASM Hot-Reload Architecture
 
 All three platforms use the same pattern:
