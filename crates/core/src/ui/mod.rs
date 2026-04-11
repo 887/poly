@@ -678,6 +678,11 @@ fn register_native_test_accounts(#[allow(unused_variables)] client_manager: &mut
     for entry in poly_teams::signup::get_test_accounts() {
         client_manager.write().register_test_account(*entry);
     }
+
+    #[cfg(feature = "lemmy")]
+    for entry in poly_lemmy::signup::get_test_accounts() {
+        client_manager.write().register_test_account(*entry);
+    }
 }
 
 /// Register all native backend plugin settings pages into `ClientManager`.

@@ -456,6 +456,114 @@ pub async fn get_site(
 }
 
 // ---------------------------------------------------------------------------
+// Comments
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Default)]
+pub struct ListCommentsQuery {
+    #[allow(dead_code)]
+    pub post_id: Option<i64>,
+    #[allow(dead_code)]
+    pub community_id: Option<i64>,
+    #[allow(dead_code)]
+    pub limit: Option<i64>,
+    #[allow(dead_code)]
+    pub page: Option<i64>,
+    #[allow(dead_code)]
+    pub sort: Option<String>,
+    #[allow(dead_code)]
+    pub type_: Option<String>,
+}
+
+/// GET /api/v3/comment/list
+///
+/// Returns an empty comment list — the mock server does not seed comments
+/// yet, but the route must exist so polling clients don't 404.
+pub async fn list_comments(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(_q): Query<ListCommentsQuery>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+    Json(json!({ "comments": [] })).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Registration
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct RegisterRequest {
+    pub username: String,
+    pub password: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub password_verify: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub show_nsfw: Option<bool>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub email: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub captcha_uuid: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub captcha_answer: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub answer: Option<String>,
+}
+
+/// POST /api/v3/user/register
+pub async fn register(
+    State(state): State<Arc<LemmyState>>,
+    Json(body): Json<RegisterRequest>,
+) -> impl IntoResponse {
+    let username = body.username.trim().to_string();
+
+    if username.is_empty() || body.password.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "invalid_registration" })),
+        )
+            .into_response();
+    }
+
+    if state.users.contains_key(&username) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "username_already_exists" })),
+        )
+            .into_response();
+    }
+
+    let next_id = (state.users.len() as i64) + 1;
+    state.users.insert(
+        username.clone(),
+        crate::state::User {
+            id: next_id,
+            name: username.clone(),
+            display_name: None,
+            avatar: None,
+            actor_id: format!("https://lemmy.example.com/u/{}", username),
+        },
+    );
+    state.passwords.insert(username.clone(), body.password);
+
+    let token = state.auth.create_token(&username);
+    Json(json!({
+        "jwt": token,
+        "registration_created": true,
+        "verify_email_sent": false,
+    }))
+    .into_response()
+}
+
+// ---------------------------------------------------------------------------
 // Test-only endpoints
 // ---------------------------------------------------------------------------
 

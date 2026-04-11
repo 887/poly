@@ -31,6 +31,9 @@ pub fn router_with_state(state: Arc<LemmyState>) -> Router {
         // Auth
         .route("/api/v3/user/login", post(routes::login))
         .route("/api/v3/user/logout", post(routes::logout))
+        .route("/api/v3/user/register", post(routes::register))
+        // Comments
+        .route("/api/v3/comment/list", get(routes::list_comments))
         // Communities (servers)
         .route("/api/v3/community/list", get(routes::list_communities))
         .route("/api/v3/community", get(routes::get_community))

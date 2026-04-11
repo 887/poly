@@ -28,6 +28,52 @@ pub async fn authenticate(
     })
 }
 
+fn beaver_auth(
+    u: String,
+    e: String,
+    p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
+> {
+    Box::pin(async move { authenticate(u, e, p).await })
+}
+
+fn hedgehog_auth(
+    u: String,
+    e: String,
+    p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
+> {
+    Box::pin(async move { authenticate(u, e, p).await })
+}
+
+/// Test accounts for the Lemmy local dev server (port 9104).
+pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+    use poly_client::TestAccountEntry;
+    const ACCOUNTS: &[TestAccountEntry] = &[
+        TestAccountEntry {
+            icon: "🦫",
+            label: "Beaver",
+            server_label: "Lemmy — localhost:9104",
+            base_url: "http://localhost:9104",
+            username: "beaver",
+            password: "testpass123",
+            authenticate: beaver_auth,
+        },
+        TestAccountEntry {
+            icon: "🦔",
+            label: "Hedgehog",
+            server_label: "Lemmy — localhost:9104",
+            base_url: "http://localhost:9104",
+            username: "hedgehog",
+            password: "testpass123",
+            authenticate: hedgehog_auth,
+        },
+    ];
+    ACCOUNTS
+}
+
 /// Render entry-point stored in `SignupEntry::render`.
 pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
     rsx! {

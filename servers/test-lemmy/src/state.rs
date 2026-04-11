@@ -67,7 +67,8 @@ impl LemmyState {
             return;
         }
 
-        // Users
+        // Users — testuser for legacy integration tests; beaver/hedgehog are
+        // the "animal" accounts exposed to poly-web via signup::get_test_accounts().
         self.users.insert(
             "testuser".to_string(),
             User {
@@ -79,6 +80,30 @@ impl LemmyState {
             },
         );
         self.passwords.insert("testuser".to_string(), "password123".to_string());
+
+        self.users.insert(
+            "beaver".to_string(),
+            User {
+                id: 2,
+                name: "beaver".to_string(),
+                display_name: Some("Beaver".to_string()),
+                avatar: None,
+                actor_id: "https://lemmy.example.com/u/beaver".to_string(),
+            },
+        );
+        self.passwords.insert("beaver".to_string(), "testpass123".to_string());
+
+        self.users.insert(
+            "hedgehog".to_string(),
+            User {
+                id: 3,
+                name: "hedgehog".to_string(),
+                display_name: Some("Hedgehog".to_string()),
+                avatar: None,
+                actor_id: "https://lemmy.example.com/u/hedgehog".to_string(),
+            },
+        );
+        self.passwords.insert("hedgehog".to_string(), "testpass123".to_string());
 
         // Communities
         let communities = vec![
