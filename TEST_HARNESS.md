@@ -16,10 +16,23 @@ Expected: `Finished` with zero errors.
 
 ---
 
-## 2. Clippy (poly-core)
+## 2. Clippy (poly-core + all native plugins + chat-mcp)
 
 ```bash
-cargo clippy -p poly-core -- -D warnings 2>&1
+cargo clippy \
+  -p poly-core \
+  -p poly-client \
+  -p poly-demo \
+  -p poly-stoat \
+  -p poly-matrix \
+  -p poly-discord \
+  -p poly-teams \
+  -p poly-lemmy \
+  -p poly-hackernews \
+  -p poly-github \
+  -p poly-server-client \
+  -p poly-chat-mcp \
+  -- -D warnings 2>&1
 ```
 
 Expected: zero errors. Pre-existing warnings in unrelated crates are ignored.
@@ -42,8 +55,21 @@ Expected: `Client build completed successfully!`
 (dependency conflicts). Run each testable crate individually instead:
 
 ```bash
-cargo test -p poly-core -p poly-demo -p poly-stoat -p poly-plugin-host 2>&1
+cargo test \
+  -p poly-core \
+  -p poly-client \
+  -p poly-demo \
+  -p poly-stoat \
+  -p poly-matrix \
+  -p poly-discord \
+  -p poly-teams \
+  -p poly-lemmy \
+  -p poly-hackernews \
+  -p poly-github \
+  -p poly-server-client \
+  -p poly-plugin-host 2>&1
 cargo test -p poly-plugin-loader-tests --tests 2>&1
+cargo test -p poly-chat-mcp --test mcp_integration 2>&1
 ```
 
 Expected: all tests pass. Report any failures with test name + stderr.
