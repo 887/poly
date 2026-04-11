@@ -206,7 +206,44 @@ cargo component build -p poly-demo --target wasm32-wasip2 --release
 # Desktop app release
 cd apps/desktop
 dx build --platform desktop --release
+
+# Web app — production build (strips dev-only backends, see below)
+cd apps/web
+dx build --platform web --release --no-default-features --features production
 ```
+
+### Dev-only backends — Discord & Microsoft Teams
+
+The Discord and Microsoft Teams crates live in this repository (`clients/discord`,
+`clients/teams`) but are **never shipped in release builds**. They are gated behind
+the `dev-plugins` cargo feature in `apps/web`, which is on by default for local
+development and must be explicitly disabled for production:
+
+```bash
+# Dev (default — discord + teams compiled in, surfaced under "WASM plugins" in settings)
+cd apps/web && dx serve --platform web
+
+# Production (no discord, no teams — anything app-store review touches)
+cd apps/web && dx build --platform web --release \
+    --no-default-features --features production
+```
+
+**Why?**
+
+- **App store review**: Both Discord's and Microsoft's terms of service prohibit
+  third-party clients in ways that would block iOS App Store / Google Play approval.
+  Shipping either backend in a binary submitted for review is a non-starter.
+- **TOS surface**: Even though the source is MIT-licensed and lives publicly in this
+  repo (open source code is open source — undistributed source is fine), we don't
+  want a release artifact that contains anything Discord/Teams-shaped to point at.
+- **Visibility in dev**: When `dev-plugins` is on, both backends appear in
+  `Settings → Plugins` under the **WASM plugins** section (not "Built-in") with a
+  `(dev)` suffix, so it stays visually obvious they are not first-party Poly
+  backends. They are loaded as if they were external WASM plugins a user dropped in.
+
+If you fork Poly and want to ship Discord/Teams support, that's your call — flip
+`default = ["dev-plugins"]` back on for the release build and accept the review
+risk yourself.
 
 ---
 

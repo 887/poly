@@ -9,8 +9,18 @@ license.workspace = true
 name = "poly-web"
 path = "src/main.rs"
 
+[features]
+# `dev-plugins` enables Discord and Microsoft Teams. They live in the repo
+# (MIT, undistributed source is fine) and we use them for local dev, but they
+# are NOT shipped in production binaries — both have TOS / app-store-review
+# concerns that would block iOS/Play distribution. The release build script
+# uses `--no-default-features --features production` to strip them.
+default = ["dev-plugins"]
+dev-plugins = ["poly-core/discord", "poly-core/teams"]
+production = []
+
 [dependencies]
-poly-core = { workspace = true, features = ["demo", "server", "stoat", "lemmy", "hackernews", "matrix", "discord", "teams"] }
+poly-core = { workspace = true, features = ["demo", "server", "stoat", "lemmy", "hackernews", "matrix", "github"] }
 dioxus = { workspace = true, features = ["web"] }
 tracing = { workspace = true }
 
