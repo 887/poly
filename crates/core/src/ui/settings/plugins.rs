@@ -19,6 +19,9 @@
 use crate::i18n::t;
 use crate::storage::WasmPluginEntry;
 use dioxus::prelude::*;
+use poly_client::{
+    BackendCapabilities, ContainerLabelForm, capabilities_for_slug, container_label_key,
+};
 
 /// WIT version string appended to WASM plugin fetch URLs.
 const WIT_VERSION: &str = "0.1.0";
@@ -322,7 +325,12 @@ fn toggle_native_backend(
     }
 }
 
-/// A single native backend row with toggle checkbox.
+/// A single native backend row with toggle checkbox and a click-to-expand
+/// capability details panel.
+///
+/// `badge_class` is "native" for compiled-in backends and "wasm" for
+/// dev-injected backends (Discord/Teams) so they render with the correct
+/// badge while sharing the same row layout and capability panel.
 #[rustfmt::skip]
 #[component]
 fn NativePluginRow(
@@ -333,38 +341,143 @@ fn NativePluginRow(
     available: bool,
     enabled: bool,
     account_count: usize,
+    badge_class: String,
+    badge_label_key: String,
     on_toggle: EventHandler<String>,
 ) -> Element {
     let slug_for_toggle = slug.clone();
+    let slug_for_panel = slug.clone();
+    let mut expanded = use_signal(|| false);
+    let is_open = *expanded.read();
+    let disclosure_label = if is_open {
+        t("plugins-capabilities-hide")
+    } else {
+        t("plugins-capabilities-show")
+    };
     rsx! {
         div {
-            class: if available { "plugin-row" } else { "plugin-row plugin-row-unavailable" },
-            label { class: "plugin-row-toggle",
-                input {
-                    r#type: "checkbox",
-                    checked: enabled,
-                    onchange: move |_| on_toggle.call(slug_for_toggle.clone()),
+            class: if available { "plugin-row-wrap" } else { "plugin-row-wrap plugin-row-unavailable" },
+            div {
+                class: "plugin-row",
+                onclick: move |_| {
+                    let current = *expanded.read();
+                    expanded.set(!current);
+                },
+                label {
+                    class: "plugin-row-toggle",
+                    onclick: move |e| { e.stop_propagation(); },
+                    input {
+                        r#type: "checkbox",
+                        checked: enabled,
+                        onchange: move |_| on_toggle.call(slug_for_toggle.clone()),
+                    }
                 }
-            }
-            div { class: "plugin-row-icon", "{icon}" }
-            div { class: "plugin-row-info",
-                div { class: "plugin-row-name",
-                    "{name}"
-                    if !available {
-                        span { class: "plugin-not-compiled",
-                            " ({t(\"plugins-not-compiled\")})"
+                div { class: "plugin-row-icon", "{icon}" }
+                div { class: "plugin-row-info",
+                    div { class: "plugin-row-name",
+                        "{name}"
+                        if !available {
+                            span { class: "plugin-not-compiled",
+                                " ({t(\"plugins-not-compiled\")})"
+                            }
+                        }
+                    }
+                    div { class: "plugin-row-description", "{description}" }
+                    if account_count > 0 {
+                        div { class: "plugin-row-accounts",
+                            "{t(\"plugins-active-accounts\")}: {account_count}"
                         }
                     }
                 }
-                div { class: "plugin-row-description", "{description}" }
-                if account_count > 0 {
-                    div { class: "plugin-row-accounts",
-                        "{t(\"plugins-active-accounts\")}: {account_count}"
+                div { class: "plugin-row-meta",
+                    span { class: "plugin-type-badge {badge_class}", "{t(badge_label_key.as_str())}" }
+                    button {
+                        class: "plugin-disclosure-btn",
+                        r#type: "button",
+                        "aria-expanded": "{is_open}",
+                        onclick: move |e| {
+                            e.stop_propagation();
+                            let current = *expanded.read();
+                            expanded.set(!current);
+                        },
+                        "{disclosure_label}"
                     }
                 }
             }
-            div { class: "plugin-row-meta",
-                span { class: "plugin-type-badge native", "{t(\"plugins-type-native\")}" }
+            if is_open {
+                PluginCapabilityPanel { slug: slug_for_panel }
+            }
+        }
+    }
+}
+
+/// Expandable panel that renders the full capability shape for a plugin slug.
+///
+/// Consumes [`capabilities_for_slug`] and [`container_label_key`] so it stays
+/// in sync with the capability matrix used by route gating, nav buttons, and
+/// MCP tool advertisement. Everything here is read-only inspection — no
+/// state, no toggles.
+#[rustfmt::skip]
+#[component]
+fn PluginCapabilityPanel(slug: String) -> Element {
+    let caps: BackendCapabilities = capabilities_for_slug(&slug);
+    let shape_rows = caps.shape_rows();
+    let flag_rows = caps.feature_flags();
+    let container_singular = t(container_label_key(&slug, ContainerLabelForm::Singular));
+    let container_plural = t(container_label_key(&slug, ContainerLabelForm::Plural));
+    let layout_key = if caps.is_forum_layout() {
+        "plugins-capabilities-layout-forum"
+    } else {
+        "plugins-capabilities-layout-chat"
+    };
+    rsx! {
+        div { class: "plugin-capability-panel",
+            "data-testid": "plugin-capability-panel-{slug}",
+            h5 { class: "plugin-capability-heading",
+                "{t(\"plugins-capabilities-shape\")}"
+            }
+            dl { class: "plugin-capability-list",
+                for row in shape_rows.iter() {
+                    {
+                        let label_key = row.label_key;
+                        let value_key = row.value_key;
+                        rsx! {
+                            dt { "{t(label_key)}" }
+                            dd { "{t(value_key)}" }
+                        }
+                    }
+                }
+                dt { "{t(\"plugins-capabilities-layout\")}" }
+                dd { "{t(layout_key)}" }
+            }
+            h5 { class: "plugin-capability-heading",
+                "{t(\"plugins-capabilities-flags\")}"
+            }
+            ul { class: "plugin-capability-flags",
+                for (label_key, supported) in flag_rows.iter() {
+                    {
+                        let cls = if *supported { "flag on" } else { "flag off" };
+                        let state_key = if *supported {
+                            "plugins-flag-supported"
+                        } else {
+                            "plugins-flag-unsupported"
+                        };
+                        let key = *label_key;
+                        rsx! {
+                            li { class: "{cls}",
+                                span { class: "flag-label", "{t(key)}" }
+                                span { class: "flag-state", "{t(state_key)}" }
+                            }
+                        }
+                    }
+                }
+            }
+            h5 { class: "plugin-capability-heading",
+                "{t(\"plugins-capabilities-terminology\")}"
+            }
+            dl { class: "plugin-capability-list",
+                dt { "{t(\"plugins-capabilities-container\")}" }
+                dd { "{container_singular} / {container_plural}" }
             }
         }
     }
@@ -591,6 +704,8 @@ pub fn PluginsSettings() -> Element {
                                 available: backend.available,
                                 enabled,
                                 account_count,
+                                badge_class: "native".to_string(),
+                                badge_label_key: "plugins-type-native".to_string(),
                                 on_toggle: move |toggled: String| {
                                     if toggled == "demo" {
                                         // Use toggle_demo to keep demo_active and nav
@@ -649,39 +764,27 @@ pub fn PluginsSettings() -> Element {
                                 .filter(|s| s.backend.slug() == slug.as_str())
                                 .count();
                             let slug_key = slug.clone();
-                            let slug_for_toggle = slug.clone();
                             rsx! {
-                                div {
+                                NativePluginRow {
                                     key: "{slug_key}",
-                                    class: "plugin-row",
-                                    label { class: "plugin-row-toggle",
-                                        input {
-                                            r#type: "checkbox",
-                                            checked: enabled,
-                                            onchange: move |_| {
-                                                toggle_native_backend(
-                                                    slug_for_toggle.clone(),
-                                                    client_manager,
-                                                    chat_data,
-                                                    disabled,
-                                                    wasm_plugins,
-                                                );
-                                            },
-                                        }
-                                    }
-                                    div { class: "plugin-row-icon", "{icon}" }
-                                    div { class: "plugin-row-info",
-                                        div { class: "plugin-row-name", "{name}" }
-                                        div { class: "plugin-row-description", "{description}" }
-                                        if account_count > 0 {
-                                            div { class: "plugin-row-accounts",
-                                                "{t(\"plugins-active-accounts\")}: {account_count}"
-                                            }
-                                        }
-                                    }
-                                    div { class: "plugin-row-meta",
-                                        span { class: "plugin-type-badge wasm", "{t(\"plugins-type-wasm\")}" }
-                                    }
+                                    slug: slug.clone(),
+                                    icon,
+                                    name,
+                                    description,
+                                    available: true,
+                                    enabled,
+                                    account_count,
+                                    badge_class: "wasm".to_string(),
+                                    badge_label_key: "plugins-type-wasm".to_string(),
+                                    on_toggle: move |toggled: String| {
+                                        toggle_native_backend(
+                                            toggled,
+                                            client_manager,
+                                            chat_data,
+                                            disabled,
+                                            wasm_plugins,
+                                        );
+                                    },
                                 }
                             }
                         } else {

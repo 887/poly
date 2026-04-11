@@ -306,6 +306,47 @@ plugins-file-hint = The plugin will be registered locally. Reload the app to act
 plugins-remove = Remove
 plugins-wit-hint = WIT interface version
 
+# Plugin capabilities panel (shown when a plugin row is expanded)
+plugins-capabilities-title = Capabilities
+plugins-capabilities-shape = Backend shape
+plugins-capabilities-flags = Feature flags
+plugins-capabilities-terminology = Terminology
+plugins-capabilities-show = Show capabilities
+plugins-capabilities-hide = Hide capabilities
+plugins-capabilities-container = Container noun
+plugins-capabilities-layout = Layout
+plugins-capabilities-layout-forum = Forum layout
+plugins-capabilities-layout-chat = Chat layout
+plugins-flag-supported = Supported
+plugins-flag-unsupported = Not supported
+
+cap-label-messaging = Messaging
+cap-label-dms = Direct messages
+cap-label-friends = Friends
+cap-label-notifications = Notifications
+cap-label-voice = Voice & video
+
+cap-value-messaging-none = None
+cap-value-messaging-readonly = Read-only feed
+cap-value-messaging-full = Full (read & write)
+cap-value-dms-none = Not supported
+cap-value-dms-user = User-to-user DMs
+cap-value-friends-none = No friends list
+cap-value-friends-full = Friends list
+cap-value-notifications-none = None
+cap-value-notifications-inbox = Inbox (replies, mentions)
+cap-value-notifications-activity = Activity stream
+cap-value-voice-none = No voice
+cap-value-voice-full = Voice & video channels
+
+cap-flag-presence = Presence
+cap-flag-typing = Typing indicators
+cap-flag-reactions = Reactions
+cap-flag-search = Message search
+cap-flag-attachments = Attachments
+cap-flag-create-server = Create container
+cap-flag-create-channel = Create channel
+
 # Plugin Settings
 settings-plugin-settings = Plugin Settings
 # Label shown in the nav sidebar and in the scroll divider before plugin-contributed sections
@@ -637,6 +678,35 @@ time-days-ago = { $count } days ago
 chat-toggle-members = Toggle member list
 chat-toggle-contact = Toggle contact info
 chat-select-channel = Select a channel to start chatting
+composer-read-only-notice = This backend is read-only — posts cannot be sent from Poly.
+
+# WP-9 — capability-unsupported placeholders
+feature-unsupported-friends = { $backend } doesn't have a friends list.
+feature-unsupported-dms = { $backend } doesn't support direct messages.
+feature-unsupported-notifications = { $backend } doesn't expose a notification inbox.
+feature-unsupported-create-server = { $backend } doesn't support creating servers from Poly.
+feature-unsupported-voice = { $backend } doesn't support voice channels.
+feature-unsupported-redirecting = Redirecting you back…
+
+# WP-6 — per-plugin container terminology
+term-container-server = Server
+term-container-server-plural = Servers
+term-container-server-create = Create server
+term-container-community = Community
+term-container-community-plural = Communities
+term-container-community-create = Create community
+term-container-space = Space
+term-container-space-plural = Spaces
+term-container-space-create = Create space
+term-container-team = Team
+term-container-team-plural = Teams
+term-container-team-create = Create team
+term-container-repo = Repository
+term-container-repo-plural = Repositories
+term-container-repo-create = Add repository
+term-container-feed = Feed
+term-container-feed-plural = Feeds
+term-container-feed-create = Follow feed
 chat-timestamp-yesterday = Yesterday { $time }
 search-messages = Search messages
 search-placeholder = Search in this channel...

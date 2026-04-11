@@ -145,6 +145,15 @@ pub fn AccountServerBar() -> Element {
 
     let instance_id = active_instance_id.unwrap_or_else(|| "demo".to_string());
 
+    // Capability snapshot for the active backend — drives which nav
+    // buttons render. HN has no DMs/friends/notifications → nothing beyond
+    // the server list shows up.
+    let caps = poly_client::capabilities_for_slug(&backend_slug);
+    let show_dms = !matches!(caps.dms, poly_client::DmSupport::None);
+    let show_friends = !matches!(caps.friends, poly_client::FriendModel::None);
+    let show_notifs = !matches!(caps.notifications, poly_client::NotificationSupport::None);
+    let show_create_server = caps.create_server;
+
     // Get all servers for this account (not just favorites)
     let all_servers = chat_data.read().servers.clone();
     let account_servers: Vec<_> = all_servers
@@ -170,23 +179,30 @@ pub fn AccountServerBar() -> Element {
 
     rsx! {
         nav { class: "account-server-bar",
-            // DMs / Friends button — account-scoped
-            AccountBarDmsButton {
-                current_view,
-                backend_slug: backend_slug.clone(),
-                instance_id: instance_id.clone(),
-                account_id: account_id.clone(),
+            // DMs / Friends button — account-scoped. Gated on capability:
+            // HN/Lemmy/GitHub don't surface DMs so the button is omitted.
+            if show_dms {
+                AccountBarDmsButton {
+                    current_view,
+                    backend_slug: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                }
             }
 
-            AccountBarFriendsButton {
-                current_view,
-                backend_slug: backend_slug.clone(),
-                instance_id: instance_id.clone(),
-                account_id: account_id.clone(),
+            if show_friends {
+                AccountBarFriendsButton {
+                    current_view,
+                    backend_slug: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                }
             }
 
             // Notifications button — account-scoped
-            AccountBarNotifsButton { current_view, notif_count }
+            if show_notifs {
+                AccountBarNotifsButton { current_view, notif_count }
+            }
 
             // Separator
             div { class: "sidebar-separator" }
@@ -201,17 +217,20 @@ pub fn AccountServerBar() -> Element {
                     backend_slug: server.backend.slug().to_string(),
                     instance_id: instance_id.clone(),
                     account_id: server.account_id.clone(),
-                    unread: if server.backend.is_forum() { 0 } else { server.unread_count },
-                    mention: if server.backend.is_forum() { 0 } else { server.mention_count },
+                    unread: if server.backend.uses_forum_layout() { 0 } else { server.unread_count },
+                    mention: if server.backend.uses_forum_layout() { 0 } else { server.mention_count },
                     is_selected: selected_server.as_deref() == Some(server.id.as_str()),
                     icon_url: server.icon_url.clone(),
                 }
             }
 
             // Separator + "+" button to join/create a new server/guild.
-            // Shown for all backends so the affordance is always discoverable.
-            div { class: "sidebar-separator" }
-            CreateServerButton { account_id: account_id.clone() }
+            // Capability-gated: only backends that actually support creating
+            // a server show the button.
+            if show_create_server {
+                div { class: "sidebar-separator" }
+                CreateServerButton { account_id: account_id.clone() }
+            }
 
             // Spacer keeps the icon rail aligned above the shared bottom account bar.
             div { class: "sidebar-spacer" }
@@ -596,10 +615,17 @@ fn CreateServerButton(account_id: String) -> Element {
         .clone()
         .unwrap_or_default();
 
+    // WP-6: tooltip terminology follows the active backend. Lemmy shows
+    // "Create community", Matrix shows "Create space", GitHub shows
+    // "Add repository", etc.
+    let create_label_key =
+        poly_client::container_label_key(&backend_slug, poly_client::ContainerLabelForm::CreateAction);
+    let create_label = t(create_label_key);
+
     rsx! {
         button {
             class: "create-server-pill",
-            title: "{t(\"create-server-btn\")}",
+            title: "{create_label}",
             onclick: move |_| {
                 navigator().push(Route::CreateServerRoute {
                     backend:     backend_slug.clone(),

@@ -681,6 +681,10 @@ impl ClientBackend for PolyServerBackend {
     fn backend_name(&self) -> &str {
         "Poly Server"
     }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::FULL_SOCIAL_CHAT
+    }
 }
 
 /// Map a poly-server `ServerEvent` to a `poly_client::ClientEvent`.

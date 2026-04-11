@@ -844,3 +844,92 @@ async fn list_plugins_reports_all_compiled_backends() {
         assert!(!hosts.is_empty(), "{dev_plugin} should declare http_hosts");
     }
 }
+
+// ---------------------------------------------------------------------------
+// WP-8 — list_plugin_tools + capability-gated NotSupported errors
+// ---------------------------------------------------------------------------
+
+fn parse_tool_names(result: &Value) -> Vec<String> {
+    let text = text_of(result);
+    let json_start = text.find('[').unwrap_or(0);
+    serde_json::from_str(&text[json_start..]).expect("parse tool list as JSON")
+}
+
+#[tokio::test]
+async fn list_plugin_tools_hackernews_omits_social_tools() {
+    let mut pool = BackendPool::new();
+    let result = call(&mut pool, "list_plugin_tools", json!({
+        "backend": "hackernews"
+    })).await;
+    assert_ok(&result);
+    let tools: Vec<String> = parse_tool_names(&result);
+    assert!(tools.contains(&"list_servers".to_string()), "HN should still expose list_servers");
+    assert!(tools.contains(&"get_messages".to_string()), "HN should still expose get_messages");
+    assert!(!tools.contains(&"list_friends".to_string()), "HN has no friends model");
+    assert!(!tools.contains(&"send_message".to_string()), "HN is read-only");
+    assert!(!tools.contains(&"list_dms".to_string()), "HN has no DMs");
+}
+
+#[tokio::test]
+async fn list_plugin_tools_discord_includes_all_social_tools() {
+    let mut pool = BackendPool::new();
+    let result = call(&mut pool, "list_plugin_tools", json!({
+        "backend": "discord"
+    })).await;
+    assert_ok(&result);
+    let tools: Vec<String> = parse_tool_names(&result);
+    for expected in ["list_servers", "get_messages", "send_message", "list_dms", "list_friends", "list_notifications"] {
+        assert!(tools.contains(&expected.to_string()), "discord should expose {expected}, got {tools:?}");
+    }
+}
+
+#[tokio::test]
+async fn list_plugin_tools_github_exposes_notifications_but_no_send() {
+    let mut pool = BackendPool::new();
+    let result = call(&mut pool, "list_plugin_tools", json!({
+        "backend": "github"
+    })).await;
+    assert_ok(&result);
+    let tools: Vec<String> = parse_tool_names(&result);
+    assert!(tools.contains(&"list_notifications".to_string()), "github should expose list_notifications");
+    assert!(!tools.contains(&"send_message".to_string()), "github is read-only");
+    assert!(!tools.contains(&"list_friends".to_string()), "github has no friends model");
+}
+
+#[tokio::test]
+async fn list_friends_on_hackernews_returns_not_supported_error() {
+    let srv = TestSrv::hackernews().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "hackernews", "url": srv.base_url, "username": "anonymous"
+    })).await;
+
+    let result = call(&mut pool, "list_friends", json!({ "backend": "hackernews" })).await;
+    assert_err(&result);
+    let msg = text_of(&result).to_lowercase();
+    assert!(
+        msg.contains("not supported") || msg.contains("not_supported"),
+        "expected a 'not supported' error message, got: {}", text_of(&result)
+    );
+}
+
+#[tokio::test]
+async fn send_message_on_hackernews_returns_not_supported_error() {
+    let srv = TestSrv::hackernews().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "hackernews", "url": srv.base_url, "username": "anonymous"
+    })).await;
+
+    let result = call(&mut pool, "send_message", json!({
+        "backend": "hackernews",
+        "channel_id": "hn-top",
+        "text": "should be rejected"
+    })).await;
+    assert_err(&result);
+    let msg = text_of(&result).to_lowercase();
+    assert!(
+        msg.contains("not supported") || msg.contains("not_supported") || msg.contains("read-only") || msg.contains("read only"),
+        "expected a 'not supported' or 'read-only' error message, got: {}", text_of(&result)
+    );
+}

@@ -190,8 +190,8 @@ pub fn FavoritesBar() -> Element {
                                 account_id: server.account_id.clone(),
                                 account_display_name: server.account_display_name.clone(),
                                 backend_name: server.backend.display_name().to_string(),
-                                unread: if server.backend.is_forum() { 0 } else { server.unread_count },
-                                mention: if server.backend.is_forum() { 0 } else { server.mention_count },
+                                unread: if server.backend.uses_forum_layout() { 0 } else { server.unread_count },
+                                mention: if server.backend.uses_forum_layout() { 0 } else { server.mention_count },
                                 icon_url: server.icon_url.clone(),
                             }
                         }
@@ -294,7 +294,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .read()
         .account_sessions
         .get(&account_id)
-        .map_or(false, |s| s.backend.is_forum());
+        .map_or(false, |s| s.backend.uses_forum_layout());
 
     let color = user_color(&account_id);
 
@@ -821,7 +821,7 @@ fn FavoriteServerIcon(
                 span { class: "source-badge", "A" }
             }
             // Bottom-left: account connection status emoji icon (not for forum)
-            if !poly_client::BackendType::from_slug(&backend_slug).is_forum() {
+            if !poly_client::BackendType::from_slug(&backend_slug).uses_forum_layout() {
                 span {
                     class: "account-conn-icon account-conn-icon--{_account_conn_class}",
                     title: "Account connection: {_account_conn_class}",
@@ -835,7 +835,7 @@ fn FavoriteServerIcon(
                 span { class: "badge mention-count-badge", "{unread}" }
             }
             // Bottom-right: presence dot (not for forum)
-            if !poly_client::BackendType::from_slug(&backend_slug).is_forum() {
+            if !poly_client::BackendType::from_slug(&backend_slug).uses_forum_layout() {
                 span {
                     class: "status-dot presence-dot {account_presence_class}",
                     title: "Presence: {account_presence_class}",

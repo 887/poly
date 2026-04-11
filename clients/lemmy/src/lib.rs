@@ -9,6 +9,8 @@
 //! - **Native** (`--features native`): Implements `ClientBackend` directly.
 //! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
 
+#![allow(dead_code, clippy::expect_used, clippy::if_same_then_else)]
+
 #[cfg(feature = "native")]
 mod api;
 
@@ -470,5 +472,12 @@ impl ClientBackend for LemmyClient {
 
     fn backend_name(&self) -> &str {
         "Lemmy"
+    }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            reactions: true,
+            ..BackendCapabilities::MESSAGING_NO_SOCIAL
+        }
     }
 }

@@ -305,6 +305,10 @@ impl ClientBackend for HackerNewsClient {
     fn backend_name(&self) -> &str {
         "Hacker News"
     }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::READ_ONLY_FEED
+    }
 }
 
 #[cfg(feature = "native")]

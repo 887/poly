@@ -364,10 +364,10 @@ pub trait ClientBackend: Send + Sync {
     ///
     /// The UI uses these flags to hide controls that don't apply (e.g. mic /
     /// speaker buttons for read-only news feeds, DM picker for backends with
-    /// no DMs). Default returns [`BackendCapabilities::ALL`] — full chat
-    /// backends keep working unchanged; restricted backends override.
+    /// no DMs). Default returns [`BackendCapabilities::READ_ONLY_FEED`] —
+    /// the safe minimum; richer backends opt in explicitly.
     fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::ALL
+        BackendCapabilities::READ_ONLY_FEED
     }
 
     /// Self-declared plugin manifest. Purely informational.

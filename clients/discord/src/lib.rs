@@ -309,4 +309,8 @@ impl ClientBackend for DiscordClient {
     fn backend_name(&self) -> &str {
         "Discord"
     }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::FULL_SOCIAL_CHAT
+    }
 }

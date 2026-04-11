@@ -58,16 +58,96 @@ impl BackendId {
         Self(s.to_string())
     }
 
-    /// Returns `true` for forum-style backends (Lemmy, Hacker News, etc.) that use
-    /// stateless HTTP polling rather than persistent WebSocket/XMPP connections.
+    /// Returns `true` for backends whose capabilities match the "forum layout"
+    /// pattern — no DMs, no voice, no friend graph. Used by the UI to pick
+    /// between the chat-style and forum-style channel list / badge rules.
     ///
-    /// Forum backends do not support voice, presence, or real-time connection status.
-    pub fn is_forum(&self) -> bool {
-        matches!(
-            self.0.as_str(),
-            "demo_forum" | "hackernews" | "lemmy" | "github"
-        )
+    /// Capability-derived, not a hard-coded slug list — see [`capabilities_for_slug`].
+    pub fn uses_forum_layout(&self) -> bool {
+        capabilities_for_slug(self.0.as_str()).is_forum_layout()
     }
+}
+
+/// Capability lookup for a backend slug.
+///
+/// Mirrors each plugin's `ClientBackend::backend_capabilities()` override so
+/// the UI can read a backend's shape without holding a live client instance
+/// (e.g. from a `BackendType` in a server list).
+pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
+    match slug {
+        "hackernews" => BackendCapabilities::READ_ONLY_FEED,
+        "github" => BackendCapabilities {
+            notifications: NotificationSupport::Activity,
+            search_messages: true,
+            ..BackendCapabilities::READ_ONLY_FEED
+        },
+        "lemmy" | "demo_forum" => BackendCapabilities {
+            reactions: true,
+            ..BackendCapabilities::MESSAGING_NO_SOCIAL
+        },
+        "matrix" => BackendCapabilities {
+            voice: VoiceSupport::None,
+            create_server: false,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
+        "stoat" => BackendCapabilities {
+            voice: VoiceSupport::None,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
+        "teams" => BackendCapabilities {
+            typing_indicators: false,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
+        "discord" | "demo" | "poly" => BackendCapabilities::FULL_SOCIAL_CHAT,
+        _ => BackendCapabilities::READ_ONLY_FEED,
+    }
+}
+
+/// WP-6 — Per-plugin terminology.
+///
+/// Container-level terminology varies by plugin: Discord calls them "servers",
+/// Matrix calls them "spaces", Lemmy calls them "communities", GitHub calls
+/// them "repositories". This function returns the FTL label key for the
+/// container noun at various grammatical forms (`"create"`, `"list"`, etc.).
+///
+/// A plugin that doesn't override the terminology falls back to the generic
+/// `term-container-*` keys defined in `locales/en/main.ftl`.
+#[must_use]
+pub fn container_label_key(slug: &str, form: ContainerLabelForm) -> &'static str {
+    match (slug, form) {
+        ("lemmy" | "demo_forum", ContainerLabelForm::Singular) => "term-container-community",
+        ("lemmy" | "demo_forum", ContainerLabelForm::Plural) => "term-container-community-plural",
+        ("lemmy" | "demo_forum", ContainerLabelForm::CreateAction) => "term-container-community-create",
+
+        ("matrix", ContainerLabelForm::Singular) => "term-container-space",
+        ("matrix", ContainerLabelForm::Plural) => "term-container-space-plural",
+        ("matrix", ContainerLabelForm::CreateAction) => "term-container-space-create",
+
+        ("teams", ContainerLabelForm::Singular) => "term-container-team",
+        ("teams", ContainerLabelForm::Plural) => "term-container-team-plural",
+        ("teams", ContainerLabelForm::CreateAction) => "term-container-team-create",
+
+        ("github", ContainerLabelForm::Singular) => "term-container-repo",
+        ("github", ContainerLabelForm::Plural) => "term-container-repo-plural",
+        ("github", ContainerLabelForm::CreateAction) => "term-container-repo-create",
+
+        ("hackernews", ContainerLabelForm::Singular) => "term-container-feed",
+        ("hackernews", ContainerLabelForm::Plural) => "term-container-feed-plural",
+        ("hackernews", ContainerLabelForm::CreateAction) => "term-container-feed-create",
+
+        (_, ContainerLabelForm::Singular) => "term-container-server",
+        (_, ContainerLabelForm::Plural) => "term-container-server-plural",
+        (_, ContainerLabelForm::CreateAction) => "term-container-server-create",
+    }
+}
+
+/// Grammatical form of a container label — singular noun, plural noun, or
+/// the verb phrase used in the "Create" action button.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContainerLabelForm {
+    Singular,
+    Plural,
+    CreateAction,
 }
 
 impl std::fmt::Display for BackendId {
@@ -391,67 +471,212 @@ pub struct ExecOutput {
     pub stderr: Vec<u8>,
 }
 
-/// Capability flags describing what a backend supports.
+/// Messaging model — does the backend accept user writes?
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MessagingModel {
+    /// No messaging surface at all (pure feed with no posts).
+    None,
+    /// Read-only: user can observe but not send (Hacker News, GitHub).
+    ReadOnly,
+    /// Full messaging: user can post and reply (Lemmy, Discord, Matrix…).
+    Full,
+}
+
+/// Direct-message support.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DmSupport {
+    /// Backend has no concept of DMs.
+    None,
+    /// User-to-user DMs (Discord, Matrix, Teams).
+    User,
+}
+
+/// Friend / contact list model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FriendModel {
+    /// No friends concept (HN, Lemmy, GitHub).
+    None,
+    /// Full bidirectional friends list (Discord).
+    Full,
+}
+
+/// Notification inbox model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NotificationSupport {
+    /// No notification surface.
+    None,
+    /// Message-style inbox (Lemmy replies, Matrix mentions).
+    Inbox,
+    /// Activity stream with categories (GitHub issues/PRs, Discord mentions).
+    Activity,
+}
+
+/// Voice / video channel support.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VoiceSupport {
+    /// No voice at all.
+    None,
+    /// Full voice channels (Discord, Teams).
+    Full,
+}
+
+/// Capability declaration for a backend.
 ///
-/// Used by the UI to hide controls that don't make sense for a given backend
-/// (e.g. the mic / speaker buttons for read-only news feeds).
+/// Drives which UI affordances the host renders for a given account
+/// (nav buttons, composer state, notification filter chips, voice toggle)
+/// and which MCP tools are honest to advertise.
+///
+/// See `docs/plans/phase-2.20-plugin-capabilities-plan.md` for rationale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackendCapabilities {
-    /// Backend exposes voice channels and supports joining them.
-    pub supports_voice: bool,
-    /// Backend exposes video channels.
-    pub supports_video: bool,
-    /// Backend supports direct messages.
-    pub supports_dms: bool,
-    /// Backend supports group DMs.
-    pub supports_groups: bool,
-    /// Backend allows the user to send / post messages (write access).
-    pub supports_send_messages: bool,
-    /// Backend reports user presence (online / idle / etc.).
-    pub supports_presence: bool,
-    /// Backend supports server-side message search.
-    pub supports_search: bool,
-    /// Backend supports message reactions.
-    pub supports_reactions: bool,
-    /// Backend reports typing indicators.
-    pub supports_typing_indicators: bool,
-    /// Backend supports file uploads attached to messages.
-    pub supports_file_upload: bool,
+    pub messaging: MessagingModel,
+    pub dms: DmSupport,
+    pub friends: FriendModel,
+    pub notifications: NotificationSupport,
+    pub voice: VoiceSupport,
+    pub presence: bool,
+    pub typing_indicators: bool,
+    pub reactions: bool,
+    pub search_messages: bool,
+    pub attachments: bool,
+    pub create_server: bool,
+    pub create_channel: bool,
 }
 
 impl BackendCapabilities {
-    /// All capabilities enabled — sensible default for full chat backends.
-    pub const ALL: Self = Self {
-        supports_voice: true,
-        supports_video: true,
-        supports_dms: true,
-        supports_groups: true,
-        supports_send_messages: true,
-        supports_presence: true,
-        supports_search: true,
-        supports_reactions: true,
-        supports_typing_indicators: true,
-        supports_file_upload: true,
+    /// Read-only feed (Hacker News). No writes, no social graph, no voice.
+    pub const READ_ONLY_FEED: Self = Self {
+        messaging: MessagingModel::ReadOnly,
+        dms: DmSupport::None,
+        friends: FriendModel::None,
+        notifications: NotificationSupport::None,
+        voice: VoiceSupport::None,
+        presence: false,
+        typing_indicators: false,
+        reactions: false,
+        search_messages: false,
+        attachments: false,
+        create_server: false,
+        create_channel: false,
     };
 
-    /// All capabilities disabled — sensible default for read-only feeds.
-    pub const NONE: Self = Self {
-        supports_voice: false,
-        supports_video: false,
-        supports_dms: false,
-        supports_groups: false,
-        supports_send_messages: false,
-        supports_presence: false,
-        supports_search: false,
-        supports_reactions: false,
-        supports_typing_indicators: false,
-        supports_file_upload: false,
+    /// Forum-style messaging with an inbox but no friends / DMs / voice (Lemmy).
+    pub const MESSAGING_NO_SOCIAL: Self = Self {
+        messaging: MessagingModel::Full,
+        dms: DmSupport::None,
+        friends: FriendModel::None,
+        notifications: NotificationSupport::Inbox,
+        voice: VoiceSupport::None,
+        presence: false,
+        typing_indicators: false,
+        reactions: false,
+        search_messages: true,
+        attachments: true,
+        create_server: false,
+        create_channel: false,
+    };
+
+    /// `true` if this backend should render with the forum-style UI layout:
+    /// no DMs, no voice, no friend graph. Drives badge hiding and channel-list
+    /// rendering in the host. Does not depend on the messaging model — both
+    /// read-only feeds (HN) and writeable forums (Lemmy) return `true`.
+    pub const fn is_forum_layout(&self) -> bool {
+        matches!(self.dms, DmSupport::None)
+            && matches!(self.voice, VoiceSupport::None)
+            && matches!(self.friends, FriendModel::None)
+    }
+
+    /// Full social chat (Discord, Matrix, Teams).
+    pub const FULL_SOCIAL_CHAT: Self = Self {
+        messaging: MessagingModel::Full,
+        dms: DmSupport::User,
+        friends: FriendModel::Full,
+        notifications: NotificationSupport::Activity,
+        voice: VoiceSupport::Full,
+        presence: true,
+        typing_indicators: true,
+        reactions: true,
+        search_messages: true,
+        attachments: true,
+        create_server: true,
+        create_channel: true,
     };
 }
 
 impl Default for BackendCapabilities {
     fn default() -> Self {
-        Self::ALL
+        Self::READ_ONLY_FEED
+    }
+}
+
+/// A single row in a capability summary — an FTL label key paired with the
+/// FTL value key describing how the backend supports that dimension.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CapabilityRow {
+    pub label_key: &'static str,
+    pub value_key: &'static str,
+}
+
+impl BackendCapabilities {
+    /// Return the "shape" rows (messaging model, DMs, friends, notifications,
+    /// voice) as FTL key pairs. Drives the capability details panel in
+    /// Settings > Plugins.
+    #[must_use]
+    pub fn shape_rows(&self) -> Vec<CapabilityRow> {
+        vec![
+            CapabilityRow {
+                label_key: "cap-label-messaging",
+                value_key: match self.messaging {
+                    MessagingModel::None => "cap-value-messaging-none",
+                    MessagingModel::ReadOnly => "cap-value-messaging-readonly",
+                    MessagingModel::Full => "cap-value-messaging-full",
+                },
+            },
+            CapabilityRow {
+                label_key: "cap-label-dms",
+                value_key: match self.dms {
+                    DmSupport::None => "cap-value-dms-none",
+                    DmSupport::User => "cap-value-dms-user",
+                },
+            },
+            CapabilityRow {
+                label_key: "cap-label-friends",
+                value_key: match self.friends {
+                    FriendModel::None => "cap-value-friends-none",
+                    FriendModel::Full => "cap-value-friends-full",
+                },
+            },
+            CapabilityRow {
+                label_key: "cap-label-notifications",
+                value_key: match self.notifications {
+                    NotificationSupport::None => "cap-value-notifications-none",
+                    NotificationSupport::Inbox => "cap-value-notifications-inbox",
+                    NotificationSupport::Activity => "cap-value-notifications-activity",
+                },
+            },
+            CapabilityRow {
+                label_key: "cap-label-voice",
+                value_key: match self.voice {
+                    VoiceSupport::None => "cap-value-voice-none",
+                    VoiceSupport::Full => "cap-value-voice-full",
+                },
+            },
+        ]
+    }
+
+    /// Return the boolean feature flags as `(label_key, supported)` pairs.
+    /// Pair order is stable so tests and UI can rely on it.
+    #[must_use]
+    pub fn feature_flags(&self) -> Vec<(&'static str, bool)> {
+        vec![
+            ("cap-flag-presence", self.presence),
+            ("cap-flag-typing", self.typing_indicators),
+            ("cap-flag-reactions", self.reactions),
+            ("cap-flag-search", self.search_messages),
+            ("cap-flag-attachments", self.attachments),
+            ("cap-flag-create-server", self.create_server),
+            ("cap-flag-create-channel", self.create_channel),
+        ]
     }
 }
 

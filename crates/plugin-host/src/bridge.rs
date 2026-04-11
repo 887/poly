@@ -110,18 +110,36 @@ pub fn from_wit_file_content(c: wit::FileContent) -> pc::FileContent {
 // ─── BackendCapabilities ───────────────────────────────────────────
 
 /// Convert WIT `BackendCapabilities` → poly-client `BackendCapabilities`.
+///
+/// The WIT interface still uses the legacy flat-bool shape. We project
+/// those bools onto the richer enum-based Rust shape conservatively:
+/// unknown axes (friends, notifications) default to `None`.
 pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::BackendCapabilities {
     pc::BackendCapabilities {
-        supports_voice: c.supports_voice,
-        supports_video: c.supports_video,
-        supports_dms: c.supports_dms,
-        supports_groups: c.supports_groups,
-        supports_send_messages: c.supports_send_messages,
-        supports_presence: c.supports_presence,
-        supports_search: c.supports_search,
-        supports_reactions: c.supports_reactions,
-        supports_typing_indicators: c.supports_typing_indicators,
-        supports_file_upload: c.supports_file_upload,
+        messaging: if c.supports_send_messages {
+            pc::MessagingModel::Full
+        } else {
+            pc::MessagingModel::ReadOnly
+        },
+        dms: if c.supports_dms {
+            pc::DmSupport::User
+        } else {
+            pc::DmSupport::None
+        },
+        friends: pc::FriendModel::None,
+        notifications: pc::NotificationSupport::None,
+        voice: if c.supports_voice {
+            pc::VoiceSupport::Full
+        } else {
+            pc::VoiceSupport::None
+        },
+        presence: c.supports_presence,
+        typing_indicators: c.supports_typing_indicators,
+        reactions: c.supports_reactions,
+        search_messages: c.supports_search,
+        attachments: c.supports_file_upload,
+        create_server: c.supports_groups,
+        create_channel: c.supports_groups,
     }
 }
 

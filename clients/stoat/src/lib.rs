@@ -946,12 +946,10 @@ impl ClientBackend for StoatClient {
                         Ok(WsMessage::Text(text)) => {
                             if let Ok(event_json) =
                                 serde_json::from_str::<serde_json::Value>(&text)
+                                && let Some(ev) = parse_bonfire_event(event_json)
+                                && tx.send(ev).await.is_err()
                             {
-                                if let Some(ev) = parse_bonfire_event(event_json) {
-                                    if tx.send(ev).await.is_err() {
-                                        break;
-                                    }
-                                }
+                                break;
                             }
                         }
                         Ok(WsMessage::Close(_)) | Err(_) => break,
@@ -975,6 +973,13 @@ impl ClientBackend for StoatClient {
 
     fn backend_name(&self) -> &str {
         "Stoat"
+    }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            voice: VoiceSupport::None,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        }
     }
 }
 

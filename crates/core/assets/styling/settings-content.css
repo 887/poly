@@ -633,6 +633,104 @@
     color: #a05eed;
 }
 
+/* Expandable capability panel under a plugin row */
+.plugin-row-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.plugin-row-wrap > .plugin-row {
+    cursor: pointer;
+}
+
+.plugin-disclosure-btn {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 6px;
+}
+
+.plugin-disclosure-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.plugin-capability-panel {
+    margin: 4px 0 12px 0;
+    padding: 14px 16px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--accent-color, #7289da);
+    font-size: 13px;
+}
+
+.plugin-capability-heading {
+    margin: 0 0 6px 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.plugin-capability-heading + * {
+    margin-bottom: 14px;
+}
+
+.plugin-capability-list {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 16px;
+    margin: 0 0 14px 0;
+}
+
+.plugin-capability-list dt {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.plugin-capability-list dd {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.plugin-capability-flags {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 14px 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 4px 16px;
+}
+
+.plugin-capability-flags .flag {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+}
+
+.plugin-capability-flags .flag .flag-label {
+    color: var(--text-primary);
+}
+
+.plugin-capability-flags .flag.on .flag-state {
+    color: #57c787;
+    font-weight: 600;
+}
+
+.plugin-capability-flags .flag.off .flag-state {
+    color: var(--text-tertiary, #888);
+    font-style: italic;
+}
+
 .plugin-wasm-section {
     margin-top: 8px;
     padding-top: 16px;

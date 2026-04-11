@@ -68,7 +68,7 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
     if let Some(s) = session {
         let name = s.user.display_name.clone();
         let id = s.user.id.clone();
-        let is_forum = s.backend.is_forum();
+        let is_forum = s.backend.uses_forum_layout();
         let status_text = if is_forum {
             String::new()
         } else if is_connected {

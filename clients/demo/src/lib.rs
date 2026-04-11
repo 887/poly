@@ -438,6 +438,10 @@ impl ClientBackend for DemoClient {
     fn backend_name(&self) -> &str {
         "Demo"
     }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::FULL_SOCIAL_CHAT
+    }
 }
 
 /// Second demo messenger client — the "dog" account (demo2 / 🐶).
@@ -704,6 +708,10 @@ impl ClientBackend for DemoClient2 {
     fn backend_name(&self) -> &str {
         "Demo (Dog)"
     }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::FULL_SOCIAL_CHAT
+    }
 }
 
 /// Third demo messenger client — the "lemming" account (demo_forum / 🐭).
@@ -927,5 +935,12 @@ impl ClientBackend for DemoClient3 {
 
     fn backend_name(&self) -> &str {
         "Demo Forum (Platypus)"
+    }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            reactions: true,
+            ..BackendCapabilities::MESSAGING_NO_SOCIAL
+        }
     }
 }

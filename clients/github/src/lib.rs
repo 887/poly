@@ -356,16 +356,9 @@ impl ClientBackend for GitHubClient {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            supports_voice: false,
-            supports_video: false,
-            supports_dms: false,
-            supports_groups: false,
-            supports_send_messages: false,
-            supports_presence: false,
-            supports_search: false,
-            supports_reactions: false,
-            supports_typing_indicators: false,
-            supports_file_upload: false,
+            notifications: NotificationSupport::Activity,
+            search_messages: true,
+            ..BackendCapabilities::READ_ONLY_FEED
         }
     }
 

@@ -329,4 +329,11 @@ impl ClientBackend for TeamsClient {
     fn backend_name(&self) -> &str {
         "Teams"
     }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            typing_indicators: false,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        }
+    }
 }

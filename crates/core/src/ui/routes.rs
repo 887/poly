@@ -62,6 +62,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, SettingsSection, View};
 use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::account::common::{FeatureUnsupportedPlaceholder, UnsupportedFeature};
 use crate::ui::account::common::chat_history::initial_message_query;
 use crate::ui::account::common::chat_history::request_restore_scroll_position_or_bottom;
 use dioxus::prelude::*;
@@ -917,6 +918,21 @@ fn ServerLayout() -> Element {
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
     let app_state: Signal<AppState> = use_context();
     let nav = navigator();
+    // Capability guard: backends without DMs (HN, Lemmy, GitHub) redirect
+    // to the root route, which `on_update` sends to the best active view.
+    let caps = poly_client::capabilities_for_slug(&backend);
+    if matches!(caps.dms, poly_client::DmSupport::None) {
+        let placeholder_slug = backend.clone();
+        use_effect(move || {
+            navigator().replace(Route::Root);
+        });
+        return rsx! {
+            FeatureUnsupportedPlaceholder {
+                backend_slug: placeholder_slug,
+                feature: UnsupportedFeature::Dms,
+            }
+        };
+    }
     let current_route = Route::DmsHome {
         backend: backend.clone(),
         instance_id: instance_id.clone(),
@@ -1340,7 +1356,7 @@ fn ServerHome(
         let is_voice = server_matches
             && cd.current_channel.as_ref().is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
         let is_forum = server_matches
-            && cd.current_server.as_ref().is_some_and(|s| s.backend.is_forum());
+            && cd.current_server.as_ref().is_some_and(|s| s.backend.uses_forum_layout());
         (is_voice, is_forum)
     };
 
@@ -1430,7 +1446,7 @@ fn ServerChat(
         .map(|ch| ch.channel_type);
 
     let is_forum_backend = chat_data.read().current_server.as_ref()
-        .is_some_and(|s| s.backend.is_forum());
+        .is_some_and(|s| s.backend.uses_forum_layout());
     let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
     let is_forum = is_forum_backend || matches!(channel_type, Some(ChannelType::Forum));
     let is_code = matches!(channel_type, Some(ChannelType::Code));
@@ -1449,9 +1465,26 @@ fn ServerChat(
 }
 
 /// Friends browser — tiled grid view.
+///
+/// Capability-gated: backends without a friends list (HN, Lemmy, GitHub)
+/// redirect to the account landing route instead of rendering an empty page.
 #[rustfmt::skip]
 #[component]
 fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let caps = poly_client::capabilities_for_slug(&backend);
+    if matches!(caps.friends, poly_client::FriendModel::None) {
+        let placeholder_slug = backend.clone();
+        use_effect(move || {
+            navigator().replace(Route::Root);
+        });
+        return rsx! {
+            FeatureUnsupportedPlaceholder {
+                backend_slug: placeholder_slug,
+                feature: UnsupportedFeature::Friends,
+            }
+        };
+    }
+    let _ = (backend, instance_id);
     rsx! {
         FriendsPanel { account_id }
     }
@@ -1466,12 +1499,28 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
 }
 
 /// Notifications feed — account-scoped route that preserves Bar 2 context.
+///
+/// Capability-gated: HN has no notification surface, so the route redirects
+/// to root rather than rendering an empty inbox.
 #[rustfmt::skip]
 #[component]
 fn NotificationsRoute(backend: String, instance_id: String, account_id: String) -> Element {
-    let _ = (backend, instance_id);
+    let caps = poly_client::capabilities_for_slug(&backend);
+    if matches!(caps.notifications, poly_client::NotificationSupport::None) {
+        let placeholder_slug = backend.clone();
+        use_effect(move || {
+            navigator().replace(Route::Root);
+        });
+        return rsx! {
+            FeatureUnsupportedPlaceholder {
+                backend_slug: placeholder_slug,
+                feature: UnsupportedFeature::Notifications,
+            }
+        };
+    }
+    let _ = instance_id;
     rsx! {
-        NotificationsView { account_id }
+        NotificationsView { account_id, backend_slug: backend }
     }
 }
 
@@ -1661,6 +1710,21 @@ fn PageNotFound(segments: Vec<String>) -> Element {
 #[rustfmt::skip]
 #[component]
 fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    // Backends that don't support creating a server (Matrix, Lemmy, HN…)
+    // redirect to root so the user never lands on a broken form.
+    let caps = poly_client::capabilities_for_slug(&backend);
+    if !caps.create_server {
+        let placeholder_slug = backend.clone();
+        use_effect(move || {
+            navigator().replace(Route::Root);
+        });
+        return rsx! {
+            FeatureUnsupportedPlaceholder {
+                backend_slug: placeholder_slug,
+                feature: UnsupportedFeature::CreateServer,
+            }
+        };
+    }
     rsx! {
         super::create_server::CreateServerPage { backend, instance_id, account_id }
     }

@@ -55,6 +55,9 @@ impl TestServer {
         let config = Arc::new(Config {
             bind_addr: addr.clone(),
             db_path,
+            surreal_url: "ws://localhost:8000".into(),
+            surreal_user: "root".into(),
+            surreal_pass: "root".into(),
             server_name: "Integration Test Server".into(),
             invite_only: false,
             jwt_secret: "test-secret-key".into(),

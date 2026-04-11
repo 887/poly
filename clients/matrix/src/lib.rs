@@ -13,6 +13,10 @@
 //!
 //! DECISION(D21): WASM Plugin Backends.
 
+// TODO: API response structs define the full Matrix wire format for use by
+// future handlers — tolerate the dead_code lint at the crate level for now.
+#![allow(dead_code)]
+
 #[cfg(feature = "native")]
 mod api;
 
@@ -596,6 +600,14 @@ impl ClientBackend for MatrixClient {
 
     fn backend_name(&self) -> &str {
         "Matrix"
+    }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            voice: VoiceSupport::None,
+            create_server: false,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        }
     }
 }
 

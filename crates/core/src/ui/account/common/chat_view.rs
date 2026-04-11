@@ -3877,9 +3877,38 @@ fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing
 }
 
 fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
+    // Capability-derived read-only check. For read-only feeds (HN, GitHub)
+    // the backend doesn't accept writes — show an explicit notice instead
+    // of a textarea that will always fail on send.
+    let backend_slug = ctx
+        .current_channel
+        .as_ref()
+        .map(|_| ctx.current_server.as_ref().map(|s| s.backend.slug().to_string()))
+        .flatten()
+        .or_else(|| {
+            ctx.dm_user
+                .as_ref()
+                .map(|u| u.backend.slug().to_string())
+        });
+    let is_read_only = backend_slug
+        .as_deref()
+        .map(|slug| {
+            matches!(
+                poly_client::capabilities_for_slug(slug).messaging,
+                poly_client::MessagingModel::ReadOnly | poly_client::MessagingModel::None,
+            )
+        })
+        .unwrap_or(false);
+
     rsx! {
         div { class: "message-input-area",
-            if ctx.channel_id.is_some() {
+            if is_read_only {
+                div {
+                    class: "message-input-disabled",
+                    "data-testid": "composer-readonly-notice",
+                    {t("composer-read-only-notice")}
+                }
+            } else if ctx.channel_id.is_some() {
                 {render_message_input_enabled(ctx)}
             } else {
                 div { class: "message-input-disabled", {t("chat-select-channel")} }

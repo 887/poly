@@ -3,7 +3,10 @@
 use serde_json::{Value, json};
 
 use crate::state::BackendPool;
-use poly_client::{AuthCredentials, BackendType, ClientBackend, MessageContent, MessageQuery, PluginManifest};
+use poly_client::{
+    AuthCredentials, BackendType, ClientBackend, DmSupport, FriendModel, MessageContent,
+    MessageQuery, MessagingModel, NotificationSupport, PluginManifest, VoiceSupport,
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -83,6 +86,20 @@ pub fn tool_list() -> Vec<Value> {
                             declared manifest (description, external programs, HTTP hosts, homepage). \
                             Useful for verifying which backends are available without needing to log in.",
             "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "list_plugin_tools",
+            "description": "Return the MCP tools this MCP server is willing to honour for a given \
+                            backend slug — i.e. the subset of `tools/list` that the backend's \
+                            declared capabilities actually support. Call this first to avoid \
+                            invoking `list_friends` on Hacker News etc.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string", "description": "Backend slug (e.g. hackernews, lemmy, discord)" }
+                },
+                "required": ["backend"]
+            }
         }),
 
         // Read tools
@@ -229,6 +246,7 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool) -> Value
         "logout" => handle_logout(args, pool),
         "list_accounts" => ok_result(serde_json::to_string_pretty(&pool.list_accounts()).unwrap_or_default()),
         "list_plugins" => handle_list_plugins(),
+        "list_plugin_tools" => handle_list_plugin_tools(args),
 
         "list_servers" => handle_list_servers(args, pool).await,
         "list_channels" => handle_list_channels(args, pool).await,
@@ -387,6 +405,17 @@ async fn handle_list_dms(args: &Value, pool: &BackendPool) -> Value {
 }
 
 async fn handle_list_friends(args: &Value, pool: &BackendPool) -> Value {
+    // Capability guard: backends with no friends concept (HN, Lemmy, GitHub)
+    // return an explicit NotSupported error instead of `Ok([])`, which would
+    // silently mislead the caller into thinking the user has zero friends.
+    if let Some(slug) = str_arg(args, "backend") {
+        let caps = poly_client::capabilities_for_slug(slug);
+        if matches!(caps.friends, FriendModel::None) {
+            return err_result(format!(
+                "list_friends not supported: backend '{slug}' has no friends concept"
+            ));
+        }
+    }
     let entry = match find_backend(args, pool) {
         Ok(e) => e,
         Err(v) => return v,
@@ -413,6 +442,17 @@ async fn handle_get_user(args: &Value, pool: &BackendPool) -> Value {
 }
 
 async fn handle_send_message(args: &Value, pool: &BackendPool) -> Value {
+    // Capability guard: backends without Full messaging (HN, GitHub) return
+    // NotSupported up-front. Prevents the MCP from plumbing writes into a
+    // backend whose API physically cannot accept them.
+    if let Some(slug) = str_arg(args, "backend") {
+        let caps = poly_client::capabilities_for_slug(slug);
+        if !matches!(caps.messaging, MessagingModel::Full) {
+            return err_result(format!(
+                "send_message not supported: backend '{slug}' is read-only"
+            ));
+        }
+    }
     let entry = match find_backend(args, pool) {
         Ok(e) => e,
         Err(v) => return v,
@@ -433,6 +473,43 @@ async fn handle_send_message(args: &Value, pool: &BackendPool) -> Value {
         Ok(msg) => ok_result(serde_json::to_string_pretty(&msg).unwrap_or_default()),
         Err(e) => err_result(format!("send_message failed: {e}")),
     }
+}
+
+/// Compute the subset of MCP tool names that are honest for a backend slug.
+///
+/// Read-only backends drop `send_message`. Backends with no DMs drop
+/// `list_dms`. Backends with no friends drop `list_friends`. Backends with
+/// no notifications drop `list_notifications`. The client uses this to
+/// pick the narrowest sensible tool surface for an account.
+fn handle_list_plugin_tools(args: &Value) -> Value {
+    let Some(slug) = str_arg(args, "backend") else {
+        return err_result("missing 'backend'");
+    };
+    let caps = poly_client::capabilities_for_slug(slug);
+    let mut tools: Vec<&'static str> = vec![
+        "list_plugins",
+        "list_accounts",
+        "list_servers",
+        "list_channels",
+        "get_messages",
+        "get_user",
+    ];
+    if matches!(caps.messaging, MessagingModel::Full) {
+        tools.push("send_message");
+    }
+    if !matches!(caps.dms, DmSupport::None) {
+        tools.push("list_dms");
+    }
+    if !matches!(caps.friends, FriendModel::None) {
+        tools.push("list_friends");
+    }
+    if !matches!(caps.notifications, NotificationSupport::None) {
+        tools.push("list_notifications");
+    }
+    if matches!(caps.voice, VoiceSupport::Full) {
+        tools.push("list_voice_participants");
+    }
+    ok_result(serde_json::to_string_pretty(&tools).unwrap_or_default())
 }
 
 // ─── List compiled-in plugins ────────────────────────────────────────────────

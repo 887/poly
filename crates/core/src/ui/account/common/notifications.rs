@@ -19,10 +19,13 @@ use crate::state::chat_data::backend_badge;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
-use poly_client::{BackendType, NotificationKind};
+use poly_client::{
+    BackendCapabilities, BackendType, FriendModel, NotificationKind, NotificationSupport,
+    VoiceSupport,
+};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum NotificationMenuFilter {
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum NotificationMenuFilter {
     All,
     Mentions,
     FriendRequests,
@@ -53,15 +56,53 @@ impl NotificationMenuFilter {
             Self::Other => "notifications-filter-other",
         }
     }
+
+    /// True if this filter is meaningful for a backend with the given capabilities.
+    ///
+    /// The registry is derived from `BackendCapabilities` so a new plugin can't
+    /// accidentally grow a "Voice invites" filter just by showing up in the account
+    /// list — the capability declaration is the single source of truth.
+    pub fn supported_by(self, caps: &BackendCapabilities) -> bool {
+        if matches!(caps.notifications, NotificationSupport::None) {
+            return false;
+        }
+        match self {
+            Self::All | Self::Mentions | Self::Other => true,
+            Self::FriendRequests => !matches!(caps.friends, FriendModel::None),
+            Self::ServerInvites => caps.create_server,
+            Self::VoiceInvites => matches!(caps.voice, VoiceSupport::Full),
+        }
+    }
+}
+
+/// Build the sidebar filter list honored for a given backend slug.
+///
+/// Kept as a pub(crate) free function so the inline regression test below
+/// can pin the matrix without instantiating the component.
+pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
+    let caps = poly_client::capabilities_for_slug(slug);
+    [
+        NotificationMenuFilter::All,
+        NotificationMenuFilter::Mentions,
+        NotificationMenuFilter::FriendRequests,
+        NotificationMenuFilter::ServerInvites,
+        NotificationMenuFilter::VoiceInvites,
+        NotificationMenuFilter::Other,
+    ]
+    .into_iter()
+    .filter(|f| f.supported_by(&caps))
+    .collect()
 }
 
 /// Notifications view component.
 ///
 /// Shows notifications scoped to the given account, with filtering by kind
-/// and mark-read actions.
+/// and mark-read actions. `backend_slug` drives the capability-based filter
+/// registry (WP-5) — e.g., GitHub hides FriendRequests/ServerInvites/VoiceInvites
+/// because its BackendCapabilities declares no friends/servers/voice.
 #[rustfmt::skip]
 #[component]
-pub fn NotificationsView(account_id: String) -> Element {
+pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
     let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
     let notifications = chat_data.read().notifications.iter()
@@ -80,14 +121,7 @@ pub fn NotificationsView(account_id: String) -> Element {
         .collect();
 
     let total_count = notifications.len();
-    let sidebar_filters = [
-        NotificationMenuFilter::All,
-        NotificationMenuFilter::Mentions,
-        NotificationMenuFilter::FriendRequests,
-        NotificationMenuFilter::ServerInvites,
-        NotificationMenuFilter::VoiceInvites,
-        NotificationMenuFilter::Other,
-    ];
+    let sidebar_filters = filters_for_backend(&backend_slug);
 
     rsx! {
         SplitMenuShell {
@@ -499,5 +533,91 @@ async fn handle_friend_request_action(
                 cd.friends.entry(account_id.clone()).or_default().push(friend);
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn contains(filters: &[NotificationMenuFilter], f: NotificationMenuFilter) -> bool {
+        filters.contains(&f)
+    }
+
+    #[test]
+    fn discord_shows_all_filters() {
+        let filters = filters_for_backend("discord");
+        assert!(contains(&filters, NotificationMenuFilter::All));
+        assert!(contains(&filters, NotificationMenuFilter::Mentions));
+        assert!(contains(&filters, NotificationMenuFilter::FriendRequests));
+        assert!(contains(&filters, NotificationMenuFilter::ServerInvites));
+        assert!(contains(&filters, NotificationMenuFilter::VoiceInvites));
+        assert!(contains(&filters, NotificationMenuFilter::Other));
+    }
+
+    #[test]
+    fn stoat_omits_voice_invites() {
+        // Stoat is a full social chat but has no voice support, so voice invites
+        // must never show up in its notification sidebar.
+        let filters = filters_for_backend("stoat");
+        assert!(contains(&filters, NotificationMenuFilter::FriendRequests));
+        assert!(contains(&filters, NotificationMenuFilter::ServerInvites));
+        assert!(
+            !contains(&filters, NotificationMenuFilter::VoiceInvites),
+            "stoat has no voice — voice invites must be hidden"
+        );
+    }
+
+    #[test]
+    fn matrix_omits_voice_invites() {
+        // Our current Matrix declaration has VoiceSupport::None.
+        let filters = filters_for_backend("matrix");
+        assert!(
+            !contains(&filters, NotificationMenuFilter::VoiceInvites),
+            "matrix has no voice — voice invites must be hidden"
+        );
+    }
+
+    #[test]
+    fn github_shows_only_read_activity_filters() {
+        // GitHub is read-only with Activity-style notifications: no friends,
+        // no create_server, no voice — the sidebar should collapse down.
+        let filters = filters_for_backend("github");
+        assert!(contains(&filters, NotificationMenuFilter::All));
+        assert!(contains(&filters, NotificationMenuFilter::Mentions));
+        assert!(contains(&filters, NotificationMenuFilter::Other));
+        assert!(!contains(&filters, NotificationMenuFilter::FriendRequests));
+        assert!(!contains(&filters, NotificationMenuFilter::ServerInvites));
+        assert!(!contains(&filters, NotificationMenuFilter::VoiceInvites));
+    }
+
+    #[test]
+    fn hackernews_has_no_filters() {
+        // HN has NotificationSupport::None, so the entire sidebar should be empty.
+        // (In practice the NotificationsRoute also redirects HN away, but this is
+        // the defensive last line of defence.)
+        let filters = filters_for_backend("hackernews");
+        assert!(
+            filters.is_empty(),
+            "HN has NotificationSupport::None — filters: {filters:?}"
+        );
+    }
+
+    #[test]
+    fn lemmy_shows_mentions_no_social_invites() {
+        // Lemmy has notifications (private messages / mentions) but no friends
+        // and no create_server in Poly's declaration.
+        let filters = filters_for_backend("lemmy");
+        assert!(contains(&filters, NotificationMenuFilter::Mentions));
+        assert!(!contains(&filters, NotificationMenuFilter::FriendRequests));
+        assert!(!contains(&filters, NotificationMenuFilter::VoiceInvites));
+    }
+
+    #[test]
+    fn unknown_slug_has_no_filters() {
+        // Default capability preset is READ_ONLY_FEED → NotificationSupport::None.
+        let filters = filters_for_backend("definitely-not-a-real-plugin");
+        assert!(filters.is_empty());
     }
 }
