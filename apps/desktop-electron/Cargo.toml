@@ -15,16 +15,24 @@ path = "src/main.rs"
 # --platform web --fullstack @server --features server` so the native
 # server binary pulls the axum + poly-host stack.
 default = ["dev-plugins", "web"]
-# `dev-plugins` mirrors apps/web — opt-in Discord/Teams via poly-core. Kept
-# as a no-op here (poly-core is a workspace dep without those features by
-# default) so the shared MCP command line `--features dev-plugins,web`
-# works for every shell.
-dev-plugins = []
+# Mirrors apps/web: opt-in Discord/Teams surfaced under WASM plugins.
+# Stripped in production builds via `--no-default-features --features production`.
+dev-plugins = ["poly-core/discord", "poly-core/teams"]
+production = []
 web = ["dioxus/web", "dioxus/fullstack"]
 server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
 
 [dependencies]
-poly-core = { workspace = true, features = ["demo", "storage-host-bridge"] }
+poly-core = { workspace = true, features = [
+    "demo",
+    "server",
+    "stoat",
+    "lemmy",
+    "hackernews",
+    "matrix",
+    "github",
+    "storage-host-bridge",
+] }
 dioxus = { workspace = true }
 tracing = { workspace = true }
 

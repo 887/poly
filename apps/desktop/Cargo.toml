@@ -23,9 +23,10 @@ desktop-native = ["dioxus/desktop"]
 # activates `dioxus-web/hydrate` so the client hydrates the SSR output
 # from the fullstack server instead of re-rendering alongside it.
 web = ["dioxus/web", "dioxus/fullstack"]
-# No-op alias so the shared MCP command line `--features dev-plugins,web`
-# works. The desktop app doesn't bundle Discord/Teams today.
-dev-plugins = []
+# Mirrors apps/web: opt-in Discord/Teams surfaced under WASM plugins.
+# Stripped in production builds via `--no-default-features --features production`.
+dev-plugins = ["poly-core/discord", "poly-core/teams"]
+production = []
 server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
 
 [dependencies]
@@ -33,7 +34,17 @@ server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:poly-host", "dep
 # - native build talks to `gh` directly via tokio::process
 # - wasm build (run inside the apps/desktop-web Wry shell) calls the
 #   localhost /gh subprocess bridge that the shell exposes on port 9223
-poly-core = { workspace = true, features = ["demo", "native-nav", "github", "storage-host-bridge"] }
+poly-core = { workspace = true, features = [
+    "demo",
+    "server",
+    "stoat",
+    "lemmy",
+    "hackernews",
+    "matrix",
+    "github",
+    "native-nav",
+    "storage-host-bridge",
+] }
 dioxus = { workspace = true }
 tracing = { workspace = true }
 
