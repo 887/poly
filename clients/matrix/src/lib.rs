@@ -44,7 +44,9 @@ pub use config::{DEFAULT_HOMESERVER_URL, MatrixAuthInput, MatrixConfig, MatrixCo
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use futures::stream::{self, Stream};
+use futures::stream::Stream;
+#[cfg(all(feature = "native", target_arch = "wasm32"))]
+use futures::stream;
 #[cfg(feature = "native")]
 use http::{MatrixHttpClient, MatrixSessionState};
 #[cfg(feature = "native")]
@@ -139,6 +141,16 @@ impl MatrixClient {
         self.http
             .session()
             .map(|s| s.user_id)
+            .ok_or_else(|| ClientError::AuthFailed("not logged in".into()))
+    }
+
+    /// The session/device ID used as the account key in the app.
+    /// Must match `Session::id` (= `device_id`) so sidebar lookups find the
+    /// right session.
+    fn current_account_id(&self) -> ClientResult<String> {
+        self.http
+            .session()
+            .map(|s| s.device_id)
             .ok_or_else(|| ClientError::AuthFailed("not logged in".into()))
     }
 
@@ -293,7 +305,8 @@ impl ClientBackend for MatrixClient {
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
         let joined = self.http.fetch_joined_rooms().await?;
-        let account_id = self.current_user_id()?;
+        let account_id = self.current_account_id()?;
+        let display_name = self.current_user_id().unwrap_or_else(|_| account_id.clone());
         let mut servers = Vec::new();
 
         for room_id in &joined.joined_rooms {
@@ -309,7 +322,7 @@ impl ClientBackend for MatrixClient {
                     categories: vec![],
                     backend: BackendType::from("matrix"),
                     account_id: account_id.clone(),
-                    account_display_name: account_id.clone(),
+                    account_display_name: display_name.clone(),
                 });
             }
         }
@@ -319,7 +332,8 @@ impl ClientBackend for MatrixClient {
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
         let state = self.http.fetch_room_state(id).await?;
-        let account_id = self.current_user_id()?;
+        let account_id = self.current_account_id()?;
+        let display_name = self.current_user_id().unwrap_or_else(|_| account_id.clone());
 
         Ok(Server {
             id: id.to_string(),
@@ -331,7 +345,7 @@ impl ClientBackend for MatrixClient {
             categories: vec![],
             backend: BackendType::from("matrix"),
             account_id: account_id.clone(),
-            account_display_name: account_id,
+            account_display_name: display_name,
         })
     }
 
@@ -591,7 +605,87 @@ impl ClientBackend for MatrixClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        Box::pin(stream::empty())
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use tokio::sync::mpsc;
+            let http = self.http.clone();
+            let (tx, rx) = mpsc::channel::<ClientEvent>(128);
+
+            tokio::spawn(async move {
+                let mut since = http.sync_next_batch();
+                loop {
+                    match http.sync(since.as_deref(), Some(30000)).await {
+                        Ok(response) => {
+                            // Update the batch token
+                            since = Some(response.next_batch.clone());
+                            http.set_sync_next_batch(response.next_batch);
+
+                            // Process joined rooms
+                            if let Some(rooms) = &response.rooms
+                                && let Some(joined) = &rooms.join {
+                                    for (room_id, room) in joined {
+                                        // Timeline events → MessageReceived
+                                        if let Some(timeline) = &room.timeline {
+                                            for event in &timeline.events {
+                                                if let Some(msg) =
+                                                    MatrixClient::room_event_to_message(event)
+                                                {
+                                                    let _ = tx
+                                                        .send(ClientEvent::MessageReceived {
+                                                            channel_id: room_id.clone(),
+                                                            message: msg,
+                                                        })
+                                                        .await;
+                                                }
+                                            }
+                                        }
+                                        // Ephemeral events → typing
+                                        if let Some(ephemeral) = &room.ephemeral {
+                                            for ev in &ephemeral.events {
+                                                if ev
+                                                    .get("type")
+                                                    .and_then(|t| t.as_str())
+                                                    == Some("m.typing")
+                                                    && let Some(user_ids) = ev
+                                                        .get("content")
+                                                        .and_then(|c| c.get("user_ids"))
+                                                        .and_then(|u| u.as_array())
+                                                {
+                                                    for uid in user_ids {
+                                                        if let Some(user_id) = uid.as_str() {
+                                                            let _ = tx
+                                                                .send(
+                                                                    ClientEvent::TypingStarted {
+                                                                        channel_id: room_id
+                                                                            .clone(),
+                                                                        user_id: user_id
+                                                                            .to_string(),
+                                                                        timestamp: chrono::Utc::now(),
+                                                                    },
+                                                                )
+                                                                .await;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Matrix sync error: {e:?}");
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        }
+                    }
+                }
+            });
+
+            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Box::pin(stream::empty())
+        }
     }
 
     fn backend_type(&self) -> BackendType {

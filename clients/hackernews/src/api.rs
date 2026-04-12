@@ -141,10 +141,9 @@ impl HnApiClient {
             let futures: Vec<_> = chunk.iter().map(|&id| self.get_item(id)).collect();
             let chunk_results = future::join_all(futures).await;
             for result in chunk_results {
-                match result? {
-                    Some(item) => results.push(item),
-                    None => {} // null items (deleted/not found) are skipped
-                }
+                if let Some(item) = result? {
+                    results.push(item);
+                } // null items (deleted/not found) are skipped
             }
         }
 

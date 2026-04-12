@@ -13,7 +13,8 @@
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-use poly_client::{AuthCredentials, BackendType, ClientBackend, MessageContent, MessageQuery};
+use futures::StreamExt;
+use poly_client::{AuthCredentials, BackendType, ClientBackend, ClientEvent, MessageContent, MessageQuery};
 use poly_matrix::MatrixClient;
 use poly_test_matrix::{MatrixState, router};
 
@@ -650,4 +651,79 @@ async fn test_matrix_client_backend_event_stream_returns_stream() {
     // event_stream() must not panic — box it and drop it immediately
     let _stream = client.event_stream();
     drop(_stream);
+}
+
+#[tokio::test]
+async fn test_event_stream_receives_sent_message() {
+    let srv = TestServer::start().await;
+
+    // Authenticate two clients: Axolotl listens, Owl sends.
+    let (_axolotl_id, axolotl_token) = get_test_token(&srv.base_url, "Axolotl").await;
+    let (_owl_id, owl_token) = get_test_token(&srv.base_url, "Owl").await;
+
+    let mut axolotl = make_client(&srv.base_url);
+    axolotl
+        .authenticate(AuthCredentials::Token(axolotl_token))
+        .await
+        .expect("authenticate axolotl");
+
+    let mut owl = make_client(&srv.base_url);
+    owl.authenticate(AuthCredentials::Token(owl_token))
+        .await
+        .expect("authenticate owl");
+
+    // Send a message as Owl to !general1:localhost before starting the stream,
+    // so it will be part of the first (or a subsequent) sync response.
+    let body = "event-stream integration test message";
+    owl.send_message(
+        "!general1:localhost",
+        MessageContent::Text(body.to_string()),
+    )
+    .await
+    .expect("owl send_message");
+
+    // Obtain Axolotl's event stream after the message has been sent.
+    // The initial sync (since=0) will include all timeline events — both seeded
+    // and the one Owl just sent.  Scan every event for a matching MessageReceived.
+    let mut stream = axolotl.event_stream();
+
+    // Read from the stream with a 5-second timeout, skipping non-matching events
+    // (seeded messages etc.) until a MessageReceived for !general1:localhost with
+    // the right body arrives.
+    let found = loop {
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            stream.next(),
+        )
+        .await;
+
+        match result {
+            Err(_elapsed) => {
+                // Timed out waiting for the event.
+                break false;
+            }
+            Ok(None) => {
+                // Stream ended.
+                break false;
+            }
+            Ok(Some(ClientEvent::MessageReceived { channel_id, message })) => {
+                if channel_id == "!general1:localhost" {
+                    if let MessageContent::Text(ref text) = message.content {
+                        if text == body {
+                            break true;
+                        }
+                    }
+                }
+                // Different event (seeded or wrong channel) — keep scanning.
+            }
+            Ok(Some(_other)) => {
+                // Different event type — keep scanning.
+            }
+        }
+    };
+
+    assert!(
+        found,
+        "Did not receive MessageReceived for !general1:localhost with body '{body}' within 2 s"
+    );
 }

@@ -384,7 +384,7 @@ fn ServerBanner(
         .unwrap_or_default();
     let supports_channels_roles = current_server
         .as_ref()
-        .is_some_and(|server| server.backend.to_string() == "demo");
+        .is_some_and(|server| server.backend.as_str() == "demo");
 
     rsx! {
         div { class: "server-banner-sidebar",

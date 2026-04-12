@@ -214,7 +214,7 @@ impl GhCli {
         let http = HttpClient::new();
         let mut req = http.get(&url);
         if let Some(token) = &self.http_token {
-            req = req.header("Authorization", &format!("token {}", token));
+            req = req.header("Authorization", format!("token {}", token));
         }
         let response = req
             .send()

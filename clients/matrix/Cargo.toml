@@ -15,6 +15,7 @@ native = [
     "dep:async-trait",
     "dep:futures",
     "dep:tokio",
+    "dep:tokio-stream",
     "dep:serde",
     "dep:serde_json",
     "dep:chrono",
@@ -33,6 +34,7 @@ dioxus = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["js"] }
 futures = { workspace = true, optional = true }
@@ -51,6 +53,7 @@ axum = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "time", "net"] }
+futures = { workspace = true }
 poly-test-matrix = { path = "../../servers/test-matrix" }
 poly-test-common = { path = "../../servers/test-common" }
 

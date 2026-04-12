@@ -1161,16 +1161,14 @@ pub(crate) async fn restore_test_accounts(
         // Re-apply the bundled animal portrait overlay, same as the
         // live signup flow in `build_on_complete`.
         #[cfg(feature = "demo")]
-        if session.user.avatar_url.is_none()
+        if (session.user.avatar_url.is_none()
             || session
                 .user
                 .avatar_url
                 .as_deref()
-                .is_some_and(|u| !u.starts_with("http"))
-        {
-            if let Some(url) = poly_demo::data::test_animal_avatar(&session.user.display_name) {
-                session.user.avatar_url = Some(url);
-            }
+                .is_some_and(|u| !u.starts_with("http")))
+            && let Some(url) = poly_demo::data::test_animal_avatar(&session.user.display_name) {
+            session.user.avatar_url = Some(url);
         }
         let account_id = session.id.clone();
         // Guard against duplicate account IDs (e.g. if another restore path

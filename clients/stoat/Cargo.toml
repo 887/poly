@@ -73,5 +73,9 @@ path = "tests/integration_test.rs"
 name = "realtime"
 path = "tests/realtime.rs"
 
+[[test]]
+name = "spec_validation"
+path = "tests/spec_validation.rs"
+
 [lints]
 workspace = true

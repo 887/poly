@@ -264,8 +264,8 @@ impl ClientManager {
         self.sessions
             .iter()
             .filter(|(_, s)| {
-                s.backend.to_string() == "demo"
-                    || s.backend.to_string() == "demo_forum"
+                let slug = s.backend.as_str();
+                slug == "demo" || slug == "demo_forum"
             })
             .map(|(id, _)| id.clone())
             .collect()

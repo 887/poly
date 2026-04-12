@@ -458,6 +458,24 @@ impl MatrixHttpClient {
         response.json().await.map_err(Self::network_error)
     }
 
+    /// Get the current sync batch token.
+    #[must_use]
+    pub fn sync_next_batch(&self) -> Option<String> {
+        self.session
+            .read()
+            .ok()
+            .and_then(|s| s.as_ref().and_then(|s| s.sync_next_batch.clone()))
+    }
+
+    /// Update the sync batch token after a successful sync.
+    pub fn set_sync_next_batch(&self, token: String) {
+        if let Ok(mut guard) = self.session.write()
+            && let Some(state) = guard.as_mut()
+        {
+            state.sync_next_batch = Some(token);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Error handling
     // -----------------------------------------------------------------------

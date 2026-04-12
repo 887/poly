@@ -67,7 +67,11 @@ impl MatrixConfig {
     /// and deduplication in multi-account scenarios.
     #[must_use]
     pub fn instance_id(&self) -> String {
-        self.homeserver_url.clone()
+        self.homeserver_url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .trim_end_matches('/')
+            .replace('/', "~")
     }
 }
 

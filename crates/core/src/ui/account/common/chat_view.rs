@@ -3883,8 +3883,7 @@ fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
     let backend_slug = ctx
         .current_channel
         .as_ref()
-        .map(|_| ctx.current_server.as_ref().map(|s| s.backend.slug().to_string()))
-        .flatten()
+        .and_then(|_| ctx.current_server.as_ref().map(|s| s.backend.slug().to_string()))
         .or_else(|| {
             ctx.dm_user
                 .as_ref()

@@ -18,15 +18,16 @@ pub async fn test_authenticate(
     use poly_host_bridge::http::HttpClient;
     let http = HttpClient::new();
     let resp = http
-        .post(&format!("{}/test/auth/token", base_url))
+        .post(format!("{}/test/auth/token", base_url))
         .header("Content-Type", "application/json")
         .body(format!(r#"{{"username":"{}"}}"#, username))
         .send()
         .await
         .map_err(|e| e.to_string())?;
     let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    let token = body["token"]
-        .as_str()
+    let token = body
+        .get("token")
+        .and_then(|t| t.as_str())
         .ok_or_else(|| "no token in response".to_string())?
         .to_string();
 

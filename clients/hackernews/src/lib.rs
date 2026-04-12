@@ -213,7 +213,11 @@ impl ClientBackend for HackerNewsClient {
         if let Some(ref before_id) = query.before {
             if let Ok(before_num) = before_id.parse::<u64>() {
                 if let Some(pos) = ids.iter().position(|&id| id == before_num) {
-                    ids = ids[pos + 1..].to_vec();
+                    if pos + 1 < ids.len() {
+                        ids = ids[pos + 1..].to_vec();
+                    } else {
+                        ids.clear();
+                    }
                 }
             }
         }
@@ -340,7 +344,7 @@ impl HackerNewsClient {
 
         // Collected (item, parent_id) pairs.
         let mut collected: Vec<(types::HnItem, u64)> = Vec::new();
-        let max = limit.max(1).min(300);
+        let max = limit.clamp(1, 300);
 
         while !queue.is_empty() && collected.len() < max {
             let remaining = max - collected.len();

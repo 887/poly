@@ -27,14 +27,16 @@ impl DiscordHttpClient {
     }
 
     pub fn set_token(&self, token: String) {
-        *self.token.lock().expect("token lock") = Some(token);
+        if let Ok(mut lock) = self.token.lock() {
+            *lock = Some(token);
+        }
     }
 
     fn token_header(&self) -> String {
         self.token
             .lock()
-            .expect("token lock")
-            .clone()
+            .ok()
+            .and_then(|lock| lock.clone())
             .map(|t| format!("Bot {t}"))
             .unwrap_or_default()
     }
