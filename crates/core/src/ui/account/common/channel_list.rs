@@ -784,7 +784,11 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     for ch in channels.iter().filter(|c| c.server_id == server_id) {
                         {
                             let ch_id = ch.id.clone();
-                            let is_active = ch_id == current_channel_id;
+                            // Use nav.selected_channel (updated synchronously by
+                            // sync_route_to_app_state) instead of chat_data.current_channel
+                            // which lags behind the route on same-server channel switches.
+                            let nav_selected = app_state.read().nav.selected_channel.clone().unwrap_or_default();
+                            let is_active = ch_id == nav_selected;
                             let icon = match ch.channel_type {
                                 ChannelType::Forum => {
                                     if ch.name.contains("pull") { "🔀" } else { "🐛" }
