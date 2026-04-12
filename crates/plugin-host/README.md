@@ -54,7 +54,7 @@ cargo test -p poly-plugin-loader-tests --all-features -- --nocapture
 
 ## Decision
 
-**DECISION(D22):** Dynamic linking boundary for wasmtime isolation. See `docs/phase-2.14-plan.md`.
+**DECISION(D22):** Dynamic linking boundary for wasmtime isolation. See `docs/1-architecture/1.1-wasm-plugin-system.md`.
 
 ## License
 
