@@ -69,6 +69,18 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
     var TIMEOUT = {timeout};
     window.__polyLastHeartbeat = Date.now();
 
+    // Gaps longer than this are OS suspend/resume, not real hangs.
+    var MAX_REAL_HANG = 60000;
+
+    // Reset heartbeat on visibility change (resume from suspend, tab
+    // switch). Without this, Date.now() jumps across the suspend and
+    // the watchdog sees a fake multi-hour "hang".
+    document.addEventListener('visibilitychange', function() {{
+        if (document.visibilityState === 'visible') {{
+            window.__polyLastHeartbeat = Date.now();
+        }}
+    }});
+
     try {{
         var workerSrc = 'setInterval(function(){{postMessage(1)}}, 500);';
         var blob = new Blob([workerSrc], {{ type: 'application/javascript' }});
@@ -77,27 +89,17 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
             var now = Date.now();
             var gap = now - window.__polyLastHeartbeat;
             window.__polyLastHeartbeat = now;
-            // If the main thread was frozen for longer than the timeout,
-            // record a retroactive hang and surface the overlay now that
-            // it's running again.
-            if (gap > TIMEOUT) {{
+            if (gap > TIMEOUT && gap < MAX_REAL_HANG) {{
                 showHangOverlay(gap);
             }}
         }};
     }} catch (e) {{
-        // Worker creation failed (CSP, private mode). Fall back to a
-        // simple interval — won't catch true deadlocks but will catch
-        // multi-second synchronous work that blocks user interaction.
         console.warn('Poly interaction watchdog: worker unavailable', e);
     }}
 
-    // Safety net: a main-thread interval that also checks elapsed time.
-    // When the main thread resumes after a freeze, this interval fires
-    // next tick and notices the gap even if the worker message hasn't
-    // arrived yet (worker messages are queued behind the event loop).
     setInterval(function() {{
         var gap = Date.now() - window.__polyLastHeartbeat;
-        if (gap > TIMEOUT) {{
+        if (gap > TIMEOUT && gap < MAX_REAL_HANG) {{
             showHangOverlay(gap);
         }}
     }}, 1000);
