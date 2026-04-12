@@ -83,6 +83,8 @@ pub(crate) use settings::poly_settings_render_fn;
 pub(crate) use settings::hackernews_settings_render_fn;
 #[cfg(feature = "github")]
 pub(crate) use settings::github_settings_render_fn;
+#[cfg(feature = "forgejo")]
+pub(crate) use settings::forgejo_settings_render_fn;
 #[cfg(feature = "lemmy")]
 pub(crate) use settings::lemmy_settings_render_fn;
 #[cfg(feature = "discord")]
@@ -655,6 +657,15 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         desc_key: "plugin-github-signup-desc",
         render: poly_github::signup::signup_render_fn,
     });
+
+    #[cfg(feature = "forgejo")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "forgejo",
+        icon: "🦊",
+        name_key: "plugin-forgejo-signup-name",
+        desc_key: "plugin-forgejo-signup-desc",
+        render: poly_forgejo::signup::signup_render_fn,
+    });
 }
 
 /// Register test account entries from all compiled-in native plugins.
@@ -681,6 +692,11 @@ fn register_native_test_accounts(#[allow(unused_variables)] client_manager: &mut
 
     #[cfg(feature = "lemmy")]
     for entry in poly_lemmy::signup::get_test_accounts() {
+        client_manager.write().register_test_account(*entry);
+    }
+
+    #[cfg(feature = "forgejo")]
+    for entry in poly_forgejo::signup::get_test_accounts() {
         client_manager.write().register_test_account(*entry);
     }
 }
@@ -758,6 +774,16 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
             nav_label_key: "plugin-github-title",
             nav_icon: "🐙",
             render: github_settings_render_fn,
+        });
+
+    #[cfg(feature = "forgejo")]
+    client_manager
+        .write()
+        .register_plugin_settings(PluginSettingsEntry {
+            slug: "forgejo",
+            nav_label_key: "plugin-forgejo-title",
+            nav_icon: "🦊",
+            render: forgejo_settings_render_fn,
         });
 
     #[cfg(feature = "discord")]
@@ -965,6 +991,99 @@ pub(crate) async fn restore_github_accounts(
         }
 
         tracing::info!("Restored GitHub account: {account_id}");
+    }
+}
+
+/// Restore persisted Forgejo accounts on app startup.
+///
+/// The stored `AccountToken.instance_id` is the Forgejo instance hostname
+/// (or `"codeberg.org"`); we reconstruct the full URL and re-authenticate
+/// with the stored personal access token.
+#[cfg(feature = "forgejo")]
+pub(crate) async fn restore_forgejo_accounts(
+    storage: &crate::storage::Storage,
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    use crate::client_manager::BackendHandle;
+    use poly_client::{AuthCredentials, ClientBackend as _};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    let Ok(tokens) = storage.get_account_tokens().await else {
+        return;
+    };
+
+    let fj_tokens: Vec<_> = tokens.into_iter().filter(|t| t.backend == "forgejo").collect();
+    if fj_tokens.is_empty() {
+        return;
+    }
+
+    tracing::info!("Restoring {} Forgejo account(s)", fj_tokens.len());
+
+    for token in fj_tokens {
+        let instance_url = token
+            .instance_id
+            .clone()
+            .map(|id| {
+                if id.starts_with("http://") || id.starts_with("https://") {
+                    id
+                } else {
+                    format!("https://{id}")
+                }
+            })
+            .unwrap_or_else(|| "https://codeberg.org".to_string());
+
+        let mut backend = poly_forgejo::ForgejoClient::new(&instance_url);
+        let session = match backend
+            .authenticate(AuthCredentials::Token(token.token.clone()))
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!("Skipping Forgejo account {}: {}", token.account_id, e);
+                continue;
+            }
+        };
+        let account_id = session.id.clone();
+
+        let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(
+            Box::new(backend) as Box<dyn poly_client::ClientBackend + Send + Sync>,
+        ));
+
+        let mut server_map = HashMap::new();
+        let servers = {
+            let guard = backend_handle.read().await;
+            guard.get_servers().await.unwrap_or_default()
+        };
+        for srv in &servers {
+            server_map.insert(srv.id.clone(), account_id.clone());
+        }
+
+        client_manager.write().commit_backend_account(
+            account_id.clone(),
+            session.clone(),
+            backend_handle,
+            server_map,
+        );
+        chat_data
+            .write()
+            .account_sessions
+            .insert(account_id.clone(), session);
+
+        {
+            let mut cd = chat_data.write();
+            for srv in &servers {
+                if !cd.servers.iter().any(|s| s.id == srv.id) {
+                    cd.servers.push(srv.clone());
+                }
+                if !cd.favorited_server_ids.contains(&srv.id) {
+                    cd.favorited_server_ids.push(srv.id.clone());
+                }
+            }
+        }
+
+        tracing::info!("Restored Forgejo account: {account_id}");
     }
 }
 
@@ -1434,6 +1553,10 @@ async fn init_storage(
                     // Restore GitHub accounts via the gh CLI (no token in storage).
                     #[cfg(feature = "github")]
                     restore_github_accounts(&storage, client_manager, chat_data).await;
+
+                    // Restore Forgejo / Gitea / Codeberg accounts via stored token.
+                    #[cfg(feature = "forgejo")]
+                    restore_forgejo_accounts(&storage, client_manager, chat_data).await;
 
                     // Restore quick-add test accounts (Matrix/Stoat/Lemmy animals)
                     // by re-running their registered auth function. Runs last so

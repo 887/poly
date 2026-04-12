@@ -39,7 +39,8 @@
 | 2.4 | [Matrix](2-clients/2.4-matrix.md) | IN-PROGRESS | matrix-sdk wrapper — stub, not yet functional |
 | 2.5 | [Hacker News](2-clients/2.5-hackernews.md) | DONE | Read-only HN Firebase API, forum model |
 | 2.6 | [Lemmy](2-clients/2.6-lemmy.md) | DONE | Lemmy REST API v3, federated forum |
-| 2.7 | [GitHub](2-clients/2.7-github.md) | DONE | GitHub Issues/PRs/notifications |
+| 2.7 | [GitHub](2-clients/2.7-github.md) | DONE | GitHub Issues/PRs/notifications + source explorer (forge backend) |
+| 2.7b | [Forgejo](2-clients/2.7b-forgejo.md) | DONE | Forgejo/Gitea/Codeberg forge backend — REST API |
 | 2.8 | [Discord](2-clients/2.8-discord.md) | TBD | TOS risk — approach not yet decided |
 | 2.9 | [Teams](2-clients/2.9-teams.md) | TBD | Microsoft Graph API — stub |
 | 2.10 | [Client Backends Research](2-clients/2.10-client-backends-research.md) | DONE | Research notes from Phase 1 |

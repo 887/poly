@@ -27,6 +27,7 @@ Every Poly app entry point (`apps/desktop`, `apps/web`, `apps/android`, etc.) de
 | `hackernews` | Hacker News forum backend |
 | `lemmy` | Lemmy federated forum backend |
 | `github` | GitHub Issues/PRs/notifications |
+| `forgejo` | Forgejo/Gitea/Codeberg forge backend |
 | `storage-host-bridge` | SQLite storage via `/host/*` routes |
 | `native-nav` | Native navigation (desktop) |
 | `all-backends` | Enable all backends |

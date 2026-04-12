@@ -2,7 +2,7 @@
 
 A cross-platform messenger that unifies all your chat accounts — Discord, Matrix, Stoat, Teams, Hacker News, Lemmy, GitHub, self-hosted servers — into a single app with an AI agent that remembers, responds, and manages your social life. Built in **Rust** with **Dioxus 0.7.3**, powered by **WASM Component Model** plugins.
 
-**Status (2026-04-12):** All 3 platform shells working with SSR hydration + host-bridge unification. 10 client backends (demo, stoat, matrix, discord, teams, poly-server, hackernews, lemmy, github, poly-cli). Plugin capability system live. Phase 5 (Social Agent) in progress.
+**Status (2026-04-12):** All 3 platform shells working with SSR hydration + host-bridge unification. 11 client backends (demo, stoat, matrix, discord, teams, poly-server, hackernews, lemmy, github, forgejo, poly-cli). Plugin capability system live. Phase 5 (Social Agent) in progress.
 
 ---
 
@@ -56,7 +56,8 @@ All messenger backend implementations are compiled to **WebAssembly Component Mo
 | **Poly Server** | Chat | First-party poly-server protocol client |
 | **Hacker News** | Forum | HN Firebase API — read-only, forum model |
 | **Lemmy** | Forum | Lemmy REST API v3 — federated forum |
-| **GitHub** | Forum | GitHub Issues/PRs/notifications |
+| **GitHub** | Forge | GitHub Issues/PRs/notifications + source explorer |
+| **Forgejo** | Forge | Forgejo/Gitea/Codeberg repos, issues, PRs + source explorer |
 | **poly-cli** | Chat | Dynamic CLI client for the chat MCP |
 
 ### Plugin System
@@ -120,7 +121,8 @@ poly/
 │   ├── server-client/    # Poly server protocol client
 │   ├── hackernews/       # HN Firebase API (forum)
 │   ├── lemmy/            # Lemmy REST API v3 (forum)
-│   └── github/           # GitHub Issues/PRs/notifications
+│   ├── github/           # Git forge: GitHub/GHE via gh CLI
+│   └── forgejo/          # Git forge: Forgejo/Gitea/Codeberg via REST API
 │
 ├── apps/                 # Platform entry points
 │   ├── web/              # Browser (Dioxus fullstack + Axum, port 3000)

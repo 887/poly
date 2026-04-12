@@ -6366,6 +6366,7 @@ dependencies = [
  "poly-client",
  "poly-demo",
  "poly-discord",
+ "poly-forgejo",
  "poly-github",
  "poly-hackernews",
  "poly-host-bridge",
@@ -6558,6 +6559,27 @@ dependencies = [
  "tokio-tungstenite 0.26.2",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "poly-forgejo"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "dioxus",
+ "futures",
+ "poly-client",
+ "poly-host-bridge",
+ "poly-test-forgejo",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "wit-bindgen 0.53.1",
 ]
 
 [[package]]
@@ -6856,6 +6878,25 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "chrono",
+ "dashmap",
+ "poly-test-common",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "poly-test-forgejo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64",
  "chrono",
  "dashmap",
  "poly-test-common",

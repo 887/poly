@@ -6,7 +6,7 @@ Shared messenger client protocol for **Poly** (PolyGlot Messenger).
 
 Defines the `ClientBackend` trait that all messenger backends must implement, plus shared data types for servers, channels, messages, users, and events.
 
-This crate is the **contract** between `poly-core` (the UI/app logic) and the backend implementations (`poly-demo`, `poly-stoat`, `poly-matrix`, `poly-discord`, `poly-teams`, `poly-server-client`, `poly-hackernews`, `poly-lemmy`, `poly-github`).
+This crate is the **contract** between `poly-core` (the UI/app logic) and the backend implementations (`poly-demo`, `poly-stoat`, `poly-matrix`, `poly-discord`, `poly-teams`, `poly-server-client`, `poly-hackernews`, `poly-lemmy`, `poly-github`, `poly-forgejo`).
 
 ## WASM Plugin Architecture (2026-03-06)
 

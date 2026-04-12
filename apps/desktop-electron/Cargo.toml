@@ -31,6 +31,7 @@ poly-core = { workspace = true, features = [
     "hackernews",
     "matrix",
     "github",
+    "forgejo",
     "storage-host-bridge",
 ] }
 dioxus = { workspace = true }

@@ -14,6 +14,7 @@ members = [
     "clients/lemmy",
     "clients/hackernews",
     "clients/github",
+    "clients/forgejo",
     "clients/server-client",
     "servers/backup-server",
     "servers/server",
@@ -25,6 +26,7 @@ members = [
     "servers/test-poly",
     "servers/test-lemmy",
     "servers/test-hackernews",
+    "servers/test-forgejo",
     "servers/test-runner",
     "mcp/devtools-protocol",
     "mcp/desktop-devtools-mcp",
@@ -195,9 +197,11 @@ poly-teams = { path = "clients/teams" }
 poly-lemmy = { path = "clients/lemmy" }
 poly-hackernews = { path = "clients/hackernews" }
 poly-github = { path = "clients/github" }
+poly-forgejo = { path = "clients/forgejo" }
 poly-backup-server = { path = "servers/backup-server" }
 poly-server = { path = "servers/server" }
 poly-test-common = { path = "servers/test-common" }
+poly-test-forgejo = { path = "servers/test-forgejo" }
 poly-server-client = { path = "clients/server-client", default-features = false }
 poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools-mcp" }
 poly-web-devtools-mcp = { path = "mcp/web-devtools-mcp" }

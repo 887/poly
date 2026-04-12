@@ -95,6 +95,13 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
         description: "Browse GitHub / GHE repos via your local gh CLI. Issues, PRs, and code explorer.",
         available: cfg!(feature = "github"),
     },
+    NativeBackend {
+        slug: "forgejo",
+        icon: "🦊",
+        name: "Forgejo",
+        description: "Browse repos on any Forgejo, Gitea, or Codeberg instance. Issues, PRs, and code explorer.",
+        available: cfg!(feature = "forgejo"),
+    },
 ];
 
 /// Dev-only backends that are technically compiled into this binary but are
@@ -319,6 +326,14 @@ fn toggle_native_backend(
             if let Some(storage) = crate::STORAGE.get() {
                 spawn(async move {
                     crate::ui::restore_github_accounts(storage, client_manager, chat_data).await;
+                });
+            }
+        }
+        #[cfg(feature = "forgejo")]
+        if toggled_re == "forgejo" {
+            if let Some(storage) = crate::STORAGE.get() {
+                spawn(async move {
+                    crate::ui::restore_forgejo_accounts(storage, client_manager, chat_data).await;
                 });
             }
         }

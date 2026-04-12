@@ -371,6 +371,37 @@ pub fn github_settings_render_fn() -> Element {
     }
 }
 
+// ── Forgejo plugin settings ───────────────────────────────────────────────────
+
+#[cfg(feature = "forgejo")]
+#[component]
+pub fn ForgejoPluginSettings() -> Element {
+    use poly_client::ClientBackend as _;
+    let client = poly_forgejo::ForgejoClient::codeberg();
+    let manifest = client.plugin_manifest();
+    let t = crate::i18n::t;
+    rsx! {
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🦊" }
+                h2 { class: "plugin-section-title", "{t(\"plugin-forgejo-title\")}" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
+                "Forge backend for Forgejo, Gitea, and Codeberg instances. Browse repos, issues, pull requests, and source code via the Forgejo REST API."
+            }
+            PluginManifestPanel { manifest }
+        }
+    }
+}
+
+#[cfg(feature = "forgejo")]
+pub fn forgejo_settings_render_fn() -> Element {
+    rsx! {
+        ForgejoPluginSettings {}
+    }
+}
+
 /// Render a plugin's declared manifest (informational only — not enforced).
 ///
 /// Lists the external programs the plugin claims it may invoke and the HTTP

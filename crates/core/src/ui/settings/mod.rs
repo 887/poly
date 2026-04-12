@@ -48,6 +48,8 @@ pub(crate) use plugin_settings::hackernews_settings_render_fn;
 pub(crate) use plugin_settings::lemmy_settings_render_fn;
 #[cfg(feature = "github")]
 pub(crate) use plugin_settings::github_settings_render_fn;
+#[cfg(feature = "forgejo")]
+pub(crate) use plugin_settings::forgejo_settings_render_fn;
 #[cfg(feature = "discord")]
 pub(crate) use plugin_settings::discord_settings_render_fn;
 #[cfg(feature = "teams")]
