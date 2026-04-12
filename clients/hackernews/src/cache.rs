@@ -107,6 +107,7 @@ impl HnCache {
     }
 
     /// Remove an item from the cache (e.g. after an update notification).
+    #[allow(dead_code)]
     pub fn invalidate_item(&mut self, id: u64) {
         self.items.remove(&id);
     }

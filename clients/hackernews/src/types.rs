@@ -119,6 +119,7 @@ impl HnFeed {
 }
 
 /// Response from `/v0/updates.json`.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HnUpdates {
     #[serde(default)]

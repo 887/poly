@@ -63,6 +63,7 @@ impl HnApiClient {
         format!("{}/{}", self.base_url, feed.path())
     }
 
+    #[allow(dead_code)]
     fn updates_url(&self) -> String {
         format!("{}/updates.json", self.base_url)
     }
@@ -183,6 +184,7 @@ impl HnApiClient {
     }
 
     /// Poll for recently updated items and profiles.
+    #[allow(dead_code)]
     pub async fn get_updates(&self) -> ClientResult<HnUpdates> {
         let url = self.updates_url();
         let updates: HnUpdates = self
@@ -199,6 +201,7 @@ impl HnApiClient {
     }
 
     /// Invalidate a cached item (e.g. after receiving an update notification).
+    #[allow(dead_code)]
     pub fn invalidate_item(&self, id: u64) -> ClientResult<()> {
         let mut cache = self.cache.lock().map_err(|_| {
             ClientError::Internal("cache lock poisoned".to_string())
