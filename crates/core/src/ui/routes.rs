@@ -56,6 +56,7 @@ use super::account::{
 };
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
 use super::main_layout::MainLayout;
+use super::server_overview::ServerOverviewPage;
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
@@ -95,7 +96,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::SavedItemsRoute { account_id, .. }
         | Route::AccountSettingsRoute { account_id, .. }
         | Route::CreateServerRoute { account_id, .. }
-        | Route::AccountSearchRoute { account_id, .. } => Some(account_id.as_str()),
+        | Route::AccountSearchRoute { account_id, .. }
+        | Route::ServerOverviewRoute { account_id, .. } => Some(account_id.as_str()),
         Route::Root
         | Route::SettingsRoute
         | Route::SettingsSectionRoute { .. }
@@ -272,6 +274,10 @@ pub enum Route {
 
         #[route("/:backend/:instance_id/:account_id/saved")]
         SavedItemsRoute { backend: String, instance_id: String, account_id: String },
+
+        // ── Account-scoped: Server/repo overview (forge backends) ────
+        #[route("/:backend/:instance_id/:account_id/overview")]
+        ServerOverviewRoute { backend: String, instance_id: String, account_id: String },
 
         // ── App-level (not account-scoped) ───────────────────────────
         #[route("/settings")]
@@ -738,6 +744,21 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_instance_id = Some(instance_id.clone());
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::ServerOverviewRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
+            s.nav.view = View::DmsFriends; // reuse the top-level view
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = None;
             s.nav.selected_channel = None;
             s.nav
                 .account_last_routes
@@ -1391,6 +1412,7 @@ fn ServerChat(
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
+    let route_channel_id = channel_id.clone();
     use_effect(move || {
         let backend_slug = backend.clone();
         let instance = instance_id.clone();
@@ -1440,11 +1462,19 @@ fn ServerChat(
         });
     });
 
-    let channel_type = chat_data
-        .read()
-        .current_channel
-        .as_ref()
-        .map(|ch| ch.channel_type);
+    // Prefer the channel type from the channels list keyed by the route's
+    // channel_id — this updates immediately on navigation.  Fall back to
+    // current_channel (set asynchronously by restore_server_channel) so the
+    // view stays correct while the async load is in flight.
+    let channel_type = {
+        let snapshot = chat_data.read();
+        snapshot
+            .channels
+            .iter()
+            .find(|ch| ch.id == route_channel_id)
+            .map(|ch| ch.channel_type)
+            .or_else(|| snapshot.current_channel.as_ref().map(|ch| ch.channel_type))
+    };
 
     let is_forum_backend = chat_data.read().current_server.as_ref()
         .is_some_and(|s| s.backend.uses_forum_layout());
@@ -1456,7 +1486,7 @@ fn ServerChat(
         if is_voice {
             VoiceChannelView {}
         } else if is_code {
-            super::code_explorer::CodeExplorerView {}
+            super::code_explorer::CodeExplorerView { route_channel_id: route_channel_id.clone() }
         } else if is_forum {
             ForumView {}
         } else {
@@ -1492,6 +1522,16 @@ fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Ele
 fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
         SavedItemsView {}
+    }
+}
+
+/// Server/repo overview — landing page for forge backends (GitHub, Forgejo).
+/// Shows a searchable list of all repos with open issues/PRs counts.
+#[rustfmt::skip]
+#[component]
+fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    rsx! {
+        ServerOverviewPage { backend, instance_id, account_id }
     }
 }
 

@@ -184,6 +184,17 @@ fn register_native_plugin_ftl() {
         tracing::debug!("Native github plugin FTL registered for all locales");
     }
 
+    #[cfg(feature = "forgejo")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_forgejo::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("forgejo", locale, src);
+            }
+        }
+        tracing::debug!("Native forgejo plugin FTL registered for all locales");
+    }
+
     #[cfg(feature = "discord")]
     {
         for locale in SUPPORTED_LOCALES {

@@ -18,6 +18,7 @@ const BACKENDS: &[(&str, u16)] = &[
     ("poly-test-lemmy", 9104),
     ("poly-test-hackernews", 9105),
     ("poly-test-forgejo", 9106),
+    ("poly-test-github", 9107),
 ];
 
 /// Spawn one backend binary. Returns the child handle.
@@ -114,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
     println!("  Lemmy    → Beaver, Hedgehog   (localhost:9104)");
     println!("  HN       → (read-only feed)   (localhost:9105)");
     println!("  Forgejo  → Otter, Flamingo    (localhost:9106)");
+    println!("  GitHub   → Penguin, Chameleon (localhost:9107)");
     println!();
     println!("Press Ctrl+C to stop all servers.");
 

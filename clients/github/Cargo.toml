@@ -27,5 +27,12 @@ tokio = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 
+[dev-dependencies]
+poly-test-github = { path = "../../servers/test-github" }
+axum = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "net"] }
+
 [lints]
 workspace = true

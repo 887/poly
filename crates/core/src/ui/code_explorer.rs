@@ -18,14 +18,19 @@ use crate::state::ChatData;
 /// Two-pane explorer rendered when the current channel is `ChannelType::Code`.
 #[rustfmt::skip]
 #[component]
-pub fn CodeExplorerView() -> Element {
+pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
     let chat_data = use_context::<Signal<ChatData>>();
     let client_manager = use_context::<Signal<crate::client_manager::ClientManager>>();
 
     let (channel_id, server_id) = {
         let cd = chat_data.read();
+        let ch_id = if route_channel_id.is_empty() {
+            cd.current_channel.as_ref().map(|c| c.id.clone())
+        } else {
+            Some(route_channel_id.clone())
+        };
         (
-            cd.current_channel.as_ref().map(|c| c.id.clone()),
+            ch_id,
             cd.current_server.as_ref().map(|s| s.id.clone()),
         )
     };

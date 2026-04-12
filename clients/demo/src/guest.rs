@@ -601,6 +601,7 @@ impl MessengerClientGuest for DemoPlugin {
             supports_reactions: true,
             supports_typing_indicators: true,
             supports_file_upload: true,
+            landing: wit::LandingPage::DirectMessages,
         }
     }
 

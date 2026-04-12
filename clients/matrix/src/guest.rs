@@ -448,6 +448,7 @@ impl Guest for MatrixPlugin {
             supports_reactions: true,
             supports_typing_indicators: true,
             supports_file_upload: false,
+            landing: wit::LandingPage::DirectMessages,
         }
     }
 

@@ -75,6 +75,13 @@ interface types {
         stderr: list<u8>,
     }
 
+    /// Which screen the UI should navigate to after the backend loads.
+    enum landing-page {
+        direct-messages,
+        first-server,
+        server-overview,
+    }
+
     /// Capability flags describing what a backend supports. Used by the UI
     /// to hide controls that don't make sense for a given backend (e.g.
     /// the mic/speaker buttons for read-only news feeds).
@@ -89,6 +96,7 @@ interface types {
         supports-reactions: bool,
         supports-typing-indicators: bool,
         supports-file-upload: bool,
+        landing: landing-page,
     }
 
     /// Self-declared plugin manifest. Purely informational — the host does

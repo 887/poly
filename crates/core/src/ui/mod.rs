@@ -92,6 +92,7 @@ pub(crate) use settings::discord_settings_render_fn;
 #[cfg(feature = "teams")]
 pub(crate) use settings::teams_settings_render_fn;
 mod runtime_js;
+mod server_overview;
 mod setup_wizard;
 mod voice_banner;
 
@@ -697,6 +698,11 @@ fn register_native_test_accounts(#[allow(unused_variables)] client_manager: &mut
 
     #[cfg(feature = "forgejo")]
     for entry in poly_forgejo::signup::get_test_accounts() {
+        client_manager.write().register_test_account(*entry);
+    }
+
+    #[cfg(feature = "github")]
+    for entry in poly_github::signup::get_test_accounts() {
         client_manager.write().register_test_account(*entry);
     }
 }

@@ -48,13 +48,22 @@ pub struct GhCli {
     /// Optional GHE hostname (e.g. `"github.example.com"`).
     /// `None` means github.com.
     hostname: Option<String>,
+    /// Optional HTTP base URL for testing — when set, uses direct HTTP
+    /// instead of spawning the `gh` CLI binary.
+    http_base_url: Option<String>,
+    /// Optional auth token for HTTP mode.
+    http_token: Option<String>,
 }
 
 impl GhCli {
     /// Wrap the user's gh CLI for github.com.
     #[must_use]
     pub fn dotcom() -> Self {
-        Self { hostname: None }
+        Self {
+            hostname: None,
+            http_base_url: None,
+            http_token: None,
+        }
     }
 
     /// Wrap the user's gh CLI for a GitHub Enterprise hostname.
@@ -62,13 +71,44 @@ impl GhCli {
     pub fn enterprise(hostname: impl Into<String>) -> Self {
         Self {
             hostname: Some(hostname.into()),
+            http_base_url: None,
+            http_token: None,
         }
+    }
+
+    /// Create a client that uses direct HTTP instead of the gh CLI.
+    /// Used for testing against mock servers.
+    #[must_use]
+    pub fn with_http(base_url: impl Into<String>) -> Self {
+        Self {
+            hostname: None,
+            http_base_url: Some(base_url.into()),
+            http_token: None,
+        }
+    }
+
+    /// Set the auth token for HTTP mode.
+    pub fn set_token(&mut self, token: String) {
+        self.http_token = Some(token);
+    }
+
+    /// Clear the auth token.
+    pub fn clear_token(&mut self) {
+        self.http_token = None;
     }
 
     /// Display name for the instance (used as `instance_id` and in errors).
     #[must_use]
     pub fn instance_id(&self) -> &str {
-        self.hostname.as_deref().unwrap_or("github.com")
+        if let Some(url) = &self.http_base_url {
+            url.trim_start_matches("http://")
+                .trim_start_matches("https://")
+                .split('/')
+                .next()
+                .unwrap_or("localhost")
+        } else {
+            self.hostname.as_deref().unwrap_or("github.com")
+        }
     }
 
     /// Run `gh api <endpoint>` and parse the JSON output as `T`.
@@ -86,6 +126,11 @@ impl GhCli {
     /// Native: run `gh api <endpoint>` as a subprocess and return raw stdout.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn api_raw(&self, endpoint: &str, extra_args: &[&str]) -> Result<Vec<u8>, GhError> {
+        // If HTTP mode is configured, use direct HTTP instead of gh CLI
+        if let Some(base_url) = &self.http_base_url {
+            return self.api_raw_http(base_url, endpoint).await;
+        }
+
         use std::process::Stdio;
         use tokio::process::Command;
 
@@ -124,6 +169,11 @@ impl GhCli {
     /// host-api operation goes through the same endpoint.
     #[cfg(target_arch = "wasm32")]
     pub async fn api_raw(&self, endpoint: &str, extra_args: &[&str]) -> Result<Vec<u8>, GhError> {
+        // If HTTP mode is configured, use direct HTTP instead of the host bridge
+        if let Some(base_url) = &self.http_base_url {
+            return self.api_raw_http(base_url, endpoint).await;
+        }
+
         use poly_host_bridge::{BridgeError, Client};
 
         let mut args: Vec<String> = Vec::with_capacity(4 + extra_args.len());
@@ -154,6 +204,37 @@ impl GhCli {
             });
         }
         Ok(stdout)
+    }
+
+    /// HTTP-based transport for testing. Sends GET requests directly to the mock server.
+    async fn api_raw_http(&self, base_url: &str, endpoint: &str) -> Result<Vec<u8>, GhError> {
+        use poly_host_bridge::http::HttpClient;
+
+        let url = format!("{}{}", base_url, endpoint);
+        let http = HttpClient::new();
+        let mut req = http.get(&url);
+        if let Some(token) = &self.http_token {
+            req = req.header("Authorization", &format!("token {}", token));
+        }
+        let response = req
+            .send()
+            .await
+            .map_err(|e| GhError::Spawn(format!("HTTP request failed: {}", e)))?;
+
+        let status = response.status();
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| GhError::Parse(format!("failed to read response body: {}", e)))?;
+
+        if status != 200 {
+            return Err(GhError::Exit {
+                code: status.as_u16() as i32,
+                stderr: String::from_utf8_lossy(&bytes).into_owned(),
+            });
+        }
+
+        Ok(bytes.to_vec())
     }
 
     /// Check whether the user is authenticated against this instance.

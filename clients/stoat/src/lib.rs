@@ -978,6 +978,7 @@ impl ClientBackend for StoatClient {
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             voice: VoiceSupport::None,
+            landing: poly_client::LandingPage::DirectMessages,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         }
     }

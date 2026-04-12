@@ -83,6 +83,15 @@ impl GitHubClient {
         }
     }
 
+    /// Create a client using direct HTTP transport (for testing).
+    pub fn with_http(base_url: impl Into<String>) -> Self {
+        Self {
+            cli: GhCli::with_http(base_url),
+            session: None,
+            repos: tokio::sync::Mutex::new(Vec::new()),
+        }
+    }
+
     /// Build an authenticated [`Session`] from a `gh` login.
     fn build_session(&self, login: &str) -> Session {
         let instance = self.cli.instance_id().to_string();
@@ -145,7 +154,13 @@ impl Default for GitHubClient {
 impl ClientBackend for GitHubClient {
     // --- Authentication ---
 
-    async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
+    async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
+        // In HTTP mode, extract the token from credentials and set it on the CLI transport.
+        if let AuthCredentials::Token(ref token) = credentials {
+            if !token.is_empty() {
+                self.cli.set_token(token.clone());
+            }
+        }
         let login = self
             .cli
             .auth_status_login()
@@ -158,6 +173,7 @@ impl ClientBackend for GitHubClient {
 
     async fn logout(&mut self) -> ClientResult<()> {
         // The gh CLI keeps its own credentials; we just drop our session.
+        self.cli.clear_token();
         self.session = None;
         Ok(())
     }
@@ -358,6 +374,7 @@ impl ClientBackend for GitHubClient {
         BackendCapabilities {
             notifications: NotificationSupport::Activity,
             search_messages: true,
+            landing: poly_client::LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         }
     }

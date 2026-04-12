@@ -140,6 +140,11 @@ pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::Backend
         attachments: c.supports_file_upload,
         create_server: c.supports_groups,
         create_channel: c.supports_groups,
+        landing: match c.landing {
+            wit::LandingPage::DirectMessages => pc::LandingPage::DirectMessages,
+            wit::LandingPage::FirstServer => pc::LandingPage::FirstServer,
+            wit::LandingPage::ServerOverview => pc::LandingPage::ServerOverview,
+        },
     }
 }
 

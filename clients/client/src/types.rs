@@ -76,9 +76,10 @@ impl BackendId {
 pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
     match slug {
         "hackernews" => BackendCapabilities::READ_ONLY_FEED,
-        "github" => BackendCapabilities {
+        "github" | "forgejo" => BackendCapabilities {
             notifications: NotificationSupport::Activity,
             search_messages: true,
+            landing: LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         },
         "lemmy" | "demo_forum" => BackendCapabilities {
@@ -511,6 +512,18 @@ pub enum NotificationSupport {
     Activity,
 }
 
+/// Landing page preference — determines what the host shows when the user
+/// clicks the account icon in the sidebar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LandingPage {
+    /// Direct messages list (Discord, Matrix, Teams).
+    DirectMessages,
+    /// First server's channel list (HN, Lemmy).
+    FirstServer,
+    /// Repo/server overview with search and attention items (GitHub, Forgejo).
+    ServerOverview,
+}
+
 /// Voice / video channel support.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VoiceSupport {
@@ -534,6 +547,7 @@ pub struct BackendCapabilities {
     pub friends: FriendModel,
     pub notifications: NotificationSupport,
     pub voice: VoiceSupport,
+    pub landing: LandingPage,
     pub presence: bool,
     pub typing_indicators: bool,
     pub reactions: bool,
@@ -551,6 +565,7 @@ impl BackendCapabilities {
         friends: FriendModel::None,
         notifications: NotificationSupport::None,
         voice: VoiceSupport::None,
+        landing: LandingPage::FirstServer,
         presence: false,
         typing_indicators: false,
         reactions: false,
@@ -567,6 +582,7 @@ impl BackendCapabilities {
         friends: FriendModel::None,
         notifications: NotificationSupport::Inbox,
         voice: VoiceSupport::None,
+        landing: LandingPage::FirstServer,
         presence: false,
         typing_indicators: false,
         reactions: false,
@@ -593,6 +609,7 @@ impl BackendCapabilities {
         friends: FriendModel::Full,
         notifications: NotificationSupport::Activity,
         voice: VoiceSupport::Full,
+        landing: LandingPage::DirectMessages,
         presence: true,
         typing_indicators: true,
         reactions: true,

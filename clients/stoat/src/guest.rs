@@ -579,6 +579,7 @@ impl Guest for StoatPlugin {
             supports_reactions: false,
             supports_typing_indicators: true,
             supports_file_upload: false,
+            landing: wit::LandingPage::DirectMessages,
         }
     }
 

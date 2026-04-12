@@ -520,29 +520,36 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     (slug, inst, first_server)
                 };
                 let caps = poly_client::capabilities_for_slug(&backend_slug);
-                let fallback_route = if matches!(
-                    caps.dms,
-                    poly_client::DmSupport::None,
-                ) {
-                    if let Some(server_id) = first_server_id {
-                        Route::ServerHome {
-                            backend: backend_slug,
-                            instance_id,
-                            account_id: aid,
-                            server_id,
-                        }
-                    } else {
-                        Route::NotificationsRoute {
+                let fallback_route = match caps.landing {
+                    poly_client::LandingPage::ServerOverview => {
+                        Route::ServerOverviewRoute {
                             backend: backend_slug,
                             instance_id,
                             account_id: aid,
                         }
                     }
-                } else {
-                    Route::DmsHome {
-                        backend: backend_slug,
-                        instance_id,
-                        account_id: aid,
+                    poly_client::LandingPage::FirstServer => {
+                        if let Some(server_id) = first_server_id {
+                            Route::ServerHome {
+                                backend: backend_slug,
+                                instance_id,
+                                account_id: aid,
+                                server_id,
+                            }
+                        } else {
+                            Route::NotificationsRoute {
+                                backend: backend_slug,
+                                instance_id,
+                                account_id: aid,
+                            }
+                        }
+                    }
+                    poly_client::LandingPage::DirectMessages => {
+                        Route::DmsHome {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id: aid,
+                        }
                     }
                 };
                 navigator().push(fallback_route);

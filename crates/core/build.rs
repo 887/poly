@@ -43,6 +43,7 @@ const PARTIALS: &[&str] = &[
     "direct-call-overlay.css", // Route-backed pending direct-call overlay
     "media-viewer.css",        // Route-backed fullscreen message media viewer
     "code-explorer.css",       // GitHub / code-channel two-pane explorer
+    "server-overview.css",     // Forge backend repo/server overview landing page
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -178,11 +178,39 @@ fn build_on_complete(
                     chat_data.write().content_policy = policy;
                 }
             }
-            navigator().push(Route::DmsHome {
-                backend: backend_slug,
-                instance_id,
-                account_id,
-            });
+            let caps = poly_client::capabilities_for_slug(&backend_slug);
+            let landing = match caps.landing {
+                poly_client::LandingPage::ServerOverview => Route::ServerOverviewRoute {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id,
+                },
+                poly_client::LandingPage::FirstServer => {
+                    let first_server = chat_data.read().servers.iter()
+                        .find(|s| s.account_id == account_id)
+                        .map(|s| s.id.clone());
+                    if let Some(server_id) = first_server {
+                        Route::ServerHome {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id,
+                            server_id,
+                        }
+                    } else {
+                        Route::DmsHome {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id,
+                        }
+                    }
+                }
+                poly_client::LandingPage::DirectMessages => Route::DmsHome {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id,
+                },
+            };
+            navigator().push(landing);
         });
     })
 }

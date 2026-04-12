@@ -9,6 +9,84 @@ use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupCo
 
 use crate::GitHubClient;
 
+/// Authenticate against a GitHub test server using the `/test/auth/token` bypass.
+pub async fn test_authenticate(
+    base_url: String,
+    username: String,
+    _password: String,
+) -> Result<SignupCompleted, String> {
+    use poly_host_bridge::http::HttpClient;
+    let http = HttpClient::new();
+    let resp = http
+        .post(&format!("{}/test/auth/token", base_url))
+        .header("Content-Type", "application/json")
+        .body(format!(r#"{{"username":"{}"}}"#, username))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let token = body["token"]
+        .as_str()
+        .ok_or_else(|| "no token in response".to_string())?
+        .to_string();
+
+    let mut backend = GitHubClient::with_http(&base_url);
+    let session = backend
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(SignupCompleted {
+        session,
+        backend: Box::new(backend),
+    })
+}
+
+fn penguin_auth(
+    u: String,
+    e: String,
+    p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
+> {
+    Box::pin(async move { test_authenticate(u, e, p).await })
+}
+
+fn chameleon_auth(
+    u: String,
+    e: String,
+    p: String,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
+> {
+    Box::pin(async move { test_authenticate(u, e, p).await })
+}
+
+/// Test accounts for the GitHub local dev server (port 9107).
+pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+    use poly_client::TestAccountEntry;
+    const ACCOUNTS: &[TestAccountEntry] = &[
+        TestAccountEntry {
+            icon: "🐧",
+            label: "Penguin",
+            server_label: "GitHub — localhost:9107",
+            base_url: "http://localhost:9107",
+            username: "penguin",
+            password: "testpass123",
+            authenticate: penguin_auth,
+        },
+        TestAccountEntry {
+            icon: "🦎",
+            label: "Chameleon",
+            server_label: "GitHub — localhost:9107",
+            base_url: "http://localhost:9107",
+            username: "chameleon",
+            password: "testpass123",
+            authenticate: chameleon_auth,
+        },
+    ];
+    ACCOUNTS
+}
+
 /// Run `gh api /user` against the chosen instance and build a session.
 pub async fn authenticate(hostname: Option<String>) -> Result<SignupCompleted, String> {
     let mut backend = match hostname {

@@ -606,6 +606,7 @@ impl ClientBackend for MatrixClient {
         BackendCapabilities {
             voice: VoiceSupport::None,
             create_server: false,
+            landing: poly_client::LandingPage::DirectMessages,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         }
     }

@@ -940,6 +940,7 @@ impl ClientBackend for DemoClient3 {
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             reactions: true,
+            landing: poly_client::LandingPage::FirstServer,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         }
     }

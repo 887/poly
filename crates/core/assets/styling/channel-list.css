@@ -291,3 +291,49 @@
     right: -4px;
 }
 
+/* ── Forge (GitHub/Forgejo) Channel Sidebar ── */
+
+.forge-sidebar-channels {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px;
+}
+
+.forge-channel-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background 0.12s, color 0.12s;
+}
+
+.forge-channel-item:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.forge-channel-item.active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.forge-channel-icon {
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.forge-channel-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+

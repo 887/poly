@@ -728,8 +728,9 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
         let backend_slug = server.backend.slug().to_string();
         let is_hn = server.backend.slug() == "hackernews";
         let is_github = server.backend.slug() == "github";
+        let is_forge = server.backend.slug() == "github" || server.backend.slug() == "forgejo";
         // Read-only and demo backends do not support channel creation.
-        let can_create = server.backend != "demo" && !is_hn && !is_github;
+        let can_create = server.backend != "demo" && !is_hn && !is_github && !is_forge;
         let server_id = server.id.clone();
 
         // Is the current channel a (Lemmy-style) forum channel?
@@ -746,8 +747,8 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
         rsx! {
             // Discord-style categories: shown for all backends, including HN.
-            // Hidden only for Lemmy/forum backends whose sidebar replaces categories.
-            if !is_forum {
+            // Hidden for Lemmy/forum and forge backends whose sidebar replaces categories.
+            if !is_forum && !is_forge {
                 if !uncategorized_ids.is_empty() {
                     CategorySection {
                         cat_name: t("channel-list-text-channels"),
@@ -777,8 +778,46 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     }
                 }
             }
+            // Forge (GitHub/Forgejo) sidebar: Issues / Pull Requests / Code channel links.
+            if is_forge {
+                div { class: "forge-sidebar-channels",
+                    for ch in channels.iter().filter(|c| c.server_id == server_id) {
+                        {
+                            let ch_id = ch.id.clone();
+                            let is_active = ch_id == current_channel_id;
+                            let icon = match ch.channel_type {
+                                ChannelType::Forum => {
+                                    if ch.name.contains("pull") { "🔀" } else { "🐛" }
+                                }
+                                ChannelType::Code => "📁",
+                                _ => "#",
+                            };
+                            let label = match ch.name.as_str() {
+                                "issues" => "Issues",
+                                "pull-requests" => "Pull Requests",
+                                "code" => "Code",
+                                other => other,
+                            };
+                            rsx! {
+                                Link {
+                                    class: if is_active { "forge-channel-item active" } else { "forge-channel-item" },
+                                    to: Route::ServerChat {
+                                        backend: backend_slug.clone(),
+                                        instance_id: instance_id.clone(),
+                                        account_id: account_id.clone(),
+                                        server_id: server_id.clone(),
+                                        channel_id: ch_id,
+                                    },
+                                    span { class: "forge-channel-icon", "{icon}" }
+                                    span { class: "forge-channel-label", "{label}" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             // Forum (Lemmy-style) sidebar: Posts/Comments tabs + scope filters.
-            if is_forum {
+            else if is_forum && !is_forge {
                 div { class: "forum-sidebar-controls",
                     // Posts / Comments nav tabs
                     div { class: "forum-nav-tabs",

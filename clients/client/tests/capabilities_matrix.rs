@@ -13,8 +13,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use poly_client::{
-    BackendCapabilities, DmSupport, FriendModel, MessagingModel, NotificationSupport,
-    VoiceSupport, capabilities_for_slug,
+    BackendCapabilities, DmSupport, FriendModel, LandingPage, MessagingModel,
+    NotificationSupport, VoiceSupport, capabilities_for_slug,
 };
 
 fn expected(slug: &str) -> BackendCapabilities {
@@ -23,6 +23,7 @@ fn expected(slug: &str) -> BackendCapabilities {
         "github" => BackendCapabilities {
             notifications: NotificationSupport::Activity,
             search_messages: true,
+            landing: LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         },
         "lemmy" | "demo_forum" => BackendCapabilities {
