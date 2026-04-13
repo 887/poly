@@ -87,14 +87,10 @@
     line-height: 1.2;
 }
 
-/* Make draggable server icons in Bar 2 show a grab cursor */
+/* Server icons in Bar 2 use pointer cursor (same as Bar 1); dragging still
+   works via draggable="true" but we don't preview the grab hand on hover. */
 .account-server-bar .server-icon[draggable="true"] {
-    cursor: grab;
-}
-
-.account-server-bar .server-icon[draggable="true"]:active {
-    cursor: grabbing;
-    opacity: 0.7;
+    cursor: pointer;
 }
 
 .server-icon {
@@ -187,6 +183,11 @@
     display: flex;
 }
 
+/* Signal-driven visibility for draggable icons where :hover is unreliable */
+.sidebar-tooltip-visible {
+    display: flex !important;
+}
+
 .sidebar-tooltip-line {
     display: block;
     line-height: 1.3;
@@ -222,7 +223,8 @@
     padding-bottom: 64px;
     scroll-padding-bottom: 64px;
     position: relative;
-    z-index: 0;
+    /* z-index: auto (not 0) — avoids creating a stacking context that would
+       trap position:fixed tooltips inside this bar's z-layer. */
 }
 
 .poly-app.poly-menu-mirrored .account-server-bar {

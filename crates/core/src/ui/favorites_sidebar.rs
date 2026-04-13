@@ -58,9 +58,12 @@ pub(crate) fn SidebarTooltip(
     line2: Option<String>,
     /// Optional third row: backend type (only for server icons)
     line3: Option<String>,
+    /// Override the CSS class (e.g. to add `sidebar-tooltip-visible` for signal-driven visibility)
+    extra_class: Option<String>,
 ) -> Element {
+    let class = extra_class.as_deref().unwrap_or("sidebar-tooltip");
     rsx! {
-        div { class: "sidebar-tooltip",
+        div { class: "{class}",
             span { class: "sidebar-tooltip-line sidebar-tooltip-name", "{line1}" }
             if let Some(ref l2) = line2 {
                 span { class: "sidebar-tooltip-line sidebar-tooltip-type", "{l2}" }
@@ -143,14 +146,16 @@ pub fn FavoritesBar() -> Element {
     // Local signal for drop-zone highlight state.
     let mut drag_over = use_signal(|| false);
 
-    // Set up JS event delegation for tooltip positioning.
+    // Global tooltip show/hide + positioning for ALL sidebar icons.
+    // Uses document-level mouseover/mouseout (which bubble) so it works
+    // for both Bar 1 (.server-sidebar) and Bar 2 (.account-server-bar),
+    // including draggable server icons where CSS :hover is unreliable.
     use_effect(move || {
         let _ = dioxus::prelude::document::eval(r#"
             (function() {
-                var sidebar = document.querySelector('.server-sidebar');
-                if (!sidebar || sidebar._tooltipInit) return;
-                sidebar._tooltipInit = true;
-                sidebar.addEventListener('mouseenter', function(e) {
+                if (document._sidebarTooltipInit) return;
+                document._sidebarTooltipInit = true;
+                document.addEventListener('mouseover', function(e) {
                     var icon = e.target.closest('.server-icon');
                     if (!icon) return;
                     var tip = icon.querySelector('.sidebar-tooltip');
@@ -165,7 +170,16 @@ pub fn FavoritesBar() -> Element {
                         tip.style.left = (r.right + 12) + 'px';
                         tip.style.right = 'auto';
                     }
-                }, true);
+                    tip.style.display = 'flex';
+                });
+                document.addEventListener('mouseout', function(e) {
+                    var icon = e.target.closest('.server-icon');
+                    if (!icon) return;
+                    var related = e.relatedTarget;
+                    if (related && icon.contains(related)) return;
+                    var tip = icon.querySelector('.sidebar-tooltip');
+                    if (tip) tip.style.display = '';
+                });
             })()
         "#);
     });

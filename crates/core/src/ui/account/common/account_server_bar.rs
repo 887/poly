@@ -178,33 +178,6 @@ pub fn AccountServerBar() -> Element {
         .filter(|n| n.account_id == account_id)
         .count();
 
-    // Set up JS event delegation for tooltip positioning (same pattern as FavoritesBar).
-    use_effect(move || {
-        let _ = dioxus::prelude::document::eval(r#"
-            (function() {
-                var bar = document.querySelector('.account-server-bar');
-                if (!bar || bar._tooltipInit) return;
-                bar._tooltipInit = true;
-                bar.addEventListener('mouseenter', function(e) {
-                    var icon = e.target.closest('.server-icon');
-                    if (!icon) return;
-                    var tip = icon.querySelector('.sidebar-tooltip');
-                    if (!tip) return;
-                    var r = icon.getBoundingClientRect();
-                    var mirrored = document.querySelector('.poly-app.poly-menu-mirrored') !== null;
-                    tip.style.top = (r.top + r.height / 2) + 'px';
-                    if (mirrored) {
-                        tip.style.right = (window.innerWidth - r.left + 12) + 'px';
-                        tip.style.left = 'auto';
-                    } else {
-                        tip.style.left = (r.right + 12) + 'px';
-                        tip.style.right = 'auto';
-                    }
-                }, true);
-            })()
-        "#);
-    });
-
     rsx! {
         nav { class: "account-server-bar",
             // DMs / Friends button — account-scoped. Gated on capability:
@@ -424,10 +397,52 @@ fn AccountServerIcon(
         });
     };
 
+    let sid_tip = server_id.clone();
+    let on_mouseenter = move |_: Event<MouseData>| {
+        let sid = sid_tip.clone();
+        let _ = dioxus::prelude::document::eval(&format!(
+            r#"(function(){{
+                var icon = document.querySelector('[data-tip-id="{}"]');
+                if (!icon) return;
+                var tip = icon.querySelector('.sidebar-tooltip');
+                if (!tip) return;
+                var r = icon.getBoundingClientRect();
+                var mirrored = document.querySelector('.poly-app.poly-menu-mirrored') !== null;
+                tip.style.top = (r.top + r.height / 2) + 'px';
+                if (mirrored) {{
+                    tip.style.right = (window.innerWidth - r.left + 12) + 'px';
+                    tip.style.left = 'auto';
+                }} else {{
+                    tip.style.left = (r.right + 12) + 'px';
+                    tip.style.right = 'auto';
+                }}
+                tip.style.display = 'flex';
+            }})()"#,
+            sid
+        ));
+    };
+
+    let sid_tip2 = server_id.clone();
+    let on_mouseleave = move |_: Event<MouseData>| {
+        let sid = sid_tip2.clone();
+        let _ = dioxus::prelude::document::eval(&format!(
+            r#"(function(){{
+                var icon = document.querySelector('[data-tip-id="{}"]');
+                if (!icon) return;
+                var tip = icon.querySelector('.sidebar-tooltip');
+                if (tip) tip.style.display = '';
+            }})()"#,
+            sid
+        ));
+    };
+
     rsx! {
         div {
             class: "{item_class}",
             draggable: "true",
+            "data-tip-id": "{server_id}",
+            onmouseenter: on_mouseenter,
+            onmouseleave: on_mouseleave,
             oncontextmenu: on_context_menu,
             ondragstart: on_drag_start,
             ondragover: on_drag_over,
