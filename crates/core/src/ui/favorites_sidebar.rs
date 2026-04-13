@@ -51,18 +51,20 @@ fn NavBarSpacer() -> Element {
 /// so it escapes overflow-hidden scroll containers.
 #[component]
 #[allow(clippy::needless_pass_by_value)]
-fn SidebarTooltip(
+pub(crate) fn SidebarTooltip(
     /// First row: account name or server name
     line1: String,
-    /// Second row: account name (for servers) or backend type (for accounts)
-    line2: String,
+    /// Optional second row: backend type (for accounts) or account name (for servers)
+    line2: Option<String>,
     /// Optional third row: backend type (only for server icons)
     line3: Option<String>,
 ) -> Element {
     rsx! {
         div { class: "sidebar-tooltip",
             span { class: "sidebar-tooltip-line sidebar-tooltip-name", "{line1}" }
-            span { class: "sidebar-tooltip-line sidebar-tooltip-type", "{line2}" }
+            if let Some(ref l2) = line2 {
+                span { class: "sidebar-tooltip-line sidebar-tooltip-type", "{l2}" }
+            }
             if let Some(ref l3) = line3 {
                 span { class: "sidebar-tooltip-line sidebar-tooltip-type", "{l3}" }
             }
@@ -649,7 +651,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             }
             SidebarTooltip {
                 line1: display_name.clone(),
-                line2: backend_name,
+                line2: Some(backend_name),
                 line3: None,
             }
         }
@@ -939,7 +941,7 @@ fn FavoriteServerIcon(
             }
             SidebarTooltip {
                 line1: server_name.clone(),
-                line2: account_display_name.clone(),
+                line2: Some(account_display_name.clone()),
                 line3: Some(backend_name.clone()),
             }
         }

@@ -29,6 +29,7 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
+use crate::ui::favorites_sidebar::SidebarTooltip;
 use dioxus::prelude::*;
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
@@ -176,6 +177,33 @@ pub fn AccountServerBar() -> Element {
         .iter()
         .filter(|n| n.account_id == account_id)
         .count();
+
+    // Set up JS event delegation for tooltip positioning (same pattern as FavoritesBar).
+    use_effect(move || {
+        let _ = dioxus::prelude::document::eval(r#"
+            (function() {
+                var bar = document.querySelector('.account-server-bar');
+                if (!bar || bar._tooltipInit) return;
+                bar._tooltipInit = true;
+                bar.addEventListener('mouseenter', function(e) {
+                    var icon = e.target.closest('.server-icon');
+                    if (!icon) return;
+                    var tip = icon.querySelector('.sidebar-tooltip');
+                    if (!tip) return;
+                    var r = icon.getBoundingClientRect();
+                    var mirrored = document.querySelector('.poly-app.poly-menu-mirrored') !== null;
+                    tip.style.top = (r.top + r.height / 2) + 'px';
+                    if (mirrored) {
+                        tip.style.right = (window.innerWidth - r.left + 12) + 'px';
+                        tip.style.left = 'auto';
+                    } else {
+                        tip.style.left = (r.right + 12) + 'px';
+                        tip.style.right = 'auto';
+                    }
+                }, true);
+            })()
+        "#);
+    });
 
     rsx! {
         nav { class: "account-server-bar",
@@ -400,7 +428,6 @@ fn AccountServerIcon(
         div {
             class: "{item_class}",
             draggable: "true",
-            title: "{server_name}",
             oncontextmenu: on_context_menu,
             ondragstart: on_drag_start,
             ondragover: on_drag_over,
@@ -416,6 +443,7 @@ fn AccountServerIcon(
                 unread,
                 mention,
             }
+            SidebarTooltip { line1: server_name, line2: None, line3: None }
         }
     }
 }
@@ -495,8 +523,8 @@ fn AccountBarDmsButton(
                         account_id: account_id.clone(),
                     });
             },
-            title: "{t(\"nav-dms\")}",
             div { class: "icon-dms", "💬" }
+            SidebarTooltip { line1: t("nav-dms"), line2: None, line3: None }
         }
     }
 }
@@ -532,8 +560,8 @@ fn AccountBarFriendsButton(
                     account_id: account_id.clone(),
                 });
             },
-            title: "{t(\"nav-friends\")}",
             div { class: "icon-dms", "👥" }
+            SidebarTooltip { line1: t("nav-friends"), line2: None, line3: None }
         }
     }
 }
@@ -583,11 +611,11 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                     account_id: account_id.clone(),
                 });
             },
-            title: "{t(\"nav-notifications\")}",
             div { class: "icon-notifications", "🔔" }
             if notif_count > 0 {
                 span { class: "badge", "{notif_count}" }
             }
+            SidebarTooltip { line1: t("nav-notifications"), line2: None, line3: None }
         }
     }
 }
