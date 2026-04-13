@@ -46,6 +46,30 @@ fn NavBarSpacer() -> Element {
     rsx! {}
 }
 
+/// Custom hover tooltip for sidebar icons. Opens to the right of the icon
+/// (or left when `mirror_menu_layout` is enabled). Uses `position: fixed`
+/// so it escapes overflow-hidden scroll containers.
+#[component]
+#[allow(clippy::needless_pass_by_value)]
+fn SidebarTooltip(
+    /// First row: account name or server name
+    line1: String,
+    /// Second row: account name (for servers) or backend type (for accounts)
+    line2: String,
+    /// Optional third row: backend type (only for server icons)
+    line3: Option<String>,
+) -> Element {
+    rsx! {
+        div { class: "sidebar-tooltip",
+            span { class: "sidebar-tooltip-line sidebar-tooltip-name", "{line1}" }
+            span { class: "sidebar-tooltip-line sidebar-tooltip-type", "{line2}" }
+            if let Some(ref l3) = line3 {
+                span { class: "sidebar-tooltip-line sidebar-tooltip-type", "{l3}" }
+            }
+        }
+    }
+}
+
 /// Favorites Bar component — **Favorites Bar** (Bar 1).
 ///
 /// Shows: Account icons, separator, favorited server icons with
@@ -116,6 +140,33 @@ pub fn FavoritesBar() -> Element {
 
     // Local signal for drop-zone highlight state.
     let mut drag_over = use_signal(|| false);
+
+    // Set up JS event delegation for tooltip positioning.
+    use_effect(move || {
+        let _ = dioxus::prelude::document::eval(r#"
+            (function() {
+                var sidebar = document.querySelector('.server-sidebar');
+                if (!sidebar || sidebar._tooltipInit) return;
+                sidebar._tooltipInit = true;
+                sidebar.addEventListener('mouseenter', function(e) {
+                    var icon = e.target.closest('.server-icon');
+                    if (!icon) return;
+                    var tip = icon.querySelector('.sidebar-tooltip');
+                    if (!tip) return;
+                    var r = icon.getBoundingClientRect();
+                    var mirrored = document.querySelector('.poly-app.poly-menu-mirrored') !== null;
+                    tip.style.top = (r.top + r.height / 2) + 'px';
+                    if (mirrored) {
+                        tip.style.right = (window.innerWidth - r.left + 12) + 'px';
+                        tip.style.left = 'auto';
+                    } else {
+                        tip.style.left = (r.right + 12) + 'px';
+                        tip.style.right = 'auto';
+                    }
+                }, true);
+            })()
+        "#);
+    });
 
     rsx! {
         nav { class: "server-sidebar",
@@ -313,6 +364,13 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .get(&account_id)
         .map(|s| s.user.display_name.clone())
         .unwrap_or_else(|| account_id.clone());
+
+    let backend_name: String = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .map(|s| s.backend.display_name().to_string())
+        .unwrap_or_else(|| "Unknown".to_string());
 
     // Use icon_emoji from session if available, else fall back to the first
     // letter of the account's display name (NOT the account_id, which starts
@@ -554,7 +612,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 };
                 navigator().push(fallback_route);
             },
-            title: "{display_name}",
             // Render image avatar if available (avatar_url is set by the client;
             // demo client sets it to the bundled cat/dog asset path).
             if let Some(url) = &avatar_url {
@@ -574,7 +631,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             if !is_forum_account {
                 span {
                     class: "account-conn-icon account-conn-icon--{conn_class}",
-                    title: "Connection: {conn_class}",
                     "{conn_icon}"
                 }
             }
@@ -589,8 +645,12 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             if !is_forum_account {
                 span {
                     class: "status-dot presence-dot {presence_class}",
-                    title: "Presence: {presence_class}",
                 }
+            }
+            SidebarTooltip {
+                line1: display_name.clone(),
+                line2: backend_name,
+                line3: None,
             }
         }
     }
@@ -655,7 +715,6 @@ fn FavoriteServerIcon(
         .next()
         .map(|c| c.to_string())
         .unwrap_or_default();
-    let tooltip = format!("{server_name}\n{backend_name} — {account_display_name}");
     let icon_color = user_color(&server_id);
 
     // Determine source badge: account's avatar URL
@@ -836,7 +895,6 @@ fn FavoriteServerIcon(
                 cd.drag_source = DragSource::None;
                 cd.drag_over_id = None;
             },
-            title: "{tooltip}",
             if let Some(ref url) = icon_url {
                 img {
                     class: "server-icon-image",
@@ -864,7 +922,6 @@ fn FavoriteServerIcon(
             if !poly_client::BackendType::from_slug(&backend_slug).uses_forum_layout() {
                 span {
                     class: "account-conn-icon account-conn-icon--{_account_conn_class}",
-                    title: "Account connection: {_account_conn_class}",
                     "{conn_icon}"
                 }
             }
@@ -878,8 +935,12 @@ fn FavoriteServerIcon(
             if !poly_client::BackendType::from_slug(&backend_slug).uses_forum_layout() {
                 span {
                     class: "status-dot presence-dot {account_presence_class}",
-                    title: "Presence: {account_presence_class}",
                 }
+            }
+            SidebarTooltip {
+                line1: server_name.clone(),
+                line2: account_display_name.clone(),
+                line3: Some(backend_name.clone()),
             }
         }
     }

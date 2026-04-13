@@ -42,6 +42,7 @@ pub fn router_with_state(state: Arc<ForgejoState>) -> Router {
             "/api/v1/repos/{owner}/{repo}/contents/{path}",
             get(routes::get_contents),
         )
+        .route("/avatars/{name}", get(routes::serve_avatar))
         .route("/test/auth/token", post(routes::test_auth_token))
         .with_state(state)
         .layer(CorsLayer::very_permissive())

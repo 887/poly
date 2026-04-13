@@ -105,19 +105,19 @@ impl ForgejoState {
             id: 1,
             login: "otter".to_string(),
             full_name: "Otter".to_string(),
-            avatar_url: "https://forgejo.example.com/avatars/otter".to_string(),
+            avatar_url: "http://localhost:9106/avatars/otter".to_string(),
         };
         let flamingo = User {
             id: 2,
             login: "flamingo".to_string(),
             full_name: "Flamingo".to_string(),
-            avatar_url: "https://forgejo.example.com/avatars/flamingo".to_string(),
+            avatar_url: "http://localhost:9106/avatars/flamingo".to_string(),
         };
         let testuser = User {
             id: 3,
             login: "testuser".to_string(),
             full_name: "Test User".to_string(),
-            avatar_url: "https://forgejo.example.com/avatars/testuser".to_string(),
+            avatar_url: "http://localhost:9106/avatars/testuser".to_string(),
         };
 
         self.users.insert("otter".to_string(), otter.clone());
