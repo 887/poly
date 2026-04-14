@@ -2,7 +2,9 @@
 
 A cross-platform messenger that unifies all your chat accounts — Discord, Matrix, Stoat, Teams, Hacker News, Lemmy, GitHub, self-hosted servers — into a single app with an AI agent that remembers, responds, and manages your social life. Built in **Rust** with **Dioxus 0.7.3**, powered by **WASM Component Model** plugins.
 
-**Status (2026-04-12):** All 3 platform shells working with SSR hydration + host-bridge unification. 11 client backends (demo, stoat, matrix, discord, teams, poly-server, hackernews, lemmy, github, forgejo, poly-cli). Plugin capability system live. Phase 5 (Social Agent) in progress.
+![Poly — unified chat UI (Electron shell)](assets/screenshots/poly-app.png)
+
+**Status (2026-04-15):** All 3 platform shells working with SSR hydration + host-bridge unification. 11 client backends (demo, stoat, matrix, discord, teams, poly-server, hackernews, lemmy, github, forgejo, poly-cli). Plugin capability system live. Phase 5 (Social Agent) in progress.
 
 ---
 
