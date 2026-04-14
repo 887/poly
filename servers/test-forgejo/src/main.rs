@@ -12,7 +12,7 @@
 //!
 //! Default port: 9106.
 
-use poly_test_common::{CliArgs, TestServerBase};
+use poly_test_common::{wipe_persisted, AuthState, CliArgs, TestServerBase};
 use poly_test_forgejo::{ForgejoState, router_with_state};
 use std::sync::Arc;
 
@@ -21,10 +21,17 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
     args.init_tracing();
 
-    let state = Arc::new(ForgejoState::new());
+    let auth_path = args.auth_path("forgejo");
+    if args.reset {
+        wipe_persisted(&auth_path);
+    }
+
+    let mut state = ForgejoState::new();
+    state.auth = AuthState::load(auth_path);
     if args.seed {
         state.seed();
     }
+    let state = Arc::new(state);
 
     let base = TestServerBase::bind(args.port).await?;
     tracing::info!("poly-test-forgejo listening on {}", base.base_url());

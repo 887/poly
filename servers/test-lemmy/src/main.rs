@@ -13,7 +13,7 @@
 //!
 //! Default port: 8538.
 
-use poly_test_common::{CliArgs, TestServerBase};
+use poly_test_common::{wipe_persisted, AuthState, CliArgs, TestServerBase};
 use poly_test_lemmy::{LemmyState, router_with_state};
 use std::sync::Arc;
 
@@ -22,10 +22,17 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
     args.init_tracing();
 
-    let state = Arc::new(LemmyState::new());
+    let auth_path = args.auth_path("lemmy");
+    if args.reset {
+        wipe_persisted(&auth_path);
+    }
+
+    let mut state = LemmyState::new();
+    state.auth = AuthState::load(auth_path);
     if args.seed {
         state.seed();
     }
+    let state = Arc::new(state);
 
     let base = TestServerBase::bind(args.port).await?;
     tracing::info!("poly-test-lemmy listening on {}", base.base_url());

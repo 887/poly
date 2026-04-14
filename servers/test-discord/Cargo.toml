@@ -31,6 +31,9 @@ tower-http = { workspace = true, features = ["cors", "trace"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Discord models (ISC-licensed, from twilight-rs)
+twilight-model = { workspace = true }
+
 # Utilities
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

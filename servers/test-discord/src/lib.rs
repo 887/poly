@@ -19,6 +19,9 @@ use tower_http::cors::CorsLayer;
 pub fn router(state: Arc<DiscordState>) -> Router {
     Router::new()
         .route("/health", get(|| async { health_handler("discord").await }))
+        // Auth — Spacebar-compatible password login + Gateway discovery
+        .route("/api/v10/auth/login", post(routes::login))
+        .route("/api/v10/gateway", get(routes::get_gateway))
         // Test-only easy-signin
         .route("/test/auth/token", post(routes::test_auth_token))
         // Users

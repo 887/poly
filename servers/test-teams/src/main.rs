@@ -3,7 +3,7 @@
 //! Implements the subset of the Microsoft Graph API that poly-teams calls.
 //! In-memory state, mock OAuth2 token endpoint.
 
-use poly_test_common::{CliArgs, TestServerBase};
+use poly_test_common::{wipe_persisted, AuthState, CliArgs, TestServerBase};
 use poly_test_teams::{TeamsState, router};
 use std::sync::Arc;
 
@@ -12,10 +12,17 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
     args.init_tracing();
 
-    let state = Arc::new(TeamsState::new());
+    let auth_path = args.auth_path("teams");
+    if args.reset {
+        wipe_persisted(&auth_path);
+    }
+
+    let mut state = TeamsState::new();
+    state.auth = AuthState::load(auth_path);
     if args.seed {
         state.seed();
     }
+    let state = Arc::new(state);
 
     let base = TestServerBase::bind(args.port).await?;
     tracing::info!("poly-test-teams listening on {}", base.base_url());

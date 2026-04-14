@@ -25,7 +25,7 @@ mod broadcast;
 mod cli;
 mod server;
 
-pub use auth::{AuthState, TokenAuth};
+pub use auth::{AuthState, TokenAuth, wipe_persisted};
 pub use broadcast::EventBus;
 pub use cli::CliArgs;
 pub use server::TestServerBase;

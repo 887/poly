@@ -5,7 +5,7 @@ use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupCo
 
 use crate::DiscordClient;
 
-/// Public authenticate helper — called by the form and integration tests.
+/// Public authenticate helper — token-based (real Discord + Spacebar with pre-issued tokens).
 pub async fn authenticate(
     base_url: String,
     token: String,
@@ -21,24 +21,41 @@ pub async fn authenticate(
     })
 }
 
+/// Password-based authenticate helper — used by Spacebar/Fosscord and the local test server.
+pub async fn authenticate_with_password(
+    base_url: String,
+    email: String,
+    password: String,
+) -> Result<SignupCompleted, String> {
+    let mut backend = DiscordClient::with_base_url(base_url);
+    let session = backend
+        .authenticate(AuthCredentials::EmailPassword { email, password })
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(SignupCompleted {
+        session,
+        backend: Box::new(backend),
+    })
+}
+
 fn koala_auth(
     u: String,
-    t: String,
-    _p: String,
+    email: String,
+    password: String,
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
-    Box::pin(async move { authenticate(u, t).await })
+    Box::pin(async move { authenticate_with_password(u, email, password).await })
 }
 
 fn kangaroo_auth(
     u: String,
-    t: String,
-    _p: String,
+    email: String,
+    password: String,
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
-    Box::pin(async move { authenticate(u, t).await })
+    Box::pin(async move { authenticate_with_password(u, email, password).await })
 }
 
 /// Test accounts for the Discord local dev server (port 9102).
@@ -50,8 +67,8 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             label: "Koala",
             server_label: "Discord — localhost:9102",
             base_url: "http://localhost:9102",
-            username: "koala-test-token",
-            password: "",
+            username: "koala",
+            password: "testpass123",
             authenticate: koala_auth,
         },
         TestAccountEntry {
@@ -59,8 +76,8 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             label: "Kangaroo",
             server_label: "Discord — localhost:9102",
             base_url: "http://localhost:9102",
-            username: "kangaroo-test-token",
-            password: "",
+            username: "kangaroo",
+            password: "testpass123",
             authenticate: kangaroo_auth,
         },
     ];

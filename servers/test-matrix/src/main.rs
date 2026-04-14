@@ -5,7 +5,7 @@
 //! so integration tests and the binary share a single source of truth for
 //! route registration and CORS configuration.
 
-use poly_test_common::{CliArgs, TestServerBase};
+use poly_test_common::{wipe_persisted, AuthState, CliArgs, TestServerBase};
 use poly_test_matrix::{router, MatrixState};
 use std::sync::Arc;
 
@@ -14,10 +14,17 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
     args.init_tracing();
 
-    let state = Arc::new(MatrixState::new());
+    let auth_path = args.auth_path("matrix");
+    if args.reset {
+        wipe_persisted(&auth_path);
+    }
+
+    let mut state = MatrixState::new();
+    state.auth = AuthState::load(auth_path);
     if args.seed {
         state.seed();
     }
+    let state = Arc::new(state);
 
     let base = TestServerBase::bind(args.port).await?;
     tracing::info!("poly-test-matrix listening on {}", base.base_url());

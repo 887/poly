@@ -82,8 +82,8 @@ impl DiscordClient {
 
     fn discord_user_to_poly(&self, u: api::DiscordUser) -> User {
         User {
-            id: u.id,
-            display_name: u.username,
+            id: u.id.to_string(),
+            display_name: u.global_name.unwrap_or(u.username),
             avatar_url: None,
             presence: PresenceStatus::Online,
             backend: BackendType::from("discord"),
@@ -96,7 +96,7 @@ impl DiscordClient {
             .map(|dt| dt.with_timezone(&chrono::Utc))
             .unwrap_or_else(|_| chrono::Utc::now());
         Message {
-            id: m.id,
+            id: m.id.to_string(),
             author,
             content: MessageContent::Text(m.content),
             timestamp,
@@ -120,18 +120,21 @@ impl ClientBackend for DiscordClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         let token = match credentials {
             AuthCredentials::Token(t) => t,
-            AuthCredentials::EmailPassword { password, .. } => password,
+            AuthCredentials::EmailPassword { email, password } => {
+                self.http.login(&email, &password).await?
+            }
             AuthCredentials::OAuth { token } => token,
-            _ => return Err(ClientError::AuthFailed("Discord requires a user token".into())),
+            _ => return Err(ClientError::AuthFailed("Discord requires a user token or email+password".into())),
         };
         self.http.set_token(token.clone());
         let user = self.http.get_me().await?;
-        self.account_id = Some(user.id.clone());
+        let user_id = user.id.to_string();
+        self.account_id = Some(user_id.clone());
         self.account_display_name = Some(user.username.clone());
         Ok(Session {
-            id: user.id.clone(),
+            id: user_id.clone(),
             user: User {
-                id: user.id.clone(),
+                id: user_id,
                 display_name: user.username.clone(),
                 avatar_url: None,
                 presence: PresenceStatus::Online,
@@ -171,7 +174,7 @@ impl ClientBackend for DiscordClient {
         let account_id = self.account_id();
         let account_name = self.account_display_name();
         Ok(self.http.get_guilds().await?.into_iter().map(|g| Server {
-            id: g.id,
+            id: g.id.to_string(),
             name: g.name,
             icon_url: None,
             banner_url: None,
@@ -189,7 +192,7 @@ impl ClientBackend for DiscordClient {
         let account_name = self.account_display_name();
         let g = self.http.get_guild(id).await?;
         Ok(Server {
-            id: g.id,
+            id: g.id.to_string(),
             name: g.name,
             icon_url: None,
             banner_url: None,
@@ -203,10 +206,11 @@ impl ClientBackend for DiscordClient {
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
+        use twilight_model::channel::ChannelType as DcChType;
         Ok(self.http.get_guild_channels(server_id).await?.into_iter()
-            .filter(|c| c.channel_type == 0 || c.channel_type == 5)
+            .filter(|c| matches!(c.channel_type, DcChType::GuildText | DcChType::GuildAnnouncement))
             .map(|c| Channel {
-                id: c.id,
+                id: c.id.to_string(),
                 name: c.name,
                 channel_type: ChannelType::Text,
                 server_id: server_id.to_string(),
@@ -220,10 +224,10 @@ impl ClientBackend for DiscordClient {
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
         let ch = self.http.get_channel(id).await?;
         Ok(Channel {
-            id: ch.id,
+            id: ch.id.to_string(),
             name: ch.name,
             channel_type: ChannelType::Text,
-            server_id: ch.guild_id.unwrap_or_default(),
+            server_id: ch.guild_id.map(|id| id.to_string()).unwrap_or_default(),
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
@@ -262,11 +266,12 @@ impl ClientBackend for DiscordClient {
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        use twilight_model::channel::ChannelType as DcChType;
         let account_id = self.account_id();
         Ok(self.http.get_dm_channels().await?.into_iter()
-            .filter(|c| c.channel_type == 1)
+            .filter(|c| c.channel_type == DcChType::Private)
             .map(|c| DmChannel {
-                id: c.id,
+                id: c.id.to_string(),
                 user: User {
                     id: String::new(),
                     display_name: c.name,

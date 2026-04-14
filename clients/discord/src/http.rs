@@ -80,6 +80,34 @@ impl DiscordHttpClient {
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
+    /// Spacebar/Fosscord-compatible password login.
+    /// Real Discord doesn't expose this without captcha+MFA; we use it for
+    /// self-hosted Spacebar instances and the local test server.
+    pub async fn login(&self, login: &str, password: &str) -> Result<String, ClientError> {
+        #[derive(serde::Deserialize)]
+        struct LoginResp {
+            token: String,
+        }
+        let resp = self
+            .http
+            .post(self.api_url("/api/v10/auth/login"))
+            .json(&serde_json::json!({ "login": login, "password": password }))
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            return Err(ClientError::AuthFailed(format!(
+                "login failed: HTTP {status}"
+            )));
+        }
+        let parsed: LoginResp = resp
+            .json()
+            .await
+            .map_err(|e| ClientError::Internal(e.to_string()))?;
+        Ok(parsed.token)
+    }
+
     pub async fn get_me(&self) -> Result<DiscordUser, ClientError> {
         self.get("/api/v10/users/@me").await
     }

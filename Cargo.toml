@@ -111,6 +111,10 @@ reqwest = { version = "0.13.2", default-features = false, features = [
 axum = "0.8"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
+# Discord — ISC-licensed models shared between poly-discord (client) and
+# poly-test-discord (mock server). No AGPL code from Spacebar/Fosscord.
+twilight-model = "0.17"
+
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

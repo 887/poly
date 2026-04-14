@@ -126,8 +126,8 @@ async fn test_get_servers() {
 async fn test_get_server_by_id() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
-    let server = client.get_server("G001").await.expect("get_server G001");
-    assert_eq!(server.id, "G001");
+    let server = client.get_server("100").await.expect("get_server guild 100");
+    assert_eq!(server.id, "100");
     assert_eq!(server.name, "Australiana");
 }
 
@@ -135,14 +135,14 @@ async fn test_get_server_by_id() {
 async fn test_get_channels() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
-    let channels = client.get_channels("G001").await.expect("get_channels G001");
+    let channels = client.get_channels("100").await.expect("get_channels guild 100");
     assert!(!channels.is_empty());
     let names: Vec<_> = channels.iter().map(|c| c.name.as_str()).collect();
     assert!(names.contains(&"general"), "general channel expected");
     assert!(names.contains(&"random"), "random channel expected");
     for ch in &channels {
         assert_eq!(ch.channel_type, ChannelType::Text);
-        assert_eq!(ch.server_id, "G001");
+        assert_eq!(ch.server_id, "100");
     }
 }
 
@@ -150,8 +150,8 @@ async fn test_get_channels() {
 async fn test_get_channel_by_id() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
-    let ch = client.get_channel("CH001").await.expect("get_channel CH001");
-    assert_eq!(ch.id, "CH001");
+    let ch = client.get_channel("200").await.expect("get_channel 200");
+    assert_eq!(ch.id, "200");
     assert_eq!(ch.name, "general");
     assert_eq!(ch.channel_type, ChannelType::Text);
 }
@@ -161,10 +161,10 @@ async fn test_get_messages() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
     let msgs = client
-        .get_messages("CH001", MessageQuery { limit: Some(10), before: None, after: None, around: None })
+        .get_messages("200", MessageQuery { limit: Some(10), before: None, after: None, around: None })
         .await
         .expect("get_messages");
-    assert!(!msgs.is_empty(), "CH001 should have seeded messages");
+    assert!(!msgs.is_empty(), "channel 200 should have seeded messages");
     let has_gday = msgs.iter().any(|m| {
         matches!(&m.content, MessageContent::Text(t) if t.contains("G'day"))
     });
@@ -176,7 +176,7 @@ async fn test_send_message() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
     let msg = client
-        .send_message("CH001", MessageContent::Text("Hello from test!".to_string()))
+        .send_message("200", MessageContent::Text("Hello from test!".to_string()))
         .await
         .expect("send_message");
     assert_eq!(msg.content, MessageContent::Text("Hello from test!".to_string()));
@@ -188,14 +188,14 @@ async fn test_send_then_read_message() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
     let sent = client
-        .send_message("CH002", MessageContent::Text("Cross-channel ping!".to_string()))
+        .send_message("201", MessageContent::Text("Cross-channel ping!".to_string()))
         .await
-        .expect("send to CH002");
+        .expect("send to channel 201");
 
     let msgs = client
-        .get_messages("CH002", MessageQuery { limit: Some(20), before: None, after: None, around: None })
+        .get_messages("201", MessageQuery { limit: Some(20), before: None, after: None, around: None })
         .await
-        .expect("get_messages CH002");
+        .expect("get_messages 201");
     assert!(
         msgs.iter().any(|m| m.id == sent.id),
         "sent message should appear in get_messages"
@@ -214,8 +214,8 @@ async fn test_get_dm_channels() {
 async fn test_get_user() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
-    let user = client.get_user("U002").await.expect("get_user U002");
-    assert_eq!(user.id, "U002");
+    let user = client.get_user("2").await.expect("get_user 2");
+    assert_eq!(user.id, "2");
     assert_eq!(user.display_name, "kangaroo");
     assert_eq!(user.backend, BackendType::from("discord"));
 }
@@ -232,7 +232,7 @@ async fn test_backend_type_and_name() {
 async fn test_presence_and_friends_stubs() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("koala").await;
-    let presence = client.get_presence("U001").await.expect("get_presence");
+    let presence = client.get_presence("1").await.expect("get_presence");
     assert_eq!(presence, PresenceStatus::Offline);
     let friends = client.get_friends().await.expect("get_friends");
     assert!(friends.is_empty());

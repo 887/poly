@@ -1,5 +1,7 @@
 //! CLI argument parser for test server binaries.
 
+use std::path::PathBuf;
+
 /// Command-line arguments shared by all test servers.
 pub struct CliArgs {
     /// Port to bind on (0 = random free port).
@@ -8,6 +10,8 @@ pub struct CliArgs {
     pub seed: bool,
     /// Enable verbose tracing output.
     pub verbose: bool,
+    /// Wipe persisted auth + state for this backend before starting.
+    pub reset: bool,
 }
 
 impl CliArgs {
@@ -17,6 +21,7 @@ impl CliArgs {
         let mut port = 0u16;
         let mut seed = false;
         let mut verbose = false;
+        let mut reset = false;
 
         let mut i = 1;
         while i < args.len() {
@@ -29,6 +34,7 @@ impl CliArgs {
                 }
                 Some("--seed") => seed = true,
                 Some("--verbose") | Some("-v") => verbose = true,
+                Some("--reset") => reset = true,
                 _ => {}
             }
             i += 1;
@@ -38,6 +44,7 @@ impl CliArgs {
             port,
             seed,
             verbose,
+            reset,
         }
     }
 
@@ -52,5 +59,31 @@ impl CliArgs {
         };
 
         tracing_subscriber::fmt().with_env_filter(filter).init();
+    }
+
+    /// Directory where this backend persists state across restarts.
+    ///
+    /// `$POLY_TEST_DATA_DIR/{backend}/` if set, else
+    /// `$XDG_DATA_HOME/poly/test-servers/{backend}/` or
+    /// `~/.local/share/poly/test-servers/{backend}/`.
+    pub fn persist_dir(&self, backend: &str) -> PathBuf {
+        if let Ok(root) = std::env::var("POLY_TEST_DATA_DIR") {
+            return PathBuf::from(root).join(backend);
+        }
+        let base = std::env::var("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .ok()
+            .or_else(|| {
+                std::env::var("HOME")
+                    .ok()
+                    .map(|h| PathBuf::from(h).join(".local/share"))
+            })
+            .unwrap_or_else(|| PathBuf::from("."));
+        base.join("poly/test-servers").join(backend)
+    }
+
+    /// Absolute path to the persisted auth-token file for this backend.
+    pub fn auth_path(&self, backend: &str) -> PathBuf {
+        self.persist_dir(backend).join("auth.json")
     }
 }
