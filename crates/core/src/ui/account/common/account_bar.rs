@@ -122,11 +122,15 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
 
     // Icon (not a dot) for connection status — visually distinct per state.
     let conn_icon = match user.conn_class {
-        "connected" => "⚡",    // lightning bolt  = live connection
-        "connecting" => "↺",   // rotating arrows = syncing/connecting
-        "disconnected" => "—",  // em dash         = offline by choice
-        _ => "⚠",               // warning triangle = error state
+        "connected" => "⚡",         // lightning bolt    = live connection
+        "connecting" => "↺",        // rotating arrows   = syncing/connecting
+        "disconnected" => "—",       // em dash           = offline by choice
+        "unauthenticated" => "🔑",   // key               = stored token rejected, please reauth
+        _ => "⚠",                    // warning triangle  = transport error
     };
+    // Reauth badge is shown for ALL backends — forum/forge clients never show
+    // a regular connection badge but they DO surface this one.
+    let needs_reauth = user.conn_class == "unauthenticated";
 
     rsx! {
         div { class: "account-bar-user",
@@ -152,7 +156,9 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
                         "{user.first_char}"
                     }
                 }
-                // Forum backends have no persistent connection or presence — hide badges.
+                // Forum backends have no persistent connection or presence — hide regular badges,
+                // but ALWAYS surface the reauth badge (even for forum/forge backends) so the user
+                // knows a sign-in is needed.
                 if !user.is_forum {
                     span {
                         class: "account-conn-icon account-conn-icon--{user.conn_class}",
@@ -162,6 +168,12 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
                     span {
                         class: "status-dot presence-dot {user.presence_class}",
                         title: "Presence: {user.presence_class}",
+                    }
+                } else if needs_reauth {
+                    span {
+                        class: "account-conn-icon account-conn-icon--unauthenticated",
+                        title: "Sign in again",
+                        "🔑"
                     }
                 }
             }
@@ -207,6 +219,7 @@ fn AccountProfilePopup(
         "connected" => t("account-conn-connected"),
         "connecting" => t("account-conn-connecting"),
         "disconnected" => t("account-conn-disconnected"),
+        "unauthenticated" => t("notifications-reconnect"),
         _ => t("account-conn-error"),
     };
 

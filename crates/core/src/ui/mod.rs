@@ -1005,6 +1005,83 @@ pub(crate) async fn restore_github_accounts(
 /// The stored `AccountToken.instance_id` is the Forgejo instance hostname
 /// (or `"codeberg.org"`); we reconstruct the full URL and re-authenticate
 /// with the stored personal access token.
+/// Heuristic: does this error string look like a 401 / invalid-token failure?
+///
+/// Used by backend restore paths to distinguish "stored token rejected, user
+/// must reauth" from "network unreachable, try again later". Matching is
+/// intentionally lenient — errors bubble up from eight different HTTP clients
+/// with wildly different formatting.
+#[allow(dead_code)] // Not all feature combinations consume this helper yet.
+pub(crate) fn looks_like_auth_failure(err: &str) -> bool {
+    let l = err.to_lowercase();
+    l.contains("401")
+        || l.contains("unauthorized")
+        || l.contains("invalid token")
+        || l.contains("invalid credentials")
+        || l.contains("authentication failed")
+}
+
+/// Register an offline session for an account whose persisted token was rejected
+/// with 401, and push a user-visible reauth notification.
+///
+/// Used by restore paths for forge/forum backends that otherwise would silently
+/// skip the account — leaving the user confused about why their sidebar is empty.
+#[allow(clippy::too_many_arguments)]
+#[allow(dead_code)] // Not all feature combinations consume this helper yet.
+pub(crate) fn register_unauthenticated_account(
+    client_manager: &mut Signal<ClientManager>,
+    chat_data: &mut Signal<ChatData>,
+    backend: poly_client::BackendType,
+    backend_slug: &str,
+    account_id: String,
+    display_name: String,
+    token: String,
+    instance_id: String,
+    backend_url: Option<String>,
+    reason: String,
+) {
+    let session = poly_client::Session {
+        id: account_id.clone(),
+        user: poly_client::User {
+            id: account_id.clone(),
+            display_name,
+            avatar_url: None,
+            presence: poly_client::PresenceStatus::Offline,
+            backend: backend.clone(),
+        },
+        token,
+        backend: backend.clone(),
+        icon_emoji: None,
+        instance_id,
+        backend_url,
+    };
+    {
+        let mut cm = client_manager.write();
+        cm.register_offline_session(account_id.clone(), session.clone());
+        cm.mark_unauthenticated(&account_id, reason);
+    }
+    let mut cd = chat_data.write();
+    cd.account_sessions.insert(account_id.clone(), session);
+    // Only add one ReauthRequired notification per account.
+    let already_notified = cd.notifications.iter().any(|n| {
+        n.account_id == account_id
+            && matches!(&n.kind, poly_client::NotificationKind::ReauthRequired { .. })
+    });
+    if !already_notified {
+        cd.notifications.push(poly_client::Notification {
+            id: format!("reauth-{account_id}"),
+            kind: poly_client::NotificationKind::ReauthRequired {
+                backend_slug: backend_slug.to_string(),
+            },
+            backend,
+            account_id,
+            timestamp: chrono::Utc::now(),
+            read: false,
+            preview: crate::i18n::t("notifications-reauth-preview"),
+        });
+    }
+}
+
 #[cfg(feature = "forgejo")]
 pub(crate) async fn restore_forgejo_accounts(
     storage: &crate::storage::Storage,
@@ -1047,7 +1124,27 @@ pub(crate) async fn restore_forgejo_accounts(
         {
             Ok(s) => s,
             Err(e) => {
-                tracing::warn!("Skipping Forgejo account {}: {}", token.account_id, e);
+                let err_str = e.to_string();
+                if looks_like_auth_failure(&err_str) {
+                    tracing::warn!(
+                        "Forgejo account {} token rejected (401). Surfacing reauth prompt.",
+                        token.account_id
+                    );
+                    register_unauthenticated_account(
+                        &mut client_manager,
+                        &mut chat_data,
+                        poly_client::BackendType::from("forgejo"),
+                        "forgejo",
+                        token.account_id.clone(),
+                        token.display_name.clone(),
+                        token.token.clone(),
+                        instance_url.clone(),
+                        Some(instance_url.clone()),
+                        err_str,
+                    );
+                } else {
+                    tracing::warn!("Skipping Forgejo account {}: {}", token.account_id, e);
+                }
                 continue;
             }
         };

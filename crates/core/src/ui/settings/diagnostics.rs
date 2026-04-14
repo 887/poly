@@ -87,6 +87,7 @@ fn AccountDiagnosticsRow(account_id: String) -> Element {
         ConnectionStatus::Connected => "Connected",
         ConnectionStatus::Connecting => "Connecting…",
         ConnectionStatus::Disconnected => "Disconnected",
+        ConnectionStatus::Unauthenticated(_) => "Reauthenticate",
         ConnectionStatus::Error(e) => {
             let _ = e;
             "Error"

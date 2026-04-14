@@ -577,6 +577,21 @@
     color: #fff;
 }
 
+/* Reauthentication required — amber with subtle pulse so the user notices.
+   Applied to every backend (including forge/forum) when its stored token is
+   rejected with 401. */
+.account-conn-icon--unauthenticated {
+    background: #f0a032;
+    color: #1a1a1a;
+    box-shadow: 0 0 0 2px rgba(240, 160, 50, 0.35);
+    animation: conn-reauth-pulse 2s ease-in-out infinite;
+}
+
+@keyframes conn-reauth-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(240, 160, 50, 0.35); }
+    50%      { box-shadow: 0 0 0 4px rgba(240, 160, 50, 0.15); }
+}
+
 /* Small variant used inside the profile popup info row */
 .account-conn-icon.small {
     position: static;

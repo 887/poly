@@ -297,6 +297,7 @@ fn NotificationItemContent(
         NotificationKind::FriendRequest { .. } => ("👤", "Friend Request"),
         NotificationKind::ServerInvite { .. } => ("🏠", "Server Invite"),
         NotificationKind::VoiceChannelInvite { .. } => ("🔊", "Voice Invite"),
+        NotificationKind::ReauthRequired { .. } => ("🔑", "Reconnect"),
         NotificationKind::Other(_) => ("🔔", "Notification"),
     };
 
@@ -423,6 +424,22 @@ fn NotificationItemContent(
                                     }
                                 },
                                 "{t(\"notifications-dismiss\")}"
+                            }
+                        }
+                    }
+                    NotificationKind::ReauthRequired { backend_slug } => {
+                        let slug = backend_slug.clone();
+                        let nid = dismiss_id.clone();
+                        rsx! {
+                            button {
+                                class: "btn btn-warning btn-sm notif-action-reauth",
+                                onclick: move |_| {
+                                    chat_data.write().notifications.retain(|n| n.id != nid);
+                                    navigator().push(super::super::super::routes::Route::ClientSignup {
+                                        client: slug.clone(),
+                                    });
+                                },
+                                "{t(\"notifications-reconnect\")}"
                             }
                         }
                     }

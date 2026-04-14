@@ -366,6 +366,17 @@ impl ClientManager {
             .or_insert(AccountPresence::Online);
     }
 
+    /// Mark an account as needing reauthentication (stored token rejected with 401).
+    ///
+    /// Sets the connection status to `Unauthenticated` — the account icon shows a
+    /// 🔑 badge regardless of whether the backend uses forum layout. The caller
+    /// should also push a `NotificationKind::ReauthRequired` notification into
+    /// `ChatData` so the user sees an actionable toast.
+    pub fn mark_unauthenticated(&mut self, account_id: &str, reason: impl Into<String>) {
+        self.connection_statuses
+            .insert(account_id.to_string(), ConnectionStatus::Unauthenticated(reason.into()));
+    }
+
     /// Register a server → account mapping so `get_backend_for_server` can route API
     /// calls for a newly-created server without a full server-map rebuild.
     pub fn register_server(&mut self, server_id: String, account_id: String) {

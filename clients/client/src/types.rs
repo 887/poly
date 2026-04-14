@@ -195,7 +195,12 @@ pub enum ConnectionStatus {
     Connecting,
     /// Explicitly disconnected by the user (e.g. truly-offline / appear-offline mode).
     Disconnected,
-    /// Authentication rejected (4xx) or network unreachable (5xx / timeout).
+    /// Backend rejected the stored auth token (401 / invalid session). User must
+    /// sign in again. Surfaced on the account icon even for forge/forum backends
+    /// that otherwise have no connection status.
+    Unauthenticated(String),
+    /// Transport error — network unreachable, 5xx, timeout, parse failure, etc.
+    /// Distinct from `Unauthenticated` because the user can't fix it by re-logging.
     Error(String),
 }
 
@@ -206,6 +211,7 @@ impl ConnectionStatus {
             Self::Connected => "connected",
             Self::Connecting => "connecting",
             Self::Disconnected => "disconnected",
+            Self::Unauthenticated(_) => "unauthenticated",
             Self::Error(_) => "error",
         }
     }
@@ -216,8 +222,16 @@ impl ConnectionStatus {
             Self::Connected => "●",
             Self::Connecting => "◌",
             Self::Disconnected => "○",
+            Self::Unauthenticated(_) => "🔑",
             Self::Error(_) => "✕",
         }
+    }
+
+    /// True when the UI should surface a reauthentication affordance for this
+    /// account (prominent icon + toast notification). Forge/forum backends
+    /// never show a connection-status badge, but they DO show this one.
+    pub fn needs_reauth(&self) -> bool {
+        matches!(self, Self::Unauthenticated(_))
     }
 }
 
@@ -1045,6 +1059,10 @@ pub enum NotificationKind {
         /// User ID of the person who sent the invite.
         inviter_user_id: String,
     },
+    /// Stored auth token was rejected (401). User must sign in again for this
+    /// account before it can be used. Carries the backend slug so the UI can
+    /// route "Reconnect" clicks straight to the right signup flow.
+    ReauthRequired { backend_slug: String },
     /// Generic notification.
     Other(String),
 }

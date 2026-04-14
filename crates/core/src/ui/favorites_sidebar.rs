@@ -421,8 +421,10 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         "connected" => "⚡",
         "connecting" => "↺",
         "disconnected" => "—",
+        "unauthenticated" => "🔑",
         _ => "⚠",
     };
+    let needs_reauth_badge = conn_class == "unauthenticated";
 
     let is_drag_over_account = chat_data.read().drag_over_id.as_deref()
         == Some(account_id.as_str())
@@ -643,11 +645,18 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     "{icon_label}"
                 }
             }
-            // Bottom-left: connection status emoji icon (not shown for forum accounts)
+            // Bottom-left: connection status emoji icon (not shown for forum accounts,
+            // unless the account needs reauthentication — then always show).
             if !is_forum_account {
                 span {
                     class: "account-conn-icon account-conn-icon--{conn_class}",
                     "{conn_icon}"
+                }
+            } else if needs_reauth_badge {
+                span {
+                    class: "account-conn-icon account-conn-icon--unauthenticated",
+                    title: "Sign in again",
+                    "🔑"
                 }
             }
             // Top-left: notification count badge (not shown for forum accounts)
@@ -721,8 +730,10 @@ fn FavoriteServerIcon(
         "connected" => "⚡",
         "connecting" => "↺",
         "disconnected" => "—",
+        "unauthenticated" => "🔑",
         _ => "⚠",
     };
+    let server_needs_reauth = _account_conn_class == "unauthenticated";
 
     let is_selected = app_state.read().nav.selected_server.as_deref() == Some(&server_id);
     let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
@@ -934,11 +945,18 @@ fn FavoriteServerIcon(
             } else {
                 span { class: "source-badge", "A" }
             }
-            // Bottom-left: account connection status emoji icon (not for forum)
+            // Bottom-left: account connection status emoji icon (not for forum,
+            // unless reauth is needed — forum accounts still surface the 🔑 badge).
             if !poly_client::BackendType::from_slug(&backend_slug).uses_forum_layout() {
                 span {
                     class: "account-conn-icon account-conn-icon--{_account_conn_class}",
                     "{conn_icon}"
+                }
+            } else if server_needs_reauth {
+                span {
+                    class: "account-conn-icon account-conn-icon--unauthenticated",
+                    title: "Sign in again",
+                    "🔑"
                 }
             }
             // Top-left: mention count badge
