@@ -10,11 +10,11 @@
 //! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
 
 #[cfg(feature = "native")]
-mod api;
-#[cfg(feature = "native")]
 mod http;
 #[cfg(feature = "native")]
 pub mod signup;
+#[cfg(feature = "native")]
+pub mod types;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
 #[cfg(target_os = "wasi")]
@@ -81,7 +81,7 @@ impl TeamsClient {
         self.account_display_name.clone().unwrap_or_default()
     }
 
-    fn graph_message_to_poly(&self, m: api::GraphMessage) -> Message {
+    fn graph_message_to_poly(&self, m: types::GraphMessage) -> Message {
         let author = if let Some(from) = m.from {
             if let Some(u) = from.user {
                 User {
@@ -112,6 +112,28 @@ impl TeamsClient {
         }
     }
 
+    /// Edit a channel message. Not yet on the `ClientBackend` trait — expose
+    /// so test harnesses and future trait work can drive it.
+    pub async fn edit_message(&self, channel_id: &str, message_id: &str, content: &str) -> ClientResult<Message> {
+        let Some((team_id, ch_id)) = channel_id.split_once('/') else {
+            return Err(ClientError::Internal(format!(
+                "Teams edit_message requires 'team_id/channel_id', got '{channel_id}'"
+            )));
+        };
+        let m = self.http.edit_channel_message(team_id, ch_id, message_id, content).await?;
+        Ok(self.graph_message_to_poly(m))
+    }
+
+    /// Soft-delete a channel message.
+    pub async fn delete_message(&self, channel_id: &str, message_id: &str) -> ClientResult<()> {
+        let Some((team_id, ch_id)) = channel_id.split_once('/') else {
+            return Err(ClientError::Internal(format!(
+                "Teams delete_message requires 'team_id/channel_id', got '{channel_id}'"
+            )));
+        };
+        self.http.delete_channel_message(team_id, ch_id, message_id).await
+    }
+
     fn unknown_user(&self) -> User {
         User {
             id: String::new(),
@@ -136,7 +158,9 @@ impl ClientBackend for TeamsClient {
         let token = match credentials {
             AuthCredentials::Token(t) => t,
             AuthCredentials::OAuth { token } => token,
-            AuthCredentials::EmailPassword { password, .. } => password,
+            AuthCredentials::EmailPassword { email, password } => {
+                self.http.login(&email, &password).await?
+            }
             _ => return Err(ClientError::AuthFailed("Teams requires a Bearer token".into())),
         };
         self.http.set_token(token.clone());
@@ -258,19 +282,21 @@ impl ClientBackend for TeamsClient {
             MessageContent::Text(t) => t,
             MessageContent::WithAttachments { text, .. } => text,
         };
-        // channel_id is "team_id/channel_id"
-        let (team_id, ch_id) = channel_id.split_once('/').ok_or_else(|| {
-            ClientError::Internal(format!("Teams channel id must be 'team_id/channel_id', got '{channel_id}'"))
-        })?;
-        let m = self.http.send_channel_message(team_id, ch_id, &text).await?;
+        // Channel IDs are "team_id/channel_id"; chat IDs have no slash.
+        let m = if let Some((team_id, ch_id)) = channel_id.split_once('/') {
+            self.http.send_channel_message(team_id, ch_id, &text).await?
+        } else {
+            self.http.send_chat_message(channel_id, &text).await?
+        };
         Ok(self.graph_message_to_poly(m))
     }
 
     async fn get_messages(&self, channel_id: &str, query: MessageQuery) -> ClientResult<Vec<Message>> {
-        let (team_id, ch_id) = channel_id.split_once('/').ok_or_else(|| {
-            ClientError::Internal(format!("Teams channel id must be 'team_id/channel_id', got '{channel_id}'"))
-        })?;
-        let msgs = self.http.get_channel_messages(team_id, ch_id, query.limit).await?;
+        let msgs = if let Some((team_id, ch_id)) = channel_id.split_once('/') {
+            self.http.get_channel_messages(team_id, ch_id, query.limit).await?
+        } else {
+            self.http.get_chat_messages(channel_id, query.limit).await?
+        };
         Ok(msgs.into_iter().map(|m| self.graph_message_to_poly(m)).collect())
     }
 

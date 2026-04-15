@@ -21,24 +21,41 @@ pub async fn authenticate(
     })
 }
 
+/// Password-based authenticate helper — used by the local test server.
+pub async fn authenticate_with_password(
+    base_url: String,
+    email: String,
+    password: String,
+) -> Result<SignupCompleted, String> {
+    let mut backend = TeamsClient::with_base_url(base_url);
+    let session = backend
+        .authenticate(AuthCredentials::EmailPassword { email, password })
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(SignupCompleted {
+        session,
+        backend: Box::new(backend),
+    })
+}
+
 fn sheep_auth(
     u: String,
-    t: String,
-    _p: String,
+    email: String,
+    password: String,
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
-    Box::pin(async move { authenticate(u, t).await })
+    Box::pin(async move { authenticate_with_password(u, email, password).await })
 }
 
 fn walrus_auth(
     u: String,
-    t: String,
-    _p: String,
+    email: String,
+    password: String,
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = Result<poly_client::SignupCompleted, String>>>,
 > {
-    Box::pin(async move { authenticate(u, t).await })
+    Box::pin(async move { authenticate_with_password(u, email, password).await })
 }
 
 /// Test accounts for the Teams local dev server (port 9103).
@@ -50,8 +67,8 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             label: "Sheep",
             server_label: "Teams — localhost:9103",
             base_url: "http://localhost:9103",
-            username: "sheep-test-token",
-            password: "",
+            username: "sheep@contoso.com",
+            password: "testpass123",
             authenticate: sheep_auth,
         },
         TestAccountEntry {
@@ -59,8 +76,8 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             label: "Walrus",
             server_label: "Teams — localhost:9103",
             base_url: "http://localhost:9103",
-            username: "walrus-test-token",
-            password: "",
+            username: "walrus@contoso.com",
+            password: "testpass123",
             authenticate: walrus_auth,
         },
     ];

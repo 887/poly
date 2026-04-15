@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
 
-use crate::api::{GraphChannel, GraphChat, GraphCollection, GraphMessage, GraphTeam, GraphUser};
+use crate::types::{GraphChannel, GraphChat, GraphCollection, GraphMessage, GraphTeam, GraphUser};
 
 pub struct TeamsHttpClient {
     base_url: String,
@@ -80,6 +80,30 @@ impl TeamsHttpClient {
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
+    /// Test-server email+password login. Real Graph uses OAuth2 (Phase 3.4.7).
+    pub async fn login(&self, login: &str, password: &str) -> Result<String, ClientError> {
+        #[derive(serde::Deserialize)]
+        struct LoginResp {
+            token: String,
+        }
+        let resp = self
+            .http
+            .post(self.url("/test/auth/login"))
+            .json(&serde_json::json!({ "login": login, "password": password }))
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            return Err(ClientError::AuthFailed(format!("login failed: HTTP {status}")));
+        }
+        let parsed: LoginResp = resp
+            .json()
+            .await
+            .map_err(|e| ClientError::Internal(e.to_string()))?;
+        Ok(parsed.token)
+    }
+
     pub async fn get_me(&self) -> Result<GraphUser, ClientError> {
         self.get("/v1.0/me").await
     }
@@ -124,8 +148,80 @@ impl TeamsHttpClient {
         .await
     }
 
+    pub async fn edit_channel_message(
+        &self,
+        team_id: &str,
+        channel_id: &str,
+        message_id: &str,
+        content: &str,
+    ) -> Result<GraphMessage, ClientError> {
+        let url = self.url(&format!(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}"
+        ));
+        let resp = self
+            .http
+            .patch(url)
+            .header("Authorization", self.auth_header())
+            .json(&serde_json::json!({ "body": { "content": content, "contentType": "text" } }))
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            return Err(ClientError::Network(format!("HTTP {status}")));
+        }
+        resp.json::<GraphMessage>().await.map_err(|e| ClientError::Internal(e.to_string()))
+    }
+
+    pub async fn delete_channel_message(
+        &self,
+        team_id: &str,
+        channel_id: &str,
+        message_id: &str,
+    ) -> Result<(), ClientError> {
+        let url = self.url(&format!(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}"
+        ));
+        let resp = self
+            .http
+            .delete(url)
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            return Err(ClientError::Network(format!("HTTP {status}")));
+        }
+        Ok(())
+    }
+
     pub async fn get_chats(&self) -> Result<Vec<GraphChat>, ClientError> {
         let col: GraphCollection<GraphChat> = self.get("/v1.0/me/chats").await?;
         Ok(col.value)
+    }
+
+    pub async fn get_chat_messages(
+        &self,
+        chat_id: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<GraphMessage>, ClientError> {
+        let top = limit.unwrap_or(50);
+        let col: GraphCollection<GraphMessage> = self
+            .get(&format!("/v1.0/chats/{chat_id}/messages?$top={top}"))
+            .await?;
+        Ok(col.value)
+    }
+
+    pub async fn send_chat_message(
+        &self,
+        chat_id: &str,
+        content: &str,
+    ) -> Result<GraphMessage, ClientError> {
+        self.post_json(
+            &format!("/v1.0/chats/{chat_id}/messages"),
+            &serde_json::json!({ "body": { "content": content, "contentType": "text" } }),
+        )
+        .await
     }
 }

@@ -58,6 +58,35 @@ pub async fn test_auth_token(
     }))
 }
 
+#[derive(Deserialize)]
+pub struct LoginBody {
+    pub login: String,
+    pub password: String,
+}
+
+/// POST /test/auth/login — email+password → Bearer token, mirrors test-discord.
+pub async fn login(
+    State(state): State<Arc<TeamsState>>,
+    Json(body): Json<LoginBody>,
+) -> impl IntoResponse {
+    let user = state
+        .users
+        .iter()
+        .find(|u| u.email == body.login || u.display_name == body.login)
+        .map(|u| u.clone());
+    let Some(user) = user else {
+        return graph_error(StatusCode::UNAUTHORIZED, "InvalidAuthenticationRequest", "Unknown user").into_response();
+    };
+    if user.password != body.password {
+        return graph_error(StatusCode::UNAUTHORIZED, "InvalidAuthenticationRequest", "Incorrect password").into_response();
+    }
+    let token = state.auth.create_token(&user.id);
+    Json(serde_json::json!({
+        "token": token,
+        "user_id": user.id,
+    })).into_response()
+}
+
 // ---------------------------------------------------------------------------
 // Current user (GET /v1.0/me)
 // ---------------------------------------------------------------------------
@@ -194,10 +223,80 @@ pub async fn send_channel_message(
                 from_user_id: user_id,
                 channel_or_chat_id: channel_id.clone(),
                 created_date_time: chrono::Utc::now().to_rfc3339(),
+                last_modified_date_time: None,
+                deleted_date_time: None,
             };
             let json = message_to_json(&msg, &state);
             state.messages.entry(channel_id).or_default().push(msg);
             (StatusCode::CREATED, Json(json)).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct EditMessageBody {
+    pub body: Option<serde_json::Value>,
+}
+
+/// PATCH /v1.0/teams/:team_id/channels/:channel_id/messages/:message_id
+pub async fn edit_channel_message(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((_team_id, channel_id, message_id)): Path<(String, String, String)>,
+    Json(body): Json<EditMessageBody>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(user_id) => {
+            let new_content = body.body
+                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(|s| s.to_string()));
+            let Some(new_content) = new_content else {
+                return graph_error(StatusCode::BAD_REQUEST, "InvalidRequest", "Missing body.content").into_response();
+            };
+            let mut entry = match state.messages.get_mut(&channel_id) {
+                Some(e) => e,
+                None => return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Channel not found").into_response(),
+            };
+            let Some(msg) = entry.iter_mut().find(|m| m.id == message_id) else {
+                return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Message not found").into_response();
+            };
+            if msg.from_user_id != user_id {
+                return graph_error(StatusCode::FORBIDDEN, "Forbidden", "Not message author").into_response();
+            }
+            if msg.deleted_date_time.is_some() {
+                return graph_error(StatusCode::GONE, "Gone", "Message is deleted").into_response();
+            }
+            msg.body_content = new_content;
+            msg.last_modified_date_time = Some(chrono::Utc::now().to_rfc3339());
+            let json = message_to_json(msg, &state);
+            Json(json).into_response()
+        }
+    }
+}
+
+/// DELETE /v1.0/teams/:team_id/channels/:channel_id/messages/:message_id
+/// Soft delete (Graph sets deletedDateTime, row stays).
+pub async fn delete_channel_message(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((_team_id, channel_id, message_id)): Path<(String, String, String)>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(user_id) => {
+            let mut entry = match state.messages.get_mut(&channel_id) {
+                Some(e) => e,
+                None => return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Channel not found").into_response(),
+            };
+            let Some(msg) = entry.iter_mut().find(|m| m.id == message_id) else {
+                return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Message not found").into_response();
+            };
+            if msg.from_user_id != user_id {
+                return graph_error(StatusCode::FORBIDDEN, "Forbidden", "Not message author").into_response();
+            }
+            msg.deleted_date_time = Some(chrono::Utc::now().to_rfc3339());
+            msg.body_content = String::new();
+            StatusCode::NO_CONTENT.into_response()
         }
     }
 }
@@ -218,6 +317,70 @@ pub async fn get_chats(
                 .map(|c| chat_to_json(&c))
                 .collect();
             Json(serde_json::json!({ "value": chats })).into_response()
+        }
+    }
+}
+
+/// GET /v1.0/chats/:chat_id/messages
+pub async fn get_chat_messages(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path(chat_id): Path<String>,
+    Query(query): Query<MessagesQuery>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(user_id) => {
+            let Some(chat) = state.chats.get(&chat_id) else {
+                return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Chat not found").into_response();
+            };
+            if !chat.members.contains(&user_id) {
+                return graph_error(StatusCode::FORBIDDEN, "Forbidden", "Not a chat member").into_response();
+            }
+            drop(chat);
+            let msgs = state.messages.get(&chat_id).map(|v| v.clone()).unwrap_or_default();
+            let top = query.top.unwrap_or(50).min(100) as usize;
+            let value: Vec<serde_json::Value> = msgs.iter().rev().take(top)
+                .map(|m| message_to_json(m, &state))
+                .collect();
+            Json(serde_json::json!({ "value": value })).into_response()
+        }
+    }
+}
+
+/// POST /v1.0/chats/:chat_id/messages
+pub async fn send_chat_message(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path(chat_id): Path<String>,
+    Json(body): Json<SendMessageBody>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(user_id) => {
+            let Some(chat) = state.chats.get(&chat_id) else {
+                return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Chat not found").into_response();
+            };
+            if !chat.members.contains(&user_id) {
+                return graph_error(StatusCode::FORBIDDEN, "Forbidden", "Not a chat member").into_response();
+            }
+            drop(chat);
+            let content = body.body
+                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(|s| s.to_string()))
+                .unwrap_or_default();
+            let msg_id = format!("MSG{}", state.messages.len() + 100);
+            let msg = Message {
+                id: msg_id.clone(),
+                body_content: content,
+                from_user_id: user_id,
+                channel_or_chat_id: chat_id.clone(),
+                created_date_time: chrono::Utc::now().to_rfc3339(),
+                last_modified_date_time: None,
+                deleted_date_time: None,
+            };
+            let json = message_to_json(&msg, &state);
+            state.messages.entry(chat_id).or_default().push(msg);
+            (StatusCode::CREATED, Json(json)).into_response()
         }
     }
 }
@@ -289,6 +452,8 @@ fn message_to_json(m: &Message, state: &TeamsState) -> serde_json::Value {
         "from": from_user,
         "channelIdentity": { "channelId": m.channel_or_chat_id },
         "createdDateTime": m.created_date_time,
+        "lastModifiedDateTime": m.last_modified_date_time,
+        "deletedDateTime": m.deleted_date_time,
         "messageType": "message",
         "attachments": [],
     })

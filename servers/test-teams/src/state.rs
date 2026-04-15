@@ -84,6 +84,10 @@ pub struct Message {
     pub from_user_id: String,
     pub channel_or_chat_id: String,
     pub created_date_time: String,
+    #[serde(default)]
+    pub last_modified_date_time: Option<String>,
+    #[serde(default)]
+    pub deleted_date_time: Option<String>,
 }
 
 impl TeamsState {
@@ -164,6 +168,8 @@ impl TeamsState {
                 from_user_id: "U001".into(),
                 channel_or_chat_id: "CH001".into(),
                 created_date_time: "2026-04-05T09:00:00Z".into(),
+                last_modified_date_time: None,
+                deleted_date_time: None,
             },
             Message {
                 id: "MSG002".into(),
@@ -171,6 +177,8 @@ impl TeamsState {
                 from_user_id: "U002".into(),
                 channel_or_chat_id: "CH001".into(),
                 created_date_time: "2026-04-05T09:01:00Z".into(),
+                last_modified_date_time: None,
+                deleted_date_time: None,
             },
         ]);
     }

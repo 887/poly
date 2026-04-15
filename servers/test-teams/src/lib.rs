@@ -9,7 +9,7 @@ pub mod state;
 
 pub use state::TeamsState;
 
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post};
 use axum::Router;
 use poly_test_common::health_handler;
 use std::sync::Arc;
@@ -20,6 +20,7 @@ pub fn router(state: Arc<TeamsState>) -> Router {
         .route("/health", get(|| async { health_handler("teams").await }))
         // Test-only easy-signin
         .route("/test/auth/token", post(routes::test_auth_token))
+        .route("/test/auth/login", post(routes::login))
         // Current user
         .route("/v1.0/me", get(routes::get_me))
         // Teams
@@ -30,8 +31,16 @@ pub fn router(state: Arc<TeamsState>) -> Router {
             "/v1.0/teams/{team_id}/channels/{channel_id}/messages",
             get(routes::get_channel_messages).post(routes::send_channel_message),
         )
+        .route(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}",
+            patch(routes::edit_channel_message).delete(routes::delete_channel_message),
+        )
         // Chats / DMs
         .route("/v1.0/me/chats", get(routes::get_chats))
+        .route(
+            "/v1.0/chats/{chat_id}/messages",
+            get(routes::get_chat_messages).post(routes::send_chat_message),
+        )
         // Lifecycle
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))
