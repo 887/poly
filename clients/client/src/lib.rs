@@ -477,6 +477,27 @@ pub struct SignupCompleted {
     ///
     /// The host wraps this in `BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>`.
     pub backend: Box<dyn ClientBackend + Send + Sync>,
+    /// OAuth2 refresh token (backends that issue one set this). Persisted with
+    /// the `AccountToken` so silent reauth survives restarts.
+    pub refresh_token: Option<String>,
+    /// RFC3339 UTC timestamp at which the access token expires.
+    pub token_expires_at: Option<String>,
+    /// Space-separated OAuth scopes the token was granted.
+    pub scope: Option<String>,
+}
+
+impl SignupCompleted {
+    /// Build a legacy-shaped completion (no OAuth metadata) — most signup
+    /// flows (Bearer tokens, email+password against test servers) use this.
+    pub fn new(session: Session, backend: Box<dyn ClientBackend + Send + Sync>) -> Self {
+        Self {
+            session,
+            backend,
+            refresh_token: None,
+            token_expires_at: None,
+            scope: None,
+        }
+    }
 }
 
 /// Type alias for the boxed-future authenticate fn stored in a `TestAccountEntry`.

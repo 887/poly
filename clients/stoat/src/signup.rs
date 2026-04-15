@@ -19,10 +19,7 @@ pub async fn authenticate(
         .await
         .map_err(|error| error.to_string())?;
 
-    Ok(SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    })
+    Ok(SignupCompleted::new(session, Box::new(backend)))
 }
 
 fn stoat_auth(

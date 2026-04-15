@@ -667,6 +667,15 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         desc_key: "plugin-forgejo-signup-desc",
         render: poly_forgejo::signup::signup_render_fn,
     });
+
+    #[cfg(feature = "teams")]
+    client_manager.write().register_signup_entry(SignupEntry {
+        slug: "teams",
+        icon: "🟦",
+        name_key: "plugin-teams-signup-name",
+        desc_key: "plugin-teams-signup-desc",
+        render: poly_teams::signup::signup_render_fn,
+    });
 }
 
 /// Register test account entries from all compiled-in native plugins.

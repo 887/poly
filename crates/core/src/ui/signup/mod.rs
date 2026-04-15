@@ -53,6 +53,9 @@ fn build_on_complete(
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
             Arc::new(tokio::sync::RwLock::new(completed.backend));
+        let refresh_token = completed.refresh_token.clone();
+        let token_expires_at = completed.token_expires_at.clone();
+        let scope = completed.scope.clone();
         let mut session = completed.session;
         // Quick-add test accounts sign in against local mock servers that
         // don't serve real avatar PNGs. Overlay a bundled animal portrait
@@ -89,6 +92,9 @@ fn build_on_complete(
                     token: session.token.clone(),
                     display_name: session.user.display_name.clone(),
                     instance_id: session.backend_url.clone(),
+                    refresh_token: refresh_token.clone(),
+                    token_expires_at: token_expires_at.clone(),
+                    scope: scope.clone(),
                 };
                 if let Err(e) = storage.upsert_account_token(&at).await {
                     tracing::warn!("Failed to persist backend account token: {e}");
@@ -225,6 +231,9 @@ fn build_on_complete_reauth(
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
             Arc::new(tokio::sync::RwLock::new(completed.backend));
+        let refresh_token = completed.refresh_token.clone();
+        let token_expires_at = completed.token_expires_at.clone();
+        let scope = completed.scope.clone();
         let mut session = completed.session;
         // Pin the session to the original account id so existing rows overwrite.
         session.id = target_account_id.clone();
@@ -241,6 +250,9 @@ fn build_on_complete_reauth(
                     token: session.token.clone(),
                     display_name: session.user.display_name.clone(),
                     instance_id: session.backend_url.clone(),
+                    refresh_token: refresh_token.clone(),
+                    token_expires_at: token_expires_at.clone(),
+                    scope: scope.clone(),
                 };
                 if let Err(e) = storage.upsert_account_token(&at).await {
                     tracing::warn!("Failed to persist reauthenticated token: {e}");

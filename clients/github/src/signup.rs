@@ -36,10 +36,7 @@ pub async fn test_authenticate(
         .authenticate(AuthCredentials::Token(token))
         .await
         .map_err(|e| e.to_string())?;
-    Ok(SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    })
+    Ok(SignupCompleted::new(session, Box::new(backend)))
 }
 
 fn penguin_auth(
@@ -98,10 +95,7 @@ pub async fn authenticate(hostname: Option<String>) -> Result<SignupCompleted, S
         .authenticate(AuthCredentials::Token(String::new()))
         .await
         .map_err(|e| e.to_string())?;
-    Ok(SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    })
+    Ok(SignupCompleted::new(session, Box::new(backend)))
 }
 
 /// Render entry-point stored in `SignupEntry::render`.

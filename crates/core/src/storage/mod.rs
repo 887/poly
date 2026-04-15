@@ -463,6 +463,13 @@ impl Default for VoiceSettings {
 /// A stored messenger account credential/token.
 ///
 /// Persisted under the key `"account_tokens"` as a JSON array.
+///
+/// ## OAuth fields
+/// `refresh_token`, `token_expires_at`, and `scope` are populated for
+/// backends that exchange a refresh token alongside the access token
+/// (Teams via Microsoft Graph is the first). Older persisted entries
+/// from pre-OAuth backends deserialize with these fields defaulted to
+/// `None`, and bearer-only backends continue to leave them unset.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountToken {
     /// Backend identifier (`"poly"`, `"stoat"`, `"matrix"`, `"discord"`, …).
@@ -479,6 +486,16 @@ pub struct AccountToken {
     /// server: `"http://127.0.0.1:7080"`).  `None` for built-in services.
     #[serde(default)]
     pub instance_id: Option<String>,
+    /// OAuth2 refresh token, if the backend issued one (`offline_access`).
+    /// Used for silent reauth when `token` expires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+    /// RFC3339 UTC timestamp at which `token` expires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_expires_at: Option<String>,
+    /// Space-separated OAuth scopes this token was granted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
 }
 
 /// Stored backup server configuration.

@@ -15,10 +15,7 @@ pub async fn authenticate(
         .authenticate(AuthCredentials::Token(token))
         .await
         .map_err(|e| e.to_string())?;
-    Ok(SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    })
+    Ok(SignupCompleted::new(session, Box::new(backend)))
 }
 
 /// Password-based authenticate helper — used by Spacebar/Fosscord and the local test server.
@@ -32,10 +29,7 @@ pub async fn authenticate_with_password(
         .authenticate(AuthCredentials::EmailPassword { email, password })
         .await
         .map_err(|e| e.to_string())?;
-    Ok(SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    })
+    Ok(SignupCompleted::new(session, Box::new(backend)))
 }
 
 fn koala_auth(

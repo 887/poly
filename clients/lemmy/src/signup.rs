@@ -22,10 +22,7 @@ pub async fn authenticate(
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    })
+    Ok(SignupCompleted::new(session, Box::new(backend)))
 }
 
 fn beaver_auth(

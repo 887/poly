@@ -251,7 +251,7 @@ fn ExistingAccountsForm(
                                     spawn(async move {
                                         match do_signin(&url, Some(selected_user_id), key, &no_key).await {
                                             Ok((session, backend)) => {
-                                                on_complete.call(SignupCompleted { session, backend });
+                                                on_complete.call(SignupCompleted::new(session, backend));
                                             }
                                             Err(e) => {
                                                 error_msg.set(Some(e));
@@ -404,7 +404,7 @@ fn SignupDetailsForm(
                         spawn(async move {
                             match do_signup(&url, &user, &email, &dname, key, &no_key).await {
                                 Ok((session, backend)) => {
-                                    on_complete.call(SignupCompleted { session, backend });
+                                    on_complete.call(SignupCompleted::new(session, backend));
                                 }
                                 Err(e) => {
                                     error_msg.set(Some(e));

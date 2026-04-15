@@ -18,10 +18,7 @@ pub async fn authenticate(
         .authenticate(AuthCredentials::Token(token))
         .await
         .map_err(|e| e.to_string())?;
-    Ok(SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    })
+    Ok(SignupCompleted::new(session, Box::new(backend)))
 }
 
 /// Authenticate against a Forgejo test server using the `/test/auth/token` bypass.

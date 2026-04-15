@@ -12,20 +12,14 @@ use crate::HackerNewsClient;
 pub fn complete_as_guest() -> SignupCompleted {
     let mut backend = HackerNewsClient::new();
     let session = backend.guest_session();
-    SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    }
+    SignupCompleted::new(session, Box::new(backend))
 }
 
 /// Build a named SignupCompleted with a given HN username.
 pub fn complete_as_user(username: String) -> SignupCompleted {
     let mut backend = HackerNewsClient::new();
     let session = backend.named_session(username);
-    SignupCompleted {
-        session,
-        backend: Box::new(backend),
-    }
+    SignupCompleted::new(session, Box::new(backend))
 }
 
 /// Render entry-point stored in `SignupEntry::render`.

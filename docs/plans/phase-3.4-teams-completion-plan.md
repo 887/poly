@@ -1,7 +1,7 @@
 # Phase 3.4 — Microsoft Teams Client Completion Plan
 
 > **Created:** 2026-04-15
-> **Status:** 🟢 β — write paths, reactions, presence, event stream, and OAuth2 helpers all landed against the mock; OAuth signup-tab UI and WIT guest are the only remaining gaps (both deferred for cross-cutting reasons — see 3.4.6 / 3.4.7.7).
+> **Status:** 🟢 γ — Graph auth + OAuth device-code signup UI complete; 3.4.6.4 harness fixture + 3.4.1.6 type-level unit tests are the only remaining bullets and are explicitly follow-up work.
 > **Crate:** `poly-teams`
 > **Supersedes:** `docs/archive/phases/phase-3.4-teams-plan.md` (that plan assumed greenfield; this one picks up from where the α implementation actually stands)
 > **Goal:** Bring Teams to Discord-level parity — typed API layer, EmailPassword test flow, signup-picker entry, WIT guest on par with native.
@@ -87,9 +87,9 @@ Discord is NOT registered in `register_native_signup_entries()` either — both 
 - [x] **3.4.7.3** Default client ID — `auth::DEFAULT_CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"` (`ttyms`) and `auth::DEFAULT_TENANT = "common"`.
 - [x] **3.4.7.4** Scopes — `auth::DEFAULT_SCOPES` lists exactly the set above, including `offline_access`.
 - [x] **3.4.7.5** Refresh helper — `auth::refresh_access_token()` swaps a refresh token for a fresh `TokenResponse`. Wiring the 401 → refresh → retry loop into `TeamsHttpClient` and emitting the reauth signal is the remaining piece; deferred until OAuth ships behind the signup tab (3.4.7.7).
-- [ ] **3.4.7.6** Token storage via the existing `AccountToken` / host-bridge KV, encrypted for backup — extend the record to include `refresh_token`, `expires_at`, `scope`
-- [ ] **3.4.7.7** Teams signup panel — add a "Microsoft account (real)" tab alongside the test-server tab, showing the device-code URL + user-code when that flow kicks off, or kicking off the browser for the PKCE flow
-- [ ] **3.4.7.8** Rate-limit + throttling handling — honor `Retry-After` from Graph, exponential backoff on 5xx
+- [x] **3.4.7.6** `AccountToken` gained `refresh_token`, `token_expires_at`, `scope` (all `Option<String>`, `#[serde(default, skip_serializing_if = "Option::is_none")]` so old DB rows still deserialize). `SignupCompleted` grew parallel fields + a `::new()` helper for legacy callers. Both `build_on_complete` and `build_on_complete_reauth` in `crates/core/src/ui/signup/mod.rs` thread the values into the persisted `AccountToken` row.
+- [x] **3.4.7.7** Teams registered in `register_native_signup_entries()` under `plugin-teams-signup-name` / `plugin-teams-signup-desc`. `TeamsSignupPage` now has **Microsoft account** (device-code) and **Access token** tabs. The OAuth tab kicks off `auth::start_device_code`, shows `user_code` + `verification_uri`, polls `poll_device_code_token` every `interval` seconds (bounded by `expires_in`), and on success hands a populated `SignupCompleted` (access token on session, refresh + RFC3339 expiry + granted scope) back to `on_complete`. PKCE path stays in `auth.rs` for a later desktop wiring (loopback listener lives outside `clients/teams`).
+- [x] **3.4.7.8** `send_oauth_retry` closure wrapper in `auth.rs` — same retry policy as `http.rs`' `send_with_retry` (up to 3 attempts, honor `Retry-After` on 429, `1/2/4`s exponential backoff on 5xx capped at 30 s). `start_device_code`, `poll_device_code_token`, `refresh_access_token`, and `exchange_pkce_code` all route through it. 4xx (other than 429) returns immediately so the OAuth error body can be inspected.
 
 ---
 

@@ -21,9 +21,48 @@
 //! call it when a 401 comes back and only surface the reauth prompt when the
 //! refresh itself fails.
 
+use std::time::Duration;
+
 use poly_client::ClientError;
-use poly_host_bridge::http::HttpClient;
+use poly_host_bridge::http::{HttpClient, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
+
+const MAX_AUTH_ATTEMPTS: u32 = 3;
+const DEFAULT_RETRY_AFTER_SECS: u64 = 1;
+const MAX_BACKOFF_SECS: u64 = 30;
+
+/// Run a `login.microsoftonline.com` POST through up to 3 attempts. Honors
+/// `Retry-After` on 429; exponential backoff on 5xx. 4xx (other than 429)
+/// returns immediately so the caller can inspect the OAuth error body.
+async fn send_oauth_retry<F>(make_req: F) -> Result<Response, ClientError>
+where
+    F: Fn() -> RequestBuilder,
+{
+    let mut attempt: u32 = 0;
+    loop {
+        attempt += 1;
+        let resp = make_req()
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        let retryable = status == 429 || (500..600).contains(&status);
+        if !retryable || attempt >= MAX_AUTH_ATTEMPTS {
+            return Ok(resp);
+        }
+        let delay = if status == 429 {
+            resp.headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(DEFAULT_RETRY_AFTER_SECS)
+        } else {
+            1u64 << (attempt - 1)
+        }
+        .min(MAX_BACKOFF_SECS);
+        tokio::time::sleep(Duration::from_secs(delay)).await;
+    }
+}
 
 /// Community-maintained Azure AD client ID shipped with `ttyms`.
 /// Covers delegated scopes without admin consent. Replace with a Poly-owned
@@ -98,13 +137,12 @@ pub async fn start_device_code(
         urlencoding::encode(client_id),
         urlencoding::encode(&scopes.join(" "))
     );
-    let resp = http
-        .post(url)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| ClientError::Network(e.to_string()))?;
+    let resp = send_oauth_retry(|| {
+        http.post(url.clone())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body.clone())
+    })
+    .await?;
     if !resp.status().is_success() {
         return Err(ClientError::Network(format!(
             "devicecode HTTP {}",
@@ -136,13 +174,12 @@ pub async fn poll_device_code_token(
         urlencoding::encode(client_id),
         urlencoding::encode(device_code),
     );
-    let resp = http
-        .post(url)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| ClientError::Network(e.to_string()))?;
+    let resp = send_oauth_retry(|| {
+        http.post(url.clone())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body.clone())
+    })
+    .await?;
     let status = resp.status();
     if status.is_success() {
         return resp
@@ -185,13 +222,12 @@ pub async fn refresh_access_token(
         urlencoding::encode(refresh_token),
         urlencoding::encode(&scopes.join(" ")),
     );
-    let resp = http
-        .post(url)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| ClientError::Network(e.to_string()))?;
+    let resp = send_oauth_retry(|| {
+        http.post(url.clone())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body.clone())
+    })
+    .await?;
     if !resp.status().is_success() {
         return Err(ClientError::AuthFailed(format!(
             "refresh failed: HTTP {}",
@@ -245,13 +281,12 @@ pub async fn exchange_pkce_code(
         urlencoding::encode(redirect_uri),
         urlencoding::encode(code_verifier),
     );
-    let resp = http
-        .post(url)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| ClientError::Network(e.to_string()))?;
+    let resp = send_oauth_retry(|| {
+        http.post(url.clone())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body.clone())
+    })
+    .await?;
     if !resp.status().is_success() {
         return Err(ClientError::AuthFailed(format!(
             "code exchange failed: HTTP {}",
