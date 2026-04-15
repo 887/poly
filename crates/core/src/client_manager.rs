@@ -347,9 +347,24 @@ impl ClientManager {
         }
     }
 
-    /// Get the list of active account IDs.
+    /// Get the list of accounts that should appear in the sidebar.
+    ///
+    /// Includes both **live** accounts (with a connected backend) and **offline**
+    /// accounts that only have a cached session — the latter covers:
+    ///   1. Accounts restored from storage while the server is unreachable.
+    ///   2. Accounts whose stored token was rejected with 401 (Unauthenticated).
+    ///
+    /// Both cases need to stay visible so the user can click through to
+    /// reauthenticate. Live operations (send message, sync) still iterate
+    /// `backends` directly and skip offline entries naturally.
     pub fn active_account_ids(&self) -> Vec<String> {
-        self.backends.keys().cloned().collect()
+        let mut ids: Vec<String> = self.backends.keys().cloned().collect();
+        for id in self.sessions.keys() {
+            if !ids.iter().any(|x| x == id) {
+                ids.push(id.clone());
+            }
+        }
+        ids
     }
 
     /// Register an offline/cached session for an account that has no live backend yet.
