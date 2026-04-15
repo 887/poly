@@ -541,6 +541,29 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             onclick: move |_| {
                 let aid = aid_for_click.clone();
                 let preserve_drawer_context = mobile_left_drawer_open();
+
+                // If this account needs reauth, skip the normal route resolution —
+                // sending it through NotificationsRoute / ServerHome would mount a
+                // component that spins waiting on a backend that no longer exists,
+                // freezing the UI. Drop the user on the signup page instead.
+                let needs_reauth = {
+                    let cm = client_manager.read();
+                    cm.connection_statuses
+                        .get(&aid)
+                        .map_or(false, ConnectionStatus::needs_reauth)
+                };
+                if needs_reauth {
+                    let slug = chat_data
+                        .read()
+                        .account_sessions
+                        .get(&aid)
+                        .map(|s| s.backend.slug().to_string());
+                    if let Some(slug) = slug {
+                        navigator().push(Route::ClientSignup { client: slug });
+                        return;
+                    }
+                }
+
                 // Clear server/channel state — the target route will reload what's needed.
                 chat_data.write().current_server = None;
                 chat_data.write().current_channel = None;
