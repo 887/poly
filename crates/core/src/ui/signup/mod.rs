@@ -130,17 +130,8 @@ fn build_on_complete(
                                 account_display_name: display_name.clone(),
                             })
                             .collect();
-                    let new_ids: Vec<String> =
-                        servers.iter().map(|s| s.id.clone()).collect();
-
                     let mut cd = chat_data.write();
-                    for id in &new_ids {
-                        if !cd.favorited_server_ids.contains(id) {
-                            cd.favorited_server_ids.push(id.clone());
-                        }
-                    }
                     cd.servers.extend(servers);
-                    let all_fav_ids = cd.favorited_server_ids.clone();
                     drop(cd);
 
                     if let Some(storage) = crate::STORAGE.get()
@@ -149,7 +140,6 @@ fn build_on_complete(
                     {
                         tracing::warn!("Failed to cache server metadata: {e}");
                     }
-                    crate::ui::favorites_sidebar::persist_favorites(all_fav_ids).await;
                 }
             }
             {

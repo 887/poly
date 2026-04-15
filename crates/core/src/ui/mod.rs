@@ -889,15 +889,13 @@ pub(crate) async fn restore_hackernews_accounts(
             .account_sessions
             .insert(account_id.clone(), session);
 
-        // Add servers to chat_data and favorited list.
+        // Add servers to chat_data (favorites are user-managed; don't
+        // auto-favorite servers during restore).
         {
             let mut cd = chat_data.write();
             for srv in &servers {
                 if !cd.servers.iter().any(|s| s.id == srv.id) {
                     cd.servers.push(srv.clone());
-                }
-                if !cd.favorited_server_ids.contains(&srv.id) {
-                    cd.favorited_server_ids.push(srv.id.clone());
                 }
             }
         }
@@ -989,9 +987,6 @@ pub(crate) async fn restore_github_accounts(
             for srv in &servers {
                 if !cd.servers.iter().any(|s| s.id == srv.id) {
                     cd.servers.push(srv.clone());
-                }
-                if !cd.favorited_server_ids.contains(&srv.id) {
-                    cd.favorited_server_ids.push(srv.id.clone());
                 }
             }
         }
@@ -1180,9 +1175,6 @@ pub(crate) async fn restore_forgejo_accounts(
                 if !cd.servers.iter().any(|s| s.id == srv.id) {
                     cd.servers.push(srv.clone());
                 }
-                if !cd.favorited_server_ids.contains(&srv.id) {
-                    cd.favorited_server_ids.push(srv.id.clone());
-                }
             }
         }
 
@@ -1303,9 +1295,6 @@ pub(crate) async fn restore_test_accounts(
                 if !cd.servers.iter().any(|s| s.id == srv.id) {
                     cd.servers.push(srv.clone());
                 }
-                if !cd.favorited_server_ids.contains(&srv.id) {
-                    cd.favorited_server_ids.push(srv.id.clone());
-                }
             }
         }
 
@@ -1412,28 +1401,19 @@ async fn restore_poly_accounts(
                             account_display_name: srv.account_display_name.clone(),
                         })
                         .collect();
-                    let new_fav_ids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
-
                     let mut cd = chat_data.write();
-                    for id in &new_fav_ids {
-                        if !cd.favorited_server_ids.contains(id) {
-                            cd.favorited_server_ids.push(id.clone());
-                        }
-                    }
                     // Avoid duplicates if servers list was already populated.
+                    // Favorites are user-managed; don't auto-favorite here.
                     for srv in servers {
                         if !cd.servers.iter().any(|s| s.id == srv.id) {
                             cd.servers.push(srv);
                         }
                     }
-                    let all_fav_ids = cd.favorited_server_ids.clone();
                     drop(cd);
 
-                    // Persist cache + favourites without holding any Signal lock.
                     if let Err(e) = storage.upsert_offline_server_cache(&cache_records).await {
                         tracing::warn!("Failed to cache server metadata: {e}");
                     }
-                    crate::ui::favorites_sidebar::persist_favorites(all_fav_ids).await;
                 }
 
                 // Fetch DMs, groups, friends, blocked users and content policy.
