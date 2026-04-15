@@ -47,6 +47,8 @@ urlencoding = { workspace = true, optional = true }
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]
 wit-bindgen = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 poly-test-teams = { path = "../../servers/test-teams" }

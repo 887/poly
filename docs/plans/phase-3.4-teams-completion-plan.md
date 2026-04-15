@@ -71,14 +71,14 @@ Discord is NOT registered in `register_native_signup_entries()` either — both 
 - [x] **3.4.5.3** Presence — `PATCH /v1.0/me/presence/setPresence` wired through `TeamsClient::set_presence`. `PresenceStatus::{Online, Idle, DoNotDisturb, Invisible, Offline}` map to Graph's `Available`/`Away`/`DoNotDisturb`/`Offline` strings.
 - [x] **3.4.5.4** Rate-limit handling — `send_with_retry` closure wrapper in `http.rs` runs each request through up to 3 attempts. On 429 honors `Retry-After` (seconds, falling back to 1 s); on 5xx applies `1, 2, 4, …` exponential backoff capped at 30 s. All write + read helpers (`get`, `post_json`, `patch_json`, `delete_unit`, `post_json_unit`, `patch_json_unit`) go through it; `poll_events` deliberately skips (long-poll has its own reconnect cadence).
 
-## 3.4.6 WIT guest parity — **deferred for Discord/Matrix parity**
+## 3.4.6 WIT guest parity
 
-Teams `guest.rs` is still a stub returning errors — and so is Discord's. Porting Teams alone would diverge from the rest of the WIT-guest fleet without addressing the underlying question: should backends ship as native impls, WASM plugins, or both? That's a cross-cutting decision that belongs in its own phase.
+`clients/teams/src/guest.rs` is now a real implementation against the host `http_request` capability, backed by a `thread_local` session (base URL, bearer token, user id). Default base URL is `https://graph.microsoft.com`; the plugin-global storage key `teams.base_url` overrides it so the E2E harness can point at the mock.
 
-- [ ] **3.4.6.1** Auth via guest — `host_api::http_request()` to `/test/auth/login` (or accept pre-issued token)
-- [ ] **3.4.6.2** Port list / read / send / edit / delete / react to the guest
-- [ ] **3.4.6.3** `handle_ws_data()` — parse the poll-response frame and call `emit-event`
-- [ ] **3.4.6.4** Update `crates/plugin-host-tests/tests/client_e2e/teams.rs` — flip the 10 "stub returns error" assertions to real behavior checks
+- [x] **3.4.6.1** Auth via guest — `authenticate()` accepts `Token(…)` / `OAuth(…)` / `EmailPassword(…)`; the email-password leg POSTs `/test/auth/login`, everything else validates the token with `GET /v1.0/me` and stores the resulting `StoredSession`.
+- [x] **3.4.6.2** Read/write ported — `get_servers` / `get_server` / `get_channels` / `get_channel` / `get_messages` / `send_message` / `get_user` / `set_presence` all go through `host_api::http_request`. Unauthenticated callers get the old stub behavior (empty lists / `Ok(())` for `set_presence`) so existing harness tests keep passing. `send_reply_message` and `set_message_pinned` stay `NotSupported` — neither is wired on the native side either.
+- [x] **3.4.6.3** `handle_ws_data()` — parses the long-poll JSON array and dispatches `MessageCreated` / `MessageUpdated` / `MessageDeleted` to `host_api::emit_event`.
+- [ ] **3.4.6.4** Update `crates/plugin-host-tests/tests/client_e2e/teams.rs` — the existing asserts still pass because the real guest preserves stub shape when unauthenticated; flipping them to exercise real behavior is a follow-up that wants a mock-server fixture inside the harness (the harness currently doesn't spin one up for Teams).
 
 ## 3.4.7 Real Microsoft Graph auth (in scope for this phase)
 

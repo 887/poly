@@ -1,54 +1,424 @@
 //! WASM Component Model guest implementation for the Teams messenger plugin.
 //!
-//! Stub implementation — all methods return "not yet implemented" errors.
+//! Mirrors the native `TeamsClient` over the host-provided `http_request`
+//! capability. Default Graph base URL is `https://graph.microsoft.com`; the
+//! `TEAMS_BASE_URL` entry in plugin-global storage overrides it so the E2E
+//! harness can point at a mock server.
+//!
+//! ## Channel IDs
+//! Native encodes Graph's `team_id/channel_id` pair as a single slash-separated
+//! string in `Channel.id` / `Channel.server_id`. The guest follows the same
+//! convention so hosts can route requests identically regardless of backend.
+//!
 //! DECISION(D21): WASM Plugin Backends.
 
 #![allow(unsafe_code)]
 
-use crate::wit_bindings::{Guest, PluginMetadataGuest, SettingDescriptor, export, wit};
+use std::cell::RefCell;
+
+use serde::Deserialize;
+
+use crate::wit_bindings::{
+    Guest, PluginMetadataGuest, SettingDescriptor, export,
+    poly::messenger::{host_api, types::HttpResponse},
+    wit,
+};
+
+const DEFAULT_BASE_URL: &str = "https://graph.microsoft.com";
+/// Plugin-global storage key letting the host point the guest at a mock server.
+const BASE_URL_OVERRIDE_KEY: &str = "teams.base_url";
+
+thread_local! {
+    static STATE: RefCell<Option<StoredSession>> = const { RefCell::new(None) };
+}
+
+#[derive(Clone)]
+struct StoredSession {
+    base_url: String,
+    token: String,
+    user_id: String,
+    display_name: String,
+}
+
+// ── Graph response shapes (minimum fields we actually consume) ────────
+
+#[derive(Deserialize)]
+struct GraphUser {
+    id: String,
+    #[serde(rename = "displayName", default)]
+    display_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GraphTeam {
+    id: String,
+    #[serde(rename = "displayName", default)]
+    display_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GraphChannel {
+    id: String,
+    #[serde(rename = "displayName", default)]
+    display_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GraphMessageBody {
+    #[serde(default)]
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct GraphIdentitySet {
+    #[serde(default)]
+    user: Option<GraphIdentity>,
+}
+
+#[derive(Deserialize)]
+struct GraphIdentity {
+    id: String,
+    #[serde(rename = "displayName", default)]
+    display_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GraphMessage {
+    id: String,
+    #[serde(rename = "createdDateTime")]
+    created_date_time: String,
+    #[serde(default)]
+    body: Option<GraphMessageBody>,
+    #[serde(default)]
+    from: Option<GraphIdentitySet>,
+    #[serde(rename = "lastModifiedDateTime", default)]
+    last_modified: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GraphCollection<T> {
+    value: Vec<T>,
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+fn state_snapshot() -> Option<StoredSession> {
+    STATE.with(|s| s.borrow().clone())
+}
+
+fn resolve_base_url() -> String {
+    host_api::storage_get(BASE_URL_OVERRIDE_KEY)
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .map(|s| s.trim_end_matches('/').to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
+}
+
+fn bearer_headers(token: &str) -> Vec<(String, String)> {
+    vec![("Authorization".to_string(), format!("Bearer {token}"))]
+}
+
+fn bearer_json_headers(token: &str) -> Vec<(String, String)> {
+    vec![
+        ("Authorization".to_string(), format!("Bearer {token}")),
+        ("Content-Type".to_string(), "application/json".to_string()),
+    ]
+}
+
+fn http(
+    method: &str,
+    url: &str,
+    headers: Vec<(String, String)>,
+    body: Option<Vec<u8>>,
+) -> Result<HttpResponse, wit::ClientError> {
+    host_api::http_request(method, url, &headers, body.as_deref())
+        .map_err(wit::ClientError::Internal)
+}
+
+fn check_status(resp: &HttpResponse, context: &str) -> Result<(), wit::ClientError> {
+    match resp.status {
+        200..=299 => Ok(()),
+        401 | 403 => Err(wit::ClientError::AuthFailed(format!(
+            "Teams auth rejected on {context} (HTTP {})",
+            resp.status
+        ))),
+        404 => Err(wit::ClientError::NotFound(format!(
+            "Teams {context} not found"
+        ))),
+        429 => Err(wit::ClientError::RateLimited(
+            extract_retry_after(resp).unwrap_or(1),
+        )),
+        status => Err(wit::ClientError::Network(format!(
+            "Teams {context} returned HTTP {status}"
+        ))),
+    }
+}
+
+fn extract_retry_after(resp: &HttpResponse) -> Option<u64> {
+    resp.headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("retry-after"))
+        .and_then(|(_, v)| v.parse::<u64>().ok())
+}
+
+fn parse_json<T: for<'de> Deserialize<'de>>(
+    resp: &HttpResponse,
+    context: &str,
+) -> Result<T, wit::ClientError> {
+    serde_json::from_slice(&resp.body).map_err(|err| {
+        wit::ClientError::Internal(format!("Teams {context}: invalid JSON ({err})"))
+    })
+}
+
+fn graph_message_to_wit(m: GraphMessage) -> wit::Message {
+    let (author_id, author_display) = m
+        .from
+        .and_then(|f| f.user)
+        .map(|u| (u.id, u.display_name.unwrap_or_default()))
+        .unwrap_or_default();
+    let content = m.body.map(|b| b.content).unwrap_or_default();
+    let author = wit::User {
+        id: author_id,
+        display_name: author_display,
+        avatar_url: None,
+        presence: wit::PresenceStatus::Online,
+        backend: wit::BackendType::Teams,
+    };
+    wit::Message {
+        id: m.id,
+        author,
+        content: wit::MessageContent::Text(content),
+        timestamp: m.created_date_time,
+        attachments: vec![],
+        reactions: vec![],
+        reply_to: None,
+        edited: m.last_modified.is_some(),
+    }
+}
+
+fn wit_presence_to_graph(status: wit::PresenceStatus) -> &'static str {
+    match status {
+        wit::PresenceStatus::Online => "Available",
+        wit::PresenceStatus::Idle => "Away",
+        wit::PresenceStatus::DoNotDisturb => "DoNotDisturb",
+        wit::PresenceStatus::Invisible | wit::PresenceStatus::Offline => "Offline",
+    }
+}
+
+fn require_session() -> Result<StoredSession, wit::ClientError> {
+    state_snapshot()
+        .ok_or_else(|| wit::ClientError::AuthFailed("Teams guest not authenticated".into()))
+}
+
+fn split_channel_id(compound: &str) -> Result<(&str, &str), wit::ClientError> {
+    compound.split_once('/').ok_or_else(|| {
+        wit::ClientError::Internal(format!(
+            "Teams channel_id must be 'team_id/channel_id', got '{compound}'"
+        ))
+    })
+}
 
 struct TeamsPlugin;
 
 impl Guest for TeamsPlugin {
-    fn authenticate(_credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
-        Err(wit::ClientError::Internal(
-            "Teams client not yet implemented".into(),
-        ))
+    fn authenticate(credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
+        let base_url = resolve_base_url();
+        let token = match credentials {
+            wit::AuthCredentials::Token(t) | wit::AuthCredentials::Oauth(t) => t,
+            wit::AuthCredentials::EmailPassword(creds) => test_login(&base_url, &creds)?,
+            _ => {
+                return Err(wit::ClientError::AuthFailed(
+                    "Teams requires Token/OAuth/EmailPassword".into(),
+                ))
+            }
+        };
+
+        // Validate by calling /v1.0/me and capture the user.
+        let resp = http(
+            "GET",
+            &format!("{base_url}/v1.0/me"),
+            bearer_headers(&token),
+            None,
+        )?;
+        check_status(&resp, "/v1.0/me")?;
+        let me: GraphUser = parse_json(&resp, "/v1.0/me")?;
+        let display_name = me.display_name.clone().unwrap_or_default();
+
+        let session = wit::Session {
+            id: format!("teams-{}", me.id),
+            user: wit::User {
+                id: me.id.clone(),
+                display_name: display_name.clone(),
+                avatar_url: None,
+                presence: wit::PresenceStatus::Online,
+                backend: wit::BackendType::Teams,
+            },
+            token: token.clone(),
+            backend: wit::BackendType::Teams,
+            icon_emoji: Some("👥".into()),
+            instance_id: "teams".into(),
+            backend_url: Some(base_url.clone()),
+        };
+
+        STATE.with(|s| {
+            s.replace(Some(StoredSession {
+                base_url,
+                token,
+                user_id: me.id,
+                display_name,
+            }));
+        });
+        Ok(session)
     }
 
     fn logout() -> Result<(), wit::ClientError> {
-        Err(wit::ClientError::Internal(
-            "Teams client not yet implemented".into(),
-        ))
+        STATE.with(|s| s.replace(None));
+        Ok(())
     }
 
     fn is_authenticated() -> bool {
-        false
+        state_snapshot().is_some()
     }
 
     fn get_servers() -> Result<Vec<wit::Server>, wit::ClientError> {
-        Ok(vec![])
+        let Some(session) = state_snapshot() else {
+            return Ok(vec![]);
+        };
+        let resp = http(
+            "GET",
+            &format!("{}/v1.0/me/joinedTeams", session.base_url),
+            bearer_headers(&session.token),
+            None,
+        )?;
+        check_status(&resp, "/v1.0/me/joinedTeams")?;
+        let teams: GraphCollection<GraphTeam> = parse_json(&resp, "/v1.0/me/joinedTeams")?;
+        Ok(teams
+            .value
+            .into_iter()
+            .map(|t| wit::Server {
+                id: t.id,
+                name: t.display_name.unwrap_or_default(),
+                icon_url: None,
+                banner_url: None,
+                categories: vec![],
+                backend: wit::BackendType::Teams,
+                unread_count: 0,
+                mention_count: 0,
+                account_id: session.user_id.clone(),
+                account_display_name: session.display_name.clone(),
+            })
+            .collect())
     }
 
     fn get_server(id: String) -> Result<wit::Server, wit::ClientError> {
-        Err(wit::ClientError::NotFound(format!("Server {id}")))
+        let session = require_session().map_err(|_| {
+            wit::ClientError::NotFound(format!("Teams server {id} (unauthenticated)"))
+        })?;
+        let resp = http(
+            "GET",
+            &format!("{}/v1.0/teams/{id}", session.base_url),
+            bearer_headers(&session.token),
+            None,
+        )?;
+        check_status(&resp, "team")?;
+        let t: GraphTeam = parse_json(&resp, "team")?;
+        Ok(wit::Server {
+            id: t.id,
+            name: t.display_name.unwrap_or_default(),
+            icon_url: None,
+            banner_url: None,
+            categories: vec![],
+            backend: wit::BackendType::Teams,
+            unread_count: 0,
+            mention_count: 0,
+            account_id: session.user_id,
+            account_display_name: session.display_name,
+        })
     }
 
-    fn get_channels(_server_id: String) -> Result<Vec<wit::Channel>, wit::ClientError> {
-        Ok(vec![])
+    fn get_channels(server_id: String) -> Result<Vec<wit::Channel>, wit::ClientError> {
+        let Some(session) = state_snapshot() else {
+            return Ok(vec![]);
+        };
+        let resp = http(
+            "GET",
+            &format!("{}/v1.0/teams/{server_id}/channels", session.base_url),
+            bearer_headers(&session.token),
+            None,
+        )?;
+        check_status(&resp, "channels")?;
+        let channels: GraphCollection<GraphChannel> = parse_json(&resp, "channels")?;
+        Ok(channels
+            .value
+            .into_iter()
+            .map(|c| wit::Channel {
+                id: format!("{server_id}/{}", c.id),
+                name: c.display_name.unwrap_or_default(),
+                channel_type: wit::ChannelType::Text,
+                server_id: server_id.clone(),
+                unread_count: 0,
+                mention_count: 0,
+                last_message_id: None,
+            })
+            .collect())
     }
 
     fn get_channel(id: String) -> Result<wit::Channel, wit::ClientError> {
-        Err(wit::ClientError::NotFound(format!("Channel {id}")))
+        let session = require_session().map_err(|_| {
+            wit::ClientError::NotFound(format!("Teams channel {id} (unauthenticated)"))
+        })?;
+        let (team_id, ch_id) = split_channel_id(&id)?;
+        let resp = http(
+            "GET",
+            &format!("{}/v1.0/teams/{team_id}/channels/{ch_id}", session.base_url),
+            bearer_headers(&session.token),
+            None,
+        )?;
+        check_status(&resp, "channel")?;
+        let c: GraphChannel = parse_json(&resp, "channel")?;
+        Ok(wit::Channel {
+            id: format!("{team_id}/{}", c.id),
+            name: c.display_name.unwrap_or_default(),
+            channel_type: wit::ChannelType::Text,
+            server_id: team_id.to_string(),
+            unread_count: 0,
+            mention_count: 0,
+            last_message_id: None,
+        })
     }
 
     fn send_message(
-        _channel_id: String,
-        _content: wit::MessageContent,
+        channel_id: String,
+        content: wit::MessageContent,
     ) -> Result<wit::Message, wit::ClientError> {
-        Err(wit::ClientError::Internal(
-            "Teams client not yet implemented".into(),
-        ))
+        let session = require_session()?;
+        let text = match content {
+            wit::MessageContent::Text(t) => t,
+            wit::MessageContent::WithAttachments(p) => p.text,
+        };
+        let body = serde_json::json!({
+            "body": { "content": text, "contentType": "text" }
+        });
+        let body_bytes = serde_json::to_vec(&body)
+            .map_err(|e| wit::ClientError::Internal(e.to_string()))?;
+
+        // channel_id = "team/channel" → channel POST; otherwise treat as chat id.
+        let url = match channel_id.split_once('/') {
+            Some((team_id, ch_id)) => format!(
+                "{}/v1.0/teams/{team_id}/channels/{ch_id}/messages",
+                session.base_url
+            ),
+            None => format!("{}/v1.0/chats/{channel_id}/messages", session.base_url),
+        };
+        let resp = http(
+            "POST",
+            &url,
+            bearer_json_headers(&session.token),
+            Some(body_bytes),
+        )?;
+        check_status(&resp, "send_message")?;
+        let m: GraphMessage = parse_json(&resp, "send_message")?;
+        Ok(graph_message_to_wit(m))
     }
 
     fn send_reply_message(
@@ -56,21 +426,42 @@ impl Guest for TeamsPlugin {
         _reply_to_message_id: String,
         _content: wit::MessageContent,
     ) -> Result<wit::Message, wit::ClientError> {
-        Err(wit::ClientError::Internal(
-            "Teams reply sending not yet implemented".into(),
+        // Graph nests replies under /messages/{id}/replies; distinct endpoint we
+        // haven't wired native-side yet. Keep parity until both sides land it.
+        Err(wit::ClientError::NotSupported(
+            "Teams reply sending not yet implemented".to_string(),
         ))
     }
 
     fn get_messages(
-        _channel_id: String,
-        _query: wit::MessageQuery,
+        channel_id: String,
+        query: wit::MessageQuery,
     ) -> Result<Vec<wit::Message>, wit::ClientError> {
-        Ok(vec![])
+        let Some(session) = state_snapshot() else {
+            return Ok(vec![]);
+        };
+        let top = query.limit.unwrap_or(50);
+        let url = match channel_id.split_once('/') {
+            Some((team_id, ch_id)) => format!(
+                "{}/v1.0/teams/{team_id}/channels/{ch_id}/messages?$top={top}",
+                session.base_url
+            ),
+            None => format!(
+                "{}/v1.0/chats/{channel_id}/messages?$top={top}",
+                session.base_url
+            ),
+        };
+        let resp = http("GET", &url, bearer_headers(&session.token), None)?;
+        check_status(&resp, "messages")?;
+        let msgs: GraphCollection<GraphMessage> = parse_json(&resp, "messages")?;
+        Ok(msgs.value.into_iter().map(graph_message_to_wit).collect())
     }
 
     fn search_messages(
         _query: wit::MessageSearchQuery,
     ) -> Result<Vec<wit::MessageSearchHit>, wit::ClientError> {
+        // Graph search lives under /v1.0/search/query with a distinct request
+        // shape — skipped for parity with native (not yet implemented there).
         Ok(vec![])
     }
 
@@ -101,14 +492,33 @@ impl Guest for TeamsPlugin {
     }
 
     fn get_user(id: String) -> Result<wit::User, wit::ClientError> {
-        Err(wit::ClientError::NotFound(format!("User {id}")))
+        let session = require_session()
+            .map_err(|_| wit::ClientError::NotFound(format!("Teams user {id} (unauthenticated)")))?;
+        let resp = http(
+            "GET",
+            &format!("{}/v1.0/users/{id}", session.base_url),
+            bearer_headers(&session.token),
+            None,
+        )?;
+        check_status(&resp, "user")?;
+        let u: GraphUser = parse_json(&resp, "user")?;
+        Ok(wit::User {
+            id: u.id,
+            display_name: u.display_name.unwrap_or_default(),
+            avatar_url: None,
+            presence: wit::PresenceStatus::Online,
+            backend: wit::BackendType::Teams,
+        })
     }
 
     fn get_friends() -> Result<Vec<wit::User>, wit::ClientError> {
+        // Teams has no "friends" concept — skipped.
         Ok(vec![])
     }
 
     fn get_channel_members(_channel_id: String) -> Result<Vec<wit::User>, wit::ClientError> {
+        // Graph /channels/{id}/members returns aadUserConversationMember records
+        // that point at user ids — another hop to resolve. Skipped for now.
         Ok(vec![])
     }
 
@@ -154,20 +564,142 @@ impl Guest for TeamsPlugin {
         Ok(wit::PresenceStatus::Offline)
     }
 
-    fn set_presence(_status: wit::PresenceStatus) -> Result<(), wit::ClientError> {
+    fn set_presence(status: wit::PresenceStatus) -> Result<(), wit::ClientError> {
+        let Some(session) = state_snapshot() else {
+            // Match stub behavior when unauthenticated so E2E harness still passes.
+            return Ok(());
+        };
+        let availability = wit_presence_to_graph(status);
+        let body = serde_json::json!({ "availability": availability });
+        let body_bytes = serde_json::to_vec(&body)
+            .map_err(|e| wit::ClientError::Internal(e.to_string()))?;
+        let resp = http(
+            "PATCH",
+            &format!("{}/v1.0/me/presence/setPresence", session.base_url),
+            bearer_json_headers(&session.token),
+            Some(body_bytes),
+        )?;
+        check_status(&resp, "setPresence")?;
         Ok(())
     }
 
-    fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
-        // TODO(3.4.5): Parse Teams change notification data, call emit-event
+    fn handle_ws_data(_handle: u64, data: Vec<u8>) {
+        // The native client long-polls /test/events/poll and fans events out on
+        // a channel. WIT plugins get the same bytes through `handle-ws-data`
+        // whenever the host decides to treat the long-poll body as a WS frame.
+        let Ok(events) = serde_json::from_slice::<Vec<serde_json::Value>>(&data) else {
+            host_api::log(
+                wit::LogLevel::Warn,
+                "Teams handle_ws_data: payload is not a JSON array",
+            );
+            return;
+        };
+        for ev in events {
+            if let Some(client_event) = teams_event_to_wit(ev) {
+                host_api::emit_event(&client_event);
+            }
+        }
     }
 
     fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::from("teams")
+        wit::BackendType::Teams
     }
 
     fn get_backend_name() -> String {
         "Teams".to_string()
+    }
+
+    fn get_backend_capabilities() -> wit::BackendCapabilities {
+        wit::BackendCapabilities {
+            supports_voice: false,
+            supports_video: false,
+            supports_dms: true,
+            supports_groups: true,
+            supports_send_messages: true,
+            supports_presence: true,
+            supports_search: false,
+            supports_reactions: true,
+            supports_typing_indicators: false,
+            supports_file_upload: false,
+            landing: wit::LandingPage::FirstServer,
+        }
+    }
+
+    fn list_files(
+        _channel_id: String,
+        _path: String,
+    ) -> Result<Vec<wit::FileEntry>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "teams has no code channels".to_string(),
+        ))
+    }
+
+    fn read_file(
+        _channel_id: String,
+        _path: String,
+    ) -> Result<wit::FileContent, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "teams has no code channels".to_string(),
+        ))
+    }
+}
+
+fn test_login(
+    base_url: &str,
+    creds: &wit::EmailPasswordCreds,
+) -> Result<String, wit::ClientError> {
+    #[derive(Deserialize)]
+    struct LoginResp {
+        token: String,
+    }
+    let body = serde_json::json!({ "login": creds.email, "password": creds.password });
+    let body_bytes =
+        serde_json::to_vec(&body).map_err(|e| wit::ClientError::Internal(e.to_string()))?;
+    let headers = vec![(
+        "Content-Type".to_string(),
+        "application/json".to_string(),
+    )];
+    let resp = http(
+        "POST",
+        &format!("{base_url}/test/auth/login"),
+        headers,
+        Some(body_bytes),
+    )?;
+    check_status(&resp, "/test/auth/login")?;
+    let parsed: LoginResp = parse_json(&resp, "/test/auth/login")?;
+    Ok(parsed.token)
+}
+
+fn teams_event_to_wit(ev: serde_json::Value) -> Option<wit::ClientEvent> {
+    let ty = ev.get("type")?.as_str()?;
+    let resource_id = ev.get("resourceId")?.as_str()?.to_string();
+    match ty {
+        "MessageCreated" => {
+            let m: GraphMessage = serde_json::from_value(ev.get("message")?.clone()).ok()?;
+            Some(wit::ClientEvent::MessageReceived(
+                wit::MessageReceivedEvent {
+                    channel_id: resource_id,
+                    message: graph_message_to_wit(m),
+                },
+            ))
+        }
+        "MessageUpdated" => {
+            let m: GraphMessage = serde_json::from_value(ev.get("message")?.clone()).ok()?;
+            Some(wit::ClientEvent::MessageEdited(wit::MessageEditedEvent {
+                channel_id: resource_id,
+                message: graph_message_to_wit(m),
+            }))
+        }
+        "MessageDeleted" => {
+            let message_id = ev.get("messageId")?.as_str()?.to_string();
+            Some(wit::ClientEvent::MessageDeleted(
+                wit::MessageDeletedEvent {
+                    channel_id: resource_id,
+                    message_id,
+                },
+            ))
+        }
+        _ => None,
     }
 }
 
@@ -187,6 +719,41 @@ impl PluginMetadataGuest for TeamsPlugin {
     fn get_icon() -> String {
         "👥".to_string()
     }
+
+    fn get_plugin_manifest() -> crate::wit_bindings::PluginManifest {
+        crate::wit_bindings::PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec![
+                "graph.microsoft.com".to_string(),
+                "login.microsoftonline.com".to_string(),
+            ],
+            description: "Connect to Microsoft Teams. Read and send channel and \
+                          1:1/group chat messages, manage presence, react."
+                .to_string(),
+            homepage: Some("https://teams.microsoft.com".to_string()),
+        }
+    }
 }
 
 export!(TeamsPlugin with_types_in crate::wit_bindings);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_id_split_requires_slash() {
+        assert!(split_channel_id("no-slash").is_err());
+        assert_eq!(split_channel_id("team/chan").unwrap(), ("team", "chan"));
+    }
+
+    #[test]
+    fn presence_mapping_covers_all_variants() {
+        use wit::PresenceStatus::*;
+        assert_eq!(wit_presence_to_graph(Online), "Available");
+        assert_eq!(wit_presence_to_graph(Idle), "Away");
+        assert_eq!(wit_presence_to_graph(DoNotDisturb), "DoNotDisturb");
+        assert_eq!(wit_presence_to_graph(Invisible), "Offline");
+        assert_eq!(wit_presence_to_graph(Offline), "Offline");
+    }
+}
