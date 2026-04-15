@@ -15,12 +15,14 @@ native = [
     "dep:async-trait",
     "dep:futures",
     "dep:tokio",
+    "dep:tokio-stream",
     "dep:serde",
     "dep:serde_json",
     "dep:chrono",
     "dep:uuid",
     "dep:thiserror",
     "dep:tracing",
+    "dep:urlencoding",
     "dep:poly-host-bridge",
 ]
 
@@ -33,12 +35,14 @@ dioxus = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["js"] }
 futures = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
 
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]

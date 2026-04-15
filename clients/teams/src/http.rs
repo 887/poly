@@ -1,15 +1,16 @@
 //! Microsoft Graph API HTTP client.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
 
 use crate::types::{GraphChannel, GraphChat, GraphCollection, GraphMessage, GraphTeam, GraphUser};
 
+#[derive(Clone)]
 pub struct TeamsHttpClient {
     base_url: String,
-    token: Mutex<Option<String>>,
+    token: Arc<Mutex<Option<String>>>,
     http: HttpClient,
 }
 
@@ -17,7 +18,7 @@ impl TeamsHttpClient {
     pub fn new(base_url: String) -> Self {
         Self {
             base_url,
-            token: Mutex::new(None),
+            token: Arc::new(Mutex::new(None)),
             http: HttpClient::new(),
         }
     }
@@ -223,5 +224,93 @@ impl TeamsHttpClient {
             &serde_json::json!({ "body": { "content": content, "contentType": "text" } }),
         )
         .await
+    }
+
+    pub async fn set_channel_reaction(
+        &self,
+        team_id: &str,
+        channel_id: &str,
+        message_id: &str,
+        reaction_type: &str,
+    ) -> Result<(), ClientError> {
+        let url = self.url(&format!(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/setReaction"
+        ));
+        let resp = self
+            .http
+            .post(url)
+            .header("Authorization", self.auth_header())
+            .json(&serde_json::json!({ "reactionType": reaction_type }))
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        Ok(())
+    }
+
+    pub async fn unset_channel_reaction(
+        &self,
+        team_id: &str,
+        channel_id: &str,
+        message_id: &str,
+        reaction_type: &str,
+    ) -> Result<(), ClientError> {
+        let url = self.url(&format!(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/unsetReaction"
+        ));
+        let resp = self
+            .http
+            .post(url)
+            .header("Authorization", self.auth_header())
+            .json(&serde_json::json!({ "reactionType": reaction_type }))
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        Ok(())
+    }
+
+    pub async fn set_presence(&self, availability: &str) -> Result<(), ClientError> {
+        let url = self.url("/v1.0/me/presence/setPresence");
+        let resp = self
+            .http
+            .patch(url)
+            .header("Authorization", self.auth_header())
+            .json(&serde_json::json!({ "availability": availability }))
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        Ok(())
+    }
+
+    /// Long-poll the test server's subscription endpoint for change notifications.
+    /// Returns the raw JSON events array so the caller can dispatch to `ClientEvent`.
+    pub async fn poll_events(&self) -> Result<Vec<serde_json::Value>, ClientError> {
+        #[derive(serde::Deserialize)]
+        struct PollResp {
+            events: Vec<serde_json::Value>,
+        }
+        let resp = self
+            .http
+            .get(self.url("/test/events/poll"))
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        let parsed: PollResp = resp
+            .json()
+            .await
+            .map_err(|e| ClientError::Internal(e.to_string()))?;
+        Ok(parsed.events)
     }
 }

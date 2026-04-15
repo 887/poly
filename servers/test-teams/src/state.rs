@@ -88,6 +88,15 @@ pub struct Message {
     pub last_modified_date_time: Option<String>,
     #[serde(default)]
     pub deleted_date_time: Option<String>,
+    #[serde(default)]
+    pub reactions: Vec<Reaction>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Reaction {
+    pub user_id: String,
+    pub reaction_type: String,
+    pub created_date_time: String,
 }
 
 impl TeamsState {
@@ -170,6 +179,7 @@ impl TeamsState {
                 created_date_time: "2026-04-05T09:00:00Z".into(),
                 last_modified_date_time: None,
                 deleted_date_time: None,
+                reactions: vec![],
             },
             Message {
                 id: "MSG002".into(),
@@ -179,6 +189,7 @@ impl TeamsState {
                 created_date_time: "2026-04-05T09:01:00Z".into(),
                 last_modified_date_time: None,
                 deleted_date_time: None,
+                reactions: vec![],
             },
         ]);
     }

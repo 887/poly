@@ -10,6 +10,8 @@
 //! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
 
 #[cfg(feature = "native")]
+pub mod auth;
+#[cfg(feature = "native")]
 mod http;
 #[cfg(feature = "native")]
 pub mod signup;
@@ -34,7 +36,7 @@ pub fn plugin_translations(locale: &str) -> String {
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use futures::stream::{self, Stream};
+use futures::stream::Stream;
 #[cfg(feature = "native")]
 use http::TeamsHttpClient;
 #[cfg(feature = "native")]
@@ -134,6 +136,26 @@ impl TeamsClient {
         self.http.delete_channel_message(team_id, ch_id, message_id).await
     }
 
+    /// Add a reaction to a channel message.
+    pub async fn react(&self, channel_id: &str, message_id: &str, reaction_type: &str) -> ClientResult<()> {
+        let Some((team_id, ch_id)) = channel_id.split_once('/') else {
+            return Err(ClientError::Internal(format!(
+                "Teams react requires 'team_id/channel_id', got '{channel_id}'"
+            )));
+        };
+        self.http.set_channel_reaction(team_id, ch_id, message_id, reaction_type).await
+    }
+
+    /// Remove a reaction from a channel message.
+    pub async fn unreact(&self, channel_id: &str, message_id: &str, reaction_type: &str) -> ClientResult<()> {
+        let Some((team_id, ch_id)) = channel_id.split_once('/') else {
+            return Err(ClientError::Internal(format!(
+                "Teams unreact requires 'team_id/channel_id', got '{channel_id}'"
+            )));
+        };
+        self.http.unset_channel_reaction(team_id, ch_id, message_id, reaction_type).await
+    }
+
     fn unknown_user(&self) -> User {
         User {
             id: String::new(),
@@ -148,6 +170,77 @@ impl TeamsClient {
 #[cfg(feature = "native")]
 impl Default for TeamsClient {
     fn default() -> Self { Self::new() }
+}
+
+/// Convert a `TeamsEvent` JSON payload (from `/test/events/poll`) to a
+/// `ClientEvent`. Returns None for events we don't yet surface.
+#[cfg(feature = "native")]
+fn teams_event_to_client(ev: serde_json::Value) -> Option<ClientEvent> {
+    let ty = ev.get("type")?.as_str()?;
+    match ty {
+        "MessageCreated" => {
+            let resource_id = ev.get("resourceId")?.as_str()?.to_string();
+            let m = ev.get("message")?;
+            let msg = poly_event_message_from_json(m)?;
+            Some(ClientEvent::MessageReceived { channel_id: resource_id, message: msg })
+        }
+        "MessageUpdated" => {
+            let resource_id = ev.get("resourceId")?.as_str()?.to_string();
+            let m = ev.get("message")?;
+            let msg = poly_event_message_from_json(m)?;
+            Some(ClientEvent::MessageEdited { channel_id: resource_id, message: msg })
+        }
+        "MessageDeleted" => {
+            let resource_id = ev.get("resourceId")?.as_str()?.to_string();
+            let message_id = ev.get("messageId")?.as_str()?.to_string();
+            Some(ClientEvent::MessageDeleted { channel_id: resource_id, message_id })
+        }
+        _ => None,
+    }
+}
+
+#[cfg(feature = "native")]
+fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
+    let id = m.get("id")?.as_str()?.to_string();
+    let content = m.get("body")
+        .and_then(|b| b.get("content"))
+        .and_then(|c| c.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let timestamp = m.get("createdDateTime")
+        .and_then(|t| t.as_str())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or_else(chrono::Utc::now);
+    let author_id = m.get("from")
+        .and_then(|f| f.get("user"))
+        .and_then(|u| u.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let author_name = m.get("from")
+        .and_then(|f| f.get("user"))
+        .and_then(|u| u.get("displayName"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let edited = m.get("lastModifiedDateTime").map(|v| !v.is_null()).unwrap_or(false);
+    Some(Message {
+        id,
+        author: User {
+            id: author_id,
+            display_name: author_name,
+            avatar_url: None,
+            presence: PresenceStatus::Online,
+            backend: BackendType::from("teams"),
+        },
+        content: MessageContent::Text(content),
+        timestamp,
+        attachments: vec![],
+        reactions: vec![],
+        reply_to: None,
+        edited,
+    })
 }
 
 #[cfg(feature = "native")]
@@ -340,12 +433,39 @@ impl ClientBackend for TeamsClient {
         Ok(PresenceStatus::Offline)
     }
 
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Ok(())
+    async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {
+        let availability = match status {
+            PresenceStatus::Online => "Available",
+            PresenceStatus::Idle => "Away",
+            PresenceStatus::DoNotDisturb => "DoNotDisturb",
+            PresenceStatus::Offline | PresenceStatus::Invisible => "Offline",
+        };
+        self.http.set_presence(availability).await
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        Box::pin(stream::pending())
+        let http = self.http.clone();
+        let (tx, rx) = tokio::sync::mpsc::channel::<ClientEvent>(128);
+        tokio::spawn(async move {
+            loop {
+                match http.poll_events().await {
+                    Ok(events) => {
+                        for ev in events {
+                            if let Some(ce) = teams_event_to_client(ev) {
+                                if tx.send(ce).await.is_err() {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Teams poll_events error: {e:?}");
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
+                }
+            }
+        });
+        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
     }
 
     fn backend_type(&self) -> BackendType {

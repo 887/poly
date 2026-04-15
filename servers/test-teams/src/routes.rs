@@ -12,7 +12,7 @@ use axum::Json;
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::state::{Message, TeamsState};
+use crate::state::{Message, Reaction, TeamsEvent, TeamsState};
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -225,9 +225,14 @@ pub async fn send_channel_message(
                 created_date_time: chrono::Utc::now().to_rfc3339(),
                 last_modified_date_time: None,
                 deleted_date_time: None,
+                reactions: vec![],
             };
             let json = message_to_json(&msg, &state);
-            state.messages.entry(channel_id).or_default().push(msg);
+            state.messages.entry(channel_id.clone()).or_default().push(msg);
+            state.events.publish(TeamsEvent::MessageCreated {
+                resource_id: channel_id,
+                message: json.clone(),
+            });
             (StatusCode::CREATED, Json(json)).into_response()
         }
     }
@@ -269,7 +274,128 @@ pub async fn edit_channel_message(
             msg.body_content = new_content;
             msg.last_modified_date_time = Some(chrono::Utc::now().to_rfc3339());
             let json = message_to_json(msg, &state);
+            drop(entry);
+            state.events.publish(TeamsEvent::MessageUpdated {
+                resource_id: channel_id,
+                message: json.clone(),
+            });
             Json(json).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ReactionBody {
+    #[serde(rename = "reactionType")]
+    pub reaction_type: String,
+}
+
+/// POST /v1.0/teams/:team_id/channels/:channel_id/messages/:message_id/setReaction
+pub async fn set_reaction(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((_team_id, channel_id, message_id)): Path<(String, String, String)>,
+    Json(body): Json<ReactionBody>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(user_id) => {
+            let updated = {
+                let mut entry = match state.messages.get_mut(&channel_id) {
+                    Some(e) => e,
+                    None => return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Channel not found").into_response(),
+                };
+                let Some(msg) = entry.iter_mut().find(|m| m.id == message_id) else {
+                    return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Message not found").into_response();
+                };
+                msg.reactions.retain(|r| !(r.user_id == user_id && r.reaction_type == body.reaction_type));
+                msg.reactions.push(Reaction {
+                    user_id: user_id.clone(),
+                    reaction_type: body.reaction_type.clone(),
+                    created_date_time: chrono::Utc::now().to_rfc3339(),
+                });
+                message_to_json(msg, &state)
+            };
+            state.events.publish(TeamsEvent::MessageUpdated {
+                resource_id: channel_id,
+                message: updated.clone(),
+            });
+            StatusCode::NO_CONTENT.into_response()
+        }
+    }
+}
+
+/// POST /v1.0/teams/:team_id/channels/:channel_id/messages/:message_id/unsetReaction
+pub async fn unset_reaction(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((_team_id, channel_id, message_id)): Path<(String, String, String)>,
+    Json(body): Json<ReactionBody>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(user_id) => {
+            let updated = {
+                let mut entry = match state.messages.get_mut(&channel_id) {
+                    Some(e) => e,
+                    None => return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Channel not found").into_response(),
+                };
+                let Some(msg) = entry.iter_mut().find(|m| m.id == message_id) else {
+                    return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Message not found").into_response();
+                };
+                msg.reactions.retain(|r| !(r.user_id == user_id && r.reaction_type == body.reaction_type));
+                message_to_json(msg, &state)
+            };
+            state.events.publish(TeamsEvent::MessageUpdated {
+                resource_id: channel_id,
+                message: updated,
+            });
+            StatusCode::NO_CONTENT.into_response()
+        }
+    }
+}
+
+/// GET /test/events/poll — long-poll subscription endpoint.
+/// Blocks up to ~25s waiting for events, returns them as a JSON array.
+/// Mirrors Graph change-notifications without requiring a real subscription.
+pub async fn long_poll_events(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
+    }
+    let mut rx = state.events.subscribe();
+    let timeout = std::time::Duration::from_secs(25);
+    match tokio::time::timeout(timeout, rx.recv()).await {
+        Ok(Ok(event)) => Json(serde_json::json!({
+            "events": [event_to_json(&event)]
+        })).into_response(),
+        Ok(Err(_)) => Json(serde_json::json!({ "events": [] })).into_response(),
+        Err(_) => Json(serde_json::json!({ "events": [] })).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SetPresenceBody {
+    pub availability: Option<String>,
+}
+
+/// PATCH /v1.0/me/presence/setPresence
+pub async fn set_presence(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Json(body): Json<SetPresenceBody>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(user_id) => {
+            let availability = body.availability.unwrap_or_else(|| "Available".into());
+            state.events.publish(TeamsEvent::PresenceChanged {
+                user_id,
+                availability,
+            });
+            StatusCode::NO_CONTENT.into_response()
         }
     }
 }
@@ -296,6 +422,11 @@ pub async fn delete_channel_message(
             }
             msg.deleted_date_time = Some(chrono::Utc::now().to_rfc3339());
             msg.body_content = String::new();
+            drop(entry);
+            state.events.publish(TeamsEvent::MessageDeleted {
+                resource_id: channel_id,
+                message_id,
+            });
             StatusCode::NO_CONTENT.into_response()
         }
     }
@@ -377,9 +508,14 @@ pub async fn send_chat_message(
                 created_date_time: chrono::Utc::now().to_rfc3339(),
                 last_modified_date_time: None,
                 deleted_date_time: None,
+                reactions: vec![],
             };
             let json = message_to_json(&msg, &state);
-            state.messages.entry(chat_id).or_default().push(msg);
+            state.messages.entry(chat_id.clone()).or_default().push(msg);
+            state.events.publish(TeamsEvent::MessageCreated {
+                resource_id: chat_id,
+                message: json.clone(),
+            });
             (StatusCode::CREATED, Json(json)).into_response()
         }
     }
@@ -440,12 +576,42 @@ fn chat_to_json(c: &crate::state::Chat) -> serde_json::Value {
     })
 }
 
+fn event_to_json(e: &TeamsEvent) -> serde_json::Value {
+    match e {
+        TeamsEvent::MessageCreated { resource_id, message } => serde_json::json!({
+            "type": "MessageCreated",
+            "resourceId": resource_id,
+            "message": message,
+        }),
+        TeamsEvent::MessageUpdated { resource_id, message } => serde_json::json!({
+            "type": "MessageUpdated",
+            "resourceId": resource_id,
+            "message": message,
+        }),
+        TeamsEvent::MessageDeleted { resource_id, message_id } => serde_json::json!({
+            "type": "MessageDeleted",
+            "resourceId": resource_id,
+            "messageId": message_id,
+        }),
+        TeamsEvent::PresenceChanged { user_id, availability } => serde_json::json!({
+            "type": "PresenceChanged",
+            "userId": user_id,
+            "availability": availability,
+        }),
+    }
+}
+
 fn message_to_json(m: &Message, state: &TeamsState) -> serde_json::Value {
     let from_user = state.users.get(&m.from_user_id).map(|u| serde_json::json!({
         "user": { "id": u.id, "displayName": u.display_name }
     })).unwrap_or_else(|| serde_json::json!({
         "user": { "id": m.from_user_id, "displayName": m.from_user_id }
     }));
+    let reactions: Vec<serde_json::Value> = m.reactions.iter().map(|r| serde_json::json!({
+        "reactionType": r.reaction_type,
+        "createdDateTime": r.created_date_time,
+        "user": { "user": { "id": r.user_id } },
+    })).collect();
     serde_json::json!({
         "id": m.id,
         "body": { "content": m.body_content, "contentType": "text" },
@@ -456,5 +622,6 @@ fn message_to_json(m: &Message, state: &TeamsState) -> serde_json::Value {
         "deletedDateTime": m.deleted_date_time,
         "messageType": "message",
         "attachments": [],
+        "reactions": reactions,
     })
 }

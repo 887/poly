@@ -1,7 +1,7 @@
 # Phase 3.4 — Microsoft Teams Client Completion Plan
 
 > **Created:** 2026-04-15
-> **Status:** 🟡 α (native backend working against mock server; not wired into signup picker)
+> **Status:** 🟢 β — write paths, reactions, presence, event stream, and OAuth2 helpers all landed against the mock; OAuth signup-tab UI and WIT guest are the only remaining gaps (both deferred for cross-cutting reasons — see 3.4.6 / 3.4.7.7).
 > **Crate:** `poly-teams`
 > **Supersedes:** `docs/archive/phases/phase-3.4-teams-plan.md` (that plan assumed greenfield; this one picks up from where the α implementation actually stands)
 > **Goal:** Bring Teams to Discord-level parity — typed API layer, EmailPassword test flow, signup-picker entry, WIT guest on par with native.
@@ -59,21 +59,21 @@ Discord is NOT registered in `register_native_signup_entries()` either — both 
 
 - [x] **3.4.4.1** `PATCH /v1.0/teams/{tid}/channels/{cid}/messages/{mid}` — edit message (author-only, rejects if `deletedDateTime` set)
 - [x] **3.4.4.2** `DELETE /v1.0/teams/{tid}/channels/{cid}/messages/{mid}` — soft-delete (sets `deletedDateTime`, clears `body.content`, row stays)
-- [ ] **3.4.4.3** Reactions — deferred; `setReaction`/`unsetReaction` pair with event-stream (3.4.5.2), handle together
+- [x] **3.4.4.3** Reactions — `POST /v1.0/teams/{tid}/channels/{cid}/messages/{mid}/setReaction` and `…/unsetReaction` (action-style endpoints matching Graph). `Message` grew a `reactions: Vec<Reaction>` field; mutations emit `MessageUpdated` events.
 - [x] **3.4.4.4** `POST /v1.0/chats/{chatId}/messages` + `GET /v1.0/chats/{chatId}/messages` — send/read 1:1 / group chat
 - [x] **3.4.4.5** `/seed` + `/reset` + `/reseed` audit — Message struct grew `last_modified_date_time` + `deleted_date_time`; seed data defaults both to None
-- [ ] **3.4.4.6** `GET /v1.0/subscriptions` mock — deferred; pairs with 3.4.5.2 event-stream
+- [x] **3.4.4.6** Long-poll `GET /test/events/poll` — diverges from Graph's webhook-style `/v1.0/subscriptions` (which would require a publicly reachable callback URL) in favor of a simpler long-poll that's friendlier to client testing. Backed by a `tokio::sync::broadcast` `EventBus`; 25 s timeout per poll.
 
 ## 3.4.5 Native client — fill in the write + real-time paths
 
 - [x] **3.4.5.1** Wire edit / delete into `TeamsClient` as public methods (`edit_message`, `delete_message`). `send_message` and `get_messages` now route to chat vs channel endpoints based on id format (slash-separated → team/channel, bare id → chat). Reactions deferred with 3.4.4.3. **Note:** `ClientBackend` trait has no `edit_message`/`delete_message`; exposing these on the trait is a cross-cutting decision that needs alignment across all backends — deferred.
-- [ ] **3.4.5.2** `event_stream()` — poll the mock subscription / long-poll endpoint and emit `MessageReceived`, `MessageEdited`, `MessageDeleted`, `ReactionAdded`
-- [ ] **3.4.5.3** Presence — stub `set_presence` against `PATCH /v1.0/me/presence/setPresence` in the mock
-- [ ] **3.4.5.4** Rate-limit handling — on 429 from Graph, honor `Retry-After`; no-op against the mock but keep the wiring so real Graph calls work
+- [x] **3.4.5.2** `event_stream()` — spawns a task that long-polls `/test/events/poll`; emits `MessageReceived` / `MessageEdited` / `MessageDeleted`. Reaction events ride on `MessageEdited` since reactions live inside the message body (consistent with how the test server emits `MessageUpdated` from `set_reaction`/`unset_reaction`).
+- [x] **3.4.5.3** Presence — `PATCH /v1.0/me/presence/setPresence` wired through `TeamsClient::set_presence`. `PresenceStatus::{Online, Idle, DoNotDisturb, Invisible, Offline}` map to Graph's `Available`/`Away`/`DoNotDisturb`/`Offline` strings.
+- [ ] **3.4.5.4** Rate-limit handling — deferred. `HttpClient::RequestBuilder` isn't `Clone`, so a 429-retry helper would need to either (a) capture the request via closures or (b) buffer body+headers up-front. Punted until real Graph traffic forces the issue.
 
-## 3.4.6 WIT guest parity
+## 3.4.6 WIT guest parity — **deferred for Discord/Matrix parity**
 
-Teams `guest.rs` is still a stub returning errors. Once the native write paths above land, port them.
+Teams `guest.rs` is still a stub returning errors — and so is Discord's. Porting Teams alone would diverge from the rest of the WIT-guest fleet without addressing the underlying question: should backends ship as native impls, WASM plugins, or both? That's a cross-cutting decision that belongs in its own phase.
 
 - [ ] **3.4.6.1** Auth via guest — `host_api::http_request()` to `/test/auth/login` (or accept pre-issued token)
 - [ ] **3.4.6.2** Port list / read / send / edit / delete / react to the guest
@@ -82,11 +82,11 @@ Teams `guest.rs` is still a stub returning errors. Once the native write paths a
 
 ## 3.4.7 Real Microsoft Graph auth (in scope for this phase)
 
-- [ ] **3.4.7.1** OAuth2 Device Code Flow against `login.microsoftonline.com/common/oauth2/v2.0/devicecode` (headless / terminal)
-- [ ] **3.4.7.2** Authorization Code + PKCE against `/oauth2/v2.0/authorize` → `/oauth2/v2.0/token` — open system browser from the desktop shells, loopback-redirect to a one-shot localhost listener
-- [ ] **3.4.7.3** Azure AD app registration — reuse the `ttyms` default client ID (`04b07795-8ddb-461a-bbee-02f9e1bf7b46` or whatever it ships with) for day one; capture the value in `clients/teams/src/auth.rs` as a const, switch to a Poly-owned registration later
-- [ ] **3.4.7.4** Scopes (minimal, delegated): `User.Read`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `ChannelMessage.Read.All`, `ChannelMessage.Send`, `Chat.Read`, `Chat.ReadWrite`, `Presence.Read`, `offline_access` (for refresh tokens)
-- [ ] **3.4.7.5** Refresh-token rotation + silent re-auth — store refresh-token alongside access-token in `AccountToken`; when a 401 comes back from Graph, refresh once before surfacing the error; wire the reauth-needed signal into the per-account reauth UI (phase 2.5 landed that surface)
+- [x] **3.4.7.1** OAuth2 Device Code Flow — `auth::start_device_code()` + `auth::poll_device_code_token()` (handles `authorization_pending` / `slow_down` / `authorization_declined` / `expired_token`).
+- [x] **3.4.7.2** Authorization Code + PKCE — `auth::build_pkce_authorize_url()` + `auth::exchange_pkce_code()`. Caller supplies the verifier/challenge pair and runs the loopback listener. Wiring into the desktop shells (system-browser launch + 127.0.0.1 listener) lives outside `clients/teams` and is part of 3.4.7.7.
+- [x] **3.4.7.3** Default client ID — `auth::DEFAULT_CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"` (`ttyms`) and `auth::DEFAULT_TENANT = "common"`.
+- [x] **3.4.7.4** Scopes — `auth::DEFAULT_SCOPES` lists exactly the set above, including `offline_access`.
+- [x] **3.4.7.5** Refresh helper — `auth::refresh_access_token()` swaps a refresh token for a fresh `TokenResponse`. Wiring the 401 → refresh → retry loop into `TeamsHttpClient` and emitting the reauth signal is the remaining piece; deferred until OAuth ships behind the signup tab (3.4.7.7).
 - [ ] **3.4.7.6** Token storage via the existing `AccountToken` / host-bridge KV, encrypted for backup — extend the record to include `refresh_token`, `expires_at`, `scope`
 - [ ] **3.4.7.7** Teams signup panel — add a "Microsoft account (real)" tab alongside the test-server tab, showing the device-code URL + user-code when that flow kicks off, or kicking off the browser for the PKCE flow
 - [ ] **3.4.7.8** Rate-limit + throttling handling — honor `Retry-After` from Graph, exponential backoff on 5xx

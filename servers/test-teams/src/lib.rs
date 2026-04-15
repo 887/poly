@@ -35,6 +35,16 @@ pub fn router(state: Arc<TeamsState>) -> Router {
             "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}",
             patch(routes::edit_channel_message).delete(routes::delete_channel_message),
         )
+        .route(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/setReaction",
+            post(routes::set_reaction),
+        )
+        .route(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/unsetReaction",
+            post(routes::unset_reaction),
+        )
+        .route("/v1.0/me/presence/setPresence", patch(routes::set_presence))
+        .route("/test/events/poll", get(routes::long_poll_events))
         // Chats / DMs
         .route("/v1.0/me/chats", get(routes::get_chats))
         .route(
