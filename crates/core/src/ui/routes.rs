@@ -98,6 +98,10 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::CreateServerRoute { account_id, .. }
         | Route::AccountSearchRoute { account_id, .. }
         | Route::ServerOverviewRoute { account_id, .. } => Some(account_id.as_str()),
+        // Reauth intentionally returns None so route_targets_unknown_account
+        // never treats a reauth URL as pointing at a missing account — the
+        // point of reauth is to fix an account whose backend may be gone.
+        Route::ReauthAccount { .. } => None,
         Route::Root
         | Route::SettingsRoute
         | Route::SettingsSectionRoute { .. }
@@ -328,6 +332,12 @@ pub enum Route {
 
     #[route("/signup/:client")]
     ClientSignup { client: String },
+
+    // Per-account reauth page — rendered full-page outside MainLayout.
+    // Reused for 401/unauthenticated accounts: updates the existing account's
+    // token in place (or removes the account) rather than creating a new one.
+    #[route("/:backend/:instance_id/:account_id/reauth")]
+    ReauthAccount { backend: String, instance_id: String, account_id: String },
 
     // Catch-all → redirected by on_update to the best active route
     #[route("/:..segments")]
@@ -773,6 +783,17 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = None;
             s.nav.active_instance_id = None;
             s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::ReauthAccount { backend, instance_id, account_id } => {
+            // Reauth is a full-page form like signup, but scoped to an
+            // existing account — keep the account context so the page can
+            // look it up in ClientManager / ChatData.
+            s.nav.view = View::Signup;
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = None;
             s.nav.selected_channel = None;
         }
@@ -1715,6 +1736,20 @@ fn SignupPicker() -> Element {
 fn ClientSignup(client: String) -> Element {
     rsx! {
         super::signup::ClientSignupPage { client }
+    }
+}
+
+/// Per-account reauth page — `/:backend/:instance_id/:account_id/reauth`.
+///
+/// Full-page form (outside MainLayout) that lets the user update the existing
+/// account's credentials in place, or remove the account entirely. Used when
+/// a stored token has been rejected (401) and the app has marked the
+/// connection status as [`ConnectionStatus::Unauthenticated`].
+#[rustfmt::skip]
+#[component]
+fn ReauthAccount(backend: String, instance_id: String, account_id: String) -> Element {
+    rsx! {
+        super::signup::ReauthAccountPage { backend, instance_id, account_id }
     }
 }
 

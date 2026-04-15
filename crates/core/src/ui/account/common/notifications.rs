@@ -17,11 +17,12 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::backend_badge;
 use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{
-    BackendCapabilities, BackendType, FriendModel, NotificationKind, NotificationSupport,
-    VoiceSupport,
+    BackendCapabilities, BackendType, ConnectionStatus, FriendModel, NotificationKind,
+    NotificationSupport, VoiceSupport,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -123,6 +124,21 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let total_count = notifications.len();
     let sidebar_filters = filters_for_backend(&backend_slug);
 
+    // Detect whether the active account's stored token is rejected (401).
+    // Only surface the reauth CTA in that case — hidden otherwise.
+    let client_manager_sig: Signal<ClientManager> = use_context();
+    let needs_reauth = client_manager_sig
+        .read()
+        .connection_statuses
+        .get(&account_id)
+        .map_or(false, ConnectionStatus::needs_reauth);
+    let reauth_instance_id = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .map(|s| s.instance_id.clone())
+        .unwrap_or_else(|| "demo".to_string());
+
     rsx! {
         SplitMenuShell {
             root_class: "notifications-shell".to_string(),
@@ -132,6 +148,31 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
                 div { class: "special-page-sidebar-header",
                     h2 { class: "special-page-sidebar-title", "{notifications_title}" }
                     p { class: "special-page-sidebar-description", "{notifications_empty}" }
+                }
+                if needs_reauth {
+                    {
+                        let aid = account_id.clone();
+                        let slug = backend_slug.clone();
+                        let iid = reauth_instance_id.clone();
+                        rsx! {
+                            div { class: "special-page-sidebar-nav notifications-reauth-cta",
+                                button {
+                                    class: "special-page-sidebar-button notif-reauth-button",
+                                    onclick: move |_| {
+                                        navigator().push(Route::ReauthAccount {
+                                            backend: slug.clone(),
+                                            instance_id: iid.clone(),
+                                            account_id: aid.clone(),
+                                        });
+                                    },
+                                    span { class: "notif-reauth-icon", "🔑" }
+                                    span { class: "special-page-sidebar-button-label",
+                                        "{t(\"notifications-reconnect\")}"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 div { class: "special-page-sidebar-nav",
                     for filter in sidebar_filters {
@@ -429,14 +470,23 @@ fn NotificationItemContent(
                     }
                     NotificationKind::ReauthRequired { backend_slug } => {
                         let slug = backend_slug.clone();
+                        let aid = account_id.clone();
                         let nid = dismiss_id.clone();
+                        let instance_id = chat_data
+                            .read()
+                            .account_sessions
+                            .get(&aid)
+                            .map(|s| s.instance_id.clone())
+                            .unwrap_or_default();
                         rsx! {
                             button {
                                 class: "btn btn-warning btn-sm notif-action-reauth",
                                 onclick: move |_| {
                                     chat_data.write().notifications.retain(|n| n.id != nid);
-                                    navigator().push(super::super::super::routes::Route::ClientSignup {
-                                        client: slug.clone(),
+                                    navigator().push(super::super::super::routes::Route::ReauthAccount {
+                                        backend: slug.clone(),
+                                        instance_id: instance_id.clone(),
+                                        account_id: aid.clone(),
                                     });
                                 },
                                 "{t(\"notifications-reconnect\")}"

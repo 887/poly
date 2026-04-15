@@ -544,6 +544,21 @@ impl ClientManager {
         tracing::info!("Backend account committed to ClientManager");
     }
 
+    /// Detach a single account from the runtime maps and return its backend
+    /// handle so the caller can `logout()` outside the write-lock.
+    ///
+    /// All runtime state keyed on the account id is cleared (backends,
+    /// sessions, connection/presence status, server→account mapping). The
+    /// caller is responsible for removing the persisted storage row.
+    pub fn take_account(&mut self, account_id: &str) -> Option<BackendHandle> {
+        let handle = self.backends.remove(account_id);
+        self.sessions.remove(account_id);
+        self.connection_statuses.remove(account_id);
+        self.presence_statuses.remove(account_id);
+        self.server_account_map.retain(|_, aid| aid != account_id);
+        handle
+    }
+
     /// Remove a poly-server account by account ID.
     pub async fn remove_poly_server(&mut self, account_id: &str) -> Result<(), String> {
         if let Some(backend) = self.backends.remove(account_id) {

@@ -545,7 +545,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 // If this account needs reauth, skip the normal route resolution —
                 // sending it through NotificationsRoute / ServerHome would mount a
                 // component that spins waiting on a backend that no longer exists,
-                // freezing the UI. Drop the user on the signup page instead.
+                // freezing the UI. Route to the account-scoped reauth page so the
+                // existing token is updated (or the account removed) in place.
                 let needs_reauth = {
                     let cm = client_manager.read();
                     cm.connection_statuses
@@ -553,13 +554,26 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         .map_or(false, ConnectionStatus::needs_reauth)
                 };
                 if needs_reauth {
-                    let slug = chat_data
+                    let info = chat_data
                         .read()
                         .account_sessions
                         .get(&aid)
-                        .map(|s| s.backend.slug().to_string());
-                    if let Some(slug) = slug {
-                        navigator().push(Route::ClientSignup { client: slug });
+                        .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()));
+                    if let Some((slug, instance_id)) = info {
+                        // Session.instance_id may be stored with scheme (e.g.
+                        // "http://localhost:9106") when restored from the
+                        // persisted AccountToken. Route path segments cannot
+                        // contain `//`, so normalize here.
+                        let instance_id = instance_id
+                            .trim_start_matches("https://")
+                            .trim_start_matches("http://")
+                            .trim_end_matches('/')
+                            .to_string();
+                        navigator().push(Route::ReauthAccount {
+                            backend: slug,
+                            instance_id,
+                            account_id: aid.clone(),
+                        });
                         return;
                     }
                 }

@@ -219,6 +219,67 @@
     font-size: 0.875rem;
 }
 
+.notifications-reauth-cta {
+    margin-bottom: 8px;
+}
+
+.notif-reauth-button {
+    background: color-mix(in srgb, #f0a032 18%, transparent);
+    border-color: color-mix(in srgb, #f0a032 45%, transparent);
+    color: var(--text-primary);
+}
+
+.notif-reauth-button:hover {
+    background: color-mix(in srgb, #f0a032 28%, transparent);
+    border-color: #f0a032;
+}
+
+.notif-reauth-icon {
+    flex: 0 0 auto;
+    font-size: 1rem;
+}
+
+/* Reauth page: hide the plugin's own "Add X Instance" heading — the reauth
+   shell renders a "Sign In Again" page title and a short "<Backend>" sub-
+   title above the plugin form. */
+.reauth-content .signup-form-title:not(.reauth-page-title) {
+    display: none;
+}
+
+.reauth-page-title {
+    margin: 0 0 4px 0;
+}
+
+.reauth-backend-title {
+    margin: 0 0 16px 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-secondary, #9ea0ac);
+}
+
+/* Remove Account lives at the very bottom, well separated from the form so
+   it can't be hit by accident. Clicking it swaps in an inline confirm row. */
+.reauth-remove-section {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color, #2a2a3a);
+}
+
+.reauth-remove-btn {
+    opacity: 0.85;
+}
+
+.reauth-remove-confirm-text {
+    margin: 0 0 8px 0;
+    color: var(--text-secondary, #9ea0ac);
+    font-size: 0.9rem;
+}
+
+.reauth-remove-confirm-row {
+    display: flex;
+    gap: 8px;
+}
+
 .special-page-content {
     background: var(--bg-primary);
 }

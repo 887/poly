@@ -215,6 +215,134 @@ fn build_on_complete(
     })
 }
 
+// ── Reauth-mode commit callback ──────────────────────────────────────────────
+
+/// Build an `on_complete` for the per-account reauth flow.
+///
+/// Differs from [`build_on_complete`] in that it:
+/// 1. Forces the incoming `session.id` to the caller-supplied `target_account_id`
+///    so the existing row (token, session, backend handle, server map) is updated
+///    in place — the stable account identity survives the reauth.
+/// 2. Bypasses the duplicate-session check (overwrite is the point).
+/// 3. Clears `ConnectionStatus::Unauthenticated` by replacing it with
+///    `Connected` on commit.
+/// 4. Navigates back to the account's natural landing page.
+fn build_on_complete_reauth(
+    target_account_id: String,
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) -> Callback<SignupCompleted> {
+    Callback::new(move |completed: SignupCompleted| {
+        let backend_handle: BackendHandle =
+            Arc::new(tokio::sync::RwLock::new(completed.backend));
+        let mut session = completed.session;
+        // Pin the session to the original account id so existing rows overwrite.
+        session.id = target_account_id.clone();
+        spawn(async move {
+            let backend_slug = session.backend.slug().to_string();
+            let account_id  = session.id.clone();
+            let instance_id = session.instance_id.clone();
+
+            // Persist the fresh token over the stale one.
+            if let Some(storage) = crate::STORAGE.get() {
+                let at = crate::storage::AccountToken {
+                    backend: backend_slug.clone(),
+                    account_id: account_id.clone(),
+                    token: session.token.clone(),
+                    display_name: session.user.display_name.clone(),
+                    instance_id: session.backend_url.clone(),
+                };
+                if let Err(e) = storage.upsert_account_token(&at).await {
+                    tracing::warn!("Failed to persist reauthenticated token: {e}");
+                }
+            }
+
+            // Rebuild server→account map (may have changed if server list did).
+            let mut server_map = HashMap::new();
+            {
+                let guard = backend_handle.read().await;
+                if let Ok(servers) = guard.get_servers().await {
+                    for srv in &servers {
+                        server_map.insert(srv.id.clone(), account_id.clone());
+                    }
+                }
+            }
+            client_manager.write().commit_backend_account(
+                account_id.clone(),
+                session.clone(),
+                backend_handle.clone(),
+                server_map,
+            );
+            chat_data.write().account_sessions.insert(account_id.clone(), session);
+
+            let caps = poly_client::capabilities_for_slug(&backend_slug);
+            let landing = match caps.landing {
+                poly_client::LandingPage::ServerOverview => Route::ServerOverviewRoute {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id,
+                },
+                poly_client::LandingPage::FirstServer => {
+                    let first_server = chat_data.read().servers.iter()
+                        .find(|s| s.account_id == account_id)
+                        .map(|s| s.id.clone());
+                    if let Some(server_id) = first_server {
+                        Route::ServerHome {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id,
+                            server_id,
+                        }
+                    } else {
+                        Route::DmsHome {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id,
+                        }
+                    }
+                }
+                poly_client::LandingPage::DirectMessages => Route::DmsHome {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id,
+                },
+            };
+            navigator().push(landing);
+        });
+    })
+}
+
+/// Delete a single account fully — runtime state, storage row, and cached chat data.
+///
+/// Used by the "Remove this account" button on the reauth page.
+async fn remove_backend_account_now(
+    account_id: String,
+    backend_slug: String,
+    mut client_manager: Signal<ClientManager>,
+    mut chat_data: Signal<ChatData>,
+) {
+    let handle = client_manager.write().take_account(&account_id);
+    if let Some(h) = handle {
+        let mut g = h.write().await;
+        let _ = g.logout().await;
+    }
+    {
+        let mut cd = chat_data.write();
+        cd.servers.retain(|s| s.account_id != account_id);
+        cd.dm_channels.retain(|d| d.account_id != account_id);
+        cd.groups.retain(|g| g.account_id != account_id);
+        cd.notifications.retain(|n| n.account_id != account_id);
+        cd.friends.remove(&account_id);
+        cd.account_sessions.remove(&account_id);
+        let live_server_ids: Vec<String> = cd.servers.iter().map(|s| s.id.clone()).collect();
+        cd.favorited_server_ids.retain(|id| live_server_ids.contains(id));
+    }
+    if let Some(storage) = crate::STORAGE.get() {
+        let _ = storage.remove_account_token(&backend_slug, &account_id).await;
+    }
+    navigator().push(Route::SettingsRoute);
+}
+
 /// Ensure the Poly signup flow always has an identity key available.
 async fn ensure_poly_signup_identity(client: &str) -> Option<Vec<u8>> {
     let storage = crate::STORAGE.get()?;
@@ -507,6 +635,152 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
         div { class: "add-account-page",
             FavoritesBar {}
             AddAccountNav { selected_slug: Some(client.clone()) }
+            { right_content }
+        }
+    }
+}
+
+// ── Reauth sidebar ───────────────────────────────────────────────────────────
+
+/// Narrow left-nav for the reauth page.
+///
+/// Unlike the full [`AddAccountNav`] which lists every backend for account
+/// creation, this sidebar is scoped to the single account being reauthed —
+/// it shows just that backend's entry plus a back link and the account's
+/// display name as subtitle. No other backends are offered because the user
+/// is not adding a new account, they are renewing credentials for a specific
+/// existing one.
+#[rustfmt::skip]
+#[component]
+fn ReauthNav(backend_slug: String, display_name: String) -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
+    let client_manager = use_context::<Signal<ClientManager>>();
+    let entry = client_manager
+        .read()
+        .signup_entries
+        .iter()
+        .find(|e| e.slug == backend_slug.as_str())
+        .map(|e| (t(e.name_key), e.icon.to_string(), t(e.desc_key)));
+
+    rsx! {
+        nav { class: "signup-nav",
+            div { class: "signup-nav-header",
+                h3 { class: "signup-nav-title", "{t(\"notifications-reconnect\")}" }
+                p { class: "signup-nav-subtitle", "{display_name}" }
+            }
+            if let Some((name, icon, desc)) = entry {
+                div { class: "signup-nav-item active",
+                    span { class: "signup-nav-icon", "{icon}" }
+                    div { class: "signup-nav-item-text",
+                        span { class: "signup-nav-item-name", "{name}" }
+                        span { class: "signup-nav-item-desc", "{desc}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Per-account reauth form (/:backend/:instance_id/:account_id/reauth) ─────
+
+/// Per-account reauth page — `/:backend/:instance_id/:account_id/reauth`.
+///
+/// Shown when a stored token has been rejected (401). Renders the same
+/// per-backend form that the signup flow uses but commits the result over
+/// the existing account row instead of creating a new one. Also offers a
+/// "Remove this account" button.
+#[rustfmt::skip]
+#[component]
+pub(crate) fn ReauthAccountPage(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+) -> Element {
+    let _locale = crate::i18n::use_locale().read().clone();
+    let _ = instance_id; // carried in the URL for /:backend/:instance_id/:account_id symmetry
+    let client_manager = use_context::<Signal<ClientManager>>();
+    let chat_data      = use_context::<Signal<ChatData>>();
+
+    let display_name = chat_data
+        .read()
+        .account_sessions
+        .get(&account_id)
+        .map(|s| s.user.display_name.clone())
+        .unwrap_or_else(|| account_id.clone());
+
+    let (render_fn, backend_name) = {
+        let manager = client_manager.read();
+        let entry = manager
+            .signup_entries
+            .iter()
+            .find(|e| e.slug == backend.as_str());
+        (entry.map(|e| e.render), entry.map(|e| t(e.name_key)).unwrap_or_default())
+    };
+
+    let right_content: Element = if let Some(render) = render_fn {
+        let ctx = SignupContext {
+            private_key: None,
+            t: crate::i18n::t,
+            navigate_back: navigate_back_to_settings,
+        };
+        let on_complete = build_on_complete_reauth(account_id.clone(), client_manager, chat_data);
+        let aid_for_remove = account_id.clone();
+        let slug_for_remove = backend.clone();
+        let mut confirm_remove = use_signal(|| false);
+        rsx! {
+            div { class: "signup-content reauth-content",
+                h2 { class: "signup-form-title reauth-page-title",
+                    "{t(\"notifications-reconnect\")}"
+                }
+                h3 { class: "reauth-backend-title", "{backend_name}" }
+                { render(on_complete, ctx) }
+                div { class: "reauth-remove-section",
+                    if confirm_remove() {
+                        p { class: "reauth-remove-confirm-text",
+                            "Remove this account? Local credentials will be deleted."
+                        }
+                        div { class: "reauth-remove-confirm-row",
+                            button {
+                                class: "btn btn-danger",
+                                onclick: move |_| {
+                                    let aid = aid_for_remove.clone();
+                                    let slug = slug_for_remove.clone();
+                                    spawn(async move {
+                                        remove_backend_account_now(aid, slug, client_manager, chat_data).await;
+                                    });
+                                },
+                                "Yes, remove"
+                            }
+                            button {
+                                class: "btn btn-secondary",
+                                onclick: move |_| confirm_remove.set(false),
+                                "Cancel"
+                            }
+                        }
+                    } else {
+                        button {
+                            class: "btn btn-danger reauth-remove-btn",
+                            onclick: move |_| confirm_remove.set(true),
+                            "{t(\"settings-remove-account\")}"
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        rsx! {
+            div { class: "signup-content",
+                div { class: "signup-placeholder",
+                    p { class: "signup-stub-notice", "Unknown backend: {backend}" }
+                }
+            }
+        }
+    };
+
+    rsx! {
+        div { class: "add-account-page",
+            FavoritesBar {}
+            ReauthNav { backend_slug: backend.clone(), display_name: display_name.clone() }
             { right_content }
         }
     }
