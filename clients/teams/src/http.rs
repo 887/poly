@@ -1,11 +1,64 @@
 //! Microsoft Graph API HTTP client.
+//!
+//! ## Rate-limiting
+//!
+//! All outbound requests run through [`send_with_retry`], which honors Graph's
+//! `Retry-After` on 429 and applies exponential backoff on 5xx. Up to
+//! [`MAX_ATTEMPTS`] tries; on the final attempt we return whatever we got so
+//! the caller can surface the error.
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use poly_client::ClientError;
-use poly_host_bridge::http::HttpClient;
+use poly_host_bridge::http::{HttpClient, RequestBuilder, Response};
 
 use crate::types::{GraphChannel, GraphChat, GraphCollection, GraphMessage, GraphTeam, GraphUser};
+
+/// Max HTTP attempts per logical request (initial + 2 retries).
+const MAX_ATTEMPTS: u32 = 3;
+/// Fallback backoff when a 429 response omits `Retry-After`.
+const DEFAULT_RETRY_AFTER_SECS: u64 = 1;
+/// Hard cap on any single backoff — don't let a server hold us forever.
+const MAX_BACKOFF_SECS: u64 = 30;
+
+/// Run `make_req` and retry on 429/5xx. The closure rebuilds the request each
+/// attempt because `RequestBuilder` isn't `Clone`.
+async fn send_with_retry<F>(make_req: F) -> Result<Response, ClientError>
+where
+    F: Fn() -> RequestBuilder,
+{
+    let mut attempt: u32 = 0;
+    loop {
+        attempt += 1;
+        let resp = make_req()
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        let retryable = status == 429 || (500..600).contains(&status);
+        if !retryable || attempt >= MAX_ATTEMPTS {
+            return Ok(resp);
+        }
+        let delay = if status == 429 {
+            resp.headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(DEFAULT_RETRY_AFTER_SECS)
+        } else {
+            1u64 << (attempt - 1) // 1, 2, 4…
+        };
+        let delay = delay.min(MAX_BACKOFF_SECS);
+        tracing::debug!(
+            status,
+            attempt,
+            delay_secs = delay,
+            "teams: retrying after transient failure"
+        );
+        tokio::time::sleep(Duration::from_secs(delay)).await;
+    }
+}
 
 #[derive(Clone)]
 pub struct TeamsHttpClient {
@@ -47,16 +100,15 @@ impl TeamsHttpClient {
     }
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
-        let resp = self
-            .http
-            .get(self.url(path))
-            .header("Authorization", self.auth_header())
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let url = self.url(path);
+        let resp = send_with_retry(|| {
+            self.http
+                .get(url.clone())
+                .header("Authorization", self.auth_header())
+        })
+        .await?;
         if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            return Err(ClientError::Network(format!("HTTP {status}")));
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
         }
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
@@ -66,19 +118,101 @@ impl TeamsHttpClient {
         path: &str,
         body: &B,
     ) -> Result<T, ClientError> {
-        let resp = self
-            .http
-            .post(self.url(path))
-            .header("Authorization", self.auth_header())
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let url = self.url(path);
+        let body_bytes =
+            serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
+        let resp = send_with_retry(|| {
+            self.http
+                .post(url.clone())
+                .header("Authorization", self.auth_header())
+                .header("Content-Type", "application/json")
+                .body(body_bytes.clone())
+        })
+        .await?;
         if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            return Err(ClientError::Network(format!("HTTP {status}")));
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
         }
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
+    }
+
+    async fn patch_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, ClientError> {
+        let url = self.url(path);
+        let body_bytes =
+            serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
+        let resp = send_with_retry(|| {
+            self.http
+                .patch(url.clone())
+                .header("Authorization", self.auth_header())
+                .header("Content-Type", "application/json")
+                .body(body_bytes.clone())
+        })
+        .await?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
+    }
+
+    async fn delete_unit(&self, path: &str) -> Result<(), ClientError> {
+        let url = self.url(path);
+        let resp = send_with_retry(|| {
+            self.http
+                .delete(url.clone())
+                .header("Authorization", self.auth_header())
+        })
+        .await?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        Ok(())
+    }
+
+    async fn post_json_unit<B: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<(), ClientError> {
+        let url = self.url(path);
+        let body_bytes =
+            serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
+        let resp = send_with_retry(|| {
+            self.http
+                .post(url.clone())
+                .header("Authorization", self.auth_header())
+                .header("Content-Type", "application/json")
+                .body(body_bytes.clone())
+        })
+        .await?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        Ok(())
+    }
+
+    async fn patch_json_unit<B: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<(), ClientError> {
+        let url = self.url(path);
+        let body_bytes =
+            serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
+        let resp = send_with_retry(|| {
+            self.http
+                .patch(url.clone())
+                .header("Authorization", self.auth_header())
+                .header("Content-Type", "application/json")
+                .body(body_bytes.clone())
+        })
+        .await?;
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
+        }
+        Ok(())
     }
 
     /// Test-server email+password login. Real Graph uses OAuth2 (Phase 3.4.7).
@@ -87,13 +221,17 @@ impl TeamsHttpClient {
         struct LoginResp {
             token: String,
         }
-        let resp = self
-            .http
-            .post(self.url("/test/auth/login"))
-            .json(&serde_json::json!({ "login": login, "password": password }))
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let url = self.url("/test/auth/login");
+        let body = serde_json::json!({ "login": login, "password": password });
+        let body_bytes =
+            serde_json::to_vec(&body).map_err(|e| ClientError::Internal(e.to_string()))?;
+        let resp = send_with_retry(|| {
+            self.http
+                .post(url.clone())
+                .header("Content-Type", "application/json")
+                .body(body_bytes.clone())
+        })
+        .await?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             return Err(ClientError::AuthFailed(format!("login failed: HTTP {status}")));
@@ -156,22 +294,11 @@ impl TeamsHttpClient {
         message_id: &str,
         content: &str,
     ) -> Result<GraphMessage, ClientError> {
-        let url = self.url(&format!(
-            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}"
-        ));
-        let resp = self
-            .http
-            .patch(url)
-            .header("Authorization", self.auth_header())
-            .json(&serde_json::json!({ "body": { "content": content, "contentType": "text" } }))
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            return Err(ClientError::Network(format!("HTTP {status}")));
-        }
-        resp.json::<GraphMessage>().await.map_err(|e| ClientError::Internal(e.to_string()))
+        self.patch_json(
+            &format!("/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}"),
+            &serde_json::json!({ "body": { "content": content, "contentType": "text" } }),
+        )
+        .await
     }
 
     pub async fn delete_channel_message(
@@ -180,21 +307,10 @@ impl TeamsHttpClient {
         channel_id: &str,
         message_id: &str,
     ) -> Result<(), ClientError> {
-        let url = self.url(&format!(
+        self.delete_unit(&format!(
             "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}"
-        ));
-        let resp = self
-            .http
-            .delete(url)
-            .header("Authorization", self.auth_header())
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            return Err(ClientError::Network(format!("HTTP {status}")));
-        }
-        Ok(())
+        ))
+        .await
     }
 
     pub async fn get_chats(&self) -> Result<Vec<GraphChat>, ClientError> {
@@ -233,21 +349,13 @@ impl TeamsHttpClient {
         message_id: &str,
         reaction_type: &str,
     ) -> Result<(), ClientError> {
-        let url = self.url(&format!(
-            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/setReaction"
-        ));
-        let resp = self
-            .http
-            .post(url)
-            .header("Authorization", self.auth_header())
-            .json(&serde_json::json!({ "reactionType": reaction_type }))
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
-        }
-        Ok(())
+        self.post_json_unit(
+            &format!(
+                "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/setReaction"
+            ),
+            &serde_json::json!({ "reactionType": reaction_type }),
+        )
+        .await
     }
 
     pub async fn unset_channel_reaction(
@@ -257,41 +365,27 @@ impl TeamsHttpClient {
         message_id: &str,
         reaction_type: &str,
     ) -> Result<(), ClientError> {
-        let url = self.url(&format!(
-            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/unsetReaction"
-        ));
-        let resp = self
-            .http
-            .post(url)
-            .header("Authorization", self.auth_header())
-            .json(&serde_json::json!({ "reactionType": reaction_type }))
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
-        }
-        Ok(())
+        self.post_json_unit(
+            &format!(
+                "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/unsetReaction"
+            ),
+            &serde_json::json!({ "reactionType": reaction_type }),
+        )
+        .await
     }
 
     pub async fn set_presence(&self, availability: &str) -> Result<(), ClientError> {
-        let url = self.url("/v1.0/me/presence/setPresence");
-        let resp = self
-            .http
-            .patch(url)
-            .header("Authorization", self.auth_header())
-            .json(&serde_json::json!({ "availability": availability }))
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
-        }
-        Ok(())
+        self.patch_json_unit(
+            "/v1.0/me/presence/setPresence",
+            &serde_json::json!({ "availability": availability }),
+        )
+        .await
     }
 
     /// Long-poll the test server's subscription endpoint for change notifications.
     /// Returns the raw JSON events array so the caller can dispatch to `ClientEvent`.
+    ///
+    /// Long-polls skip retry on 5xx — the caller loop reconnects on its own schedule.
     pub async fn poll_events(&self) -> Result<Vec<serde_json::Value>, ClientError> {
         #[derive(serde::Deserialize)]
         struct PollResp {
