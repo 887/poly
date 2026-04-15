@@ -682,8 +682,11 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     "🔑"
                 }
             }
-            // Top-left: notification count badge (not shown for forum accounts)
-            if !is_forum_account && total_unreads > 0 {
+            // Top-left: notification count badge.
+            // Hidden for forum accounts by default (too chatty), but ALWAYS shown
+            // when a reauth prompt is waiting — otherwise the user has no in-sidebar
+            // cue that the 🔑 icon maps to a clickable notification.
+            if (!is_forum_account || needs_reauth_badge) && total_unreads > 0 {
                 span {
                     class: "badge mention-count-badge",
                     "{total_unreads}"
