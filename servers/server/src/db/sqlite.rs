@@ -355,7 +355,8 @@ impl Db {
         let now = now_iso();
         let kind_str = kind.as_str().unwrap_or("text").to_owned();
         let pos_str = position.to_string();
-        match category_id {
+        let cat_full = category_id.map(|c| ensure_prefix(c, "category"));
+        match cat_full.as_deref() {
             Some(cat) => {
                 exec_bind(&conn,
                     "INSERT INTO channel (id, server, category, name, kind, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -544,7 +545,8 @@ impl Db {
         let conn = self.inner.lock().await;
         let id = new_id("message");
         let now = now_iso();
-        match reply_to {
+        let reply_full = reply_to.map(|rt| ensure_prefix(rt, "message"));
+        match reply_full.as_deref() {
             Some(rt) => exec_bind(&conn,
                 "INSERT INTO message (id, channel, author, content, reply_to, edited_at, deleted, created_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL, 0, ?6)",
                 &[&id, channel_id, author_id, content, rt, &now])?,
@@ -688,6 +690,18 @@ fn db_err(e: sqlite::Error) -> AppError {
 fn new_id(table: &str) -> String {
     let key = uuid::Uuid::new_v4().to_string().replace('-', "");
     format!("{table}:{key}")
+}
+
+/// Clients commonly strip the `{table}:` prefix before sending an ID across
+/// the wire (see `clients/server-client/src/http.rs`). Storage keys here are
+/// always fully-qualified (`message:abc123`), so any reference we write
+/// (reply_to, category, …) must be re-prefixed before FK-checked inserts.
+fn ensure_prefix(id: &str, table: &str) -> String {
+    if id.starts_with(&format!("{table}:")) {
+        id.to_owned()
+    } else {
+        format!("{table}:{id}")
+    }
 }
 
 fn now_iso() -> String {
