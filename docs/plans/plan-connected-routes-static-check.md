@@ -3,7 +3,7 @@
 > **Created:** 2026-04-16
 > **Status:** 🔵 drafted
 > **Scope:** cross-cutting — `crates/core/src/ui/routes.rs`, every link/button/navigator callsite under `crates/core/src/ui/`, the shared `crates/ui-macros/` proc-macro crate, and the shared `crates/lint-gate/build.rs` graph checker
-> **Goal:** `cargo check`-native, bidirectional reachability check — every `Route` variant declares its incoming edges and every link/button/`navigator()` call declares its destination. Mismatches surface as `cargo::error=` lines on plain `cargo check` (no `#[test]` to skip, no xtask to forget); orphan routes must supply a human-readable `programmatic(...)` reason.
+> **Goal:** `cargo check`-native reachability check. Every `Route` variant must be reached by **either** (a) at least one `Link { to: Route::X }` / `nav!(Route::X)` callsite — identity carried by Rust's own type system on `Route::X`, nothing stringly-typed — **or** (b) a ZST `ProgrammaticProducer` impl naming the route as its target. Orphan routes and routes unreachable from `entry_point` surface as `cargo::error=` on plain `cargo check`. No `via` label dictionary, no `#[test]` to skip.
 
 ---
 
@@ -26,21 +26,21 @@ Baseline for success: the plan must handle ~27 routes × ~115 callsites without 
 It is worth naming the shape explicitly so future work doesn't reinvent the vocabulary:
 
 - **Nodes** — `Route` enum variants. `|V| ≈ 27`.
-- **Edges** — one per link/button/`navigator().push(...)` callsite, labeled with a `via` surface string. `|E| ≈ 115`. Directed, since routes link to routes; not symmetric (a sidebar → chat link does not imply a chat → sidebar link).
-- **Root** — the `entry_point` variant (`Root`). Exactly one; an error if more than one node carries that marker.
-- **Programmatic edges** — routes reachable only via non-UI producers (redirect after signup, deep-link handler, push-notification open) are edges whose producer is a `programmatic("reason")` marker, not a `Link`/`navigator!()` callsite. These still count toward in-degree ≥ 1.
+- **Edges** — one per link/button/`navigator().push(Route::X)` callsite. `|E| ≈ 115`. Directed. **Unlabeled** — the edge's identity is the pair `(source_module_path, target_variant)` captured by the `linkme`-registered macro expansion; there is no free-text `via` string and nothing that asks the author to invent one.
+- **Root** — the `entry_point` variant. Exactly one; an error if more than one node carries that marker.
+- **Programmatic edges** — routes reachable only via non-UI producers (redirect after signup, deep-link handler, push-notification open) are represented by ZST tag types implementing the sealed `ProgrammaticProducer` trait. Each such type names its `TARGET: RouteDiscriminant` at the type level; the `#[connected(programmatic<SignupCompletionLanding>)]` on the route side references the type, so a rename compile-errors at the declaration site. These edges still count toward `in_degree ≥ 1`.
 
 What the check enforces, in graph terms:
 
 | Check | Graph statement | Failure name |
 |---|---|---|
 | Every route is reachable | `in_degree(v) ≥ 1` for all `v ≠ root` | **orphan route** |
-| Every declared incoming edge has a producer | every edge in the route's `incoming(...)` list must be matched by a producer-side edge with the same `via` label | **unconsumed declaration** |
-| Every producer has a consumer | every `Link { to, via }` / `nav!(via, to)` must match a declaration on the target route | **undeclared edge** |
+| Every `programmatic<T>()` names a real type | `T: ProgrammaticProducer` must exist and its `TARGET` must match the route | **unknown programmatic producer** (enforced by trait bound — compile error, not build.rs) |
+| Every `Link/nav!` target is a real Route variant | `Route::X` must parse | **unknown route** (enforced by Rust type checking — compile error) |
+| Graph is connected from root | every `v` is reachable from `root` via BFS over edges + programmatic producers | **unreachable component** |
 | No dead-end routes (optional, warn) | `out_degree(v) == 0` flagged unless annotated `#[dead_end("reason")]` | **leaf warning** |
-| Graph is connected from root | every `v` is reachable from `root` via BFS over edges + programmatic markers | **unreachable component** |
 
-The primary guarantee the plan buys is: **the route graph is a single connected component rooted at `entry_point`.** Orphan routes are disconnected nodes; unconsumed declarations and undeclared edges are dangling half-edges that would corrupt the graph if ignored.
+The primary guarantee the plan buys is: **the route graph is a single connected component rooted at `entry_point`.** Orphan routes are disconnected nodes. Because edges are unlabeled and typed at both ends, there is no "dangling half-edge" failure mode — link identity is carried by the `Route` enum itself and programmatic-producer identity is carried by a sealed trait.
 
 `Route` is not a tree — several producers can target one route (e.g. `ServerChat` has many entries: sidebar channel-list, notifications, search, deep links). That is fine; the check is about **reachability**, not **uniqueness of paths**. Reducing the graph to a **spanning tree** rooted at `entry_point` is not a goal — it would imply one canonical path per route, which is wrong for a chat app where every route has many natural entrances.
 
@@ -50,30 +50,29 @@ What the plan does *not* enforce:
 - **No shortest-path analysis.** The graph's diameter doesn't matter.
 - **No strongly-connected-component decomposition.** Listed here only to rule it out: we do not partition the graph and we do not care whether the graph is strongly connected, only weakly connected from `entry_point`.
 
-Operationally, the check materializes two sets during a build: `declared_edges` (route-side) and `produced_edges` (callsite-side). Both live in `linkme` distributed slices. The build-script-run checker computes `set(declared) △ set(produced)` (symmetric difference) and a BFS from `entry_point`. Any non-empty output is a compile error.
+Operationally, the build-script checker reads two `linkme` distributed slices: `LINK_CALLSITES` (populated by `Link { to: Route::X }` / `nav!(Route::X)` expansions) and `PROGRAMMATIC_EDGES` (populated by every `ProgrammaticProducer` impl). It runs BFS from `entry_point` over the union of both edge sets and emits `cargo::error=` for every `Route` variant not visited. No symmetric-difference pass — there are no labeled declarations to match against, only the set of actually-typed producers, and a typed producer that targets a nonexistent variant is already a rustc error before the build script runs.
 
 ---
 
 ## 2. The DSL — concrete syntax for both directions
 
-Two paired proc-macros in a new `crates/ui-macros/` crate, re-exported from `crates/core` as `poly_ui::{connected, links_to, nav}`.
+Macros in a new `crates/ui-macros/` crate, re-exported from `crates/core` as `poly_ui::{connected, nav, ProgrammaticProducer}`. **Link identity is carried by the Rust type system, not by strings.**
 
 ### 2.1 On route/page declarations (incoming edges)
 
-Attach a `#[connected(...)]` attribute to either the `Route` enum variant or the page component function. The attribute enumerates every **producer** of a navigation to that route.
-
 ```rust
 #[connected(
-    // Normal incoming edges — must be matched by a `#[links_to(...)]`
-    // or `nav!()` callsite somewhere in the workspace.
-    via("favorites-sidebar:account-icon"),
-    via("channel-list:dm-row"),
-    via("search:dm-result"),
-    via("signup:on-complete-landing"),
+    // This route is reachable from ≥1 Link/nav! callsite in the workspace.
+    // The build-script BFS proves it; the annotation is just the route-side
+    // declaration that this is the expected story.
+    linked,
 
-    // Programmatic/automated entry that has no clickable producer.
-    // The string is a free-form justification captured in compile output.
-    programmatic("sync_route_to_app_state fallback when account_last_routes empty"),
+    // Any non-clickable entry point is represented by a ZST tag type that
+    // implements `ProgrammaticProducer`. Rename the type → compile error
+    // at this site. No reason-string drift, because the reason lives on
+    // the impl as `const REASON: &'static str`.
+    programmatic<SignupCompletionLanding>,
+    programmatic<SyncRouteRestoreFromAccountLastRoutes>,
 )]
 #[route("/:backend/:instance_id/:account_id/dms")]
 DmsHome { backend: String, instance_id: String, account_id: String },
@@ -81,53 +80,85 @@ DmsHome { backend: String, instance_id: String, account_id: String },
 
 Three edge kinds:
 
-| Kind | Syntax | Consumer required? | Use |
-|------|--------|--------------------|-----|
-| `via("label")` | `via("sidebar-accounts")` | **Yes** — must match a `#[links_to(..., via = "sidebar-accounts")]` somewhere | Normal buttons, links, menu items |
-| `entry_point` | `entry_point` (bare) | No | The one root route loaded on cold start. Only one variant may carry this. |
-| `programmatic("reason")` | `programmatic("401 redirect from AccountBar")` | No, but reason string is **mandatory** and lint-checked for non-empty | Automated redirects, default-landing, `on_update` replaces, external deep-links |
+| Kind | Syntax | Identity carrier | Use |
+|------|--------|------------------|-----|
+| `linked` | `linked` (bare) | The set of `Link { to: Route::X }` / `nav!(Route::X)` callsites in the workspace, discovered via the `LINK_CALLSITES` `linkme` slice. Author names nothing. | Normal buttons, links, menu items. |
+| `entry_point` | `entry_point` (bare) | None — this is the BFS root. | The cold-start route. Exactly one variant may carry this. |
+| `programmatic<T>` | `programmatic<SignupCompletionLanding>` | Rust type `T: ProgrammaticProducer<Target = Self>`. Rename breaks the build at this site and at the impl. | Automated redirects, default-landing, `on_update` replaces, external deep-links. |
 
-A route with no `#[connected(...)]` at all is an orphan and fails the check. A route with only `via(...)` edges that never resolve is also an orphan.
+A route with no `#[connected(...)]` is an orphan. A route with only `linked` when no callsite actually targets it is an orphan. Both cases → `cargo::error=E-ROUTE-002`.
 
-### 2.2 On link/button/navigator callsites (outgoing edges)
-
-Three flavors, one per call style already present in the codebase:
-
-**RSX `Link` (Dioxus component):** add a `via:` prop that the macro reads.
+### 2.2 The `ProgrammaticProducer` trait
 
 ```rust
-Link {
-    to: Route::SettingsRoute,
-    via: "favorites-sidebar:gear-button",
-    "Settings"
+// crates/ui-macros/src/programmatic.rs (re-exported from poly_ui)
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a declared ProgrammaticProducer",
+    label = "impl ProgrammaticProducer<Target = Route::…> for this type",
+    note = "ZST tag types are how automated/non-clickable route entries declare themselves"
+)]
+pub trait ProgrammaticProducer {
+    type Target;                           // Route variant this producer lands on.
+    const REASON: &'static str;            // Human-readable, shown in build.rs output.
+    const SITE: &'static str = file!();    // Auto-captured; audit aid only.
 }
 ```
 
-**Imperative `navigator()`:** wrap through a declarative `nav!` macro that emits the same `navigator().push(...)` at runtime but records the edge at compile time.
+Per programmatic producer, authors write a ZST + impl at the producer site:
 
 ```rust
-nav!(via = "favorites-sidebar:account-icon",
-     Route::DmsHome {
-         backend: backend.clone(),
-         instance_id: instance_id.clone(),
-         account_id: account_id.clone(),
-     });
+// crates/core/src/ui/signup/mod.rs
+pub struct SignupCompletionLanding;
+impl ProgrammaticProducer for SignupCompletionLanding {
+    type Target = routes::DmsHome;          // type-level route reference
+    const REASON: &'static str = "redirect to user's DMs after signup completes";
+}
 ```
 
-`nav!` expands to `navigator().push(route)` unchanged — zero runtime cost — plus a `#[linkme::distributed_slice]` registration entry.
-
-**Attribute on plain handlers / context-menu items** (the sibling plan's surface):
+A derive or small `declare_programmatic!` helper macro can cut the boilerplate to one line:
 
 ```rust
-#[links_to(Route::ServerChat { .. }, via = "channel-list:chat-row")]
-fn on_click_channel_row(...) { ... }
+declare_programmatic!(SignupCompletionLanding -> routes::DmsHome
+    = "redirect to user's DMs after signup completes");
 ```
 
-The `..` in the `Route::X { .. }` pattern means "any variant args" — the static check only cares about the variant identity, not its runtime field values.
+Expected count: ~5–8 programmatic producers total in the current codebase (signup landing, account-restore fallback, deep-link handler, 401 redirect, push-notification opener). Small enough that each gets a real type.
 
-### 2.3 Label grammar
+### 2.3 On link/button/navigator callsites (outgoing edges)
 
-`via` labels are slash-separated hierarchical tags: `"<surface>:<element>[:<qualifier>]"`. Enforced by a const regex in the macro (`^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*){1,2}$`). Surfaces: `favorites-sidebar`, `channel-list`, `chat-view`, `settings`, `signup`, `account-bar`, `context-menu`, `search`, `notifications`, … Extensible; the set is just the union of what shows up in the code.
+Two flavors — the `Route::X` type is the identity; nothing else is required:
+
+**RSX `Link` (Dioxus component):**
+
+```rust
+Link { to: Route::SettingsRoute, "Settings" }
+```
+
+No macro change required — we can't modify Dioxus's `Link`, but we don't need to. A companion `track_link!` or a proc-macro applied to the enclosing `#[component]` walks the RSX tree at expansion time, finds every `Link { to: Route::X }`, and emits a `#[linkme::distributed_slice(LINK_CALLSITES)]` entry with `(target = Route::X's discriminant, file, line)`. The user writes plain Dioxus; the macro does the bookkeeping.
+
+**Imperative `navigator()`:** wrap through a declarative `nav!` macro.
+
+```rust
+nav!(Route::DmsHome {
+    backend: backend.clone(),
+    instance_id: instance_id.clone(),
+    account_id: account_id.clone(),
+});
+```
+
+`nav!` expands to `navigator().push(route)` unchanged — zero runtime cost — plus a `LINK_CALLSITES` registration whose payload is the variant discriminant.
+
+Raw `navigator().push(Route::...)` outside `nav!` / `Link` is banned in Phase C (§5.3.3) so the lintgate build.rs sees every callsite.
+
+### 2.4 Why no labels
+
+The earlier draft of this plan required each edge to carry a free-text `via("surface:element")` string matched on both ends. Dropped because:
+
+1. **Parallel source of truth.** Renaming the "favorites-sidebar" UI section would require updating ~8 `via` strings across unrelated files with no compile check.
+2. **Agent gaming.** The most common repair for "unconsumed label" / "unknown label" errors is to copy-paste whatever string makes the build pass. The check would then be satisfied by a label set that doesn't mean anything.
+3. **Type system already does it.** Rust's type checker already knows `Route::X` is a real variant; it already catches typos in `Link { to: Route::Xxx }` and `nav!(Route::Xxx)`. Adding a string next to the type is redundant.
+
+The one thing labels gave us that types don't: **"which UI surface produces this edge"** for audit purposes. That use case is served by `git grep 'to: Route::X'` + `git grep 'nav!(Route::X'` — already done today, no new machinery needed.
 
 ---
 
@@ -151,75 +182,70 @@ Considered and rejected as primary, kept as optional reinforcement:
 
 ### 3.3 Why not pure clippy lint
 
-Clippy lints can flag individual callsites but cannot see the full graph across crates in one pass. A custom `dylint` pass can, but ships out-of-tree and is awkward in CI. Use `dylint` only for *span-level* hints pointing at the exact missing `via` on a `Link`, not for the global graph check.
+Clippy lints can flag individual callsites but cannot see the full graph across crates in one pass. A custom `dylint` pass can, but ships out-of-tree and is awkward in CI. Not used.
 
 ### 3.4 Pipeline
 
-1. `#[connected(...)]` proc-macro on each `Route` variant → emits `#[linkme::distributed_slice(ROUTE_DECLARATIONS)] static: RouteDecl { variant: "DmsHome", edges: &[...] }`.
-2. `#[links_to(...)]` and `nav!(...)` and `Link { via: ... }` → emit `#[linkme::distributed_slice(LINK_CALLSITES)] static: LinkCallsite { target: "DmsHome", via: "favorites-sidebar:account-icon", file, line }`.
+1. `#[connected(...)]` proc-macro on each `Route` variant → emits `#[linkme::distributed_slice(ROUTE_DECLARATIONS)] static: RouteDecl { variant_discriminant, has_linked_flag, programmatic_targets: &[...] }`. No string labels.
+2. `nav!(Route::X { ... })` and the component-level RSX-walk proc-macro for `Link { to: Route::X }` → emit `#[linkme::distributed_slice(LINK_CALLSITES)] static: LinkCallsite { target_discriminant, file, line }`. Each `impl ProgrammaticProducer for T` expands to a `#[linkme::distributed_slice(PROGRAMMATIC_EDGES)] static: ProgrammaticEdge { target_discriminant, producer_type_name, reason }`.
 3. **The graph assertion runs from `crates/lint-gate/build.rs`** — the same build script that plan-component-lints.md §3.2 uses for the allow-ban scan and plan-context-menu-quality-control.md §3.1.2 uses for decorator coverage. `lint-gate` depends on `ui-macros` so both slices are in scope; the script materializes `declared_edges` and `produced_edges` from the slices, computes symmetric difference and BFS from `entry_point`, and emits one `cargo::error=E-ROUTE-XXX: ...` line per violation (stabilized Rust 1.84). Because `cargo check` runs every `build.rs` before typechecking, the error surfaces automatically — rust-analyzer red-squiggles it on save, `cargo check` exits non-zero in CI, no agent can quietly skip it.
 4. **One workspace walk, three checks.** `lint-gate`'s `build.rs` already walks `*.rs` for the allow-ban (plan 3 §3.2) and for `#[component]`-decorator coverage (plan 1 §3.1.2). The slice-level graph check bolts onto the same pass — negligible additional cost (slice read + hash-set diff). Clean-build cost stays in the 100–300 ms range even with all three lints active.
 5. WASM-side note: `build.rs` runs on the host during every `cargo check --target wasm32-unknown-unknown`. The registry content is source-level (macros emit `&'static` data populated at compile time and linked per-target), so the host build sees everything the WASM build would have registered. No WASM-specific tooling required.
 
-### 3.5 Error surface — use `#[diagnostic::on_unimplemented]` (stable 1.78+)
+### 3.5 Error surface — type errors from rustc, graph errors from build.rs
 
-Wrap the marker types in a sealed trait so typos in `via = "..."` produce a readable compiler error pointing at the exact RSX line:
+Three classes of error, each surfacing through its natural channel:
 
-```rust
-#[diagnostic::on_unimplemented(
-    message = "no Route declares `via(\"{Via}\")` as an incoming edge",
-    label = "add `via(\"{Via}\")` to the target Route's #[connected(...)]",
-    note = "or use #[connected(programmatic(\"reason\"))] if this link is automated"
-)]
-trait ViaDeclared<const Via: &'static str> {}
-```
+1. **Unknown route variant** (`Link { to: Route::Xxx }` where `Xxx` isn't a variant) — caught by rustc at the callsite with the usual span. Nothing to add.
+2. **Bad `programmatic<T>`** (type doesn't exist or doesn't impl `ProgrammaticProducer` with the expected `Target`) — caught by the trait bound in the `#[connected]` expansion, with a `#[diagnostic::on_unimplemented]` message on the trait (§2.2). Per-`#[connected(...)]` span, not build.rs stderr.
+3. **Orphan route / unreachable component** — caught by the BFS in `lint-gate/build.rs`, emitted as `cargo::error=E-ROUTE-002: Route::X is unreachable from entry_point — either add a Link/nav!(Route::X) producer, add programmatic<T>, or mark it entry_point`.
 
-This gives **per-callsite** diagnostics with proper spans, not just build.rs stderr.
+Classes 1 and 2 hit the Rust compiler first; only class 3 needs the build script. Every error has an actionable fix listed in the message.
 
 ---
 
-## 4. Bidirectional matching logic
+## 4. Check rules — BFS and nothing else
 
-The build-time checker collapses both slices into one directed graph `G = (V = Routes, E = edges)`:
+The build-time checker builds one directed graph `G = (V = Route variants, E = LINK_CALLSITES ∪ PROGRAMMATIC_EDGES)` and runs a single BFS from `entry_point`.
 
-- Producer side: each `LinkCallsite { target, via }` is a candidate edge `(?, target, via)`.
-- Consumer side: each `RouteDecl { variant, edges: [via("x"), programmatic("…"), entry_point] }` is a set of *expected* edges into `variant`.
+### 4.1 Rules
 
-### 4.1 Match rules
+1. Every `Route` variant must appear in `#[connected(...)]`. Missing → **E-ROUTE-001: undeclared route**.
+2. Every variant's `#[connected(...)]` must carry at least one of `linked` / `entry_point` / `programmatic<T>`. Empty → **E-ROUTE-001: undeclared route** (same class, caught at macro expansion).
+3. Exactly one variant may carry `entry_point` → **E-ROUTE-004: multiple entry points** otherwise.
+4. Variants reachable from `entry_point` via BFS over `LINK_CALLSITES` + `PROGRAMMATIC_EDGES` pass. Variants not reachable → **E-ROUTE-002: orphan / unreachable route**.
+5. For every variant declaring `linked` in its `#[connected(...)]`, there must be ≥1 entry in `LINK_CALLSITES` targeting its discriminant → **E-ROUTE-003: `linked` declared but no producer** (a self-check on the route author's expectation, not the graph itself).
 
-1. For every `via("L")` on a `RouteDecl`, there must be **≥1** `LinkCallsite` with `target = variant ∧ via = L`. If zero → **error: unconsumed incoming edge**.
-2. For every `LinkCallsite { target, via }`, there must be **≥1** `RouteDecl` for `target` that contains `via("L")` with matching `L`. If zero → **error: unexpected outgoing link**.
-3. Every variant of `Route` must appear in at least one `RouteDecl`. Missing → **error: undeclared route**.
-4. Each variant's `RouteDecl` must have ≥1 edge of any kind (`via` / `programmatic` / `entry_point`). A `RouteDecl` with an empty edge list → **error: orphan without reason**.
-5. Exactly one variant may carry `entry_point` → **error: multiple entry points** otherwise.
-6. `programmatic("reason")` must have a non-empty `reason` string (trimmed). Checked at macro expansion → **error: programmatic reason required**.
+Checks 1–3 fire at macro expansion or via the trait system. Only 4 and 5 run in `build.rs`. There is no symmetric-difference pass, no label-match pass, no "half-edge" failure mode.
 
 ### 4.2 Example error text
 
 ```
-error[E-ROUTE-001]: Route::DmsHome declares `via("favorites-sidebar:account-icon")`
-                    but no link, button, or `nav!(...)` in the workspace targets it
- --> crates/core/src/ui/routes.rs:150:9
-    |
-150 |     via("favorites-sidebar:account-icon"),
-    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    = help: either remove this `via(...)` from #[connected(...)],
-            or add `via: "favorites-sidebar:account-icon"` to a Link/nav! targeting DmsHome.
-
-error[E-ROUTE-002]: orphan route — Route::DmMediaViewerRoute has no #[connected(...)]
+error[E-ROUTE-002]: orphan route — Route::DmMediaViewerRoute is unreachable from entry_point
  --> crates/core/src/ui/routes.rs:175:13
-    = help: add #[connected(via("chat-view:attachment-thumbnail"))]
-            or #[connected(programmatic("reason"))] if you reach it some other way.
+    = note: BFS starting at Route::Root never visits this variant.
+    = help: either (a) add a `Link { to: Route::DmMediaViewerRoute }` or
+            `nav!(Route::DmMediaViewerRoute { ... })` callsite somewhere,
+            or (b) add an impl of ProgrammaticProducer<Target = Route::DmMediaViewerRoute>
+            for a ZST tag and reference it via #[connected(programmatic<YourTag>)].
 
-error[E-ROUTE-003]: link targets Route::SettingsRoute with via="foo-bar",
-                    but Route::SettingsRoute only declares via("favorites-sidebar:gear-button")
- --> crates/core/src/ui/favorites_sidebar.rs:321:21
-    = help: did you mean via="favorites-sidebar:gear-button"?
+error[E-ROUTE-003]: Route::SettingsRoute declares `linked` but LINK_CALLSITES has no
+                    entry targeting its discriminant
+ --> crates/core/src/ui/routes.rs:190:9
+    = help: drop `linked` (and use `programmatic<T>` if appropriate),
+            or add a Link { to: Route::SettingsRoute } callsite.
+
+error: `SignupCompletionLanding` is not a declared ProgrammaticProducer
+ --> crates/core/src/ui/routes.rs:150:26
+    |
+150 |     programmatic<SignupCompletionLanding>,
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^
+    = help: impl ProgrammaticProducer<Target = Route::…> for this type.
 ```
 
 ### 4.3 Non-enum navigation — URL strings
 
-`routes.rs:358` stores URL strings in `account_last_routes`, and `signup/mod.rs:209` pushes opaque `landing` routes computed at runtime. These bypass the enum. The plan treats them as **programmatic** and requires their call sites be wrapped in `nav_dynamic!(reason = "restore-last-account-route")` which registers against a synthetic `*` target and does not require a matching `via`.
+`routes.rs:358` stores URL strings in `account_last_routes`, and `signup/mod.rs:209` pushes opaque `landing` routes computed at runtime. These bypass the enum. Each such choke point wraps its runtime-computed route through a ZST producer, e.g. `AccountLastRouteRestore: ProgrammaticProducer<Target = ()>` — `Target = ()` is a sentinel meaning "any variant" because the target is determined at runtime. The producer's existence still marks its caller as a reachable entry point for the BFS; the check simply doesn't narrow the reachable set by its target. Expected count of `Target = ()` producers: 2 (the two choke points above).
 
 ---
 
@@ -229,7 +255,7 @@ Rolling out a hard compile error across 79+ callsites in one commit is a non-sta
 
 ### 5.1 Phase A — infrastructure, no enforcement (1 PR)
 
-- [ ] **5.1.1** Create `crates/ui-macros/` (proc-macro crate: `#[connected]`, `#[links_to]`, `nav!`, `nav_dynamic!`, derive helpers) and wire the graph-check module into `crates/lint-gate/build.rs` (the shared build script introduced in plan-component-lints.md §3.2). No separate `ui-macros-build` binary — the whole-graph assertion lives alongside the allow-ban and component-decorator scans in one build script.
+- [ ] **5.1.1** Create `crates/ui-macros/` (proc-macro crate: `#[connected]`, `nav!`, `declare_programmatic!`, the `ProgrammaticProducer` trait, the RSX-walking component macro that registers `Link { to: Route::X }` callsites) and wire the graph-check module into `crates/lint-gate/build.rs` (the shared build script introduced in plan-component-lints.md §3.2). No separate `ui-macros-build` binary — the whole-graph assertion lives alongside the allow-ban and component-decorator scans in one build script.
 - [ ] **5.1.2** Add `linkme = "0.3"` and `diagnostic::on_unimplemented` trait marker setup.
 - [ ] **5.1.3** Macros compile and register; graph-check runs but emits `cargo::warning=` instead of `cargo::error=` while the backfill is in flight. Gate through the shared `regen-baseline` feature so that known violations grandfather into `crates/lint-gate/baseline.json`; new violations still fail the build.
 - [ ] **5.1.4** An optional debug helper `cargo run -p lint-gate --bin dump-routes` (tiny binary inside `lint-gate` that re-uses the same slice-walking code) dumps the current graph to `target/routes.dot` for inspection. Not a gate, just a visualization aid.
@@ -237,9 +263,9 @@ Rolling out a hard compile error across 79+ callsites in one commit is a non-sta
 ### 5.2 Phase B — backfill, warn loudly (one PR per UI module, parallelizable)
 
 - [ ] **5.2.1** Backfill `#[connected(...)]` on all 27 `Route` variants (single file edit in `routes.rs`). For each variant, inspect `sync_route_to_app_state` to list known producers; when unclear, start with `programmatic("TODO: audit")` and file follow-ups.
-- [ ] **5.2.2** Backfill `Link { via }` + `nav!` in hotspot files first: `favorites_sidebar.rs`, `channel_list.rs`, `chat_view.rs`, `signup/mod.rs`, `search.rs`, `settings/`. Use codemod (`cargo fix`-compatible macro rewrites) to convert bare `navigator().push(...)` → `nav!(via = "TODO-<file>-<line>", ...)`.
-- [ ] **5.2.3** Enable `deny` for **E-ROUTE-002 (orphan)** and **E-ROUTE-003 (unknown via)**; keep **E-ROUTE-001 (unconsumed)** as warn so half-migrated routes don't block the build.
-- [ ] **5.2.4** Drive TODO count to zero — grep for `"TODO-"` via labels in CI.
+- [ ] **5.2.2** Convert bare `navigator().push(Route::...)` → `nav!(Route::...)` across hotspot files (`favorites_sidebar.rs`, `channel_list.rs`, `chat_view.rs`, `signup/mod.rs`, `search.rs`, `settings/`). Mechanical rewrite — one-line regex because there are no labels to author.
+- [ ] **5.2.3** Enable `deny` for **E-ROUTE-002 (orphan / unreachable)** once every `Route` variant has `#[connected(...)]`. E-ROUTE-003 (`linked` declared but no producer) defaults to warn during backfill; flip to deny in Phase C.
+- [ ] **5.2.4** Stand up each `ProgrammaticProducer` ZST + impl at its source module. Expected ~5–8 types; one PR per cluster (signup flow, account-restore, deep-link, 401 redirect, push-notification open).
 
 ### 5.3 Phase C — full enforcement (1 PR)
 
@@ -253,17 +279,21 @@ Rolling out a hard compile error across 79+ callsites in one commit is a non-sta
 
 ### 6.1 `plan-context-menu-quality-control.md`
 
-Some context-menu items *are* navigation (e.g. "Open in new tab", "Go to Settings"). Both DSLs must compose. Proposal:
+Some context-menu items *are* navigation (e.g. "Open in new tab", "Go to Settings"). Menu items that navigate use plain `nav!(Route::X)` inside their handler body — no extra DSL required. The `nav!` expansion registers the callsite in `LINK_CALLSITES` exactly as any other navigator would, so the BFS sees the edge:
 
 ```rust
-#[context_menu(
-    label = "Go to server settings",
-    links_to(Route::ServerSettingsRoute { .. }, via = "context-menu:server:settings"),
-)]
-fn server_settings_menu_item(...) { ... }
+#[context_menu(ServerContextMenu)]
+#[component]
+fn ServerIcon(props: ServerIconProps) -> Element {
+    rsx! {
+        /* … */
+        // inside a menu-item handler:
+        // onclick: move |_| nav!(Route::ServerSettingsRoute { server_id }),
+    }
+}
 ```
 
-The `links_to(...)` slot inside `#[context_menu(...)]` delegates to the same macro internals as standalone `#[links_to]` and emits the same `LinkCallsite`. Integration point: `crates/ui-macros/src/context_menu.rs` re-exports helpers from `crates/ui-macros/src/links_to.rs`.
+No integration glue needed between the two plans — both plans contribute expansions to the same `crates/ui-macros/` crate, and both register via `linkme` slices that the shared `crates/lint-gate/build.rs` reads.
 
 ### 6.2 `plan-component-lints.md`
 
@@ -272,9 +302,10 @@ No direct overlap (size/dead-code is orthogonal to reachability), but both plans
 ```
 crates/ui-macros/src/
 ├── lib.rs          # #[proc_macro_derive] / #[proc_macro_attribute] entry points
-├── connected.rs    # this plan
-├── links_to.rs     # this plan
-├── nav.rs          # nav!, nav_dynamic!
+├── connected.rs    # this plan — #[connected(...)] route-side attr
+├── nav.rs          # nav!(Route::X { ... }) macro
+├── programmatic.rs # ProgrammaticProducer trait + declare_programmatic! helper
+├── link_walk.rs    # RSX walker that finds Link { to: Route::X } inside #[component]
 ├── context_menu.rs # sibling plan
 └── component_lint.rs # sibling plan (size caps, dead-code)
 ```
@@ -285,13 +316,13 @@ Shared: `syn` parsing helpers, `linkme` registration helpers, error-span utiliti
 
 ## 7. Testing
 
-- [ ] **7.1** Unit tests in `crates/ui-macros/tests/` covering: valid `#[connected]`, empty edge list, invalid `via` label grammar, duplicate `entry_point`, `programmatic` with empty string, mismatched type pattern in `#[links_to]`.
+- [ ] **7.1** Unit tests in `crates/ui-macros/tests/` covering: valid `#[connected]`, empty edge list, duplicate `entry_point`, `programmatic<T>` where `T` does not impl `ProgrammaticProducer`, `programmatic<T>` where `T::Target` ≠ the enclosing route.
 - [ ] **7.2** `trybuild`-based compile-fail fixtures under `crates/ui-macros/tests/compile-fail/`:
   - `orphan_route.rs` — Route variant with no `#[connected]`
-  - `unconsumed_via.rs` — Route declares `via("x")` but nothing produces it
-  - `unknown_via.rs` — Link declares `via = "x"` but target Route doesn't expect it
+  - `unreachable_route.rs` — variant has `#[connected(linked)]` but no callsite targets it
+  - `programmatic_wrong_target.rs` — `impl ProgrammaticProducer<Target = Route::A>` referenced under `#[connected(programmatic<T>)]` on Route::B
+  - `programmatic_unimplemented.rs` — referenced tag type has no `ProgrammaticProducer` impl
   - `multiple_entry_points.rs`
-  - `empty_programmatic.rs`
 - [ ] **7.3** Integration test crate `crates/ui-macros-tests/` (NOT `crates/core`) with a miniature `Route` enum and 3 page components, deliberately orphaning one; assert the checker binary exits non-zero and produces the expected diagnostic.
 - [ ] **7.4** Runtime coverage counter in `sync_route_to_app_state` under `#[cfg(debug_assertions)]` that records which variants are actually visited during a dev session — lets us compare *declared* edges against *exercised* edges. Optional "dead route" warning.
 - [ ] **7.5** Run the harness via a haiku subagent per `TEST_HARNESS.md` after Phase A and after Phase C lands.
@@ -300,9 +331,9 @@ Shared: `syn` parsing helpers, `linkme` registration helpers, error-span utiliti
 
 ## 8. Open questions
 
-- **OQ-1** Should `via` labels be generated or hand-written? Hand-written is verbose but greppable. Generated from file+line is automatic but brittle across refactors. **Tentative: hand-written, with a lint that flags duplicates.**
-- **OQ-2** How do we handle `Route::PageNotFound { segments }` and `Route::Root`? Likely: both are `entry_point`-adjacent. `Root` gets `entry_point`; `PageNotFound` gets `programmatic("router fallback for unknown URLs")`.
-- **OQ-3** Dynamic route construction in `account_last_routes` (`format!("{route}")` in `routes.rs:361`) — how granular does the programmatic-reason requirement get? Proposal: one `nav_dynamic!(reason = ...)` at each choke point (currently two: `sync_route_to_app_state` on_update restore, and `signup` on-complete-landing).
+- **OQ-1** ~~`via` label grammar~~ — dropped; identity comes from the `Route` enum and `ProgrammaticProducer` types. No labels to name.
+- **OQ-2** How do we handle `Route::PageNotFound { segments }` and `Route::Root`? Likely: `Root` carries `entry_point`; `PageNotFound` gets `programmatic<RouterNotFoundFallback>` with `const REASON = "router fallback for unknown URLs"`.
+- **OQ-3** Dynamic route construction in `account_last_routes` (`format!("{route}")` in `routes.rs:361`) — treat each as a distinct `ProgrammaticProducer<Target = ()>` ZST (two expected: `AccountLastRouteRestore` and `SignupCompletionLanding`). `Target = ()` sentinel per §4.3.
 - **OQ-4** `linkme` across `#[cfg(feature = "...")]`-gated backend modules: does a slice entry in a disabled feature disappear cleanly? Expected yes (the module doesn't compile → no registration), but needs a trybuild test in §7.
 - **OQ-5** IDE/rust-analyzer — the `#[diagnostic::on_unimplemented]` errors should surface in hover, but `linkme` slice-mismatch errors only appear at link time. Need to check whether `cargo check` is sufficient or whether `cargo build` is required.
 - **OQ-6** External deep links (mobile intent handlers, future OS URL-scheme handlers) — treat as a synthetic `external` producer or as `programmatic("external")`? Leaning `programmatic` to keep the producer side in-tree only.
