@@ -23,6 +23,42 @@
 
 ---
 
+## Design Principles — SOLID (as it maps to Rust)
+
+Design new code — and opportunistically refactor old code — against SOLID. These
+are *design* principles, not a refactor mandate: don't rewrite working code just
+to hit a checklist. Do apply them when you're touching a file anyway, and
+especially when the component-size / connected-routes / context-menu lint plans
+force a refactor of oversize components.
+
+- **Single Responsibility.** One reason to change per type/module/function. If
+  describing what a thing does needs "and", it's two things. A 684-line rsx!
+  isn't one responsibility — it's a dozen.
+- **Open/Closed.** Add new variants/impls, don't edit existing ones. In Rust:
+  prefer adding a trait impl or a new enum variant to swapping out a match arm's
+  semantics. New backends/routes should not require surgery on old code.
+- **Liskov Substitution.** A trait impl must obey the trait's documented
+  contract. If `ClientBackend::send_message` says "may fail, won't panic", no
+  impl can panic. Don't strengthen preconditions or weaken postconditions in
+  impls.
+- **Interface Segregation.** Small traits over kitchen-sink traits. Consumers
+  should depend only on methods they actually call. `Read + Write` over one
+  `ReadWrite`; split capability traits when a backend only supports part of
+  the surface (cf. `NotSupported` returns — a sign the trait needs splitting).
+- **Dependency Inversion.** Depend on abstractions. Pass `impl Trait` /
+  `&dyn Trait` / generics rather than concrete types at call sites. A
+  component that reads from `Signal<RoomList>` should not know how the list
+  was loaded.
+
+**When this kicks in:** the three in-flight lint plans
+(`plan-component-lints.md`, `plan-connected-routes-static-check.md`,
+`plan-context-menu-quality-control.md`) will force refactors on the oversize
+components (`FavoriteServerIcon`, `ChatView`, `ServerContextMenu`, …). Apply
+SOLID during those refactors — especially Single Responsibility when deciding
+*how* to split an rsx! block.
+
+---
+
 ## Agent Orchestration
 
 This project uses a three-tier agent model:
