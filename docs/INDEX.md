@@ -108,9 +108,9 @@ Cross-cutting plans currently in `drafted` state, awaiting execution:
 
 | Plan | Status | Description |
 |---|---|---|
-| [Context Menu Quality Control](plans/plan-context-menu-quality-control.md) | 🔵 drafted | Component-level `#[context_menu(...)]` DSL, compile-time coverage, mobile overlay runtime with submenu stack |
-| [Connected Routes Static Check](plans/plan-connected-routes-static-check.md) | 🔵 drafted | Bidirectional compile-time reachability — every route declares incoming edges; every link declares its destination |
-| [Component-Size & Dead-Code Lints](plans/plan-component-lints.md) | 🔵 drafted | `cargo check`-native lints: proc-macro `compile_error!` for oversize `#[component]`, build.rs `cargo::error=` for stray `#[allow(dead_code)]` |
+| [Context Menu Quality Control](plans/plan-context-menu-quality-control.md) | 🔵 drafted | `#[context_menu(Foo/None/allow_default/inherit)]` DSL; coverage enforced via `cargo check` (shared `lint-gate` build.rs); mobile overlay runtime with submenu stack |
+| [Connected Routes Static Check](plans/plan-connected-routes-static-check.md) | 🔵 drafted | Bidirectional `cargo check`-native reachability — routes declare incoming edges, links declare destination; graph assertion lives in the shared `lint-gate` build.rs |
+| [Component-Size & Dead-Code Lints](plans/plan-component-lints.md) | 🔵 drafted | `cargo check`-native lints: proc-macro `compile_error!` for oversize `#[component]`, `lint-gate` build.rs `cargo::error=` for stray `#[allow(dead_code)]`. Same build.rs hosts the other two plans' cross-file checks |
 
 Phase plans tracking in-flight client work:
 

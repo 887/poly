@@ -3,7 +3,7 @@
 > **Created:** 2026-04-16
 > **Status:** 🔵 drafted
 > **Scope:** cross-cutting — every Dioxus component in `crates/core/src/ui/` and each `clients/*/src/`
-> **Goal:** Every `#[component]` in the app declares a compile-time context-menu policy (`menu(…)` / `no_menu` / `allow_default`), the right menu always shows up for a given surface, the wrong one never bleeds through, and on mobile a long-press opens a center-screen stacked-overlay menu that dismisses on back / swipe / outside-click.
+> **Goal:** Every `#[component]` in the app declares a compile-time context-menu policy via a single `#[context_menu(...)]` attribute macro (`Foo` / `None` / `allow_default` / `inherit`). Coverage is enforced by the shared `crates/lint-gate/build.rs` — any missing decorator emits `cargo::error=` on plain `cargo check`, so agents cannot silently skip it. The right menu always shows up for a given surface, the wrong one never bleeds through, and on mobile a long-press opens a center-screen stacked-overlay menu that dismisses on back / swipe / outside-click.
 
 ---
 
@@ -120,7 +120,11 @@ pub trait ContextMenuFor<Props> {
 Trade-off summary: Dioxus 0.7.3's `#[component]` macro is a plain attribute macro that rewrites the function into a generated struct + function. Stacking attributes is legal as long as ours runs *outside* `#[component]` (Rust attribute-macro ordering is outer-first). So we ship a `poly-context-menu-macros` proc-macro crate that:
 
 - [ ] **3.1.1** Exports a single attribute macro `#[context_menu(...)]`. The macro parses its argument into one of four variants (`Foo` ident → attach menu; `None` ident → preventDefault-only; `allow_default` ident → native menu; `inherit` ident → parent forwards). It runs before `#[component]` and simply (a) validates the arg, (b) injects a `#[linkme::distributed_slice(CTX_MENU_COVERAGE)]` static entry with the component's `module_path!()` + variant tag, (c) re-emits the original `fn` with the appropriate DOM-level wrapper (or no wrapper for `None`/`inherit`/`allow_default`) so `#[component]` sees a valid fn.
-- [ ] **3.1.2** Ship a `build.rs` in `crates/core` that, at compile time, runs `syn` over every `*.rs` under `src/ui/` and `clients/*/src/` and emits an `include!()`-able `const EXPECTED_COMPONENTS: &[&str] = &[…]`. At runtime in a `#[test]` we compare `EXPECTED_COMPONENTS` against the `CTX_MENU_COVERAGE` slice — any delta is a test failure naming the offending component. This is the "deny" gate; no warnings in release.
+- [ ] **3.1.2** Coverage enforcement runs on **plain `cargo check`**, not `#[test]` — tests are easy for agents to skip, build errors are not. Lives in the shared `crates/lint-gate/build.rs` from `plan-component-lints.md` §3.2 (one workspace walk feeds every cross-file lint). The build script:
+  - enumerates every `#[component]`-attributed fn in the workspace via `ignore::WalkBuilder` + line-prefix attribute scan (same primitive as the allow-ban);
+  - for each hit, checks the preceding non-blank line for one of `#[context_menu(Foo)]` / `#[context_menu(None)]` / `#[context_menu(allow_default)]` / `#[context_menu(inherit)]`;
+  - emits `cargo::error=missing #[context_menu(...)] decorator at <path>:<line>` (stabilized Rust 1.84) for each miss.
+  Result: rust-analyzer red-squiggles on save; `cargo check` fails in CI with the exact file:line. No `#[test]` needed — keep a smoke test in `crates/core/tests/` that reads the `CTX_MENU_COVERAGE` `linkme` slice and asserts every registered variant tag is well-formed, but that is a belt-and-braces runtime check, not the gate.
 - [ ] **3.1.3** `#[context_menu(inherit)]` is a bare-bones variant that only registers in the slice — it is the tool authors use when they genuinely mean "my parent owns the menu." It keeps the coverage check clean without forcing every `<span>`-like leaf into a dummy menu.
 - [ ] **3.1.4** Quality: emit a `#[diagnostic::on_unimplemented]` on `ContextMenuFor` so a typo in `#[context_menu(Foo)]` where `Foo` does not impl the trait gives a clean error message.
 
@@ -181,19 +185,19 @@ pub struct AppState {
 ### 5.1 Phased rollout
 
 - [ ] **5.1.1** **Phase A — infrastructure.** Land the macro crate + `ContextMenuFor` trait + the stack runtime. No component annotations yet. Existing `ServerContextMenu` / `ChannelContextMenu` / `MsgContextMenuOverlay` refactored in place to use the stack. Net behavior unchanged.
-- [ ] **5.1.2** **Phase B — warn mode.** The coverage test in 3.1.2 runs as `#[test]` but only emits `eprintln!` warnings, not failures. Tracks remaining un-annotated components per PR.
+- [ ] **5.1.2** **Phase B — warn mode.** The `lint-gate` build script emits `cargo::warning=missing #[context_menu(...)] at <path>:<line>` instead of `cargo::error=` while the backfill is in flight. Gated behind the same `regen-baseline` feature used for plan-component-lints.md: the baseline file `crates/lint-gate/baseline.json` carries the grandfathered set, new violations still fail the build. Tracks remaining un-annotated components per PR.
 - [ ] **5.1.3** **Phase C — batch annotate.** Split the ~347 remaining components across 6-8 PRs, grouped by area: (1) `settings/*`, (2) `signup/*`, (3) `account/common/chat_view.rs` internals, (4) `account/common/forum_view.rs` + per-forum-backend extras, (5) per-backend `account/*/mod.rs`, (6) `favorites_sidebar` + `account_server_bar` + `channel_list` polish, (7) voice/media/modal overlays, (8) root-level routes. Each PR sets its subset to warn-free.
-- [ ] **5.1.4** **Phase D — deny.** Flip the coverage test to hard-fail on any component without a decorator. Add `#[context_menu(...)]` to the project lint list in `CLAUDE.md`.
+- [ ] **5.1.4** **Phase D — deny.** Drain the baseline to empty so every miss emits `cargo::error=` on plain `cargo check`. Add `#[context_menu(...)]` to the project lint list in `CLAUDE.md`.
 
 ### 5.2 Author ergonomics
 
-- [ ] **5.2.1** `cargo xtask check-menus` — quick wrapper around the coverage test for local dev.
+- [ ] **5.2.1** No separate command — coverage surfaces on `cargo check` / `cargo clippy` / rust-analyzer save. A `cargo check --features regen-baseline` from the workspace root rewrites `crates/lint-gate/baseline.json` after a cleanup wave.
 - [ ] **5.2.2** Editor snippet documentation in `crates/core/agents.md` (this repo's convention) so new components default to `#[context_menu(None)]` when the author is unsure.
-- [ ] **5.2.3** Lint rule: any file that imports `dioxus::prelude::*` and defines a `#[component]` but forgets a menu decorator triggers the test failure with a *file-local* message ("add `#[context_menu(...)]` — one of `(Foo)` / `(None)` / `(allow_default)` / `(inherit)`").
+- [ ] **5.2.3** The `lint-gate` build script's `cargo::error=` message is itself the *file-local* lint — "add `#[context_menu(...)]` — one of `(Foo)` / `(None)` / `(allow_default)` / `(inherit)`" — with the exact file:line. Editor picks it up on save via rust-analyzer.
 
 ## 6. Testing strategy
 
-- [ ] **6.1.1** **Unit — registry coverage.** The `#[test]` from 3.1.2 (`context_menu_coverage`) runs under `cargo test -p poly-core`. Deterministic.
+- [ ] **6.1.1** **Build — registry coverage.** The `lint-gate` `build.rs` scan from 3.1.2 runs on every `cargo check`, emits `cargo::error=` for any `#[component]` without a decorator. No `#[test]` to skip; agents cannot silently ignore it. A small runtime smoke test in `crates/core/tests/context_menu.rs` asserts that the `CTX_MENU_COVERAGE` `linkme` slice parses cleanly (tag well-formedness only) — belt-and-braces, not the gate.
 - [ ] **6.1.2** **Unit — menu dispatch.** Per menu, a test that constructs the `ContextMenuFor::Ctx` from a mocked props and asserts `render()` produces the expected items by i18n key. Extends the existing chat-view render tests.
 - [ ] **6.1.3** **Snapshot — overlay markup.** `insta`-style snapshot of the rendered menu HTML for a fixed stack state (single menu open, submenu open, allow-default no-op).
 - [ ] **6.1.4** **MCP UI — desktop.** Via `poly-desktop` / `poly-electron` / `poly-web` MCPs: `launch_app → connect_cdp → click_at(x,y,right)` on each of the annotated surfaces, `take_screenshot`, assert the menu container `.context-menu` is present and the native browser menu is not. Scripted per backend.

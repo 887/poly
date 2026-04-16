@@ -2,8 +2,8 @@
 
 > **Created:** 2026-04-16
 > **Status:** 🔵 drafted
-> **Scope:** cross-cutting — `crates/core/src/ui/routes.rs`, every link/button/navigator callsite under `crates/core/src/ui/`, and a new `crates/ui-macros/` proc-macro + `crates/ui-macros-build/` checker crate
-> **Goal:** Compile-time, bidirectional reachability check — every `Route` variant declares its incoming edges and every link/button/`navigator()` call declares its destination; mismatches fail the build (or warn during migration), and orphan routes must supply a human-readable reason.
+> **Scope:** cross-cutting — `crates/core/src/ui/routes.rs`, every link/button/navigator callsite under `crates/core/src/ui/`, the shared `crates/ui-macros/` proc-macro crate, and the shared `crates/lint-gate/build.rs` graph checker
+> **Goal:** `cargo check`-native, bidirectional reachability check — every `Route` variant declares its incoming edges and every link/button/`navigator()` call declares its destination. Mismatches surface as `cargo::error=` lines on plain `cargo check` (no `#[test]` to skip, no xtask to forget); orphan routes must supply a human-readable `programmatic(...)` reason.
 
 ---
 
@@ -133,7 +133,7 @@ The `..` in the `Route::X { .. }` pattern means "any variant args" — the stati
 
 ## 3. The check — mechanism
 
-**Chosen primary mechanism: `linkme` distributed slice + post-link build-time assertion run by `build.rs` in `crates/core`.** Fallback/complement: a `clippy`-style `dylint` crate for prettier error spans.
+**Chosen primary mechanism: `linkme` distributed slice populated by the proc-macros, read by the shared `crates/lint-gate/build.rs` from `plan-component-lints.md` §3.2. Graph-check errors emerge as `cargo::error=` lines on plain `cargo check` — no separate command, no `#[test]` to skip.** Fallback/complement: a `clippy`-style `dylint` crate for prettier error spans.
 
 ### 3.1 Why `linkme`, not `inventory`
 
@@ -157,8 +157,9 @@ Clippy lints can flag individual callsites but cannot see the full graph across 
 
 1. `#[connected(...)]` proc-macro on each `Route` variant → emits `#[linkme::distributed_slice(ROUTE_DECLARATIONS)] static: RouteDecl { variant: "DmsHome", edges: &[...] }`.
 2. `#[links_to(...)]` and `nav!(...)` and `Link { via: ... }` → emit `#[linkme::distributed_slice(LINK_CALLSITES)] static: LinkCallsite { target: "DmsHome", via: "favorites-sidebar:account-icon", file, line }`.
-3. `crates/core/build.rs` invokes a tiny native helper (`poly-routes-check`, new bin in `crates/ui-macros-build/`) that links against the same slices (re-exports the trait + macros with `native`-only cfg) and asserts the two slices agree. Errors are printed with `cargo:warning=` plus a non-zero exit.
-4. For WASM builds (where `build.rs` already runs natively on the host), the same native helper runs; the WASM target's compiled slices are inspected through the host build of the same crate since the registry content is source-level, not target-dependent.
+3. **The graph assertion runs from `crates/lint-gate/build.rs`** — the same build script that plan-component-lints.md §3.2 uses for the allow-ban scan and plan-context-menu-quality-control.md §3.1.2 uses for decorator coverage. `lint-gate` depends on `ui-macros` so both slices are in scope; the script materializes `declared_edges` and `produced_edges` from the slices, computes symmetric difference and BFS from `entry_point`, and emits one `cargo::error=E-ROUTE-XXX: ...` line per violation (stabilized Rust 1.84). Because `cargo check` runs every `build.rs` before typechecking, the error surfaces automatically — rust-analyzer red-squiggles it on save, `cargo check` exits non-zero in CI, no agent can quietly skip it.
+4. **One workspace walk, three checks.** `lint-gate`'s `build.rs` already walks `*.rs` for the allow-ban (plan 3 §3.2) and for `#[component]`-decorator coverage (plan 1 §3.1.2). The slice-level graph check bolts onto the same pass — negligible additional cost (slice read + hash-set diff). Clean-build cost stays in the 100–300 ms range even with all three lints active.
+5. WASM-side note: `build.rs` runs on the host during every `cargo check --target wasm32-unknown-unknown`. The registry content is source-level (macros emit `&'static` data populated at compile time and linked per-target), so the host build sees everything the WASM build would have registered. No WASM-specific tooling required.
 
 ### 3.5 Error surface — use `#[diagnostic::on_unimplemented]` (stable 1.78+)
 
@@ -228,10 +229,10 @@ Rolling out a hard compile error across 79+ callsites in one commit is a non-sta
 
 ### 5.1 Phase A — infrastructure, no enforcement (1 PR)
 
-- [ ] **5.1.1** Create `crates/ui-macros/` (proc-macro crate: `#[connected]`, `#[links_to]`, `nav!`, `nav_dynamic!`, derive helpers) and `crates/ui-macros-build/` (binary + library for the checker).
+- [ ] **5.1.1** Create `crates/ui-macros/` (proc-macro crate: `#[connected]`, `#[links_to]`, `nav!`, `nav_dynamic!`, derive helpers) and wire the graph-check module into `crates/lint-gate/build.rs` (the shared build script introduced in plan-component-lints.md §3.2). No separate `ui-macros-build` binary — the whole-graph assertion lives alongside the allow-ban and component-decorator scans in one build script.
 - [ ] **5.1.2** Add `linkme = "0.3"` and `diagnostic::on_unimplemented` trait marker setup.
-- [ ] **5.1.3** Macros compile and register but the checker is in **report-only** mode (`cargo:warning=` only). Build never fails.
-- [ ] **5.1.4** Add `cargo xtask routes-graph` that dumps the current graph to `target/routes.dot` for inspection.
+- [ ] **5.1.3** Macros compile and register; graph-check runs but emits `cargo::warning=` instead of `cargo::error=` while the backfill is in flight. Gate through the shared `regen-baseline` feature so that known violations grandfather into `crates/lint-gate/baseline.json`; new violations still fail the build.
+- [ ] **5.1.4** An optional debug helper `cargo run -p lint-gate --bin dump-routes` (tiny binary inside `lint-gate` that re-uses the same slice-walking code) dumps the current graph to `target/routes.dot` for inspection. Not a gate, just a visualization aid.
 
 ### 5.2 Phase B — backfill, warn loudly (one PR per UI module, parallelizable)
 
@@ -242,9 +243,9 @@ Rolling out a hard compile error across 79+ callsites in one commit is a non-sta
 
 ### 5.3 Phase C — full enforcement (1 PR)
 
-- [ ] **5.3.1** Flip E-ROUTE-001 to deny.
-- [ ] **5.3.2** Remove report-only mode from `build.rs`.
-- [ ] **5.3.3** Add a denylist check in CI that fails on any `navigator().push(Route::...)` outside `nav!`/`Link` macros (this closes the bypass loophole forever).
+- [ ] **5.3.1** Drain `crates/lint-gate/baseline.json` to empty so E-ROUTE-001 emits as `cargo::error=` on plain `cargo check`.
+- [ ] **5.3.2** Remove the `regen-baseline` warn downgrade path for route-graph violations.
+- [ ] **5.3.3** Add the bare `navigator().push(Route::...)` pattern to the `lint-gate` build.rs banned-pattern list (same mechanism as the `#[allow(dead_code)]` scan): any occurrence outside a `nav!`/`Link` macro expansion emits `cargo::error=`, closing the bypass loophole permanently on the same `cargo check` surface.
 
 ---
 
@@ -321,9 +322,8 @@ Shared: `syn` parsing helpers, `linkme` registration helpers, error-span utiliti
 
 ## Files this plan will touch
 
-- `crates/ui-macros/` *(new)* — proc-macro crate
-- `crates/ui-macros-build/` *(new)* — checker binary invoked from `build.rs`
-- `crates/core/build.rs` *(new or extended)*
+- `crates/ui-macros/` *(new)* — proc-macro crate (shared with plans 1 + 3)
+- `crates/lint-gate/` *(new, shared with plan 3)* — `build.rs` runs the graph assertion alongside the allow-ban and decorator-coverage scans; all three checks piggyback on a single workspace walk
 - `crates/core/src/ui/routes.rs` — add `#[connected(...)]` to every variant
 - `crates/core/src/ui/favorites_sidebar.rs`, `channel_list.rs`, `chat_view.rs`, `search.rs`, `signup/mod.rs`, `settings/mod.rs`, `create_server.rs`, `create_channel.rs`, `create_forum_post.rs`, `main_layout.rs`, `voice_banner.rs`, `server_overview.rs` — convert call sites
 - `crates/core/src/ui/account/**/*.rs` — convert call sites
