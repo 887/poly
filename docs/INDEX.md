@@ -1,6 +1,6 @@
 # Poly Documentation Index
 
-> Last updated: 2026-04-12
+> Last updated: 2026-04-16
 > For project overview: [0.1-vision-and-roadmap.md](0-project/0.1-vision-and-roadmap.md)
 
 ---
@@ -99,6 +99,25 @@
 |---|---|---|---|
 | 7.0 | [Poly Server Protocol](7-infrastructure/7.0-poly-server-protocol.md) | DONE | REST + WebSocket protocol spec |
 | 7.1 | [Backup Server](7-infrastructure/7.1-backup-server.md) | DONE | Encrypted settings sync server — PoW auth, blob storage |
+
+---
+
+## Plans — Active
+
+Cross-cutting plans currently in `drafted` state, awaiting execution:
+
+| Plan | Status | Description |
+|---|---|---|
+| [Context Menu Quality Control](plans/plan-context-menu-quality-control.md) | 🔵 drafted | Component-level `#[context_menu(...)]` DSL, compile-time coverage, mobile overlay runtime with submenu stack |
+| [Connected Routes Static Check](plans/plan-connected-routes-static-check.md) | 🔵 drafted | Bidirectional compile-time reachability — every route declares incoming edges; every link declares its destination |
+| [Component-Size & Dead-Code Lints](plans/plan-component-lints.md) | 🔵 drafted | `cargo xtask lint` regex checks for oversize `#[component]` functions and stray `#[allow(dead_code)]` usage |
+
+Phase plans tracking in-flight client work:
+
+- [Phase 3.4 — Teams Completion](plans/phase-3.4-teams-completion-plan.md)
+- [Direct calls & temporary calls](plans/direct-calls-and-temporary-calls.md)
+- [Discord forums & threads](plans/plan-discord-forums-threads.md)
+- [Reddit stub](plans/plan-reddit-stub.md)
 
 ---
 
