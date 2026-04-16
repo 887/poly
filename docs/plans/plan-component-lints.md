@@ -3,10 +3,13 @@
 > **Created:** 2026-04-16
 > **Status:** 🔵 drafted
 > **Scope:** workspace-wide tooling; no production code behavior change
-> **Goal:** Give teeth to the two rules AI agents keep breaking — the 100-line
-> `#[component]` cap and the ban on `#[allow(dead_code)]` / `#[allow(unused*)]` —
-> by enforcing both natively under `cargo check` (proc-macro `compile_error!`
-> for size; `build.rs` emitting `cargo::error` for the allow ban).
+> **Goal:** Give teeth to the two rules AI agents keep breaking — (1) the ban on
+> `#[allow(dead_code)]` / `#[allow(unused*)]`, (2) the size of `rsx!` macro
+> bodies inside `#[component]` functions (clippy misses this entirely because
+> it doesn't see into macro expansions; it's the actual failure mode behind
+> the 684-line `FavoriteServerIcon` and 1129-line `ChatView`). Both enforced
+> natively under `cargo check` — proc-macro `compile_error!` at each oversize
+> `rsx!` span, `build.rs` emitting `cargo::error=` for the allow ban.
 
 ---
 
@@ -54,9 +57,9 @@ non-test hit below is a real violation:
 From `docs/4-ui/ui-component-150-line-refactor-checklist.md` (full audit complete
 2026-03-07, scope `crates/core/src/ui/**/*.rs` only):
 
-- **130 components measured**
-- **29 components over the 100-line cap** (22% failure rate)
-- **101 components compliant**
+- **130 components measured** (whole-function line count)
+- **29 components over the old 100-line *function* cap** (22% failure rate)
+- **101 components compliant under the old rule**
 
 Five worst offenders (from the audit log):
 
@@ -68,25 +71,44 @@ Five worst offenders (from the audit log):
 | `AccountServerIcon` | `crates/core/src/ui/account/common/account_server_bar.rs` | **198** |
 | `ServerBanner` | `crates/core/src/ui/account/common/channel_list.rs` | **187** |
 
-The audit covered `crates/core` only. Running the proposed lint on the full
+**Caveat — the numbers above count the whole function body, which is the
+wrong metric.** Inspecting the five worst offenders: ≥90% of each file's line
+count lives inside a single `rsx! { ... }` invocation. Under the revised check
+(§3.1 — primary cap on `rsx!` body size, not fn body) the same components
+would fail in almost the same ratio, but the error message would point the
+fix at the right place (extract a chunk of markup, not "extract a helper").
+Clippy's own `too_many_lines` misses all of these today because it doesn't
+see into macro expansions; that is precisely the blind spot this plan closes.
+
+The audit covered `crates/core` only. Running the revised lint on the full
 workspace will almost certainly find more — there are ~420 `#[component]` hits
 workspace-wide (client backends, `apps/*`, mock servers).
 
 `ChatView` (1129 lines) has since been partially refactored but remains over
-100.
+the rsx! cap.
 
 ---
 
 ## 2. Declared limits (cite, do not invent)
 
-- **Per-function / per-component body line cap:** `too-many-lines-threshold = 100`
-  in `/home/laragana/workspcacemsg/clippy.toml` (the single source of truth).
+Two thresholds, two different scopes:
+
+- **`rsx!` body cap — 100 lines, hard error.** Primary gate. Proc-macro in
+  `crates/ui-macros/` hard-codes this constant. Rationale: 100 roughly fills
+  a standard terminal, and by that point any `rsx!` block benefits from being
+  sliced into a child component.
+- **Function body cap — 250 lines, hard error.** Secondary gate for pathological
+  non-markup bloat. Proc-macro hard-codes this too. `too-many-lines-threshold`
+  in `/home/laragana/workspcacemsg/clippy.toml` is set to `250` so clippy
+  agrees. `lint-gate`'s build.rs asserts the two values stay in sync (the macro
+  constant and the clippy config).
 - Pairs with `"clippy::too_many_lines" = true` in every `cranky.toml` (workspace
-  root + ~25 per-crate overlays).
+  root + ~25 per-crate overlays). Clippy acts as a defense-in-depth duplicate
+  of the 250 fn cap; it cannot enforce the 100 rsx! cap because it can't see
+  into macro bodies.
 - Historical note: `docs/archive/ui-component-150-line-refactor-checklist.md` is
-  titled "150-line" because the cap started there; the active limit is 100.
-  The proc-macro hard-codes 100 to match `clippy.toml`; a build.rs assertion in
-  `crates/lint-gate/` fails the build if the two drift apart.
+  titled "150-line" because the cap started there; the legacy whole-function
+  number is now obsolete under the revised rsx!-primary rule.
 
 `cognitive-complexity-threshold = 15` and `too-many-arguments-threshold = 6`
 also live in `clippy.toml`; the component-size lint does **not** touch those —
@@ -115,30 +137,48 @@ Stable Rust already supports this via two built-in escape hatches:
 The plan therefore splits the two checks across the mechanism best suited to
 each — both surface on `cargo check` with zero extra tooling.
 
-### 3.1 Component-size lint — via proc-macro (`compile_error!` at expansion time)
+### 3.1 Component-size lint — primary check is `rsx!` body size, not fn body
 
-The concurrent `plan-context-menu-quality-control.md` already requires every
-`#[component]` to be wrapped with exactly one of `#[context_menu(...)]` /
-`#[context_menu(None)]` / `#[context_menu(allow_default)]` / `#[context_menu(inherit)]`.
-Those four attribute macros live in the shared proc-macro crate that this plan
-also contributes to (`crates/ui-macros/`, see §6). They already see the full
-`fn Foo(props: FooProps) { … }` token stream at expansion.
+**Intent correction (2026-04-16):** the real thing that rots the UI is giant
+`rsx! { ... }` invocations — the tree of markup the component renders. Clippy's
+`too_many_lines` does **not** see into macro bodies; it counts only the
+function's Rust statements. That's why today's 684-line `FavoriteServerIcon` and
+1129-line `ChatView` pass clippy despite being catastrophically over-grown:
+almost all of those lines live inside a single `rsx! { ... }` block that clippy
+treats as one statement.
 
-Add a body-line count to the macro expansion:
+Fix: primary gate counts lines inside each `rsx!` invocation. Secondary
+(looser) gate counts the function body for pathological non-markup bloat.
+
+#### 3.1.a Primary — per-`rsx!` body line cap (hard limit: 100)
+
+The `#[context_menu(...)]` attribute macros (which every `#[component]` carries,
+per `plan-context-menu-quality-control.md`) see the full body `TokenStream` at
+expansion. We walk the `syn::Block` and inspect every `Expr::Macro` /
+`Stmt::Macro` whose path resolves to `rsx` / `dioxus::rsx` / `dioxus_core::rsx`.
+For each hit, count logical lines inside the delimiter:
 
 ```rust
-// inside crates/ui-macros/src/component_size.rs
-fn check_body_size(item: &ItemFn, max: usize) -> Result<(), TokenStream> {
-    let body = &item.block;
-    let span = body.span();
-    let body_text = body.to_token_stream().to_string();
-    let logical_lines = body_text.lines().filter(|l| !l.trim().is_empty()).count();
-    if logical_lines > max {
+// crates/ui-macros/src/rsx_size.rs
+const MAX_RSX_LINES: usize = 100;
+
+fn check_rsx_blocks(body: &Block) -> Result<(), TokenStream> {
+    let mut offenders = Vec::new();
+    visit_rsx_macros(body, |mac| {
+        let text = mac.tokens.to_string();
+        let lines = text.lines().filter(|l| !l.trim().is_empty()).count();
+        if lines > MAX_RSX_LINES {
+            offenders.push((mac.span(), lines));
+        }
+    });
+    if let Some((span, lines)) = offenders.into_iter().next() {
         return Err(quote_spanned! { span =>
             compile_error!(concat!(
-                "component body exceeds ", stringify!(#max),
-                " lines (found ", stringify!(#logical_lines),
-                "). Extract sub-components or add // @lint-size-skip: <reason> on the attribute."
+                "rsx! body exceeds ", stringify!(#MAX_RSX_LINES),
+                " lines (found ", stringify!(#lines),
+                "). Extract the largest top-level tag into its own #[component]. ",
+                "Each sub-component is also a Dioxus re-render boundary, so this ",
+                "also narrows re-render scope.",
             ));
         }.into());
     }
@@ -146,41 +186,71 @@ fn check_body_size(item: &ItemFn, max: usize) -> Result<(), TokenStream> {
 }
 ```
 
-This fires on `cargo check` automatically — no xtask, no CI step, no developer
-discipline required. The macro is the gate. Error span points at the body's
-opening `{`, so editors jump straight there.
+Why `rsx!` body, not function body:
+- **Harder to game than fn body.** To shrink an `rsx!` block, an agent has to
+  actually extract markup into a sub-component — which, by construction, creates
+  a real new component with props. You cannot "delete blank lines" out of
+  structural JSX-style markup the way you can out of statements.
+- **Right signal for the damage.** The render cost is the rsx! tree. The diff
+  churn is the rsx! tree. The unreadability is the rsx! tree.
+- **Extraction is mechanically guided.** The error message names a single
+  remedy ("extract the largest top-level tag"), not a vague "extract repeated
+  blocks" that invites hollow sub-components.
+- **Matches Dioxus architecture.** In Dioxus 0.7.3 each `#[component]` is a
+  re-render boundary. Splitting rsx! across components is not a cosmetic fix —
+  it actually isolates signal reads and reduces re-renders.
+
+Multiple `rsx!` blocks in one fn (e.g. `if cond { rsx! { … } } else { rsx! { …
+} }`) are each checked independently against their own cap. Total-across-blocks
+is not tracked.
+
+#### 3.1.b Secondary — fn body cap (soft limit: 250 lines, warn-only)
+
+A much looser backstop for the rare component that is pathologically bloated
+outside rsx! — giant match, deeply nested hook chains, huge `use_memo` closures.
+Emits `compile_error!` only over 250 lines (vs the primary rsx! cap of 100).
+Most components will hit 3.1.a long before 3.1.b.
+
+Rationale for keeping 3.1.b at all rather than dropping the fn-body idea:
+catches cases where an agent hollowed out an `rsx!` into `rsx! { { build_tree(ctx) } }`
+and dumped a 500-line node-builder fn into the same component. Unlikely but
+possible; 50 lines of macro is cheap insurance.
+
+#### 3.1.c Mechanics
+
+Both checks fire on `cargo check` automatically via the `#[context_menu(...)]`
+macro expansion — no xtask, no CI step, no developer discipline required.
 
 Pros:
-- **`cargo check` native.** Exactly what the user asked for.
-- **Zero false positives** — token-stream line count is not text-regex guessing
-  inside strings or comments; it counts logical lines of the parsed block.
-- **Authoritative span** — error points at the function body, not a separate
-  tool's stdout.
-- **No toolchain additions.** Stable Rust + `syn`/`quote` (already a transitive
-  workspace dep via Dioxus).
-- **Compiles incrementally** — the macro runs only on touched files, so a 1-
-  component edit pays a 1-component cost.
+- **`cargo check` native.** Errors surface in rust-analyzer on save.
+- **Counts what actually matters** — markup size, not statement count.
+- **Can't be gamed by blank-line deletion** inside rsx! (whitespace collapses
+  but the tag tree is still the tag tree).
+- **Authoritative span** — error points at the specific rsx! macro call, not
+  the whole fn body. Editor jumps straight to the right place.
 
 Cons / edge cases:
-- **Only covers components wrapped by one of the four context-menu macros.**
-  That's fine because the context-menu plan makes wrapping mandatory. If a bare
-  `#[component]` slips through, the `context_menu_coverage` `#[test]` in that
-  plan (Phase A) catches it — an orthogonal check on attribute presence, not
-  body size.
-- **Threshold is a compile-time constant in the macro.** Reading
-  `too-many-lines-threshold` from `clippy.toml` at macro-expansion time is
-  awkward (proc-macros can't read cargo config). Instead we hard-code it in
-  the macro from the project standard (100), and a CI assertion verifies
-  `clippy.toml:too-many-lines-threshold == 100` so the two can't drift.
-- **Inline `// @lint-size-skip: <reason>` escape hatch** — parsed off the
-  attribute's preceding line in the `TokenStream` context; `reason = "..."` is
-  required, empty reasons fail. Same grammar the connected-routes plan uses for
-  `via = "..."` labels.
+- **Only covers components wrapped by one of the four `#[context_menu(...)]`
+  attribute macros.** Fine because the context-menu plan makes wrapping
+  mandatory; the `context_menu_coverage` check in that plan catches bare
+  `#[component]` slips.
+- **`rsx!` detection is path-based.** If a backend uses
+  `use dioxus::rsx as render;` and calls `render! { ... }`, the check misses
+  it. Mitigation: `clippy.toml` disallows renaming `dioxus::rsx` imports;
+  build.rs in `lint-gate` scans for `use dioxus::rsx as` and emits
+  `cargo::error=` if anyone tries.
+- **Thresholds are compile-time constants in the macro.** Proc-macros can't
+  read `clippy.toml`, so the rsx! cap (100) and fn cap (250) are hard-coded in
+  `crates/ui-macros/`. `lint-gate`'s build.rs asserts
+  `clippy.toml:too-many-lines-threshold == 250` so the secondary fn-body cap
+  and clippy stay in sync.
+- **Inline `// @lint-size-skip: <reason>` escape hatch** still available on
+  the attribute line. `<reason>` must be ≥ 10 chars; empty reasons fail.
+  Applies to both 3.1.a and 3.1.b.
 
-Additional net: **clippy's own `too_many_lines` lint** is already stable and
-already runs under `cargo clippy`. Turn it on in `clippy.toml` with a higher
-threshold (150, say) as a **secondary, last-resort** net for components that
-somehow bypassed the macro. This gives two independent checks — cheap insurance.
+Additional net: clippy's own `too_many_lines` lint remains on at 250 as a
+defense-in-depth duplicate of 3.1.b. Three checks total, zero configuration
+work for developers.
 
 ### 3.2 `#[allow(...)]` ban — via `build.rs` regex scan (emits `cargo::error`)
 
@@ -297,52 +367,69 @@ A function marked with `#[component]` (Dioxus's component attribute). Detection
 is attribute-presence, not path-based — so `#[dioxus::component]` and
 `#[component]` both trigger.
 
-### 4.2 What counts as "the body"
+### 4.2 What gets counted (and why)
 
-Source lines from the opening `{` after the signature (inclusive) through the
-matching closing `}` (inclusive). This matches the manual-audit counting rule
-used in the existing checklist (e.g. `ChatView` = 1129 lines).
+Two separate counters run per component, both at macro expansion time:
 
-Blank lines and comment-only lines **count**. If a developer wants smaller
-numbers, they can delete blank lines — but usually they want to extract a
-sub-component. This is the rule we want.
+1. **`rsx!` body line count (primary, cap 100).** Inside every `rsx! { ... }`
+   invocation reachable from the component body, count logical lines
+   (non-blank, inside the macro delimiter). Each `rsx!` block is checked
+   independently against its own 100-line cap. A component with several
+   conditional `rsx!` branches passes as long as each branch is ≤ 100, even
+   if they sum to more.
+2. **Function body line count (secondary, cap 250).** Lines from the opening
+   `{` after the signature through the matching `}`. Captures pathological
+   non-markup bloat.
+
+Blank lines and comment-only lines count for both — deleting comments to hit
+the limit is a tell that the component needed extraction anyway. But for
+`rsx!`, agents can't meaningfully shrink by whitespace edits because the tag
+tree drives the structure; the counter is really counting tags and attrs.
 
 ### 4.3 Exclusions
 
 - Files with `// @generated` as their first non-shebang, non-blank line (none
   today).
-- Test files (`#[cfg(test)]` modules and files under `tests/`) — tests aren't
-  components in practice, and if someone does wrap a test fixture with
-  `#[component]` we want to know.
-- Components marked with inline `// @lint-size-skip: <reason>` on the attribute
-  line (parsed by the proc-macro). `<reason>` must be ≥ 10 chars; empty reasons
-  fail expansion.
+- Test files (`#[cfg(test)]` modules and files under `tests/`).
+- Components marked with inline `// @lint-size-skip: <reason>` on the
+  `#[context_menu(...)]` attribute line. `<reason>` must be ≥ 10 chars; empty
+  reasons fail expansion. Applies to both the rsx! and fn caps.
 
 ### 4.4 Error format
 
-```
-component-size: FAIL
-  crates/core/src/ui/favorites_sidebar.rs:374: FavoriteServerIcon — 684 lines (limit 100)
-    suggest: extract server list rendering / drag-drop / context menu into sub-components
-  crates/core/src/ui/account/server/context_menu.rs:15: ServerContextMenu — 286 lines (limit 100)
-    suggest: split by menu section (owner actions / moderation / notification prefs)
+Primary (rsx! cap):
 
-2 / 130 components over limit
+```
+error: rsx! body exceeds 100 lines (found 684)
+ --> crates/core/src/ui/favorites_sidebar.rs:402:5
+    |
+402 |     rsx! {
+    |     ^^^^^^
+    = help: extract the largest top-level tag into its own #[component].
+            Each sub-component is also a Dioxus re-render boundary, so this
+            also narrows re-render scope.
 ```
 
-Extraction suggestions are hand-authored from the checklist (tier-based
-heuristics: "giant rsx! block" → "extract header / list / input", "nested
-context menu" → "split by section"). Not every violator gets a tailored hint —
-violators without a known suggestion just print `suggest: extract repeated
-blocks into sub-components`.
+Secondary (fn cap):
+
+```
+error: component function body exceeds 250 lines (found 412)
+ --> crates/core/src/ui/some_control.rs:88:43
+    = help: split out non-markup helpers (match arms, memoized closures,
+            event handlers) into free functions or a sibling module.
+```
+
+The extraction hint is always the same — for rsx!, "extract the largest
+top-level tag"; for fn, "move non-markup helpers out." No per-component
+tailored hints: the hint is implied by what actually exceeded the cap.
 
 ### 4.5 Acknowledged false-negative: macro-generated components
 
 Some macros (see section 8) emit `#[component]` functions. Generated components
 are excluded via the `// @generated` header rule — each macro must emit the
-header. Concretely, `#[context_menu]` and the proposed `#[connected_route]`
-macro need to emit `// @generated by poly-macros::context_menu\n` as their
-first line so this lint skips them.
+header. Concretely, `#[context_menu]` and any future component-emitting macro
+need to emit `// @generated by poly-macros::context_menu\n` as the first line
+of their expansion so this lint skips them.
 
 ---
 
@@ -497,15 +584,18 @@ No editor plugin needed.
 
 ### 6.6 Interaction with existing `cargo clippy`
 
-- `clippy::too_many_lines` stays on in `clippy.toml` at a looser 150 threshold
-  as a defense-in-depth net for non-component functions and for any `#[component]`
-  that somehow bypassed the wrapper macros. The proc-macro is the primary gate;
-  clippy is the belt to the macro's suspenders.
-- A CI assertion (one `grep` in the build.rs of `lint-gate`) verifies
-  `clippy.toml:too-many-lines-threshold` still exists and is `≤ 150`. Drift
-  between the macro's hard-coded `100` and clippy's 150 is tolerated (we want
-  two different thresholds for the two different nets). Drift that *removes*
-  the clippy limit entirely is an error.
+- `clippy::too_many_lines` stays on in `clippy.toml` at threshold `250` —
+  matching the proc-macro's secondary fn-body cap (3.1.b). Clippy is a
+  defense-in-depth duplicate of that secondary gate for any `#[component]`
+  that bypassed the wrapper macros, and covers non-component functions.
+  Clippy **cannot** enforce the primary rsx!-body cap (3.1.a) because it
+  doesn't see into macro expansions; that's the proc-macro's exclusive job.
+- A build.rs assertion in `lint-gate` reads `clippy.toml` and errors if
+  `too-many-lines-threshold` is missing, > 250, or drifts away from the
+  `MAX_FN_LINES` constant in `crates/ui-macros/src/rsx_size.rs`. The two
+  must stay in sync because they're enforcing the same fn-body rule via
+  two tools. The rsx! cap (`MAX_RSX_LINES = 100`) has no clippy counterpart
+  and is not part of that assertion.
 
 ---
 
@@ -516,8 +606,13 @@ Day 1 (warn-phase, single PR):
 1. Land `crates/ui-macros/` and `crates/lint-gate/` with both checks active.
 2. Run `cargo check --features regen-baseline` → commit
    `crates/lint-gate/baseline.json` with the existing 45 `#[allow(dead_code)]`
-   + 2 `unused_variables` + 15 `clippy::*` + (per-macro-wrap) 29 oversize
-   components.
+   + 2 `unused_variables` + 15 `clippy::*` + (per-macro-wrap) the oversize-
+   rsx! offenders. The old fn-cap audit counted 29 components over 100 lines;
+   the rsx!-primary check will flag a similar-but-not-identical set (the
+   rsx!-dominant offenders like `FavoriteServerIcon`, `ChatView`, `ServerContextMenu`
+   all still fail; any component that was 110-line-fn-with-30-line-rsx passes
+   under the revised rule). Expect the oversize count after the regen run to
+   drop slightly — the full number lands when the check runs in anger.
 3. Normal `cargo check` / `cargo clippy` from there: baseline entries
    downgrade to `cargo::warning=`, anything new stays `cargo::error=`.
 
@@ -578,10 +673,12 @@ both `build.rs`-driven checks and expansion-time checks reuse the same
 
 1. Should the `#[allow(...)]` ban also cover `#[deny(…)]` override attrs like
    `#[forbid(dead_code)]`? (Leaning no — those tighten, not loosen.)
-2. `clippy.toml`'s 100-line threshold currently applies to **all** fns, not
-   just components. Is that intentional, or do we want a separate per-
-   component vs per-function threshold? (Checklist wording says "100 lines
-   fills a standard terminal" — one threshold seems right.)
+2. `clippy.toml`'s `too-many-lines-threshold` applies to **all** fns, not just
+   components. Under the revised plan we lift it to 250 (matching the fn-body
+   secondary cap) so it aligns with 3.1.b for every function, component or
+   not. The primary rsx!-body cap (100) is enforced only inside `#[component]`
+   wrappers because rsx! outside a component is rare and unidiomatic — revisit
+   if that stops being true.
 3. Should the baseline file live at `crates/lint-gate/baseline.json` (next to
    the build script that reads it) or at `.poly/lint-baseline.json` (project
    root, like `.gitignore`)? Leaning toward crate-local so the build script
