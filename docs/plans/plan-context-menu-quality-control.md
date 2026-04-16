@@ -42,7 +42,7 @@ Poly is "an app, not a website" — users expect Discord/Slack-style right-click
 ## 1. Audit & catalog (baseline for the migration)
 
 - [ ] **1.1.1** Grep + machine-readable inventory. Add `scripts/audit_context_menus.sh` that greps `#[component]` and emits CSV of `<file, component_name, has_oncontextmenu, has_ontouchstart, prevent_default_count>` so phase-rollout progress is trackable.
-- [ ] **1.1.2** Manually classify each `#[component]` into one of: `menu(Foo)`, `menu(Foo, allow_default)`, `no_menu`, `inherits` (delegates to parent — see 3.1.3). Store as a TOML registry `docs/plans/context-menu-coverage.toml` keyed by fully-qualified path.
+- [ ] **1.1.2** Manually classify each `#[component]` into one of: `menu(Foo)`, `menu(Foo, allow_default)`, `menu(None)` (preventDefault only, no menu), `menu(inherit)` (delegates to parent — see 3.1.3). Store as a TOML registry `docs/plans/context-menu-coverage.toml` keyed by fully-qualified path.
 - [ ] **1.1.3** Produce the "currently-bleeding" list — places where the *wrong* menu fires today (server menu items appearing over a forum post because the right-click bubbles through the post into the server sidebar, etc.).
 - [ ] **1.1.4** Decide per-backend menu extras for forum-style backends (`clients/hackernews`, `clients/lemmy`, `clients/github`, `clients/forgejo`). Today only Discord / Matrix / Teams / Stoat / demo / poly_native have `context_menu.rs` modules; forums have none.
 
@@ -59,7 +59,7 @@ Three variants, all applied *above* `#[component]` (see 3 for why ordering matte
 fn ChannelRow(props: ChannelRowProps) -> Element { /* … */ }
 
 // 2.1.2 — explicitly opt out (preventDefault only, no menu)
-#[no_context_menu]
+#[context_menu(None)]
 #[component]
 fn VoiceBanner() -> Element { /* … */ }
 
@@ -74,6 +74,14 @@ fn MessageImage(props: MessageImageProps) -> Element { /* … */ }
 fn MessageBodyText(props: ...) -> Element { /* … */ }
 ```
 
+**DSL shape:** one macro, `#[context_menu(...)]`, with four argument variants —
+`Foo` (menu type), `None` (opt-out), `allow_default` (native menu), `inherit`
+(forward to parent). Keeping them all under a single macro name makes grep /
+coverage / error messages consistent ("missing `#[context_menu(...)]`") and
+avoids the bikeshed of remembering whether the opt-out was spelled
+`#[no_context_menu]` or `#[skip_context_menu]`. `None` is parsed as an ident,
+not the `Option::None` path — the macro matches it literally.
+
 ### 2.2 Expansion sketch
 
 `#[context_menu(ChannelMenu)]` expands to wrap the returned `Element` in a `ContextMenuHost` marker div that:
@@ -82,7 +90,7 @@ fn MessageBodyText(props: ...) -> Element { /* … */ }
 2. Registers an `ontouchstart` / `ontouchmove` / `ontouchend` long-press handler with the shared 500 ms timer from `channel_list.rs` (extracted into `crates/core/src/ui/context_menu/long_press.rs`).
 3. Emits a `const _: () = <ChannelMenu as ContextMenuFor<ChannelRowProps>>::ASSERT_COMPATIBLE;` so a menu that expects a different prop shape fails to compile.
 
-`#[no_context_menu]` expands to only the `oncontextmenu: evt.prevent_default()` guard — no menu, no long-press handler.
+`#[context_menu(None)]` expands to only the `oncontextmenu: evt.prevent_default()` guard — no menu, no long-press handler. Identical runtime behavior to the previous `#[no_context_menu]` spelling; renamed for DSL consistency.
 
 `#[context_menu(allow_default)]` expands to *nothing at the DOM level* but does register the component in the compile-time registry (see 3), so the coverage lint sees it. Native menu fires; that is the desired behavior.
 
@@ -111,7 +119,7 @@ pub trait ContextMenuFor<Props> {
 
 Trade-off summary: Dioxus 0.7.3's `#[component]` macro is a plain attribute macro that rewrites the function into a generated struct + function. Stacking attributes is legal as long as ours runs *outside* `#[component]` (Rust attribute-macro ordering is outer-first). So we ship a `poly-context-menu-macros` proc-macro crate that:
 
-- [ ] **3.1.1** Exports `#[context_menu]`, `#[no_context_menu]`. Both run before `#[component]` and simply (a) validate the arg, (b) inject a `#[linkme::distributed_slice(CTX_MENU_COVERAGE)]` static entry with the component's `module_path!()` + variant, (c) re-emit the original `fn` untouched so `#[component]` sees exactly what it would have.
+- [ ] **3.1.1** Exports a single attribute macro `#[context_menu(...)]`. The macro parses its argument into one of four variants (`Foo` ident → attach menu; `None` ident → preventDefault-only; `allow_default` ident → native menu; `inherit` ident → parent forwards). It runs before `#[component]` and simply (a) validates the arg, (b) injects a `#[linkme::distributed_slice(CTX_MENU_COVERAGE)]` static entry with the component's `module_path!()` + variant tag, (c) re-emits the original `fn` with the appropriate DOM-level wrapper (or no wrapper for `None`/`inherit`/`allow_default`) so `#[component]` sees a valid fn.
 - [ ] **3.1.2** Ship a `build.rs` in `crates/core` that, at compile time, runs `syn` over every `*.rs` under `src/ui/` and `clients/*/src/` and emits an `include!()`-able `const EXPECTED_COMPONENTS: &[&str] = &[…]`. At runtime in a `#[test]` we compare `EXPECTED_COMPONENTS` against the `CTX_MENU_COVERAGE` slice — any delta is a test failure naming the offending component. This is the "deny" gate; no warnings in release.
 - [ ] **3.1.3** `#[context_menu(inherit)]` is a bare-bones variant that only registers in the slice — it is the tool authors use when they genuinely mean "my parent owns the menu." It keeps the coverage check clean without forcing every `<span>`-like leaf into a dummy menu.
 - [ ] **3.1.4** Quality: emit a `#[diagnostic::on_unimplemented]` on `ContextMenuFor` so a typo in `#[context_menu(Foo)]` where `Foo` does not impl the trait gives a clean error message.
@@ -180,8 +188,8 @@ pub struct AppState {
 ### 5.2 Author ergonomics
 
 - [ ] **5.2.1** `cargo xtask check-menus` — quick wrapper around the coverage test for local dev.
-- [ ] **5.2.2** Editor snippet documentation in `crates/core/agents.md` (this repo's convention) so new components default to `#[no_context_menu]` when the author is unsure.
-- [ ] **5.2.3** Lint rule: any file that imports `dioxus::prelude::*` and defines a `#[component]` but forgets a menu decorator triggers the test failure with a *file-local* message ("add `#[no_context_menu]` or one of `#[context_menu(Foo)]` / `#[context_menu(allow_default)]` / `#[context_menu(inherit)]`").
+- [ ] **5.2.2** Editor snippet documentation in `crates/core/agents.md` (this repo's convention) so new components default to `#[context_menu(None)]` when the author is unsure.
+- [ ] **5.2.3** Lint rule: any file that imports `dioxus::prelude::*` and defines a `#[component]` but forgets a menu decorator triggers the test failure with a *file-local* message ("add `#[context_menu(...)]` — one of `(Foo)` / `(None)` / `(allow_default)` / `(inherit)`").
 
 ## 6. Testing strategy
 

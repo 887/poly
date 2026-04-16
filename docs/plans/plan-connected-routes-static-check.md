@@ -21,6 +21,39 @@ Baseline for success: the plan must handle ~27 routes × ~115 callsites without 
 
 ---
 
+## 1b. Mental model — this is a directed graph coverage problem
+
+It is worth naming the shape explicitly so future work doesn't reinvent the vocabulary:
+
+- **Nodes** — `Route` enum variants. `|V| ≈ 27`.
+- **Edges** — one per link/button/`navigator().push(...)` callsite, labeled with a `via` surface string. `|E| ≈ 115`. Directed, since routes link to routes; not symmetric (a sidebar → chat link does not imply a chat → sidebar link).
+- **Root** — the `entry_point` variant (`Root`). Exactly one; an error if more than one node carries that marker.
+- **Programmatic edges** — routes reachable only via non-UI producers (redirect after signup, deep-link handler, push-notification open) are edges whose producer is a `programmatic("reason")` marker, not a `Link`/`navigator!()` callsite. These still count toward in-degree ≥ 1.
+
+What the check enforces, in graph terms:
+
+| Check | Graph statement | Failure name |
+|---|---|---|
+| Every route is reachable | `in_degree(v) ≥ 1` for all `v ≠ root` | **orphan route** |
+| Every declared incoming edge has a producer | every edge in the route's `incoming(...)` list must be matched by a producer-side edge with the same `via` label | **unconsumed declaration** |
+| Every producer has a consumer | every `Link { to, via }` / `nav!(via, to)` must match a declaration on the target route | **undeclared edge** |
+| No dead-end routes (optional, warn) | `out_degree(v) == 0` flagged unless annotated `#[dead_end("reason")]` | **leaf warning** |
+| Graph is connected from root | every `v` is reachable from `root` via BFS over edges + programmatic markers | **unreachable component** |
+
+The primary guarantee the plan buys is: **the route graph is a single connected component rooted at `entry_point`.** Orphan routes are disconnected nodes; unconsumed declarations and undeclared edges are dangling half-edges that would corrupt the graph if ignored.
+
+`Route` is not a tree — several producers can target one route (e.g. `ServerChat` has many entries: sidebar channel-list, notifications, search, deep links). That is fine; the check is about **reachability**, not **uniqueness of paths**. Reducing the graph to a **spanning tree** rooted at `entry_point` is not a goal — it would imply one canonical path per route, which is wrong for a chat app where every route has many natural entrances.
+
+What the plan does *not* enforce:
+
+- **No cycle detection.** Cycles are normal (Settings ⇄ Server Settings sub-page). The check is agnostic to cycles.
+- **No shortest-path analysis.** The graph's diameter doesn't matter.
+- **No strongly-connected-component decomposition.** Listed here only to rule it out: we do not partition the graph and we do not care whether the graph is strongly connected, only weakly connected from `entry_point`.
+
+Operationally, the check materializes two sets during a build: `declared_edges` (route-side) and `produced_edges` (callsite-side). Both live in `linkme` distributed slices. The build-script-run checker computes `set(declared) △ set(produced)` (symmetric difference) and a BFS from `entry_point`. Any non-empty output is a compile error.
+
+---
+
 ## 2. The DSL — concrete syntax for both directions
 
 Two paired proc-macros in a new `crates/ui-macros/` crate, re-exported from `crates/core` as `poly_ui::{connected, links_to, nav}`.

@@ -110,7 +110,7 @@ Cross-cutting plans currently in `drafted` state, awaiting execution:
 |---|---|---|
 | [Context Menu Quality Control](plans/plan-context-menu-quality-control.md) | 🔵 drafted | Component-level `#[context_menu(...)]` DSL, compile-time coverage, mobile overlay runtime with submenu stack |
 | [Connected Routes Static Check](plans/plan-connected-routes-static-check.md) | 🔵 drafted | Bidirectional compile-time reachability — every route declares incoming edges; every link declares its destination |
-| [Component-Size & Dead-Code Lints](plans/plan-component-lints.md) | 🔵 drafted | `cargo xtask lint` regex checks for oversize `#[component]` functions and stray `#[allow(dead_code)]` usage |
+| [Component-Size & Dead-Code Lints](plans/plan-component-lints.md) | 🔵 drafted | `cargo check`-native lints: proc-macro `compile_error!` for oversize `#[component]`, build.rs `cargo::error=` for stray `#[allow(dead_code)]` |
 
 Phase plans tracking in-flight client work:
 
