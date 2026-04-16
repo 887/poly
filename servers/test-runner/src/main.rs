@@ -5,6 +5,13 @@
 //! Spawns each backend binary as a child process on a fixed port, waits for
 //! `/health` to come up, then keeps them alive until Ctrl+C.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
+
 use poly_test_common::CliArgs;
 use std::time::Duration;
 use tokio::process::{Child, Command};

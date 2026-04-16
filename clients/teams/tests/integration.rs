@@ -3,7 +3,7 @@
 //! Spins up `poly_test_teams` in-process, seeds demo data, authenticates,
 //! and exercises the full `ClientBackend` API surface.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::sync::Arc;
 

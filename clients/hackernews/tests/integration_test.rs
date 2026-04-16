@@ -3,7 +3,7 @@
 //! Spins up a `poly-test-hackernews` server in-process and exercises every
 //! `ClientBackend` method that `HackerNewsClient` implements.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
 use poly_hackernews::HackerNewsClient;

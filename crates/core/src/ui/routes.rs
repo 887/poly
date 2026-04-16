@@ -135,42 +135,52 @@ pub fn route_targets_unknown_account(route: &Route, client_manager: &ClientManag
 /// - Browser back/forward work correctly across account switches
 ///
 /// See module-level docs for the full URL scheme.
-#[derive(Routable, Clone, PartialEq, Debug)]
+#[derive(Routable, Clone, PartialEq, Debug, poly_ui_macros::Connected)]
 #[rustfmt::skip]
 pub enum Route {
     #[layout(MainLayout)]
 
         // Root redirect — memory history starts here on desktop; on_update
         // replaces immediately with the best active account DMs route.
+        #[connected(entry_point)]
         #[route("/")]
         Root,
 
         // ── Account-scoped: DMs ─────────────────────────────────────
         #[layout(DmsLayout)]
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms")]
             DmsHome { backend: String, instance_id: String, account_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/search")]
             ConversationSearchRoute { backend: String, instance_id: String, account_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/new")]
             NewConversationRoute { backend: String, instance_id: String, account_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id")]
             DmChat { backend: String, instance_id: String, account_id: String, dm_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/call")]
             DmPendingCall { backend: String, instance_id: String, account_id: String, dm_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/video-call")]
             DmPendingVideoCall { backend: String, instance_id: String, account_id: String, dm_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/call/add")]
             DmPendingAddCall { backend: String, instance_id: String, account_id: String, dm_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/video-call/add")]
             DmPendingAddVideoCall { backend: String, instance_id: String, account_id: String, dm_id: String },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/media/:message_id/:attachment_index")]
             DmMediaViewerRoute {
                 backend: String,
@@ -191,6 +201,7 @@ pub enum Route {
             // channel_id = "create-channel" and try to load that as a real
             // channel, causing a crash. Always keep literal-suffix routes above
             // wildcard-segment routes of the same depth.
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/create-channel")]
             CreateChannelRoute {
                 backend: String,
@@ -199,6 +210,7 @@ pub enum Route {
                 server_id: String,
             },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id")]
             ServerChat {
                 backend: String,
@@ -208,6 +220,7 @@ pub enum Route {
                 channel_id: String,
             },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/media/:message_id/:attachment_index")]
             ServerMediaViewerRoute {
                 backend: String,
@@ -220,6 +233,7 @@ pub enum Route {
             },
 
             // ── Forum post thread (deeper than ServerChat — listed after) ──
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/posts/:post_id")]
             ForumPostRoute {
                 backend: String,
@@ -231,6 +245,7 @@ pub enum Route {
             },
 
             // ── Create forum post (literal "create-post" segment — listed after) ──
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/create-post")]
             CreateForumPostRoute {
                 backend: String,
@@ -241,6 +256,7 @@ pub enum Route {
             },
 
             // ── Forum search ──
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/search")]
             ForumSearchRoute {
                 backend: String,
@@ -251,6 +267,7 @@ pub enum Route {
             },
 
             // ── Forum comments feed ──
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/comments")]
             ForumCommentsRoute {
                 backend: String,
@@ -260,6 +277,7 @@ pub enum Route {
                 channel_id: String,
             },
 
+            #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id")]
             ServerHome {
                 backend: String,
@@ -270,42 +288,53 @@ pub enum Route {
         #[end_layout]
 
         // ── Account-scoped: Friends ──────────────────────────────────
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/friends")]
         FriendsRoute { backend: String, instance_id: String, account_id: String },
 
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/notifications")]
         NotificationsRoute { backend: String, instance_id: String, account_id: String },
 
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/saved")]
         SavedItemsRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped: Server/repo overview (forge backends) ────
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/overview")]
         ServerOverviewRoute { backend: String, instance_id: String, account_id: String },
 
         // ── App-level (not account-scoped) ───────────────────────────
+        #[connected(linked)]
         #[route("/settings")]
         SettingsRoute,
 
+        #[connected(linked)]
         #[route("/settings/:section")]
         SettingsSectionRoute { section: String },
 
+        #[connected(linked)]
         #[route("/search")]
         SearchRoute,
 
         /// Account-scoped search — shows the global search page but pre-filters to one account.
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/search")]
         AccountSearchRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped settings ──────────────────────────────────
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/settings")]
         AccountSettingsRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped: Create server (full-page form) ───────────
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/create-server")]
         CreateServerRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped: Server settings ─────────────────────────
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/servers/:server_id/settings")]
         ServerSettingsRoute {
             backend: String,
@@ -314,6 +343,7 @@ pub enum Route {
             server_id: String,
         },
 
+        #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/servers/:server_id/settings/:section")]
         ServerSettingsSectionRoute {
             backend: String,
@@ -327,19 +357,23 @@ pub enum Route {
 
     // ── Signup flow (full-page, no sidebar) ─────────────────────────────────
     // These routes render without MainLayout, giving a clean signup experience.
+    #[connected(linked)]
     #[route("/signup")]
     SignupPicker,
 
+    #[connected(linked)]
     #[route("/signup/:client")]
     ClientSignup { client: String },
 
     // Per-account reauth page — rendered full-page outside MainLayout.
     // Reused for 401/unauthenticated accounts: updates the existing account's
     // token in place (or removes the account) rather than creating a new one.
+    #[connected(linked)]
     #[route("/:backend/:instance_id/:account_id/reauth")]
     ReauthAccount { backend: String, instance_id: String, account_id: String },
 
     // Catch-all → redirected by on_update to the best active route
+    #[connected(linked)]
     #[route("/:..segments")]
     PageNotFound { segments: Vec<String> },
 }

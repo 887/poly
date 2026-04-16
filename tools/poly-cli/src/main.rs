@@ -152,16 +152,14 @@ fn parse_tool_args(args: &[String]) -> anyhow::Result<Value> {
     let mut map = serde_json::Map::new();
     let mut i = 0;
 
-    while i < args.len() {
-        let arg = &args[i];
+    while let Some(arg) = args.get(i) {
         if let Some(key) = arg.strip_prefix("--") {
             i += 1;
-            if i >= args.len() {
+            let Some(val) = args.get(i) else {
                 // Flag without value = true
                 map.insert(key.to_string(), json!(true));
                 continue;
-            }
-            let val = &args[i];
+            };
             // Try to parse as JSON
             let json_val = if val.starts_with('{') || val.starts_with('[') {
                 serde_json::from_str(val).unwrap_or_else(|_| json!(val))

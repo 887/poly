@@ -340,6 +340,7 @@ interface types {
         friend-request(string),
         server-invite(string),
         voice-channel-invite(voice-invite-info),
+        reauth-required(string),
         other(string),
     }
 

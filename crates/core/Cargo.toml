@@ -39,6 +39,10 @@ poly-client = { workspace = true }
 # and `docs/plans/plan-component-lints.md` §3.2.
 poly-lint-gate = { workspace = true }
 
+# UI-lint proc-macros: #[rsx_body_size], #[context_menu], #[connected] +
+# #[derive(Connected)]. See `crates/ui-macros/src/lib.rs`.
+poly-ui-macros = { workspace = true }
+
 # Backend clients (feature-gated)
 poly-demo = { workspace = true, optional = true }
 poly-stoat = { workspace = true, optional = true }

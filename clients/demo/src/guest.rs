@@ -257,6 +257,9 @@ fn to_wit_notification_kind(nk: &pc::NotificationKind) -> wit::NotificationKind 
             channel_name: channel_name.clone(),
             inviter_user_id: inviter_user_id.clone(),
         }),
+        pc::NotificationKind::ReauthRequired { backend_slug } => {
+            wit::NotificationKind::ReauthRequired(backend_slug.clone())
+        }
         pc::NotificationKind::Other(desc) => wit::NotificationKind::Other(desc.clone()),
     }
 }

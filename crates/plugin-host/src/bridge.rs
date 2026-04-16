@@ -488,6 +488,9 @@ pub fn from_wit_notification_kind(nk: wit::NotificationKind) -> pc::Notification
                 inviter_user_id: info.inviter_user_id,
             }
         }
+        wit::NotificationKind::ReauthRequired(backend_slug) => {
+            pc::NotificationKind::ReauthRequired { backend_slug }
+        }
         wit::NotificationKind::Other(desc) => pc::NotificationKind::Other(desc),
     }
 }

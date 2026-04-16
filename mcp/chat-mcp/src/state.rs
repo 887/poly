@@ -10,15 +10,14 @@ pub struct BackendEntry {
 }
 
 /// Pool of authenticated backends, keyed by "backend_type:account_id".
+#[derive(Default)]
 pub struct BackendPool {
     backends: HashMap<String, BackendEntry>,
 }
 
 impl BackendPool {
     pub fn new() -> Self {
-        Self {
-            backends: HashMap::new(),
-        }
+        Self::default()
     }
 
     fn key(backend_type: BackendType, account_id: &str) -> String {

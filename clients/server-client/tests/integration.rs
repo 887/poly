@@ -8,7 +8,7 @@
 //! ```
 //! cargo test -p poly-server-client
 //! ```
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -56,6 +56,9 @@ impl TestServer {
         let config = Arc::new(Config {
             bind_addr: addr.clone(),
             db_path,
+            surreal_url: "ws://localhost:8000".into(),
+            surreal_user: "root".into(),
+            surreal_pass: "root".into(),
             server_name: "Test Server".into(),
             invite_only: false,
             jwt_secret: "test-secret".into(),

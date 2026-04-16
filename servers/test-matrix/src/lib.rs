@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code
+)]
 //! Library interface for the mock Matrix homeserver.
 //!
 //! Exposes `router` and `MatrixState` so integration tests can spin up the

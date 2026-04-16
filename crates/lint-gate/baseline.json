@@ -153,7 +153,7 @@
     {
       "rule": "allow_ban",
       "path": "crates/core/src/ui/routes.rs",
-      "line": 1867,
+      "line": 1901,
       "detail": "banned #[allow(unused_variables)]"
     },
     {
@@ -163,274 +163,1930 @@
       "detail": "banned #[allow(clippy::indexing_slicing)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "mcp/devtools-protocol/src/backend.rs",
-      "line": 779,
-      "detail": "banned #[allow(clippy::unwrap_used)]"
+      "rule": "context_menu_coverage",
+      "path": "apps/desktop-devtools/src/main.rs",
+      "line": 349,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "mcp/devtools-protocol/src/backend.rs",
-      "line": 800,
-      "detail": "banned #[allow(clippy::unwrap_used)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/discord/src/signup.rs",
+      "line": 89,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-discord/src/lib.rs",
-      "line": 6,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/forgejo/src/signup.rs",
+      "line": 111,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-discord/src/routes.rs",
-      "line": 6,
-      "detail": "banned #[allow(clippy::expect_used)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/github/src/signup.rs",
+      "line": 115,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-discord/src/routes.rs",
-      "line": 6,
-      "detail": "banned #[allow(clippy::panic)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/hackernews/src/signup.rs",
+      "line": 40,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-discord/src/routes.rs",
-      "line": 6,
-      "detail": "banned #[allow(clippy::unwrap_used)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/lemmy/src/signup.rs",
+      "line": 83,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-forgejo/src/routes.rs",
-      "line": 117,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 90,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-forgejo/src/routes.rs",
-      "line": 119,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 140,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-forgejo/src/routes.rs",
-      "line": 149,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 209,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-forgejo/src/routes.rs",
-      "line": 151,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 305,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-forgejo/src/routes.rs",
-      "line": 153,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/stoat/src/signup.rs",
+      "line": 80,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-github/src/routes.rs",
-      "line": 116,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "clients/teams/src/signup.rs",
+      "line": 121,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-github/src/routes.rs",
+      "rule": "context_menu_coverage",
+      "path": "clients/teams/src/signup.rs",
+      "line": 157,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "clients/teams/src/signup.rs",
+      "line": 204,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
       "line": 118,
-      "detail": "banned #[allow(dead_code)]"
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-github/src/routes.rs",
-      "line": 120,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
+      "line": 204,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-github/src/routes.rs",
-      "line": 150,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
+      "line": 297,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-github/src/routes.rs",
-      "line": 152,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
+      "line": 368,
+      "detail": "#[component] fn AccountBar missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-github/src/routes.rs",
-      "line": 154,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 126,
+      "detail": "#[component] fn AccountServerBar missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 203,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 248,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 205,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 471,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 207,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 512,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 273,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 549,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 275,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 586,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 277,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 644,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 279,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/account_switcher.rs",
+      "line": 22,
+      "detail": "#[component] fn AccountSwitcher missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 330,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_context_menu.rs",
+      "line": 25,
+      "detail": "#[component] fn ChannelContextMenu missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 332,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_context_menu.rs",
+      "line": 107,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 300,
+      "detail": "#[component] fn ChannelList missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 347,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 535,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 699,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 896,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 951,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1049,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1117,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1158,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1196,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1420,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 874,
+      "detail": "#[component] fn ChatView missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 2529,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 2552,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4645,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4813,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4915,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4945,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4969,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5022,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5069,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5145,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5175,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5259,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5307,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5452,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5516,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5699,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5727,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5740,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5765,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5815,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5861,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 41,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 72,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 97,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 125,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 159,
+      "detail": "#[component] fn ConversationSearchView missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/direct_call_overlay.rs",
+      "line": 18,
+      "detail": "#[component] fn OutgoingDirectCallOverlay missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/dm_user_sidebar.rs",
+      "line": 39,
+      "detail": "#[component] fn DmUserSidebar missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/dm_user_sidebar.rs",
+      "line": 90,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/emoji_picker.rs",
       "line": 334,
-      "detail": "banned #[allow(dead_code)]"
+      "detail": "#[component] fn EmojiPicker missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 464,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 186,
+      "detail": "#[component] fn ForumView missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 466,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 199,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 468,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 361,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 470,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 543,
+      "detail": "#[component] fn ForumPostView missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 472,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 649,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 474,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 704,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 502,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 771,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 505,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 21,
+      "detail": "#[component] fn FriendsPanel missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 508,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 124,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 511,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 142,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 514,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 173,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-lemmy/src/routes.rs",
-      "line": 517,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 240,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-matrix/src/state.rs",
-      "line": 193,
-      "detail": "banned #[allow(clippy::too_many_arguments)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 274,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-teams/src/lib.rs",
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 117,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 153,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 210,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 339,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 350,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 376,
+      "detail": "#[component] fn MediaPickerPopup missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/media_viewer.rs",
+      "line": 21,
+      "detail": "#[component] fn MessageMediaViewerOverlay missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/new_conversation_view.rs",
+      "line": 14,
+      "detail": "#[component] fn NewConversationView missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 105,
+      "detail": "#[component] fn NotificationsView missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 225,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 250,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 285,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 325,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 46,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 100,
+      "detail": "#[component] fn SavedItemsView missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 335,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 359,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/unsupported_placeholder.rs",
+      "line": 53,
+      "detail": "#[component] fn FeatureUnsupportedPlaceholder missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/user_profile_modal.rs",
+      "line": 76,
+      "detail": "#[component] fn UserProfileModal missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/user_profile_modal.rs",
+      "line": 323,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/user_sidebar.rs",
+      "line": 69,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/user_sidebar.rs",
+      "line": 100,
+      "detail": "#[component] fn UserSidebar missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/user_sidebar.rs",
+      "line": 229,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_account_footer.rs",
       "line": 5,
-      "detail": "banned #[allow(dead_code)]"
+      "detail": "#[component] fn VoiceAccountFooter missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-teams/src/routes.rs",
-      "line": 6,
-      "detail": "banned #[allow(clippy::expect_used)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 108,
+      "detail": "#[component] fn VoiceBar missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-teams/src/routes.rs",
-      "line": 6,
-      "detail": "banned #[allow(clippy::panic)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 147,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-teams/src/routes.rs",
-      "line": 6,
-      "detail": "banned #[allow(clippy::unwrap_used)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 170,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
-      "rule": "allow_ban",
-      "path": "servers/test-teams/src/routes.rs",
-      "line": 6,
-      "detail": "banned #[allow(dead_code)]"
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 183,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 231,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 379,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 426,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 238,
+      "detail": "#[component] fn VoiceChannelView missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 321,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 354,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 406,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 439,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 525,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 567,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/demo/context_menu.rs",
+      "line": 14,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/discord/context_menu.rs",
+      "line": 13,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/matrix/context_menu.rs",
+      "line": 14,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/poly_native/context_menu.rs",
+      "line": 13,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 33,
+      "detail": "#[component] fn ServerContextMenu missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 320,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 340,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 362,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/general.rs",
+      "line": 15,
+      "detail": "#[component] fn ServerGeneralSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/general.rs",
+      "line": 68,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 98,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 127,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 138,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 173,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 271,
+      "detail": "#[component] fn ServerSettingsPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 377,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/notifications.rs",
+      "line": 19,
+      "detail": "#[component] fn ServerNotificationsSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/notifications.rs",
+      "line": 85,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/notifications.rs",
+      "line": 99,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/overview.rs",
+      "line": 46,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/overview.rs",
+      "line": 144,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/overview.rs",
+      "line": 241,
+      "detail": "#[component] fn ServerOverviewSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/server/settings/profile.rs",
+      "line": 11,
+      "detail": "#[component] fn ServerProfileSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 35,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 64,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 81,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 117,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 156,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 182,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 211,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 253,
+      "detail": "#[component] fn ContentSocialSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/mod.rs",
+      "line": 175,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/mod.rs",
+      "line": 204,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/mod.rs",
+      "line": 227,
+      "detail": "#[component] fn AccountSettingsPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 78,
+      "detail": "#[component] fn NotificationsSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 111,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 181,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 248,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/profile.rs",
+      "line": 28,
+      "detail": "#[component] fn PolyProfileSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 58,
+      "detail": "#[component] fn VoiceSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 106,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 139,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 172,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 203,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/stoat/context_menu.rs",
+      "line": 13,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/account/teams/context_menu.rs",
+      "line": 14,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/code_explorer.rs",
+      "line": 20,
+      "detail": "#[component] fn CodeExplorerView missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/code_explorer.rs",
+      "line": 189,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/create_channel.rs",
+      "line": 27,
+      "detail": "#[component] fn CreateChannelPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/create_forum_post.rs",
+      "line": 8,
+      "detail": "#[component] fn CreateForumPostPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/create_forum_post.rs",
+      "line": 92,
+      "detail": "#[component] fn ForumSearchPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/create_server.rs",
+      "line": 25,
+      "detail": "#[component] fn CreateServerPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/electron_titlebar.rs",
+      "line": 48,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/electron_titlebar.rs",
+      "line": 72,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/electron_titlebar.rs",
+      "line": 104,
+      "detail": "#[component] fn ElectronTitleBar missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 38,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 52,
+      "detail": "#[component] fn SidebarTooltip missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 83,
+      "detail": "#[component] fn FavoritesBar missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 339,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 732,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/main_layout.rs",
+      "line": 159,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/main_layout.rs",
+      "line": 202,
+      "detail": "#[component] fn MainLayout missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1762,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1799,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1894,
+      "detail": "#[component] fn App missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 941,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 971,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 993,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1076,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1134,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1149,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1164,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1179,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1194,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1231,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1267,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1350,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1358,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1371,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1458,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1558,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1576,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1586,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1598,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1617,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1630,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1642,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1656,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1673,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1688,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1708,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1733,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1756,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1769,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1783,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1793,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1813,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1838,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1855,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1871,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1886,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1902,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 91,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 131,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 157,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 193,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 221,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 262,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 290,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 407,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 447,
+      "detail": "#[component] fn SearchPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/server_overview.rs",
+      "line": 12,
+      "detail": "#[component] fn ServerOverviewPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/server_overview.rs",
+      "line": 118,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/accounts.rs",
+      "line": 43,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/accounts.rs",
+      "line": 97,
+      "detail": "#[component] fn AccountsSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/ai.rs",
+      "line": 20,
+      "detail": "#[component] fn AiSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 290,
+      "detail": "#[component] fn ProbeStatusBox missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 329,
+      "detail": "#[component] fn WizardAuthStatusBox missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 351,
+      "detail": "#[component] fn ReauthForm missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 408,
+      "detail": "#[component] fn ServerCard missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 497,
+      "detail": "#[component] fn WizardStep1 missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 590,
+      "detail": "#[component] fn WizardStep2 missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 676,
+      "detail": "#[component] fn AddServerWizard missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 748,
+      "detail": "#[component] fn BackupSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/common.rs",
+      "line": 20,
+      "detail": "#[component] fn PolySelect missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/diagnostics.rs",
+      "line": 16,
+      "detail": "#[component] fn DiagnosticsPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/diagnostics.rs",
+      "line": 69,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 83,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 95,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 164,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 192,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 283,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 323,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 334,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 367,
+      "detail": "#[component] fn LayoutSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 385,
+      "detail": "#[component] fn GeneralSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/identity.rs",
+      "line": 49,
+      "detail": "#[component] fn MnemonicModal missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/identity.rs",
+      "line": 109,
+      "detail": "#[component] fn IdentitySettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/identity.rs",
+      "line": 234,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/language.rs",
+      "line": 65,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/language.rs",
+      "line": 81,
+      "detail": "#[component] fn LanguageSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/media.rs",
+      "line": 50,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/media.rs",
+      "line": 97,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/media.rs",
+      "line": 120,
+      "detail": "#[component] fn MediaSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 222,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 306,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 322,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 423,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 550,
+      "detail": "#[component] fn SettingsPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 30,
+      "detail": "#[component] fn DemoPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 106,
+      "detail": "#[component] fn StoatPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 141,
+      "detail": "#[component] fn PolyServerPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 235,
+      "detail": "#[component] fn HackerNewsPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 257,
+      "detail": "#[component] fn LemmyPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 285,
+      "detail": "#[component] fn DiscordPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 317,
+      "detail": "#[component] fn TeamsPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 347,
+      "detail": "#[component] fn GitHubPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 377,
+      "detail": "#[component] fn ForgejoPluginSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 410,
+      "detail": "#[component] fn PluginManifestPanel missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 349,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 435,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 502,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 547,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 660,
+      "detail": "#[component] fn PluginsSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 55,
+      "detail": "#[component] fn ThemePresetPicker missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 100,
+      "detail": "#[component] fn ThemeColorModeSelector missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 148,
+      "detail": "#[component] fn ThemeColorCustomizer missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 198,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 216,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 258,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 278,
+      "detail": "#[component] fn ThemeCssEditor missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 301,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 319,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 340,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 400,
+      "detail": "#[component] fn ThemeSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/translation.rs",
+      "line": 18,
+      "detail": "#[component] fn TranslationSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 41,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 54,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 77,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 104,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 127,
+      "detail": "#[component] fn VoiceVideoSettings missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 209,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 232,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/setup_wizard.rs",
+      "line": 8,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/setup_wizard.rs",
+      "line": 22,
+      "detail": "#[component] fn SetupWizard missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 384,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 450,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 544,
+      "detail": "#[component] fn SignupPickerPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 568,
+      "detail": "#[component] fn ClientSignupPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 660,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 699,
+      "detail": "#[component] fn ReauthAccountPage missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/split_shell.rs",
+      "line": 102,
+      "detail": "#[component] fn SplitMenuShell missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/split_shell.rs",
+      "line": 137,
+      "detail": "#[component] fn RightWingShell missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 26,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 70,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 126,
+      "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
+    },
+    {
+      "rule": "context_menu_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 199,
+      "detail": "#[component] fn VoiceBanner missing #[context_menu(...)]"
+    },
+    {
+      "rule": "route_graph",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 156,
+      "detail": "E-ROUTE-002: Route::ConversationSearchRoute unreachable (no callsite / programmatic producer)"
+    },
+    {
+      "rule": "route_graph",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 260,
+      "detail": "E-ROUTE-002: Route::ForumSearchRoute unreachable (no callsite / programmatic producer)"
+    },
+    {
+      "rule": "route_graph",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 347,
+      "detail": "E-ROUTE-002: Route::ServerSettingsSectionRoute unreachable (no callsite / programmatic producer)"
     }
   ]
 }

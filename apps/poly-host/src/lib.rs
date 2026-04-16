@@ -1,3 +1,12 @@
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing
+    )
+)]
 //! # poly-host (library surface)
 //!
 //! Reusable axum router + SQLite KV backend for the `/host/*` host-bridge

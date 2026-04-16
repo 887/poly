@@ -131,7 +131,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
         .read()
         .connection_statuses
         .get(&account_id)
-        .map_or(false, ConnectionStatus::needs_reauth);
+        .is_some_and(ConnectionStatus::needs_reauth);
     let reauth_instance_id = chat_data
         .read()
         .account_sessions
@@ -596,7 +596,7 @@ async fn handle_friend_request_action(
 
     if let Some(friends) = refreshed_friends {
         for friend in friends {
-            if !cd.friends.get(&account_id).map_or(false, |v| v.iter().any(|existing| existing.id == friend.id)) {
+            if !cd.friends.get(&account_id).is_some_and(|v| v.iter().any(|existing| existing.id == friend.id)) {
                 cd.friends.entry(account_id.clone()).or_default().push(friend);
             }
         }

@@ -78,7 +78,7 @@ pub(crate) async fn toggle_demo(
                 let sids: Vec<String> = cd
                     .servers
                     .iter()
-                    .filter(|s| s.backend == poly_client::BackendType::from("demo"))
+                    .filter(|s| s.backend == "demo")
                     .map(|s| s.id.clone())
                     .collect();
                 let fav_ids: Vec<String> = cd
@@ -98,20 +98,20 @@ pub(crate) async fn toggle_demo(
             {
                 let mut cd = chat_data.write();
                 cd.servers.retain(|s| {
-                    s.backend != poly_client::BackendType::from("demo")
-                        && s.backend != poly_client::BackendType::from("demo_forum")
+                    s.backend != "demo"
+                        && s.backend != "demo_forum"
                 });
                 cd.dm_channels.retain(|d| {
-                    d.backend != poly_client::BackendType::from("demo")
-                        && d.backend != poly_client::BackendType::from("demo_forum")
+                    d.backend != "demo"
+                        && d.backend != "demo_forum"
                 });
                 cd.groups.retain(|g| {
-                    g.backend != poly_client::BackendType::from("demo")
-                        && g.backend != poly_client::BackendType::from("demo_forum")
+                    g.backend != "demo"
+                        && g.backend != "demo_forum"
                 });
                 cd.notifications.retain(|n| {
-                    n.backend != poly_client::BackendType::from("demo")
-                        && n.backend != poly_client::BackendType::from("demo_forum")
+                    n.backend != "demo"
+                        && n.backend != "demo_forum"
                 });
                 for aid in &demo_ids {
                     cd.friends.remove(aid.as_str());
@@ -334,15 +334,14 @@ pub(crate) async fn toggle_demo(
                     chat_data.write().groups.extend(groups);
                 }
                 let is_forum = chat_data.read().account_sessions.get(aid)
-                    .map_or(false, |s| s.backend.uses_forum_layout());
-                if !is_forum {
-                    if let Ok(notifs) = guard.get_notifications().await {
+                    .is_some_and(|s| s.backend.uses_forum_layout());
+                if !is_forum
+                    && let Ok(notifs) = guard.get_notifications().await {
                         chat_data.write().notifications.extend(notifs.into_iter().filter(|n| !n.read));
                     }
-                }
                 if let Ok(friends) = guard.get_friends().await {
                     for friend in friends {
-                        let already = chat_data.read().friends.get(aid.as_str()).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
+                        let already = chat_data.read().friends.get(aid.as_str()).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
                         if !already {
                             chat_data.write().friends.entry(aid.clone()).or_default().push(friend);
                         }

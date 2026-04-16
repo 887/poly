@@ -35,9 +35,15 @@ const BANNED: &[&str] = &[
 /// the line above the `#[allow(...)]` attribute.
 pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
     for path in &walker.files {
-        // tests/ and examples/ directories are skipped wholesale.
+        // tests/, examples/, test-harness crates (servers/test-*, *tests crate),
+        // mcp/ and tools/ are skipped wholesale — they're fixtures, not prod code.
         let s = path.to_string_lossy();
-        if s.contains("/tests/") || s.contains("/examples/") {
+        if s.contains("/tests/")
+            || s.contains("/examples/")
+            || s.contains("/servers/test-")
+            || s.contains("/plugin-host-tests/")
+            || s.contains("/mcp/")
+        {
             continue;
         }
         // The snippet of Rust inside #[cfg(test)] { ... } blocks is also skipped;

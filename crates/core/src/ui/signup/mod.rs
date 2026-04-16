@@ -62,17 +62,15 @@ fn build_on_complete(
         // (Owl, Axolotl, Stoat, …) so the sidebar and Settings → Accounts
         // list show the cute icon instead of a first-letter bubble.
         #[cfg(feature = "demo")]
-        if session.user.avatar_url.is_none()
+        if (session.user.avatar_url.is_none()
             || session
                 .user
                 .avatar_url
                 .as_deref()
-                .is_some_and(|u| !u.starts_with("http"))
-        {
-            if let Some(url) = poly_demo::data::test_animal_avatar(&session.user.display_name) {
+                .is_some_and(|u| !u.starts_with("http")))
+            && let Some(url) = poly_demo::data::test_animal_avatar(&session.user.display_name) {
                 session.user.avatar_url = Some(url);
             }
-        }
         spawn(async move {
             // Guard: reject duplicate session IDs (e.g. two anonymous HN accounts).
             if client_manager.read().sessions.contains_key(&session.id) {
@@ -161,7 +159,7 @@ fn build_on_complete(
                 }
                 if let Ok(friends) = guard.get_friends().await {
                     for friend in friends {
-                        let already = chat_data.read().friends.get(&account_id).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
+                        let already = chat_data.read().friends.get(&account_id).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
                         if !already {
                             chat_data.write().friends.entry(account_id.clone()).or_default().push(friend);
                         }
@@ -480,7 +478,7 @@ fn TestAccountsPanel() -> Element {
                         let password = acct.password.to_string();
                         let auth_fn = acct.authenticate;
                         let status = statuses.read().get(idx).cloned().unwrap_or_default();
-                        let on_complete2 = on_complete.clone();
+                        let on_complete2 = on_complete;
                         rsx! {
                             div { class: "test-account-card",
                                 span { class: "test-account-icon", "{icon}" }
@@ -495,17 +493,23 @@ fn TestAccountsPanel() -> Element {
                                         let bu = base_url.clone();
                                         let un = username.clone();
                                         let pw = password.clone();
-                                        let oc = on_complete2.clone();
+                                        let oc = on_complete2;
                                         let mut statuses2 = statuses;
-                                        statuses2.write()[idx] = "loading".to_string();
+                                        if let Some(s) = statuses2.write().get_mut(idx) {
+                                            *s = "loading".to_string();
+                                        }
                                         spawn(async move {
                                             match (auth_fn)(bu, un, pw).await {
                                                 Ok(completed) => {
-                                                    statuses2.write()[idx] = "ok".to_string();
+                                                    if let Some(s) = statuses2.write().get_mut(idx) {
+                                                        *s = "ok".to_string();
+                                                    }
                                                     oc.call(completed);
                                                 }
                                                 Err(e) => {
-                                                    statuses2.write()[idx] = format!("error: {e}");
+                                                    if let Some(s) = statuses2.write().get_mut(idx) {
+                                                        *s = format!("error: {e}");
+                                                    }
                                                 }
                                             }
                                         });

@@ -281,13 +281,12 @@ fn toggle_native_backend(
             }
             let is_self_init =
                 backend_slug == "demo_forum" || backend_slug == "hackernews";
-            if !is_self_init {
-                if let Some(storage) = crate::STORAGE.get() {
+            if !is_self_init
+                && let Some(storage) = crate::STORAGE.get() {
                     for id in &removed_ids {
                         let _ = storage.remove_account_token(&backend_slug, id).await;
                     }
                 }
-            }
             let mut settings = load_settings().await;
             settings.disabled_native_backends = new_disabled;
             settings.wasm_plugins = wasm;

@@ -156,10 +156,10 @@ impl ClientBackend for GitHubClient {
 
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         // In HTTP mode, extract the token from credentials and set it on the CLI transport.
-        if let AuthCredentials::Token(ref token) = credentials {
-            if !token.is_empty() {
-                self.cli.set_token(token.clone());
-            }
+        if let AuthCredentials::Token(ref token) = credentials
+            && !token.is_empty()
+        {
+            self.cli.set_token(token.clone());
         }
         let login = self
             .cli

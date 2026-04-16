@@ -8,7 +8,7 @@
 //! `MessagingModel` / `NotificationSupport` / etc. but the summary rows
 //! silently fall through to a wrong label.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{BackendCapabilities, capabilities_for_slug};
 

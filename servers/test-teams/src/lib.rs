@@ -2,7 +2,14 @@
 //!
 //! Exposes `router` and `TeamsState` for in-process integration tests.
 
-#![allow(dead_code)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code,
+    unused_imports
+)]
 
 pub mod routes;
 pub mod state;

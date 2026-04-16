@@ -4,7 +4,7 @@
 //! demo data, authenticates via `/test/auth/token`, then exercises the full
 //! `ClientBackend` API surface.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::sync::Arc;
 

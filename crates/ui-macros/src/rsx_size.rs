@@ -57,14 +57,14 @@ fn scan_for_rsx(stream: proc_macro2::TokenStream) -> Option<(usize, usize)> {
     while let Some(tree) = iter.next() {
         match &tree {
             TokenTree::Ident(id) if id == "rsx" => {
-                if let Some(TokenTree::Punct(p)) = iter.peek() {
-                    if p.as_char() == '!' {
-                        let _bang = iter.next();
-                        if let Some(TokenTree::Group(g)) = iter.peek() {
-                            let text = g.span().source_text().unwrap_or_default();
-                            let lines = text.lines().count().max(1);
-                            return Some((1, lines));
-                        }
+                if let Some(TokenTree::Punct(p)) = iter.peek()
+                    && p.as_char() == '!'
+                {
+                    let _bang = iter.next();
+                    if let Some(TokenTree::Group(g)) = iter.peek() {
+                        let text = g.span().source_text().unwrap_or_default();
+                        let lines = text.lines().count().max(1);
+                        return Some((1, lines));
                     }
                 }
             }

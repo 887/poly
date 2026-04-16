@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code
+)]
 //! Mock Hacker News Firebase API server for Poly testing.
 //!
 //! Implements the subset of the HN Firebase REST API that `poly-hackernews`
@@ -144,24 +151,26 @@ impl HnState {
 
         // Index all items
         for item in &items {
-            let id = item["id"].as_u64().unwrap();
-            self.items.insert(id, item.clone());
+            if let Some(id) = item.get("id").and_then(serde_json::Value::as_u64) {
+                self.items.insert(id, item.clone());
+            }
         }
         for comment in &comments {
-            let id = comment["id"].as_u64().unwrap();
-            self.items.insert(id, comment.clone());
+            if let Some(id) = comment.get("id").and_then(serde_json::Value::as_u64) {
+                self.items.insert(id, comment.clone());
+            }
         }
 
         // Build feed lists from seeded stories
         let story_ids: Vec<u64> = items
             .iter()
-            .filter(|i| i["type"].as_str() != Some("job"))
-            .map(|i| i["id"].as_u64().unwrap())
+            .filter(|i| i.get("type").and_then(serde_json::Value::as_str) != Some("job"))
+            .filter_map(|i| i.get("id").and_then(serde_json::Value::as_u64))
             .collect();
         let job_ids: Vec<u64> = items
             .iter()
-            .filter(|i| i["type"].as_str() == Some("job"))
-            .map(|i| i["id"].as_u64().unwrap())
+            .filter(|i| i.get("type").and_then(serde_json::Value::as_str) == Some("job"))
+            .filter_map(|i| i.get("id").and_then(serde_json::Value::as_u64))
             .collect();
 
         self.feeds.insert("top".to_string(), story_ids.clone());

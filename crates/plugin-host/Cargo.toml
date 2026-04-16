@@ -11,7 +11,12 @@ license.workspace = true
 # wasmtime. Only changes to THIS crate trigger wasmtime recompilation.
 # DECISION(D22): Dynamic linking boundary for wasmtime isolation.
 [lib]
-crate-type = ["dylib"]
+# `rlib` alongside `dylib` is required so dependent crates' integration tests can
+# link statically — without it cargo can't pick a single format for std deps.
+# The primary build path still uses the dylib output (poly-core depends on it
+# dynamically); adding rlib is free for tests that otherwise fail with
+# "cannot satisfy dependencies so `X` only shows up once" errors.
+crate-type = ["dylib", "rlib"]
 
 [dependencies]
 # Shared client trait — types only, no heavy deps

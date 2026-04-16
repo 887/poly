@@ -3,7 +3,7 @@
 //! Spins up Discord + Teams + Lemmy + HackerNews + Stoat + Matrix test servers
 //! in-process, then exercises the `poly-chat-mcp` tool dispatch layer end-to-end.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::sync::Arc;
 
@@ -225,7 +225,7 @@ async fn discord_list_channels() {
 
     let result = call(&mut pool, "list_channels", json!({
         "backend": "discord",
-        "server_id": "G001"
+        "server_id": "100"
     })).await;
     assert_ok(&result);
     let channels: Vec<Value> = parse_text(&result);
@@ -245,7 +245,7 @@ async fn discord_get_messages() {
 
     let result = call(&mut pool, "get_messages", json!({
         "backend": "discord",
-        "channel_id": "CH001",
+        "channel_id": "200",
         "limit": 10
     })).await;
     assert_ok(&result);
@@ -263,7 +263,7 @@ async fn discord_send_message() {
 
     let result = call(&mut pool, "send_message", json!({
         "backend": "discord",
-        "channel_id": "CH001",
+        "channel_id": "200",
         "text": "Hello from MCP test!"
     })).await;
     assert_ok(&result);

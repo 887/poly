@@ -3,7 +3,7 @@
 //! Spins up the mock Lemmy server in-process and exercises the full
 //! `LemmyClient` → `ClientBackend` surface against it.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
 use poly_lemmy::LemmyClient;

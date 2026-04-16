@@ -5,7 +5,7 @@
 //! end-to-end-style coverage for the native Stoat transport while the WASM
 //! plugin guest remains a stub.
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::net::TcpListener;
 use std::sync::Arc;

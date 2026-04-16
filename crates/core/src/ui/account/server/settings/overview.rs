@@ -30,13 +30,13 @@ fn backend_from_slug(slug: &str) -> Option<BackendType> {
 
 /// Returns `true` for backends that support user-facing banner images.
 fn supports_banner(backend: Option<&BackendType>) -> bool {
-    backend.map_or(false, |b| matches!(b.as_str(), "demo" | "stoat" | "discord" | "poly"))
+    backend.is_some_and(|b| matches!(b.as_str(), "demo" | "stoat" | "discord" | "poly"))
 }
 
 /// Returns `true` for backends where server icon changes must be local-only
 /// (Matrix workspaces, Teams channels — no "server" ownership).
 fn is_local_only(backend: Option<&BackendType>) -> bool {
-    backend.map_or(false, |b| matches!(b.as_str(), "matrix" | "teams"))
+    backend.is_some_and(|b| matches!(b.as_str(), "matrix" | "teams"))
 }
 
 /// Icon URL input, live preview, and save button.

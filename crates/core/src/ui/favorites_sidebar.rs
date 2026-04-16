@@ -122,8 +122,8 @@ pub fn FavoritesBar() -> Element {
         let cd = chat_data.read();
         let priority = |id: &String| -> u8 {
             match cd.account_sessions.get(id) {
-                Some(s) if s.backend.to_string() == "demo" => 0,
-                Some(s) if s.backend.to_string() == "demo_forum" => 1,
+                Some(s) if s.backend == "demo" => 0,
+                Some(s) if s.backend == "demo_forum" => 1,
                 _ => 2,
             }
         };
@@ -361,7 +361,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .read()
         .account_sessions
         .get(&account_id)
-        .map_or(false, |s| s.backend.uses_forum_layout());
+        .is_some_and(|s| s.backend.uses_forum_layout());
 
     let color = user_color(&account_id);
 
@@ -551,7 +551,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     let cm = client_manager.read();
                     cm.connection_statuses
                         .get(&aid)
-                        .map_or(false, ConnectionStatus::needs_reauth)
+                        .is_some_and(ConnectionStatus::needs_reauth)
                 };
                 if needs_reauth {
                     let info = chat_data

@@ -323,7 +323,7 @@ fn HnFeedView() -> Element {
                         let post2 = post.clone();
                         let post_id = post.id.clone();
                         let (backend, instance_id, account_id2, server_id, channel_id) = route_params.clone();
-                        let nav2 = nav.clone();
+                        let nav2 = nav;
                         rsx! {
                             ForumPostCard {
                                 key: "{post_id}",
@@ -410,10 +410,10 @@ fn LemmyForumView() -> Element {
         | ForumSort::TopTwelveHours | ForumSort::TopDay | ForumSort::TopWeek
         | ForumSort::TopMonth | ForumSort::TopThreeMonths | ForumSort::TopSixMonths
         | ForumSort::TopNineMonths | ForumSort::TopYear | ForumSort::TopAllTime => {
-            sorted_posts.sort_by(|a, b| post_score(b).cmp(&post_score(a)))
+            sorted_posts.sort_by_key(|b| std::cmp::Reverse(post_score(b)))
         }
         ForumSort::New | ForumSort::NewComments => {
-            sorted_posts.sort_by(|a, b| b.timestamp.cmp(&a.timestamp))
+            sorted_posts.sort_by_key(|b| std::cmp::Reverse(b.timestamp))
         }
         ForumSort::Old => sorted_posts.sort_by(|a, b| a.timestamp.cmp(&b.timestamp)),
     }
@@ -502,7 +502,7 @@ fn LemmyForumView() -> Element {
                         let post2 = post.clone();
                         let post_id = post.id.clone();
                         let (backend, instance_id, account_id2, server_id, channel_id) = route_params.clone();
-                        let nav2 = nav.clone();
+                        let nav2 = nav;
                         rsx! {
                             ForumPostCard {
                                 key: "{post_id}",

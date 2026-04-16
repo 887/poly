@@ -45,7 +45,7 @@ pub fn context_menu(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
-/// `#[connected(...)]` — route-graph edge declaration.
+/// `#[connected(...)]` — route-graph edge declaration (item attribute).
 ///
 /// Phase A: a transparent pass-through. Phase B will parse the
 /// `linked | entry_point | programmatic<T>` variants and contribute
@@ -53,4 +53,17 @@ pub fn context_menu(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn connected(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
+}
+
+/// `#[derive(Connected)]` — enables `#[connected(...)]` helper attributes on
+/// enum variants. Phase A: expands to nothing. Phase B / C: will emit a
+/// `linkme` distributed slice carrying each variant's declared edges so the
+/// `crates/lint-gate/build/route_graph.rs` BFS can read them at build time.
+///
+/// This derive is the companion that makes `#[connected(...)]` legal on a
+/// variant — Rust requires helper attributes to be declared by a derive on
+/// the enclosing enum.
+#[proc_macro_derive(Connected, attributes(connected))]
+pub fn derive_connected(_input: TokenStream) -> TokenStream {
+    TokenStream::new()
 }

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code
+)]
 //! Mock Lemmy API server for Poly testing — library entry point.
 //!
 //! Exposes [`router`] so integration tests can spin up the server in-process.

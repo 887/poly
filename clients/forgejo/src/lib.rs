@@ -244,12 +244,12 @@ impl ClientBackend for ForgejoClient {
         // Single issue thread (`fj-issue-{owner}-{repo}-{number}`)
         if let Some(rest) = channel_id.strip_prefix("fj-issue-") {
             let parts: Vec<&str> = rest.rsplitn(2, '-').collect();
-            if let [number_str, rest_pair] = parts.as_slice() {
-                if let Ok(number) = number_str.parse::<u64>() {
-                    let (owner, repo) = split_owner_repo(rest_pair)?;
-                    let comments = self.api.list_issue_comments(&owner, &repo, number).await?;
-                    return Ok(comments.iter().map(mapping::comment_to_message).collect());
-                }
+            if let [number_str, rest_pair] = parts.as_slice()
+                && let Ok(number) = number_str.parse::<u64>()
+            {
+                let (owner, repo) = split_owner_repo(rest_pair)?;
+                let comments = self.api.list_issue_comments(&owner, &repo, number).await?;
+                return Ok(comments.iter().map(mapping::comment_to_message).collect());
             }
         }
         Ok(Vec::new())

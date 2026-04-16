@@ -8,6 +8,14 @@
 //!
 //! Default port: 8537.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code
+)]
+
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use axum::routing::get;

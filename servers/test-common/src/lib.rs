@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code
+)]
 //! Shared infrastructure for Poly test server suite.
 //!
 //! Provides dynamic port binding, CLI args, health/reset/seed route builders,

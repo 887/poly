@@ -210,15 +210,14 @@ impl ClientBackend for HackerNewsClient {
         let mut ids = self.api.get_feed_ids(feed).await?;
 
         // Apply pagination: if `before` is set, find the offset in the ID list
-        if let Some(ref before_id) = query.before {
-            if let Ok(before_num) = before_id.parse::<u64>() {
-                if let Some(pos) = ids.iter().position(|&id| id == before_num) {
-                    if pos + 1 < ids.len() {
-                        ids = ids[pos + 1..].to_vec();
-                    } else {
-                        ids.clear();
-                    }
-                }
+        if let Some(ref before_id) = query.before
+            && let Ok(before_num) = before_id.parse::<u64>()
+            && let Some(pos) = ids.iter().position(|&id| id == before_num)
+        {
+            if let Some(tail) = ids.get(pos + 1..) {
+                ids = tail.to_vec();
+            } else {
+                ids.clear();
             }
         }
 

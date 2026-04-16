@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code
+)]
 //! Library interface for the mock Discord REST API v10 server.
 //!
 //! Exposes `router` and `DiscordState` so integration tests can start the

@@ -28,7 +28,7 @@ pub fn NewConversationView() -> Element {
         .friends
         .values()
         .flatten()
-        .filter(|friend| active_backend.as_ref().map_or(true, |backend| *backend == friend.backend))
+        .filter(|friend| active_backend.as_ref().is_none_or(|backend| *backend == friend.backend))
         .filter(|friend| {
             search_lower.is_empty() || friend.display_name.to_lowercase().contains(&search_lower)
         })

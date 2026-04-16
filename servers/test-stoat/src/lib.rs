@@ -1,3 +1,11 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    dead_code,
+    unused_variables
+)]
 //! Library interface for the mock Stoat/Revolt API server.
 //!
 //! Exposes `router` and `StoatState` so integration tests can spin up the

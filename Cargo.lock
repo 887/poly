@@ -6425,6 +6425,7 @@ dependencies = [
  "poly-server-client",
  "poly-stoat",
  "poly-teams",
+ "poly-ui-macros",
  "pulldown-cmark",
  "reqwest 0.13.2",
  "serde",

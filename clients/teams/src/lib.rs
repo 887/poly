@@ -444,28 +444,35 @@ impl ClientBackend for TeamsClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        let http = self.http.clone();
-        let (tx, rx) = tokio::sync::mpsc::channel::<ClientEvent>(128);
-        tokio::spawn(async move {
-            loop {
-                match http.poll_events().await {
-                    Ok(events) => {
-                        for ev in events {
-                            if let Some(ce) = teams_event_to_client(ev) {
-                                if tx.send(ce).await.is_err() {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let http = self.http.clone();
+            let (tx, rx) = tokio::sync::mpsc::channel::<ClientEvent>(128);
+            tokio::spawn(async move {
+                loop {
+                    match http.poll_events().await {
+                        Ok(events) => {
+                            for ev in events {
+                                if let Some(ce) = teams_event_to_client(ev)
+                                    && tx.send(ce).await.is_err()
+                                {
                                     return;
                                 }
                             }
                         }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Teams poll_events error: {e:?}");
-                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        Err(e) => {
+                            tracing::warn!("Teams poll_events error: {e:?}");
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        }
                     }
                 }
-            }
-        });
-        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+            });
+            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Box::pin(futures::stream::empty())
+        }
     }
 
     fn backend_type(&self) -> BackendType {
