@@ -34,6 +34,11 @@ dioxus = { workspace = true }
 # Shared client trait
 poly-client = { workspace = true }
 
+# Workspace-wide lint gate — empty library, but its build.rs scans the
+# whole workspace on every `cargo check`. See `crates/lint-gate/build.rs`
+# and `docs/plans/plan-component-lints.md` §3.2.
+poly-lint-gate = { workspace = true }
+
 # Backend clients (feature-gated)
 poly-demo = { workspace = true, optional = true }
 poly-stoat = { workspace = true, optional = true }

@@ -3,8 +3,10 @@ resolver = "2"
 members = [
     "crates/core",
     "crates/host-bridge",
+    "crates/lint-gate",
     "crates/plugin-host",
     "crates/plugin-host-tests",
+    "crates/ui-macros",
     "clients/client",
     "clients/demo",
     "clients/stoat",
@@ -214,6 +216,8 @@ poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools-mcp" }
 poly-web-devtools-mcp = { path = "mcp/web-devtools-mcp" }
 poly-electron-devtools-mcp = { path = "mcp/electron-devtools-mcp" }
 poly-devtools-protocol = { path = "mcp/devtools-protocol" }
+poly-lint-gate = { path = "crates/lint-gate" }
+poly-ui-macros = { path = "crates/ui-macros" }
 
 # ── Workspace-wide lint policy ───────────────────────────────────────────────
 # rust-analyzer, cargo clippy, and cargo cranky all respect these.

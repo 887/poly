@@ -681,6 +681,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 
 [[package]]
+name = "bstr"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3718,6 +3728,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "globset"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52dfc19153a48bde0cbd630453615c8151bce3a5adfac7a0aebfbf0a1e1f57e3"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "gloo-net"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4417,6 +4440,22 @@ checksum = "3acae9609540aa318d1bc588455225fb2085b9ed0c4f6bd0d9d5bcd86f1a0344"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "ignore"
+version = "0.4.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3d782a365a015e0f5c04902246139249abf769125006fbe7649e2ee88169b4a"
+dependencies = [
+ "crossbeam-deque",
+ "globset",
+ "log",
+ "memchr",
+ "regex-automata",
+ "same-file",
+ "walkdir",
+ "winapi-util",
 ]
 
 [[package]]
@@ -6380,6 +6419,7 @@ dependencies = [
  "poly-hackernews",
  "poly-host-bridge",
  "poly-lemmy",
+ "poly-lint-gate",
  "poly-matrix",
  "poly-plugin-host",
  "poly-server-client",
@@ -6696,6 +6736,15 @@ dependencies = [
  "tracing",
  "uuid",
  "wit-bindgen 0.53.1",
+]
+
+[[package]]
+name = "poly-lint-gate"
+version = "0.1.0"
+dependencies = [
+ "ignore",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7062,6 +7111,15 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "poly-ui-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

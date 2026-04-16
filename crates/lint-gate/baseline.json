@@ -1,0 +1,436 @@
+{
+  "violations": [
+    {
+      "rule": "allow_ban",
+      "path": "apps/desktop-web/src/main.rs",
+      "line": 30,
+      "detail": "banned #[allow(clippy::expect_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "apps/desktop-web/src/main.rs",
+      "line": 30,
+      "detail": "banned #[allow(clippy::panic)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "apps/desktop-web/src/main.rs",
+      "line": 30,
+      "detail": "banned #[allow(clippy::unwrap_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/demo/src/data.rs",
+      "line": 15,
+      "detail": "banned #[allow(clippy::indexing_slicing)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/demo/src/data.rs",
+      "line": 460,
+      "detail": "banned #[allow(clippy::too_many_arguments)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/demo/src/data.rs",
+      "line": 933,
+      "detail": "banned #[allow(clippy::expect_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/forgejo/src/lib.rs",
+      "line": 88,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/forgejo/src/lib.rs",
+      "line": 414,
+      "detail": "banned #[allow(clippy::indexing_slicing)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/forgejo/src/mapping.rs",
+      "line": 52,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/github/src/lib.rs",
+      "line": 468,
+      "detail": "banned #[allow(clippy::indexing_slicing)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/github/src/mapping.rs",
+      "line": 55,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/hackernews/src/api.rs",
+      "line": 66,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/hackernews/src/api.rs",
+      "line": 186,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/hackernews/src/api.rs",
+      "line": 203,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/hackernews/src/cache.rs",
+      "line": 110,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/hackernews/src/types.rs",
+      "line": 122,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/lemmy/src/lib.rs",
+      "line": 12,
+      "detail": "banned #[allow(clippy::expect_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/lemmy/src/lib.rs",
+      "line": 12,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/matrix/src/lib.rs",
+      "line": 18,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "clients/teams/src/auth.rs",
+      "line": 121,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 1876,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 53,
+      "detail": "banned #[allow(clippy::needless_pass_by_value)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1018,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1033,
+      "detail": "banned #[allow(clippy::too_many_arguments)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1034,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1867,
+      "detail": "banned #[allow(unused_variables)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "crates/core/src/ui/settings/ai.rs",
+      "line": 45,
+      "detail": "banned #[allow(clippy::indexing_slicing)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "mcp/devtools-protocol/src/backend.rs",
+      "line": 779,
+      "detail": "banned #[allow(clippy::unwrap_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "mcp/devtools-protocol/src/backend.rs",
+      "line": 800,
+      "detail": "banned #[allow(clippy::unwrap_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-discord/src/lib.rs",
+      "line": 6,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-discord/src/routes.rs",
+      "line": 6,
+      "detail": "banned #[allow(clippy::expect_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-discord/src/routes.rs",
+      "line": 6,
+      "detail": "banned #[allow(clippy::panic)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-discord/src/routes.rs",
+      "line": 6,
+      "detail": "banned #[allow(clippy::unwrap_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-forgejo/src/routes.rs",
+      "line": 117,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-forgejo/src/routes.rs",
+      "line": 119,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-forgejo/src/routes.rs",
+      "line": 149,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-forgejo/src/routes.rs",
+      "line": 151,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-forgejo/src/routes.rs",
+      "line": 153,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-github/src/routes.rs",
+      "line": 116,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-github/src/routes.rs",
+      "line": 118,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-github/src/routes.rs",
+      "line": 120,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-github/src/routes.rs",
+      "line": 150,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-github/src/routes.rs",
+      "line": 152,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-github/src/routes.rs",
+      "line": 154,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 203,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 205,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 207,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 273,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 275,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 277,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 279,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 330,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 332,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 334,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 464,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 466,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 468,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 470,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 472,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 474,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 502,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 505,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 508,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 511,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 514,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-lemmy/src/routes.rs",
+      "line": 517,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-matrix/src/state.rs",
+      "line": 193,
+      "detail": "banned #[allow(clippy::too_many_arguments)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-teams/src/lib.rs",
+      "line": 5,
+      "detail": "banned #[allow(dead_code)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-teams/src/routes.rs",
+      "line": 6,
+      "detail": "banned #[allow(clippy::expect_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-teams/src/routes.rs",
+      "line": 6,
+      "detail": "banned #[allow(clippy::panic)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-teams/src/routes.rs",
+      "line": 6,
+      "detail": "banned #[allow(clippy::unwrap_used)]"
+    },
+    {
+      "rule": "allow_ban",
+      "path": "servers/test-teams/src/routes.rs",
+      "line": 6,
+      "detail": "banned #[allow(dead_code)]"
+    }
+  ]
+}
