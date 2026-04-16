@@ -110,7 +110,7 @@ Cross-cutting plans currently in `drafted` state, awaiting execution:
 |---|---|---|
 | [Context Menu Quality Control](plans/plan-context-menu-quality-control.md) | 🔵 drafted | `#[context_menu(Foo/None/allow_default/inherit)]` DSL; coverage enforced via `cargo check` (shared `lint-gate` build.rs); mobile overlay runtime with submenu stack |
 | [Connected Routes Static Check](plans/plan-connected-routes-static-check.md) | 🔵 drafted | Bidirectional `cargo check`-native reachability — routes declare incoming edges, links declare destination; graph assertion lives in the shared `lint-gate` build.rs |
-| [Component-Size & Dead-Code Lints](plans/plan-component-lints.md) | 🔵 drafted | `cargo check`-native lints: proc-macro `compile_error!` on oversize `rsx!` bodies inside `#[component]` (primary — clippy is blind to macro bodies, so it misses today's 684-line / 1129-line offenders), plus 250-line fn-body backstop. `lint-gate` build.rs `cargo::error=` for stray `#[allow(dead_code)]`; same build.rs hosts the other two plans' cross-file checks |
+| [Component-Size & Dead-Code Lints](plans/plan-component-lints.md) | 🔵 drafted | `cargo check`-native lints: proc-macro `compile_error!` on oversize `rsx!` bodies inside `#[component]` (clippy is blind to macro bodies, so it misses today's 684-line / 1129-line offenders); fn-body bloat stays clippy's job at default-100. `lint-gate` build.rs `cargo::error=` for stray `#[allow(dead_code)]`; same build.rs hosts the other two plans' cross-file checks |
 
 Phase plans tracking in-flight client work:
 
