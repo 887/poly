@@ -51,9 +51,7 @@ pub struct LemmyPerson {
 #[derive(Debug, Clone, Deserialize)]
 pub struct LemmyCommunity {
     pub id: i64,
-    pub name: String,
     pub title: String,
-    pub description: Option<String>,
     pub icon: Option<String>,
     pub banner: Option<String>,
 }
@@ -73,10 +71,8 @@ pub struct CommunityListResponse {
 /// Post counts sub-object.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PostCounts {
-    pub score: i64,
     pub upvotes: i64,
     pub downvotes: i64,
-    pub comments: i64,
 }
 
 /// A Lemmy post.
@@ -86,7 +82,6 @@ pub struct LemmyPost {
     pub name: String,
     pub body: Option<String>,
     pub url: Option<String>,
-    pub creator_id: i64,
     pub published: DateTime<Utc>,
     pub updated: Option<DateTime<Utc>>,
 }
@@ -109,7 +104,6 @@ pub struct PostListResponse {
 /// Comment counts sub-object.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CommentCounts {
-    pub score: i64,
     pub upvotes: i64,
     pub downvotes: i64,
 }
@@ -119,9 +113,6 @@ pub struct CommentCounts {
 pub struct LemmyComment {
     pub id: i64,
     pub content: String,
-    pub creator_id: i64,
-    pub post_id: i64,
-    pub path: String,
     pub published: DateTime<Utc>,
     pub updated: Option<DateTime<Utc>>,
 }
@@ -147,7 +138,6 @@ pub struct LemmyPrivateMessage {
     pub id: i64,
     pub content: String,
     pub creator_id: i64,
-    pub recipient_id: i64,
     pub published: DateTime<Utc>,
     pub read: bool,
 }
@@ -411,7 +401,7 @@ impl LemmyHttpClient {
     pub fn is_authenticated(&self) -> bool {
         self.session
             .read()
-            .expect("session lock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .is_some()
     }
 
@@ -419,18 +409,18 @@ impl LemmyHttpClient {
     pub fn session(&self) -> Option<LemmySession> {
         self.session
             .read()
-            .expect("session lock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .clone()
     }
 
     /// Store a session JWT after successful login.
     pub fn set_session(&self, session: LemmySession) {
-        *self.session.write().expect("session lock poisoned") = Some(session);
+        *self.session.write().unwrap_or_else(|e| e.into_inner()) = Some(session);
     }
 
     /// Clear the stored session.
     pub fn clear_session(&self) {
-        *self.session.write().expect("session lock poisoned") = None;
+        *self.session.write().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     /// Build the full URL for an API path (e.g. `/api/v3/user/login`).

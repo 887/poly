@@ -9,7 +9,7 @@
 //! - **Native** (`--features native`): Implements `ClientBackend` directly.
 //! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
 
-#![allow(dead_code, clippy::expect_used, clippy::if_same_then_else)]
+#![allow(clippy::if_same_then_else)]
 
 #[cfg(feature = "native")]
 mod api;

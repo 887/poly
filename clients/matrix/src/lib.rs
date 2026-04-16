@@ -13,9 +13,6 @@
 //!
 //! DECISION(D21): WASM Plugin Backends.
 
-// TODO: API response structs define the full Matrix wire format for use by
-// future handlers — tolerate the dead_code lint at the crate level for now.
-#![allow(dead_code)]
 
 #[cfg(feature = "native")]
 mod api;

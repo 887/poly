@@ -1,168 +1,6 @@
 {
   "violations": [
     {
-      "rule": "allow_ban",
-      "path": "apps/desktop-web/src/main.rs",
-      "line": 30,
-      "detail": "banned #[allow(clippy::expect_used)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "apps/desktop-web/src/main.rs",
-      "line": 30,
-      "detail": "banned #[allow(clippy::panic)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "apps/desktop-web/src/main.rs",
-      "line": 30,
-      "detail": "banned #[allow(clippy::unwrap_used)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/demo/src/data.rs",
-      "line": 15,
-      "detail": "banned #[allow(clippy::indexing_slicing)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/demo/src/data.rs",
-      "line": 460,
-      "detail": "banned #[allow(clippy::too_many_arguments)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/demo/src/data.rs",
-      "line": 933,
-      "detail": "banned #[allow(clippy::expect_used)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/forgejo/src/lib.rs",
-      "line": 88,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/forgejo/src/lib.rs",
-      "line": 414,
-      "detail": "banned #[allow(clippy::indexing_slicing)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/forgejo/src/mapping.rs",
-      "line": 52,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/github/src/lib.rs",
-      "line": 468,
-      "detail": "banned #[allow(clippy::indexing_slicing)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/github/src/mapping.rs",
-      "line": 55,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/hackernews/src/api.rs",
-      "line": 66,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/hackernews/src/api.rs",
-      "line": 186,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/hackernews/src/api.rs",
-      "line": 203,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/hackernews/src/cache.rs",
-      "line": 110,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/hackernews/src/types.rs",
-      "line": 122,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/lemmy/src/lib.rs",
-      "line": 12,
-      "detail": "banned #[allow(clippy::expect_used)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/lemmy/src/lib.rs",
-      "line": 12,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/matrix/src/lib.rs",
-      "line": 18,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "clients/teams/src/auth.rs",
-      "line": 121,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 1876,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "crates/core/src/ui/favorites_sidebar.rs",
-      "line": 53,
-      "detail": "banned #[allow(clippy::needless_pass_by_value)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "crates/core/src/ui/mod.rs",
-      "line": 1018,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "crates/core/src/ui/mod.rs",
-      "line": 1033,
-      "detail": "banned #[allow(clippy::too_many_arguments)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "crates/core/src/ui/mod.rs",
-      "line": 1034,
-      "detail": "banned #[allow(dead_code)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "crates/core/src/ui/routes.rs",
-      "line": 1901,
-      "detail": "banned #[allow(unused_variables)]"
-    },
-    {
-      "rule": "allow_ban",
-      "path": "crates/core/src/ui/settings/ai.rs",
-      "line": 45,
-      "detail": "banned #[allow(clippy::indexing_slicing)]"
-    },
-    {
       "rule": "context_menu_coverage",
       "path": "apps/desktop-devtools/src/main.rs",
       "line": 349,
@@ -405,127 +243,127 @@
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 2529,
+      "line": 2509,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 2552,
+      "line": 2532,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 4645,
+      "line": 4625,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 4813,
+      "line": 4793,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 4915,
+      "line": 4895,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 4945,
+      "line": 4925,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 4969,
+      "line": 4949,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5022,
+      "line": 5002,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5069,
+      "line": 5049,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5145,
+      "line": 5125,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5175,
+      "line": 5155,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5259,
+      "line": 5239,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5307,
+      "line": 5287,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5452,
+      "line": 5432,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5516,
+      "line": 5496,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5699,
+      "line": 5679,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5727,
+      "line": 5707,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5740,
+      "line": 5720,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5765,
+      "line": 5745,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5815,
+      "line": 5795,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/account/common/chat_view.rs",
-      "line": 5861,
+      "line": 5841,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
@@ -1233,19 +1071,19 @@
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/favorites_sidebar.rs",
-      "line": 83,
+      "line": 82,
       "detail": "#[component] fn FavoritesBar missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/favorites_sidebar.rs",
-      "line": 339,
+      "line": 338,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/favorites_sidebar.rs",
-      "line": 732,
+      "line": 731,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
@@ -1263,19 +1101,19 @@
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/mod.rs",
-      "line": 1762,
+      "line": 1768,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/mod.rs",
-      "line": 1799,
+      "line": 1805,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/mod.rs",
-      "line": 1894,
+      "line": 1900,
       "detail": "#[component] fn App missing #[context_menu(...)]"
     },
     {
@@ -1497,7 +1335,7 @@
     {
       "rule": "context_menu_coverage",
       "path": "crates/core/src/ui/routes.rs",
-      "line": 1902,
+      "line": 1901,
       "detail": "#[component] fn <unknown> missing #[context_menu(...)]"
     },
     {

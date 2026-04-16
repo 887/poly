@@ -1898,7 +1898,6 @@ fn ForumSearchRoute(
 
 /// Forum comments feed — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/comments`.
 #[rustfmt::skip]
-#[allow(unused_variables)]
 #[component]
 fn ForumCommentsRoute(
     backend: String,
@@ -1907,6 +1906,7 @@ fn ForumCommentsRoute(
     server_id: String,
     channel_id: String,
 ) -> Element {
+    let _ = (backend, instance_id, account_id, server_id, channel_id);
     rsx! {
         div { class: "forum-view",
             div { class: "forum-empty",

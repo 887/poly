@@ -52,7 +52,6 @@ pub fn code_channel_id(owner: &str, repo: &str) -> String {
 /// Currently constructed inline by the message-fetch path; kept exported so
 /// the future thread-open routing can use it.
 #[must_use]
-#[allow(dead_code)]
 pub fn issue_thread_channel_id(owner: &str, repo: &str, number: u64) -> String {
     format!("gh-issue-{owner}-{repo}-{number}")
 }

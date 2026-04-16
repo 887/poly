@@ -49,7 +49,6 @@ pub fn code_channel_id(owner: &str, repo: &str) -> String {
 
 /// Channel ID for a single issue/PR comment thread.
 #[must_use]
-#[allow(dead_code)]
 pub fn issue_thread_channel_id(owner: &str, repo: &str, number: u64) -> String {
     format!("fj-issue-{owner}-{repo}-{number}")
 }

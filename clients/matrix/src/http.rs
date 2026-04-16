@@ -6,7 +6,7 @@
 
 use crate::api::{
     JoinedRoomsResponse, LoginIdentifier, LoginRequest, LoginResponse, MessagesResponse,
-    ProfileResponse, PublicRoomsResponse, RoomEvent, RoomMembersResponse, SendEventResponse,
+    ProfileResponse, RoomEvent, RoomMembersResponse, SendEventResponse,
     SendMessageRequest, SpaceHierarchyResponse, SyncResponse, WhoAmIResponse,
 };
 use crate::config::MatrixConfig;
@@ -358,52 +358,6 @@ impl MatrixHttpClient {
             .authenticated_request(
                 Method::GET,
                 &format!("/_matrix/client/v3/rooms/{room_id}/state"),
-            )?
-            .send()
-            .await
-            .map_err(Self::network_error)?;
-
-        if !response.status().is_success() {
-            return Err(Self::parse_error(response).await);
-        }
-
-        response.json().await.map_err(Self::network_error)
-    }
-
-    /// Fetch the public room directory via `GET /_matrix/client/v3/publicRooms`.
-    pub async fn fetch_public_rooms(
-        &self,
-        limit: Option<u64>,
-        since: Option<&str>,
-    ) -> ClientResult<PublicRoomsResponse> {
-        let mut params: Vec<(&str, String)> = Vec::new();
-        if let Some(limit) = limit {
-            params.push(("limit", limit.to_string()));
-        }
-        if let Some(since) = since {
-            params.push(("since", since.to_string()));
-        }
-
-        let path = build_path("/_matrix/client/v3/publicRooms", &params);
-        let response = self
-            .authenticated_request(Method::GET, &path)?
-            .send()
-            .await
-            .map_err(Self::network_error)?;
-
-        if !response.status().is_success() {
-            return Err(Self::parse_error(response).await);
-        }
-
-        response.json().await.map_err(Self::network_error)
-    }
-
-    /// Join a room via `POST /_matrix/client/v3/join/{roomIdOrAlias}`.
-    pub async fn join_room(&self, room_id_or_alias: &str) -> ClientResult<serde_json::Value> {
-        let response = self
-            .authenticated_request(
-                Method::POST,
-                &format!("/_matrix/client/v3/join/{room_id_or_alias}"),
             )?
             .send()
             .await

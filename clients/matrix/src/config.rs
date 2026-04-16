@@ -9,9 +9,6 @@ use poly_client::{AuthCredentials, ClientError, ClientResult};
 /// Default homeserver used when no custom URL is provided.
 pub const DEFAULT_HOMESERVER_URL: &str = "https://matrix.org";
 
-/// Well-known auto-discovery path.
-pub const WELL_KNOWN_PATH: &str = "/.well-known/matrix/client";
-
 /// Errors that can occur when building Matrix connection configuration.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MatrixConfigError {

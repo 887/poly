@@ -37,7 +37,7 @@ use futures::stream::{self, Stream};
 use poly_client::*;
 
 pub use api::{GhCli, GhError};
-pub use mapping::BACKEND_SLUG;
+pub use mapping::{BACKEND_SLUG, issue_thread_channel_id};
 
 /// Number of years of `pushed_at` activity required for a repo to surface
 /// in the server list. Two years matches the user's stated requirement.
@@ -465,12 +465,13 @@ fn decode_b64(s: &str) -> Vec<u8> {
     decode_b64_simple(&cleaned)
 }
 
-#[allow(clippy::indexing_slicing)]
 fn decode_b64_simple(input: &str) -> Vec<u8> {
     const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut lookup = [255u8; 256];
     for (i, &b) in TABLE.iter().enumerate() {
-        lookup[b as usize] = i as u8;
+        if let Some(slot) = lookup.get_mut(usize::from(b)) {
+            *slot = i as u8;
+        }
     }
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
@@ -480,7 +481,7 @@ fn decode_b64_simple(input: &str) -> Vec<u8> {
         if b == b'=' {
             break;
         }
-        let v = lookup[b as usize];
+        let v = lookup.get(usize::from(b)).copied().unwrap_or(255);
         if v == 255 {
             continue;
         }

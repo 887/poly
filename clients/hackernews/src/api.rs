@@ -12,7 +12,7 @@ use poly_client::{ClientError, ClientResult};
 use poly_host_bridge::http::HttpClient;
 
 use crate::cache::HnCache;
-use crate::types::{HnFeed, HnItem, HnUpdates, HnUser};
+use crate::types::{HnFeed, HnItem, HnUser};
 
 const MAX_CONCURRENT: usize = 10;
 
@@ -61,11 +61,6 @@ impl HnApiClient {
 
     fn feed_url(&self, feed: HnFeed) -> String {
         format!("{}/{}", self.base_url, feed.path())
-    }
-
-    #[allow(dead_code)]
-    fn updates_url(&self) -> String {
-        format!("{}/updates.json", self.base_url)
     }
 
     /// Fetch the list of story IDs for a feed. Uses cache when available.
@@ -182,32 +177,6 @@ impl HnApiClient {
         Ok(response)
     }
 
-    /// Poll for recently updated items and profiles.
-    #[allow(dead_code)]
-    pub async fn get_updates(&self) -> ClientResult<HnUpdates> {
-        let url = self.updates_url();
-        let updates: HnUpdates = self
-            .http
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?
-            .json()
-            .await
-            .map_err(|e| ClientError::Internal(e.to_string()))?;
-
-        Ok(updates)
-    }
-
-    /// Invalidate a cached item (e.g. after receiving an update notification).
-    #[allow(dead_code)]
-    pub fn invalidate_item(&self, id: u64) -> ClientResult<()> {
-        let mut cache = self.cache.lock().map_err(|_| {
-            ClientError::Internal("cache lock poisoned".to_string())
-        })?;
-        cache.invalidate_item(id);
-        Ok(())
-    }
 }
 
 impl Default for HnApiClient {

@@ -50,7 +50,6 @@ fn NavBarSpacer() -> Element {
 /// (or left when `mirror_menu_layout` is enabled). Uses `position: fixed`
 /// so it escapes overflow-hidden scroll containers.
 #[component]
-#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn SidebarTooltip(
     /// First row: account name or server name
     line1: String,

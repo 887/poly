@@ -9,16 +9,25 @@
 //! - `demo2` (🐶 dog) — 4 servers (Open Source Hub, Book Club, Cooking Corner, Fitness Crew)
 //! - `demo_forum` (🦆 platypus) — Lemmy-style forum communities with forum channels
 //!
-//! SAFETY NOTE: indexing_slicing is allowed in this module because all indices
-//! are bounded by the fixed-size `demo_users()` slice, which is compile-time
-//! constant mock data. This is intentional for readability in test/demo code.
-#![allow(clippy::indexing_slicing)]
-
 use chrono::{Duration, Utc};
 #[cfg(feature = "native")]
 use dioxus::prelude::*;
 use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
+
+/// Return a clone of `users[idx]`, or a placeholder user when the index is
+/// out of range.  All demo data uses indices 0–9 against the 10-element
+/// `demo_users()` slice; the fallback is a safety net, never exercised in
+/// practice.
+fn u(users: &[User], idx: usize) -> User {
+    users.get(idx).cloned().unwrap_or_else(|| User {
+        id: format!("unknown-{idx}"),
+        display_name: format!("Unknown#{idx}"),
+        avatar_url: None,
+        presence: PresenceStatus::Offline,
+        backend: BackendType::from("demo"),
+    })
+}
 
 /// Bundled platypus avatar image for the demo_forum account.
 #[cfg(feature = "native")]
@@ -457,37 +466,41 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             backend: BackendType::from(DEMO_FORUM_BACKEND),
         }
     }
-    #[allow(clippy::too_many_arguments)]
+    /// Extra metadata for a forum comment (grouped to stay under the argument count limit).
+    struct CommentMeta<'a> {
+        ts_offset: chrono::Duration,
+        upvotes: u32,
+        downvotes: u32,
+        parent_id: Option<&'a str>,
+        parent_author: Option<&'a str>,
+    }
+
     fn forum_comment(
         now: chrono::DateTime<Utc>,
         id: &str,
         author: User,
         text: &str,
-        ts_offset: chrono::Duration,
-        upvotes: u32,
-        downvotes: u32,
-        parent_id: Option<&str>,
-        parent_author: Option<&str>,
+        meta: CommentMeta<'_>,
     ) -> Message {
-        let reply_to = parent_id.map(|pid| MessageReplyPreview {
+        let reply_to = meta.parent_id.map(|pid| MessageReplyPreview {
             message_id: pid.to_string(),
-            author_id: parent_author.unwrap_or("").to_string(),
-            author_display_name: parent_author.unwrap_or("").to_string(),
+            author_id: meta.parent_author.unwrap_or("").to_string(),
+            author_display_name: meta.parent_author.unwrap_or("").to_string(),
             author_avatar_url: None,
             snippet: String::new(),
         });
         let mut reactions = vec![];
-        if upvotes > 0 {
-            reactions.push(Reaction { emoji: "🔥".to_string(), count: upvotes, me: false });
+        if meta.upvotes > 0 {
+            reactions.push(Reaction { emoji: "🔥".to_string(), count: meta.upvotes, me: false });
         }
-        if downvotes > 0 {
-            reactions.push(Reaction { emoji: "👎".to_string(), count: downvotes, me: false });
+        if meta.downvotes > 0 {
+            reactions.push(Reaction { emoji: "👎".to_string(), count: meta.downvotes, me: false });
         }
         Message {
             id: id.to_string(),
             author,
             content: MessageContent::Text(text.to_string()),
-            timestamp: now - ts_offset,
+            timestamp: now - meta.ts_offset,
             attachments: vec![],
             reactions,
             reply_to,
@@ -498,7 +511,13 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
     // Convenience macro-like closure — captures `now` legally.
     let c = |id: &str, author: User, text: &str, offset: chrono::Duration,
               up: u32, down: u32, parent: Option<&str>, parent_name: Option<&str>| {
-        forum_comment(now, id, author, text, offset, up, down, parent, parent_name)
+        forum_comment(now, id, author, text, CommentMeta {
+            ts_offset: offset,
+            upvotes: up,
+            downvotes: down,
+            parent_id: parent,
+            parent_author: parent_name,
+        })
     };
 
     match post_id {
@@ -928,14 +947,19 @@ pub fn demo2_session() -> Session {
     }
 }
 
-/// Look up a demo user by id. Panics if the id is not found — all callers use
-/// static ids that must exist in `demo_users()`.
-#[allow(clippy::expect_used)]
+/// Look up a demo user by id, returning a placeholder user when not found.
+/// All callers use static ids that must exist in `demo_users()`.
 fn demo_user(id: &str) -> User {
     demo_users()
         .into_iter()
         .find(|u| u.id == id)
-        .expect("demo user id not found in demo_users()")
+        .unwrap_or_else(|| User {
+            id: id.to_string(),
+            display_name: id.to_string(),
+            avatar_url: None,
+            presence: PresenceStatus::Offline,
+            backend: BackendType::from("demo"),
+        })
 }
 
 /// Generate a list of demo users.
@@ -1336,7 +1360,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
         "ch2-announcements" => vec![
             Message {
                 id: "msg2-1".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Welcome to the Open Source Hub! 🎉 Check out our pinned projects.".to_string(),
                 ),
@@ -1348,7 +1372,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-2".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Just merged a big PR! See the contributions channel for discussion."
                         .to_string(),
@@ -1362,7 +1386,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
         ],
         "ch2-current-read" => vec![Message {
             id: "msg2-10".to_string(),
-            author: users[2].clone(),
+            author: u(&users, 2),
             content: MessageContent::Text(
                 "Finished chapter 12 — what does everyone think about the plot twist?".to_string(),
             ),
@@ -1378,7 +1402,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
         }],
         "ch2-workouts" => vec![Message {
             id: "msg2-30".to_string(),
-            author: users[6].clone(),
+            author: u(&users, 6),
             content: MessageContent::Text("5K run this morning! 💪 New personal best.".to_string()),
             timestamp: now - Duration::hours(2),
             reply_to: None,
@@ -1541,7 +1565,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             // — Day 1: Two days ago —
             Message {
                 id: "msg-ch-general-0".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Hey everyone! Welcome to the Poly Development server 👋\n\nExcited to have you all here. Let's build something amazing together!"
                         .to_string(),
@@ -1557,7 +1581,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-general-1".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Thanks for having me! This project looks really cool."
                         .to_string(),
@@ -1570,7 +1594,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-general-2".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Has anyone tried the new **Dioxus 0.7** hot-reload? It's blazing fast!\n\n- hot patches in seconds\n- keeps router state alive\n- makes UI iteration way less painful"
                         .to_string(),
@@ -1584,7 +1608,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             // Same author within 7 minutes — should be grouped
             Message {
                 id: "msg-ch-general-3".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Yeah, subsecond hot-patch is a game changer for development.\nI tested it with a massive component tree and it works flawlessly."
                         .to_string(),
@@ -1598,7 +1622,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             // — Day 2: Yesterday —
             Message {
                 id: "msg-ch-general-4".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "I just pushed some updates to the theme engine. Check it out!"
                         .to_string(),
@@ -1622,7 +1646,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-general-5".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text(
                     "The SurrealDB integration is coming along nicely.\n\nHere's the architectural diagram I drafted:"
                         .to_string(),
@@ -1643,7 +1667,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-general-6".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Anyone up for a code review session later today?"
                         .to_string(),
@@ -1656,7 +1680,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-general-7".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "Sure! I'll be free around 3pm."
                         .to_string(),
@@ -1670,7 +1694,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             // — Today —
             Message {
                 id: "msg-ch-general-8".to_string(),
-                author: users[8].clone(),
+                author: u(&users, 8),
                 content: MessageContent::Text(
                     "Does anyone know if SurrealKV works on Android yet?"
                         .to_string(),
@@ -1683,7 +1707,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-general-9".to_string(),
-                author: users[9].clone(),
+                author: u(&users, 9),
                 content: MessageContent::Text(
                     "We should test that early. It's flagged as a risk in the plan.\n\n| Target | Status | Note |\n| --- | --- | --- |\n| Android | ⚠️ Pending | Need emulator pass |\n| iOS | ⚠️ Pending | Need device build |\n| Web | ✅ Green | WASM check already passes |\n\nI can try spinning up the Android emulator this afternoon to test. 📱"
                         .to_string(),
@@ -1697,7 +1721,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             // Same author, within 7 min — grouped
             Message {
                 id: "msg-ch-general-10".to_string(),
-                author: users[9].clone(),
+                author: u(&users, 9),
                 content: MessageContent::Text(
                     "Also here's a doc I found on the topic:".to_string(),
                 ),
@@ -1719,7 +1743,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
         "ch-off-topic" => vec![
             Message {
                 id: "msg-ch-off-topic-0".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Check out this sunset photo I took yesterday! 🌅".to_string(),
                 ),
@@ -1742,7 +1766,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-off-topic-1".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "That's gorgeous! Where was this?"
                         .to_string(),
@@ -1755,7 +1779,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-off-topic-2".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Taken from the rooftop of my apartment building in Berlin 🇩🇪\n\nThe light was perfect around 7:30pm."
                         .to_string(),
@@ -1770,7 +1794,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
         "ch-minecraft" => vec![
             Message {
                 id: "msg-ch-minecraft-0".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Who wants to play Minecraft tonight? 🎮".to_string(),
                 ),
@@ -1782,7 +1806,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-minecraft-1".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text("I'm in! What time?".to_string()),
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(45),
                 attachments: vec![],
@@ -1792,7 +1816,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-minecraft-2".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text("Let's do 8pm EST".to_string()),
                 timestamp: now - Duration::days(1) - Duration::hours(5) - Duration::minutes(40),
                 attachments: vec![],
@@ -1802,7 +1826,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-minecraft-3".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "I built a massive redstone contraption, you all need to see it!"
                         .to_string(),
@@ -1826,7 +1850,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-ch-minecraft-4".to_string(),
-                author: users[9].clone(),
+                author: u(&users, 9),
                 content: MessageContent::Text(
                     "The new update is amazing, have you tried the new biomes?"
                         .to_string(),
@@ -1841,7 +1865,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
         _ => vec![
             Message {
                 id: format!("msg-{channel_id}-0"),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Hello from this channel!".to_string(),
                 ),
@@ -1853,7 +1877,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: format!("msg-{channel_id}-1"),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Nice to see some activity here.".to_string(),
                 ),
@@ -1865,7 +1889,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: format!("msg-{channel_id}-2"),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Let's keep the conversation going! 😊".to_string(),
                 ),
@@ -1942,11 +1966,11 @@ pub fn demo_groups() -> Vec<Group> {
     vec![
         Group {
             id: "group-1".to_string(),
-            members: users[..3].to_vec(),
+            members: users.get(..3).map(|s| s.to_vec()).unwrap_or_default(),
             name: Some("Project Team".to_string()),
             last_message: Some(Message {
                 id: "msg-group-1".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text("Meeting at 5pm today".to_string()),
                 timestamp: Utc::now() - Duration::hours(1),
                 attachments: vec![],
@@ -1959,11 +1983,11 @@ pub fn demo_groups() -> Vec<Group> {
         },
         Group {
             id: "group-2".to_string(),
-            members: users[3..6].to_vec(),
+            members: users.get(3..6).map(|s| s.to_vec()).unwrap_or_default(),
             name: Some("Weekend Plans".to_string()),
             last_message: Some(Message {
                 id: "msg-group-2".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text("How about Saturday?".to_string()),
                 timestamp: Utc::now() - Duration::hours(3),
                 attachments: vec![],
@@ -2303,7 +2327,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
     match channel_id {
         "ch-voice-dev" => vec![
             VoiceParticipant {
-                user: users[0].clone(), // Alice
+                user: u(&users, 0), // Alice
                 is_muted: false,
                 is_deafened: false,
                 is_streaming: false,
@@ -2311,7 +2335,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: true,
             },
             VoiceParticipant {
-                user: users[2].clone(), // Charlie
+                user: u(&users, 2), // Charlie
                 is_muted: true,
                 is_deafened: false,
                 is_streaming: false,
@@ -2319,7 +2343,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: false,
             },
             VoiceParticipant {
-                user: users[6].clone(), // Grace
+                user: u(&users, 6), // Grace
                 is_muted: false,
                 is_deafened: false,
                 is_streaming: true,
@@ -2329,7 +2353,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
         ],
         "ch-voice-gaming" => vec![
             VoiceParticipant {
-                user: users[1].clone(), // Bob
+                user: u(&users, 1), // Bob
                 is_muted: false,
                 is_deafened: false,
                 is_streaming: false,
@@ -2337,7 +2361,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: true,
             },
             VoiceParticipant {
-                user: users[3].clone(), // Diana
+                user: u(&users, 3), // Diana
                 is_muted: false,
                 is_deafened: true,
                 is_streaming: false,
@@ -2345,7 +2369,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: false,
             },
             VoiceParticipant {
-                user: users[9].clone(), // Jack
+                user: u(&users, 9), // Jack
                 is_muted: true,
                 is_deafened: false,
                 is_streaming: false,
@@ -2353,7 +2377,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: false,
             },
             VoiceParticipant {
-                user: users[4].clone(), // Eve
+                user: u(&users, 4), // Eve
                 is_muted: false,
                 is_deafened: false,
                 is_streaming: false,
@@ -2364,7 +2388,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
         // Dog account (demo2) voice channels
         "ch2-voice-book" => vec![
             VoiceParticipant {
-                user: users[5].clone(), // Frank
+                user: u(&users, 5), // Frank
                 is_muted: false,
                 is_deafened: false,
                 is_streaming: false,
@@ -2372,7 +2396,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: true,
             },
             VoiceParticipant {
-                user: users[7].clone(), // Henry
+                user: u(&users, 7), // Henry
                 is_muted: true,
                 is_deafened: false,
                 is_streaming: false,
@@ -2382,7 +2406,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
         ],
         "ch2-voice-oss" => vec![
             VoiceParticipant {
-                user: users[0].clone(), // Alice
+                user: u(&users, 0), // Alice
                 is_muted: false,
                 is_deafened: false,
                 is_streaming: true,
@@ -2390,7 +2414,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
                 is_speaking: true,
             },
             VoiceParticipant {
-                user: users[2].clone(), // Charlie
+                user: u(&users, 2), // Charlie
                 is_muted: false,
                 is_deafened: false,
                 is_streaming: false,
@@ -2399,7 +2423,7 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
             },
         ],
         "ch2-voice-workout" => vec![VoiceParticipant {
-            user: users[6].clone(), // Grace
+            user: u(&users, 6), // Grace
             is_muted: false,
             is_deafened: false,
             is_streaming: false,
@@ -2425,7 +2449,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
         "dm-user-alice" => vec![
             Message {
                 id: "dm-alice-0".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Hey! Just saw your PR for the SurrealDB integration — looks really solid 🎉"
                         .to_string(),
@@ -2450,7 +2474,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-alice-2".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Just ran it — compiles clean! The hot-reload with subsecond patches is incredible.\n\n> One small nit: the error messages for auth failure could be more descriptive.\n\n```rust\nErr(ClientError::AuthFailed(message.to_string()))\n```".to_string(),
                 ),
@@ -2474,7 +2498,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-alice-4".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text("Perfect. Merging once you push that 🚀".to_string()),
                 timestamp: now - Duration::hours(2),
                 attachments: vec![],
@@ -2488,7 +2512,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
         "dm-user-bob" => vec![
             Message {
                 id: "dm-bob-0".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "You playing anything this weekend? We're doing a Minecraft survival session Saturday night 🎮".to_string(),
                 ),
@@ -2512,7 +2536,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-bob-2".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "8pm EST works perfectly. Diana and Jack are also joining. We built a whole underground base last time 😄".to_string(),
                 ),
@@ -2534,7 +2558,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-bob-4".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Also — did you see the new Minecraft snapshot? The new biomes look wild.".to_string(),
                 ),
@@ -2550,7 +2574,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
         "dm-user-charlie" => vec![
             Message {
                 id: "dm-charlie-0".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Hey, quick Rust question — I'm hitting a lifetime error I don't understand 😅\n\n`error[E0502]: cannot borrow 'data' as mutable because it is also borrowed as immutable`".to_string(),
                 ),
@@ -2574,7 +2598,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-charlie-2".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "```rust\nlet view = data.iter().find(|x| x.id == id);\ndata.push(new_item); // ← borrow error here\n```\n\nI need both at the same time 😬".to_string(),
                 ),
@@ -2598,7 +2622,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-charlie-4".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "That fixed it! Rust ownership never stops surprising me... but I'm getting there 💪".to_string(),
                 ),
@@ -2614,7 +2638,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
         "dm-user-diana" => vec![
             Message {
                 id: "dm-diana-0".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "Hey! Wanted to get your opinion on the new purple theme variant. Does it feel too Discord-like?".to_string(),
                 ),
@@ -2646,7 +2670,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-diana-2".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "Good idea. I'll also add a subtle gradient on the server sidebar. The flat single-color bg feels a bit stark in dark mode.".to_string(),
                 ),
@@ -2674,7 +2698,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
         "dm-user-eve" => vec![
             Message {
                 id: "dm-eve-0".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Just a reminder — we have the voice/video architecture call tomorrow at 2pm UTC 📅".to_string(),
                 ),
@@ -2696,7 +2720,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-eve-2".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Yes — three items:\n1. WebRTC crate selection (webrtc-rs vs browser native)\n2. Mobile camera/mic bindings\n3. Voice UI component layout\n\nShould take ~45 min.".to_string(),
                 ),
@@ -2720,7 +2744,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "dm-eve-4".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text("🙌 Perfect. See you then!".to_string()),
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
@@ -3125,10 +3149,10 @@ pub fn demo_groups_v2() -> Vec<Group> {
         Group {
             id: "group-rust-study".to_string(),
             name: Some("Rust Study Group".to_string()),
-            members: vec![users[0].clone(), users[1].clone(), users[2].clone()],
+            members: vec![u(&users, 0), u(&users, 1), u(&users, 2)],
             last_message: Some(Message {
                 id: "group-rust-study-last".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Found a great blog post on async Rust patterns".to_string(),
                 ),
@@ -3144,10 +3168,10 @@ pub fn demo_groups_v2() -> Vec<Group> {
         Group {
             id: "group-weekend-warriors".to_string(),
             name: Some("Weekend Warriors".to_string()),
-            members: vec![users[3].clone(), users[4].clone(), users[5].clone()],
+            members: vec![u(&users, 3), u(&users, 4), u(&users, 5)],
             last_message: Some(Message {
                 id: "group-weekend-warriors-last".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text("Saturday 8pm — everyone good?".to_string()),
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
@@ -3161,10 +3185,10 @@ pub fn demo_groups_v2() -> Vec<Group> {
         Group {
             id: "group-midnight-jams".to_string(),
             name: Some("Midnight Jams".to_string()),
-            members: vec![users[6].clone(), users[7].clone()],
+            members: vec![u(&users, 6), u(&users, 7)],
             last_message: Some(Message {
                 id: "group-midnight-jams-last".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text("New lo-fi playlist just dropped 🎵".to_string()),
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
@@ -3179,14 +3203,14 @@ pub fn demo_groups_v2() -> Vec<Group> {
             id: "group-team-poly".to_string(),
             name: Some("Poly Core Team".to_string()),
             members: vec![
-                users[0].clone(),
-                users[1].clone(),
-                users[2].clone(),
-                users[3].clone(),
+                u(&users, 0),
+                u(&users, 1),
+                u(&users, 2),
+                u(&users, 3),
             ],
             last_message: Some(Message {
                 id: "group-team-poly-last".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text("Sprint planning tomorrow, 10am UTC".to_string()),
                 timestamp: now - Duration::minutes(30),
                 attachments: vec![],
@@ -3209,10 +3233,10 @@ pub fn demo2_groups() -> Vec<Group> {
         Group {
             id: "group2-oss-contributors".to_string(),
             name: Some("OSS Contributors".to_string()),
-            members: vec![users[0].clone(), users[1].clone(), users[2].clone()],
+            members: vec![u(&users, 0), u(&users, 1), u(&users, 2)],
             last_message: Some(Message {
                 id: "group2-oss-last".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text("PR #342 needs a second review 👀".to_string()),
                 timestamp: now - Duration::hours(2),
                 attachments: vec![],
@@ -3226,10 +3250,10 @@ pub fn demo2_groups() -> Vec<Group> {
         Group {
             id: "group2-bookworms".to_string(),
             name: Some("Bookworms".to_string()),
-            members: vec![users[3].clone(), users[4].clone()],
+            members: vec![u(&users, 3), u(&users, 4)],
             last_message: Some(Message {
                 id: "group2-bookworms-last".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "Finished it last night — what a twist! 📚".to_string(),
                 ),
@@ -3245,10 +3269,10 @@ pub fn demo2_groups() -> Vec<Group> {
         Group {
             id: "group2-meal-prep".to_string(),
             name: Some("Meal Prep Squad".to_string()),
-            members: vec![users[5].clone(), users[6].clone(), users[7].clone()],
+            members: vec![u(&users, 5), u(&users, 6), u(&users, 7)],
             last_message: Some(Message {
                 id: "group2-meal-prep-last".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text("Batch cooked 6 meals today 🍱".to_string()),
                 timestamp: now - Duration::hours(4),
                 attachments: vec![],
@@ -3275,7 +3299,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
         "group-rust-study" => vec![
             Message {
                 id: "grp-rust-0".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Hey team! I started experimenting with `async-trait` 0.2 — the new built-in async trait syntax in Rust 1.85 is a game changer.".to_string(),
                 ),
@@ -3287,7 +3311,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-rust-1".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Yeah, no more `#[async_trait]` proc macro! The desugaring is so much cleaner now.".to_string(),
                 ),
@@ -3299,7 +3323,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-rust-2".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Found a great blog post on async Rust patterns — heavy read but worth it:\nhttps://blog.therust.cafe/async-patterns-2025".to_string(),
                 ),
@@ -3314,7 +3338,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-rust-3".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Also — should we start looking into `polonius` borrow checker? It handles some lifetime edge cases the current NLL misses.".to_string(),
                 ),
@@ -3326,7 +3350,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-rust-4".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Found a great blog post on async Rust patterns".to_string(),
                 ),
@@ -3341,7 +3365,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
         "group-weekend-warriors" => vec![
             Message {
                 id: "grp-ww-0".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "Who's up for a game night this Saturday? 🎮".to_string(),
                 ),
@@ -3355,7 +3379,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-ww-1".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text("I'm in! Valorant or Minecraft?".to_string()),
                 timestamp: now - Duration::days(2) - Duration::hours(4) - Duration::minutes(50),
                 attachments: vec![],
@@ -3365,7 +3389,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-ww-2".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Minecraft survival — let's finish that castle we started. 🏰".to_string(),
                 ),
@@ -3377,7 +3401,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-ww-3".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text("Minecraft it is! 8pm EST?".to_string()),
                 timestamp: now - Duration::days(2) - Duration::hours(3),
                 attachments: vec![],
@@ -3387,7 +3411,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-ww-4".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text("Saturday 8pm — everyone good?".to_string()),
                 timestamp: now - Duration::hours(3),
                 attachments: vec![],
@@ -3400,7 +3424,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
         "group-midnight-jams" => vec![
             Message {
                 id: "grp-mj-0".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "Anyone else been listening to that new synthwave album? The \"Chromatic Bloom\" one?".to_string(),
                 ),
@@ -3412,7 +3436,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-mj-1".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Yes!! Track 4 is pure nostalgia 🎧 Can't stop listening.".to_string(),
                 ),
@@ -3424,7 +3448,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-mj-2".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "Made a lo-fi coding playlist that works really well for late night sessions. Want me to share it?".to_string(),
                 ),
@@ -3436,7 +3460,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-mj-3".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text("New lo-fi playlist just dropped 🎵".to_string()),
                 timestamp: now - Duration::hours(5),
                 attachments: vec![],
@@ -3449,7 +3473,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
         "group-team-poly" => vec![
             Message {
                 id: "grp-tp-0".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Phase 2.12 shipped! Status dots and diagnostics are live. 🎉".to_string(),
                 ),
@@ -3464,7 +3488,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-tp-1".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Great work! The favorites persistence was a real pain point. Glad it's sorted.".to_string(),
                 ),
@@ -3476,7 +3500,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-tp-2".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "2.13 scope is clear — DMs/Groups + rich demo data. Anything we should prioritise?".to_string(),
                 ),
@@ -3488,7 +3512,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-tp-3".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Group member management would be a big UX win. Even just the list panel with a remove button would go a long way.".to_string(),
                 ),
@@ -3500,7 +3524,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp-tp-4".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Sprint planning tomorrow, 10am UTC".to_string(),
                 ),
@@ -3516,7 +3540,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
         "group2-oss-contributors" => vec![
             Message {
                 id: "grp2-oss-0".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Just pushed new CI pipeline for the Open Source Hub project. Builds are 40% faster now 🚀".to_string(),
                 ),
@@ -3528,7 +3552,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp2-oss-1".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Nice! I've been stuck on that weird flaky test in the integration suite. Any ideas?".to_string(),
                 ),
@@ -3540,7 +3564,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp2-oss-2".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "PR #342 needs a second review 👀\nIt's the async queue refactor — should be clean but needs eyes.".to_string(),
                 ),
@@ -3555,7 +3579,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
         "group2-bookworms" => vec![
             Message {
                 id: "grp2-bw-0".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Okay I'm halfway through the book and I can already tell the ending is going to be devastating 😭".to_string(),
                 ),
@@ -3567,7 +3591,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp2-bw-1".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "Oh no. I just finished it last night — what a twist! 📚\n\n(No spoilers but... chapter 23. That's all I'll say.)".to_string(),
                 ),
@@ -3579,7 +3603,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp2-bw-2".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Chapter 23?! I'm only on 18 aaaaah 😱".to_string(),
                 ),
@@ -3594,7 +3618,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
         "group2-meal-prep" => vec![
             Message {
                 id: "grp2-mp-0".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text(
                     "Sunday meal prep done! Chicken tikka, roasted veg, overnight oats 🍱".to_string(),
                 ),
@@ -3617,7 +3641,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp2-mp-1".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "Looks incredible! Can you share the tikka recipe? I've been trying to perfect it.".to_string(),
                 ),
@@ -3629,7 +3653,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "grp2-mp-2".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Batch cooked 6 meals today 🍱\nHigh protein week — grilled salmon, lentil soup, quinoa salad.".to_string(),
                 ),
@@ -3678,14 +3702,14 @@ fn demo2_general_attachment(index: usize) -> Attachment {
 fn demo2_opensource_general_messages() -> Vec<Message> {
     let users = demo_users();
     let authors = [
-        users[0].clone(),
-        users[1].clone(),
-        users[2].clone(),
-        users[3].clone(),
-        users[4].clone(),
-        users[6].clone(),
-        users[7].clone(),
-        users[9].clone(),
+        u(&users, 0),
+        u(&users, 1),
+        u(&users, 2),
+        u(&users, 3),
+        u(&users, 4),
+        u(&users, 6),
+        u(&users, 7),
+        u(&users, 9),
     ];
     let topics = [
         "Dioxus hot-reload",
@@ -3720,10 +3744,10 @@ fn demo2_opensource_general_messages() -> Vec<Message> {
 
     (0..560)
         .map(|index| {
-            let topic = topics[index % topics.len()];
-            let action = actions[(index / 3) % actions.len()];
-            let detail = details[(index / 7) % details.len()];
-            let author = authors[index % authors.len()].clone();
+            let topic = topics.get(index % topics.len()).copied().unwrap_or("");
+            let action = actions.get((index / 3) % actions.len()).copied().unwrap_or("");
+            let detail = details.get((index / 7) % details.len()).copied().unwrap_or("");
+            let author = authors.get(index % authors.len()).cloned().unwrap_or_else(|| u(&users, 0));
             let timestamp = Utc::now() - Duration::minutes(24_000)
                 + Duration::minutes(i64::try_from(index).unwrap_or(0) * 43);
             let mut text = format!("Daily check-in #{index}: {topic} {action}. {detail}",);
@@ -3786,7 +3810,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch2-contributions" => vec![
             Message {
                 id: "msg2-contrib-0".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Merged 3 PRs this week! The issue tracker is looking much cleaner.".to_string(),
                 ),
@@ -3798,7 +3822,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-contrib-1".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Working on the documentation overhaul. The README was last updated in 2023 😅".to_string(),
                 ),
@@ -3810,7 +3834,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-contrib-2".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "PR #342 is up! Async queue refactor — reduces memory usage by ~30%. Please review when you get a chance 🙏".to_string(),
                 ),
@@ -3824,7 +3848,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch2-recommendations" => vec![
             Message {
                 id: "msg2-rec-0".to_string(),
-                author: users[4].clone(),
+                author: u(&users, 4),
                 content: MessageContent::Text(
                     "Just finished \"The Midnight Library\" — absolutely recommend it if you like contemplative fiction. 📖".to_string(),
                 ),
@@ -3836,7 +3860,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-rec-1".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "I've been meaning to read that! Currently on \"Project Hail Mary\" — hard sci-fi that reads like a thriller.".to_string(),
                 ),
@@ -3848,7 +3872,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-rec-2".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "For non-fiction people: \"Four Thousand Weeks\" by Oliver Burkeman is life-changing. Totally reframes time and productivity.".to_string(),
                 ),
@@ -3862,7 +3886,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch2-recipes" => vec![
             Message {
                 id: "msg2-recipes-0".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text(
                     "Made a 5-ingredient pasta last night and it turned out amazing!\n\n**Recipe:**\n- 400g spaghetti\n- 200g guanciale (or pancetta)\n- 4 egg yolks\n- 100g Pecorino Romano\n- Black pepper\n\nThe key is to use the pasta water to emulsify the sauce — no cream!".to_string(),
                 ),
@@ -3885,7 +3909,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-recipes-1".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Classic carbonara! The guanciale makes all the difference, I can't go back to using bacon anymore.".to_string(),
                 ),
@@ -3897,7 +3921,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-recipes-2".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "Anyone have a good sourdough starter recipe? Mine keeps dying 😭 Third attempt this month...".to_string(),
                 ),
@@ -3909,7 +3933,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-recipes-3".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text(
                     "The trick is room temperature water (never tap cold) and 12h between feedings. Also 50/50 bread flour + whole wheat feed works better than just white flour.".to_string(),
                 ),
@@ -3923,7 +3947,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch2-techniques" => vec![
             Message {
                 id: "msg2-tech-0".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Anyone else do the salt-baking technique for whole fish? Completely seals in moisture — game changer. 🐟".to_string(),
                 ),
@@ -3935,7 +3959,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-tech-1".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text(
                     "Tried it with sea bass last weekend! The crust comes off perfectly and the fish stays so juicy.".to_string(),
                 ),
@@ -3947,7 +3971,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-tech-2".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "The maillard reaction discussion last week was eye-opening. I've been searing my steaks incorrectly my whole life 😅\n\nPatting dry + cast iron screaming hot = perfection".to_string(),
                 ),
@@ -3961,7 +3985,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch2-nutrition" => vec![
             Message {
                 id: "msg2-nutr-0".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Week 3 of tracking macros — 150g protein/day feels more achievable than I expected. Chicken + Greek yoghurt + cottage cheese gets you there pretty easily.".to_string(),
                 ),
@@ -3973,7 +3997,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-nutr-1".to_string(),
-                author: users[8].clone(),
+                author: u(&users, 8),
                 content: MessageContent::Text(
                     "Protein timing matters too — spreading it across 4+ meals seems to help muscle synthesis more than 2-3 large portions.".to_string(),
                 ),
@@ -3985,7 +4009,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-nutr-2".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Post-workout meal today: 200g salmon, roasted sweet potato, broccoli. Clean and filling 🍽️".to_string(),
                 ),
@@ -3997,7 +4021,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-nutr-3".to_string(),
-                author: users[8].clone(),
+                author: u(&users, 8),
                 content: MessageContent::Text(
                     "Meal logged: 3,200 kcal, 145g protein. Slightly over on carbs but had a hard leg day so it balances out.".to_string(),
                 ),
@@ -4011,7 +4035,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch2-workouts" => vec![
             Message {
                 id: "msg2-wk-0".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "5K run this morning! 💪 New personal best — 22:14. Beat my previous by 45 seconds.".to_string(),
                 ),
@@ -4026,7 +4050,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-wk-1".to_string(),
-                author: users[8].clone(),
+                author: u(&users, 8),
                 content: MessageContent::Text("That's incredible progress! What's your training plan?".to_string()),
                 timestamp: now - Duration::days(1) - Duration::hours(6) - Duration::minutes(50),
                 attachments: vec![],
@@ -4036,7 +4060,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-wk-2".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "3 runs/week — one tempo, one long slow, one interval. Followed the 12-week Garmin plan. Surprisingly beginner-friendly.".to_string(),
                 ),
@@ -4048,7 +4072,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg2-wk-3".to_string(),
-                author: users[9].clone(),
+                author: u(&users, 9),
                 content: MessageContent::Text(
                     "Anyone else doing the 100-day push-up challenge? Day 34 — 200 push-ups today. My arms are cooked 🔥".to_string(),
                 ),
@@ -4065,7 +4089,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch-rust" => vec![
             Message {
                 id: "msg-rust-0".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "I keep hitting E0502 when trying to use a slice and mutate the Vec at the same time. The borrow checker is not happy 😅".to_string(),
                 ),
@@ -4077,7 +4101,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-rust-1".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "Classic borrow issue! You need to use `split_at_mut` or restructure to avoid overlapping borrows. Or collect the indices first, then mutate.".to_string(),
                 ),
@@ -4089,7 +4113,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-rust-2".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text(
                     "The `polonius` borrow checker (now in nightly) handles some of these NLL limitations. Worth trying on nightly if you want to unblock.".to_string(),
                 ),
@@ -4101,7 +4125,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-rust-3".to_string(),
-                author: users[9].clone(),
+                author: u(&users, 9),
                 content: MessageContent::Text(
                     "How are people handling errors in large projects? `thiserror` for libraries + `anyhow` for binaries seems like the community standard.".to_string(),
                 ),
@@ -4113,7 +4137,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-rust-4".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "That's exactly the pattern we use in Poly. `poly-client` uses `thiserror`, the apps use `anyhow` internally. Works great.".to_string(),
                 ),
@@ -4127,7 +4151,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch-dioxus" => vec![
             Message {
                 id: "msg-dioxus-0".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "Dioxus 0.7 hot-reload is genuinely magical. RSX changes reflect subsecond without losing any state. How is this even possible? 🤯".to_string(),
                 ),
@@ -4141,7 +4165,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-dioxus-1".to_string(),
-                author: users[0].clone(),
+                author: u(&users, 0),
                 content: MessageContent::Text(
                     "The `subsecond` hotpatch library. It relinks only the changed functions at runtime — similar to how Swift playgrounds work. Genuinely impressive engineering.".to_string(),
                 ),
@@ -4153,7 +4177,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-dioxus-2".to_string(),
-                author: users[5].clone(),
+                author: u(&users, 5),
                 content: MessageContent::Text(
                     "One thing I've learned: keep `#[component]` fns under ~150 lines or the RSX macro gets confused during hot-reload. Works great when you respect the limit.".to_string(),
                 ),
@@ -4165,7 +4189,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-dioxus-3".to_string(),
-                author: users[2].clone(),
+                author: u(&users, 2),
                 content: MessageContent::Text(
                     "Signal-based state is so much cleaner than React's useState cascade. Just `use_context()` anywhere and it Just Works™.".to_string(),
                 ),
@@ -4179,7 +4203,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch-production" => vec![
             Message {
                 id: "msg-prod-0".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Just got my first hardware synth! A Novation MiniNova. The learning curve is steep but the sound design possibilities are endless 🎹".to_string(),
                 ),
@@ -4202,7 +4226,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-prod-1".to_string(),
-                author: users[7].clone(),
+                author: u(&users, 7),
                 content: MessageContent::Text(
                     "Beautiful! Are you going to run it through your DAW or use it standalone? I hook mine directly into Ableton and use MIDI automation heavily.".to_string(),
                 ),
@@ -4214,7 +4238,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-prod-2".to_string(),
-                author: users[6].clone(),
+                author: u(&users, 6),
                 content: MessageContent::Text(
                     "Planning to use it with FL Studio. Made a 32-bar loop last night and it sounds incredible with some saturation on the output.\n\nHere's a quick recording:".to_string(),
                 ),
@@ -4226,7 +4250,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-prod-3".to_string(),
-                author: users[9].clone(),
+                author: u(&users, 9),
                 content: MessageContent::Text(
                     "Anyone using the new Vital synth plugin? Free version is genuinely superb — wavetable synthesis with a ton of preset starting points.".to_string(),
                 ),
@@ -4240,7 +4264,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
         "ch-valorant" => vec![
             Message {
                 id: "msg-valorant-0".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text("Just hit Diamond! Finally 💎".to_string()),
                 timestamp: now - Duration::days(1) - Duration::hours(6),
                 attachments: vec![],
@@ -4253,7 +4277,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-valorant-1".to_string(),
-                author: users[1].clone(),
+                author: u(&users, 1),
                 content: MessageContent::Text(
                     "Let's goooo!! What agent did you climb with?".to_string(),
                 ),
@@ -4265,7 +4289,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-valorant-2".to_string(),
-                author: users[3].clone(),
+                author: u(&users, 3),
                 content: MessageContent::Text(
                     "Mostly Sage and Killjoy on defense. Sentinel playstyle + info gathering wins more rounds than fragging in my experience.".to_string(),
                 ),
@@ -4277,7 +4301,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
             },
             Message {
                 id: "msg-valorant-3".to_string(),
-                author: users[9].clone(),
+                author: u(&users, 9),
                 content: MessageContent::Text(
                     "Killjoy is so broken right now — her turret damage got buffed and nobody's countering it properly. Expect nerfs soon.".to_string(),
                 ),
@@ -4337,7 +4361,7 @@ fn apply_message_query(mut messages: Vec<Message>, query: &MessageQuery) -> Vec<
         let before = limit / 2;
         let start = index.saturating_sub(before);
         let end = (start + limit).min(messages.len());
-        return messages[start..end].to_vec();
+        return messages.get(start..end).map(|s| s.to_vec()).unwrap_or_default();
     }
 
     if let Some(ref before_id) = query.before
@@ -4345,7 +4369,7 @@ fn apply_message_query(mut messages: Vec<Message>, query: &MessageQuery) -> Vec<
     {
         let limit = usize::try_from(query.limit.unwrap_or(50)).unwrap_or(50);
         let start = index.saturating_sub(limit);
-        return messages[start..index].to_vec();
+        return messages.get(start..index).map(|s| s.to_vec()).unwrap_or_default();
     }
 
     if let Some(ref after_id) = query.after
@@ -4354,13 +4378,14 @@ fn apply_message_query(mut messages: Vec<Message>, query: &MessageQuery) -> Vec<
         let limit = usize::try_from(query.limit.unwrap_or(50)).unwrap_or(50);
         let start = index.saturating_add(1);
         let end = (start + limit).min(messages.len());
-        return messages[start..end].to_vec();
+        return messages.get(start..end).map(|s| s.to_vec()).unwrap_or_default();
     }
 
     if let Some(limit) = query.limit {
         let limit = usize::try_from(limit).unwrap_or(messages.len());
         if limit < messages.len() {
-            return messages[messages.len() - limit..].to_vec();
+            let start = messages.len() - limit;
+            return messages.get(start..).map(|s| s.to_vec()).unwrap_or_default();
         }
     }
 

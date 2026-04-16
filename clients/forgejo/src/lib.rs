@@ -24,7 +24,7 @@ mod types;
 #[cfg(feature = "native")]
 pub use api::ForgejoApi;
 #[cfg(feature = "native")]
-pub use mapping::BACKEND_SLUG;
+pub use mapping::{BACKEND_SLUG, issue_thread_channel_id};
 
 #[cfg(feature = "native")]
 use async_trait::async_trait;
@@ -84,16 +84,6 @@ impl ForgejoClient {
             .unwrap_or("anonymous")
     }
 
-    /// Extract `(owner, repo)` from an issues/pulls channel ID.
-    #[allow(dead_code)]
-    fn parse_owner_repo_from_channel(channel_id: &str, prefix: &str) -> ClientResult<(String, String)> {
-        let rest = channel_id
-            .strip_prefix(prefix)
-            .ok_or_else(|| ClientError::NotFound(format!("channel {channel_id} not a {prefix} channel")))?;
-        rest.split_once('-')
-            .map(|(o, r)| (o.to_string(), r.to_string()))
-            .ok_or_else(|| ClientError::NotFound(format!("malformed owner-repo in channel id: {channel_id}")))
-    }
 }
 
 #[cfg(feature = "native")]
@@ -411,12 +401,13 @@ fn decode_b64(s: &str) -> Vec<u8> {
 }
 
 #[cfg(feature = "native")]
-#[allow(clippy::indexing_slicing)]
 fn decode_b64_simple(input: &str) -> Vec<u8> {
     const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut lookup = [255u8; 256];
     for (i, &b) in TABLE.iter().enumerate() {
-        lookup[b as usize] = i as u8;
+        if let Some(slot) = lookup.get_mut(usize::from(b)) {
+            *slot = i as u8;
+        }
     }
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
@@ -426,7 +417,7 @@ fn decode_b64_simple(input: &str) -> Vec<u8> {
         if b == b'=' {
             break;
         }
-        let v = lookup[b as usize];
+        let v = lookup.get(usize::from(b)).copied().unwrap_or(255);
         if v == 255 {
             continue;
         }

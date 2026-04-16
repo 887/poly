@@ -117,9 +117,6 @@ pub struct TokenResponse {
 #[derive(Debug, Deserialize)]
 struct OAuthError {
     error: String,
-    #[serde(default)]
-    #[allow(dead_code)]
-    error_description: Option<String>,
 }
 
 /// Kick off Device Code flow. The returned `user_code` should be shown to the
@@ -193,7 +190,6 @@ pub async fn poll_device_code_token(
         .await
         .unwrap_or(OAuthError {
             error: format!("http_{}", status.as_u16()),
-            error_description: None,
         });
     match err.error.as_str() {
         "authorization_pending" | "slow_down" => Ok(None),

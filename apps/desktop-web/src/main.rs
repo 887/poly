@@ -27,8 +27,6 @@
 //! Screenshots use WebKit2GTK's native snapshot API, triggered via
 //! `UserEvent::ScreenshotRequest` → gtk main thread.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -430,12 +428,18 @@ fn main() {
     let proxy = event_loop.create_proxy();
 
     // ── Window ────────────────────────────────────────────────────────────────
-    let window = WindowBuilder::new()
+    let window = match WindowBuilder::new()
         .with_title("Poly Desktop (Web Dev)")
         .with_inner_size(tao::dpi::LogicalSize::new(1440.0_f64, 900.0_f64))
         .with_min_inner_size(tao::dpi::LogicalSize::new(800.0_f64, 600.0_f64))
         .build(&event_loop)
-        .expect("Failed to create window");
+    {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("fatal: Failed to create window: {e}");
+            std::process::exit(1);
+        }
+    };
 
     // ── WebView ───────────────────────────────────────────────────────────────
     let pending_ipc = pending.clone();
@@ -474,14 +478,30 @@ fn main() {
     #[cfg(target_os = "linux")]
     let webview = {
         use wry::WebViewBuilderExtUnix as _;
-        let vbox = window.default_vbox().expect("tao window should have a default vbox");
-        builder
-            .build_gtk(vbox)
-            .expect("Failed to create webview")
+        let vbox = match window.default_vbox() {
+            Some(v) => v,
+            None => {
+                eprintln!("fatal: tao window should have a default vbox");
+                std::process::exit(1);
+            }
+        };
+        match builder.build_gtk(vbox) {
+            Ok(wv) => wv,
+            Err(e) => {
+                eprintln!("fatal: Failed to create webview: {e}");
+                std::process::exit(1);
+            }
+        }
     };
 
     #[cfg(not(target_os = "linux"))]
-    let webview = builder.build(&window).expect("Failed to create webview");
+    let webview = match builder.build(&window) {
+        Ok(wv) => wv,
+        Err(e) => {
+            eprintln!("fatal: Failed to create webview: {e}");
+            std::process::exit(1);
+        }
+    };
 
     // ── Screenshot channel ────────────────────────────────────────────────────
     // Set up the screenshot mpsc channel now that we have the webview handle.
@@ -500,7 +520,13 @@ fn main() {
     };
 
     // ── Start tokio runtime + HTTP server ─────────────────────────────────────
-    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            eprintln!("fatal: failed to create tokio runtime: {e}");
+            std::process::exit(1);
+        }
+    };
 
     if !http_started.swap(true, Ordering::SeqCst) {
         let proxy2 = proxy.clone();

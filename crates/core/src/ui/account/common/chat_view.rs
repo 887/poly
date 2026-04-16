@@ -1873,26 +1873,6 @@ fn estimate_message_row_height(
     height
 }
 
-#[allow(dead_code)]
-fn estimate_message_block_height(
-    messages: &[Message],
-    start_idx: usize,
-    end_idx: usize,
-    unread_marker_id: Option<&str>,
-    unread_count: u32,
-) -> f64 {
-    if start_idx >= end_idx || start_idx >= messages.len() {
-        return 0.0;
-    }
-
-    let capped_end = end_idx.min(messages.len());
-    let mut total = 0.0;
-    for idx in start_idx..capped_end {
-        total += estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
-    }
-    total
-}
-
 fn recompute_history_spacers(history: &mut ChatHistoryUiState, _messages: &[Message]) {
     history.before_spacer_px = if history.has_more_before {
         MESSAGE_HISTORY_SENTINEL_PX

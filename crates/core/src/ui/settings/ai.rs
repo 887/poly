@@ -42,15 +42,13 @@ pub(super) fn AiSettings() -> Element {
             })();
             "#,
         );
-        #[allow(clippy::indexing_slicing)] // serde_json Value[str] returns Null, never panics
         if let Ok(val) = eval.recv::<serde_json::Value>().await {
-            status.set(McpStatus {
-                running: val["running"].as_bool().unwrap_or(false),
-                port: val["port"].as_u64().unwrap_or(3010) as u16,
-                is_electron: val["is_electron"].as_bool().unwrap_or(false),
-            });
-            if val["port"].as_u64().is_some() {
-                mcp_port.set(val["port"].as_u64().unwrap_or(3010) as u16);
+            let running = val.get("running").and_then(|v| v.as_bool()).unwrap_or(false);
+            let port = val.get("port").and_then(|v| v.as_u64()).unwrap_or(3010) as u16;
+            let is_electron = val.get("is_electron").and_then(|v| v.as_bool()).unwrap_or(false);
+            status.set(McpStatus { running, port, is_electron });
+            if val.get("port").and_then(|v| v.as_u64()).is_some() {
+                mcp_port.set(port);
             }
         }
     });

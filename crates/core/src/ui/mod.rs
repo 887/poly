@@ -1015,7 +1015,6 @@ pub(crate) async fn restore_github_accounts(
 /// must reauth" from "network unreachable, try again later". Matching is
 /// intentionally lenient — errors bubble up from eight different HTTP clients
 /// with wildly different formatting.
-#[allow(dead_code)] // Not all feature combinations consume this helper yet.
 pub(crate) fn looks_like_auth_failure(err: &str) -> bool {
     let l = err.to_lowercase();
     l.contains("401")
@@ -1030,20 +1029,25 @@ pub(crate) fn looks_like_auth_failure(err: &str) -> bool {
 ///
 /// Used by restore paths for forge/forum backends that otherwise would silently
 /// skip the account — leaving the user confused about why their sidebar is empty.
-#[allow(clippy::too_many_arguments)]
-#[allow(dead_code)] // Not all feature combinations consume this helper yet.
+/// Account details for [`register_unauthenticated_account`].
+pub(crate) struct UnauthAccountInfo {
+    pub backend: poly_client::BackendType,
+    pub backend_slug: String,
+    pub account_id: String,
+    pub display_name: String,
+    pub token: String,
+    pub instance_id: String,
+    pub backend_url: Option<String>,
+    pub reason: String,
+}
+
 pub(crate) fn register_unauthenticated_account(
     client_manager: &mut Signal<ClientManager>,
     chat_data: &mut Signal<ChatData>,
-    backend: poly_client::BackendType,
-    backend_slug: &str,
-    account_id: String,
-    display_name: String,
-    token: String,
-    instance_id: String,
-    backend_url: Option<String>,
-    reason: String,
+    info: UnauthAccountInfo,
 ) {
+    let UnauthAccountInfo { backend, backend_slug, account_id, display_name, token, instance_id, backend_url, reason } = info;
+    let backend_slug = backend_slug.as_str();
     let session = poly_client::Session {
         id: account_id.clone(),
         user: poly_client::User {
@@ -1137,14 +1141,16 @@ pub(crate) async fn restore_forgejo_accounts(
                     register_unauthenticated_account(
                         &mut client_manager,
                         &mut chat_data,
-                        poly_client::BackendType::from("forgejo"),
-                        "forgejo",
-                        token.account_id.clone(),
-                        token.display_name.clone(),
-                        token.token.clone(),
-                        instance_url.clone(),
-                        Some(instance_url.clone()),
-                        err_str,
+                        UnauthAccountInfo {
+                            backend: poly_client::BackendType::from("forgejo"),
+                            backend_slug: "forgejo".to_string(),
+                            account_id: token.account_id.clone(),
+                            display_name: token.display_name.clone(),
+                            token: token.token.clone(),
+                            instance_id: instance_url.clone(),
+                            backend_url: Some(instance_url.clone()),
+                            reason: err_str,
+                        },
                     );
                 } else {
                     tracing::warn!("Skipping Forgejo account {}: {}", token.account_id, e);

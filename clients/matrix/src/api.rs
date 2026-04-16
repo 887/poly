@@ -60,24 +60,6 @@ pub struct LoginResponse {
     /// Device ID assigned by the homeserver.
     pub device_id: String,
 
-    /// Homeserver URL (for well-known delegation).
-    #[serde(default)]
-    pub well_known: Option<WellKnownInfo>,
-}
-
-/// Well-known delegation info returned in login response.
-#[derive(Debug, Deserialize)]
-pub struct WellKnownInfo {
-    /// Homeserver URL.
-    #[serde(rename = "m.homeserver")]
-    pub homeserver: Option<WellKnownBaseUrl>,
-}
-
-/// A well-known base_url entry.
-#[derive(Debug, Deserialize)]
-pub struct WellKnownBaseUrl {
-    /// The base URL for the homeserver.
-    pub base_url: String,
 }
 
 /// Response from `GET /_matrix/client/v3/account/whoami`.
@@ -125,14 +107,6 @@ pub struct SyncRooms {
     /// Joined rooms and their updates.
     #[serde(default)]
     pub join: Option<std::collections::HashMap<String, JoinedRoom>>,
-
-    /// Invited rooms.
-    #[serde(default)]
-    pub invite: Option<std::collections::HashMap<String, serde_json::Value>>,
-
-    /// Left rooms.
-    #[serde(default)]
-    pub leave: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 /// Updates for a single joined room in a sync response.
@@ -141,10 +115,6 @@ pub struct JoinedRoom {
     /// Timeline events.
     #[serde(default)]
     pub timeline: Option<Timeline>,
-
-    /// State events.
-    #[serde(default)]
-    pub state: Option<State>,
 
     /// Ephemeral events (typing, receipts).
     #[serde(default)]
@@ -158,21 +128,9 @@ pub struct Timeline {
     #[serde(default)]
     pub events: Vec<RoomEvent>,
 
-    /// Whether more events exist before this batch.
-    #[serde(default)]
-    pub limited: bool,
-
     /// Pagination token for earlier events.
     #[serde(default)]
     pub prev_batch: Option<String>,
-}
-
-/// State section of a joined room.
-#[derive(Debug, Deserialize)]
-pub struct State {
-    /// List of state events.
-    #[serde(default)]
-    pub events: Vec<RoomEvent>,
 }
 
 /// Ephemeral events section.
@@ -280,10 +238,6 @@ pub struct SpaceHierarchyResponse {
     /// Rooms in the Space hierarchy.
     #[serde(default)]
     pub rooms: Vec<SpaceHierarchyRoom>,
-
-    /// Pagination token.
-    #[serde(default)]
-    pub next_batch: Option<String>,
 }
 
 /// A room entry in a Space hierarchy response.
@@ -296,68 +250,9 @@ pub struct SpaceHierarchyRoom {
     #[serde(default)]
     pub name: Option<String>,
 
-    /// Room topic.
-    #[serde(default)]
-    pub topic: Option<String>,
-
-    /// Avatar MXC URL.
-    #[serde(default)]
-    pub avatar_url: Option<String>,
-
-    /// Number of joined members.
-    #[serde(default)]
-    pub num_joined_members: u64,
-
     /// Room type (e.g. `m.space` for Spaces).
     #[serde(default)]
     pub room_type: Option<String>,
-
-    /// Child rooms (state events of type `m.space.child`).
-    #[serde(default)]
-    pub children_state: Vec<serde_json::Value>,
-}
-
-/// Response from `GET /_matrix/client/v3/publicRooms`.
-#[derive(Debug, Deserialize)]
-pub struct PublicRoomsResponse {
-    /// Public rooms on this homeserver.
-    #[serde(default)]
-    pub chunk: Vec<PublicRoom>,
-
-    /// Pagination token.
-    #[serde(default)]
-    pub next_batch: Option<String>,
-
-    /// Estimated total number of rooms.
-    #[serde(default)]
-    pub total_room_count_estimate: Option<u64>,
-}
-
-/// A single public room listing.
-#[derive(Debug, Deserialize)]
-pub struct PublicRoom {
-    /// Room ID.
-    pub room_id: String,
-
-    /// Room name.
-    #[serde(default)]
-    pub name: Option<String>,
-
-    /// Room topic.
-    #[serde(default)]
-    pub topic: Option<String>,
-
-    /// Avatar MXC URL.
-    #[serde(default)]
-    pub avatar_url: Option<String>,
-
-    /// Number of joined members.
-    #[serde(default)]
-    pub num_joined_members: u64,
-
-    /// Room alias.
-    #[serde(default)]
-    pub canonical_alias: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -379,27 +274,5 @@ pub struct MessagesResponse {
     /// Message events (most recent first when `dir=b`).
     #[serde(default)]
     pub chunk: Vec<RoomEvent>,
-
-    /// Pagination token for requesting earlier messages.
-    #[serde(default)]
-    pub end: Option<String>,
-
-    /// Start token.
-    #[serde(default)]
-    pub start: Option<String>,
 }
 
-// ---------------------------------------------------------------------------
-// Error response
-// ---------------------------------------------------------------------------
-
-/// Standard Matrix error response body.
-#[derive(Debug, Deserialize)]
-pub struct MatrixError {
-    /// Error code, e.g. `M_FORBIDDEN`, `M_UNKNOWN_TOKEN`.
-    pub errcode: String,
-
-    /// Human-readable error description.
-    #[serde(default)]
-    pub error: Option<String>,
-}
