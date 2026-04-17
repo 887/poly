@@ -9,6 +9,7 @@
 use crate::i18n::t;
 use crate::storage::VoiceSettings;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Persist current voice settings to storage.
 fn persist_voice_settings(settings: VoiceSettings) {
@@ -37,6 +38,7 @@ fn save_voice(
     });
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DeviceSelectRow(label_key: &'static str, option_key: &'static str) -> Element {
@@ -50,6 +52,7 @@ fn DeviceSelectRow(label_key: &'static str, option_key: &'static str) -> Element
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn MicTestRow(mic_testing: Signal<bool>) -> Element {
@@ -73,6 +76,7 @@ fn MicTestRow(mic_testing: Signal<bool>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceModeRow(selected: String, on_change: EventHandler<String>) -> Element {
@@ -100,6 +104,7 @@ fn VoiceModeRow(selected: String, on_change: EventHandler<String>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element {
@@ -123,6 +128,7 @@ fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element 
 /// Lets the user configure audio/video input/output devices, volume levels,
 /// voice activity detection mode, noise suppression and echo cancellation.
 /// Settings are loaded from and persisted to storage.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn VoiceVideoSettings() -> Element {
@@ -205,6 +211,7 @@ pub(super) fn VoiceVideoSettings() -> Element {
 }
 
 /// Volume slider with label showing percentage.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VolumeSlider(label: String, value: u32, on_change: EventHandler<u32>) -> Element {
@@ -228,6 +235,7 @@ fn VolumeSlider(label: String, value: u32, on_change: EventHandler<u32>) -> Elem
 }
 
 /// Noise suppression radio group.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NoiseSuppressionRow(selected: String, on_change: EventHandler<String>) -> Element {

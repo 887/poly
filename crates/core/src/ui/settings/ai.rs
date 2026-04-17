@@ -5,6 +5,7 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 const DEFAULT_MCP_PORT: u16 = 3010;
 
@@ -16,6 +17,7 @@ struct McpStatus {
     is_electron: bool,
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn AiSettings() -> Element {

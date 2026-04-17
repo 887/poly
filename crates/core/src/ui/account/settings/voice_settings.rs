@@ -17,6 +17,7 @@
 use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 // ── JS for device enumeration and mic test ────────────────────────────────────
 
@@ -54,6 +55,7 @@ const JS_TEST_MIC: &str = r#"
 ///
 /// Composed of: mic picker, speaker picker, noise cancel toggle, test mic button.
 // DECISION(V-4): Audio settings live in AccountSettingsPage, not a popup.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceSettings() -> Element {
@@ -102,6 +104,7 @@ pub fn VoiceSettings() -> Element {
 }
 
 /// Microphone device selector.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
@@ -135,6 +138,7 @@ fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
 }
 
 /// Speaker device selector.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
@@ -168,6 +172,7 @@ fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
 }
 
 /// Noise cancellation toggle.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NoiseCancelToggle() -> Element {
@@ -199,6 +204,7 @@ fn NoiseCancelToggle() -> Element {
 }
 
 /// Test microphone button.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn TestMicButton() -> Element {

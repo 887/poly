@@ -10,6 +10,7 @@ name = "poly-desktop-devtools"
 path = "src/main.rs"
 
 [dependencies]
+poly-ui-macros = { workspace = true }
 poly-core = { workspace = true, features = ["demo", "native-nav"] }
 dioxus = { workspace = true, features = ["desktop"] }
 tracing = { workspace = true }

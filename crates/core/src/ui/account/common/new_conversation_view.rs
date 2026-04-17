@@ -9,7 +9,9 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn NewConversationView() -> Element {

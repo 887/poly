@@ -7,6 +7,7 @@
 use crate::i18n::t;
 use crate::storage::{GifProviderKind, MediaProviderSettings};
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 async fn persist_media_settings(media: MediaProviderSettings) {
     let Some(storage) = crate::STORAGE.get() else {
@@ -46,6 +47,7 @@ fn load_media_settings(mut media: Signal<MediaProviderSettings>) {
 }
 
 /// Single provider config panel (shown when that provider's tab is active).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ProviderPanel(
@@ -93,6 +95,7 @@ fn ProviderPanel(
 }
 
 /// Tab bar for provider selection — each provider is a clickable tab.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ProviderTabs(active_tab: Signal<GifProviderKind>, providers: Vec<(GifProviderKind, String)>) -> Element {
@@ -116,6 +119,7 @@ fn ProviderTabs(active_tab: Signal<GifProviderKind>, providers: Vec<(GifProvider
 }
 
 /// Media integrations settings section — provider tabs layout.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn MediaSettings() -> Element {

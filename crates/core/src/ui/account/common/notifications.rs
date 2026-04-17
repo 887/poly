@@ -24,6 +24,7 @@ use poly_client::{
     BackendCapabilities, BackendType, ConnectionStatus, FriendModel, NotificationKind,
     NotificationSupport, VoiceSupport,
 };
+use poly_ui_macros::context_menu;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum NotificationMenuFilter {
@@ -101,6 +102,7 @@ pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
 /// and mark-read actions. `backend_slug` drives the capability-based filter
 /// registry (WP-5) — e.g., GitHub hides FriendRequests/ServerInvites/VoiceInvites
 /// because its BackendCapabilities declares no friends/servers/voice.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
@@ -221,6 +223,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NotificationSidebarButton(
@@ -246,6 +249,7 @@ fn NotificationSidebarButton(
 }
 
 /// Backend filter dropdown for notifications.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NotificationFilter(
@@ -281,6 +285,7 @@ fn NotificationFilter(
 }
 
 /// Rendered list of notification items with per-kind action buttons.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
@@ -321,6 +326,7 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
 }
 
 /// Inner content for a single notification item, with kind-specific action buttons.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NotificationItemContent(

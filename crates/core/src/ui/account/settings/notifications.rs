@@ -18,6 +18,7 @@
 use crate::i18n::t;
 use crate::storage::AccountNotificationSettings;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 #[derive(Clone, Copy, PartialEq)]
 struct NotifSignals {
@@ -74,6 +75,7 @@ fn load_account_notif_settings(account_id: String, mut signals: NotifSignals) {
 /// Notification settings panel for a single account.
 ///
 /// Loads saved settings on mount and persists any toggle change immediately.
+#[context_menu(inherit)]
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`].
 #[component]
 pub fn NotificationsSettings(account_id: String) -> Element {
@@ -107,6 +109,7 @@ pub fn NotificationsSettings(account_id: String) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Element {
@@ -177,6 +180,7 @@ fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Elem
 
 /// Inner presentation component for an account's notification toggles.
 ///
+#[context_menu(inherit)]
 /// Split out so `NotificationsSettings` stays under the 150-line limit.
 #[component]
 fn AccountNotifSectionInner(
@@ -244,6 +248,7 @@ fn AccountNotifSectionInner(
     }
 }
 
+#[context_menu(inherit)]
 /// Generic notification toggle row.
 #[component]
 fn NotifToggleRow(label: String, checked: bool, on_toggle: EventHandler<bool>) -> Element {

@@ -45,6 +45,7 @@ use dioxus::prelude::*;
 use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
 
 use crate::{PolyServerBackend, models::IdentityAccount};
+use poly_ui_macros::context_menu;
 
 // ── Public render entry-point ────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ enum ConnectStep {
 /// The host's `ClientSignupPage` wraps this output in `div.signup-content`
 /// which provides scroll, padding, and layout context — so this component
 /// renders just a heading, description, and form with no outer card wrapper.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn PolySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
@@ -136,6 +138,7 @@ fn PolySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) ->
 /// URL entry form — step 1 of the connect flow.
 ///
 /// Looks up all existing accounts bound to the device identity key.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn UrlConnectForm(
@@ -205,6 +208,7 @@ fn UrlConnectForm(
 }
 
 /// Existing-account picker shown when this identity key is already registered.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ExistingAccountsForm(
@@ -301,6 +305,7 @@ fn ExistingAccountsForm(
 ///
 /// Shows the confirmed server URL (read-only), username + display name fields,
 /// and a "Create Account" button.  A "← Back" link returns to step 1.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SignupDetailsForm(

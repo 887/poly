@@ -8,6 +8,7 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// One language option shown in the picker.
 struct LangOption {
@@ -61,6 +62,7 @@ fn resolve_locale(stored: &str) -> &str {
 }
 
 /// Single language option row with flag, name, and active checkmark.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn LangRow(code: String, label: String, selected: bool, onclick: EventHandler<MouseEvent>) -> Element {
@@ -77,6 +79,7 @@ fn LangRow(code: String, label: String, selected: bool, onclick: EventHandler<Mo
 }
 
 /// Language settings section — flag+checkmark picker.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn LanguageSettings() -> Element {

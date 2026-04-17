@@ -31,6 +31,7 @@ use crate::ui::account::common::chat_history::remember_message_list_scroll_posit
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use crate::ui::favorites_sidebar::SidebarTooltip;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
 fn get_ordered_servers(
@@ -122,6 +123,7 @@ pub(crate) async fn persist_account_server_order(
 ///
 /// Only rendered when `active_account_id` is `Some(...)`.
 /// Shows DMs, notifications, and all servers for this account.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn AccountServerBar() -> Element {
@@ -244,6 +246,7 @@ pub fn AccountServerBar() -> Element {
 /// Handles all drag-and-drop events, right-click context menu, and click navigation.
 /// Extracted from the `AccountServerBar` for-loop to keep RSX macros small and
 /// avoid Dioxus macro complexity limits inside `for` iterator blocks.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountServerIcon(
@@ -467,6 +470,7 @@ fn AccountServerIcon(
 ///
 /// Shows a red `@{mention}` badge for direct @mentions, and a small unread dot
 /// when there are unread messages but no direct mentions.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerIconDisplay(
@@ -508,6 +512,7 @@ fn ServerIconDisplay(
 }
 
 /// Conversations button for the account server bar.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountBarDmsButton(
@@ -545,6 +550,7 @@ fn AccountBarDmsButton(
 }
 
 /// Friends / ignore / blocked management button for the account server bar.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountBarFriendsButton(
@@ -582,6 +588,7 @@ fn AccountBarFriendsButton(
 }
 
 /// Notifications button for the account server bar.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
@@ -640,6 +647,7 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
 /// Navigates to the full-page Create Server route where FavoritesBar and
 /// AccountServerBar remain visible. The inline form was replaced by the
 /// full-page route to match the Settings/Signup page pattern.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CreateServerButton(account_id: String) -> Element {

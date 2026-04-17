@@ -21,6 +21,7 @@ use crate::ui::main_layout::close_mobile_drawer;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, DmChannel, Server, User, VoiceParticipant};
+use poly_ui_macros::context_menu;
 
 fn dm_last_incoming_timestamp(dm: &DmChannel) -> Option<DateTime<Utc>> {
     dm.last_message
@@ -296,6 +297,7 @@ pub(crate) fn open_direct_message_from_active_account(
 }
 
 /// Single connected voice participant entry.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn ChannelList() -> Element {
@@ -343,6 +345,7 @@ pub fn ChannelList() -> Element {
 /// overlay that covers the full viewport beneath the panel.
 // DECISION(DX): reuses the context-menu-backdrop/context-menu CSS pattern
 // established in phase-2.10 so we don't need new z-index layers.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerBanner(
@@ -531,6 +534,7 @@ fn ServerBanner(
 }
 
 /// DMs and Friends view — action shortcuts plus unified list of DMs + groups.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DMFriendsView() -> Element {
@@ -695,6 +699,7 @@ fn DMFriendsView() -> Element {
 }
 
 /// Server channel view — categories and channels.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
@@ -892,6 +897,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
 /// Demo-only panel to opt into category visibility, inspired by Discord's
 /// Channels & Roles onboarding surface.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ChannelsRolesPanel(server: Server, mut visible_category_ids: Signal<Vec<String>>) -> Element {
@@ -947,6 +953,7 @@ fn ChannelsRolesPanel(server: Server, mut visible_category_ids: Signal<Vec<Strin
 }
 
 /// Single DM channel item.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DMChannelItem(
@@ -1045,6 +1052,7 @@ fn DMChannelItem(
 }
 
 /// Single group channel item.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn GroupChannelItem(
@@ -1113,6 +1121,7 @@ fn GroupChannelItem(
 }
 
 /// Friend contact in search results.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn FriendItem(display_name: String, user_id: String) -> Element {
@@ -1154,6 +1163,7 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
 /// Category header + channels within the category.
 ///
 /// Clicking the category header toggles collapse/expand of its channel list.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CategorySection(
@@ -1192,6 +1202,7 @@ fn CategorySection(
 }
 
 /// Single server channel row (with voice participants if applicable).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ChannelItemRow(channel: Channel) -> Element {
@@ -1416,6 +1427,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {

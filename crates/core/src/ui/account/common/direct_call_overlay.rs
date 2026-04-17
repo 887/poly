@@ -13,7 +13,9 @@ use crate::state::{AppState, ChatData};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
+use poly_ui_macros::context_menu;
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn OutgoingDirectCallOverlay(

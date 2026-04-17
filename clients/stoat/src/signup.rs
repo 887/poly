@@ -6,6 +6,7 @@ use dioxus::prelude::*;
 use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
 
 use crate::{OFFICIAL_STOAT_BASE_URL, StoatClient};
+use poly_ui_macros::context_menu;
 
 /// Authenticate against a Stoat/Revolt server. Public so test panels can call it.
 pub async fn authenticate(
@@ -76,6 +77,7 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
 }
 
 /// Full Stoat login form.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn StoatSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

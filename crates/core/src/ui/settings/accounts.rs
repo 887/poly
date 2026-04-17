@@ -15,6 +15,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Derive a stable hsl color from an account ID string (same as search.rs).
 fn account_color(account_id: &str) -> String {
@@ -39,6 +40,7 @@ fn backend_emoji(slug: &str) -> &'static str {
 }
 
 /// A single row in the accounts list showing account icon, name, backend, and settings gear.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountRow(
@@ -93,6 +95,7 @@ fn AccountRow(
 /// Lists active messenger accounts grouped by backend and provides
 /// an "Add Account" button that navigates to the plugin-driven signup
 /// flow at `/signup`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn AccountsSettings() -> Element {

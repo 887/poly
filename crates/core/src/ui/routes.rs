@@ -68,6 +68,7 @@ use crate::ui::account::common::chat_history::initial_message_query;
 use crate::ui::account::common::chat_history::request_restore_scroll_position_or_bottom;
 use dioxus::prelude::*;
 use poly_client::{BackendType, Channel, ChannelType};
+use poly_ui_macros::context_menu;
 
 /// Return the account id encoded by an account-scoped route, if any.
 pub fn route_account_id(route: &Route) -> Option<&str> {
@@ -152,7 +153,10 @@ pub enum Route {
             #[route("/:backend/:instance_id/:account_id/dms")]
             DmsHome { backend: String, instance_id: String, account_id: String },
 
-            #[connected(linked)]
+            // Reached programmatically: the DMs channel list and conversation
+            // search view navigate here via navigator().push. No Link callsite
+            // exists yet (the search button is rendered inside DMFriendsView).
+            #[connected(linked, programmatic<ConversationSearchRouteProducer>)]
             #[route("/:backend/:instance_id/:account_id/dms/search")]
             ConversationSearchRoute { backend: String, instance_id: String, account_id: String },
 
@@ -256,7 +260,9 @@ pub enum Route {
             },
 
             // ── Forum search ──
-            #[connected(linked)]
+            // Reached programmatically: the forum sidebar navigates here to open
+            // the community search page. No Link callsite exists yet.
+            #[connected(linked, programmatic<ForumSearchRouteProducer>)]
             #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/search")]
             ForumSearchRoute {
                 backend: String,
@@ -343,7 +349,11 @@ pub enum Route {
             server_id: String,
         },
 
-        #[connected(linked)]
+        // Reached programmatically: ServerSettingsPage uses history.replaceState
+        // to update the URL when scrolling between sections (see
+        // crates/core/src/ui/account/server/settings/mod.rs). No typed
+        // navigator().push callsite exists; the route is entered via the URL.
+        #[connected(linked, programmatic<ServerSettingsSectionRouteProducer>)]
         #[route("/:backend/:instance_id/:account_id/servers/:server_id/settings/:section")]
         ServerSettingsSectionRoute {
             backend: String,
@@ -937,6 +947,7 @@ fn restore_dm_chat(
 /// the same `margin-left: -72px` trick as the old account-bar standalone, so
 /// both panels extend to cover the favourites sidebar column.
 // DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmsLayout() -> Element {
@@ -967,6 +978,7 @@ fn DmsLayout() -> Element {
 /// the same `margin-left: -72px` trick as the old account-bar standalone, so
 /// both panels extend to cover the favourites sidebar column.
 // DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerLayout() -> Element {
@@ -989,6 +1001,7 @@ fn ServerLayout() -> Element {
 // ── Route pages ─────────────────────────────────────────────────────────────
 
 /// DM home — placeholder when no conversation is selected.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1072,6 +1085,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 /// Handles both click navigation (DMChannelItem sets up data before routing)
 /// and URL-restore navigation (account switch, page reload) by loading data
 /// in a `use_effect` when `current_channel` doesn't already match `dm_id`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
@@ -1130,6 +1144,7 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmPendingCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
@@ -1145,6 +1160,7 @@ fn DmPendingCall(backend: String, instance_id: String, account_id: String, dm_id
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmPendingVideoCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
@@ -1160,6 +1176,7 @@ fn DmPendingVideoCall(backend: String, instance_id: String, account_id: String, 
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmPendingAddCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
@@ -1175,6 +1192,7 @@ fn DmPendingAddCall(backend: String, instance_id: String, account_id: String, dm
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmPendingAddVideoCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
@@ -1190,6 +1208,7 @@ fn DmPendingAddVideoCall(backend: String, instance_id: String, account_id: Strin
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmPendingCallInner(
@@ -1227,6 +1246,7 @@ fn DmPendingCallInner(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmMediaViewerRoute(
@@ -1263,6 +1283,7 @@ fn DmMediaViewerRoute(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerMediaViewerRoute(
@@ -1346,6 +1367,7 @@ fn ServerMediaViewerRoute(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NewConversationRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1354,6 +1376,7 @@ fn NewConversationRoute(backend: String, instance_id: String, account_id: String
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ConversationSearchRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1367,6 +1390,7 @@ fn ConversationSearchRoute(backend: String, instance_id: String, account_id: Str
 /// On URL-restore navigation (F5, deep link) the click handler that normally
 /// calls `load_server_data` never ran, so data is missing. The `use_effect`
 /// here detects that case and loads the server data before rendering.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerHome(
@@ -1454,6 +1478,7 @@ fn ServerHome(
 /// normally set up `chat_data` never ran. The `use_effect` here detects
 /// missing data and calls `restore_server_channel` to reload it, preserving
 /// the exact channel from the URL rather than defaulting to the first one.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerChat(
@@ -1554,6 +1579,7 @@ fn ServerChat(
 ///
 /// Capability-gated: backends without a friends list (HN, Lemmy, GitHub)
 /// redirect to the account landing route instead of rendering an empty page.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1572,6 +1598,7 @@ fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Ele
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1582,6 +1609,7 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
 
 /// Server/repo overview — landing page for forge backends (GitHub, Forgejo).
 /// Shows a searchable list of all repos with open issues/PRs counts.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1594,6 +1622,7 @@ fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String)
 ///
 /// Capability-gated: HN has no notification surface, so the route redirects
 /// to root rather than rendering an empty inbox.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NotificationsRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1613,6 +1642,7 @@ fn NotificationsRoute(backend: String, instance_id: String, account_id: String) 
 }
 
 /// Settings page — app-level, not account-scoped.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SettingsRoute() -> Element {
@@ -1626,6 +1656,7 @@ fn SettingsRoute() -> Element {
 /// `/settings/:section` deep-links directly into a settings section.
 /// `sync_route_to_app_state` parses the `section` slug and writes it to
 /// `AppState.settings_section`, so `SettingsPage` renders the correct content.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SettingsSectionRoute(section: String) -> Element {
@@ -1638,6 +1669,7 @@ fn SettingsSectionRoute(section: String) -> Element {
 }
 
 /// Global search page — browse the full node tree of all accounts.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SearchRoute() -> Element {
@@ -1652,6 +1684,7 @@ fn SearchRoute() -> Element {
 /// context is active.  The account context stays in app-state nav so Bar 2
 /// remains visible; `SearchPage` receives the `locked_account_id` prop and
 /// initialises `enabled_accounts` to contain only that account.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountSearchRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1669,6 +1702,7 @@ fn AccountSearchRoute(backend: String, instance_id: String, account_id: String) 
 ///
 /// AccountSettingsPage renders its own channel-list-wrapper (with settings nav
 /// + AccountBar) and settings-content sibling, matching the normal layout.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1684,6 +1718,7 @@ fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String
 ///
 /// ServerSettingsPage renders its own channel-list-wrapper (with settings nav
 /// + AccountBar) and settings-content sibling, matching the normal layout.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsRoute(
@@ -1704,6 +1739,7 @@ fn ServerSettingsRoute(
 }
 
 /// Server settings for a specific section of one server.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsSectionRoute(
@@ -1729,6 +1765,7 @@ fn ServerSettingsSectionRoute(
 /// Uses `use_effect` to navigate away on mount since the `on_update`
 /// callback may not process its redirect return value on the very first
 /// render in Dioxus memory-history mode.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn Root() -> Element {
@@ -1752,6 +1789,7 @@ fn Root() -> Element {
 ///
 /// Renders [`super::signup::SignupPickerPage`] which lists available backends
 /// and navigates to `/signup/:client` on selection.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SignupPicker() -> Element {
@@ -1765,6 +1803,7 @@ fn SignupPicker() -> Element {
 /// The `client` slug selects which backend signup page to render:
 /// - `"poly"` → full Poly server signup/sign-in form
 /// - all others → "coming soon" stub
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ClientSignup(client: String) -> Element {
@@ -1779,6 +1818,7 @@ fn ClientSignup(client: String) -> Element {
 /// account's credentials in place, or remove the account entirely. Used when
 /// a stored token has been rejected (401) and the app has marked the
 /// connection status as [`ConnectionStatus::Unauthenticated`].
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ReauthAccount(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1789,6 +1829,7 @@ fn ReauthAccount(backend: String, instance_id: String, account_id: String) -> El
 
 /// Catch-all 404 — on_update redirects before render, but as a belt-and-suspenders
 /// fallback this component also redirects to Root on mount.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn PageNotFound(segments: Vec<String>) -> Element {
@@ -1809,6 +1850,7 @@ fn PageNotFound(segments: Vec<String>) -> Element {
 ///
 /// Full-page form inside MainLayout (both FavoritesBar + AccountServerBar remain
 /// visible on the left). Delegates to [`super::create_server::CreateServerPage`].
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -> Element {
@@ -1834,6 +1876,7 @@ fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -
 /// Full-page form inside `ServerLayout` — the `ChannelList` sidebar (with all
 /// existing channels) stays visible on the left while the form occupies the
 /// main content area on the right.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CreateChannelRoute(
@@ -1851,6 +1894,7 @@ fn CreateChannelRoute(
 ///
 /// Renders inside `ServerLayout` (sidebar visible). The parent `channel_id` is synced into
 /// `AppState.nav.selected_channel` by `sync_route_to_app_state` so the sidebar stays highlighted.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ForumPostRoute(
@@ -1867,6 +1911,7 @@ fn ForumPostRoute(
 }
 
 /// Create forum post — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/create-post`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CreateForumPostRoute(
@@ -1882,6 +1927,7 @@ fn CreateForumPostRoute(
 }
 
 /// Forum search — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/search`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ForumSearchRoute(
@@ -1897,6 +1943,7 @@ fn ForumSearchRoute(
 }
 
 /// Forum comments feed — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/comments`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ForumCommentsRoute(

@@ -17,6 +17,7 @@ use super::emoji_picker::{EMOJI_CATEGORIES, emoji_shortcode_matches};
 use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::CustomEmoji;
+use poly_ui_macros::context_menu;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum MediaTab {
@@ -113,6 +114,7 @@ pub(crate) fn build_emoji_sections(custom: &[CustomEmoji]) -> Vec<EmojiSection> 
 }
 
 /// Left sidebar icon button for one emoji section.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SidebarIcon(icon: String, label: String, section_id: String) -> Element {
@@ -149,6 +151,7 @@ fn SidebarIcon(icon: String, label: String, section_id: String) -> Element {
 }
 
 /// One emoji section: sticky header + grid of items, or a divider.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn EmojiSectionBlock(section: EmojiSection, on_select: EventHandler<String>) -> Element {
@@ -206,6 +209,7 @@ fn EmojiSectionBlock(section: EmojiSection, on_select: EventHandler<String>) -> 
 ///
 /// The sidebar active-icon highlight is managed entirely in JS (via `__polyEmojiScrollSpy`)
 /// to avoid async round-trips between Rust and the DOM on every scroll event.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn EmojiTabContent(
@@ -335,6 +339,7 @@ fn EmojiTabContent(
 }
 
 /// Placeholder tab shown when GIF or Sticker search is not yet implemented.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn PlaceholderTabContent(message: String) -> Element {
@@ -346,6 +351,7 @@ fn PlaceholderTabContent(message: String) -> Element {
 }
 
 /// Footer row with markdown toggle.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn MediaPickerFooter(markdown_enabled: Signal<bool>) -> Element {
@@ -372,6 +378,7 @@ fn MediaPickerFooter(markdown_enabled: Signal<bool>) -> Element {
 /// Shows emoji, GIF, and sticker tabs plus a markdown formatting toggle.
 /// Positioning is controlled by CSS: bottom-right panel on desktop,
 /// full-width slide-up sheet on mobile.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn MediaPickerPopup(

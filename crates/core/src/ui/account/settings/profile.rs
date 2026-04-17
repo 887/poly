@@ -19,11 +19,13 @@ use crate::state::ChatData;
 use crate::state::chat_data::user_color;
 use dioxus::prelude::*;
 use poly_client::AccountPresence;
+use poly_ui_macros::context_menu;
 
 /// Poly Server profile settings section.
 ///
 /// Rendered inside `AccountSettingsPage` only when `backend == "poly"`.
 /// Shows: avatar display, display name, status picker, banner placeholder.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {

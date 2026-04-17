@@ -13,11 +13,13 @@ use super::super::super::routes::Route;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, SettingsSection};
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Account switcher bar component (replaces AccountBar in DMs).
 ///
 /// Shows account switching and settings buttons in a bar at the bottom
 /// of the channel list (same style/position as AccountBar for servers).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn AccountSwitcher() -> Element {

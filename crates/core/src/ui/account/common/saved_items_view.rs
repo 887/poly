@@ -12,6 +12,7 @@ use crate::state::{AppState, ChatData};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{MessageContent, MessageSearchHit};
+use poly_ui_macros::context_menu;
 
 #[derive(Clone, PartialEq)]
 struct SavedPinnedItem {
@@ -42,6 +43,7 @@ fn build_highlight_terms(query: &str) -> Vec<String> {
         .collect()
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn HighlightedSavedText(text: String, search_terms: Vec<String>) -> Element {
@@ -96,6 +98,7 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
     sources
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn SavedItemsView() -> Element {
@@ -331,6 +334,7 @@ pub fn SavedItemsView() -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SidebarSourceButton(
@@ -355,6 +359,7 @@ fn SidebarSourceButton(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SavedPinnedItemCard(

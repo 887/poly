@@ -9,6 +9,7 @@ use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FriendsManagementTab {
@@ -17,6 +18,7 @@ enum FriendsManagementTab {
     Blocked,
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn FriendsPanel(account_id: String) -> Element {
@@ -120,6 +122,7 @@ pub fn FriendsPanel(account_id: String) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SidebarMenuButton(label: String, active: bool, onclick: EventHandler<MouseEvent>) -> Element {
@@ -138,6 +141,7 @@ fn SidebarMenuButton(label: String, active: bool, onclick: EventHandler<MouseEve
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn FriendsFilterBar(
@@ -169,6 +173,7 @@ fn FriendsFilterBar(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
@@ -236,6 +241,7 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn BlockedUsersGrid(blocked_users: Vec<poly_client::BlockedUser>) -> Element {
@@ -270,6 +276,7 @@ fn BlockedUsersGrid(blocked_users: Vec<poly_client::BlockedUser>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn IgnoredUsersPlaceholder() -> Element {

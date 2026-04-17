@@ -20,6 +20,7 @@ use crate::state::{AppState, ChatData};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
+use poly_ui_macros::context_menu;
 
 /// Presence dot CSS class for a given status.
 fn presence_dot_class(status: &PresenceStatus) -> &'static str {
@@ -35,6 +36,7 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 ///
 /// Reads `ChatData::active_group_members` and `NavState::dm_right_sidebar_visible`.
 /// Renders nothing when there are no active group members.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn DmUserSidebar() -> Element {
@@ -86,6 +88,7 @@ pub fn DmUserSidebar() -> Element {
 }
 
 /// A single member row in the DM group member sidebar.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmMemberRow(

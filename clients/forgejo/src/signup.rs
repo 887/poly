@@ -5,6 +5,7 @@
 
 use dioxus::prelude::*;
 use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
+use poly_ui_macros::context_menu;
 
 use crate::ForgejoClient;
 
@@ -107,6 +108,7 @@ enum FjMode {
     Custom,
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ForgejoSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

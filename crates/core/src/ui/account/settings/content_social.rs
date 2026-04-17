@@ -25,12 +25,14 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
 use poly_client::{DmSpamFilterLevel, SensitiveContentLevel};
+use poly_ui_macros::context_menu;
 
 // ─── sub-components ─────────────────────────────────────────────────────────
 
 /// A single select-row inside the Sensitive Media section.
 ///
 /// Renders a label + `<select>` for a [`SensitiveContentLevel`].
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SensitiveMediaRow(
@@ -60,6 +62,7 @@ fn SensitiveMediaRow(
 }
 
 /// A labeled checkbox toggle row.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Element {
@@ -77,6 +80,7 @@ fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Ele
 }
 
 /// Sensitive Media section — three select rows.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -113,6 +117,7 @@ fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// DM Spam Filter section — three radio options.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -152,6 +157,7 @@ fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// Age-Restricted Content section — age access toggles.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -178,6 +184,7 @@ fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// Social Permissions section — DM and message request controls.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -207,6 +214,7 @@ fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// Friend Requests section — three permission checkboxes.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -249,6 +257,7 @@ fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
 ///
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`] when the
 /// "content-social" section is active.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn ContentSocialSettings(_account_id: String) -> Element {

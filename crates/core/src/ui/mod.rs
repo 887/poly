@@ -56,6 +56,7 @@
 //! **NEVER hardcode demo/test data in UI components** — all data must flow
 //! through the `ClientBackend` trait via `ClientManager`.
 
+use poly_ui_macros::context_menu;
 pub mod account;
 pub(crate) mod create_channel;
 pub(crate) mod create_forum_post;
@@ -1015,6 +1016,7 @@ pub(crate) async fn restore_github_accounts(
 /// must reauth" from "network unreachable, try again later". Matching is
 /// intentionally lenient — errors bubble up from eight different HTTP clients
 /// with wildly different formatting.
+#[cfg(feature = "forgejo")]
 pub(crate) fn looks_like_auth_failure(err: &str) -> bool {
     let l = err.to_lowercase();
     l.contains("401")
@@ -1030,6 +1032,7 @@ pub(crate) fn looks_like_auth_failure(err: &str) -> bool {
 /// Used by restore paths for forge/forum backends that otherwise would silently
 /// skip the account — leaving the user confused about why their sidebar is empty.
 /// Account details for [`register_unauthenticated_account`].
+#[cfg(feature = "forgejo")]
 pub(crate) struct UnauthAccountInfo {
     pub backend: poly_client::BackendType,
     pub backend_slug: String,
@@ -1041,6 +1044,7 @@ pub(crate) struct UnauthAccountInfo {
     pub reason: String,
 }
 
+#[cfg(feature = "forgejo")]
 pub(crate) fn register_unauthenticated_account(
     client_manager: &mut Signal<ClientManager>,
     chat_data: &mut Signal<ChatData>,
@@ -1764,6 +1768,7 @@ fn router_config(
     )
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
@@ -1801,6 +1806,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn StartupOverlay(state: StartupOverlayState) -> Element {
@@ -1896,6 +1902,7 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 /// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
 /// - `Signal<ClientManager>` — client manager for active backends
 /// - `Signal<ChatData>` — reactive chat data store
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn App() -> Element {

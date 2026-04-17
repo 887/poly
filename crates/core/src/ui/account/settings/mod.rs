@@ -15,6 +15,7 @@
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**
 //! of RSX + logic. Extract sub-components rather than growing any file.
 
+use poly_ui_macros::context_menu;
 mod content_social;
 mod notifications;
 
@@ -171,6 +172,7 @@ fn install_account_settings_scroll_spy(_active_section: Signal<String>, _show_pr
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
@@ -200,6 +202,7 @@ fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>) -> Element {
@@ -223,6 +226,7 @@ fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>)
 ///
 /// Global settings (theme, language, voice/video, identity, backup) are handled
 /// by the app-level `SettingsPage`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {

@@ -18,6 +18,7 @@ use crate::ui::split_shell::SplitMenuShell;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::BackendType;
+use poly_ui_macros::context_menu;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ fn group_last_incoming_timestamp(
 // ── UI Components ─────────────────────────────────────────────────────────────
 
 /// Search input bar for the global search page.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SearchInput(query: Signal<String>) -> Element {
@@ -127,6 +129,7 @@ fn SearchInput(query: Signal<String>) -> Element {
 ///
 /// Renders an `<img>` if `url` is `Some`, otherwise a coloured bubble using
 /// the first character of `label` as a fallback initial.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
@@ -153,6 +156,7 @@ fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
 }
 
 /// Per-account checkbox in the sidebar — shows avatar/icon, name, and backend.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountFilter(
@@ -189,6 +193,7 @@ fn AccountFilter(
 }
 
 /// A single node row in the search tree.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NodeRow(
@@ -217,6 +222,7 @@ fn NodeRow(
 }
 
 /// A node row with an avatar icon — used for DM and group entries.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AvatarNodeRow(
@@ -258,6 +264,7 @@ fn build_highlight_terms(query: &str) -> Vec<String> {
         .collect()
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn HighlightedSearchText(class_name: String, text: String, search_terms: Vec<String>) -> Element {
@@ -286,6 +293,7 @@ fn HighlightedSearchText(class_name: String, text: String, search_terms: Vec<Str
 }
 
 /// Server section with its channels and account attribution in the header.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerNode(
@@ -403,6 +411,7 @@ fn ServerNode(
 }
 
 /// Type filter checkboxes — Servers / DMs / Groups.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Element {
@@ -443,6 +452,7 @@ fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Elem
 }
 
 /// Global search page — sidebar with account filters + right tree of all nodes.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn SearchPage(

@@ -15,6 +15,7 @@
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
     if !app_state.is_setup_complete {
@@ -44,6 +45,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ElectronNavButtons() -> Element {
@@ -68,6 +70,8 @@ fn ElectronNavButtons() -> Element {
         }
     }
 }
+
+#[context_menu(inherit)]
 
 #[component]
 fn ElectronWindowControls() -> Element {
@@ -100,6 +104,8 @@ fn ElectronWindowControls() -> Element {
         }
     }
 }
+
+#[context_menu(inherit)]
 
 #[component]
 pub fn ElectronTitleBar() -> Element {

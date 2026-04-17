@@ -43,6 +43,7 @@ native = [
 ]
 
 [dependencies]
+poly-ui-macros = { workspace = true }
 # The shared abstraction trait + types
 poly-client = { workspace = true }
 

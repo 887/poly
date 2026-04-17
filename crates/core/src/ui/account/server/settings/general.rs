@@ -7,10 +7,12 @@ use super::super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// General settings panel for a server.
 ///
 /// Shows server info and a leave-server action with an inline confirm.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn ServerGeneralSettings(
@@ -64,6 +66,7 @@ pub fn ServerGeneralSettings(
 /// Inline confirm widget for leaving a server.
 ///
 /// Does NOT use `window.confirm()`. The confirm dialog is rendered in-DOM.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn LeaveServerConfirm(

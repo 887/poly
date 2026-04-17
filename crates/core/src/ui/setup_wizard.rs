@@ -2,8 +2,10 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// A large feature card for the welcome screen.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn FeatureCard(icon: String, title: String, body: String) -> Element {
@@ -18,6 +20,7 @@ fn FeatureCard(icon: String, title: String, body: String) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn SetupWizard(on_complete: EventHandler<String>) -> Element {

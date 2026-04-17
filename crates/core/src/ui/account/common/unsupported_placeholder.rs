@@ -13,6 +13,7 @@
 use dioxus::prelude::*;
 
 use crate::i18n::{t, t_args};
+use poly_ui_macros::context_menu;
 
 /// Categories of features that can be declared unsupported.
 ///
@@ -49,6 +50,7 @@ impl UnsupportedFeature {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn FeatureUnsupportedPlaceholder(

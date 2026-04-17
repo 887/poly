@@ -7,6 +7,7 @@
 use crate::i18n::t;
 use crate::theme::{ThemeConfig, ThemePreset};
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Persist the theme config to storage (fire-and-forget).
 async fn persist_theme(config: ThemeConfig) {
@@ -51,6 +52,7 @@ fn initial_editor_css(config: &ThemeConfig) -> String {
 }
 
 /// Visual preset picker — colored buttons for each built-in theme.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
@@ -96,6 +98,7 @@ pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
 }
 
 /// Dark / Light / Follow Device toggle.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Element {
@@ -144,6 +147,7 @@ pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Eleme
 /// When disabled (default), the color pickers are greyed out and no
 /// color overrides are applied. When enabled, users can customize
 /// individual colors which then override the preset.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element {
@@ -194,6 +198,7 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ColorOverridesToggleRow(colors_enabled: bool, on_toggle: EventHandler<bool>) -> Element {
@@ -212,6 +217,7 @@ fn ColorOverridesToggleRow(colors_enabled: bool, on_toggle: EventHandler<bool>) 
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ColorOverridesGrid(
@@ -254,6 +260,7 @@ fn ColorOverridesGrid(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ResetColorsButton(on_reset: EventHandler<MouseEvent>) -> Element {
@@ -274,6 +281,7 @@ fn ResetColorsButton(on_reset: EventHandler<MouseEvent>) -> Element {
 /// When disabled (default), the editor is visible but greyed out and
 /// the CSS is not injected. The template lists every CSS variable
 /// (commented out) so users can see what is available.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
@@ -297,6 +305,7 @@ pub(super) fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Element {
@@ -315,6 +324,7 @@ fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Eleme
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CssEditorArea(
@@ -336,6 +346,7 @@ fn CssEditorArea(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>) -> Element {
@@ -396,6 +407,7 @@ fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>
 ///
 /// Replaces the separate Appearance page: everything color/theme related
 /// is now in one place.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn ThemeSettings() -> Element {

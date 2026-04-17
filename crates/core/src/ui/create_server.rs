@@ -15,12 +15,14 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Full-page Create Server form.
 ///
 /// Shows a centered card with a server-name input and a Create button.
 /// On success: registers the new server and navigates to
 /// `/:backend/:instance_id/:account_id/dms`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn CreateServerPage(

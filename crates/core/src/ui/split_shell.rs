@@ -14,6 +14,7 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 #[cfg(target_arch = "wasm32")]
 const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
 
@@ -98,6 +99,7 @@ fn close_mobile_left_wing() {}
 #[cfg(not(target_arch = "wasm32"))]
 fn request_close_mobile_right_wing() {}
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn SplitMenuShell(props: SplitMenuShellProps) -> Element {
@@ -133,6 +135,7 @@ pub(crate) fn SplitMenuShell(props: SplitMenuShellProps) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn RightWingShell(props: RightWingShellProps) -> Element {

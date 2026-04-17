@@ -32,6 +32,7 @@ use crate::state::ChatData;
 use crate::state::chat_data::user_color;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
+use poly_ui_macros::context_menu;
 
 // ── JS snippets stored as constants to keep fn bodies under 150 lines ──────
 
@@ -104,6 +105,7 @@ const JS_STOP_ALL_STREAMS: &str = r#"
 /// Placed INSIDE `.channel-list-wrapper` between `ChannelList` and `AccountBar`.
 // DECISION(V-1): VoiceBar stays in sidebar; compact 3-row layout with avatars + buttons.
 // DECISION(V-mute): Mute/deafen buttons live only in AccountBar — not duplicated here.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceBar() -> Element {
@@ -143,6 +145,7 @@ pub fn VoiceBar() -> Element {
 // ─── Dock sections ───────────────────────────────────────────────────────────
 
 /// Left section: animated dot + "Voice Connected" + channel/server name.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceDockInfo(conn: poly_client::VoiceConnection) -> Element {
@@ -166,6 +169,7 @@ fn VoiceDockInfo(conn: poly_client::VoiceConnection) -> Element {
 }
 
 /// Center section: horizontally scrollable row of participant mini-tiles.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceDockParticipants(participants: Vec<poly_client::VoiceParticipant>) -> Element {
@@ -179,6 +183,7 @@ fn VoiceDockParticipants(participants: Vec<poly_client::VoiceParticipant>) -> El
 }
 
 /// Single participant mini-tile: avatar + truncated name + status icons.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceDockTile(participant: poly_client::VoiceParticipant) -> Element {
@@ -227,6 +232,7 @@ fn VoiceDockTile(participant: poly_client::VoiceParticipant) -> Element {
 /// Mute and deafen are intentionally NOT here — they live in `AccountBar`.
 // DECISION(V-2): JS eval used for getUserMedia/getDisplayMedia.
 // DECISION(V-mute): Mute/deafen in AccountBar only to avoid duplication.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceDockControls(
@@ -375,6 +381,7 @@ fn VoiceDockControls(
 /// Four vertical stripes grow in height left-to-right. All four lit = excellent.
 /// Demo hardcodes 42 ms excellent signal at EU-West.
 // DECISION(V-5): CSS bars for signal quality; hardcoded demo latency.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceLatencyBar() -> Element {
@@ -422,6 +429,7 @@ fn VoiceLatencyBar() -> Element {
 /// `#poly-local-camera` and `#poly-local-screen` by ID immediately on
 /// `getUserMedia`/`getDisplayMedia` resolution — before Rust re-renders.
 // DECISION(V-3): Always-rendered video elements with CSS visibility control.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoicePreviewPanel(conn: poly_client::VoiceConnection) -> Element {

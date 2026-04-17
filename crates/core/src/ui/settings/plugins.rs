@@ -22,6 +22,7 @@ use dioxus::prelude::*;
 use poly_client::{
     BackendCapabilities, ContainerLabelForm, capabilities_for_slug, container_label_key,
 };
+use poly_ui_macros::context_menu;
 
 /// WIT version string appended to WASM plugin fetch URLs.
 const WIT_VERSION: &str = "0.1.0";
@@ -345,6 +346,7 @@ fn toggle_native_backend(
 /// `badge_class` is "native" for compiled-in backends and "wasm" for
 /// dev-injected backends (Discord/Teams) so they render with the correct
 /// badge while sharing the same row layout and capability panel.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NativePluginRow(
@@ -431,6 +433,7 @@ fn NativePluginRow(
 /// in sync with the capability matrix used by route gating, nav buttons, and
 /// MCP tool advertisement. Everything here is read-only inspection — no
 /// state, no toggles.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn PluginCapabilityPanel(slug: String) -> Element {
@@ -498,6 +501,7 @@ fn PluginCapabilityPanel(slug: String) -> Element {
 }
 
 /// A single WASM plugin row with toggle and remove buttons.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn WasmPluginRow(
@@ -543,6 +547,7 @@ fn WasmPluginRow(
 ///
 /// Two install modes: from URL (with WIT version appended) or from a local .wasm file.
 /// Display name is inferred from the URL hostname or file name — no manual entry needed.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
@@ -656,6 +661,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 /// **Accounts** ("Cat (demo)", "Dog (demo)") are sessions created when a plugin
 /// authenticates a user — they appear in the Accounts settings page. Here we
 /// manage *which plugins are available and enabled*.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn PluginsSettings() -> Element {

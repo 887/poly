@@ -21,7 +21,9 @@ use crate::ui::account::common::chat_history::remember_message_list_scroll_posit
 use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
+use poly_ui_macros::context_menu;
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceBannerParticipants(
@@ -66,6 +68,7 @@ fn VoiceBannerParticipants(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceBannerChannelLink(
@@ -122,6 +125,7 @@ fn VoiceBannerChannelLink(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceBannerControls(
@@ -195,6 +199,7 @@ fn VoiceBannerControls(
 ///
 /// Spans all columns (server sidebar, channel list, chat area) and sits
 /// at the top of the layout. Hidden when not in a voice channel.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceBanner() -> Element {

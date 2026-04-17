@@ -36,6 +36,7 @@ use poly_client::{
     MessageContent, MessageQuery, MessageReplyPreview, MessageSearchHit, MessageSearchQuery,
     PresenceStatus, User,
 };
+use poly_ui_macros::context_menu;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -870,6 +871,7 @@ async fn persist_member_list_display_settings(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn ChatView() -> Element {
@@ -2505,6 +2507,7 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn HeaderOverflowItem(
@@ -2528,6 +2531,8 @@ fn HeaderOverflowItem(
         }
     }
 }
+
+#[context_menu(inherit)]
 
 #[component]
 fn ChatHeaderActions(
@@ -4621,6 +4626,7 @@ fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ChatUtilityRail(
@@ -4789,6 +4795,7 @@ fn ChatUtilityRail(
 /// Chat settings panel — shown inside the utility rail when the ⚙️ tab is open.
 ///
 /// Contains per-channel notification settings and member display preferences.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
@@ -4891,6 +4898,7 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SearchFilterPopup(
@@ -4921,6 +4929,7 @@ fn SearchFilterPopup(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SearchFilterRow(
@@ -4945,6 +4954,7 @@ fn SearchFilterRow(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SearchResultCard(
@@ -4998,6 +5008,7 @@ fn SearchResultCard(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn PinnedMessageCard(
@@ -5045,6 +5056,7 @@ fn PinnedMessageCard(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
@@ -5121,6 +5133,7 @@ fn render_markdown_html(text: &str) -> String {
     builder.clean(&html_output).to_string()
 }
 /// Render message text content, handling multi-line and edited indicator.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn MessageContentView(content: MessageContent, edited: bool) -> Element {
@@ -5151,6 +5164,7 @@ fn MessageContentView(content: MessageContent, edited: bool) -> Element {
 }
 
 /// Render attachments (images inline, non-images as links).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String) -> Element {
@@ -5235,6 +5249,7 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
 }
 
 /// Render reaction pills (clickable to toggle).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> Element {
@@ -5283,6 +5298,7 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 /// Typing indicator shown above the message input when users are typing.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn TypingIndicator() -> Element {
@@ -5428,6 +5444,7 @@ fn apply_edit(chat_data: &mut Signal<ChatData>, message_id: &str, new_text: Stri
 ///
 /// Shows a textarea pre-filled with the current message text, a Cancel button,
 /// and a Save button. Enter (without Shift) saves; Escape cancels.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn MessageInlineEdit(
@@ -5492,6 +5509,7 @@ const QUICK_REACTIONS: &[&str] = &["👍", "✅", "⚖️", "🔞"];
 ///
 /// Renders a transparent backdrop (closes on click) and a fixed-position
 /// floating menu at the coordinates stored in `msg_context_menu`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn MsgContextMenuOverlay(
@@ -5675,6 +5693,7 @@ fn render_context_menu_copy_id_item(
 ///
 /// Renders a full-width button with optional right arrow, danger styling,
 /// and a leading icon glyph.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ContextMenuItemSimple(
@@ -5703,6 +5722,7 @@ fn ContextMenuItemSimple(
 }
 
 /// Small inline reply preview shown above a replied message.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
@@ -5716,6 +5736,7 @@ fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
 }
 
 /// Composer banner shown while replying to a message.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEvent>) -> Element {
@@ -5741,6 +5762,7 @@ fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEve
 ///
 /// Shows filtered commands with provider badges. Highlighted item is driven by `active_idx`.
 /// Clicking a command calls `on_select` with the filled command text (e.g. `"/play "`).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn SlashCommandPopup(
@@ -5791,6 +5813,7 @@ fn SlashCommandPopup(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmContactListPanel(channel_id: String) -> Element {
@@ -5837,6 +5860,7 @@ fn DmContactListPanel(channel_id: String) -> Element {
 ///
 /// Uses the `user-avatar-wrap` + explicit `span.presence-dot` pattern so the dot
 /// is never clipped by `overflow: hidden` on `.user-avatar`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn DmContactRow(user: User, app_state: Signal<AppState>) -> Element {

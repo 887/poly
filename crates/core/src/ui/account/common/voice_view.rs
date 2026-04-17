@@ -24,6 +24,7 @@ use crate::ui::account::common::chat_history::remember_message_list_scroll_posit
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{ChannelType, VoiceConnectionKind, VoiceParticipant};
+use poly_ui_macros::context_menu;
 
 // ── JS snippets ───────────────────────────────────────────────────────────────
 
@@ -234,6 +235,7 @@ async fn join_voice_channel(
 ///
 /// Renders the full voice/video call experience including the floating
 /// `VoiceChatBar` when connected and the local screen share area when streaming.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceChannelView() -> Element {
@@ -317,6 +319,7 @@ pub fn VoiceChannelView() -> Element {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 /// Header bar showing channel name, backend badge, and participant count.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceHeader(
@@ -350,6 +353,7 @@ fn VoiceHeader(
 /// preview also feeds this element.
 // DECISION(V-screenshare-main): Reuse __polyScreenStream for the big view
 // video element so no extra capture is needed.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceScreenShareArea() -> Element {
@@ -402,6 +406,7 @@ fn VoiceScreenShareArea() -> Element {
 }
 
 /// Grid of voice participant tiles.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceParticipantGrid(
@@ -435,6 +440,7 @@ fn VoiceParticipantGrid(
 }
 
 /// Single participant tile in the voice grid.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceTile(participant: VoiceParticipant) -> Element {
@@ -521,6 +527,7 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
 }
 
 /// Join button — rendered when user is NOT connected.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceJoinButton(
@@ -563,6 +570,7 @@ fn VoiceJoinButton(
 /// Mirrors the sidebar `VoiceBar` controls but styled as a floating panel.
 // DECISION(V-6): VoiceChatBar duplicates sidebar controls in a larger, more
 // accessible floating bar so users don't need to look at the sidebar mid-call.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn VoiceChatBar(mut chat_data: Signal<ChatData>) -> Element {

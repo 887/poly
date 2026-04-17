@@ -2,6 +2,7 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// What the JS capability probe returned.
 #[derive(Clone, Debug, PartialEq)]
@@ -14,6 +15,7 @@ enum BrowserTranslation {
     Unavailable,
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn TranslationSettings() -> Element {

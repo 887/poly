@@ -9,6 +9,7 @@ license.workspace = true
 crate-type = ["rlib"]
 
 [dependencies]
+poly-ui-macros = { workspace = true }
 poly-client = { workspace = true }
 poly-host-bridge = { workspace = true }
 dioxus = { workspace = true }

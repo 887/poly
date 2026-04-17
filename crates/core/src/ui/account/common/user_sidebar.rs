@@ -24,6 +24,7 @@ use crate::state::{AppState, MemberListGrouping, MemberListSortOrder};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
+use poly_ui_macros::context_menu;
 
 /// Sort-rank for a presence status (lower = shown first).
 fn presence_rank(p: PresenceStatus) -> u8 {
@@ -65,6 +66,7 @@ fn apply_sort(mut users: Vec<User>, sort_order: MemberListSortOrder) -> Vec<User
 /// Rendered member list body — switches between grouped and flat layout.
 ///
 /// If `query` is empty or not found, renders the full name as plain text.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn HighlightedName(name: String, query: String) -> Element {
@@ -96,6 +98,7 @@ fn HighlightedName(name: String, query: String) -> Element {
 /// `…show_offline`).
 ///
 /// A collapsible filter (🔍 icon → text input) lets users search by name.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn UserSidebar() -> Element {
@@ -225,6 +228,7 @@ pub fn UserSidebar() -> Element {
 }
 
 /// A group of users under a presence header.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn UserGroup(

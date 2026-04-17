@@ -10,6 +10,7 @@ use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 fn user_color(account_id: &str) -> String {
     let hash: u32 = account_id.bytes().fold(5381_u32, |h, b| {
@@ -37,6 +38,7 @@ fn group_last_incoming_timestamp(
         .map(|message| message.timestamp)
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ConversationSearchInput(query: Signal<String>) -> Element {
@@ -68,6 +70,7 @@ fn ConversationSearchInput(query: Signal<String>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
@@ -93,6 +96,7 @@ fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AvatarNodeRow(
@@ -121,6 +125,7 @@ fn AvatarNodeRow(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Element {
@@ -155,6 +160,7 @@ fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<Strin
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn ConversationSearchView() -> Element {

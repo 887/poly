@@ -13,6 +13,7 @@
 //! ## 150-line component rule
 //! Every `#[component]` fn body MUST stay under **150 lines** of RSX + logic.
 
+use poly_ui_macros::context_menu;
 mod general;
 mod notifications;
 mod overview;
@@ -94,6 +95,7 @@ fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
@@ -123,6 +125,7 @@ fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String) -> Element {
@@ -134,6 +137,7 @@ fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String)
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsNavigation(
@@ -169,6 +173,7 @@ fn ServerSettingsNavigation(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsContent(
@@ -267,6 +272,7 @@ impl ServerSettingsSection {
 ///
 /// Shares the same two-column layout (nav sidebar + content) as `AccountSettingsPage`
 /// and `SettingsPage`. Server name shown in the content header.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn ServerSettingsPage(
@@ -373,6 +379,7 @@ pub fn ServerSettingsPage(
 }
 
 /// Navigation item for the server settings sidebar.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ServerSettingsNavItem(

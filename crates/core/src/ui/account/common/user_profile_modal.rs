@@ -28,6 +28,7 @@ use crate::state::ChatData;
 use crate::state::chat_data::{backend_badge, user_color};
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User, VoiceConnectionKind};
+use poly_ui_macros::context_menu;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,7 @@ fn close_modal(mut app_state: Signal<AppState>) {
 ///
 /// Render this **once** from `AppBody` — it is a no-op when
 /// `AppState.nav.profile_modal_user` is `None`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn UserProfileModal() -> Element {
@@ -319,6 +321,7 @@ pub fn UserProfileModal() -> Element {
 }
 
 /// Editable note text area with a live character counter.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NoteEditor() -> Element {

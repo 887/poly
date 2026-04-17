@@ -17,6 +17,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
 use poly_client::BackendType;
+use poly_ui_macros::context_menu;
 
 /// Determine whether a backend slug identifies a backend that owns its servers
 /// and can set icon/banner programmatically (Phase 3 API calls).
@@ -42,6 +43,7 @@ fn is_local_only(backend: Option<&BackendType>) -> bool {
 /// Icon URL input, live preview, and save button.
 ///
 /// Used by [`ServerOverviewSettings`] for both full and local-only modes.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn IconPanel(
@@ -140,6 +142,7 @@ fn IconPanel(
 /// Banner URL input, live preview, and save button.
 ///
 /// Shown only for backends that support banner images (Demo, Stoat, Discord, Poly).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> Element {
@@ -237,6 +240,7 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
 /// <!-- TODO(phase-3): wire icon/banner saves to backend API calls -->
 /// Currently all saves are local-only (stored in `AppSettings`). Phase 3 will
 /// add `ClientBackend::update_server_icon` / `update_server_banner` for
+#[context_menu(inherit)]
 /// Demo, Stoat, Discord, and Poly backends.
 #[component]
 pub fn ServerOverviewSettings(

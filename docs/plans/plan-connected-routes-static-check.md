@@ -1,7 +1,7 @@
 # Plan — Connected Routes Static Check
 
 > **Created:** 2026-04-16
-> **Status:** 🔵 drafted
+> **Status:** ✅ done (Phase A infrastructure + Phase B scans + full migration — no baseline exceptions)
 > **Scope:** cross-cutting — `crates/core/src/ui/routes.rs`, every link/button/navigator callsite under `crates/core/src/ui/`, the shared `crates/ui-macros/` proc-macro crate, and the shared `crates/lint-gate/build.rs` graph checker
 > **Goal:** `cargo check`-native reachability check. Every `Route` variant must be reached by **either** (a) at least one `Link { to: Route::X }` / `nav!(Route::X)` callsite — identity carried by Rust's own type system on `Route::X`, nothing stringly-typed — **or** (b) a ZST `ProgrammaticProducer` impl naming the route as its target. Orphan routes and routes unreachable from `entry_point` surface as `cargo::error=` on plain `cargo check`. No `via` label dictionary, no `#[test]` to skip.
 
@@ -255,17 +255,17 @@ Rolling out a hard compile error across 79+ callsites in one commit is a non-sta
 
 ### 5.1 Phase A — infrastructure, no enforcement (1 PR)
 
-- [ ] **5.1.1** Create `crates/ui-macros/` (proc-macro crate: `#[connected]`, `nav!`, `declare_programmatic!`, the `ProgrammaticProducer` trait, the RSX-walking component macro that registers `Link { to: Route::X }` callsites) and wire the graph-check module into `crates/lint-gate/build.rs` (the shared build script introduced in plan-component-lints.md §3.2). No separate `ui-macros-build` binary — the whole-graph assertion lives alongside the allow-ban and component-decorator scans in one build script.
-- [ ] **5.1.2** Add `linkme = "0.3"` and `diagnostic::on_unimplemented` trait marker setup.
-- [ ] **5.1.3** Macros compile and register; graph-check runs but emits `cargo::warning=` instead of `cargo::error=` while the backfill is in flight. Gate through the shared `regen-baseline` feature so that known violations grandfather into `crates/lint-gate/baseline.json`; new violations still fail the build.
-- [ ] **5.1.4** An optional debug helper `cargo run -p lint-gate --bin dump-routes` (tiny binary inside `lint-gate` that re-uses the same slice-walking code) dumps the current graph to `target/routes.dot` for inspection. Not a gate, just a visualization aid.
+- [x] **5.1.1** Create `crates/ui-macros/` (proc-macro crate: `#[connected]`, `nav!`, `declare_programmatic!`, the `ProgrammaticProducer` trait, the RSX-walking component macro that registers `Link { to: Route::X }` callsites) and wire the graph-check module into `crates/lint-gate/build.rs` (the shared build script introduced in plan-component-lints.md §3.2). No separate `ui-macros-build` binary — the whole-graph assertion lives alongside the allow-ban and component-decorator scans in one build script.
+- [x] **5.1.2** Add `linkme = "0.3"` and `diagnostic::on_unimplemented` trait marker setup.
+- [x] **5.1.3** Macros compile and register; graph-check runs but emits `cargo::warning=` instead of `cargo::error=` while the backfill is in flight. Gate through the shared `regen-baseline` feature so that known violations grandfather into `crates/lint-gate/baseline.json`; new violations still fail the build.
+- [x] **5.1.4** An optional debug helper `cargo run -p lint-gate --bin dump-routes` (tiny binary inside `lint-gate` that re-uses the same slice-walking code) dumps the current graph to `target/routes.dot` for inspection. Not a gate, just a visualization aid.
 
 ### 5.2 Phase B — backfill, warn loudly (one PR per UI module, parallelizable)
 
-- [ ] **5.2.1** Backfill `#[connected(...)]` on all 27 `Route` variants (single file edit in `routes.rs`). For each variant, inspect `sync_route_to_app_state` to list known producers; when unclear, start with `programmatic("TODO: audit")` and file follow-ups.
-- [ ] **5.2.2** Convert bare `navigator().push(Route::...)` → `nav!(Route::...)` across hotspot files (`favorites_sidebar.rs`, `channel_list.rs`, `chat_view.rs`, `signup/mod.rs`, `search.rs`, `settings/`). Mechanical rewrite — one-line regex because there are no labels to author.
-- [ ] **5.2.3** Enable `deny` for **E-ROUTE-002 (orphan / unreachable)** once every `Route` variant has `#[connected(...)]`. E-ROUTE-003 (`linked` declared but no producer) defaults to warn during backfill; flip to deny in Phase C.
-- [ ] **5.2.4** Stand up each `ProgrammaticProducer` ZST + impl at its source module. Expected ~5–8 types; one PR per cluster (signup flow, account-restore, deep-link, 401 redirect, push-notification open).
+- [x] **5.2.1** Backfill `#[connected(...)]` on all 27 `Route` variants (single file edit in `routes.rs`). For each variant, inspect `sync_route_to_app_state` to list known producers; when unclear, start with `programmatic("TODO: audit")` and file follow-ups.
+- [x] **5.2.2** Convert bare `navigator().push(Route::...)` → `nav!(Route::...)` across hotspot files (`favorites_sidebar.rs`, `channel_list.rs`, `chat_view.rs`, `signup/mod.rs`, `search.rs`, `settings/`). Mechanical rewrite — one-line regex because there are no labels to author.
+- [x] **5.2.3** Enable `deny` for **E-ROUTE-002 (orphan / unreachable)** once every `Route` variant has `#[connected(...)]`. E-ROUTE-003 (`linked` declared but no producer) defaults to warn during backfill; flip to deny in Phase C.
+- [x] **5.2.4** Stand up each `ProgrammaticProducer` ZST + impl at its source module. Expected ~5–8 types; one PR per cluster (signup flow, account-restore, deep-link, 401 redirect, push-notification open).
 
 ### 5.3 Phase C — full enforcement (1 PR)
 

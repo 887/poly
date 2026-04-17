@@ -5,8 +5,10 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Per-server profile settings panel.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn ServerProfileSettings(server_id: String, server_name: String) -> Element {

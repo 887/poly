@@ -26,6 +26,7 @@ use dioxus::prelude::*;
 use poly_core::ui::App;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::{mpsc, oneshot};
+use poly_ui_macros::context_menu;
 
 // ─── Eval Bridge ──────────────────────────────────────────────────────────────
 
@@ -345,6 +346,7 @@ async fn run_screenshot_coroutine() {
 /// before delegating rendering entirely to [`App`].
 ///
 /// **Hot-reload safe:** coroutines recreate their channels on each mount.
+#[context_menu(inherit)]
 /// The HTTP server is guarded by [`HTTP_SERVER_STARTED`] so it only binds once.
 #[component]
 fn DevtoolsShell() -> Element {

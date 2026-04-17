@@ -9,6 +9,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
 use poly_client::Attachment;
+use poly_ui_macros::context_menu;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct MessageMediaViewerOverlayProps {
@@ -17,6 +18,7 @@ pub struct MessageMediaViewerOverlayProps {
     pub attachment_index: usize,
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {

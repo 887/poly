@@ -39,6 +39,7 @@ use dioxus::prelude::*;
 use poly_client::{SignupCompleted, SignupContext};
 use std::collections::HashMap;
 use std::sync::Arc;
+use poly_ui_macros::context_menu;
 
 // ── Shared signup-commit callback builder ───────────────────────────────────
 
@@ -380,6 +381,7 @@ fn navigate_back_to_settings() {
 ///
 /// Lists all registered backend types (Poly Server, Matrix, …).
 /// The `selected_slug` entry is highlighted like the active nav item in Settings.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AddAccountNav(selected_slug: Option<String>) -> Element {
@@ -446,6 +448,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 
 // ── Test account quick-add panel ─────────────────────────────────────────────
 
+#[context_menu(inherit)]
 /// Panel shown at `/signup/test` — quick-add buttons for all registered test accounts.
 #[component]
 fn TestAccountsPanel() -> Element {
@@ -540,6 +543,7 @@ fn TestAccountsPanel() -> Element {
 ///
 /// Shows the favorites bar on the left, backend sidebar, and a placeholder
 /// in the right panel prompting the user to pick an account type.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn SignupPickerPage() -> Element {
@@ -564,6 +568,7 @@ pub(crate) fn SignupPickerPage() -> Element {
 /// Shows the favorites bar on the left, the selected backend highlighted in the sidebar,
 /// and its form in the right panel. Core handles all state commitment via the
 /// `on_complete` callback.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn ClientSignupPage(client: String) -> Element {
@@ -656,6 +661,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
 /// display name as subtitle. No other backends are offered because the user
 /// is not adding a new account, they are renewing credentials for a specific
 /// existing one.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ReauthNav(backend_slug: String, display_name: String) -> Element {
@@ -695,6 +701,7 @@ fn ReauthNav(backend_slug: String, display_name: String) -> Element {
 /// per-backend form that the signup flow uses but commits the result over
 /// the existing account row instead of creating a new one. Also offers a
 /// "Remove this account" button.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn ReauthAccountPage(

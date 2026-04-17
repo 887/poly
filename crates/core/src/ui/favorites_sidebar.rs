@@ -31,9 +31,11 @@ use crate::ui::account::common::chat_history::{
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
+use poly_ui_macros::context_menu;
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 #[allow(non_snake_case)]
@@ -48,6 +50,7 @@ fn NavBarSpacer() -> Element {
 
 /// Custom hover tooltip for sidebar icons. Opens to the right of the icon
 /// (or left when `mirror_menu_layout` is enabled). Uses `position: fixed`
+#[context_menu(inherit)]
 /// so it escapes overflow-hidden scroll containers.
 #[component]
 pub(crate) fn SidebarTooltip(
@@ -78,6 +81,7 @@ pub(crate) fn SidebarTooltip(
 ///
 /// Shows: Account icons, separator, favorited server icons with
 /// source badge, spacer, Demo toggle, App Settings.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 #[allow(non_snake_case)]
@@ -334,6 +338,7 @@ pub fn FavoritesBar() -> Element {
 /// Shows a colored circle with the account's emoji icon (if set in its session)
 /// or first character of the account ID as fallback. Clicking navigates to that
 /// account's last visited page (or DMs home if no history exists).
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
@@ -727,6 +732,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 /// - Right-click to open the server context menu
 /// - Drag to reorder within Bar 1 or move back (drag is tracked via `DragSource::FavoriteServer`)
 /// - Accept drops from Bar 2 (`DragSource::AccountServer`) for positional insertion
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn FavoriteServerIcon(

@@ -17,10 +17,12 @@ use crate::i18n::t;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// Channel right-click / long-press context menu.
 ///
 /// Reads `AppState.channel_context_menu` and renders a floating div at the
+#[context_menu(inherit)]
 /// stored coordinates. Renders nothing when `channel_context_menu` is `None`.
 #[component]
 pub fn ChannelContextMenu() -> Element {
@@ -103,6 +105,7 @@ pub fn ChannelContextMenu() -> Element {
 }
 
 /// A single clickable item inside the channel context menu.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn ChannelMenuItem(

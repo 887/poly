@@ -7,6 +7,7 @@ use dioxus::prelude::*;
 use poly_client::{SignupCompleted, SignupContext};
 
 use crate::HackerNewsClient;
+use poly_ui_macros::context_menu;
 
 /// Build a guest SignupCompleted immediately (no network call needed).
 pub fn complete_as_guest() -> SignupCompleted {
@@ -36,6 +37,7 @@ enum HnMode {
 }
 
 /// Two-mode HN signup page: anonymous or with username.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn HackerNewsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

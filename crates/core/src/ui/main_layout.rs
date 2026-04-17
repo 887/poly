@@ -22,6 +22,7 @@ use crate::client_manager::ClientManager;
 use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
+use poly_ui_macros::context_menu;
 
 const MOBILE_DRAWER_RUNTIME_JS: Asset = asset!("assets/scripts/mobile_drawer_runtime.js", AssetOptions::js());
 const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
@@ -155,6 +156,7 @@ const fn runtime_mobile_ui_active() -> bool {
 /// On web, the browser's native back/forward buttons handle navigation.
 // DECISION(DX-ROUTER-1): NavBar uses navigator().go_back()/go_forward()
 // instead of custom AppState history stack.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn NavBar() -> Element {
@@ -198,6 +200,7 @@ fn NavBar() -> Element {
 ///
 /// Desktop: voice banner + (nav bar | server sidebar | outlet)
 /// Mobile: TBD
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn MainLayout() -> Element {

@@ -27,6 +27,7 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
+use poly_ui_macros::context_menu;
 
 /// Snapshot of all rendering state for the account bar user panel.
 #[derive(Clone, PartialEq)]
@@ -114,6 +115,7 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
 /// Clicking the avatar opens an account profile popup with the full presence picker.
 /// The two-icon system is visually distinct from simple dots so users can tell at a glance
 /// whether the app is live-connected vs just what their chosen presence is.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
@@ -200,6 +202,7 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
 /// Displays the current user's own profile card (banner, avatar, name, status)
 /// plus an inline presence picker to change availability without navigating away.
 /// Positioned above the account bar; closes on backdrop click.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountProfilePopup(
@@ -293,6 +296,7 @@ fn AccountProfilePopup(
     }
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn AccountBarControls(
@@ -364,6 +368,7 @@ fn AccountBarControls(
 ///
 /// Shows user avatar + name + status + quick controls at the
 /// bottom of the channel list panel.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub fn AccountBar() -> Element {

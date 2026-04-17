@@ -6,6 +6,7 @@
 
 use dioxus::prelude::*;
 use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
+use poly_ui_macros::context_menu;
 
 use crate::GitHubClient;
 
@@ -111,6 +112,7 @@ enum GhMode {
     Enterprise,
 }
 
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 fn GitHubSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

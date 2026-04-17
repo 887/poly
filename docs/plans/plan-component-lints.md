@@ -1,7 +1,7 @@
 # Plan — Component-Size and Dead-Code Lints
 
 > **Created:** 2026-04-16
-> **Status:** 🔵 drafted
+> **Status:** ✅ done (Phase A infrastructure + Phase B scans + full migration — no baseline exceptions)
 > **Scope:** workspace-wide tooling; no production code behavior change
 > **Goal:** Give teeth to the two rules AI agents keep breaking — (1) the ban on
 > `#[allow(dead_code)]` / `#[allow(unused*)]`, (2) the size of `rsx!` macro

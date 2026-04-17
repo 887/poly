@@ -7,7 +7,9 @@ use dioxus::prelude::*;
 
 use crate::state::ChatData;
 use crate::ui::routes::Route;
+use poly_ui_macros::context_menu;
 
+#[context_menu(inherit)]
 /// Server overview landing page for forge backends (GitHub, Forgejo).
 #[component]
 pub fn ServerOverviewPage(
@@ -114,6 +116,7 @@ pub fn ServerOverviewPage(
     }
 }
 
+#[context_menu(inherit)]
 /// A single repo card in the overview grid.
 #[component]
 fn RepoCard(

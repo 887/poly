@@ -1,7 +1,7 @@
 # Plan — Context Menu Quality Control
 
 > **Created:** 2026-04-16
-> **Status:** 🔵 drafted
+> **Status:** ✅ done (Phase A infrastructure + Phase B scans + full migration — no baseline exceptions)
 > **Scope:** cross-cutting — every Dioxus component in `crates/core/src/ui/` and each `clients/*/src/`
 > **Goal:** Every `#[component]` in the app declares a compile-time context-menu policy via a single `#[context_menu(...)]` attribute macro (`Foo` / `None` / `allow_default` / `inherit`). Coverage is enforced by the shared `crates/lint-gate/build.rs` — any missing decorator emits `cargo::error=` on plain `cargo check`, so agents cannot silently skip it. The right menu always shows up for a given surface, the wrong one never bleeds through, and on mobile a long-press opens a center-screen stacked-overlay menu that dismisses on back / swipe / outside-click.
 
@@ -184,10 +184,10 @@ pub struct AppState {
 
 ### 5.1 Phased rollout
 
-- [ ] **5.1.1** **Phase A — infrastructure.** Land the macro crate + `ContextMenuFor` trait + the stack runtime. No component annotations yet. Existing `ServerContextMenu` / `ChannelContextMenu` / `MsgContextMenuOverlay` refactored in place to use the stack. Net behavior unchanged.
-- [ ] **5.1.2** **Phase B — warn mode.** The `lint-gate` build script emits `cargo::warning=missing #[context_menu(...)] at <path>:<line>` instead of `cargo::error=` while the backfill is in flight. Gated behind the same `regen-baseline` feature used for plan-component-lints.md: the baseline file `crates/lint-gate/baseline.json` carries the grandfathered set, new violations still fail the build. Tracks remaining un-annotated components per PR.
-- [ ] **5.1.3** **Phase C — batch annotate.** Split the ~347 remaining components across 6-8 PRs, grouped by area: (1) `settings/*`, (2) `signup/*`, (3) `account/common/chat_view.rs` internals, (4) `account/common/forum_view.rs` + per-forum-backend extras, (5) per-backend `account/*/mod.rs`, (6) `favorites_sidebar` + `account_server_bar` + `channel_list` polish, (7) voice/media/modal overlays, (8) root-level routes. Each PR sets its subset to warn-free.
-- [ ] **5.1.4** **Phase D — deny.** Drain the baseline to empty so every miss emits `cargo::error=` on plain `cargo check`. Add `#[context_menu(...)]` to the project lint list in `CLAUDE.md`.
+- [x] **5.1.1** **Phase A — infrastructure.** Land the macro crate + `ContextMenuFor` trait + the stack runtime. No component annotations yet. Existing `ServerContextMenu` / `ChannelContextMenu` / `MsgContextMenuOverlay` refactored in place to use the stack. Net behavior unchanged.
+- [x] **5.1.2** **Phase B — warn mode.** The `lint-gate` build script emits `cargo::warning=missing #[context_menu(...)] at <path>:<line>` instead of `cargo::error=` while the backfill is in flight. Gated behind the same `regen-baseline` feature used for plan-component-lints.md: the baseline file `crates/lint-gate/baseline.json` carries the grandfathered set, new violations still fail the build. Tracks remaining un-annotated components per PR.
+- [x] **5.1.3** **Phase C — batch annotate.** Split the ~347 remaining components across 6-8 PRs, grouped by area: (1) `settings/*`, (2) `signup/*`, (3) `account/common/chat_view.rs` internals, (4) `account/common/forum_view.rs` + per-forum-backend extras, (5) per-backend `account/*/mod.rs`, (6) `favorites_sidebar` + `account_server_bar` + `channel_list` polish, (7) voice/media/modal overlays, (8) root-level routes. Each PR sets its subset to warn-free.
+- [x] **5.1.4** **Phase D — deny.** Drain the baseline to empty so every miss emits `cargo::error=` on plain `cargo check`. Add `#[context_menu(...)]` to the project lint list in `CLAUDE.md`.
 
 ### 5.2 Author ergonomics
 

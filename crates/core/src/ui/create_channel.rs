@@ -18,11 +18,13 @@ use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::ChannelType;
 use tracing::{error, info};
+use poly_ui_macros::context_menu;
 
 /// Full-page Create Channel form rendered in the main content area.
 ///
 /// The left-hand `ChannelList` sidebar (with existing channels) remains visible
 /// because this route is rendered inside `ServerLayout`'s `Outlet`.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn CreateChannelPage(

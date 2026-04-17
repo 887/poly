@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
 
 use crate::DiscordClient;
+use poly_ui_macros::context_menu;
 
 /// Public authenticate helper — token-based (real Discord + Spacebar with pre-issued tokens).
 pub async fn authenticate(
@@ -85,6 +86,7 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
     }
 }
 
+#[context_menu(inherit)]
 /// Discord account setup form (token-based auth).
 #[component]
 fn DiscordSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

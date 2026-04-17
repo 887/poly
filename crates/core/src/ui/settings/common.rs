@@ -4,6 +4,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 
 use dioxus::prelude::*;
+use poly_ui_macros::context_menu;
 
 /// A (value, display-label) pair for [`PolySelect`].
 #[derive(Clone, PartialEq)]
@@ -16,6 +17,7 @@ pub(crate) struct SelectOption {
 ///
 /// The native OS select popup ignores CSS custom properties; this component
 /// renders entirely in the webview so it respects the active theme.
+#[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn PolySelect(
