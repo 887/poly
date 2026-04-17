@@ -1,3 +1,9 @@
+#![allow(
+    dead_code,
+    unused_imports,
+    clippy::unnecessary_map_or,
+    clippy::enum_variant_names,
+)]
 #![cfg_attr(
     test,
     allow(

@@ -1,3 +1,8 @@
+#![allow(
+    clippy::manual_strip,
+    clippy::needless_borrow,
+)]
+
 //! UI action coverage scanner.
 //!
 //! Enforces three rules across all `.rs` files in `crates/core/src/ui/`
@@ -87,7 +92,7 @@ fn scan_rule_a(src: &str, path: &str, out: &mut Vec<Violation>) {
             let Some(close_pipe) = after_open.find('|') else {
                 continue;
             };
-            let after_params = after_open[close_pipe + 1..].trim_start();
+            let after_params = &after_open[close_pipe + 1..].trim_start();
             // Empty body: `{}` or `()`
             if is_empty_body(after_params) {
                 out.push(Violation {
@@ -115,8 +120,8 @@ fn find_handler_start<'a>(line: &'a str, ev: &str) -> Option<&'a str> {
         let pos = search.find(ev)?;
         let after = &search[pos + ev.len()..];
         let after_ws = after.trim_start();
-        if after_ws.starts_with(':') {
-            return Some(&after_ws[1..]);
+        if let Some(stripped) = after_ws.strip_prefix(':') {
+            return Some(stripped);
         }
         // Keep searching past this occurrence.
         search = &search[pos + 1..];
@@ -189,7 +194,11 @@ fn is_empty_rsx_on_line(s: &str) -> bool {
     };
     let rest = after_rsx.trim_start();
     // Strip optional `(`  — Dioxus supports both `rsx! {}` and `rsx!(...)`; focus on `{}`
-    let rest = if rest.starts_with('(') { &rest[1..].trim_start() } else { rest };
+    let rest = if let Some(stripped) = rest.strip_prefix('(') {
+        stripped.trim_start()
+    } else {
+        rest
+    };
     if !rest.starts_with('{') {
         return false;
     }

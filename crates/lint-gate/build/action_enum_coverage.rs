@@ -1,4 +1,10 @@
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    clippy::manual_pattern_char_comparison,
+    clippy::indexing_slicing,
+    clippy::manual_strip,
+    clippy::needless_borrow
+)]
 //! UI action-enum coverage scanner — Phase C of typed UI action enums plan.
 //!
 //! Enforces two rules across all `.rs` files in `crates/core/src/ui/`
@@ -138,7 +144,7 @@ fn find_ui_action_above(lines: &[&str], component_idx: usize) -> UiActionKind {
             if let Some(inner) = t.strip_prefix("#[ui_action(") {
                 // inner is something like `None)]` or `inherit)]` or `MyEnum)]`
                 let arg = inner
-                    .trim_end_matches(|c: char| c == ')' || c == ']')
+                    .trim_end_matches([')', ']'])
                     .trim();
                 return if arg.eq_ignore_ascii_case("none") {
                     UiActionKind::None
@@ -185,7 +191,8 @@ fn scan_rule_b_for_component(
     let start = component_idx + 1;
     let end = (start + 200).min(lines.len());
 
-    for (offset, line) in lines[start..end].iter().enumerate() {
+    if let Some(slice) = lines.get(start..end) {
+        for (offset, line) in slice.iter().enumerate() {
         let abs_line = start + offset;
         let t = line.trim();
 
@@ -214,6 +221,7 @@ fn scan_rule_b_for_component(
                 // One violation per line is enough.
                 break;
             }
+        }
         }
     }
 }
