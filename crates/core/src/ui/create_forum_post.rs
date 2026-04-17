@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use poly_ui_macros::context_menu;
 
 /// Full-page Create Forum Post form.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn CreateForumPostPage(
@@ -90,7 +90,7 @@ pub(crate) fn CreateForumPostPage(
 }
 
 /// Forum search page — search posts within a community.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn ForumSearchPage(

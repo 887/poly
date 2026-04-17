@@ -37,7 +37,7 @@ enum HnMode {
 }
 
 /// Two-mode HN signup page: anonymous or with username.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn HackerNewsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

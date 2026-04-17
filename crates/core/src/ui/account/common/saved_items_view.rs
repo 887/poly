@@ -98,7 +98,7 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
     sources
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn SavedItemsView() -> Element {

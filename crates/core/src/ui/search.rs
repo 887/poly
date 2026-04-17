@@ -452,7 +452,7 @@ fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Elem
 }
 
 /// Global search page — sidebar with account filters + right tree of all nodes.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn SearchPage(

@@ -9,7 +9,7 @@ use crate::state::ChatData;
 use crate::ui::routes::Route;
 use poly_ui_macros::context_menu;
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 /// Server overview landing page for forge backends (GitHub, Forgejo).
 #[component]
 pub fn ServerOverviewPage(

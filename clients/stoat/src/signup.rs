@@ -77,7 +77,7 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
 }
 
 /// Full Stoat login form.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn StoatSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

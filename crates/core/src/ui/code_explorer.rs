@@ -17,7 +17,7 @@ use crate::state::ChatData;
 use poly_ui_macros::context_menu;
 
 /// Two-pane explorer rendered when the current channel is `ChannelType::Code`.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {

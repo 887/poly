@@ -17,7 +17,7 @@ struct McpStatus {
     is_electron: bool,
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn AiSettings() -> Element {

@@ -45,7 +45,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn ElectronNavButtons() -> Element {
@@ -71,7 +71,7 @@ fn ElectronNavButtons() -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 
 #[component]
 fn ElectronWindowControls() -> Element {
@@ -105,7 +105,7 @@ fn ElectronWindowControls() -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 
 #[component]
 pub fn ElectronTitleBar() -> Element {

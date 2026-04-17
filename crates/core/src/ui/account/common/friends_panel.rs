@@ -18,7 +18,7 @@ enum FriendsManagementTab {
     Blocked,
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn FriendsPanel(account_id: String) -> Element {

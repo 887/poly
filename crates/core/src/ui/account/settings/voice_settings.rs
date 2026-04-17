@@ -55,7 +55,7 @@ const JS_TEST_MIC: &str = r#"
 ///
 /// Composed of: mic picker, speaker picker, noise cancel toggle, test mic button.
 // DECISION(V-4): Audio settings live in AccountSettingsPage, not a popup.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceSettings() -> Element {

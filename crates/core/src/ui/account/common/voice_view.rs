@@ -235,7 +235,7 @@ async fn join_voice_channel(
 ///
 /// Renders the full voice/video call experience including the floating
 /// `VoiceChatBar` when connected and the local screen share area when streaming.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceChannelView() -> Element {

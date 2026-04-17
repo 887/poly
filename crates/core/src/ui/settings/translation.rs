@@ -15,7 +15,7 @@ enum BrowserTranslation {
     Unavailable,
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn TranslationSettings() -> Element {

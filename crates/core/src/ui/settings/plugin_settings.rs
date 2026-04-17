@@ -27,7 +27,7 @@ use poly_ui_macros::context_menu;
 ///
 /// Strings come from the plugin's own FTL bundle (prefixed `plugin-demo-`),
 /// registered by [`crate::i18n::init`] at startup.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn DemoPluginSettings() -> Element {
@@ -104,7 +104,7 @@ pub fn demo_settings_render_fn() -> Element {
 
 /// Settings content for the Stoat backend.
 #[cfg(feature = "stoat")]
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn StoatPluginSettings() -> Element {
@@ -140,7 +140,7 @@ pub fn stoat_settings_render_fn() -> Element {
 /// Strings come from the `server-client` plugin's own FTL bundle
 /// (prefixed `plugin-poly-`), registered by [`crate::i18n::init`] at startup.
 #[cfg(feature = "server")]
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn PolyServerPluginSettings() -> Element {
@@ -235,7 +235,7 @@ pub fn poly_settings_render_fn() -> Element {
 
 // ── Hacker News plugin settings ───────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[cfg(feature = "hackernews")]
 #[component]
 pub fn HackerNewsPluginSettings() -> Element {
@@ -258,7 +258,7 @@ pub fn hackernews_settings_render_fn() -> Element {
 
 // ── Lemmy plugin settings ─────────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[cfg(feature = "lemmy")]
 #[component]
 pub fn LemmyPluginSettings() -> Element {
@@ -287,7 +287,7 @@ pub fn lemmy_settings_render_fn() -> Element {
 /// release builds. Shown in the settings nav so developers can see the
 /// declared manifest alongside the other native backends.
 #[cfg(feature = "discord")]
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn DiscordPluginSettings() -> Element {
@@ -320,7 +320,7 @@ pub fn discord_settings_render_fn() -> Element {
 
 /// Settings content for the Microsoft Teams backend.
 #[cfg(feature = "teams")]
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn TeamsPluginSettings() -> Element {
@@ -351,7 +351,7 @@ pub fn teams_settings_render_fn() -> Element {
 
 // ── GitHub plugin settings ────────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[cfg(feature = "github")]
 #[component]
 pub fn GitHubPluginSettings() -> Element {
@@ -382,7 +382,7 @@ pub fn github_settings_render_fn() -> Element {
 
 // ── Forgejo plugin settings ───────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[cfg(feature = "forgejo")]
 #[component]
 pub fn ForgejoPluginSettings() -> Element {
@@ -416,7 +416,7 @@ pub fn forgejo_settings_render_fn() -> Element {
 ///
 /// Lists the external programs the plugin claims it may invoke and the HTTP
 /// hosts it claims it may contact, plus the plugin's homepage. The manifest
-#[context_menu(inherit)]
+#[context_menu(None)]
 /// is purely for transparency: the host does NOT sandbox or block based on it.
 #[component]
 pub fn PluginManifestPanel(manifest: poly_client::PluginManifest) -> Element {

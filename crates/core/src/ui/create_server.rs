@@ -22,7 +22,7 @@ use poly_ui_macros::context_menu;
 /// Shows a centered card with a server-name input and a Create button.
 /// On success: registers the new server and navigates to
 /// `/:backend/:instance_id/:account_id/dms`.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn CreateServerPage(

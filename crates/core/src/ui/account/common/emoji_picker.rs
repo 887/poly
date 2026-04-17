@@ -331,7 +331,7 @@ pub(crate) fn emoji_shortcode_matches(emoji: &str, query: &str) -> bool {
 /// Emoji picker component (used for reactions).
 ///
 /// Compact picker: left sidebar icons + scrollable section list.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn EmojiPicker(on_select: EventHandler<String>, on_close: EventHandler<()>) -> Element {

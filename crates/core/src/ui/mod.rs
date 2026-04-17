@@ -1768,7 +1768,7 @@ fn router_config(
     )
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
@@ -1806,7 +1806,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn StartupOverlay(state: StartupOverlayState) -> Element {
@@ -1902,7 +1902,7 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 /// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
 /// - `Signal<ClientManager>` — client manager for active backends
 /// - `Signal<ChatData>` — reactive chat data store
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn App() -> Element {

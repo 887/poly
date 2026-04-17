@@ -272,7 +272,7 @@ impl ServerSettingsSection {
 ///
 /// Shares the same two-column layout (nav sidebar + content) as `AccountSettingsPage`
 /// and `SettingsPage`. Server name shown in the content header.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ServerSettingsPage(

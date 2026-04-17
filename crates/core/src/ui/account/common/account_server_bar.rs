@@ -123,7 +123,7 @@ pub(crate) async fn persist_account_server_order(
 ///
 /// Only rendered when `active_account_id` is `Some(...)`.
 /// Shows DMs, notifications, and all servers for this account.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn AccountServerBar() -> Element {

@@ -15,7 +15,7 @@ use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
 use poly_ui_macros::context_menu;
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn OutgoingDirectCallOverlay(

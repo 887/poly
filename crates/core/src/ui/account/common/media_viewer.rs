@@ -18,7 +18,7 @@ pub struct MessageMediaViewerOverlayProps {
     pub attachment_index: usize,
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
@@ -256,6 +256,7 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                     src: "{attachment.url}",
                     alt: "{attachment.filename}",
                     onclick: move |e| e.stop_propagation(),
+                    oncontextmenu: move |e| e.stop_propagation(),
                 }
             }
 

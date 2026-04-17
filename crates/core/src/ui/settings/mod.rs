@@ -551,7 +551,7 @@ fn SettingsAllSections(search_query: String) -> Element {
 ///
 /// Account-specific settings (notifications) are handled by
 /// [`crate::ui::account::settings::AccountSettingsPage`] instead.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn SettingsPage() -> Element {

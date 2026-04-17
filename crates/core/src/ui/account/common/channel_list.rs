@@ -297,7 +297,7 @@ pub(crate) fn open_direct_message_from_active_account(
 }
 
 /// Single connected voice participant entry.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ChannelList() -> Element {

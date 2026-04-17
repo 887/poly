@@ -108,7 +108,7 @@ enum FjMode {
     Custom,
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn ForgejoSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

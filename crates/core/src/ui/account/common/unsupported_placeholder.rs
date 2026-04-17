@@ -50,7 +50,7 @@ impl UnsupportedFeature {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn FeatureUnsupportedPlaceholder(

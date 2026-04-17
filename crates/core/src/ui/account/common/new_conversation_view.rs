@@ -11,7 +11,7 @@ use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_ui_macros::context_menu;
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn NewConversationView() -> Element {

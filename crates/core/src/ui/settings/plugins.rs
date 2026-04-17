@@ -547,7 +547,7 @@ fn WasmPluginRow(
 ///
 /// Two install modes: from URL (with WIT version appended) or from a local .wasm file.
 /// Display name is inferred from the URL hostname or file name — no manual entry needed.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
@@ -661,7 +661,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 /// **Accounts** ("Cat (demo)", "Dog (demo)") are sessions created when a plugin
 /// authenticates a user — they appear in the Accounts settings page. Here we
 /// manage *which plugins are available and enabled*.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn PluginsSettings() -> Element {

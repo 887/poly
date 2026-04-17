@@ -46,7 +46,7 @@ async fn create_identity() -> Result<(String, Vec<String>), String> {
 }
 
 /// Modal overlay that displays and allows copying the 24-word recovery phrase.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn MnemonicModal(
@@ -107,7 +107,7 @@ pub(super) fn MnemonicModal(
 /// - Show recovery phrase
 /// - See which backup servers use each identity
 /// - Create additional identities
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn IdentitySettings() -> Element {

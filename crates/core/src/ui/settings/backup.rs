@@ -752,7 +752,7 @@ pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRe
 /// Loads the server list on mount and pulls remote changes in the background,
 /// then delegates rendering to [`ServerCard`] (per server) and [`AddServerWizard`].
 // DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn BackupSettings() -> Element {

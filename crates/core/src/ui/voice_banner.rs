@@ -199,7 +199,7 @@ fn VoiceBannerControls(
 ///
 /// Spans all columns (server sidebar, channel list, chat area) and sits
 /// at the top of the layout. Hidden when not in a voice channel.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceBanner() -> Element {

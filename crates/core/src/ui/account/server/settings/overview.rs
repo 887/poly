@@ -43,7 +43,7 @@ fn is_local_only(backend: Option<&BackendType>) -> bool {
 /// Icon URL input, live preview, and save button.
 ///
 /// Used by [`ServerOverviewSettings`] for both full and local-only modes.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn IconPanel(
@@ -142,7 +142,7 @@ fn IconPanel(
 /// Banner URL input, live preview, and save button.
 ///
 /// Shown only for backends that support banner images (Demo, Stoat, Discord, Poly).
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> Element {
@@ -240,7 +240,7 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
 /// <!-- TODO(phase-3): wire icon/banner saves to backend API calls -->
 /// Currently all saves are local-only (stored in `AppSettings`). Phase 3 will
 /// add `ClientBackend::update_server_icon` / `update_server_banner` for
-#[context_menu(inherit)]
+#[context_menu(None)]
 /// Demo, Stoat, Discord, and Poly backends.
 #[component]
 pub fn ServerOverviewSettings(

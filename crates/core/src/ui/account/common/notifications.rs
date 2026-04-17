@@ -102,7 +102,7 @@ pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
 /// and mark-read actions. `backend_slug` drives the capability-based filter
 /// registry (WP-5) — e.g., GitHub hides FriendRequests/ServerInvites/VoiceInvites
 /// because its BackendCapabilities declares no friends/servers/voice.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {

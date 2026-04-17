@@ -13,7 +13,7 @@ use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::context_menu;
 
 /// Diagnostics page — shows health and status information for all accounts.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn DiagnosticsPage() -> Element {

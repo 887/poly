@@ -95,7 +95,7 @@ fn AccountRow(
 /// Lists active messenger accounts grouped by backend and provides
 /// an "Add Account" button that navigates to the plugin-driven signup
 /// flow at `/signup`.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn AccountsSettings() -> Element {

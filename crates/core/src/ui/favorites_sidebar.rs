@@ -81,7 +81,7 @@ pub(crate) fn SidebarTooltip(
 ///
 /// Shows: Account icons, separator, favorited server icons with
 /// source badge, spacer, Demo toggle, App Settings.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 #[allow(non_snake_case)]

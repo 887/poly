@@ -118,7 +118,7 @@ enum TeamsTab {
     Token,
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 /// Teams account setup form — Microsoft OAuth (device code) or raw Bearer token.
 #[component]
 fn TeamsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
@@ -155,7 +155,7 @@ fn TeamsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 /// Raw Bearer-token sign-in path (kept for testing / dev scenarios).
 #[component]
 fn TeamsTokenTab(on_complete: Callback<SignupCompleted>) -> Element {
@@ -203,7 +203,7 @@ fn TeamsTokenTab(on_complete: Callback<SignupCompleted>) -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 /// Device-code sign-in against `login.microsoftonline.com`.
 #[component]
 fn TeamsOAuthTab(on_complete: Callback<SignupCompleted>) -> Element {

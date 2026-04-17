@@ -543,7 +543,7 @@ fn TestAccountsPanel() -> Element {
 ///
 /// Shows the favorites bar on the left, backend sidebar, and a placeholder
 /// in the right panel prompting the user to pick an account type.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn SignupPickerPage() -> Element {
@@ -568,7 +568,7 @@ pub(crate) fn SignupPickerPage() -> Element {
 /// Shows the favorites bar on the left, the selected backend highlighted in the sidebar,
 /// and its form in the right panel. Core handles all state commitment via the
 /// `on_complete` callback.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn ClientSignupPage(client: String) -> Element {
@@ -701,7 +701,7 @@ fn ReauthNav(backend_slug: String, display_name: String) -> Element {
 /// per-backend form that the signup flow uses but commits the result over
 /// the existing account row instead of creating a new one. Also offers a
 /// "Remove this account" button.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn ReauthAccountPage(

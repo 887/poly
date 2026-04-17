@@ -73,7 +73,7 @@ fn close_modal(mut app_state: Signal<AppState>) {
 ///
 /// Render this **once** from `AppBody` — it is a no-op when
 /// `AppState.nav.profile_modal_user` is `None`.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn UserProfileModal() -> Element {

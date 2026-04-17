@@ -112,7 +112,7 @@ enum GhMode {
     Enterprise,
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn GitHubSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

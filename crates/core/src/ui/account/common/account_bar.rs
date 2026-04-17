@@ -202,7 +202,7 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
 /// Displays the current user's own profile card (banner, avatar, name, status)
 /// plus an inline presence picker to change availability without navigating away.
 /// Positioned above the account bar; closes on backdrop click.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn AccountProfilePopup(
@@ -368,7 +368,7 @@ fn AccountBarControls(
 ///
 /// Shows user avatar + name + status + quick controls at the
 /// bottom of the channel list panel.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn AccountBar() -> Element {

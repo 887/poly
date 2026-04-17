@@ -128,7 +128,7 @@ fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element 
 /// Lets the user configure audio/video input/output devices, volume levels,
 /// voice activity detection mode, noise suppression and echo cancellation.
 /// Settings are loaded from and persisted to storage.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn VoiceVideoSettings() -> Element {

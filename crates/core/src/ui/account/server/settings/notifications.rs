@@ -16,7 +16,7 @@ use poly_ui_macros::context_menu;
 ///
 /// Notification preferences are currently in-memory only (no storage
 /// persistence yet — that is planned for Phase 2.11).
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ServerNotificationsSettings(server_id: String, server_name: String) -> Element {

@@ -25,7 +25,7 @@ use poly_ui_macros::context_menu;
 ///
 /// Rendered inside `AccountSettingsPage` only when `backend == "poly"`.
 /// Shows: avatar display, display name, status picker, banner placeholder.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {

@@ -24,7 +24,7 @@ use poly_ui_macros::context_menu;
 ///
 /// The left-hand `ChannelList` sidebar (with existing channels) remains visible
 /// because this route is rendered inside `ServerLayout`'s `Outlet`.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(crate) fn CreateChannelPage(

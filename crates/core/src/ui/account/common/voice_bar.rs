@@ -105,7 +105,7 @@ const JS_STOP_ALL_STREAMS: &str = r#"
 /// Placed INSIDE `.channel-list-wrapper` between `ChannelList` and `AccountBar`.
 // DECISION(V-1): VoiceBar stays in sidebar; compact 3-row layout with avatars + buttons.
 // DECISION(V-mute): Mute/deafen buttons live only in AccountBar — not duplicated here.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn VoiceBar() -> Element {

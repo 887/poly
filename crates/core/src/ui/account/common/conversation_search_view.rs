@@ -160,7 +160,7 @@ fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<Strin
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ConversationSearchView() -> Element {

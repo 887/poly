@@ -226,7 +226,7 @@ fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>)
 ///
 /// Global settings (theme, language, voice/video, identity, backup) are handled
 /// by the app-level `SettingsPage`.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {

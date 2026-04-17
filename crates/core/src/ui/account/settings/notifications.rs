@@ -75,7 +75,7 @@ fn load_account_notif_settings(account_id: String, mut signals: NotifSignals) {
 /// Notification settings panel for a single account.
 ///
 /// Loads saved settings on mount and persists any toggle change immediately.
-#[context_menu(inherit)]
+#[context_menu(None)]
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`].
 #[component]
 pub fn NotificationsSettings(account_id: String) -> Element {

@@ -20,7 +20,7 @@ fn FeatureCard(icon: String, title: String, body: String) -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn SetupWizard(on_complete: EventHandler<String>) -> Element {

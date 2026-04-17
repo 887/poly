@@ -80,7 +80,7 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
 }
 
 /// Full Lemmy login form.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn LemmySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

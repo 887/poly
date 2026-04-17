@@ -871,7 +871,7 @@ async fn persist_member_list_display_settings(
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ChatView() -> Element {
@@ -4627,7 +4627,7 @@ fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn ChatUtilityRail(
@@ -4796,7 +4796,7 @@ fn ChatUtilityRail(
 /// Chat settings panel — shown inside the utility rail when the ⚙️ tab is open.
 ///
 /// Contains per-channel notification settings and member display preferences.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
@@ -4899,7 +4899,7 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn SearchFilterPopup(
@@ -5165,7 +5165,7 @@ fn MessageContentView(content: MessageContent, edited: bool) -> Element {
 }
 
 /// Render attachments (images inline, non-images as links).
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String) -> Element {
@@ -5174,6 +5174,7 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
 
     rsx! {
         div { class: "message-attachments",
+            oncontextmenu: move |e| e.stop_propagation(),
             for (attachment_index, att) in attachments.iter().enumerate() {
                 {
                     let is_image = att.content_type.starts_with("image/");
@@ -5299,7 +5300,7 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 /// Typing indicator shown above the message input when users are typing.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn TypingIndicator() -> Element {
@@ -5445,7 +5446,7 @@ fn apply_edit(chat_data: &mut Signal<ChatData>, message_id: &str, new_text: Stri
 ///
 /// Shows a textarea pre-filled with the current message text, a Cancel button,
 /// and a Save button. Enter (without Shift) saves; Escape cancels.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn MessageInlineEdit(
@@ -5457,6 +5458,7 @@ fn MessageInlineEdit(
     let mid_save = message_id.clone();
     rsx! {
         div { class: "message-inline-edit",
+            oncontextmenu: move |e| e.stop_propagation(),
             textarea {
                 class: "message-edit-input",
                 value: "{edit_draft}",
@@ -5510,7 +5512,7 @@ const QUICK_REACTIONS: &[&str] = &["👍", "✅", "⚖️", "🔞"];
 ///
 /// Renders a transparent backdrop (closes on click) and a fixed-position
 /// floating menu at the coordinates stored in `msg_context_menu`.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn MsgContextMenuOverlay(
@@ -5737,7 +5739,7 @@ fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
 }
 
 /// Composer banner shown while replying to a message.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEvent>) -> Element {
@@ -5763,7 +5765,7 @@ fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEve
 ///
 /// Shows filtered commands with provider badges. Highlighted item is driven by `active_idx`.
 /// Clicking a command calls `on_select` with the filled command text (e.g. `"/play "`).
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn SlashCommandPopup(
@@ -5814,7 +5816,7 @@ fn SlashCommandPopup(
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn DmContactListPanel(channel_id: String) -> Element {

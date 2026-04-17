@@ -183,7 +183,7 @@ fn score_class(score: i64) -> &'static str {
 // Top-level ForumView — dispatches to HN feed or Lemmy forum based on channel type
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ForumView() -> Element {
@@ -197,7 +197,7 @@ pub fn ForumView() -> Element {
 // Hacker News feed view — filter input, infinite scroll, no Lemmy sort dropdown
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn HnFeedView() -> Element {
@@ -360,7 +360,7 @@ fn HnFeedView() -> Element {
 // Lemmy/Reddit-style forum view (original implementation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn LemmyForumView() -> Element {
@@ -543,7 +543,7 @@ fn LemmyForumView() -> Element {
 // ForumPostView — route component: load + render single post + comments
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
@@ -650,6 +650,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
 // Post card
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TODO(context-menu): audit — should be (ForumPostContextMenu) once that menu exists; (inherit) for now
 #[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]
@@ -706,7 +707,7 @@ fn ForumPostCard(post: Message, on_click: EventHandler<()>) -> Element {
 // Thread view
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Element {
@@ -774,6 +775,7 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
 // Recursive comment component (named ForumComment to avoid struct/component clash)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TODO(context-menu): audit — should be (ForumPostContextMenu) once that menu exists; (inherit) for now
 #[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]

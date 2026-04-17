@@ -36,7 +36,7 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 ///
 /// Reads `ChatData::active_group_members` and `NavState::dm_right_sidebar_visible`.
 /// Renders nothing when there are no active group members.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn DmUserSidebar() -> Element {
@@ -88,7 +88,7 @@ pub fn DmUserSidebar() -> Element {
 }
 
 /// A single member row in the DM group member sidebar.
-#[context_menu(inherit)]
+#[context_menu(inherit)] // TODO(context-menu): author UserRowContextMenu
 #[rustfmt::skip]
 #[component]
 fn DmMemberRow(

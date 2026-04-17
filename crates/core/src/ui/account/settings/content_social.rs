@@ -257,7 +257,7 @@ fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
 ///
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`] when the
 /// "content-social" section is active.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ContentSocialSettings(_account_id: String) -> Element {

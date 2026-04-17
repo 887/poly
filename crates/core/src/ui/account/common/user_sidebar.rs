@@ -98,7 +98,7 @@ fn HighlightedName(name: String, query: String) -> Element {
 /// `…show_offline`).
 ///
 /// A collapsible filter (🔍 icon → text input) lets users search by name.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn UserSidebar() -> Element {

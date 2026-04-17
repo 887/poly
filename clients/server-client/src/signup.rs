@@ -87,7 +87,7 @@ enum ConnectStep {
 /// The host's `ClientSignupPage` wraps this output in `div.signup-content`
 /// which provides scroll, padding, and layout context — so this component
 /// renders just a heading, description, and form with no outer card wrapper.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn PolySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
@@ -138,7 +138,7 @@ fn PolySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) ->
 /// URL entry form — step 1 of the connect flow.
 ///
 /// Looks up all existing accounts bound to the device identity key.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn UrlConnectForm(
@@ -305,7 +305,7 @@ fn ExistingAccountsForm(
 ///
 /// Shows the confirmed server URL (read-only), username + display name fields,
 /// and a "Create Account" button.  A "← Back" link returns to step 1.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[component]
 fn SignupDetailsForm(

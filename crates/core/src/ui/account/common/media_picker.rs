@@ -378,7 +378,7 @@ fn MediaPickerFooter(markdown_enabled: Signal<bool>) -> Element {
 /// Shows emoji, GIF, and sticker tabs plus a markdown formatting toggle.
 /// Positioning is controlled by CSS: bottom-right panel on desktop,
 /// full-width slide-up sheet on mobile.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn MediaPickerPopup(

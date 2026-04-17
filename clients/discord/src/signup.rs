@@ -86,7 +86,7 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 /// Discord account setup form (token-based auth).
 #[component]
 fn DiscordSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {

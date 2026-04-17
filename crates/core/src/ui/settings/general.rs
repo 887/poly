@@ -371,7 +371,7 @@ fn ResetSection() -> Element {
 /// General settings section.
 ///
 /// Contains shell layout and mirroring preferences.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn LayoutSettings() -> Element {
@@ -390,7 +390,7 @@ pub(super) fn LayoutSettings() -> Element {
 ///
 /// Contains the app-reset and nuke-all-data danger zone.
 // TODO(phase-2.7.9.10): Notification preferences, startup behavior
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub(super) fn GeneralSettings() -> Element {

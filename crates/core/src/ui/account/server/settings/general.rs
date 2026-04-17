@@ -12,7 +12,7 @@ use poly_ui_macros::context_menu;
 /// General settings panel for a server.
 ///
 /// Shows server info and a leave-server action with an inline confirm.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn ServerGeneralSettings(
@@ -66,7 +66,7 @@ pub fn ServerGeneralSettings(
 /// Inline confirm widget for leaving a server.
 ///
 /// Does NOT use `window.confirm()`. The confirm dialog is rendered in-DOM.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn LeaveServerConfirm(

@@ -156,7 +156,7 @@ const fn runtime_mobile_ui_active() -> bool {
 /// On web, the browser's native back/forward buttons handle navigation.
 // DECISION(DX-ROUTER-1): NavBar uses navigator().go_back()/go_forward()
 // instead of custom AppState history stack.
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 fn NavBar() -> Element {
@@ -200,7 +200,7 @@ fn NavBar() -> Element {
 ///
 /// Desktop: voice banner + (nav bar | server sidebar | outlet)
 /// Mobile: TBD
-#[context_menu(inherit)]
+#[context_menu(None)]
 #[rustfmt::skip]
 #[component]
 pub fn MainLayout() -> Element {
