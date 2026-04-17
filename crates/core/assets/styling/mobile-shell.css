@@ -49,10 +49,14 @@
 
 .poly-app.poly-mobile-runtime-active .server-sidebar,
 .poly-app.poly-mobile-runtime-active .account-server-bar {
-    position: fixed;
+    /* absolute (not fixed) + no z-index so NO stacking context is created.
+       This lets position:fixed descendants like .sidebar-tooltip (z:1000)
+       escape to the root stacking context and paint above .poly-split-content
+       (z:470). The sidebars themselves still paint behind the content because
+       they have no positive z-index and content has z:470. */
+    position: absolute;
     top: 0;
     bottom: 0;
-    z-index: 410;
     box-shadow: none;
 }
 
@@ -257,11 +261,16 @@
 }
 
 .poly-app.poly-mobile-runtime-active .voice-account-footer {
-    z-index: 2;
-    /* In mobile mode the server-icon rail is fixed/overlaid, not inline.
-       Reset the negative-margin width trick that extends the footer behind it. */
-    width: 100%;
-    margin-left: 0;
+    /* Extend left over both rails (server-sidebar 72 + account-server-bar 72
+       = 144px) so the Cat (demo) footer visually spans the full bottom edge,
+       matching desktop. The footer lives inside .poly-split-sidebar which
+       starts at x=144px. */
+    width: calc(100% + 144px);
+    margin-left: -144px;
+    /* No z-index: keep it auto so it doesn't create a stacking context that
+       would trap the voice settings popup. Content at z:470 paints above, so
+       this sits behind the content column when drawer is closed — but the
+       footer region is below content's visible area so no conflict. */
 }
 
 .poly-app.poly-mobile-runtime-active .account-view-main,
