@@ -11,7 +11,11 @@
 .context-menu-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 99;
+    /* Must sit above the mobile-shell stacking layers: .poly-split-content and
+       .chat-main-column (z:470), .mobile-left-wing-backdrop (z:475). Otherwise
+       the menu paints below the chat-main-column sibling in .chat-view's
+       stacking context and is invisible on mobile viewports. */
+    z-index: 999;
     /* Transparent — only captures clicks to dismiss the menu */
 }
 
@@ -19,7 +23,7 @@
 
 .context-menu {
     position: fixed;
-    z-index: 100;
+    z-index: 1000;
     min-width: 200px;
     background: var(--modal-bg, #2b2d31);
     border: 1px solid var(--sidebar-separator, rgba(255, 255, 255, 0.06));
