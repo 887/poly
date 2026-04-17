@@ -292,6 +292,11 @@ pub fn MainLayout() -> Element {
     rsx! {
         div {
             class: "main-layout",
+            // Root context-menu guard per plan-context-menu-quality-control.md §4.5.1.
+            // Suppresses the native browser menu everywhere. Surfaces that want a
+            // custom menu (or the native menu for images) must `stop_propagation()`
+            // on oncontextmenu *before* this handler runs.
+            oncontextmenu: move |evt| evt.prevent_default(),
             // Dismiss context menu when clicking outside of it
             onclick: move |_| {
                 if app_state.read().context_menu.is_some() {
