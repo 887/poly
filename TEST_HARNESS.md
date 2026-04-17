@@ -76,16 +76,33 @@ Expected: all tests pass. Report any failures with test name + stderr.
 
 ---
 
-## 5. Playwright — UI changes only
+## 5. poly-web MCP smoke-test — UI changes only
 
 > Skip this section if no `.rs`, `.css`, or `.html` files changed.
-> Requires `dx serve --platform web` already running on port 3000.
+> This step uses the **poly-web** MCP server (custom Rust binary at
+> `mcp/web-devtools-mcp/`), NOT Playwright or `chrome-devtools-mcp`.
+> If the poly-web MCP is not loaded in the current session, report
+> SKIP — do not substitute any other browser MCP.
 
-```bash
-cd /home/laragana/workspcacemsg && npx playwright test --project=chromium 2>&1
-```
+Workflow:
 
-Expected: all tests pass. Screenshot artifacts saved to `test-results/` on failure.
+1. `mcp__poly-web__launch_app` — starts `dx serve --platform web` + Chromium.
+   Non-blocking; returns immediately.
+2. Poll `mcp__poly-web__get_last_build_status` every 5–10s until
+   `state != "Running"`. Report FAIL if `state == "Failed"` and include
+   the tail of `mcp__poly-web__get_last_build_log`.
+3. `mcp__poly-web__connect_cdp` — attach to the running Chromium.
+4. `mcp__poly-web__take_screenshot` of the root route and each
+   top-level UI surface affected by the change.
+5. `mcp__poly-web__list_console_messages` — fail on any `error`-level
+   console messages that are new compared to a clean baseline.
+6. For each modified component / route, exercise the golden path
+   (click, type, navigate) and re-screenshot.
+7. `mcp__poly-web__kill_app` when done.
+
+Pass criteria: build succeeds, no error-level console messages, all
+screenshots render (no blank / 0x0 / crash overlays), every exercised
+interaction responds as expected.
 
 ---
 
@@ -99,4 +116,4 @@ After running all applicable steps, respond with a table:
 | 2. clippy | PASS/FAIL | ... |
 | 3. WASM build | PASS/FAIL | ... |
 | 4. unit tests | PASS/FAIL | N tests passed |
-| 5. playwright | PASS/SKIP/FAIL | ... |
+| 5. poly-web MCP | PASS/SKIP/FAIL | ... |
