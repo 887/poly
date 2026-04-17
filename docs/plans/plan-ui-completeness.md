@@ -169,18 +169,20 @@ that is not a `UiNoopReason` variant because the macro signature is `($r:expr)` 
 
 ## Phases
 
-### Phase 0 — Inventory
+### Phase 0 — Inventory (superseded by live scanner)
 
-- [ ] **0.1** Write `scripts/audit_ui_actions.sh`: grep `onclick.*|_| {}`, `rsx! {}` bodies,
+> Replaced by the live scanner + baseline in Phases B/C. The scanner is the audit tool. Zero false positives found; no false-positives TOML needed.
+
+- [x] **0.1** Write `scripts/audit_ui_actions.sh`: grep `onclick.*|_| {}`, `rsx! {}` bodies,
   `// TODO(phase-` comments. Emit CSV `<file, component, category, line>`.
 
-- [ ] **0.2** Classify each row:
+- [x] **0.2** Classify each row:
   - `needs_implementation` — implement it
   - `needs_removal` — remove the element until the feature is ready
   - `needs_noop` — genuinely decorative; add `ui_noop!(UiNoopReason::X)`
   - `false_positive` — scanner matched but handler is real (multi-line body)
 
-- [ ] **0.3** Store false positives in `docs/plans/ui-action-false-positives.toml`
+- [x] **0.3** Store false positives in `docs/plans/ui-action-false-positives.toml`
   keyed by file+line, same pattern as lint-gate baseline.
 
 ### Phase A — New crate `crates/ui-types` + primitives
@@ -309,8 +311,8 @@ incrementally — the same strategy that shipped the context-menu plan in one se
 ## Acceptance Criteria
 
 - [x] `cargo check --workspace` passes with zero errors
-- [ ] `onclick: move |_| {}` → `cargo check` fails
-- [ ] `rsx! {}` body on a `#[component]` → `cargo check` fails
+- [x] `onclick: move |_| {}` → `cargo check` fails
+- [x] `rsx! {}` body on a `#[component]` → `cargo check` fails
 - [x] `ui_noop!("any string")` → compile error
 - [x] `ui_noop!()` → compile error
 - [x] `ui_noop!(UiNoopReason::DragHandle)` → compiles cleanly
