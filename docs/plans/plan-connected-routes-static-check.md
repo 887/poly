@@ -1,7 +1,7 @@
 # Plan — Connected Routes Static Check
 
 > **Created:** 2026-04-16
-> **Status:** ✅ done (Phase A infrastructure + Phase B scans + full migration — no baseline exceptions)
+> **Status:** 🟡 PARTIAL — Phase A infrastructure + Phase B backfill + baseline drain (§5.3.1) shipped; every Route variant carries `#[connected(...)]` and baseline is empty, so `E-ROUTE-001`/`E-ROUTE-002` break `cargo check`. Still pending: (1) the `regen-baseline` warn-downgrade path removal (§5.3.2), (2) the bare-`navigator().push(Route::...)` ban scan (§5.3.3) — the loophole remains open, new bypasses would not be caught, (3) the entire test plan (§7.1–7.5: unit + trybuild + integration + runtime coverage counter + harness entry).
 > **Scope:** cross-cutting — `crates/core/src/ui/routes.rs`, every link/button/navigator callsite under `crates/core/src/ui/`, the shared `crates/ui-macros/` proc-macro crate, and the shared `crates/lint-gate/build.rs` graph checker
 > **Goal:** `cargo check`-native reachability check. Every `Route` variant must be reached by **either** (a) at least one `Link { to: Route::X }` / `nav!(Route::X)` callsite — identity carried by Rust's own type system on `Route::X`, nothing stringly-typed — **or** (b) a ZST `ProgrammaticProducer` impl naming the route as its target. Orphan routes and routes unreachable from `entry_point` surface as `cargo::error=` on plain `cargo check`. No `via` label dictionary, no `#[test]` to skip.
 
@@ -269,9 +269,9 @@ Rolling out a hard compile error across 79+ callsites in one commit is a non-sta
 
 ### 5.3 Phase C — full enforcement (1 PR)
 
-- [ ] **5.3.1** Drain `crates/lint-gate/baseline.json` to empty so E-ROUTE-001 emits as `cargo::error=` on plain `cargo check`.
-- [ ] **5.3.2** Remove the `regen-baseline` warn downgrade path for route-graph violations.
-- [ ] **5.3.3** Add the bare `navigator().push(Route::...)` pattern to the `lint-gate` build.rs banned-pattern list (same mechanism as the `#[allow(dead_code)]` scan): any occurrence outside a `nav!`/`Link` macro expansion emits `cargo::error=`, closing the bypass loophole permanently on the same `cargo check` surface.
+- [x] **5.3.1** Drain `crates/lint-gate/baseline.json` to empty so E-ROUTE-001 emits as `cargo::error=` on plain `cargo check`. **Shipped:** baseline.json contains `"violations": []`.
+- [ ] **5.3.2** Remove the `regen-baseline` warn downgrade path for route-graph violations. *Still present in `crates/lint-gate/build.rs`; remove once §7 tests land.*
+- [ ] **5.3.3** Add the bare `navigator().push(Route::...)` pattern to the `lint-gate` build.rs banned-pattern list (same mechanism as the `#[allow(dead_code)]` scan): any occurrence outside a `nav!`/`Link` macro expansion emits `cargo::error=`, closing the bypass loophole permanently on the same `cargo check` surface. *Not shipped — no such scan exists in `crates/lint-gate/build/`.*
 
 ---
 

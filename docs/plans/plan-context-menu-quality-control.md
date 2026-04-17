@@ -1,7 +1,7 @@
 # Plan — Context Menu Quality Control
 
 > **Created:** 2026-04-16
-> **Status:** 🟡 PARTIAL — only the lint-gate coverage scan (Phase B §3.1.2) shipped. The proc-macro is a no-op pass-through, all 318 components were blanket-stamped with `inherit` (no real classification), no root guard, no runtime stack, no forum/profile/member-list menus. The native browser menu still bleeds through everywhere except the ~5 surfaces with hand-rolled `oncontextmenu` handlers predating this plan.
+> **Status:** 🟡 PARTIAL — shipped: (1) lint-gate coverage scan (Phase B §3.1.2), (2) root guard on `.main-layout` (§4.5.1), (3) per-surface classification of all 318 annotations into `None` / `allow_default` / `inherit` (Phase C §5.1.3). Still pending: real proc-macro expansion (§2.2), `ContextMenuFor` trait (§2.3), context-menu stack runtime (§4.1–4.2), mobile center-overlay (§4.3), long-press extraction (§4.4), new per-surface menus (`ForumPostContextMenu`, `UserRowContextMenu`), and the entire test plan (§6). Runtime behavior today: the root guard suppresses the native menu everywhere; `allow_default` surfaces `stop_propagation` correctly; custom menus still rely on the pre-existing hand-rolled `ServerContextMenu` / `ChannelContextMenu` / `MsgContextMenuOverlay`.
 > **Scope:** cross-cutting — every Dioxus component in `crates/core/src/ui/` and each `clients/*/src/`
 > **Goal:** Every `#[component]` in the app declares a compile-time context-menu policy via a single `#[context_menu(...)]` attribute macro (`Foo` / `None` / `allow_default` / `inherit`). Coverage is enforced by the shared `crates/lint-gate/build.rs` — any missing decorator emits `cargo::error=` on plain `cargo check`, so agents cannot silently skip it. The right menu always shows up for a given surface, the wrong one never bleeds through, and on mobile a long-press opens a center-screen stacked-overlay menu that dismisses on back / swipe / outside-click.
 
@@ -120,11 +120,11 @@ pub trait ContextMenuFor<Props> {
 Trade-off summary: Dioxus 0.7.3's `#[component]` macro is a plain attribute macro that rewrites the function into a generated struct + function. Stacking attributes is legal as long as ours runs *outside* `#[component]` (Rust attribute-macro ordering is outer-first). So we ship a `poly-context-menu-macros` proc-macro crate that:
 
 - [ ] **3.1.1** Exports a single attribute macro `#[context_menu(...)]`. The macro parses its argument into one of four variants (`Foo` ident → attach menu; `None` ident → preventDefault-only; `allow_default` ident → native menu; `inherit` ident → parent forwards). It runs before `#[component]` and simply (a) validates the arg, (b) injects a `#[linkme::distributed_slice(CTX_MENU_COVERAGE)]` static entry with the component's `module_path!()` + variant tag, (c) re-emits the original `fn` with the appropriate DOM-level wrapper (or no wrapper for `None`/`inherit`/`allow_default`) so `#[component]` sees a valid fn.
-- [ ] **3.1.2** Coverage enforcement runs on **plain `cargo check`**, not `#[test]` — tests are easy for agents to skip, build errors are not. Lives in the shared `crates/lint-gate/build.rs` from `plan-component-lints.md` §3.2 (one workspace walk feeds every cross-file lint). The build script:
+- [x] **3.1.2** Coverage enforcement runs on **plain `cargo check`**, not `#[test]` — tests are easy for agents to skip, build errors are not. Lives in the shared `crates/lint-gate/build.rs` from `plan-component-lints.md` §3.2 (one workspace walk feeds every cross-file lint). The build script:
   - enumerates every `#[component]`-attributed fn in the workspace via `ignore::WalkBuilder` + line-prefix attribute scan (same primitive as the allow-ban);
   - for each hit, checks the preceding non-blank line for one of `#[context_menu(Foo)]` / `#[context_menu(None)]` / `#[context_menu(allow_default)]` / `#[context_menu(inherit)]`;
   - emits `cargo::error=missing #[context_menu(...)] decorator at <path>:<line>` (stabilized Rust 1.84) for each miss.
-  Result: rust-analyzer red-squiggles on save; `cargo check` fails in CI with the exact file:line. No `#[test]` needed — keep a smoke test in `crates/core/tests/` that reads the `CTX_MENU_COVERAGE` `linkme` slice and asserts every registered variant tag is well-formed, but that is a belt-and-braces runtime check, not the gate.
+  **Shipped:** `crates/lint-gate/build/context_menu_coverage.rs`. Baseline is empty. The `linkme` runtime smoke test is deferred — the compile-time scan is the gate.
 - [ ] **3.1.3** `#[context_menu(inherit)]` is a bare-bones variant that only registers in the slice — it is the tool authors use when they genuinely mean "my parent owns the menu." It keeps the coverage check clean without forcing every `<span>`-like leaf into a dummy menu.
 - [ ] **3.1.4** Quality: emit a `#[diagnostic::on_unimplemented]` on `ContextMenuFor` so a typo in `#[context_menu(Foo)]` where `Foo` does not impl the trait gives a clean error message.
 
@@ -178,7 +178,7 @@ pub struct AppState {
 
 ### 4.5 Global guard
 
-- [ ] **4.5.1** Add `oncontextmenu: evt.prevent_default()` at the root `.main-layout` `<div>` in `main_layout.rs` as a belt-and-suspenders fallback for components that somehow skipped annotation. The per-component `allow_default` variant opts out by calling `evt.stop_propagation()` before the root handler sees it. This is the only place we accept a runtime guard; compile-time coverage (3) is the source of truth.
+- [x] **4.5.1** Add `oncontextmenu: evt.prevent_default()` at the root `.main-layout` `<div>` in `main_layout.rs` as a belt-and-suspenders fallback for components that somehow skipped annotation. The per-component `allow_default` variant opts out by calling `evt.stop_propagation()` before the root handler sees it. This is the only place we accept a runtime guard; compile-time coverage (3) is the source of truth. **Shipped:** commit `f627d9fc`, `main_layout.rs:299`.
 
 ## 5. Migration path
 
@@ -188,7 +188,7 @@ pub struct AppState {
 
 - [ ] **5.1.1** **Phase A — infrastructure.** *Not shipped.* The `crates/core/src/ui/context_menu/` directory does not exist; `ContextMenuFor` trait does not exist; the context-menu stack runtime does not exist; `#[context_menu(...)]` in `crates/ui-macros/src/lib.rs:44` is `pub fn context_menu(_attr, item) { item }` — a transparent pass-through that injects no DOM and no handlers. Existing `ServerContextMenu` / `ChannelContextMenu` / `MsgContextMenuOverlay` were never refactored to use a stack. Must build: (a) real macro expansion per §2.2, (b) `ContextMenuFor` trait per §2.3, (c) `context_menu_stack: Vec<ActiveContextMenu>` on `AppState` per §4.1, (d) `ContextMenuStack` host component mounted in `MainLayout`, (e) root guard per §4.5.1, (f) long-press hook extracted from `channel_list.rs` per §4.4.
 - [x] **5.1.2** **Phase B — warn mode.** Shipped. The `lint-gate` build script (`crates/lint-gate/build/context_menu_coverage.rs`) emits `cargo::error=` for any `#[component]` lacking a sibling `#[context_menu(...)]`. `baseline.json` is empty, so every miss breaks `cargo check`.
-- [ ] **5.1.3** **Phase C — batch annotate *and classify*.** *Not shipped.* Commit `7b61707` bulk-stamped all 318 `#[component]`s with `#[context_menu(inherit)]` as a placeholder to make the coverage lint green. Real per-surface classification (Foo / None / allow_default / inherit) is *still pending* for every one of those 318 sites. Split into parallel subagent batches by area: (1) `settings/*`, (2) `signup/*`, (3) `account/common/chat_view.rs` internals, (4) `account/common/forum_view.rs` + per-forum-backend extras, (5) per-backend `account/*/mod.rs`, (6) `favorites_sidebar` + `account_server_bar` + `channel_list` polish, (7) voice/media/modal overlays, (8) root-level routes.
+- [x] **5.1.3** **Phase C — batch annotate *and classify*.** *Shipped* via commit `4159fda9`. Four parallel audit subagents reclassified all 318 placeholders: ~70 → `None` (route-level pages, standalone panels, popups), ~19 → `allow_default` (image viewers, text inputs, credential forms; each adds `oncontextmenu: stop_propagation` on its DOM element), ~229 kept `inherit` (visual leaves inside menu-owning parents, and existing `*_context_menu.rs` component definitions). 3 TODOs left in-code for future menus that need authoring: `ForumPostContextMenu` (forum_view.rs:653, 778) and `UserRowContextMenu` (dm_user_sidebar.rs:91).
 - [ ] **5.1.4** **Phase D — deny.** *Technically green but meaningless.* Baseline *is* empty (every miss emits `cargo::error=`) but every component currently carries `inherit`, which is a runtime no-op. "Deny" is only meaningful once Phase A macro expansion is real AND Phase C classification is done. Re-verify once §5.1.1 and §5.1.3 land.
 
 ### 5.2 Author ergonomics
@@ -207,14 +207,16 @@ pub struct AppState {
 - [ ] **6.1.6** **Forum-specific regression.** Explicitly assert right-clicking a Lemmy post does NOT show "Invite" or "Server Boost."
 - [ ] **6.1.7** Haiku test-harness entry — extend `TEST_HARNESS.md` with a section 8 "context-menu smoke" that the haiku subagent runs after any UI-touching PR.
 
-## 7. Open questions
+## 7. Resolved questions
 
-- [ ] **7.1.1** Where does the hardware-back-button interception live on Dioxus native mobile targets (iOS/Android)? The current repo handles back only via browser `history.back` / `hashchange` in WASM. A native Wry / Dioxus-mobile `BackHandler` equivalent needs research — see Dioxus 0.7 `use_navigator()` plus any platform-specific handler. Placeholder: reuse the `hashchange` trick in the web-shell-backed `apps/desktop` since it is a WebView, and file a TODO for the true-native mobile builds.
-- [ ] **7.1.2** Should `#[context_menu]` also cover keyboard activation (Shift+F10, Context-Menu key)? Nice-to-have; not in this plan's scope but the DSL leaves room.
-- [ ] **7.1.3** Does the long-press duration want to be configurable per component (e.g. 300 ms for channel icons, 500 ms for chat messages)? Default 500 ms; expose `#[context_menu(Foo, press_ms = 300)]` if real usage demands it.
-- [ ] **7.1.4** Accessibility: do we expose `aria-haspopup="menu"` and focus management for screen readers? Should be yes — add to 5.1.3 Phase C PRs.
-- [ ] **7.1.5** Citation anchors for mobile UX in §4.3.4 — pin a specific revision of the Apple HIG "Context Menus" page and Material 3 "Long-press actions" spec in a references footer before the plan moves out of 🔵 drafted.
-- [ ] **7.1.6** Interaction with the Dioxus fullstack SSR pass — `linkme` slots populated by the WASM build must not be consulted server-side. The coverage `#[test]` is client-side only; double-check.
+All questions resolved 2026-04-17. Decisions are load-bearing for the runtime work in §4.
+
+- [x] **7.1.1** ~~Hardware-back on true-native mobile.~~ **Decision:** out of scope for this plan. All current Poly targets are WebView-backed (`apps/web` Chromium, `apps/desktop` Wry, `apps/desktop-electron` Electron). All three honour `hashchange` — §4.3.3's `#poly-ctx-menu-{id}` trick works uniformly. True-native Dioxus-mobile builds (iOS/Android without WebView) do not exist in this repo. Moved to §8 Out of scope; revisit when a native-mobile target lands.
+- [x] **7.1.2** ~~Keyboard activation (Shift+F10 / Context-Menu key).~~ **Decision:** yes, supported for free. Browsers synthesize a `contextmenu` event from both keys with cursor coordinates at the focused element's center, so the existing `oncontextmenu` handler from §4.2 and the root guard from §4.5.1 both fire without additional wiring. No DSL change; add an integration test under §6.1.4 that dispatches `KeyboardEvent` Shift+F10 via CDP.
+- [x] **7.1.3** ~~Configurable long-press duration.~~ **Decision:** no. 500 ms matches iOS Safari and the existing `channel_list.rs` timer. Per-component overrides are YAGNI. If future usage demands it, add `#[context_menu(Foo, press_ms = 300)]` — the attribute macro's argument parser already accommodates a key=value form.
+- [x] **7.1.4** ~~Accessibility — `aria-haspopup`, focus management.~~ **Decision:** yes, required. The §4.1 `ContextMenuStack` host component MUST set: `aria-haspopup="menu"` + `aria-expanded` on the trigger, `role="menu"` on the overlay, `role="menuitem"` on each item, and a focus-trap for the duration of the stack being non-empty (first item focused on open; Escape restores focus to the trigger). Moved to §4 as a runtime requirement; tracked as a test-plan item in §6.1.
+- [x] **7.1.5** ~~Citation anchors for mobile UX.~~ **Decision:** not a blocker. The mobile stacked-sheet pattern in §4.3.4 is well-established industry precedent (iOS `UIContextMenu`, Material 3 long-press actions, React Native `@react-native-menu/menu`); inline prose references are sufficient for a design document. Dropped from blocker list.
+- [x] **7.1.6** ~~Dioxus fullstack SSR interaction with `linkme`.~~ **Decision:** non-issue by design. The `CTX_MENU_COVERAGE` slice is consulted only by the lint-gate `build.rs` at compile time (already shipped) and by the runtime `ContextMenuStack` host which lives inside the client-only WASM render path. The fullstack server half never calls `ContextMenuFor::render`. No cfg-gates needed.
 
 ## 8. Out of scope
 
@@ -222,7 +224,7 @@ pub struct AppState {
 - Drag-and-drop context (ondrop menus) — today's dnd flow is its own pipeline in `main_layout.rs`.
 - Rich per-item keyboard navigation inside a menu (arrow keys) — phase 2 polish.
 - Reworking `MsgContextMenuOverlay`'s quick-reactions row semantics.
-- True-native (non-WebView) iOS/Android back-handler wiring — listed in Open questions for now.
+- True-native (non-WebView) iOS/Android back-handler wiring — moved from §7.1.1. Revisit when a non-WebView Dioxus-mobile target lands.
 - Touching MCP binaries (`mcp/*`) or host-bridge routes.
 
 ---
