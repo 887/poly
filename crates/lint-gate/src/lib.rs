@@ -360,6 +360,273 @@ enum Route {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// action_enum_coverage — per-file scan logic mirrored from
+// build/action_enum_coverage.rs so that `cargo test -p poly-lint-gate` can
+// exercise the scanner without depending on the build-script module path.
+// Keep in sync with the build/ copy.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+#[allow(dead_code)]
+pub mod action_enum_coverage {
+    pub struct Violation {
+        pub rule: String,
+        pub path: String,
+        pub line: u32,
+        pub detail: String,
+    }
+
+    #[derive(PartialEq, Eq, Debug)]
+    enum UiActionKind {
+        Typed,
+        None,
+        Inherit,
+        Missing,
+    }
+
+    pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
+        let mut out = Vec::new();
+        let lines: Vec<&str> = src.lines().collect();
+
+        for (i, line) in lines.iter().enumerate() {
+            if !line.trim().starts_with("#[component]") {
+                continue;
+            }
+
+            let annotation = find_ui_action_above(&lines, i);
+            let fn_name =
+                extract_fn_name_below(&lines, i).unwrap_or_else(|| "<unknown>".into());
+
+            if annotation == UiActionKind::Missing {
+                out.push(Violation {
+                    rule: "action_enum_coverage".into(),
+                    path: path.to_string(),
+                    line: (i as u32) + 1,
+                    detail: format!(
+                        "#[component] fn {fn_name} missing #[ui_action(...)] — add one of \
+                         `(YourActionEnum)` (typed actions), `(None)` (display-only), or \
+                         `(inherit)` (sub-component delegates to parent)"
+                    ),
+                });
+            }
+
+            if annotation == UiActionKind::None {
+                scan_rule_b_for_component(&lines, i, &fn_name, path, &mut out);
+            }
+        }
+
+        out
+    }
+
+    fn find_ui_action_above(lines: &[&str], component_idx: usize) -> UiActionKind {
+        let mut i = component_idx;
+        while i > 0 {
+            i -= 1;
+            let Some(line) = lines.get(i) else { break };
+            let t = line.trim();
+            if t.is_empty() || t.starts_with("//") || t.starts_with("///") {
+                continue;
+            }
+            if t.starts_with("#[") {
+                if let Some(inner) = t.strip_prefix("#[ui_action(") {
+                    let arg = inner
+                        .trim_end_matches(|c: char| c == ')' || c == ']')
+                        .trim();
+                    return if arg.eq_ignore_ascii_case("none") {
+                        UiActionKind::None
+                    } else if arg.eq_ignore_ascii_case("inherit") {
+                        UiActionKind::Inherit
+                    } else {
+                        UiActionKind::Typed
+                    };
+                }
+                continue;
+            }
+            break;
+        }
+        UiActionKind::Missing
+    }
+
+    fn scan_rule_b_for_component(
+        lines: &[&str],
+        component_idx: usize,
+        fn_name: &str,
+        path: &str,
+        out: &mut Vec<Violation>,
+    ) {
+        let event_names = [
+            "onclick:",
+            "onchange:",
+            "onsubmit:",
+            "oninput:",
+            "onkeydown:",
+            "onkeyup:",
+            "onmousedown:",
+            "onmouseup:",
+            "ondblclick:",
+            "onfocus:",
+            "onblur:",
+        ];
+
+        let start = component_idx + 1;
+        let end = (start + 200).min(lines.len());
+
+        for (offset, line) in lines[start..end].iter().enumerate() {
+            let abs_line = start + offset;
+            let t = line.trim();
+            if t.starts_with("#[component]") {
+                break;
+            }
+            for ev in &event_names {
+                if !t.contains(ev) {
+                    continue;
+                }
+                if !t.contains("ui_noop!") {
+                    out.push(Violation {
+                        rule: "action_enum_coverage_none_with_handler".into(),
+                        path: path.to_string(),
+                        line: (abs_line as u32) + 1,
+                        detail: format!(
+                            "#[ui_action(None)] component {fn_name} has a non-noop event \
+                             handler at line {} — either change to #[ui_action(SomeEnum)] \
+                             or use ui_noop!(UiNoopReason::X)",
+                            abs_line + 1
+                        ),
+                    });
+                    break;
+                }
+            }
+        }
+    }
+
+    fn extract_fn_name_below(lines: &[&str], component_idx: usize) -> Option<String> {
+        for line in lines.iter().skip(component_idx + 1).take(10) {
+            let t = line.trim_start();
+            if t.starts_with("#[") || t.starts_with("//") || t.is_empty() {
+                continue;
+            }
+            let after_fn = t.split_once(" fn ")?.1;
+            let name_end = after_fn.find(|c: char| !c.is_alphanumeric() && c != '_')?;
+            return Some(after_fn[..name_end].to_string());
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod action_enum_coverage_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    #[test]
+    fn missing_ui_action_is_violation() {
+        let src = r#"
+            #[component]
+            pub fn MyWidget() -> Element {
+                rsx! { div { "hello" } }
+            }
+        "#;
+        let violations = super::action_enum_coverage::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().any(|v| v.rule == "action_enum_coverage"),
+            "#[component] without #[ui_action] should be a Rule A violation"
+        );
+    }
+
+    #[test]
+    fn ui_action_none_is_ok() {
+        let src = r#"
+            #[ui_action(None)]
+            #[component]
+            pub fn DisplayOnly() -> Element {
+                rsx! { div { "read-only" } }
+            }
+        "#;
+        let violations = super::action_enum_coverage::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().all(|v| v.rule != "action_enum_coverage"),
+            "#[ui_action(None)] should satisfy Rule A"
+        );
+    }
+
+    #[test]
+    fn ui_action_inherit_is_ok() {
+        let src = r#"
+            #[ui_action(inherit)]
+            #[component]
+            pub fn SubWidget() -> Element {
+                rsx! { div { "child" } }
+            }
+        "#;
+        let violations = super::action_enum_coverage::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().all(|v| v.rule != "action_enum_coverage"),
+            "#[ui_action(inherit)] should satisfy Rule A"
+        );
+    }
+
+    #[test]
+    fn ui_action_typed_is_ok() {
+        let src = r#"
+            #[ui_action(MyActionEnum)]
+            #[component]
+            pub fn ActionButton() -> Element {
+                rsx! { button { "click me" } }
+            }
+        "#;
+        let violations = super::action_enum_coverage::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().all(|v| v.rule != "action_enum_coverage"),
+            "#[ui_action(MyActionEnum)] should satisfy Rule A"
+        );
+    }
+
+    #[test]
+    fn ui_action_none_with_onclick_is_violation() {
+        let src = r#"
+            #[ui_action(None)]
+            #[component]
+            pub fn BadDisplay() -> Element {
+                rsx! {
+                    button {
+                        onclick: move |_| { do_something(); },
+                        "click"
+                    }
+                }
+            }
+        "#;
+        let violations = super::action_enum_coverage::scan_src(src, "test.rs");
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.rule == "action_enum_coverage_none_with_handler"),
+            "#[ui_action(None)] with onclick (no ui_noop!) should be a Rule B violation"
+        );
+    }
+
+    #[test]
+    fn ui_action_none_with_noop_onclick_is_ok() {
+        let src = r#"
+            #[ui_action(None)]
+            #[component]
+            pub fn DecorativeIcon() -> Element {
+                rsx! {
+                    div {
+                        onclick: move |_| ui_noop!(UiNoopReason::DecorativeIcon),
+                        "icon"
+                    }
+                }
+            }
+        "#;
+        let violations = super::action_enum_coverage::scan_src(src, "test.rs");
+        assert!(
+            violations
+                .iter()
+                .all(|v| v.rule != "action_enum_coverage_none_with_handler"),
+            "#[ui_action(None)] with ui_noop! onclick should not be a Rule B violation"
+        );
+    }
+}
+
 #[cfg(test)]
 mod ui_action_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

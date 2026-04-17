@@ -22,7 +22,7 @@ use crate::client_manager::ClientManager;
 use crate::state::{AppState, SettingsSection};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 const MOBILE_DRAWER_RUNTIME_JS: Asset = asset!("assets/scripts/mobile_drawer_runtime.js", AssetOptions::js());
 const MOBILE_DRAWER_CLOSE_JS: &str = "window.__polySetMobileDrawerOpen?.(false);";
@@ -156,8 +156,9 @@ pub(crate) const fn runtime_mobile_ui_active() -> bool {
 /// On web, the browser's native back/forward buttons handle navigation.
 // DECISION(DX-ROUTER-1): NavBar uses navigator().go_back()/go_forward()
 // instead of custom AppState history stack.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn NavBar() -> Element {
     #[cfg(feature = "native-nav")]
@@ -200,8 +201,9 @@ fn NavBar() -> Element {
 ///
 /// Desktop: voice banner + (nav bar | server sidebar | outlet)
 /// Mobile: TBD
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn MainLayout() -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -292,11 +294,6 @@ pub fn MainLayout() -> Element {
     rsx! {
         div {
             class: "main-layout",
-            // Root context-menu guard per plan-context-menu-quality-control.md §4.5.1.
-            // Suppresses the native browser menu everywhere. Surfaces that want a
-            // custom menu (or the native menu for images) must `stop_propagation()`
-            // on oncontextmenu *before* this handler runs.
-            oncontextmenu: move |evt| evt.prevent_default(),
             // Dismiss context menu when clicking outside of it
             onclick: move |_| {
                 if app_state.read().context_menu.is_some() {
@@ -310,8 +307,6 @@ pub fn MainLayout() -> Element {
             ServerContextMenu {}
             // Floating channel right-click / long-press context menu
             ChannelContextMenu {}
-            // Stacked context menus (plan §4.1.2) — Phase A host for new menus
-            crate::ui::context_menu::host::ContextMenuStack {}
             // Voice connection banner — spans full width when connected
             VoiceBanner {}
             // Main body: nav + sidebar + route content

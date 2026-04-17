@@ -13,7 +13,7 @@
 use dioxus::prelude::*;
 
 use crate::i18n::{t, t_args};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Categories of features that can be declared unsupported.
 ///
@@ -50,6 +50,7 @@ impl UnsupportedFeature {
     }
 }
 
+#[ui_action(None)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]

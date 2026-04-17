@@ -9,7 +9,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
 use poly_client::Attachment;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 #[derive(Props, Clone, PartialEq)]
 pub struct MessageMediaViewerOverlayProps {
@@ -18,8 +18,9 @@ pub struct MessageMediaViewerOverlayProps {
     pub attachment_index: usize,
 }
 
-#[context_menu(allow_default)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -256,7 +257,6 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                     src: "{attachment.url}",
                     alt: "{attachment.filename}",
                     onclick: move |e| e.stop_propagation(),
-                    oncontextmenu: move |e| e.stop_propagation(),
                 }
             }
 

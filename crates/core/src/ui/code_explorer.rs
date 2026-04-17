@@ -14,9 +14,10 @@ use dioxus::prelude::*;
 use poly_client::FileEntry;
 
 use crate::state::ChatData;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Two-pane explorer rendered when the current channel is `ChannelType::Code`.
+#[ui_action(inherit)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]
@@ -187,6 +188,7 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
 
 /// One row in the file/directory list. Extracted so the parent component stays
 /// under the 150-line cap.
+#[ui_action(inherit)]
 #[context_menu(inherit)]
 #[rustfmt::skip]
 #[component]

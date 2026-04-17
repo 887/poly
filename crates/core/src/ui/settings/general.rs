@@ -9,8 +9,48 @@
 use crate::i18n::t;
 use crate::state::{AppState, LayoutMode};
 use crate::storage::AppSettings;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the layout settings section.
+pub enum LayoutSettingsAction {
+    /// Change the app layout mode.
+    SetLayoutMode(LayoutMode),
+    /// Toggle mirroring of the menu layout.
+    SetMirrorMenu(bool),
+    /// Toggle mirroring of chat messages.
+    SetMirrorChatMessages(bool),
+}
+
+impl UiAction for LayoutSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetLayoutMode(_mode) => todo!("phase-E: persist layout mode"),
+            Self::SetMirrorMenu(_enabled) => todo!("phase-E: persist mirror menu layout"),
+            Self::SetMirrorChatMessages(_enabled) => {
+                todo!("phase-E: persist mirror chat messages")
+            }
+        }
+    }
+}
+
+/// Actions for the general settings section.
+pub enum GeneralSettingsAction {
+    /// Wipe user data and return to setup wizard.
+    Reset,
+    /// Wipe all data including the identity key.
+    NukeAllData,
+}
+
+impl UiAction for GeneralSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::Reset => todo!("phase-E: run reset flow"),
+            Self::NukeAllData => todo!("phase-E: nuke all data"),
+        }
+    }
+}
 
 async fn persist_layout_mode(mode: LayoutMode) {
     let Some(storage) = crate::STORAGE.get() else {
@@ -80,8 +120,9 @@ fn load_general_settings(mut settings_sig: Signal<AppSettings>) {
     });
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn LayoutModeButton(label: String, active: bool, onclick: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -93,8 +134,9 @@ fn LayoutModeButton(label: String, active: bool, onclick: EventHandler<MouseEven
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn LayoutModeSelector() -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -163,8 +205,9 @@ fn LayoutModeSelector() -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn MirrorMenuToggle() -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -192,8 +235,9 @@ fn MirrorMenuToggle() -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn MirrorChatMessagesToggle() -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -284,8 +328,9 @@ async fn run_reset_flow(
 }
 
 /// Reset button component.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -325,8 +370,9 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
 }
 
 /// Error display component.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn ResetError(error: Signal<String>) -> Element {
     rsx! {
@@ -337,8 +383,9 @@ fn ResetError(error: Signal<String>) -> Element {
 }
 
 /// Reset actions section with buttons and error handling.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ResetSection() -> Element {
     let mut error = use_signal(String::new);
@@ -371,8 +418,9 @@ fn ResetSection() -> Element {
 /// General settings section.
 ///
 /// Contains shell layout and mirroring preferences.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(LayoutSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn LayoutSettings() -> Element {
     rsx! {
@@ -390,8 +438,9 @@ pub(super) fn LayoutSettings() -> Element {
 ///
 /// Contains the app-reset and nuke-all-data danger zone.
 // TODO(phase-2.7.9.10): Notification preferences, startup behavior
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(GeneralSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn GeneralSettings() -> Element {
     rsx! {

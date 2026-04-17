@@ -15,15 +15,31 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Typed actions for the Create Server modal form.
+pub enum CreateServerAction {
+    Submit,
+    Cancel,
+}
+
+impl crate::ui::actions::UiAction for CreateServerAction {
+    fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
+        match self {
+            Self::Submit => todo!("phase-E: submit create-server form"),
+            Self::Cancel => todo!("phase-E: cancel create-server and navigate back"),
+        }
+    }
+}
 
 /// Full-page Create Server form.
 ///
 /// Shows a centered card with a server-name input and a Create button.
 /// On success: registers the new server and navigates to
 /// `/:backend/:instance_id/:account_id/dms`.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(CreateServerAction)]
+#[context_menu(inherit)]
 #[component]
 pub(crate) fn CreateServerPage(
     backend: String,

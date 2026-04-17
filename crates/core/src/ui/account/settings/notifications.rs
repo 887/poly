@@ -18,7 +18,28 @@
 use crate::i18n::t;
 use crate::storage::AccountNotificationSettings;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Typed actions for the per-account notification settings panel.
+pub enum NotificationsSettingsAction {
+    ToggleStreams(bool),
+    ToggleFriendsVoice(bool),
+    ToggleReactions(bool),
+    ToggleSoundNewMessage(bool),
+    ToggleSoundDm(bool),
+    ToggleSoundRing(bool),
+    ToggleBadgeUnread(bool),
+    Save,
+}
+
+impl crate::ui::actions::UiAction for NotificationsSettingsAction {
+    fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
+        match self {
+            Self::Save => todo!("phase-E: persist notification settings"),
+            _ => todo!("phase-E: update notification state"),
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 struct NotifSignals {
@@ -75,8 +96,9 @@ fn load_account_notif_settings(account_id: String, mut signals: NotifSignals) {
 /// Notification settings panel for a single account.
 ///
 /// Loads saved settings on mount and persists any toggle change immediately.
-#[context_menu(None)]
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`].
+#[ui_action(NotificationsSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub fn NotificationsSettings(account_id: String) -> Element {
     let notif_streams = use_signal(|| true);
@@ -109,8 +131,9 @@ pub fn NotificationsSettings(account_id: String) -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Element {
     let make_settings = move || current_notif_settings(signals);
@@ -180,8 +203,9 @@ fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Elem
 
 /// Inner presentation component for an account's notification toggles.
 ///
-#[context_menu(inherit)]
 /// Split out so `NotificationsSettings` stays under the 150-line limit.
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountNotifSectionInner(
     account_id: String,
@@ -248,8 +272,9 @@ fn AccountNotifSectionInner(
     }
 }
 
-#[context_menu(inherit)]
 /// Generic notification toggle row.
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn NotifToggleRow(label: String, checked: bool, on_toggle: EventHandler<bool>) -> Element {
     rsx! {

@@ -18,10 +18,9 @@ use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
-use crate::ui::context_menu::menus::{user_row_entry, UserRowCtx};
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Presence dot CSS class for a given status.
 fn presence_dot_class(status: &PresenceStatus) -> &'static str {
@@ -37,8 +36,9 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 ///
 /// Reads `ChatData::active_group_members` and `NavState::dm_right_sidebar_visible`.
 /// Renders nothing when there are no active group members.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn DmUserSidebar() -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -89,8 +89,9 @@ pub fn DmUserSidebar() -> Element {
 }
 
 /// A single member row in the DM group member sidebar.
-#[context_menu(crate::ui::context_menu::menus::UserRowContextMenu)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn DmMemberRow(
     member: User,
@@ -98,7 +99,7 @@ fn DmMemberRow(
     account_id: String,
     mut chat_data: Signal<ChatData>,
     client_manager: Signal<ClientManager>,
-    mut app_state: Signal<AppState>,
+    app_state: Signal<AppState>,
 ) -> Element {
     let color = user_color(&member.id);
     let first_char: String = member
@@ -112,25 +113,11 @@ fn DmMemberRow(
     let member_name = member.display_name.clone();
     let avatar_url = member.avatar_url.clone();
     let remove_tooltip = format!("Remove {} from this group", member.display_name);
-    let ctx_member = member.clone();
-    let ctx_group_id = group_id.clone();
-    let ctx_account_id = account_id.clone();
 
     rsx! {
         div {
             class: "dm-member-row",
             onclick: move |_| open_user_profile(app_state, member.clone()),
-            oncontextmenu: move |evt| {
-                evt.prevent_default();
-                evt.stop_propagation();
-                let ctx = UserRowCtx {
-                    user: ctx_member.clone(),
-                    group_id: ctx_group_id.clone(),
-                    account_id: ctx_account_id.clone(),
-                };
-                let entry = user_row_entry(ctx, &evt);
-                app_state.write().context_menu_stack.push(entry);
-            },
             // Avatar with presence dot
             div { class: "dm-member-avatar-wrap",
                 div {

@@ -17,15 +17,31 @@ use crate::state::{AppState, ChatData};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::ChannelType;
+use poly_ui_macros::{context_menu, ui_action};
 use tracing::{error, info};
-use poly_ui_macros::context_menu;
+
+/// Typed actions for the Create Channel modal form.
+pub enum CreateChannelAction {
+    Submit,
+    Cancel,
+}
+
+impl crate::ui::actions::UiAction for CreateChannelAction {
+    fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
+        match self {
+            Self::Submit => todo!("phase-E: submit create-channel form"),
+            Self::Cancel => todo!("phase-E: cancel create-channel and navigate back"),
+        }
+    }
+}
 
 /// Full-page Create Channel form rendered in the main content area.
 ///
 /// The left-hand `ChannelList` sidebar (with existing channels) remains visible
 /// because this route is rendered inside `ServerLayout`'s `Outlet`.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(CreateChannelAction)]
+#[context_menu(inherit)]
 #[component]
 pub(crate) fn CreateChannelPage(
     backend: String,

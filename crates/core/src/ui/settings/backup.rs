@@ -15,9 +15,33 @@
 // DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
 
 use crate::i18n::t;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
+use poly_ui_macros::{context_menu, ui_action};
 use std::collections::HashMap;
-use poly_ui_macros::context_menu;
+
+/// Actions for the backup settings section.
+pub enum BackupSettingsAction {
+    /// Push current data to a backup server immediately.
+    SyncNow(String),
+    /// Remove a backup server by URL.
+    RemoveServer(String),
+    /// Begin re-authentication with an existing backup server.
+    ReauthServer(String),
+    /// Add a new backup server via URL after completing the wizard.
+    AddServer(String),
+}
+
+impl UiAction for BackupSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SyncNow(_url) => todo!("phase-E: trigger backup sync now"),
+            Self::RemoveServer(_url) => todo!("phase-E: remove backup server"),
+            Self::ReauthServer(_url) => todo!("phase-E: re-authenticate backup server"),
+            Self::AddServer(_url) => todo!("phase-E: add new backup server"),
+        }
+    }
+}
 
 // ── Supporting types ──────────────────────────────────────────────────────────
 
@@ -287,8 +311,9 @@ pub(super) async fn wizard_authenticate(
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 /// Renders the probe connection result box for Step 1 of the add-server wizard.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ProbeStatusBox(status: ProbeStatus) -> Element {
     match status {
@@ -327,8 +352,9 @@ pub(super) fn ProbeStatusBox(status: ProbeStatus) -> Element {
 }
 
 /// Renders the authentication status box for Step 2 of the add-server wizard.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn WizardAuthStatusBox(status: WizardAuthStatus) -> Element {
     match status {
@@ -350,8 +376,9 @@ pub(super) fn WizardAuthStatusBox(status: WizardAuthStatus) -> Element {
 /// Inline re-authentication form embedded in a [`ServerCard`].
 ///
 /// Manages its own passphrase input and error state. Closes on success or cancel.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ReauthForm(
     url: String,
@@ -408,8 +435,9 @@ pub(super) fn ReauthForm(
 ///
 /// Shows status, last-sync time, and Sync Now / Re-auth / Remove actions.
 /// The re-auth passphrase form is shown inline when "Re-authenticate" is clicked.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ServerCard(
     record: crate::storage::BackupServerRecord,
@@ -498,8 +526,9 @@ pub(super) fn ServerCard(
 }
 
 /// Step 1 of the add-server wizard: URL entry and server probe.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn WizardStep1(
     wizard_url: Signal<String>,
@@ -592,8 +621,9 @@ pub(super) fn WizardStep1(
 }
 
 /// Step 2 of the add-server wizard: name, optional passphrase, and authenticate.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn WizardStep2(
     wizard_step: Signal<u8>,
@@ -679,8 +709,9 @@ pub(super) fn WizardStep2(
 /// Step 1: URL entry and server probe.
 /// Step 2: name / passphrase and authenticate.
 // DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRecord>>) -> Element {
     let mut wizard_step = use_signal(|| 0u8);
@@ -752,8 +783,9 @@ pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRe
 /// Loads the server list on mount and pulls remote changes in the background,
 /// then delegates rendering to [`ServerCard`] (per server) and [`AddServerWizard`].
 // DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(BackupSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn BackupSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

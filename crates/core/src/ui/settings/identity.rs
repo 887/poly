@@ -15,8 +15,32 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 
 use crate::i18n::t;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the identity settings section.
+pub enum IdentitySettingsAction {
+    /// Generate a new Ed25519 identity keypair.
+    CreateIdentity,
+    /// Delete an identity by its account ID.
+    DeleteIdentity(String),
+    /// Copy an account ID to the clipboard.
+    CopyAccountId(String),
+    /// Show the mnemonic recovery phrase for an identity.
+    ShowRecoveryPhrase(String),
+}
+
+impl UiAction for IdentitySettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::CreateIdentity => todo!("phase-E: generate new identity keypair"),
+            Self::DeleteIdentity(_account_id) => todo!("phase-E: delete identity"),
+            Self::CopyAccountId(_account_id) => todo!("phase-E: copy account ID to clipboard"),
+            Self::ShowRecoveryPhrase(_account_id) => todo!("phase-E: show recovery phrase modal"),
+        }
+    }
+}
 
 #[derive(Clone, PartialEq)]
 struct LinkedPolyAccount {
@@ -46,8 +70,9 @@ async fn create_identity() -> Result<(String, Vec<String>), String> {
 }
 
 /// Modal overlay that displays and allows copying the 24-word recovery phrase.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn MnemonicModal(
     account_id: String,
@@ -107,8 +132,9 @@ pub(super) fn MnemonicModal(
 /// - Show recovery phrase
 /// - See which backup servers use each identity
 /// - Create additional identities
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(IdentitySettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn IdentitySettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -233,8 +259,9 @@ pub(super) fn IdentitySettings() -> Element {
 }
 
 /// Single identity card showing account ID, backup servers, Poly accounts, and delete button.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn IdentityCard(
     account_id: String,

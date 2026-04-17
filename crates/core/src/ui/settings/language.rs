@@ -7,8 +7,23 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 
 use crate::i18n::t;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the language settings section.
+pub enum LanguageSettingsAction {
+    /// Switch the app language. Empty string means auto-detect from system.
+    SetLanguage(String),
+}
+
+impl UiAction for LanguageSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetLanguage(_code) => todo!("phase-E: apply and persist locale change"),
+        }
+    }
+}
 
 /// One language option shown in the picker.
 struct LangOption {
@@ -62,8 +77,9 @@ fn resolve_locale(stored: &str) -> &str {
 }
 
 /// Single language option row with flag, name, and active checkmark.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn LangRow(code: String, label: String, selected: bool, onclick: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -79,8 +95,9 @@ fn LangRow(code: String, label: String, selected: bool, onclick: EventHandler<Mo
 }
 
 /// Language settings section — flag+checkmark picker.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(LanguageSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn LanguageSettings() -> Element {
     let mut locale_sig = crate::i18n::use_locale();

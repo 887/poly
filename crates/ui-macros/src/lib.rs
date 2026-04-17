@@ -12,12 +12,17 @@
 //! * `#[connected(...)]` — (Phase B) will declare route-graph edges for a
 //!   `#[component]`. Pass-through today. See
 //!   `docs/plans/plan-connected-routes-static-check.md` §3.1.1.
+//!
+//! * `#[ui_action(...)]` — declares the semantic action contract for a
+//!   `#[component]`. Coverage enforced by
+//!   `crates/lint-gate/build/action_enum_coverage.rs`.
 
 use proc_macro::TokenStream;
 
 mod connected;
 mod context_menu;
 mod rsx_size;
+mod ui_action;
 
 /// `MAX_RSX_LINES` gate. Apply above `#[component]` (or any `fn`):
 ///
@@ -72,4 +77,17 @@ pub fn connected(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(Connected, attributes(connected))]
 pub fn derive_connected(_input: TokenStream) -> TokenStream {
     TokenStream::new()
+}
+
+/// `#[ui_action(...)]` — semantic action contract for a `#[component]`.
+///
+/// Declare what user-triggered actions this component can perform:
+/// - `#[ui_action(MyActionEnum)]` — typed enum implementing `UiAction`
+/// - `#[ui_action(None)]`         — display-only, no semantic actions
+/// - `#[ui_action(inherit)]`      — sub-component, delegates to parent
+///
+/// Coverage is enforced by `crates/lint-gate/build/action_enum_coverage.rs`.
+#[proc_macro_attribute]
+pub fn ui_action(attr: TokenStream, item: TokenStream) -> TokenStream {
+    ui_action::expand(attr, item)
 }

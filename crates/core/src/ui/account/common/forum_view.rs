@@ -11,7 +11,7 @@ use crate::ui::routes::Route;
 use chrono::DateTime;
 use dioxus::prelude::*;
 use poly_client::{ChannelType, Message, MessageContent, MessageQuery};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 const PAGE_SIZE: usize = 20;
 
@@ -184,6 +184,7 @@ fn score_class(score: i64) -> &'static str {
 // Top-level ForumView — dispatches to HN feed or Lemmy forum based on channel type
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[ui_action(None)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]
@@ -198,6 +199,7 @@ pub fn ForumView() -> Element {
 // Hacker News feed view — filter input, infinite scroll, no Lemmy sort dropdown
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[ui_action(inherit)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]
@@ -361,6 +363,7 @@ fn HnFeedView() -> Element {
 // Lemmy/Reddit-style forum view (original implementation)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[ui_action(inherit)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]
@@ -544,6 +547,7 @@ fn LemmyForumView() -> Element {
 // ForumPostView — route component: load + render single post + comments
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[ui_action(None)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]
@@ -651,6 +655,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
 // Post card
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[ui_action(inherit)]
 #[context_menu(crate::ui::context_menu::menus::ForumPostContextMenu)]
 #[rustfmt::skip]
 #[component]
@@ -725,6 +730,7 @@ fn ForumPostCard(post: Message, on_click: EventHandler<()>) -> Element {
 // Thread view
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[ui_action(None)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]
@@ -793,6 +799,7 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
 // Recursive comment component (named ForumComment to avoid struct/component clash)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[ui_action(inherit)]
 #[context_menu(crate::ui::context_menu::menus::ForumPostContextMenu)]
 #[rustfmt::skip]
 #[component]

@@ -5,11 +5,12 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Per-server profile settings panel.
-#[context_menu(allow_default)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 pub fn ServerProfileSettings(server_id: String, server_name: String) -> Element {
     let mut nickname = use_signal(String::new);

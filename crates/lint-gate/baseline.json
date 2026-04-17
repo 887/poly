@@ -1,3 +1,1918 @@
 {
-  "violations": []
+  "violations": [
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/discord/src/signup.rs",
+      "line": 91,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/forgejo/src/signup.rs",
+      "line": 113,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/github/src/signup.rs",
+      "line": 117,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/hackernews/src/signup.rs",
+      "line": 42,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/lemmy/src/signup.rs",
+      "line": 85,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 92,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 143,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 213,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/server-client/src/signup.rs",
+      "line": 310,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/stoat/src/signup.rs",
+      "line": 82,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/teams/src/signup.rs",
+      "line": 123,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/teams/src/signup.rs",
+      "line": 160,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "clients/teams/src/signup.rs",
+      "line": 208,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
+      "line": 120,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
+      "line": 207,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
+      "line": 301,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_bar.rs",
+      "line": 373,
+      "detail": "#[component] fn AccountBar missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 128,
+      "detail": "#[component] fn AccountServerBar missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 251,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 480,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 522,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 560,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 598,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_server_bar.rs",
+      "line": 657,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/account_switcher.rs",
+      "line": 24,
+      "detail": "#[component] fn AccountSwitcher missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_context_menu.rs",
+      "line": 27,
+      "detail": "#[component] fn ChannelContextMenu missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_context_menu.rs",
+      "line": 110,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 302,
+      "detail": "#[component] fn ChannelList missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 350,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 539,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 704,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 902,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 958,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1057,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1126,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1168,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1207,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/channel_list.rs",
+      "line": 1370,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 876,
+      "detail": "#[component] fn ChatView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 2512,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 2537,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4632,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4801,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4904,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4935,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 4960,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5014,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5062,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5139,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5170,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5256,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5305,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5451,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5517,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5701,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5730,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5744,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5770,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5821,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/chat_view.rs",
+      "line": 5868,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 43,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 75,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 101,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 130,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/conversation_search_view.rs",
+      "line": 165,
+      "detail": "#[component] fn ConversationSearchView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/direct_call_overlay.rs",
+      "line": 20,
+      "detail": "#[component] fn OutgoingDirectCallOverlay missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/dm_user_sidebar.rs",
+      "line": 42,
+      "detail": "#[component] fn DmUserSidebar missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/dm_user_sidebar.rs",
+      "line": 94,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/emoji_picker.rs",
+      "line": 336,
+      "detail": "#[component] fn EmojiPicker missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 189,
+      "detail": "#[component] fn ForumView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 203,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 366,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 549,
+      "detail": "#[component] fn ForumPostView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 656,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 730,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/forum_view.rs",
+      "line": 798,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 23,
+      "detail": "#[component] fn FriendsPanel missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 127,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 146,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 178,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 246,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/friends_panel.rs",
+      "line": 281,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 119,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 156,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 214,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 344,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 356,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/media_picker.rs",
+      "line": 383,
+      "detail": "#[component] fn MediaPickerPopup missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/media_viewer.rs",
+      "line": 23,
+      "detail": "#[component] fn MessageMediaViewerOverlay missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/new_conversation_view.rs",
+      "line": 16,
+      "detail": "#[component] fn NewConversationView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 107,
+      "detail": "#[component] fn NotificationsView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 228,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 254,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 290,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/notifications.rs",
+      "line": 331,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 48,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 103,
+      "detail": "#[component] fn SavedItemsView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 339,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/saved_items_view.rs",
+      "line": 364,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/unsupported_placeholder.rs",
+      "line": 55,
+      "detail": "#[component] fn FeatureUnsupportedPlaceholder missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/user_profile_modal.rs",
+      "line": 78,
+      "detail": "#[component] fn UserProfileModal missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/user_profile_modal.rs",
+      "line": 326,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/user_sidebar.rs",
+      "line": 71,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/user_sidebar.rs",
+      "line": 103,
+      "detail": "#[component] fn UserSidebar missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/user_sidebar.rs",
+      "line": 233,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_account_footer.rs",
+      "line": 7,
+      "detail": "#[component] fn VoiceAccountFooter missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 110,
+      "detail": "#[component] fn VoiceBar missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 150,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 174,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 188,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 237,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 386,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_bar.rs",
+      "line": 434,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 240,
+      "detail": "#[component] fn VoiceChannelView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 324,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 358,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 411,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 445,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 532,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/common/voice_view.rs",
+      "line": 575,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/demo/context_menu.rs",
+      "line": 16,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/discord/context_menu.rs",
+      "line": 15,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/matrix/context_menu.rs",
+      "line": 16,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/poly_native/context_menu.rs",
+      "line": 15,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 35,
+      "detail": "#[component] fn ServerContextMenu missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 323,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 344,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/context_menu.rs",
+      "line": 367,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/general.rs",
+      "line": 17,
+      "detail": "#[component] fn ServerGeneralSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/general.rs",
+      "line": 71,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 100,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 130,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 142,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 178,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 277,
+      "detail": "#[component] fn ServerSettingsPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/mod.rs",
+      "line": 384,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/notifications.rs",
+      "line": 21,
+      "detail": "#[component] fn ServerNotificationsSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/notifications.rs",
+      "line": 88,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/notifications.rs",
+      "line": 103,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/overview.rs",
+      "line": 48,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/overview.rs",
+      "line": 147,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/overview.rs",
+      "line": 245,
+      "detail": "#[component] fn ServerOverviewSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/server/settings/profile.rs",
+      "line": 13,
+      "detail": "#[component] fn ServerProfileSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 37,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 67,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 85,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 122,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 162,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 189,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 219,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/content_social.rs",
+      "line": 262,
+      "detail": "#[component] fn ContentSocialSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/mod.rs",
+      "line": 177,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/mod.rs",
+      "line": 207,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/mod.rs",
+      "line": 231,
+      "detail": "#[component] fn AccountSettingsPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 80,
+      "detail": "#[component] fn NotificationsSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 114,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 185,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/notifications.rs",
+      "line": 253,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/profile.rs",
+      "line": 30,
+      "detail": "#[component] fn PolyProfileSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 60,
+      "detail": "#[component] fn VoiceSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 109,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 143,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 177,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/settings/voice_settings.rs",
+      "line": 209,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/stoat/context_menu.rs",
+      "line": 15,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/account/teams/context_menu.rs",
+      "line": 16,
+      "detail": "#[component] fn ServerContextMenuExtras missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/code_explorer.rs",
+      "line": 22,
+      "detail": "#[component] fn CodeExplorerView missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/code_explorer.rs",
+      "line": 192,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/context_menu/host.rs",
+      "line": 59,
+      "detail": "#[component] fn ContextMenuStack missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/context_menu/host.rs",
+      "line": 87,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/create_channel.rs",
+      "line": 29,
+      "detail": "#[component] fn CreateChannelPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/create_forum_post.rs",
+      "line": 10,
+      "detail": "#[component] fn CreateForumPostPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/create_forum_post.rs",
+      "line": 95,
+      "detail": "#[component] fn ForumSearchPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/create_server.rs",
+      "line": 27,
+      "detail": "#[component] fn CreateServerPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/electron_titlebar.rs",
+      "line": 50,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/electron_titlebar.rs",
+      "line": 76,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/electron_titlebar.rs",
+      "line": 110,
+      "detail": "#[component] fn ElectronTitleBar missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 40,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 55,
+      "detail": "#[component] fn SidebarTooltip missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 86,
+      "detail": "#[component] fn FavoritesBar missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 352,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/favorites_sidebar.rs",
+      "line": 746,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/main_layout.rs",
+      "line": 161,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/main_layout.rs",
+      "line": 205,
+      "detail": "#[component] fn MainLayout missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1776,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1814,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/mod.rs",
+      "line": 1910,
+      "detail": "#[component] fn App missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 955,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 986,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1009,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1093,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1152,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1168,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1184,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1200,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1216,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1254,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1291,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1375,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1384,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1398,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1486,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1587,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1606,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1617,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1630,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1650,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1664,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1677,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1692,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1710,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1726,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1747,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1773,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1797,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1811,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1826,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1837,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1858,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1884,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1902,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1919,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1935,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/routes.rs",
+      "line": 1951,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 93,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 134,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 161,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 198,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 227,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 269,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 298,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 416,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/search.rs",
+      "line": 457,
+      "detail": "#[component] fn SearchPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/server_overview.rs",
+      "line": 14,
+      "detail": "#[component] fn ServerOverviewPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/server_overview.rs",
+      "line": 121,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/accounts.rs",
+      "line": 45,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/accounts.rs",
+      "line": 100,
+      "detail": "#[component] fn AccountsSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/ai.rs",
+      "line": 22,
+      "detail": "#[component] fn AiSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 292,
+      "detail": "#[component] fn ProbeStatusBox missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 332,
+      "detail": "#[component] fn WizardAuthStatusBox missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 355,
+      "detail": "#[component] fn ReauthForm missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 413,
+      "detail": "#[component] fn ServerCard missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 503,
+      "detail": "#[component] fn WizardStep1 missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 597,
+      "detail": "#[component] fn WizardStep2 missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 684,
+      "detail": "#[component] fn AddServerWizard missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/backup.rs",
+      "line": 757,
+      "detail": "#[component] fn BackupSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/common.rs",
+      "line": 22,
+      "detail": "#[component] fn PolySelect missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/diagnostics.rs",
+      "line": 18,
+      "detail": "#[component] fn DiagnosticsPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/diagnostics.rs",
+      "line": 72,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 85,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 98,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 168,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 197,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 289,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 330,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 342,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 376,
+      "detail": "#[component] fn LayoutSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/general.rs",
+      "line": 395,
+      "detail": "#[component] fn GeneralSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/identity.rs",
+      "line": 51,
+      "detail": "#[component] fn MnemonicModal missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/identity.rs",
+      "line": 112,
+      "detail": "#[component] fn IdentitySettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/identity.rs",
+      "line": 238,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/language.rs",
+      "line": 67,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/language.rs",
+      "line": 84,
+      "detail": "#[component] fn LanguageSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/media.rs",
+      "line": 52,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/media.rs",
+      "line": 100,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/media.rs",
+      "line": 124,
+      "detail": "#[component] fn MediaSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 224,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 309,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 326,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 428,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/mod.rs",
+      "line": 556,
+      "detail": "#[component] fn SettingsPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 32,
+      "detail": "#[component] fn DemoPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 109,
+      "detail": "#[component] fn StoatPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 145,
+      "detail": "#[component] fn PolyServerPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 240,
+      "detail": "#[component] fn HackerNewsPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 263,
+      "detail": "#[component] fn LemmyPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 292,
+      "detail": "#[component] fn DiscordPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 325,
+      "detail": "#[component] fn TeamsPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 356,
+      "detail": "#[component] fn GitHubPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 387,
+      "detail": "#[component] fn ForgejoPluginSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugin_settings.rs",
+      "line": 421,
+      "detail": "#[component] fn PluginManifestPanel missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 350,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 437,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 505,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 551,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/plugins.rs",
+      "line": 665,
+      "detail": "#[component] fn PluginsSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 57,
+      "detail": "#[component] fn ThemePresetPicker missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 103,
+      "detail": "#[component] fn ThemeColorModeSelector missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 152,
+      "detail": "#[component] fn ThemeColorCustomizer missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 203,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 222,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 265,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 286,
+      "detail": "#[component] fn ThemeCssEditor missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 310,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 329,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 351,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/theme.rs",
+      "line": 412,
+      "detail": "#[component] fn ThemeSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/translation.rs",
+      "line": 20,
+      "detail": "#[component] fn TranslationSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 43,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 57,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 81,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 109,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 133,
+      "detail": "#[component] fn VoiceVideoSettings missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 216,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/settings/voice_video.rs",
+      "line": 240,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/setup_wizard.rs",
+      "line": 10,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/setup_wizard.rs",
+      "line": 25,
+      "detail": "#[component] fn SetupWizard missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 386,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 453,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 548,
+      "detail": "#[component] fn SignupPickerPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 573,
+      "detail": "#[component] fn ClientSignupPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 666,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/signup/mod.rs",
+      "line": 706,
+      "detail": "#[component] fn ReauthAccountPage missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/split_shell.rs",
+      "line": 104,
+      "detail": "#[component] fn SplitMenuShell missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/split_shell.rs",
+      "line": 140,
+      "detail": "#[component] fn RightWingShell missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 28,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 73,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 130,
+      "detail": "#[component] fn <unknown> missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    },
+    {
+      "rule": "action_enum_coverage",
+      "path": "crates/core/src/ui/voice_banner.rs",
+      "line": 204,
+      "detail": "#[component] fn VoiceBanner missing #[ui_action(...)] — add one of `(YourActionEnum)` (typed actions), `(None)` (display-only), or `(inherit)` (sub-component delegates to parent)"
+    }
+  ]
 }

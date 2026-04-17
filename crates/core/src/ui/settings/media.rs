@@ -6,8 +6,29 @@
 
 use crate::i18n::t;
 use crate::storage::{GifProviderKind, MediaProviderSettings};
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the media settings section.
+pub enum MediaSettingsAction {
+    /// Toggle a GIF provider on or off.
+    ToggleProvider(GifProviderKind, bool),
+    /// Update the API key for a GIF provider.
+    SetProviderApiKey(GifProviderKind, String),
+    /// Switch the active (default) GIF provider.
+    SetActiveProvider(GifProviderKind),
+}
+
+impl UiAction for MediaSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::ToggleProvider(_kind, _enabled) => todo!("phase-E: toggle GIF provider"),
+            Self::SetProviderApiKey(_kind, _key) => todo!("phase-E: persist provider API key"),
+            Self::SetActiveProvider(_kind) => todo!("phase-E: set active GIF provider"),
+        }
+    }
+}
 
 async fn persist_media_settings(media: MediaProviderSettings) {
     let Some(storage) = crate::STORAGE.get() else {
@@ -47,8 +68,9 @@ fn load_media_settings(mut media: Signal<MediaProviderSettings>) {
 }
 
 /// Single provider config panel (shown when that provider's tab is active).
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ProviderPanel(
     title: String,
@@ -95,8 +117,9 @@ fn ProviderPanel(
 }
 
 /// Tab bar for provider selection — each provider is a clickable tab.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ProviderTabs(active_tab: Signal<GifProviderKind>, providers: Vec<(GifProviderKind, String)>) -> Element {
     rsx! {
@@ -119,8 +142,9 @@ fn ProviderTabs(active_tab: Signal<GifProviderKind>, providers: Vec<(GifProvider
 }
 
 /// Media integrations settings section — provider tabs layout.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(MediaSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn MediaSettings() -> Element {
     let media = use_signal(MediaProviderSettings::default);

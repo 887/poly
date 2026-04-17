@@ -25,13 +25,14 @@ use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_client::BackendType;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Server right-click context menu.
 ///
 /// Reads `AppState.context_menu` and renders a floating div at the stored
-#[context_menu(inherit)]
 /// coordinates. Renders nothing when `context_menu` is `None`.
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn ServerContextMenu() -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -318,8 +319,9 @@ pub fn ServerContextMenu() -> Element {
 }
 
 /// A single clickable item inside the context menu.
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn ContextMenuItem(
     label: String,
@@ -339,8 +341,9 @@ fn ContextMenuItem(
     }
 }
 
-#[context_menu(inherit)]
 /// A toggleable item inside the context menu (checkbox style).
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ContextMenuToggle(label: String, checked: bool, onclick: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -362,8 +365,9 @@ fn ContextMenuToggle(label: String, checked: bool, onclick: EventHandler<MouseEv
 /// Inline confirm widget for removing a server from favorites.
 ///
 /// Replaces the normal "Remove from Favorites" menu item while showing
-#[context_menu(inherit)]
 /// a confirmation prompt inline. Does NOT use `window.confirm()`.
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn RemoveFavoritesConfirm(
     server_name: String,

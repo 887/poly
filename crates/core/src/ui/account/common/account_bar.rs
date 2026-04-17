@@ -27,7 +27,7 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Snapshot of all rendering state for the account bar user panel.
 #[derive(Clone, PartialEq)]
@@ -44,8 +44,6 @@ struct AccountBarUserState {
     presence_class: &'static str,
     /// Active account ID — needed by the presence picker to write back the chosen status.
     account_id: Option<String>,
-    /// True for forum-style backends (Lemmy, HN) that have no voice/presence/connection state.
-    is_forum: bool,
 }
 
 fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> AccountBarUserState {
@@ -69,10 +67,7 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
     if let Some(s) = session {
         let name = s.user.display_name.clone();
         let id = s.user.id.clone();
-        let is_forum = s.backend.uses_forum_layout();
-        let status_text = if is_forum {
-            String::new()
-        } else if is_connected {
+        let status_text = if is_connected {
             presence.display_name().to_string()
         } else {
             t("user-offline")
@@ -90,7 +85,6 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
             conn_class,
             presence_class,
             account_id: aid.map(str::to_string),
-            is_forum,
         };
     }
     AccountBarUserState {
@@ -102,7 +96,6 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
         conn_class: "disconnected",
         presence_class: "offline",
         account_id: None,
-        is_forum: false,
     }
 }
 
@@ -115,8 +108,9 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
 /// Clicking the avatar opens an account profile popup with the full presence picker.
 /// The two-icon system is visually distinct from simple dots so users can tell at a glance
 /// whether the app is live-connected vs just what their chosen presence is.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
     let mut show_profile = use_signal(|| false);
@@ -124,15 +118,11 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
 
     // Icon (not a dot) for connection status — visually distinct per state.
     let conn_icon = match user.conn_class {
-        "connected" => "⚡",         // lightning bolt    = live connection
-        "connecting" => "↺",        // rotating arrows   = syncing/connecting
-        "disconnected" => "—",       // em dash           = offline by choice
-        "unauthenticated" => "🔑",   // key               = stored token rejected, please reauth
-        _ => "⚠",                    // warning triangle  = transport error
+        "connected" => "⚡",    // lightning bolt  = live connection
+        "connecting" => "↺",   // rotating arrows = syncing/connecting
+        "disconnected" => "—",  // em dash         = offline by choice
+        _ => "⚠",               // warning triangle = error state
     };
-    // Reauth badge is shown for ALL backends — forum/forge clients never show
-    // a regular connection badge but they DO surface this one.
-    let needs_reauth = user.conn_class == "unauthenticated";
 
     rsx! {
         div { class: "account-bar-user",
@@ -158,25 +148,16 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
                         "{user.first_char}"
                     }
                 }
-                // Forum backends have no persistent connection or presence — hide regular badges,
-                // but ALWAYS surface the reauth badge (even for forum/forge backends) so the user
-                // knows a sign-in is needed.
-                if !user.is_forum {
-                    span {
-                        class: "account-conn-icon account-conn-icon--{user.conn_class}",
-                        title: "Connection: {user.conn_class}",
-                        "{conn_icon}"
-                    }
-                    span {
-                        class: "status-dot presence-dot {user.presence_class}",
-                        title: "Presence: {user.presence_class}",
-                    }
-                } else if needs_reauth {
-                    span {
-                        class: "account-conn-icon account-conn-icon--unauthenticated",
-                        title: "Sign in again",
-                        "🔑"
-                    }
+                // Top-right: connection icon badge (visually distinct from a dot).
+                span {
+                    class: "account-conn-icon account-conn-icon--{user.conn_class}",
+                    title: "Connection: {user.conn_class}",
+                    "{conn_icon}"
+                }
+                // Bottom-right: presence dot (colored, user-chosen availability).
+                span {
+                    class: "status-dot presence-dot {user.presence_class}",
+                    title: "Presence: {user.presence_class}",
                 }
             }
             div { class: "account-info",
@@ -202,8 +183,9 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
 /// Displays the current user's own profile card (banner, avatar, name, status)
 /// plus an inline presence picker to change availability without navigating away.
 /// Positioned above the account bar; closes on backdrop click.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountProfilePopup(
     user: AccountBarUserState,
@@ -222,7 +204,6 @@ fn AccountProfilePopup(
         "connected" => t("account-conn-connected"),
         "connecting" => t("account-conn-connecting"),
         "disconnected" => t("account-conn-disconnected"),
-        "unauthenticated" => t("notifications-reconnect"),
         _ => t("account-conn-error"),
     };
 
@@ -296,8 +277,9 @@ fn AccountProfilePopup(
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountBarControls(
     is_muted: bool,
@@ -368,8 +350,9 @@ fn AccountBarControls(
 ///
 /// Shows user avatar + name + status + quick controls at the
 /// bottom of the channel list panel.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 pub fn AccountBar() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -379,19 +362,15 @@ pub fn AccountBar() -> Element {
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);
-    let is_forum = user.is_forum;
 
     rsx! {
         div { class: "account-bar",
             AccountBarUserInfo { user }
-            // Forum backends have no voice — hide mic/speaker/deafen controls.
-            if !is_forum {
-                AccountBarControls {
-                    is_muted,
-                    is_deafened,
-                    app_state,
-                    chat_data,
-                }
+            AccountBarControls {
+                is_muted,
+                is_deafened,
+                app_state,
+                chat_data,
             }
         }
     }

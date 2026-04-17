@@ -13,9 +13,29 @@
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
+use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the accounts settings section.
+pub enum AccountsSettingsAction {
+    /// Navigate to the signup/add-account flow.
+    AddAccount,
+    /// Navigate to the per-account settings page for a specific account.
+    OpenAccountSettings(String),
+}
+
+impl UiAction for AccountsSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::AddAccount => todo!("phase-E: navigate to signup picker"),
+            Self::OpenAccountSettings(_account_id) => {
+                todo!("phase-E: navigate to account settings")
+            }
+        }
+    }
+}
 
 /// Derive a stable hsl color from an account ID string (same as search.rs).
 fn account_color(account_id: &str) -> String {
@@ -40,8 +60,9 @@ fn backend_emoji(slug: &str) -> &'static str {
 }
 
 /// A single row in the accounts list showing account icon, name, backend, and settings gear.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountRow(
     account_id: String,
@@ -50,25 +71,16 @@ fn AccountRow(
     backend_label: String,
     instance_id: String,
     icon_color: String,
-    avatar_url: Option<String>,
 ) -> Element {
     let icon_char: String = display_name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "?".to_string());
     let emoji = backend_emoji(&backend_slug);
     rsx! {
         div { class: "accounts-settings-row",
-            // Avatar image if available; otherwise colored letter bubble
-            if let Some(url) = avatar_url.as_ref() {
-                img {
-                    class: "accounts-settings-icon accounts-settings-icon--img",
-                    src: "{url}",
-                    alt: "{display_name}",
-                }
-            } else {
-                div {
-                    class: "accounts-settings-icon",
-                    style: "background: {icon_color}",
-                    "{icon_char}"
-                }
+            // Colored icon bubble
+            div {
+                class: "accounts-settings-icon",
+                style: "background: {icon_color}",
+                "{icon_char}"
             }
             // Name + backend label
             div { class: "accounts-settings-info",
@@ -95,8 +107,9 @@ fn AccountRow(
 /// Lists active messenger accounts grouped by backend and provides
 /// an "Add Account" button that navigates to the plugin-driven signup
 /// flow at `/signup`.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(AccountsSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn AccountsSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -132,8 +145,6 @@ pub(super) fn AccountsSettings() -> Element {
                                 .map(|s| s.instance_id.clone())
                                 .unwrap_or_else(|| "demo".to_string());
                             let icon_color = account_color(&aid);
-                            let avatar_url = session
-                                .and_then(|s| s.user.avatar_url.clone());
                             rsx! {
                                 AccountRow {
                                     key: "{aid}",
@@ -143,7 +154,6 @@ pub(super) fn AccountsSettings() -> Element {
                                     backend_label,
                                     instance_id,
                                     icon_color,
-                                    avatar_url,
                                 }
                             }
                         }

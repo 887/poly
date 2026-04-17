@@ -14,9 +14,9 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
+use poly_ui_macros::{context_menu, ui_action};
 
 use super::media_picker::{EmojiSectionItems, build_emoji_sections};
-use poly_ui_macros::context_menu;
 
 /// Categories of emoji with their contents.
 pub(crate) const EMOJI_CATEGORIES: &[(&str, &str, &[&str])] = &[
@@ -331,8 +331,9 @@ pub(crate) fn emoji_shortcode_matches(emoji: &str, query: &str) -> bool {
 /// Emoji picker component (used for reactions).
 ///
 /// Compact picker: left sidebar icons + scrollable section list.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn EmojiPicker(on_select: EventHandler<String>, on_close: EventHandler<()>) -> Element {
     let mut search_text = use_signal(String::new);

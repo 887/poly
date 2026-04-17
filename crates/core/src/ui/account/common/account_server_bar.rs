@@ -29,9 +29,8 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
-use crate::ui::favorites_sidebar::SidebarTooltip;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
 fn get_ordered_servers(
@@ -98,33 +97,13 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
         .insert(account_id.to_string(), order);
 }
 
-/// Persist the full per-account Bar-2 server order map to `AppSettings`.
-///
-/// Called after every reorder so the user's drag-drop order survives
-/// page reloads, app restarts, and offline periods.
-pub(crate) async fn persist_account_server_order(
-    order: std::collections::HashMap<String, Vec<String>>,
-) {
-    let Some(s) = crate::STORAGE.get() else {
-        return;
-    };
-    match s.get_app_settings().await {
-        Ok(mut settings) => {
-            settings.account_server_order = order;
-            if let Err(e) = s.set_app_settings(&settings).await {
-                tracing::warn!("Failed to persist account_server_order: {e}");
-            }
-        }
-        Err(e) => tracing::warn!("Failed to read app_settings for Bar 2 order persist: {e}"),
-    }
-}
-
 /// Account server bar — second sidebar column, per-account.
 ///
 /// Only rendered when `active_account_id` is `Some(...)`.
 /// Shows DMs, notifications, and all servers for this account.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 pub fn AccountServerBar() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -148,15 +127,6 @@ pub fn AccountServerBar() -> Element {
 
     let instance_id = active_instance_id.unwrap_or_else(|| "demo".to_string());
 
-    // Capability snapshot for the active backend — drives which nav
-    // buttons render. HN has no DMs/friends/notifications → nothing beyond
-    // the server list shows up.
-    let caps = poly_client::capabilities_for_slug(&backend_slug);
-    let show_dms = !matches!(caps.dms, poly_client::DmSupport::None);
-    let show_friends = !matches!(caps.friends, poly_client::FriendModel::None);
-    let show_notifs = !matches!(caps.notifications, poly_client::NotificationSupport::None);
-    let show_create_server = caps.create_server;
-
     // Get all servers for this account (not just favorites)
     let all_servers = chat_data.read().servers.clone();
     let account_servers: Vec<_> = all_servers
@@ -172,40 +142,33 @@ pub fn AccountServerBar() -> Element {
         get_ordered_servers(&cd, &account_id, &account_servers)
     };
 
-    // Count notifications for this account
+    // Count unread notifications for this account
     let notif_count = chat_data
         .read()
         .notifications
         .iter()
-        .filter(|n| n.account_id == account_id)
+        .filter(|n| !n.read && n.account_id == account_id)
         .count();
 
     rsx! {
         nav { class: "account-server-bar",
-            // DMs / Friends button — account-scoped. Gated on capability:
-            // HN/Lemmy/GitHub don't surface DMs so the button is omitted.
-            if show_dms {
-                AccountBarDmsButton {
-                    current_view,
-                    backend_slug: backend_slug.clone(),
-                    instance_id: instance_id.clone(),
-                    account_id: account_id.clone(),
-                }
+            // DMs / Friends button — account-scoped
+            AccountBarDmsButton {
+                current_view,
+                backend_slug: backend_slug.clone(),
+                instance_id: instance_id.clone(),
+                account_id: account_id.clone(),
             }
 
-            if show_friends {
-                AccountBarFriendsButton {
-                    current_view,
-                    backend_slug: backend_slug.clone(),
-                    instance_id: instance_id.clone(),
-                    account_id: account_id.clone(),
-                }
+            AccountBarFriendsButton {
+                current_view,
+                backend_slug: backend_slug.clone(),
+                instance_id: instance_id.clone(),
+                account_id: account_id.clone(),
             }
 
             // Notifications button — account-scoped
-            if show_notifs {
-                AccountBarNotifsButton { current_view, notif_count }
-            }
+            AccountBarNotifsButton { current_view, notif_count }
 
             // Separator
             div { class: "sidebar-separator" }
@@ -220,20 +183,17 @@ pub fn AccountServerBar() -> Element {
                     backend_slug: server.backend.slug().to_string(),
                     instance_id: instance_id.clone(),
                     account_id: server.account_id.clone(),
-                    unread: if server.backend.uses_forum_layout() { 0 } else { server.unread_count },
-                    mention: if server.backend.uses_forum_layout() { 0 } else { server.mention_count },
+                    unread: server.unread_count,
+                    mention: server.mention_count,
                     is_selected: selected_server.as_deref() == Some(server.id.as_str()),
                     icon_url: server.icon_url.clone(),
                 }
             }
 
             // Separator + "+" button to join/create a new server/guild.
-            // Capability-gated: only backends that actually support creating
-            // a server show the button.
-            if show_create_server {
-                div { class: "sidebar-separator" }
-                CreateServerButton { account_id: account_id.clone() }
-            }
+            // Shown for all backends so the affordance is always discoverable.
+            div { class: "sidebar-separator" }
+            CreateServerButton { account_id: account_id.clone() }
 
             // Spacer keeps the icon rail aligned above the shared bottom account bar.
             div { class: "sidebar-spacer" }
@@ -246,8 +206,9 @@ pub fn AccountServerBar() -> Element {
 /// Handles all drag-and-drop events, right-click context menu, and click navigation.
 /// Extracted from the `AccountServerBar` for-loop to keep RSX macros small and
 /// avoid Dioxus macro complexity limits inside `for` iterator blocks.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountServerIcon(
     server_id: String,
@@ -323,30 +284,20 @@ fn AccountServerIcon(
     let on_drop = move |evt: Event<DragData>| {
         evt.prevent_default();
         evt.stop_propagation();
-        let snapshot = {
-            let mut cd = chat_data.write();
-            let dragging = cd.dragging_server_id.clone();
-            let src = cd.drag_source.clone();
-            cd.drag_over_id = None;
-            let Some(drag_id) = dragging else {
-                cd.dragging_server_id = None;
-                cd.drag_source = DragSource::None;
-                return;
-            };
-            let did_reorder =
-                matches!(src, DragSource::AccountServer) && drag_id != tid;
-            if did_reorder {
-                apply_bar2_drop(&mut cd, &drag_id, &tid, &aid_drop);
-            }
+        let mut cd = chat_data.write();
+        let dragging = cd.dragging_server_id.clone();
+        let src = cd.drag_source.clone();
+        cd.drag_over_id = None;
+        let Some(drag_id) = dragging else {
             cd.dragging_server_id = None;
             cd.drag_source = DragSource::None;
-            did_reorder.then(|| cd.account_server_order.clone())
+            return;
         };
-        if let Some(order) = snapshot {
-            spawn(async move {
-                persist_account_server_order(order).await;
-            });
+        if matches!(src, DragSource::AccountServer) && drag_id != tid {
+            apply_bar2_drop(&mut cd, &drag_id, &tid, &aid_drop);
         }
+        cd.dragging_server_id = None;
+        cd.drag_source = DragSource::None;
     };
 
     let on_drag_end = move |_: Event<DragData>| {
@@ -400,57 +351,11 @@ fn AccountServerIcon(
         });
     };
 
-    let sid_tip = server_id.clone();
-    let on_mouseenter = move |_: Event<MouseData>| {
-        let sid = sid_tip.clone();
-        let _ = dioxus::prelude::document::eval(&format!(
-            r#"(function(){{
-                var icon = document.querySelector('[data-tip-id="{}"]');
-                if (!icon) return;
-                var tip = icon._tooltipEl;
-                if (!tip) {{
-                    tip = icon.querySelector('.sidebar-tooltip');
-                    if (!tip) return;
-                    document.body.appendChild(tip);
-                    icon._tooltipEl = tip;
-                }}
-                var r = icon.getBoundingClientRect();
-                var mirrored = document.querySelector('.poly-app.poly-menu-mirrored') !== null;
-                tip.style.top = (r.top + r.height / 2) + 'px';
-                if (mirrored) {{
-                    tip.style.right = (window.innerWidth - r.left + 12) + 'px';
-                    tip.style.left = 'auto';
-                }} else {{
-                    tip.style.left = (r.right + 12) + 'px';
-                    tip.style.right = 'auto';
-                }}
-                tip.style.display = 'flex';
-            }})()"#,
-            sid
-        ));
-    };
-
-    let sid_tip2 = server_id.clone();
-    let on_mouseleave = move |_: Event<MouseData>| {
-        let sid = sid_tip2.clone();
-        let _ = dioxus::prelude::document::eval(&format!(
-            r#"(function(){{
-                var icon = document.querySelector('[data-tip-id="{}"]');
-                if (!icon) return;
-                var tip = icon._tooltipEl;
-                if (tip) tip.style.display = 'none';
-            }})()"#,
-            sid
-        ));
-    };
-
     rsx! {
         div {
             class: "{item_class}",
             draggable: "true",
-            "data-tip-id": "{server_id}",
-            onmouseenter: on_mouseenter,
-            onmouseleave: on_mouseleave,
+            title: "{server_name}",
             oncontextmenu: on_context_menu,
             ondragstart: on_drag_start,
             ondragover: on_drag_over,
@@ -466,7 +371,6 @@ fn AccountServerIcon(
                 unread,
                 mention,
             }
-            SidebarTooltip { line1: server_name, line2: None, line3: None }
         }
     }
 }
@@ -475,8 +379,9 @@ fn AccountServerIcon(
 ///
 /// Shows a red `@{mention}` badge for direct @mentions, and a small unread dot
 /// when there are unread messages but no direct mentions.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn ServerIconDisplay(
     icon_url: Option<String>,
@@ -517,8 +422,9 @@ fn ServerIconDisplay(
 }
 
 /// Conversations button for the account server bar.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountBarDmsButton(
     current_view: View,
@@ -548,15 +454,16 @@ fn AccountBarDmsButton(
                         account_id: account_id.clone(),
                     });
             },
+            title: "{t(\"nav-dms\")}",
             div { class: "icon-dms", "💬" }
-            SidebarTooltip { line1: t("nav-dms"), line2: None, line3: None }
         }
     }
 }
 
 /// Friends / ignore / blocked management button for the account server bar.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountBarFriendsButton(
     current_view: View,
@@ -586,15 +493,16 @@ fn AccountBarFriendsButton(
                     account_id: account_id.clone(),
                 });
             },
+            title: "{t(\"nav-friends\")}",
             div { class: "icon-dms", "👥" }
-            SidebarTooltip { line1: t("nav-friends"), line2: None, line3: None }
         }
     }
 }
 
 /// Notifications button for the account server bar.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -638,11 +546,11 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                     account_id: account_id.clone(),
                 });
             },
+            title: "{t(\"nav-notifications\")}",
             div { class: "icon-notifications", "🔔" }
             if notif_count > 0 {
                 span { class: "badge", "{notif_count}" }
             }
-            SidebarTooltip { line1: t("nav-notifications"), line2: None, line3: None }
         }
     }
 }
@@ -652,8 +560,9 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
 /// Navigates to the full-page Create Server route where FavoritesBar and
 /// AccountServerBar remain visible. The inline form was replaced by the
 /// full-page route to match the Settings/Signup page pattern.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn CreateServerButton(account_id: String) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -671,17 +580,10 @@ fn CreateServerButton(account_id: String) -> Element {
         .clone()
         .unwrap_or_default();
 
-    // WP-6: tooltip terminology follows the active backend. Lemmy shows
-    // "Create community", Matrix shows "Create space", GitHub shows
-    // "Add repository", etc.
-    let create_label_key =
-        poly_client::container_label_key(&backend_slug, poly_client::ContainerLabelForm::CreateAction);
-    let create_label = t(create_label_key);
-
     rsx! {
         button {
             class: "create-server-pill",
-            title: "{create_label}",
+            title: "{t(\"create-server-btn\")}",
             onclick: move |_| {
                 crate::nav!(Route::CreateServerRoute {
                     backend:     backend_slug.clone(),

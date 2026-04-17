@@ -2,7 +2,7 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// What the JS capability probe returned.
 #[derive(Clone, Debug, PartialEq)]
@@ -15,6 +15,7 @@ enum BrowserTranslation {
     Unavailable,
 }
 
+#[ui_action(None)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]

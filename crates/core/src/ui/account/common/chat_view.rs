@@ -15,6 +15,7 @@ use super::super::super::routes::Route;
 use super::chat_history::{
     ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE, read_message_list_anchor,
     remember_message_list_scroll_position, request_preserve_message_anchor,
+    request_preserve_scroll_position, request_preserve_scroll_position_from_bottom,
     request_scroll_to_bottom, request_scroll_to_bottom_deferred, unread_marker_message_id,
 };
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
@@ -36,7 +37,7 @@ use poly_client::{
     MessageContent, MessageQuery, MessageReplyPreview, MessageSearchHit, MessageSearchQuery,
     PresenceStatus, User,
 };
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -871,8 +872,9 @@ async fn persist_member_list_display_settings(
     }
 }
 
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn ChatView() -> Element {
     render_chat_view()
@@ -1553,15 +1555,8 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         let is_channel_switch =
             history_state.read().channel_id.as_deref() != Some(&active_channel_id);
 
-        // Compute messages here so the guard below can check is_empty() for empty channels.
-        let messages = chat_snapshot.messages.clone();
-
-        // Guard: skip if history_state is already up-to-date for this channel.
-        // Without the `messages.is_empty()` arm, empty channels loop forever:
-        // messages_loaded stays false → guard never fires → history_state.set() every
-        // iteration → triggers this effect again → infinite spin.
         if history_state.read().channel_id.as_deref() == Some(&active_channel_id)
-            && (history_state.read().messages_loaded || messages.is_empty())
+            && history_state.read().messages_loaded
         {
             return;
         }
@@ -1579,6 +1574,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             scrolled_from_bottom.set(false);
             new_messages_while_scrolled_up.set(0);
         }
+        let messages = chat_snapshot.messages.clone();
         let unread_count = current_channel_unread_count(
             Some(&active_channel_id),
             chat_snapshot.current_channel.as_ref(),
@@ -1873,6 +1869,25 @@ fn estimate_message_row_height(
     }
 
     height
+}
+
+fn estimate_message_block_height(
+    messages: &[Message],
+    start_idx: usize,
+    end_idx: usize,
+    unread_marker_id: Option<&str>,
+    unread_count: u32,
+) -> f64 {
+    if start_idx >= end_idx || start_idx >= messages.len() {
+        return 0.0;
+    }
+
+    let capped_end = end_idx.min(messages.len());
+    let mut total = 0.0;
+    for idx in start_idx..capped_end {
+        total += estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
+    }
+    total
 }
 
 fn recompute_history_spacers(history: &mut ChatHistoryUiState, _messages: &[Message]) {
@@ -2507,8 +2522,9 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn HeaderOverflowItem(
     icon: String,
@@ -2532,8 +2548,8 @@ fn HeaderOverflowItem(
     }
 }
 
+#[ui_action(inherit)]
 #[context_menu(inherit)]
-
 #[component]
 fn ChatHeaderActions(
     app_state: Signal<AppState>,
@@ -3191,7 +3207,6 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
         div {
             class: if is_loading_history { "message-list loading-history" } else { "message-list" },
             id: "message-list-scroll",
-            oncontextmenu: move |evt| evt.prevent_default(),
             onscroll: move |_| {
                 if scroll_frame_pending.swap(true, Ordering::AcqRel) {
                     return;
@@ -3863,37 +3878,9 @@ fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing
 }
 
 fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
-    // Capability-derived read-only check. For read-only feeds (HN, GitHub)
-    // the backend doesn't accept writes — show an explicit notice instead
-    // of a textarea that will always fail on send.
-    let backend_slug = ctx
-        .current_channel
-        .as_ref()
-        .and_then(|_| ctx.current_server.as_ref().map(|s| s.backend.slug().to_string()))
-        .or_else(|| {
-            ctx.dm_user
-                .as_ref()
-                .map(|u| u.backend.slug().to_string())
-        });
-    let is_read_only = backend_slug
-        .as_deref()
-        .map(|slug| {
-            matches!(
-                poly_client::capabilities_for_slug(slug).messaging,
-                poly_client::MessagingModel::ReadOnly | poly_client::MessagingModel::None,
-            )
-        })
-        .unwrap_or(false);
-
     rsx! {
         div { class: "message-input-area",
-            if is_read_only {
-                div {
-                    class: "message-input-disabled",
-                    "data-testid": "composer-readonly-notice",
-                    {t("composer-read-only-notice")}
-                }
-            } else if ctx.channel_id.is_some() {
+            if ctx.channel_id.is_some() {
                 {render_message_input_enabled(ctx)}
             } else {
                 div { class: "message-input-disabled", {t("chat-select-channel")} }
@@ -4627,8 +4614,9 @@ fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ChatUtilityRail(
     panel: ChatUtilityPanel,
@@ -4796,8 +4784,9 @@ fn ChatUtilityRail(
 /// Chat settings panel — shown inside the utility rail when the ⚙️ tab is open.
 ///
 /// Contains per-channel notification settings and member display preferences.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     use crate::ui::settings::common::{PolySelect, SelectOption};
@@ -4899,8 +4888,9 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     }
 }
 
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SearchFilterPopup(
     suggestions: Vec<SearchFilterOption>,
@@ -4930,8 +4920,9 @@ fn SearchFilterPopup(
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SearchFilterRow(
     icon: &'static str,
@@ -4955,8 +4946,9 @@ fn SearchFilterRow(
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SearchResultCard(
     hit: MessageSearchHit,
@@ -5009,8 +5001,9 @@ fn SearchResultCard(
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn PinnedMessageCard(
     message: Message,
@@ -5057,8 +5050,9 @@ fn PinnedMessageCard(
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
     let lowercase_text = text.to_lowercase();
@@ -5134,8 +5128,9 @@ fn render_markdown_html(text: &str) -> String {
     builder.clean(&html_output).to_string()
 }
 /// Render message text content, handling multi-line and edited indicator.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn MessageContentView(content: MessageContent, edited: bool) -> Element {
     let text = match &content {
@@ -5165,8 +5160,9 @@ fn MessageContentView(content: MessageContent, edited: bool) -> Element {
 }
 
 /// Render attachments (images inline, non-images as links).
-#[context_menu(allow_default)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -5174,7 +5170,6 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
 
     rsx! {
         div { class: "message-attachments",
-            oncontextmenu: move |e| e.stop_propagation(),
             for (attachment_index, att) in attachments.iter().enumerate() {
                 {
                     let is_image = att.content_type.starts_with("image/");
@@ -5251,8 +5246,9 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
 }
 
 /// Render reaction pills (clickable to toggle).
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -5300,8 +5296,9 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 /// Typing indicator shown above the message input when users are typing.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn TypingIndicator() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -5446,8 +5443,9 @@ fn apply_edit(chat_data: &mut Signal<ChatData>, message_id: &str, new_text: Stri
 ///
 /// Shows a textarea pre-filled with the current message text, a Cancel button,
 /// and a Save button. Enter (without Shift) saves; Escape cancels.
-#[context_menu(allow_default)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn MessageInlineEdit(
     message_id: String,
@@ -5458,7 +5456,6 @@ fn MessageInlineEdit(
     let mid_save = message_id.clone();
     rsx! {
         div { class: "message-inline-edit",
-            oncontextmenu: move |e| e.stop_propagation(),
             textarea {
                 class: "message-edit-input",
                 value: "{edit_draft}",
@@ -5512,8 +5509,9 @@ const QUICK_REACTIONS: &[&str] = &["👍", "✅", "⚖️", "🔞"];
 ///
 /// Renders a transparent backdrop (closes on click) and a fixed-position
 /// floating menu at the coordinates stored in `msg_context_menu`.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn MsgContextMenuOverlay(
     msg_context_menu: Signal<Option<MsgContextMenu>>,
@@ -5696,8 +5694,9 @@ fn render_context_menu_copy_id_item(
 ///
 /// Renders a full-width button with optional right arrow, danger styling,
 /// and a leading icon glyph.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ContextMenuItemSimple(
     label: String,
@@ -5725,8 +5724,9 @@ fn ContextMenuItemSimple(
 }
 
 /// Small inline reply preview shown above a replied message.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
     rsx! {
@@ -5739,8 +5739,9 @@ fn MessageReplyPreviewLine(reply: MessageReplyPreview) -> Element {
 }
 
 /// Composer banner shown while replying to a message.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -5765,8 +5766,9 @@ fn ReplyComposerBar(reply: MessageReplyPreview, on_cancel: EventHandler<MouseEve
 ///
 /// Shows filtered commands with provider badges. Highlighted item is driven by `active_idx`.
 /// Clicking a command calls `on_select` with the filled command text (e.g. `"/play "`).
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SlashCommandPopup(
     commands: Vec<ChatCommand>,
@@ -5816,8 +5818,9 @@ fn SlashCommandPopup(
     }
 }
 
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn DmContactListPanel(channel_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -5863,8 +5866,9 @@ fn DmContactListPanel(channel_id: String) -> Element {
 ///
 /// Uses the `user-avatar-wrap` + explicit `span.presence-dot` pattern so the dot
 /// is never clipped by `overflow: hidden` on `.user-avatar`.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn DmContactRow(user: User, app_state: Signal<AppState>) -> Element {
     let color = user_color(&user.id);

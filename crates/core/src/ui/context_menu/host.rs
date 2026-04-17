@@ -21,7 +21,7 @@
 
 use crate::state::{ActiveContextMenu, AppState, MenuAnchor};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -55,6 +55,7 @@ fn lookup(menu_type: &str) -> Option<RenderFn> {
 /// Render the currently-active menu stack. Renders nothing when the stack
 /// is empty. Mount this once in `MainLayout` — a second mount would
 /// render the stack twice.
+#[ui_action(None)]
 #[context_menu(None)]
 #[component]
 pub fn ContextMenuStack() -> Element {
@@ -83,6 +84,7 @@ pub fn ContextMenuStack() -> Element {
 
 /// Single entry in the stack — rendered independently so each submenu
 /// level gets its own backdrop / key.
+#[ui_action(inherit)]
 #[context_menu(None)]
 #[component]
 fn ContextMenuStackEntry(entry: ActiveContextMenu, depth: usize, is_mobile: bool) -> Element {

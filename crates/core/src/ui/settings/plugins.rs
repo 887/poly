@@ -18,40 +18,47 @@
 
 use crate::i18n::t;
 use crate::storage::WasmPluginEntry;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_client::{
-    BackendCapabilities, ContainerLabelForm, capabilities_for_slug, container_label_key,
-};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the plugins settings section.
+pub enum PluginsSettingsAction {
+    /// Toggle a native backend plugin on or off.
+    ToggleNativeBackend(String),
+    /// Toggle a WASM plugin on or off by index.
+    ToggleWasmPlugin(usize),
+    /// Remove a WASM plugin by index.
+    RemoveWasmPlugin(usize),
+    /// Add a new WASM plugin.
+    AddWasmPlugin(WasmPluginEntry),
+}
+
+impl UiAction for PluginsSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::ToggleNativeBackend(_slug) => todo!("phase-E: toggle native backend"),
+            Self::ToggleWasmPlugin(_index) => todo!("phase-E: toggle WASM plugin"),
+            Self::RemoveWasmPlugin(_index) => todo!("phase-E: remove WASM plugin"),
+            Self::AddWasmPlugin(_entry) => todo!("phase-E: add WASM plugin"),
+        }
+    }
+}
 
 /// WIT version string appended to WASM plugin fetch URLs.
 const WIT_VERSION: &str = "0.1.0";
 
-/// Native backend types compiled into the **shipping** build.
+/// All native backend types compiled into this build.
 ///
-/// Lists every "built-in" backend; `available` is `false` when the backend
+/// Lists every known backend; `available` is `false` when the backend
 /// was not compiled in (feature flag absent). An unavailable backend shows
 /// greyed-out so the user knows it exists but is not in this build.
-///
-/// Discord and Microsoft Teams deliberately do **not** appear here even
-/// when their cargo features are enabled — they are surfaced in
-/// [`DEV_INJECTED_BACKENDS`] and rendered inside the WASM-plugins section
-/// to make it explicit they are not first-party Poly backends. They are
-/// only compiled in dev builds (`apps/web` `dev-plugins` feature) and are
-/// stripped from production binaries entirely.
 const NATIVE_BACKENDS: &[NativeBackend] = &[
     NativeBackend {
         slug: "demo",
         icon: "🧪",
-        name: "Messenger Demo",
+        name: "Demo",
         description: "Built-in mock data for exploring Poly without real accounts.",
-        available: true,
-    },
-    NativeBackend {
-        slug: "demo_forum",
-        icon: "🧪",
-        name: "Forum Demo",
-        description: "Built-in mock forum data for exploring the Lemmy-style forum UI.",
         available: true,
     },
     NativeBackend {
@@ -69,147 +76,36 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
         available: cfg!(feature = "matrix"),
     },
     NativeBackend {
+        slug: "discord",
+        icon: "🟣",
+        name: "Discord",
+        description: "Popular gaming and community chat platform.",
+        available: cfg!(feature = "discord"),
+    },
+    NativeBackend {
+        slug: "teams",
+        icon: "🟦",
+        name: "Microsoft Teams",
+        description: "Enterprise communication platform by Microsoft.",
+        available: cfg!(feature = "teams"),
+    },
+    NativeBackend {
         slug: "poly",
         icon: "🔷",
         name: "Poly Server",
         description: "Self-hosted Poly backup / sync server with E2E encryption.",
         available: cfg!(feature = "server"),
     },
-    NativeBackend {
-        slug: "hackernews",
-        icon: "🔶",
-        name: "Hacker News",
-        description: "Read Hacker News stories and threaded discussions.",
-        available: cfg!(feature = "hackernews"),
-    },
-    NativeBackend {
-        slug: "lemmy",
-        icon: "🐾",
-        name: "Lemmy",
-        description: "Federated link aggregator. Connect to any Lemmy instance.",
-        available: cfg!(feature = "lemmy"),
-    },
-    NativeBackend {
-        slug: "github",
-        icon: "🐙",
-        name: "GitHub",
-        description: "Browse GitHub / GHE repos via your local gh CLI. Issues, PRs, and code explorer.",
-        available: cfg!(feature = "github"),
-    },
-    NativeBackend {
-        slug: "forgejo",
-        icon: "🦊",
-        name: "Forgejo",
-        description: "Browse repos on any Forgejo, Gitea, or Codeberg instance. Issues, PRs, and code explorer.",
-        available: cfg!(feature = "forgejo"),
-    },
-];
-
-/// Dev-only backends that are technically compiled into this binary but are
-/// surfaced in the WASM-plugins section instead of "Built-in", because they
-/// are not part of any shipping build.
-///
-/// Discord and Microsoft Teams live here. Their crates only get linked in
-/// when `apps/web` is built with the `dev-plugins` feature (default in dev,
-/// off in `--features production`). They show up in the UI as if a user
-/// loaded them as external WASM plugins so it stays visually obvious they
-/// are not first-party Poly backends — and so the production build has
-/// nothing Discord/Teams-shaped to point at during app-store review.
-///
-/// At app startup, [`ensure_dev_plugins_in`] copies these into the persisted
-/// [`crate::storage::AppSettings::wasm_plugins`] list using a sentinel URL
-/// (`internal://dev-plugin/<slug>`). The rendering code in `PluginsSettings`
-/// detects that URL prefix and routes the toggle through the same
-/// disabled-native-backends path that the built-in toggles use, so the
-/// `(dev)` rows behave exactly like first-party toggles even though they
-/// look like user-loaded WASM plugins.
-pub(crate) const DEV_INJECTED_BACKENDS: &[NativeBackend] = &[
-    #[cfg(feature = "discord")]
-    NativeBackend {
-        slug: "discord",
-        icon: "🟣",
-        name: "Discord (dev)",
-        description: "Popular gaming and community chat platform. Dev-only — not shipped in release builds.",
-        available: true,
-    },
-    #[cfg(feature = "teams")]
-    NativeBackend {
-        slug: "teams",
-        icon: "🟦",
-        name: "Microsoft Teams (dev)",
-        description: "Enterprise communication platform by Microsoft. Dev-only — not shipped in release builds.",
-        available: true,
-    },
 ];
 
 /// Compile-time backend descriptor (only const-compatible types).
-pub(crate) struct NativeBackend {
-    pub(crate) slug: &'static str,
-    pub(crate) icon: &'static str,
-    pub(crate) name: &'static str,
-    pub(crate) description: &'static str,
+struct NativeBackend {
+    slug: &'static str,
+    icon: &'static str,
+    name: &'static str,
+    description: &'static str,
     /// Whether this backend was compiled in (feature flag check).
-    pub(crate) available: bool,
-}
-
-/// URL scheme used to mark dev-injected entries inside the persisted
-/// [`crate::storage::AppSettings::wasm_plugins`] list. Anything with this
-/// prefix is rendered as a dev backend (Discord/Teams) instead of a real
-/// user-loaded WASM plugin.
-const DEV_PLUGIN_URL_PREFIX: &str = "internal://dev-plugin/";
-
-/// Build the sentinel URL for a dev-injected backend.
-pub(crate) fn dev_injected_url(slug: &str) -> String {
-    format!("{DEV_PLUGIN_URL_PREFIX}{slug}")
-}
-
-/// Extract the backend slug from a dev-injected URL, or `None` if the URL
-/// is a normal user-loaded plugin.
-pub(crate) fn parse_dev_injected_slug(url: &str) -> Option<&str> {
-    url.strip_prefix(DEV_PLUGIN_URL_PREFIX)
-}
-
-/// Look up a dev backend descriptor by slug.
-pub(crate) fn lookup_dev_backend(slug: &str) -> Option<&'static NativeBackend> {
-    DEV_INJECTED_BACKENDS.iter().find(|b| b.slug == slug)
-}
-
-/// Inject any missing dev-only backends (Discord/Teams) into the persisted
-/// `wasm_plugins` list. Returns `true` if `settings` was modified, so the
-/// caller knows whether to write back to storage.
-///
-/// Cleans up stale dev entries whose feature has been turned off (e.g. a
-/// production build still seeing a leftover `discord` row from a previous
-/// dev session) so the UI never shows a backend whose code is not linked
-/// in.
-pub fn ensure_dev_plugins_in(settings: &mut crate::storage::AppSettings) -> bool {
-    let live_dev_slugs: std::collections::HashSet<&'static str> =
-        DEV_INJECTED_BACKENDS.iter().map(|b| b.slug).collect();
-    let before = settings.wasm_plugins.len();
-
-    settings.wasm_plugins.retain(|entry| {
-        if let Some(slug) = parse_dev_injected_slug(&entry.url) {
-            live_dev_slugs.contains(slug)
-        } else {
-            true
-        }
-    });
-
-    let mut changed = settings.wasm_plugins.len() != before;
-
-    for backend in DEV_INJECTED_BACKENDS {
-        let url = dev_injected_url(backend.slug);
-        if !settings.wasm_plugins.iter().any(|e| e.url == url) {
-            let enabled = !settings.disabled_native_backends.iter().any(|s| s == backend.slug);
-            settings.wasm_plugins.push(WasmPluginEntry {
-                url,
-                name: Some(backend.name.to_string()),
-                enabled,
-            });
-            changed = true;
-        }
-    }
-    changed
+    available: bool,
 }
 
 /// Load current app settings from storage (or return default).
@@ -230,123 +126,10 @@ async fn save_settings(settings: &crate::storage::AppSettings) {
     }
 }
 
-/// Toggle a non-demo native backend on/off.
-///
-/// Extracted from `PluginsSettings` so the dev-injected discord/teams rows
-/// in the WASM section can reuse the exact same disconnect-and-persist
-/// logic without duplicating the giant inline closure.
-fn toggle_native_backend(
-    toggled: String,
-    mut client_manager: Signal<crate::client_manager::ClientManager>,
-    mut chat_data: Signal<crate::state::ChatData>,
-    mut disabled: Signal<Vec<String>>,
-    wasm_plugins: Signal<Vec<WasmPluginEntry>>,
-) {
-    let is_enabled = !disabled.read().contains(&toggled);
-    if is_enabled {
-        let bt = poly_client::BackendType::from_slug(&toggled);
-        let (removed_ids, handles) =
-            client_manager.write().take_accounts_by_backend(bt.clone());
-        let backend_slug = bt.slug().to_string();
-        disabled.write().push(toggled.clone());
-        let new_disabled = disabled.read().clone();
-        client_manager
-            .write()
-            .set_disabled_native_backends(new_disabled.clone());
-        let wasm = wasm_plugins.read().clone();
-        spawn(async move {
-            for h in handles {
-                let mut g = h.write().await;
-                let _ = g.logout().await;
-            }
-            if !removed_ids.is_empty() {
-                let mut cd = chat_data.write();
-                cd.servers
-                    .retain(|s| s.backend != bt || !removed_ids.contains(&s.account_id));
-                cd.dm_channels
-                    .retain(|d| d.backend != bt || !removed_ids.contains(&d.account_id));
-                cd.groups
-                    .retain(|g| g.backend != bt || !removed_ids.contains(&g.account_id));
-                cd.notifications
-                    .retain(|n| n.backend != bt || !removed_ids.contains(&n.account_id));
-                for id in &removed_ids {
-                    cd.friends.remove(id.as_str());
-                }
-                for id in &removed_ids {
-                    cd.account_sessions.remove(id.as_str());
-                }
-                let live_server_ids: Vec<String> =
-                    cd.servers.iter().map(|s| s.id.clone()).collect();
-                cd.favorited_server_ids
-                    .retain(|fid| live_server_ids.contains(fid));
-            }
-            let is_self_init =
-                backend_slug == "demo_forum" || backend_slug == "hackernews";
-            if !is_self_init
-                && let Some(storage) = crate::STORAGE.get() {
-                    for id in &removed_ids {
-                        let _ = storage.remove_account_token(&backend_slug, id).await;
-                    }
-                }
-            let mut settings = load_settings().await;
-            settings.disabled_native_backends = new_disabled;
-            settings.wasm_plugins = wasm;
-            save_settings(&settings).await;
-        });
-    } else {
-        disabled.write().retain(|s| s != &toggled);
-        let new_disabled = disabled.read().clone();
-        client_manager
-            .write()
-            .set_disabled_native_backends(new_disabled.clone());
-        let wasm = wasm_plugins.read().clone();
-        let toggled_re = toggled.clone();
-        spawn(async move {
-            let mut s = load_settings().await;
-            s.disabled_native_backends = new_disabled;
-            s.wasm_plugins = wasm;
-            save_settings(&s).await;
-        });
-        if toggled_re == "demo_forum" {
-            spawn(async move {
-                crate::ui::demo::toggle_demo_forum_on(client_manager, chat_data).await;
-            });
-        }
-        #[cfg(feature = "hackernews")]
-        if toggled_re == "hackernews"
-            && let Some(storage) = crate::STORAGE.get()
-        {
-            spawn(async move {
-                crate::ui::restore_hackernews_accounts(storage, client_manager, chat_data).await;
-            });
-        }
-        #[cfg(feature = "github")]
-        if toggled_re == "github"
-            && let Some(storage) = crate::STORAGE.get()
-        {
-            spawn(async move {
-                crate::ui::restore_github_accounts(storage, client_manager, chat_data).await;
-            });
-        }
-        #[cfg(feature = "forgejo")]
-        if toggled_re == "forgejo"
-            && let Some(storage) = crate::STORAGE.get()
-        {
-            spawn(async move {
-                crate::ui::restore_forgejo_accounts(storage, client_manager, chat_data).await;
-            });
-        }
-    }
-}
-
-/// A single native backend row with toggle checkbox and a click-to-expand
-/// capability details panel.
-///
-/// `badge_class` is "native" for compiled-in backends and "wasm" for
-/// dev-injected backends (Discord/Teams) so they render with the correct
-/// badge while sharing the same row layout and capability panel.
-#[context_menu(inherit)]
+/// A single native backend row with toggle checkbox.
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn NativePluginRow(
     slug: String,
@@ -356,152 +139,47 @@ fn NativePluginRow(
     available: bool,
     enabled: bool,
     account_count: usize,
-    badge_class: String,
-    badge_label_key: String,
     on_toggle: EventHandler<String>,
 ) -> Element {
     let slug_for_toggle = slug.clone();
-    let slug_for_panel = slug.clone();
-    let mut expanded = use_signal(|| false);
-    let is_open = *expanded.read();
-    let disclosure_label = if is_open {
-        t("plugins-capabilities-hide")
-    } else {
-        t("plugins-capabilities-show")
-    };
     rsx! {
         div {
-            class: if available { "plugin-row-wrap" } else { "plugin-row-wrap plugin-row-unavailable" },
-            div {
-                class: "plugin-row",
-                onclick: move |_| {
-                    let current = *expanded.read();
-                    expanded.set(!current);
-                },
-                label {
-                    class: "plugin-row-toggle",
-                    onclick: move |e| { e.stop_propagation(); },
-                    input {
-                        r#type: "checkbox",
-                        checked: enabled,
-                        onchange: move |_| on_toggle.call(slug_for_toggle.clone()),
-                    }
+            class: if available { "plugin-row" } else { "plugin-row plugin-row-unavailable" },
+            label { class: "plugin-row-toggle",
+                input {
+                    r#type: "checkbox",
+                    checked: enabled,
+                    onchange: move |_| on_toggle.call(slug_for_toggle.clone()),
                 }
-                div { class: "plugin-row-icon", "{icon}" }
-                div { class: "plugin-row-info",
-                    div { class: "plugin-row-name",
-                        "{name}"
-                        if !available {
-                            span { class: "plugin-not-compiled",
-                                " ({t(\"plugins-not-compiled\")})"
-                            }
-                        }
-                    }
-                    div { class: "plugin-row-description", "{description}" }
-                    if account_count > 0 {
-                        div { class: "plugin-row-accounts",
-                            "{t(\"plugins-active-accounts\")}: {account_count}"
+            }
+            div { class: "plugin-row-icon", "{icon}" }
+            div { class: "plugin-row-info",
+                div { class: "plugin-row-name",
+                    "{name}"
+                    if !available {
+                        span { class: "plugin-not-compiled",
+                            " ({t(\"plugins-not-compiled\")})"
                         }
                     }
                 }
-                div { class: "plugin-row-meta",
-                    span { class: "plugin-type-badge {badge_class}", "{t(badge_label_key.as_str())}" }
-                    button {
-                        class: "plugin-disclosure-btn",
-                        r#type: "button",
-                        "aria-expanded": "{is_open}",
-                        onclick: move |e| {
-                            e.stop_propagation();
-                            let current = *expanded.read();
-                            expanded.set(!current);
-                        },
-                        "{disclosure_label}"
+                div { class: "plugin-row-description", "{description}" }
+                if account_count > 0 {
+                    div { class: "plugin-row-accounts",
+                        "{t(\"plugins-active-accounts\")}: {account_count}"
                     }
                 }
             }
-            if is_open {
-                PluginCapabilityPanel { slug: slug_for_panel }
-            }
-        }
-    }
-}
-
-/// Expandable panel that renders the full capability shape for a plugin slug.
-///
-/// Consumes [`capabilities_for_slug`] and [`container_label_key`] so it stays
-/// in sync with the capability matrix used by route gating, nav buttons, and
-/// MCP tool advertisement. Everything here is read-only inspection — no
-/// state, no toggles.
-#[context_menu(inherit)]
-#[rustfmt::skip]
-#[component]
-fn PluginCapabilityPanel(slug: String) -> Element {
-    let caps: BackendCapabilities = capabilities_for_slug(&slug);
-    let shape_rows = caps.shape_rows();
-    let flag_rows = caps.feature_flags();
-    let container_singular = t(container_label_key(&slug, ContainerLabelForm::Singular));
-    let container_plural = t(container_label_key(&slug, ContainerLabelForm::Plural));
-    let layout_key = if caps.is_forum_layout() {
-        "plugins-capabilities-layout-forum"
-    } else {
-        "plugins-capabilities-layout-chat"
-    };
-    rsx! {
-        div { class: "plugin-capability-panel",
-            "data-testid": "plugin-capability-panel-{slug}",
-            h5 { class: "plugin-capability-heading",
-                "{t(\"plugins-capabilities-shape\")}"
-            }
-            dl { class: "plugin-capability-list",
-                for row in shape_rows.iter() {
-                    {
-                        let label_key = row.label_key;
-                        let value_key = row.value_key;
-                        rsx! {
-                            dt { "{t(label_key)}" }
-                            dd { "{t(value_key)}" }
-                        }
-                    }
-                }
-                dt { "{t(\"plugins-capabilities-layout\")}" }
-                dd { "{t(layout_key)}" }
-            }
-            h5 { class: "plugin-capability-heading",
-                "{t(\"plugins-capabilities-flags\")}"
-            }
-            ul { class: "plugin-capability-flags",
-                for (label_key, supported) in flag_rows.iter() {
-                    {
-                        let cls = if *supported { "flag on" } else { "flag off" };
-                        let state_key = if *supported {
-                            "plugins-flag-supported"
-                        } else {
-                            "plugins-flag-unsupported"
-                        };
-                        let key = *label_key;
-                        rsx! {
-                            li { class: "{cls}",
-                                span { class: "flag-label", "{t(key)}" }
-                                span { class: "flag-state", "{t(state_key)}" }
-                            }
-                        }
-                    }
-                }
-            }
-            h5 { class: "plugin-capability-heading",
-                "{t(\"plugins-capabilities-terminology\")}"
-            }
-            dl { class: "plugin-capability-list",
-                dt { "{t(\"plugins-capabilities-container\")}" }
-                dd { "{container_singular} / {container_plural}" }
+            div { class: "plugin-row-meta",
+                span { class: "plugin-type-badge native", "{t(\"plugins-type-native\")}" }
             }
         }
     }
 }
 
 /// A single WASM plugin row with toggle and remove buttons.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn WasmPluginRow(
     index: usize,
@@ -546,8 +224,9 @@ fn WasmPluginRow(
 ///
 /// Two install modes: from URL (with WIT version appended) or from a local .wasm file.
 /// Display name is inferred from the URL hostname or file name — no manual entry needed.
-#[context_menu(allow_default)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
     let mut url = use_signal(String::new);
@@ -660,12 +339,13 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 /// **Accounts** ("Cat (demo)", "Dog (demo)") are sessions created when a plugin
 /// authenticates a user — they appear in the Accounts settings page. Here we
 /// manage *which plugins are available and enabled*.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(PluginsSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub fn PluginsSettings() -> Element {
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
-    let chat_data: Signal<crate::state::ChatData> = use_context();
+    let mut client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let mut chat_data: Signal<crate::state::ChatData> = use_context();
     let app_state: Signal<crate::state::AppState> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
@@ -723,8 +403,6 @@ pub fn PluginsSettings() -> Element {
                                 available: backend.available,
                                 enabled,
                                 account_count,
-                                badge_class: "native".to_string(),
-                                badge_label_key: "plugins-type-native".to_string(),
                                 on_toggle: move |toggled: String| {
                                     if toggled == "demo" {
                                         // Use toggle_demo to keep demo_active and nav
@@ -735,13 +413,113 @@ pub fn PluginsSettings() -> Element {
                                             ).await;
                                         });
                                     } else {
-                                        toggle_native_backend(
-                                            toggled,
-                                            client_manager,
-                                            chat_data,
-                                            disabled,
-                                            wasm_plugins,
-                                        );
+                                        // For any other native backend:
+                                        // - If currently enabled (toggling OFF): disconnect
+                                        //   all active accounts of that backend type.
+                                        // - If currently disabled (toggling ON): re-enable
+                                        //   the option (user must add accounts via /signup).
+                                        let is_enabled = !disabled.read().contains(&toggled);
+                                        if is_enabled {
+                                            // Toggling OFF — actually disconnect all sessions.
+                                            let backend_type =
+                                                poly_client::BackendType::from_slug(&toggled);
+                                            {
+                                                let bt = backend_type;
+                                                // Phase 1 (sync): take handles + clear
+                                                // ClientManager state. No await held.
+                                                let (removed_ids, handles) = client_manager
+                                                    .write()
+                                                    .take_accounts_by_backend(bt.clone());
+                                                let backend_slug = bt.slug().to_string();
+                                                // Update local disabled signal immediately for
+                                                // instant UI feedback.
+                                                disabled.write().push(toggled.clone());
+                                                let new_disabled = disabled.read().clone();
+                                                client_manager
+                                                    .write()
+                                                    .set_disabled_native_backends(new_disabled.clone());
+                                                let wasm = wasm_plugins.read().clone();
+                                                spawn(async move {
+                                                    // Phase 2: async logout (no signal lock).
+                                                    for h in handles {
+                                                        let mut g = h.write().await;
+                                                        let _ = g.logout().await;
+                                                    }
+                                                    // Phase 3: clean up ChatData.
+                                                    if !removed_ids.is_empty() {
+                                                        let mut cd = chat_data.write();
+                                                        cd.servers.retain(|s| {
+                                                            s.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&s.account_id)
+                                                        });
+                                                        cd.dm_channels.retain(|d| {
+                                                            d.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&d.account_id)
+                                                        });
+                                                        cd.groups.retain(|g| {
+                                                            g.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&g.account_id)
+                                                        });
+                                                        cd.notifications.retain(|n| {
+                                                            n.backend != bt
+                                                                || !removed_ids
+                                                                    .contains(&n.account_id)
+                                                        });
+                                                        for id in &removed_ids {
+                                                            cd.friends.remove(id.as_str());
+                                                        }
+                                                        for id in &removed_ids {
+                                                            cd.account_sessions
+                                                                .remove(id.as_str());
+                                                        }
+                                                        // Retain only favorites that still have a matching server.
+                                                        // Collect the server IDs first to avoid concurrent borrow.
+                                                        let live_server_ids: Vec<String> = cd
+                                                            .servers
+                                                            .iter()
+                                                            .map(|s| s.id.clone())
+                                                            .collect();
+                                                        cd.favorited_server_ids
+                                                            .retain(|fid| live_server_ids.contains(fid));
+                                                    }
+                                                    // Phase 4: remove stored tokens.
+                                                    if let Some(storage) = crate::STORAGE.get() {
+                                                        for id in &removed_ids {
+                                                            let _ = storage
+                                                                .remove_account_token(
+                                                                    &backend_slug,
+                                                                    id,
+                                                                )
+                                                                .await;
+                                                        }
+                                                    }
+                                                    // Phase 5: persist the disabled state.
+                                                    let mut settings =
+                                                        load_settings().await;
+                                                    settings.disabled_native_backends =
+                                                        new_disabled;
+                                                    settings.wasm_plugins = wasm;
+                                                    save_settings(&settings).await;
+                                                });
+                                            }
+                                        } else {
+                                            // Toggling ON — re-enable the backend option.
+                                            disabled.write().retain(|s| s != &toggled);
+                                            let new_disabled = disabled.read().clone();
+                                            client_manager
+                                                .write()
+                                                .set_disabled_native_backends(new_disabled.clone());
+                                            let wasm = wasm_plugins.read().clone();
+                                            spawn(async move {
+                                                let mut s = load_settings().await;
+                                                s.disabled_native_backends = new_disabled;
+                                                s.wasm_plugins = wasm;
+                                                save_settings(&s).await;
+                                            });
+                                        }
                                     }
                                 },
                             }
@@ -764,88 +542,40 @@ pub fn PluginsSettings() -> Element {
                     }
                 }
                 for (idx, entry) in wasm_snap.iter().enumerate() {
-                    {
-                        if let Some(slug) = parse_dev_injected_slug(&entry.url).map(|s| s.to_string()) {
-                            let backend = lookup_dev_backend(&slug);
-                            let icon = backend.map(|b| b.icon).unwrap_or("🔌").to_string();
-                            let name = backend
-                                .map(|b| b.name.to_string())
-                                .or_else(|| entry.name.clone())
-                                .unwrap_or_else(|| slug.clone());
-                            let description = backend
-                                .map(|b| b.description.to_string())
-                                .unwrap_or_default();
-                            let enabled = !disabled_snap.contains(&slug);
-                            let account_count = client_manager
-                                .read()
-                                .sessions
-                                .values()
-                                .filter(|s| s.backend.slug() == slug.as_str())
-                                .count();
-                            let slug_key = slug.clone();
-                            rsx! {
-                                NativePluginRow {
-                                    key: "{slug_key}",
-                                    slug: slug.clone(),
-                                    icon,
-                                    name,
-                                    description,
-                                    available: true,
-                                    enabled,
-                                    account_count,
-                                    badge_class: "wasm".to_string(),
-                                    badge_label_key: "plugins-type-wasm".to_string(),
-                                    on_toggle: move |toggled: String| {
-                                        toggle_native_backend(
-                                            toggled,
-                                            client_manager,
-                                            chat_data,
-                                            disabled,
-                                            wasm_plugins,
-                                        );
-                                    },
-                                }
+                    WasmPluginRow {
+                        key: "{idx}",
+                        index: idx,
+                        entry: entry.clone(),
+                        on_toggle: move |i: usize| {
+                            let mut wasm = wasm_plugins.write();
+                            if let Some(p) = wasm.get_mut(i) {
+                                p.enabled = !p.enabled;
                             }
-                        } else {
-                            let entry_clone = entry.clone();
-                            rsx! {
-                                WasmPluginRow {
-                                    key: "{idx}",
-                                    index: idx,
-                                    entry: entry_clone,
-                                    on_toggle: move |i: usize| {
-                                        let mut wasm = wasm_plugins.write();
-                                        if let Some(p) = wasm.get_mut(i) {
-                                            p.enabled = !p.enabled;
-                                        }
-                                        let new_wasm = wasm.clone();
-                                        drop(wasm);
-                                        let dis = disabled.read().clone();
-                                        spawn(async move {
-                                            let mut s = load_settings().await;
-                                            s.disabled_native_backends = dis;
-                                            s.wasm_plugins = new_wasm;
-                                            save_settings(&s).await;
-                                        });
-                                    },
-                                    on_remove: move |i: usize| {
-                                        let mut wasm = wasm_plugins.write();
-                                        if i < wasm.len() {
-                                            wasm.remove(i);
-                                        }
-                                        let new_wasm = wasm.clone();
-                                        drop(wasm);
-                                        let dis = disabled.read().clone();
-                                        spawn(async move {
-                                            let mut s = load_settings().await;
-                                            s.disabled_native_backends = dis;
-                                            s.wasm_plugins = new_wasm;
-                                            save_settings(&s).await;
-                                        });
-                                    },
-                                }
+                            let new_wasm = wasm.clone();
+                            drop(wasm);
+                            let dis = disabled.read().clone();
+                            spawn(async move {
+                                let mut s = load_settings().await;
+                                s.disabled_native_backends = dis;
+                                s.wasm_plugins = new_wasm;
+                                save_settings(&s).await;
+                            });
+                        },
+                        on_remove: move |i: usize| {
+                            let mut wasm = wasm_plugins.write();
+                            if i < wasm.len() {
+                                wasm.remove(i);
                             }
-                        }
+                            let new_wasm = wasm.clone();
+                            drop(wasm);
+                            let dis = disabled.read().clone();
+                            spawn(async move {
+                                let mut s = load_settings().await;
+                                s.disabled_native_backends = dis;
+                                s.wasm_plugins = new_wasm;
+                                save_settings(&s).await;
+                            });
+                        },
                     }
                 }
             }

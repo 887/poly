@@ -1,9 +1,10 @@
 use crate::ui::account::{AccountBar, VoiceBar};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
-#[context_menu(inherit)]
+#[ui_action(None)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 pub fn VoiceAccountFooter() -> Element {
     rsx! {

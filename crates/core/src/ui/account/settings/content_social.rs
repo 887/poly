@@ -25,15 +25,16 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
 use poly_client::{DmSpamFilterLevel, SensitiveContentLevel};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 // ─── sub-components ─────────────────────────────────────────────────────────
 
 /// A single select-row inside the Sensitive Media section.
 ///
 /// Renders a label + `<select>` for a [`SensitiveContentLevel`].
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SensitiveMediaRow(
     label: String,
@@ -62,8 +63,9 @@ fn SensitiveMediaRow(
 }
 
 /// A labeled checkbox toggle row.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Element {
     rsx! {
@@ -80,8 +82,9 @@ fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Ele
 }
 
 /// Sensitive Media section — three select rows.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -117,8 +120,9 @@ fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// DM Spam Filter section — three radio options.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
     let current = chat_data.read().content_policy.dm_spam_filter;
@@ -157,8 +161,9 @@ fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// Age-Restricted Content section — age access toggles.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -184,8 +189,9 @@ fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// Social Permissions section — DM and message request controls.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -214,8 +220,9 @@ fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
 }
 
 /// Friend Requests section — three permission checkboxes.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -257,8 +264,9 @@ fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
 ///
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`] when the
 /// "content-social" section is active.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn ContentSocialSettings(_account_id: String) -> Element {
     let chat_data = use_context::<Signal<ChatData>>();

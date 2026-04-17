@@ -13,10 +13,11 @@ use crate::state::{AppState, ChatData};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn OutgoingDirectCallOverlay(
     backend: String,

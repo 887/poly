@@ -15,7 +15,6 @@
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**
 //! of RSX + logic. Extract sub-components rather than growing any file.
 
-use poly_ui_macros::context_menu;
 mod content_social;
 mod notifications;
 
@@ -24,6 +23,7 @@ mod profile;
 
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
+use poly_ui_macros::{context_menu, ui_action};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::settings::scroll_spy::scroll_to_settings_section;
 #[cfg(target_arch = "wasm32")]
@@ -172,8 +172,9 @@ fn install_account_settings_scroll_spy(_active_section: Signal<String>, _show_pr
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
@@ -202,8 +203,9 @@ fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>) -> Element {
     let account_id_upper = account_id.to_uppercase();
@@ -226,8 +228,9 @@ fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>)
 ///
 /// Global settings (theme, language, voice/video, identity, backup) are handled
 /// by the app-level `SettingsPage`.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     // Subscribe to locale so labels re-render on language change.

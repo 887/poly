@@ -2,9 +2,10 @@
 
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Full-page Create Forum Post form.
+#[ui_action(inherit)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]
@@ -90,6 +91,7 @@ pub(crate) fn CreateForumPostPage(
 }
 
 /// Forum search page — search posts within a community.
+#[ui_action(inherit)]
 #[context_menu(None)]
 #[rustfmt::skip]
 #[component]

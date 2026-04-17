@@ -19,14 +19,32 @@ use crate::state::ChatData;
 use crate::state::chat_data::user_color;
 use dioxus::prelude::*;
 use poly_client::AccountPresence;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Typed actions for the Poly Server profile settings panel.
+pub enum PolyProfileSettingsAction {
+    SetPresence(AccountPresence),
+    UploadAvatar,
+    UploadBanner,
+}
+
+impl crate::ui::actions::UiAction for PolyProfileSettingsAction {
+    fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
+        match self {
+            Self::SetPresence(_) => todo!("phase-E: update presence via backend"),
+            Self::UploadAvatar => todo!("phase-E: upload avatar"),
+            Self::UploadBanner => todo!("phase-E: upload banner"),
+        }
+    }
+}
 
 /// Poly Server profile settings section.
 ///
 /// Rendered inside `AccountSettingsPage` only when `backend == "poly"`.
 /// Shows: avatar display, display name, status picker, banner placeholder.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(PolyProfileSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();

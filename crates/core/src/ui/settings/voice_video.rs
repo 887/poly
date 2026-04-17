@@ -8,8 +8,35 @@
 
 use crate::i18n::t;
 use crate::storage::VoiceSettings;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the voice & video settings section.
+pub enum VoiceVideoSettingsAction {
+    /// Set the input (microphone) volume level (0–100).
+    SetInputVolume(u32),
+    /// Set the output (speakers) volume level (0–100).
+    SetOutputVolume(u32),
+    /// Change the voice activation detection mode ("vad" or "ptt").
+    SetVadMode(String),
+    /// Change the noise suppression level ("off", "standard", "high").
+    SetNoiseSuppression(String),
+    /// Toggle echo cancellation.
+    SetEchoCancellation(bool),
+}
+
+impl UiAction for VoiceVideoSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetInputVolume(_vol) => todo!("phase-E: persist input volume"),
+            Self::SetOutputVolume(_vol) => todo!("phase-E: persist output volume"),
+            Self::SetVadMode(_mode) => todo!("phase-E: persist VAD mode"),
+            Self::SetNoiseSuppression(_level) => todo!("phase-E: persist noise suppression"),
+            Self::SetEchoCancellation(_enabled) => todo!("phase-E: persist echo cancellation"),
+        }
+    }
+}
 
 /// Persist current voice settings to storage.
 fn persist_voice_settings(settings: VoiceSettings) {
@@ -38,8 +65,9 @@ fn save_voice(
     });
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn DeviceSelectRow(label_key: &'static str, option_key: &'static str) -> Element {
     rsx! {
@@ -52,8 +80,9 @@ fn DeviceSelectRow(label_key: &'static str, option_key: &'static str) -> Element
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn MicTestRow(mic_testing: Signal<bool>) -> Element {
     rsx! {
@@ -76,8 +105,9 @@ fn MicTestRow(mic_testing: Signal<bool>) -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn VoiceModeRow(selected: String, on_change: EventHandler<String>) -> Element {
     rsx! {
@@ -104,8 +134,9 @@ fn VoiceModeRow(selected: String, on_change: EventHandler<String>) -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element {
     rsx! {
@@ -128,8 +159,9 @@ fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element 
 /// Lets the user configure audio/video input/output devices, volume levels,
 /// voice activity detection mode, noise suppression and echo cancellation.
 /// Settings are loaded from and persisted to storage.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(VoiceVideoSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn VoiceVideoSettings() -> Element {
     let mut input_vol = use_signal(|| 80_u32);
@@ -211,8 +243,9 @@ pub(super) fn VoiceVideoSettings() -> Element {
 }
 
 /// Volume slider with label showing percentage.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn VolumeSlider(label: String, value: u32, on_change: EventHandler<u32>) -> Element {
     rsx! {
@@ -235,8 +268,9 @@ fn VolumeSlider(label: String, value: u32, on_change: EventHandler<u32>) -> Elem
 }
 
 /// Noise suppression radio group.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn NoiseSuppressionRow(selected: String, on_change: EventHandler<String>) -> Element {
     rsx! {

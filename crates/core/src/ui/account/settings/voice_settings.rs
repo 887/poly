@@ -17,7 +17,26 @@
 use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::ui_action;
+
+/// Typed actions for the Voice & Audio settings panel.
+pub enum VoiceSettingsAction {
+    SetMicDevice(Option<String>),
+    SetSpeakerDevice(Option<String>),
+    ToggleNoiseCancel(bool),
+    TestMic,
+}
+
+impl crate::ui::actions::UiAction for VoiceSettingsAction {
+    fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
+        match self {
+            Self::SetMicDevice(_) => todo!("phase-E: update mic device"),
+            Self::SetSpeakerDevice(_) => todo!("phase-E: update speaker device"),
+            Self::ToggleNoiseCancel(_) => todo!("phase-E: toggle noise cancellation"),
+            Self::TestMic => todo!("phase-E: run mic test"),
+        }
+    }
+}
 
 // ── JS for device enumeration and mic test ────────────────────────────────────
 
@@ -55,8 +74,9 @@ const JS_TEST_MIC: &str = r#"
 ///
 /// Composed of: mic picker, speaker picker, noise cancel toggle, test mic button.
 // DECISION(V-4): Audio settings live in AccountSettingsPage, not a popup.
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(VoiceSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub fn VoiceSettings() -> Element {
     let mut mic_devices = use_signal::<Vec<(String, String)>>(Vec::new);
@@ -104,8 +124,9 @@ pub fn VoiceSettings() -> Element {
 }
 
 /// Microphone device selector.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -138,8 +159,9 @@ fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
 }
 
 /// Speaker device selector.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -172,8 +194,9 @@ fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
 }
 
 /// Noise cancellation toggle.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn NoiseCancelToggle() -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -204,8 +227,9 @@ fn NoiseCancelToggle() -> Element {
 }
 
 /// Test microphone button.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn TestMicButton() -> Element {
     let mut test_running = use_signal(|| false);

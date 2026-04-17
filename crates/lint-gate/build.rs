@@ -9,9 +9,12 @@
 //!  2. Context-menu decorator coverage (plan-context-menu-quality-control.md §3.1.2).
 //!  3. Connected-routes graph reachability (plan-connected-routes-static-check.md §3).
 //!  4. UI action coverage (plan-ui-completeness.md §B).
+//!  5. UI action-enum coverage (typed-ui-action-enums plan Phase C).
 //!
 //! Existing violations are grandfathered via `baseline.json`.
 
+#[path = "build/action_enum_coverage.rs"]
+mod action_enum_coverage;
 #[path = "build/allow_ban.rs"]
 mod allow_ban;
 #[path = "build/baseline.rs"]
@@ -60,6 +63,7 @@ fn main() {
 
     let mut violations: Vec<baseline::Violation> = Vec::new();
     allow_ban::scan(&walker, &mut violations);
+    action_enum_coverage::scan(&walker, &mut violations);
     context_menu_coverage::scan(&walker, &mut violations);
     nav_push_ban::scan(&walker, &mut violations);
     route_graph::scan(&ws_root, &mut violations);

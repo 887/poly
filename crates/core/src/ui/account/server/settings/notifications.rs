@@ -10,14 +10,15 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Per-server notification settings panel.
 ///
 /// Notification preferences are currently in-memory only (no storage
 /// persistence yet — that is planned for Phase 2.11).
-#[context_menu(None)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 pub fn ServerNotificationsSettings(server_id: String, server_name: String) -> Element {
     let mut notif_level = use_signal(|| NotifLevel::Mentions);
@@ -83,8 +84,9 @@ pub fn ServerNotificationsSettings(server_id: String, server_name: String) -> El
 }
 
 /// Notification level option (radio-button style).
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn NotifLevelOption(label: String, selected: bool, onclick: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -98,8 +100,9 @@ fn NotifLevelOption(label: String, selected: bool, onclick: EventHandler<MouseEv
 }
 
 /// Toggle row for a notification suppression option.
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn NotifToggleRow(label: String, checked: bool, onchange: EventHandler<bool>) -> Element {
     rsx! {

@@ -13,7 +13,6 @@
 //! ## 150-line component rule
 //! Every `#[component]` fn body MUST stay under **150 lines** of RSX + logic.
 
-use poly_ui_macros::context_menu;
 mod general;
 mod notifications;
 mod overview;
@@ -21,6 +20,7 @@ mod profile;
 
 use crate::i18n::t;
 use crate::state::AppState;
+use poly_ui_macros::{context_menu, ui_action};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::settings::scroll_spy::scroll_to_settings_section;
@@ -95,8 +95,9 @@ fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
     }
 }
 
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
@@ -125,8 +126,9 @@ fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[ui_action(None)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String) -> Element {
     rsx! {
@@ -137,8 +139,9 @@ fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String)
     }
 }
 
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn ServerSettingsNavigation(
     active_section: ServerSettingsSection,
@@ -173,8 +176,9 @@ fn ServerSettingsNavigation(
     }
 }
 
-#[context_menu(inherit)]
+#[ui_action(None)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn ServerSettingsContent(
     search_text: Signal<String>,
@@ -272,8 +276,9 @@ impl ServerSettingsSection {
 ///
 /// Shares the same two-column layout (nav sidebar + content) as `AccountSettingsPage`
 /// and `SettingsPage`. Server name shown in the content header.
-#[context_menu(None)]
+#[ui_action(None)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 pub fn ServerSettingsPage(
     backend: String,
@@ -379,8 +384,9 @@ pub fn ServerSettingsPage(
 }
 
 /// Navigation item for the server settings sidebar.
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn ServerSettingsNavItem(
     label: String,

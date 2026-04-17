@@ -6,8 +6,49 @@
 
 use crate::i18n::t;
 use crate::theme::{ThemeConfig, ThemePreset};
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the theme settings section.
+pub enum ThemeSettingsAction {
+    /// Switch to a different built-in theme preset.
+    SetPreset(ThemePreset),
+    /// Change the color mode (dark / light / follow device).
+    SetColorMode(crate::theme::ColorMode),
+    /// Toggle color overrides on or off.
+    SetColorOverridesEnabled(bool),
+    /// Override a specific CSS color variable.
+    SetColorOverride(String, String),
+    /// Reset all color overrides to preset defaults.
+    ResetColors,
+    /// Toggle custom CSS injection on or off.
+    SetCustomCssEnabled(bool),
+    /// Apply (save) the current custom CSS.
+    ApplyCss(String),
+    /// Import a theme from a clipboard-formatted export string.
+    ImportTheme(String),
+    /// Export the current theme to the clipboard.
+    ExportTheme,
+}
+
+impl UiAction for ThemeSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetPreset(_preset) => todo!("phase-E: persist theme preset"),
+            Self::SetColorMode(_mode) => todo!("phase-E: persist color mode"),
+            Self::SetColorOverridesEnabled(_enabled) => {
+                todo!("phase-E: toggle color overrides")
+            }
+            Self::SetColorOverride(_var, _value) => todo!("phase-E: persist color override"),
+            Self::ResetColors => todo!("phase-E: reset color overrides"),
+            Self::SetCustomCssEnabled(_enabled) => todo!("phase-E: toggle custom CSS"),
+            Self::ApplyCss(_css) => todo!("phase-E: apply custom CSS"),
+            Self::ImportTheme(_exported) => todo!("phase-E: import theme from string"),
+            Self::ExportTheme => todo!("phase-E: copy theme export to clipboard"),
+        }
+    }
+}
 
 /// Persist the theme config to storage (fire-and-forget).
 async fn persist_theme(config: ThemeConfig) {
@@ -52,8 +93,9 @@ fn initial_editor_css(config: &ThemeConfig) -> String {
 }
 
 /// Visual preset picker — colored buttons for each built-in theme.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -98,8 +140,9 @@ pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
 }
 
 /// Dark / Light / Follow Device toggle.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -147,8 +190,9 @@ pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Eleme
 /// When disabled (default), the color pickers are greyed out and no
 /// color overrides are applied. When enabled, users can customize
 /// individual colors which then override the preset.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -198,8 +242,9 @@ pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ColorOverridesToggleRow(colors_enabled: bool, on_toggle: EventHandler<bool>) -> Element {
     rsx! {
@@ -217,8 +262,9 @@ fn ColorOverridesToggleRow(colors_enabled: bool, on_toggle: EventHandler<bool>) 
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ColorOverridesGrid(
     entries: Vec<(String, String, String)>,
@@ -260,8 +306,9 @@ fn ColorOverridesGrid(
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn ResetColorsButton(on_reset: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -281,8 +328,9 @@ fn ResetColorsButton(on_reset: EventHandler<MouseEvent>) -> Element {
 /// When disabled (default), the editor is visible but greyed out and
 /// the CSS is not injected. The template lists every CSS variable
 /// (commented out) so users can see what is available.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -305,8 +353,9 @@ pub(super) fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Element {
     rsx! {
@@ -324,8 +373,9 @@ fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Eleme
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn CssEditorArea(
     css_enabled: bool,
@@ -346,8 +396,9 @@ fn CssEditorArea(
     }
 }
 
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>) -> Element {
     rsx! {
@@ -407,8 +458,9 @@ fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>
 ///
 /// Replaces the separate Appearance page: everything color/theme related
 /// is now in one place.
-#[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(ThemeSettingsAction)]
+#[context_menu(inherit)]
 #[component]
 pub(super) fn ThemeSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

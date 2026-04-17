@@ -56,18 +56,20 @@
 //! **NEVER hardcode demo/test data in UI components** — all data must flow
 //! through the `ClientBackend` trait via `ClientManager`.
 
-use poly_ui_macros::context_menu;
 pub mod account;
+pub mod actions;
+pub use actions::{ActionCx, UiAction};
+pub(crate) mod code_explorer;
+pub(crate) mod context_menu;
 pub(crate) mod create_channel;
 pub(crate) mod create_forum_post;
 pub(crate) mod create_server;
-pub(crate) mod code_explorer;
-pub(crate) mod context_menu;
 pub(crate) mod demo;
 mod electron_titlebar;
 mod favorites_sidebar;
 pub(crate) mod main_layout;
 pub mod routes;
+mod server_overview;
 pub(crate) mod search;
 mod settings;
 pub(crate) mod signup;
@@ -81,20 +83,7 @@ pub(crate) use settings::stoat_settings_render_fn;
 // Re-export the poly server settings render function for the same reason.
 #[cfg(feature = "server")]
 pub(crate) use settings::poly_settings_render_fn;
-#[cfg(feature = "hackernews")]
-pub(crate) use settings::hackernews_settings_render_fn;
-#[cfg(feature = "github")]
-pub(crate) use settings::github_settings_render_fn;
-#[cfg(feature = "forgejo")]
-pub(crate) use settings::forgejo_settings_render_fn;
-#[cfg(feature = "lemmy")]
-pub(crate) use settings::lemmy_settings_render_fn;
-#[cfg(feature = "discord")]
-pub(crate) use settings::discord_settings_render_fn;
-#[cfg(feature = "teams")]
-pub(crate) use settings::teams_settings_render_fn;
 mod runtime_js;
-mod server_overview;
 mod setup_wizard;
 mod voice_banner;
 
@@ -108,6 +97,7 @@ pub use setup_wizard::SetupWizard;
 use crate::client_manager::{ClientManager, SignupEntry};
 use crate::state::{AppState, ChatData, LayoutMode, SettingsSection, View};
 use dioxus::prelude::*;
+use poly_ui_macros::{context_menu, ui_action};
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
 #[cfg(target_arch = "wasm32")]
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -633,89 +623,6 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
     });
-
-    #[cfg(feature = "hackernews")]
-    client_manager.write().register_signup_entry(SignupEntry {
-        slug: "hackernews",
-        icon: "🔶",
-        name_key: "plugin-hackernews-signup-name",
-        desc_key: "plugin-hackernews-signup-desc",
-        render: poly_hackernews::signup::signup_render_fn,
-    });
-
-    #[cfg(feature = "lemmy")]
-    client_manager.write().register_signup_entry(SignupEntry {
-        slug: "lemmy",
-        icon: "🐾",
-        name_key: "plugin-lemmy-signup-name",
-        desc_key: "plugin-lemmy-signup-desc",
-        render: poly_lemmy::signup::signup_render_fn,
-    });
-
-    #[cfg(feature = "github")]
-    client_manager.write().register_signup_entry(SignupEntry {
-        slug: "github",
-        icon: "🐙",
-        name_key: "plugin-github-signup-name",
-        desc_key: "plugin-github-signup-desc",
-        render: poly_github::signup::signup_render_fn,
-    });
-
-    #[cfg(feature = "forgejo")]
-    client_manager.write().register_signup_entry(SignupEntry {
-        slug: "forgejo",
-        icon: "🦊",
-        name_key: "plugin-forgejo-signup-name",
-        desc_key: "plugin-forgejo-signup-desc",
-        render: poly_forgejo::signup::signup_render_fn,
-    });
-
-    #[cfg(feature = "teams")]
-    client_manager.write().register_signup_entry(SignupEntry {
-        slug: "teams",
-        icon: "🟦",
-        name_key: "plugin-teams-signup-name",
-        desc_key: "plugin-teams-signup-desc",
-        render: poly_teams::signup::signup_render_fn,
-    });
-}
-
-/// Register test account entries from all compiled-in native plugins.
-fn register_native_test_accounts(#[allow(unused_variables)] client_manager: &mut Signal<ClientManager>) {
-    #[cfg(feature = "stoat")]
-    for entry in poly_stoat::signup::get_test_accounts() {
-        client_manager.write().register_test_account(*entry);
-    }
-
-    #[cfg(feature = "matrix")]
-    for entry in poly_matrix::signup::get_test_accounts() {
-        client_manager.write().register_test_account(*entry);
-    }
-
-    #[cfg(feature = "discord")]
-    for entry in poly_discord::signup::get_test_accounts() {
-        client_manager.write().register_test_account(*entry);
-    }
-
-    #[cfg(feature = "teams")]
-    for entry in poly_teams::signup::get_test_accounts() {
-        client_manager.write().register_test_account(*entry);
-    }
-
-    #[cfg(feature = "lemmy")]
-    for entry in poly_lemmy::signup::get_test_accounts() {
-        client_manager.write().register_test_account(*entry);
-    }
-
-    #[cfg(feature = "forgejo")]
-    for entry in poly_forgejo::signup::get_test_accounts() {
-        client_manager.write().register_test_account(*entry);
-    }
-
-    #[cfg(feature = "github")]
-    for entry in poly_github::signup::get_test_accounts() {
-        client_manager.write().register_test_account(*entry);
-    }
 }
 
 /// Register all native backend plugin settings pages into `ClientManager`.
@@ -762,566 +669,12 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
             nav_icon: "🔷",
             render: poly_settings_render_fn,
         });
-
-    #[cfg(feature = "hackernews")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "hackernews",
-            nav_label_key: "plugin-hackernews-title",
-            nav_icon: "🔶",
-            render: hackernews_settings_render_fn,
-        });
-
-    #[cfg(feature = "lemmy")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "lemmy",
-            nav_label_key: "plugin-lemmy-title",
-            nav_icon: "🐾",
-            render: lemmy_settings_render_fn,
-        });
-
-    #[cfg(feature = "github")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "github",
-            nav_label_key: "plugin-github-title",
-            nav_icon: "🐙",
-            render: github_settings_render_fn,
-        });
-
-    #[cfg(feature = "forgejo")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "forgejo",
-            nav_label_key: "plugin-forgejo-title",
-            nav_icon: "🦊",
-            render: forgejo_settings_render_fn,
-        });
-
-    #[cfg(feature = "discord")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "discord",
-            nav_label_key: "plugin-discord-title",
-            nav_icon: "🟣",
-            render: discord_settings_render_fn,
-        });
-
-    #[cfg(feature = "teams")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "teams",
-            nav_label_key: "plugin-teams-title",
-            nav_icon: "🟦",
-            render: teams_settings_render_fn,
-        });
 }
 
 // ── App — async helpers ──────────────────────────────────────────────────────
 
 /// Restore all persisted poly-server accounts from the token store.
 ///
-/// Restore persisted HackerNews accounts on app startup.
-///
-/// HN requires no authentication, so every stored HN token can be re-activated
-/// instantly without a network round-trip. The token value is the HN username
-/// for named accounts and an empty string for anonymous accounts.
-///
-/// Populates `ClientManager` with a live backend, registers the HN server in
-/// the `server_account_map`, and adds the server to `chat_data.servers` so the
-/// favorites bar renders immediately.
-#[cfg(feature = "hackernews")]
-pub(crate) async fn restore_hackernews_accounts(
-    storage: &crate::storage::Storage,
-    mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
-) {
-    use crate::client_manager::BackendHandle;
-    use std::collections::HashMap;
-    use std::sync::Arc;
-
-    let Ok(tokens) = storage.get_account_tokens().await else {
-        return;
-    };
-
-    let hn_tokens: Vec<_> = tokens
-        .into_iter()
-        .filter(|t| t.backend == "hackernews")
-        .collect();
-
-    if hn_tokens.is_empty() {
-        return;
-    }
-
-    tracing::info!(
-        "Restoring {} HackerNews account(s) from storage",
-        hn_tokens.len()
-    );
-
-    for token in hn_tokens {
-        let mut backend = poly_hackernews::HackerNewsClient::new();
-        let session = if token.token.is_empty() {
-            backend.guest_session()
-        } else {
-            backend.named_session(token.token.clone())
-        };
-        let account_id = session.id.clone();
-
-        let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(
-            Box::new(backend) as Box<dyn poly_client::ClientBackend + Send + Sync>,
-        ));
-
-        // Build server→account map without holding any Signal lock.
-        let mut server_map = HashMap::new();
-        let servers = {
-            let guard = backend_handle.read().await;
-            guard.get_servers().await.unwrap_or_default()
-        };
-        for srv in &servers {
-            server_map.insert(srv.id.clone(), account_id.clone());
-        }
-
-        // Commit synchronously — no await while Signal lock is held.
-        client_manager.write().commit_backend_account(
-            account_id.clone(),
-            session.clone(),
-            backend_handle,
-            server_map,
-        );
-        chat_data
-            .write()
-            .account_sessions
-            .insert(account_id.clone(), session);
-
-        // Add servers to chat_data (favorites are user-managed; don't
-        // auto-favorite servers during restore).
-        {
-            let mut cd = chat_data.write();
-            for srv in &servers {
-                if !cd.servers.iter().any(|s| s.id == srv.id) {
-                    cd.servers.push(srv.clone());
-                }
-            }
-        }
-
-        tracing::info!("Restored HackerNews account: {account_id}");
-    }
-}
-
-/// Restore persisted GitHub accounts on app startup.
-///
-/// GitHub auth lives entirely in the user's `gh` CLI — no token is read or
-/// stored by Poly. The stored `AccountToken.instance_id` is the GHE hostname
-/// (or `"github.com"`); we re-run `gh api /user` against that instance to
-/// rebuild the session.
-#[cfg(feature = "github")]
-pub(crate) async fn restore_github_accounts(
-    storage: &crate::storage::Storage,
-    mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
-) {
-    use crate::client_manager::BackendHandle;
-    use poly_client::{AuthCredentials, ClientBackend as _};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-
-    let Ok(tokens) = storage.get_account_tokens().await else {
-        return;
-    };
-
-    let gh_tokens: Vec<_> = tokens.into_iter().filter(|t| t.backend == "github").collect();
-    if gh_tokens.is_empty() {
-        return;
-    }
-
-    tracing::info!(
-        "Restoring {} GitHub account(s) via gh CLI",
-        gh_tokens.len()
-    );
-
-    for token in gh_tokens {
-        let mut backend = match token.instance_id.as_deref() {
-            Some(host) if host != "github.com" && !host.is_empty() => {
-                poly_github::GitHubClient::enterprise(host.to_string())
-            }
-            _ => poly_github::GitHubClient::dotcom(),
-        };
-        let session = match backend
-            .authenticate(AuthCredentials::Token(String::new()))
-            .await
-        {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::warn!(
-                    "Skipping GitHub account {}: {}",
-                    token.account_id,
-                    e
-                );
-                continue;
-            }
-        };
-        let account_id = session.id.clone();
-
-        let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(
-            Box::new(backend) as Box<dyn poly_client::ClientBackend + Send + Sync>,
-        ));
-
-        let mut server_map = HashMap::new();
-        let servers = {
-            let guard = backend_handle.read().await;
-            guard.get_servers().await.unwrap_or_default()
-        };
-        for srv in &servers {
-            server_map.insert(srv.id.clone(), account_id.clone());
-        }
-
-        client_manager.write().commit_backend_account(
-            account_id.clone(),
-            session.clone(),
-            backend_handle,
-            server_map,
-        );
-        chat_data
-            .write()
-            .account_sessions
-            .insert(account_id.clone(), session);
-
-        {
-            let mut cd = chat_data.write();
-            for srv in &servers {
-                if !cd.servers.iter().any(|s| s.id == srv.id) {
-                    cd.servers.push(srv.clone());
-                }
-            }
-        }
-
-        tracing::info!("Restored GitHub account: {account_id}");
-    }
-}
-
-/// Restore persisted Forgejo accounts on app startup.
-///
-/// The stored `AccountToken.instance_id` is the Forgejo instance hostname
-/// (or `"codeberg.org"`); we reconstruct the full URL and re-authenticate
-/// with the stored personal access token.
-/// Heuristic: does this error string look like a 401 / invalid-token failure?
-///
-/// Used by backend restore paths to distinguish "stored token rejected, user
-/// must reauth" from "network unreachable, try again later". Matching is
-/// intentionally lenient — errors bubble up from eight different HTTP clients
-/// with wildly different formatting.
-#[cfg(feature = "forgejo")]
-pub(crate) fn looks_like_auth_failure(err: &str) -> bool {
-    let l = err.to_lowercase();
-    l.contains("401")
-        || l.contains("unauthorized")
-        || l.contains("invalid token")
-        || l.contains("invalid credentials")
-        || l.contains("authentication failed")
-}
-
-/// Register an offline session for an account whose persisted token was rejected
-/// with 401, and push a user-visible reauth notification.
-///
-/// Used by restore paths for forge/forum backends that otherwise would silently
-/// skip the account — leaving the user confused about why their sidebar is empty.
-/// Account details for [`register_unauthenticated_account`].
-#[cfg(feature = "forgejo")]
-pub(crate) struct UnauthAccountInfo {
-    pub backend: poly_client::BackendType,
-    pub backend_slug: String,
-    pub account_id: String,
-    pub display_name: String,
-    pub token: String,
-    pub instance_id: String,
-    pub backend_url: Option<String>,
-    pub reason: String,
-}
-
-#[cfg(feature = "forgejo")]
-pub(crate) fn register_unauthenticated_account(
-    client_manager: &mut Signal<ClientManager>,
-    chat_data: &mut Signal<ChatData>,
-    info: UnauthAccountInfo,
-) {
-    let UnauthAccountInfo { backend, backend_slug, account_id, display_name, token, instance_id, backend_url, reason } = info;
-    let backend_slug = backend_slug.as_str();
-    let session = poly_client::Session {
-        id: account_id.clone(),
-        user: poly_client::User {
-            id: account_id.clone(),
-            display_name,
-            avatar_url: None,
-            presence: poly_client::PresenceStatus::Offline,
-            backend: backend.clone(),
-        },
-        token,
-        backend: backend.clone(),
-        icon_emoji: None,
-        instance_id,
-        backend_url,
-    };
-    {
-        let mut cm = client_manager.write();
-        cm.register_offline_session(account_id.clone(), session.clone());
-        cm.mark_unauthenticated(&account_id, reason);
-    }
-    let mut cd = chat_data.write();
-    cd.account_sessions.insert(account_id.clone(), session);
-    // Only add one ReauthRequired notification per account.
-    let already_notified = cd.notifications.iter().any(|n| {
-        n.account_id == account_id
-            && matches!(&n.kind, poly_client::NotificationKind::ReauthRequired { .. })
-    });
-    if !already_notified {
-        cd.notifications.push(poly_client::Notification {
-            id: format!("reauth-{account_id}"),
-            kind: poly_client::NotificationKind::ReauthRequired {
-                backend_slug: backend_slug.to_string(),
-            },
-            backend,
-            account_id,
-            timestamp: chrono::Utc::now(),
-            read: false,
-            preview: crate::i18n::t("notifications-reauth-preview"),
-        });
-    }
-}
-
-#[cfg(feature = "forgejo")]
-pub(crate) async fn restore_forgejo_accounts(
-    storage: &crate::storage::Storage,
-    mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
-) {
-    use crate::client_manager::BackendHandle;
-    use poly_client::{AuthCredentials, ClientBackend as _};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-
-    let Ok(tokens) = storage.get_account_tokens().await else {
-        return;
-    };
-
-    let fj_tokens: Vec<_> = tokens.into_iter().filter(|t| t.backend == "forgejo").collect();
-    if fj_tokens.is_empty() {
-        return;
-    }
-
-    tracing::info!("Restoring {} Forgejo account(s)", fj_tokens.len());
-
-    for token in fj_tokens {
-        let instance_url = token
-            .instance_id
-            .clone()
-            .map(|id| {
-                if id.starts_with("http://") || id.starts_with("https://") {
-                    id
-                } else {
-                    format!("https://{id}")
-                }
-            })
-            .unwrap_or_else(|| "https://codeberg.org".to_string());
-
-        let mut backend = poly_forgejo::ForgejoClient::new(&instance_url);
-        let session = match backend
-            .authenticate(AuthCredentials::Token(token.token.clone()))
-            .await
-        {
-            Ok(s) => s,
-            Err(e) => {
-                let err_str = e.to_string();
-                if looks_like_auth_failure(&err_str) {
-                    tracing::warn!(
-                        "Forgejo account {} token rejected (401). Surfacing reauth prompt.",
-                        token.account_id
-                    );
-                    register_unauthenticated_account(
-                        &mut client_manager,
-                        &mut chat_data,
-                        UnauthAccountInfo {
-                            backend: poly_client::BackendType::from("forgejo"),
-                            backend_slug: "forgejo".to_string(),
-                            account_id: token.account_id.clone(),
-                            display_name: token.display_name.clone(),
-                            token: token.token.clone(),
-                            instance_id: instance_url.clone(),
-                            backend_url: Some(instance_url.clone()),
-                            reason: err_str,
-                        },
-                    );
-                } else {
-                    tracing::warn!("Skipping Forgejo account {}: {}", token.account_id, e);
-                }
-                continue;
-            }
-        };
-        let account_id = session.id.clone();
-
-        let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(
-            Box::new(backend) as Box<dyn poly_client::ClientBackend + Send + Sync>,
-        ));
-
-        let mut server_map = HashMap::new();
-        let servers = {
-            let guard = backend_handle.read().await;
-            guard.get_servers().await.unwrap_or_default()
-        };
-        for srv in &servers {
-            server_map.insert(srv.id.clone(), account_id.clone());
-        }
-
-        client_manager.write().commit_backend_account(
-            account_id.clone(),
-            session.clone(),
-            backend_handle,
-            server_map,
-        );
-        chat_data
-            .write()
-            .account_sessions
-            .insert(account_id.clone(), session);
-
-        {
-            let mut cd = chat_data.write();
-            for srv in &servers {
-                if !cd.servers.iter().any(|s| s.id == srv.id) {
-                    cd.servers.push(srv.clone());
-                }
-            }
-        }
-
-        tracing::info!("Restored Forgejo account: {account_id}");
-    }
-}
-
-/// Restore persisted quick-add test accounts (Matrix / Stoat / Lemmy / …).
-///
-/// Test accounts don't have per-backend restore functions because their
-/// credentials are already embedded in the registered `TestAccountEntry`
-/// list. This iterates registered entries, finds matching stored tokens
-/// by `display_name == entry.label`, and re-runs the same auth function
-/// that the Test Accounts panel would run.
-pub(crate) async fn restore_test_accounts(
-    storage: &crate::storage::Storage,
-    mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
-) {
-    use crate::client_manager::BackendHandle;
-    use std::collections::HashMap;
-    use std::sync::Arc;
-
-    let Ok(tokens) = storage.get_account_tokens().await else {
-        return;
-    };
-    if tokens.is_empty() {
-        return;
-    }
-
-    // Snapshot registered entries so we drop the Signal read guard before
-    // any awaits. `TestAccountEntry` is `Copy`, so this is cheap.
-    let entries: Vec<poly_client::TestAccountEntry> =
-        client_manager.read().test_account_entries.to_vec();
-    if entries.is_empty() {
-        return;
-    }
-
-    // Collect work items: (entry, token) pairs where display_name matches.
-    // A single label can correspond to at most one token since labels are
-    // unique across registered test accounts.
-    let work: Vec<poly_client::TestAccountEntry> = entries
-        .into_iter()
-        .filter(|entry| tokens.iter().any(|t| t.display_name == entry.label))
-        .collect();
-
-    if work.is_empty() {
-        return;
-    }
-
-    tracing::info!("Restoring {} test account(s) from storage", work.len());
-
-    for entry in work {
-        let auth_fn = entry.authenticate;
-        let completed = match (auth_fn)(
-            entry.base_url.to_string(),
-            entry.username.to_string(),
-            entry.password.to_string(),
-        )
-        .await
-        {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to restore test account {}: {e}. Skipping.",
-                    entry.label
-                );
-                continue;
-            }
-        };
-
-        let mut session = completed.session;
-        // Re-apply the bundled animal portrait overlay, same as the
-        // live signup flow in `build_on_complete`.
-        #[cfg(feature = "demo")]
-        if (session.user.avatar_url.is_none()
-            || session
-                .user
-                .avatar_url
-                .as_deref()
-                .is_some_and(|u| !u.starts_with("http")))
-            && let Some(url) = poly_demo::data::test_animal_avatar(&session.user.display_name) {
-            session.user.avatar_url = Some(url);
-        }
-        let account_id = session.id.clone();
-        // Guard against duplicate account IDs (e.g. if another restore path
-        // already committed this session).
-        if client_manager.read().sessions.contains_key(&account_id) {
-            continue;
-        }
-
-        let backend_handle: BackendHandle =
-            Arc::new(tokio::sync::RwLock::new(completed.backend));
-
-        let mut server_map = HashMap::new();
-        let servers = {
-            let guard = backend_handle.read().await;
-            guard.get_servers().await.unwrap_or_default()
-        };
-        for srv in &servers {
-            server_map.insert(srv.id.clone(), account_id.clone());
-        }
-
-        client_manager.write().commit_backend_account(
-            account_id.clone(),
-            session.clone(),
-            backend_handle,
-            server_map,
-        );
-        chat_data
-            .write()
-            .account_sessions
-            .insert(account_id.clone(), session);
-
-        {
-            let mut cd = chat_data.write();
-            for srv in &servers {
-                if !cd.servers.iter().any(|s| s.id == srv.id) {
-                    cd.servers.push(srv.clone());
-                }
-            }
-        }
-
-        tracing::info!("Restored test account: {} ({account_id})", entry.label);
-    }
-}
-
 /// Called during `init_storage` when `setup_complete` is true.
 /// For each stored `AccountToken` with `backend == "poly"` and a valid
 /// `instance_id` (the base URL), this function:
@@ -1421,43 +774,43 @@ async fn restore_poly_accounts(
                             account_display_name: srv.account_display_name.clone(),
                         })
                         .collect();
+                    let new_fav_ids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
+
                     let mut cd = chat_data.write();
+                    for id in &new_fav_ids {
+                        if !cd.favorited_server_ids.contains(id) {
+                            cd.favorited_server_ids.push(id.clone());
+                        }
+                    }
                     // Avoid duplicates if servers list was already populated.
-                    // Favorites are user-managed; don't auto-favorite here.
                     for srv in servers {
                         if !cd.servers.iter().any(|s| s.id == srv.id) {
                             cd.servers.push(srv);
                         }
                     }
+                    let all_fav_ids = cd.favorited_server_ids.clone();
                     drop(cd);
 
+                    // Persist cache + favourites without holding any Signal lock.
                     if let Err(e) = storage.upsert_offline_server_cache(&cache_records).await {
                         tracing::warn!("Failed to cache server metadata: {e}");
                     }
+                    crate::ui::favorites_sidebar::persist_favorites(all_fav_ids).await;
                 }
 
-                // Fetch DMs, groups, friends, blocked users and content policy.
+                // Fetch DMs and friends in background.
                 {
                     let guard = backend_handle.read().await;
                     if let Ok(dms) = guard.get_dm_channels().await {
                         chat_data.write().dm_channels.extend(dms);
                     }
-                    if let Ok(groups) = guard.get_groups().await {
-                        chat_data.write().groups.extend(groups);
-                    }
                     if let Ok(friends) = guard.get_friends().await {
                         for friend in friends {
-                            let already = chat_data.read().friends.get(&account_id).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
+                            let already = chat_data.read().friends.get(&account_id).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
                             if !already {
                                 chat_data.write().friends.entry(account_id.clone()).or_default().push(friend);
                             }
                         }
-                    }
-                    if let Ok(blocked) = guard.get_blocked_users().await {
-                        chat_data.write().blocked_users.insert(account_id.clone(), blocked);
-                    }
-                    if let Ok(policy) = guard.get_content_policy().await {
-                        chat_data.write().content_policy = policy;
                     }
                 }
 
@@ -1550,25 +903,8 @@ async fn init_storage(
                 Err(e) => tracing::warn!("Failed to load saved theme config: {e}"),
             }
             match storage.get_app_settings().await {
-                Ok(mut settings) if settings.setup_complete => {
+                Ok(settings) if settings.setup_complete => {
                     tracing::info!("Storage: setup complete, going to main layout");
-                    // Make sure dev-only plugins (Discord/Teams when the `dev-plugins`
-                    // feature is compiled in) exist as real entries inside
-                    // `wasm_plugins` so they persist across reloads through the same
-                    // storage path a user-loaded plugin would use. Also prunes stale
-                    // dev entries whose feature is no longer compiled (e.g. after
-                    // switching to a production build) so the UI never shows a
-                    // dead backend.
-                    if crate::ui::settings::plugins::ensure_dev_plugins_in(&mut settings) {
-                        if let Err(e) = storage.set_app_settings(&settings).await {
-                            tracing::warn!("Failed to persist dev-plugin injection: {e}");
-                        } else {
-                            tracing::info!(
-                                "Injected dev-only plugins into wasm_plugins ({} entries)",
-                                settings.wasm_plugins.len()
-                            );
-                        }
-                    }
                     crate::i18n::set_locale(&settings.locale);
                     *locale_sig.write() = settings.locale.clone();
                     app_state.write().is_setup_complete = true;
@@ -1592,23 +928,6 @@ async fn init_storage(
                         tracing::info!(
                             "Restored {} favorited server(s) from storage",
                             settings.favorited_server_ids.len()
-                        );
-                    }
-                    // Restore per-account Bar 2 server ordering.
-                    if !settings.account_server_order.is_empty() {
-                        chat_data.write().account_server_order =
-                            settings.account_server_order.clone();
-                        tracing::info!(
-                            "Restored server order for {} account(s) from storage",
-                            settings.account_server_order.len()
-                        );
-                    }
-                    // Restore Bar 1 account icon ordering.
-                    if !settings.account_order.is_empty() {
-                        chat_data.write().account_order = settings.account_order.clone();
-                        tracing::info!(
-                            "Restored account icon order ({} entries) from storage",
-                            settings.account_order.len()
                         );
                     }
                     // Restore the demo client if it was active when the app last closed.
@@ -1646,23 +965,6 @@ async fn init_storage(
                     // This runs after demo restore so both can coexist.
                     #[cfg(feature = "server")]
                     restore_poly_accounts(&storage, client_manager, chat_data).await;
-
-                    // Restore HackerNews accounts (no-auth, instant reconnect).
-                    #[cfg(feature = "hackernews")]
-                    restore_hackernews_accounts(&storage, client_manager, chat_data).await;
-
-                    // Restore GitHub accounts via the gh CLI (no token in storage).
-                    #[cfg(feature = "github")]
-                    restore_github_accounts(&storage, client_manager, chat_data).await;
-
-                    // Restore Forgejo / Gitea / Codeberg accounts via stored token.
-                    #[cfg(feature = "forgejo")]
-                    restore_forgejo_accounts(&storage, client_manager, chat_data).await;
-
-                    // Restore quick-add test accounts (Matrix/Stoat/Lemmy animals)
-                    // by re-running their registered auth function. Runs last so
-                    // the per-backend restore paths above claim their tokens first.
-                    restore_test_accounts(&storage, client_manager, chat_data).await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),
@@ -1691,8 +993,6 @@ async fn persist_setup_completion(account_id: String) {
         demo_active: true,
         // New install has no favorites yet.
         favorited_server_ids: Vec::new(),
-        account_order: Vec::new(),
-        account_server_order: std::collections::HashMap::new(),
         server_icon_overrides: std::collections::HashMap::new(),
         server_banner_overrides: std::collections::HashMap::new(),
         server_member_list_open: true,
@@ -1710,6 +1010,8 @@ async fn persist_setup_completion(account_id: String) {
         member_list_grouping: crate::state::MemberListGrouping::default(),
         member_list_sort_order: crate::state::MemberListSortOrder::default(),
         member_list_show_offline: true,
+        account_order: Vec::new(),
+        account_server_order: std::collections::HashMap::new(),
     };
     if let Err(e) = s.set_app_settings(&settings).await {
         tracing::error!("Failed to persist app settings: {e}");
@@ -1769,8 +1071,9 @@ fn router_config(
     )
 }
 
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
     // Pull context signals so we can activate demo after setup completes.
@@ -1807,8 +1110,9 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
     }
 }
 
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 fn StartupOverlay(state: StartupOverlayState) -> Element {
     if !state.enabled || !state.visible {
@@ -1903,8 +1207,9 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 /// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
 /// - `Signal<ClientManager>` — client manager for active backends
 /// - `Signal<ChatData>` — reactive chat data store
-#[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(None)]
+#[context_menu(inherit)]
 #[component]
 pub fn App() -> Element {
     let app_state = use_signal(AppState::default);
@@ -1942,9 +1247,7 @@ pub fn App() -> Element {
     // the Plugin Settings nav, even before the user has activated the plugin.
     use_effect(move || {
         register_native_signup_entries(&mut client_manager);
-        register_native_test_accounts(&mut client_manager);
         register_native_plugin_settings(&mut client_manager);
-        crate::ui::context_menu::menus::register_all_menus();
     });
 
     let chat_data: Signal<ChatData> = use_signal(ChatData::default);
@@ -1997,21 +1300,13 @@ pub fn App() -> Element {
                 let elapsed_ms = js_sys::Date::now() - *startup_overlay_started.read();
                 let remaining_ms = startup_overlay_config
                     .min_visible_ms
-                    .saturating_sub(elapsed_ms.max(0.0) as u32) as i32;
-                // Use a raw Promise-based sleep. The document::eval approach is broken
-                // because Dioxus wraps eval in `async function(dioxus) { {code}; dioxus.close(); }`
-                // which calls close() before the setTimeout fires, killing the channel.
-                let sleep = js_sys::Promise::new(&mut |resolve, _| {
-                    let _ = web_sys::window()
-                        .and_then(|w| {
-                            w.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                &resolve,
-                                remaining_ms,
-                            )
-                            .ok()
-                        });
-                });
-                let _ = wasm_bindgen_futures::JsFuture::from(sleep).await;
+                    .saturating_sub(elapsed_ms.max(0.0) as u32);
+                let _ = document::eval(&format!(
+                    "setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => dioxus.send(true))), {});",
+                    remaining_ms
+                ))
+                .recv::<bool>()
+                .await;
             }
             startup_overlay_visible.set(false);
             startup_overlay_finished.set(true);

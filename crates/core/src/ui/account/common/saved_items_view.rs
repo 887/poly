@@ -12,7 +12,7 @@ use crate::state::{AppState, ChatData};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{MessageContent, MessageSearchHit};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 #[derive(Clone, PartialEq)]
 struct SavedPinnedItem {
@@ -43,8 +43,9 @@ fn build_highlight_terms(query: &str) -> Vec<String> {
         .collect()
 }
 
-#[context_menu(inherit)]
+#[ui_action(None)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn HighlightedSavedText(text: String, search_terms: Vec<String>) -> Element {
     let lowercase_text = text.to_lowercase();
@@ -98,8 +99,9 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
     sources
 }
 
-#[context_menu(None)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 pub fn SavedItemsView() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -334,8 +336,9 @@ pub fn SavedItemsView() -> Element {
     }
 }
 
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn SidebarSourceButton(
     label: String,
@@ -359,8 +362,9 @@ fn SidebarSourceButton(
     }
 }
 
-#[context_menu(inherit)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn SavedPinnedItemCard(
     item: SavedPinnedItem,

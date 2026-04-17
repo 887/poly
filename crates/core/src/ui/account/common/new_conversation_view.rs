@@ -9,10 +9,11 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData};
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
-#[context_menu(None)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 pub fn NewConversationView() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -30,7 +31,7 @@ pub fn NewConversationView() -> Element {
         .friends
         .values()
         .flatten()
-        .filter(|friend| active_backend.as_ref().is_none_or(|backend| *backend == friend.backend))
+        .filter(|friend| active_backend.as_ref().map_or(true, |backend| *backend == friend.backend))
         .filter(|friend| {
             search_lower.is_empty() || friend.display_name.to_lowercase().contains(&search_lower)
         })

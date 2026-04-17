@@ -17,7 +17,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
 use poly_client::BackendType;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Determine whether a backend slug identifies a backend that owns its servers
 /// and can set icon/banner programmatically (Phase 3 API calls).
@@ -31,20 +31,21 @@ fn backend_from_slug(slug: &str) -> Option<BackendType> {
 
 /// Returns `true` for backends that support user-facing banner images.
 fn supports_banner(backend: Option<&BackendType>) -> bool {
-    backend.is_some_and(|b| matches!(b.as_str(), "demo" | "stoat" | "discord" | "poly"))
+    backend.map_or(false, |b| matches!(b.as_str(), "demo" | "stoat" | "discord" | "poly"))
 }
 
 /// Returns `true` for backends where server icon changes must be local-only
 /// (Matrix workspaces, Teams channels — no "server" ownership).
 fn is_local_only(backend: Option<&BackendType>) -> bool {
-    backend.is_some_and(|b| matches!(b.as_str(), "matrix" | "teams"))
+    backend.map_or(false, |b| matches!(b.as_str(), "matrix" | "teams"))
 }
 
 /// Icon URL input, live preview, and save button.
 ///
 /// Used by [`ServerOverviewSettings`] for both full and local-only modes.
-#[context_menu(allow_default)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn IconPanel(
     server_id: String,
@@ -142,8 +143,9 @@ fn IconPanel(
 /// Banner URL input, live preview, and save button.
 ///
 /// Shown only for backends that support banner images (Demo, Stoat, Discord, Poly).
-#[context_menu(allow_default)]
+#[ui_action(inherit)]
 #[rustfmt::skip]
+#[context_menu(inherit)]
 #[component]
 fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -240,8 +242,9 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
 /// <!-- TODO(phase-3): wire icon/banner saves to backend API calls -->
 /// Currently all saves are local-only (stored in `AppSettings`). Phase 3 will
 /// add `ClientBackend::update_server_icon` / `update_server_banner` for
-#[context_menu(None)]
 /// Demo, Stoat, Discord, and Poly backends.
+#[ui_action(inherit)]
+#[context_menu(inherit)]
 #[component]
 pub fn ServerOverviewSettings(
     server_id: String,

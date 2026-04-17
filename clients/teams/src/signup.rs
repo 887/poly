@@ -5,7 +5,7 @@ use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupCo
 
 use crate::TeamsClient;
 use crate::auth::{self, DeviceCodeResponse, TokenResponse};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Public authenticate helper — called by the form and integration tests.
 pub async fn authenticate(
@@ -118,6 +118,7 @@ enum TeamsTab {
     Token,
 }
 
+#[ui_action(inherit)]
 #[context_menu(allow_default)]
 /// Teams account setup form — Microsoft OAuth (device code) or raw Bearer token.
 #[component]
@@ -155,6 +156,7 @@ fn TeamsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -
     }
 }
 
+#[ui_action(inherit)]
 #[context_menu(allow_default)]
 /// Raw Bearer-token sign-in path (kept for testing / dev scenarios).
 #[component]
@@ -203,6 +205,7 @@ fn TeamsTokenTab(on_complete: Callback<SignupCompleted>) -> Element {
     }
 }
 
+#[ui_action(inherit)]
 #[context_menu(allow_default)]
 /// Device-code sign-in against `login.microsoftonline.com`.
 #[component]
