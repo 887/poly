@@ -39,7 +39,7 @@ use dioxus::prelude::*;
 use poly_client::{SignupCompleted, SignupContext};
 use std::collections::HashMap;
 use std::sync::Arc;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 // ── Shared signup-commit callback builder ───────────────────────────────────
 
@@ -383,6 +383,7 @@ fn navigate_back_to_settings() {
 /// The `selected_slug` entry is highlighted like the active nav item in Settings.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AddAccountNav(selected_slug: Option<String>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -450,6 +451,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 
 #[context_menu(inherit)]
 /// Panel shown at `/signup/test` — quick-add buttons for all registered test accounts.
+#[ui_action(inherit)]
 #[component]
 fn TestAccountsPanel() -> Element {
     let client_manager = use_context::<Signal<ClientManager>>();
@@ -545,6 +547,7 @@ fn TestAccountsPanel() -> Element {
 /// in the right panel prompting the user to pick an account type.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub(crate) fn SignupPickerPage() -> Element {
     rsx! {
@@ -570,6 +573,7 @@ pub(crate) fn SignupPickerPage() -> Element {
 /// `on_complete` callback.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -663,6 +667,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
 /// existing one.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ReauthNav(backend_slug: String, display_name: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -703,6 +708,7 @@ fn ReauthNav(backend_slug: String, display_name: String) -> Element {
 /// "Remove this account" button.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub(crate) fn ReauthAccountPage(
     backend: String,

@@ -24,7 +24,7 @@ use crate::ui::account::common::chat_history::remember_message_list_scroll_posit
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{ChannelType, VoiceConnectionKind, VoiceParticipant};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 // ── JS snippets ───────────────────────────────────────────────────────────────
 
@@ -237,6 +237,7 @@ async fn join_voice_channel(
 /// `VoiceChatBar` when connected and the local screen share area when streaming.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn VoiceChannelView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -321,6 +322,7 @@ pub fn VoiceChannelView() -> Element {
 /// Header bar showing channel name, backend badge, and participant count.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceHeader(
     current_channel: Option<poly_client::Channel>,
@@ -355,6 +357,7 @@ fn VoiceHeader(
 // video element so no extra capture is needed.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceScreenShareArea() -> Element {
     rsx! {
@@ -408,6 +411,7 @@ fn VoiceScreenShareArea() -> Element {
 /// Grid of voice participant tiles.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceParticipantGrid(
     participants: Vec<VoiceParticipant>,
@@ -442,6 +446,7 @@ fn VoiceParticipantGrid(
 /// Single participant tile in the voice grid.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceTile(participant: VoiceParticipant) -> Element {
     let user = &participant.user;
@@ -529,6 +534,7 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
 /// Join button — rendered when user is NOT connected.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceJoinButton(
     channel_id: Option<String>,
@@ -572,6 +578,7 @@ fn VoiceJoinButton(
 // accessible floating bar so users don't need to look at the sidebar mid-call.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceChatBar(mut chat_data: Signal<ChatData>) -> Element {
     let voice_conn = chat_data.read().voice_connection.clone();

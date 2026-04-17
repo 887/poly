@@ -68,7 +68,7 @@ use crate::ui::account::common::chat_history::initial_message_query;
 use crate::ui::account::common::chat_history::request_restore_scroll_position_or_bottom;
 use dioxus::prelude::*;
 use poly_client::{BackendType, Channel, ChannelType};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Return the account id encoded by an account-scoped route, if any.
 pub fn route_account_id(route: &Route) -> Option<&str> {
@@ -952,6 +952,7 @@ fn restore_dm_chat(
 // DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmsLayout() -> Element {
     rsx! {
@@ -983,6 +984,7 @@ fn DmsLayout() -> Element {
 // DECISION(V-1): VoiceBar + AccountBar share voice-account-footer for correct alignment.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerLayout() -> Element {
     rsx! {
@@ -1006,6 +1008,7 @@ fn ServerLayout() -> Element {
 /// DM home — placeholder when no conversation is selected.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -1090,6 +1093,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 /// in a `use_effect` when `current_channel` doesn't already match `dm_id`.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -1149,6 +1153,7 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmPendingCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     rsx! {
@@ -1165,6 +1170,7 @@ fn DmPendingCall(backend: String, instance_id: String, account_id: String, dm_id
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmPendingVideoCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     rsx! {
@@ -1181,6 +1187,7 @@ fn DmPendingVideoCall(backend: String, instance_id: String, account_id: String, 
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmPendingAddCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     rsx! {
@@ -1197,6 +1204,7 @@ fn DmPendingAddCall(backend: String, instance_id: String, account_id: String, dm
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmPendingAddVideoCall(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     rsx! {
@@ -1213,6 +1221,7 @@ fn DmPendingAddVideoCall(backend: String, instance_id: String, account_id: Strin
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmPendingCallInner(
     backend: String,
@@ -1251,6 +1260,7 @@ fn DmPendingCallInner(
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DmMediaViewerRoute(
     backend: String,
@@ -1288,6 +1298,7 @@ fn DmMediaViewerRoute(
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerMediaViewerRoute(
     backend: String,
@@ -1372,6 +1383,7 @@ fn ServerMediaViewerRoute(
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn NewConversationRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -1381,6 +1393,7 @@ fn NewConversationRoute(backend: String, instance_id: String, account_id: String
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ConversationSearchRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -1395,6 +1408,7 @@ fn ConversationSearchRoute(backend: String, instance_id: String, account_id: Str
 /// here detects that case and loads the server data before rendering.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerHome(
     backend: String,
@@ -1483,6 +1497,7 @@ fn ServerHome(
 /// the exact channel from the URL rather than defaulting to the first one.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerChat(
     backend: String,
@@ -1584,6 +1599,7 @@ fn ServerChat(
 /// redirect to the account landing route instead of rendering an empty page.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     let caps = poly_client::capabilities_for_slug(&backend);
@@ -1603,6 +1619,7 @@ fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Ele
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -1614,6 +1631,7 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
 /// Shows a searchable list of all repos with open issues/PRs counts.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -1627,6 +1645,7 @@ fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String)
 /// to root rather than rendering an empty inbox.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn NotificationsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     let caps = poly_client::capabilities_for_slug(&backend);
@@ -1647,6 +1666,7 @@ fn NotificationsRoute(backend: String, instance_id: String, account_id: String) 
 /// Settings page — app-level, not account-scoped.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SettingsRoute() -> Element {
     rsx! {
@@ -1661,6 +1681,7 @@ fn SettingsRoute() -> Element {
 /// `AppState.settings_section`, so `SettingsPage` renders the correct content.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SettingsSectionRoute(section: String) -> Element {
     // Navigation was already handled by sync_route_to_app_state;
@@ -1674,6 +1695,7 @@ fn SettingsSectionRoute(section: String) -> Element {
 /// Global search page — browse the full node tree of all accounts.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SearchRoute() -> Element {
     rsx! {
@@ -1689,6 +1711,7 @@ fn SearchRoute() -> Element {
 /// initialises `enabled_accounts` to contain only that account.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AccountSearchRoute(backend: String, instance_id: String, account_id: String) -> Element {
     let _ = (backend, instance_id); // consumed by router; state already synced
@@ -1707,6 +1730,7 @@ fn AccountSearchRoute(backend: String, instance_id: String, account_id: String) 
 /// + AccountBar) and settings-content sibling, matching the normal layout.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -1723,6 +1747,7 @@ fn AccountSettingsRoute(backend: String, instance_id: String, account_id: String
 /// + AccountBar) and settings-content sibling, matching the normal layout.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerSettingsRoute(
     backend: String,
@@ -1744,6 +1769,7 @@ fn ServerSettingsRoute(
 /// Server settings for a specific section of one server.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerSettingsSectionRoute(
     backend: String,
@@ -1770,6 +1796,7 @@ fn ServerSettingsSectionRoute(
 /// render in Dioxus memory-history mode.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn Root() -> Element {
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
@@ -1794,6 +1821,7 @@ fn Root() -> Element {
 /// and navigates to `/signup/:client` on selection.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SignupPicker() -> Element {
     rsx! {
@@ -1808,6 +1836,7 @@ fn SignupPicker() -> Element {
 /// - all others → "coming soon" stub
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ClientSignup(client: String) -> Element {
     rsx! {
@@ -1823,6 +1852,7 @@ fn ClientSignup(client: String) -> Element {
 /// connection status as [`ConnectionStatus::Unauthenticated`].
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ReauthAccount(backend: String, instance_id: String, account_id: String) -> Element {
     rsx! {
@@ -1834,6 +1864,7 @@ fn ReauthAccount(backend: String, instance_id: String, account_id: String) -> El
 /// fallback this component also redirects to Root on mount.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn PageNotFound(segments: Vec<String>) -> Element {
     // `segments` is provided by the router for the unmatched path but we only
@@ -1855,6 +1886,7 @@ fn PageNotFound(segments: Vec<String>) -> Element {
 /// visible on the left). Delegates to [`super::create_server::CreateServerPage`].
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -> Element {
     // Backends that don't support creating a server (Matrix, Lemmy, HN…)
@@ -1881,6 +1913,7 @@ fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -
 /// main content area on the right.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn CreateChannelRoute(
     backend: String,
@@ -1899,6 +1932,7 @@ fn CreateChannelRoute(
 /// `AppState.nav.selected_channel` by `sync_route_to_app_state` so the sidebar stays highlighted.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ForumPostRoute(
     backend: String,
@@ -1916,6 +1950,7 @@ fn ForumPostRoute(
 /// Create forum post — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/create-post`.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn CreateForumPostRoute(
     backend: String,
@@ -1932,6 +1967,7 @@ fn CreateForumPostRoute(
 /// Forum search — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/search`.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ForumSearchRoute(
     backend: String,
@@ -1948,6 +1984,7 @@ fn ForumSearchRoute(
 /// Forum comments feed — `/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/comments`.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ForumCommentsRoute(
     backend: String,

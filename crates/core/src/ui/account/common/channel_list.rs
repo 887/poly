@@ -21,7 +21,7 @@ use crate::ui::main_layout::close_mobile_drawer;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, DmChannel, Server, User, VoiceParticipant};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 fn dm_last_incoming_timestamp(dm: &DmChannel) -> Option<DateTime<Utc>> {
     dm.last_message
@@ -299,6 +299,7 @@ pub(crate) fn open_direct_message_from_active_account(
 /// Single connected voice participant entry.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn ChannelList() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -347,6 +348,7 @@ pub fn ChannelList() -> Element {
 // established in phase-2.10 so we don't need new z-index layers.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerBanner(
     current_view: View,
@@ -536,6 +538,7 @@ fn ServerBanner(
 /// DMs and Friends view — action shortcuts plus unified list of DMs + groups.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DMFriendsView() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -701,6 +704,7 @@ fn DMFriendsView() -> Element {
 /// Server channel view — categories and channels.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -899,6 +903,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 /// Channels & Roles onboarding surface.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ChannelsRolesPanel(server: Server, mut visible_category_ids: Signal<Vec<String>>) -> Element {
     let all_ids: Vec<String> = server.categories.iter().map(|c| c.id.clone()).collect();
@@ -955,6 +960,7 @@ fn ChannelsRolesPanel(server: Server, mut visible_category_ids: Signal<Vec<Strin
 /// Single DM channel item.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn DMChannelItem(
     channel_id: String,
@@ -1054,6 +1060,7 @@ fn DMChannelItem(
 /// Single group channel item.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn GroupChannelItem(
     group_id: String,
@@ -1123,6 +1130,7 @@ fn GroupChannelItem(
 /// Friend contact in search results.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn FriendItem(display_name: String, user_id: String) -> Element {
     use crate::state::chat_data::user_color;
@@ -1165,6 +1173,7 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
 /// Clicking the category header toggles collapse/expand of its channel list.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn CategorySection(
     cat_name: String,
@@ -1204,6 +1213,7 @@ fn CategorySection(
 /// Single server channel row (with voice participants if applicable).
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ChannelItemRow(channel: Channel) -> Element {
     let mut app_state: Signal<AppState> = use_context();
@@ -1367,6 +1377,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
     use crate::state::chat_data::user_color;

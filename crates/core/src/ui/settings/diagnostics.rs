@@ -10,11 +10,12 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Diagnostics page — shows health and status information for all accounts.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn DiagnosticsPage() -> Element {
     let client_manager: Signal<ClientManager> = use_context();
@@ -69,6 +70,7 @@ pub fn DiagnosticsPage() -> Element {
 /// A single row in the diagnostics account table.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AccountDiagnosticsRow(account_id: String) -> Element {
     let client_manager: Signal<ClientManager> = use_context();

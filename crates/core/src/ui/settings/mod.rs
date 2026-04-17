@@ -22,7 +22,7 @@
 //! | `general` | `LayoutSettings`, `GeneralSettings` |
 //! | `voice_video` | `VoiceVideoSettings` |
 
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 mod accounts;
 mod ai;
 mod backup;
@@ -221,6 +221,7 @@ fn scroll_to_section_anchor(slug: &str) {
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
@@ -306,6 +307,7 @@ fn install_settings_scroll_spy(
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SettingsContentHeader(search_text: Signal<String>) -> Element {
     rsx! {
@@ -323,6 +325,7 @@ fn SettingsContentHeader(search_text: Signal<String>) -> Element {
 /// pushes the corresponding deep-link URL.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SettingsNavigation(
     current: SettingsSection,
@@ -425,6 +428,7 @@ fn SettingsNavigation(
 /// search query are visually dimmed but still visible.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SettingsAllSections(search_query: String) -> Element {
     let q = search_query.to_lowercase();
@@ -553,6 +557,7 @@ fn SettingsAllSections(search_query: String) -> Element {
 /// [`crate::ui::account::settings::AccountSettingsPage`] instead.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn SettingsPage() -> Element {
     let mut app_state: Signal<AppState> = use_context();

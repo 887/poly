@@ -16,7 +16,7 @@
 
 use crate::i18n::t;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Settings content for the Demo backend.
 ///
@@ -29,6 +29,7 @@ use poly_ui_macros::context_menu;
 /// registered by [`crate::i18n::init`] at startup.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn DemoPluginSettings() -> Element {
     let mut app_state: Signal<crate::state::AppState> = use_context();
@@ -106,6 +107,7 @@ pub fn demo_settings_render_fn() -> Element {
 #[cfg(feature = "stoat")]
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn StoatPluginSettings() -> Element {
     rsx! {
@@ -142,6 +144,7 @@ pub fn stoat_settings_render_fn() -> Element {
 #[cfg(feature = "server")]
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn PolyServerPluginSettings() -> Element {
     // Read the stored setting. If storage is not yet initialised, default to true.
@@ -237,6 +240,7 @@ pub fn poly_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "hackernews")]
+#[ui_action(inherit)]
 #[component]
 pub fn HackerNewsPluginSettings() -> Element {
     rsx! {
@@ -260,6 +264,7 @@ pub fn hackernews_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "lemmy")]
+#[ui_action(inherit)]
 #[component]
 pub fn LemmyPluginSettings() -> Element {
     rsx! {
@@ -289,6 +294,7 @@ pub fn lemmy_settings_render_fn() -> Element {
 #[cfg(feature = "discord")]
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn DiscordPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -322,6 +328,7 @@ pub fn discord_settings_render_fn() -> Element {
 #[cfg(feature = "teams")]
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn TeamsPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -353,6 +360,7 @@ pub fn teams_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "github")]
+#[ui_action(inherit)]
 #[component]
 pub fn GitHubPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -384,6 +392,7 @@ pub fn github_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "forgejo")]
+#[ui_action(inherit)]
 #[component]
 pub fn ForgejoPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -418,6 +427,7 @@ pub fn forgejo_settings_render_fn() -> Element {
 /// hosts it claims it may contact, plus the plugin's homepage. The manifest
 #[context_menu(None)]
 /// is purely for transparency: the host does NOT sandbox or block based on it.
+#[ui_action(inherit)]
 #[component]
 pub fn PluginManifestPanel(manifest: poly_client::PluginManifest) -> Element {
     let exec_list = manifest.exec_programs.join(", ");

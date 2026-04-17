@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
 
 use crate::LemmyClient;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Authenticate against a Lemmy instance.  Public so test panels can call it.
 pub async fn authenticate(
@@ -82,6 +82,7 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
 /// Full Lemmy login form.
 #[context_menu(allow_default)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn LemmySignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
     let t = ctx.t;

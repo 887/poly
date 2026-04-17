@@ -31,12 +31,13 @@ use crate::ui::account::common::chat_history::{
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 #[allow(non_snake_case)]
 fn NavBarSpacer() -> Element {
@@ -52,6 +53,7 @@ fn NavBarSpacer() -> Element {
 /// (or left when `mirror_menu_layout` is enabled). Uses `position: fixed`
 #[context_menu(inherit)]
 /// so it escapes overflow-hidden scroll containers.
+#[ui_action(inherit)]
 #[component]
 pub(crate) fn SidebarTooltip(
     /// First row: account name or server name
@@ -83,6 +85,7 @@ pub(crate) fn SidebarTooltip(
 /// source badge, spacer, Demo toggle, App Settings.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
@@ -349,6 +352,7 @@ pub fn FavoritesBar() -> Element {
 /// account's last visited page (or DMs home if no history exists).
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -743,6 +747,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 /// - Accept drops from Bar 2 (`DragSource::AccountServer`) for positional insertion
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn FavoriteServerIcon(
     server_id: String,

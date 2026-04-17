@@ -24,7 +24,7 @@ use poly_client::{
     BackendCapabilities, BackendType, ConnectionStatus, FriendModel, NotificationKind,
     NotificationSupport, VoiceSupport,
 };
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum NotificationMenuFilter {
@@ -104,6 +104,7 @@ pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
 /// because its BackendCapabilities declares no friends/servers/voice.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -225,6 +226,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn NotificationSidebarButton(
     label: String,
@@ -251,6 +253,7 @@ fn NotificationSidebarButton(
 /// Backend filter dropdown for notifications.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn NotificationFilter(
     backends: Vec<BackendType>,
@@ -287,6 +290,7 @@ fn NotificationFilter(
 /// Rendered list of notification items with per-kind action buttons.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -328,6 +332,7 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
 /// Inner content for a single notification item, with kind-specific action buttons.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn NotificationItemContent(
     notif_id: String,

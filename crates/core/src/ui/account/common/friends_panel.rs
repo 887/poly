@@ -9,7 +9,7 @@ use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FriendsManagementTab {
@@ -20,6 +20,7 @@ enum FriendsManagementTab {
 
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn FriendsPanel(account_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -124,6 +125,7 @@ pub fn FriendsPanel(account_id: String) -> Element {
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SidebarMenuButton(label: String, active: bool, onclick: EventHandler<MouseEvent>) -> Element {
     let class = if active {
@@ -143,6 +145,7 @@ fn SidebarMenuButton(label: String, active: bool, onclick: EventHandler<MouseEve
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn FriendsFilterBar(
     search_filter: Signal<String>,
@@ -175,6 +178,7 @@ fn FriendsFilterBar(
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -243,6 +247,7 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn BlockedUsersGrid(blocked_users: Vec<poly_client::BlockedUser>) -> Element {
     let no_blocked_label = t("content-social-no-blocked");
@@ -278,6 +283,7 @@ fn BlockedUsersGrid(blocked_users: Vec<poly_client::BlockedUser>) -> Element {
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn IgnoredUsersPlaceholder() -> Element {
     let ignored_title = t("friends-ignored-title");

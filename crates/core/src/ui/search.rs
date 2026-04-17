@@ -18,7 +18,7 @@ use crate::ui::split_shell::SplitMenuShell;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::BackendType;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -90,6 +90,7 @@ fn group_last_incoming_timestamp(
 /// Search input bar for the global search page.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn SearchInput(query: Signal<String>) -> Element {
     let current = query.read().clone();
@@ -131,6 +132,7 @@ fn SearchInput(query: Signal<String>) -> Element {
 /// the first character of `label` as a fallback initial.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
     let initial = label
@@ -158,6 +160,7 @@ fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
 /// Per-account checkbox in the sidebar — shows avatar/icon, name, and backend.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AccountFilter(
     account_id: String,
@@ -195,6 +198,7 @@ fn AccountFilter(
 /// A single node row in the search tree.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn NodeRow(
     icon: String,
@@ -224,6 +228,7 @@ fn NodeRow(
 /// A node row with an avatar icon — used for DM and group entries.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn AvatarNodeRow(
     avatar_url: Option<String>,
@@ -266,6 +271,7 @@ fn build_highlight_terms(query: &str) -> Vec<String> {
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn HighlightedSearchText(class_name: String, text: String, search_terms: Vec<String>) -> Element {
     let lowercase_text = text.to_lowercase();
@@ -295,6 +301,7 @@ fn HighlightedSearchText(class_name: String, text: String, search_terms: Vec<Str
 /// Server section with its channels and account attribution in the header.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn ServerNode(
     server_id: String,
@@ -413,6 +420,7 @@ fn ServerNode(
 /// Type filter checkboxes — Servers / DMs / Groups.
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Element {
     let types: &[(&str, &str)] = &[
@@ -454,6 +462,7 @@ fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Elem
 /// Global search page — sidebar with account filters + right tree of all nodes.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn SearchPage(
     /// When `Some(account_id)`, the search is initialised with only that account

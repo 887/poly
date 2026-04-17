@@ -21,10 +21,11 @@ use crate::ui::account::common::chat_history::remember_message_list_scroll_posit
 use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
-use poly_ui_macros::context_menu;
+use poly_ui_macros::{context_menu, ui_action};
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceBannerParticipants(
     participants: Vec<poly_client::VoiceParticipant>,
@@ -70,6 +71,7 @@ fn VoiceBannerParticipants(
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceBannerChannelLink(
     channel_id: String,
@@ -127,6 +129,7 @@ fn VoiceBannerChannelLink(
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 fn VoiceBannerControls(
     is_muted: bool,
@@ -201,6 +204,7 @@ fn VoiceBannerControls(
 /// at the top of the layout. Hidden when not in a voice channel.
 #[context_menu(None)]
 #[rustfmt::skip]
+#[ui_action(inherit)]
 #[component]
 pub fn VoiceBanner() -> Element {
     let app_state: Signal<AppState> = use_context();
