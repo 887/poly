@@ -3,7 +3,7 @@
 > **Created:** 2026-04-17
 > **Status:** 🚧 IN PROGRESS
 > **Scope:** every `onclick`, `onchange`, `onsubmit`, dropdown item, menu entry, settings section, and route target in `crates/core/src/ui/` and all `clients/*/src/`
-> **Goal:** every interactive element in the app either has a real implementation, calls `not_implemented!("Human-readable description")` (shows a friendly toast + is counted by lint-gate), or is explicitly opted out with `ui_noop!()`. Bare silent event handlers (`onclick: |_| {}`) and empty view bodies (`rsx! {}`) are **compile errors** — the same bar we set for `#[context_menu(...)]` and `#[connected(...)]`.
+> **Goal:** every interactive element in the app either has a real implementation, or is explicitly documented as decorative-only with `ui_noop!("specific reason this element is passive")`. There is no escape hatch for unimplemented features — if you can't implement it, don't add the button yet. Bare silent event handlers (`onclick: |_| {}`) and empty view bodies (`rsx! {}`) are **compile errors** — the same bar we set for `#[context_menu(...)]` and `#[connected(...)]`.
 
 ---
 
@@ -25,40 +25,40 @@ context menus and route connections.
 | Unlinked settings rows | Settings nav item → section renders empty | ~5–8 | Scrolls to blank area |
 | Broken submenu chains | Menu item fires, then nothing happens or navigates to stub | ~6–10 | Menu closes, nothing changes |
 
-The root cause in all cases: **no compile-time obligation** forces a developer to either
-ship an implementation or mark the element explicitly as work-in-progress.
+The root cause in all cases: **no compile-time obligation** forces a developer to implement
+the element or prove it genuinely shouldn't respond.
 
 ---
 
 ## Solution Architecture
 
-Three layered primitives that mirror the pattern used for context menus and connected routes:
+Two primitives only. No escape hatch.
 
-### Layer 1 — `not_implemented!("desc")` macro (the escape hatch)
+### Layer 1 — Real implementation (the only path forward for interactive elements)
 
-```rust
-// In any onclick, onchange, view body, etc.:
-onclick: move |_| not_implemented!("Notification push settings — phase-3.x"),
-```
+Every `onclick`, `onchange`, `onsubmit`, etc. must call real code.
+If the feature is not ready: **remove the button or the menu item entirely** until it is.
+A button that does nothing is worse than no button — it actively destroys user trust.
 
-- **Runtime**: dispatches a toast via `AppState` → user sees `"⚠ Not yet implemented: {desc}"`
-- **Compile-time**: the lint-gate scanner counts these. With `strict-actions` cargo feature,
-  each call emits `cargo::warning` (tracked), never silently ignored.
-- **NOT a panic**. Unlike `todo!()` / `unimplemented!()`, this is user-safe and survives in
-  production builds. It is the sanctioned "ship this now, track it" pattern.
-
-### Layer 2 — `ui_noop!()` macro (the intentional no-op)
+### Layer 2 — `ui_noop!("specific reason")` (the single opt-out, for decorative elements only)
 
 ```rust
-// For decorative elements that intentionally swallow events:
-onclick: move |_| ui_noop!(),     // drag handle — only responds to pointermove
-onchange: move |_| ui_noop!(),    // display-only select
+// Draggable resize handle — interaction is handled via pointermove/pointerup, not onclick
+onclick: move |_| ui_noop!("resize handle: drag is on pointermove, click is a no-op"),
+
+// Visual-only status dot that mirrors state, clicking it would have no meaning
+onclick: move |_| ui_noop!("presence dot: read-only status indicator, no action defined"),
 ```
 
-- **Runtime**: does nothing (zero cost, inlined).
-- **Compile-time**: scanner treats this as a deliberate opt-out — not flagged as a violation.
-- Forces the developer to *consciously decide* "this element intentionally does nothing"
-  rather than leaving an empty closure.
+- **Runtime**: literally `()` — zero cost, fully inlined.
+- **Requires a non-empty string literal** explaining *specifically* why this element is passive.
+  Generic cop-outs (`"decorative"`, `"not implemented"`, `"TODO"`, `"placeholder"`) are
+  scanner-rejected as violations in their own right — they're the same as leaving it empty.
+- **Compile-time**: scanner treats a valid `ui_noop!("specific reason")` as deliberate
+  opt-out and does not flag it.
+- **Code review signal**: any `ui_noop!` in a diff is immediately visible and requires
+  justification. It cannot be used to silence a WIP feature — that's what removing the
+  UI element is for.
 
 ### Layer 3 — Lint-gate scanner `ui_action_coverage.rs`
 
@@ -66,7 +66,7 @@ Extends `crates/lint-gate/build/` (same pattern as `context_menu_coverage.rs`).
 
 #### Rule A — No bare empty event handlers (ERROR)
 
-Catches all of:
+Flags all of:
 ```
 onclick: move |_| {}
 onclick: |_| {}
@@ -78,34 +78,41 @@ onsubmit: |_| {}
 **Violation message:**
 ```
 error[poly-lint] empty event handler in `SomeComponent` at src/ui/foo.rs:42
-  = help: use `not_implemented!("description")` for WIP features
-  = help: use `ui_noop!()` to explicitly opt out
-  = help: implement the handler
+  = help: implement the handler, or
+  = help: remove the element if the feature is not ready, or
+  = help: use `ui_noop!("specific reason this is passive")` if genuinely decorative
 ```
+
+No mention of `not_implemented!` anywhere. There is no such macro.
 
 #### Rule B — No empty view bodies (ERROR)
 
-Catches:
+Flags:
 - `#[component]` function whose entire RSX body is `rsx! {}` or `rsx! { div {} }` with
   no text nodes, no child components, and no event handlers
-- Route-target components (detected by cross-referencing `route_graph.toml` or
-  `#[connected(entry_point)]` annotation) that render only empty scaffolding
+- Route-target components (`#[connected(entry_point)]`) that render only empty scaffolding
 
 **Violation message:**
 ```
 error[poly-lint] empty view body in `NotificationsPanel` at src/ui/settings/foo.rs:12
-  = help: add content, or call `not_implemented!("description")` to render a placeholder
+  = help: implement the view, or remove the route entry until it is ready
 ```
 
-#### Rule C — `not_implemented!` call counter (WARNING / tracking)
+#### Rule C — `ui_noop!` reason quality check (ERROR)
 
-The scanner collects all `not_implemented!("...")` call sites, reports:
-```
-cargo::warning=poly-action-coverage: 47 not_implemented!() calls remain (target: 0)
-```
+Flags `ui_noop!` calls where the reason string is:
+- Empty: `ui_noop!("")`
+- A known cop-out word: `"decorative"`, `"todo"`, `"TODO"`, `"placeholder"`,
+  `"not implemented"`, `"noop"`, `"none"`, `"fixme"`, `"wip"`
+- Fewer than 15 characters (too short to be specific)
 
-This is the progress dashboard. It decreases as features ship. It is a `warning`, not an
-error, so it never blocks builds — it just keeps the debt visible.
+**Violation message:**
+```
+error[poly-lint] ui_noop! reason is too vague in `DragHandle` at src/ui/foo.rs:88
+  = help: explain specifically why this element is passive
+  = note: bad: ui_noop!("decorative")
+  = note: good: ui_noop!("resize splitter: drag is handled via pointermove on the parent")
+```
 
 ---
 
@@ -118,115 +125,99 @@ error, so it never blocks builds — it just keeps the debt visible.
   candidate violation. This is the ground truth for the baseline.
 
 - [ ] **0.2** Hand-verify the CSV. Classify each row into:
-  - `needs_not_implemented` — real WIP feature, needs the macro + toast
-  - `needs_noop` — intentional passive element
-  - `needs_implementation` — should have been implemented, low effort to add
-  - `false_positive` — scanner pattern matched but handler is correct (e.g., handler body
-    spans multiple lines, scanner missed it)
+  - `needs_implementation` — the feature should exist; implement it
+  - `needs_removal` — the UI element is ahead of the feature; remove it until ready
+  - `needs_noop` — genuinely decorative passive element; add `ui_noop!("specific reason")`
+  - `false_positive` — scanner pattern matched but handler is correct (body spans multiple
+    lines, scanner missed it)
 
 - [ ] **0.3** Store the false-positive list as `docs/plans/ui-action-false-positives.toml`
-  — the scanner will skip these (by file+line key, same pattern as lint-gate baseline).
+  — the scanner will skip these by file+line key (same pattern as lint-gate baseline).
 
-### Phase A — Primitives in `crates/ui-macros`
+### Phase A — `ui_noop!` primitive in `crates/ui-macros`
 
-- [ ] **A.1** Add `not_implemented!` proc-macro (or `macro_rules!`) to `crates/ui-macros/src/lib.rs`:
+- [ ] **A.1** Add `ui_noop!` macro to `crates/ui-macros/src/lib.rs`:
   ```rust
-  /// Show a "Not yet implemented" toast and log a warning.
-  /// Use this instead of leaving onclick/onchange closures empty.
+  /// Explicitly marks an event handler as intentionally passive.
+  ///
+  /// REQUIRES a specific, non-vague reason string explaining why this element
+  /// does not respond to user interaction. Generic reasons ("decorative", "TODO",
+  /// "placeholder") are rejected by the lint-gate scanner as violations.
+  ///
+  /// If you are tempted to write `ui_noop!("not implemented yet")` — don't.
+  /// Remove the UI element instead until the feature is ready.
   ///
   /// # Example
   /// ```
-  /// onclick: move |_| not_implemented!("Push notification settings"),
+  /// // Good — specific reason that would survive code review:
+  /// onclick: move |_| ui_noop!("status dot is read-only; no click action is defined"),
+  ///
+  /// // Bad — will be flagged as a violation same as an empty handler:
+  /// onclick: move |_| ui_noop!("TODO"),
   /// ```
   #[macro_export]
-  macro_rules! not_implemented {
-      ($desc:expr) => {{
-          tracing::warn!("not_implemented: {}", $desc);
-          // Dispatch toast via AppState if available
-          if let Ok(mut state) = dioxus::prelude::try_use_context::<
-              dioxus::prelude::Signal<$crate::state::AppState>
-          >() {
-              state.write().push_toast(
-                  $crate::state::Toast::warning(
-                      format!("⚠ Not yet implemented: {}", $desc)
-                  )
-              );
-          }
-      }};
-  }
-  ```
-  > Note: the toast dispatch uses `try_use_context` so the macro is safe outside
-  > component scope (e.g. in a `spawn` future). It degrades to `tracing::warn!` only.
-
-- [ ] **A.2** Add `ui_noop!()` macro — literally `()`. Exists solely as a scanner-recognizable
-  explicit opt-out:
-  ```rust
-  #[macro_export]
   macro_rules! ui_noop {
-      () => { () };
+      ($reason:literal) => { () };
   }
   ```
+  The `$reason` is consumed at compile time only. Zero runtime cost.
 
-- [ ] **A.3** Add trybuild compile-fail test fixture for a bare empty onclick that is expected
-  to fail once Rule A is enforced (gated behind the `strict-actions` feature so it only
-  fails when the lint-gate feature is enabled, not on every `cargo test`).
+- [ ] **A.2** Add trybuild compile-fail fixtures:
+  - Bare `onclick: move |_| {}` → compile error (Rule A)
+  - `ui_noop!("")` → scanner violation (Rule C)
+  - `ui_noop!("TODO")` → scanner violation (Rule C)
+  - `ui_noop!("specific reason the drag handle is passive")` → OK
 
 ### Phase B — Lint-gate scanner `ui_action_coverage.rs`
 
 - [ ] **B.1** Create `crates/lint-gate/build/ui_action_coverage.rs`:
-  - `scan_empty_handlers(src: &str) -> Vec<Violation>` — regex scan for bare empty event handler patterns
-  - `scan_empty_views(src: &str) -> Vec<Violation>` — detect `#[component]` + `rsx! {}` stubs
-  - `count_not_implemented(src: &str) -> usize` — count `not_implemented!(` occurrences
-  - `count_ui_noop(src: &str) -> usize` — count `ui_noop!(` occurrences
+  - `scan_empty_handlers(src: &str) -> Vec<Violation>` — Rule A
+  - `scan_empty_views(src: &str) -> Vec<Violation>` — Rule B
+  - `scan_vague_noops(src: &str) -> Vec<Violation>` — Rule C
+  - No `count_not_implemented` — that macro does not exist
 
-- [ ] **B.2** Wire into `crates/lint-gate/build.rs`:
+- [ ] **B.2** Wire into `crates/lint-gate/build.rs` (same pattern as context_menu_coverage):
   ```rust
   mod ui_action_coverage;
-  // In the main scan loop:
-  let action_violations = ui_action_coverage::scan_file(&src, &path);
-  // Apply baseline grandfathering (same pattern as context_menu_coverage)
-  // Emit cargo::error for non-baseline violations
-  // Emit cargo::warning for not_implemented count
+  // In main scan loop: collect violations, apply baseline, emit cargo::error
   ```
 
-- [ ] **B.3** Tests in `crates/lint-gate/src/lib.rs` (same location as scanner_tests):
-  - `empty_onclick_is_violation` — scanner catches `onclick: move |_| {}`
-  - `not_implemented_is_ok` — `onclick: move |_| not_implemented!("X")` is not flagged
-  - `ui_noop_is_ok` — `onclick: move |_| ui_noop!()` is not flagged
-  - `nonempty_onclick_is_ok` — multi-line real handler is not flagged
-  - `empty_rsx_body_is_violation` — bare `rsx! {}` component body is flagged
-  - `rsx_with_content_is_ok` — component with real content is not flagged
+- [ ] **B.3** Unit tests in `crates/lint-gate/src/lib.rs`:
+  - `empty_onclick_is_violation` — `onclick: move |_| {}` flagged
+  - `ui_noop_with_good_reason_is_ok` — `ui_noop!("resize handle: …")` not flagged
+  - `ui_noop_with_todo_reason_is_violation` — `ui_noop!("TODO")` flagged (Rule C)
+  - `ui_noop_with_short_reason_is_violation` — `ui_noop!("noop")` flagged (Rule C)
+  - `nonempty_onclick_is_ok` — multi-line real handler not flagged
+  - `empty_rsx_body_is_violation` — bare `rsx! {}` component body flagged
+  - `rsx_with_content_is_ok` — component with real content not flagged
 
 ### Phase C — Baseline grandfathering
 
-- [ ] **C.1** Run the scanner with `REGEN_BASELINE=1` (same mechanism as context menu plan)
-  to produce the initial `crates/lint-gate/build/ui_action_baseline.toml`. This grandfathers
-  all existing violations so `cargo check` passes immediately.
+- [ ] **C.1** Run scanner with `REGEN_BASELINE=1` to produce
+  `crates/lint-gate/build/ui_action_baseline.toml`. This grandfathers existing violations
+  so `cargo check` passes immediately on landing day.
 
-- [ ] **C.2** Verify `cargo check --workspace` passes with zero new errors after the scanner
-  lands. The only output should be `cargo::warning=poly-action-coverage: N not_implemented!() calls remain`.
+- [ ] **C.2** Verify `cargo check --workspace` passes with zero errors after the scanner lands.
 
-- [ ] **C.3** From this point on, **every new empty handler added to any file is a `cargo::error`**
-  — the baseline only covers lines that existed when the scanner was seeded.
+- [ ] **C.3** From this point: **any new empty handler or empty view body in any file is a
+  `cargo::error`**. The baseline only covers lines that existed when the scanner was seeded.
 
-### Phase D — Fix existing violations (work through the baseline)
+### Phase D — Eliminate the baseline (implement or remove each violation)
 
-Work through `ui_action_baseline.toml` top-to-bottom. For each violation, choose one:
+Work through `ui_action_baseline.toml`. For each entry, choose one path only:
 
-- **Implement it** — add real code; remove the baseline entry.
-- **`not_implemented!("desc")`** — replace the empty handler; remove the baseline entry.
-  The toast tells the user what's missing and why. The scanner warning tracks the debt.
-- **`ui_noop!()`** — if the element genuinely should do nothing (decorative, display-only),
-  add the opt-out; remove the baseline entry.
+1. **Implement it** — add real code. Remove the baseline entry.
+2. **Remove the UI element** — if the feature is not ready. Remove the baseline entry.
+3. **`ui_noop!("specific reason")`** — only for genuinely decorative passive elements.
+   Remove the baseline entry. This path should be rare; most UI elements should do something.
 
-Priority order for D:
+Priority order:
 
-- [ ] **D.1** Notification settings submenu (the original bug report) — all settings nav
-  items that navigate to empty panels.
-- [ ] **D.2** Server settings submenu items (Privacy Settings, Audit Log, etc.).
-- [ ] **D.3** Voice/Video call toolbar buttons (mute, cam, share screen).
-- [ ] **D.4** Account bar action buttons (set status, set avatar).
-- [ ] **D.5** All remaining baseline entries — sweep through the TOML and eliminate it.
+- [ ] **D.1** Notification settings submenu — all settings nav items that navigate to empty panels
+- [ ] **D.2** Server settings submenu items (Privacy Settings, Audit Log, etc.)
+- [ ] **D.3** Voice/Video call toolbar buttons (mute, cam, screen share)
+- [ ] **D.4** Account bar action buttons (set status, set avatar)
+- [ ] **D.5** All remaining baseline entries — sweep and close
 
 ---
 
@@ -239,41 +230,41 @@ Priority order for D:
 | `plan-component-lints` | ✅ DONE — 150-line component rule | N/A |
 
 The three done plans ensure correct *structure*. This plan ensures correct *behavior*:
-every element that looks interactive actually does something, or loudly says why it doesn't.
+every element that looks interactive actually does something, or is explicitly proven
+to be passive with a specific justification.
 
 ---
 
-## Design Decisions & Trade-offs
+## Design Decisions
 
-**Why `not_implemented!` instead of `todo!()` / `unimplemented!()`?**
-`todo!()` panics at runtime — unacceptable in a shipped UI. `not_implemented!` degrades
-gracefully to a toast and a log line. It communicates clearly to testers: "this is WIP,
-not a crash."
+**Why no `not_implemented!` macro?**
+Any "soft" escape hatch — a macro that compiles and shows a toast — will be used as a
+crutch. AI and humans alike will reach for it to silence the compiler rather than doing
+the work. The answer is: don't add the UI element until the feature exists. A missing
+button is invisible; a button that does nothing is a broken product. The type system
+should enforce this, not merely track it.
 
-**Why `ui_noop!()` over just leaving the handler empty?**
-An empty handler and a `ui_noop!()` handler are semantically different: one is a bug,
-one is a decision. The macro makes the decision explicit and scanner-visible.
+**Why require a reason string in `ui_noop!`?**
+Without a mandatory reason, `ui_noop!()` becomes the new empty closure — a one-keystroke
+escape hatch. With a required specific string, every `ui_noop!` in a diff demands a
+human-readable justification that survives code review. The length and cop-out-word checks
+make it painful to abuse: writing `"resize splitter: interaction is via pointermove on
+the document, onclick is structurally unreachable"` takes effort; that effort is the point.
 
 **Why scanner over a type-wrapper like `Action<T>`?**
 A `UiAction` wrapper type would require touching every `onclick` in the codebase (350+
-occurrences) at once. The scanner approach lets us grandfather existing code and tighten
-the net incrementally — the same strategy that made the context-menu plan shippable in
-one session.
-
-**Why `cargo::warning` for `not_implemented!` count, not `cargo::error`?**
-The count is a *progress metric*, not a blocker. Shipping the feature means the count
-hits zero over time. Blocking builds on any `not_implemented!` call would prevent
-iterative development. The strict-actions feature flag provides an opt-in zero-tolerance
-mode for release branches.
+occurrences) in one pass. The scanner approach grandfathers existing code and tightens
+the net incrementally — the same strategy that made the context-menu plan shippable.
 
 ---
 
 ## Acceptance Criteria
 
 - [ ] `cargo check --workspace` passes with zero errors
-- [ ] Any new `onclick: move |_| {}` added to any file causes `cargo check` to fail with a clear error
+- [ ] Any new `onclick: move |_| {}` in any file causes `cargo check` to fail with a clear error
 - [ ] Any new `#[component]` with `rsx! {}` body causes `cargo check` to fail
-- [ ] The `not_implemented!` count `cargo::warning` is visible on every build
-- [ ] Clicking any previously-silent button now shows a "Not yet implemented: X" toast
+- [ ] `ui_noop!("TODO")` and `ui_noop!("")` cause `cargo check` to fail
+- [ ] `ui_noop!("resize handle: drag is on pointermove, click is structurally unreachable")` passes
+- [ ] Every previously-silent button either has real code or the UI element has been removed
 - [ ] `cargo test -p poly-lint-gate` passes all scanner unit tests
 - [ ] `cargo test -p poly-ui-macros` passes all trybuild compile-fail fixtures
