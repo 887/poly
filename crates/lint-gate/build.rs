@@ -55,12 +55,19 @@ fn main() {
 
     if regen {
         for v in &violations {
-            baseline.insert(v.clone());
+            // §5.3.2: route-graph violations are never grandfathered — the whole
+            // point of the graph scan is to catch new orphans immediately. Regen
+            // only silences allow_ban / context_menu_coverage / nav_push_ban.
+            if v.rule == "route_graph" {
+                println!("cargo::error={}", v.to_error_line());
+            } else {
+                baseline.insert(v.clone());
+            }
         }
         baseline.save(&baseline_path);
         println!(
-            "cargo::warning=lint-gate: wrote {} entries to baseline.json",
-            violations.len()
+            "cargo::warning=lint-gate: wrote {} entries to baseline.json (route_graph violations always fail)",
+            violations.iter().filter(|v| v.rule != "route_graph").count()
         );
         return;
     }

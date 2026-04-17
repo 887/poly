@@ -10,8 +10,6 @@
 //! Exposes `router` and `DiscordState` so integration tests can start the
 //! server in-process without a subprocess.
 
-#![allow(dead_code)]
-
 pub mod routes;
 pub mod state;
 

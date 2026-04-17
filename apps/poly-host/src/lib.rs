@@ -90,7 +90,7 @@ impl HostState {
 /// deciding whether the router should be composed with additional routes
 /// (the Wry shell does this to keep its MCP eval bridge on the same port
 /// as before).
-#[must_use]
+#[must_use = "the Router must be merged into the Dioxus router or served directly"]
 pub fn router(state: HostState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)

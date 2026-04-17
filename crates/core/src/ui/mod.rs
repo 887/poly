@@ -66,7 +66,7 @@ pub(crate) mod context_menu;
 pub(crate) mod demo;
 mod electron_titlebar;
 mod favorites_sidebar;
-mod main_layout;
+pub(crate) mod main_layout;
 pub mod routes;
 pub(crate) mod search;
 mod settings;
@@ -1944,6 +1944,7 @@ pub fn App() -> Element {
         register_native_signup_entries(&mut client_manager);
         register_native_test_accounts(&mut client_manager);
         register_native_plugin_settings(&mut client_manager);
+        crate::ui::context_menu::menus::register_all_menus();
     });
 
     let chat_data: Signal<ChatData> = use_signal(ChatData::default);

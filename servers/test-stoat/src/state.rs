@@ -128,6 +128,12 @@ pub struct UnreadState {
     pub mentions: Vec<String>,
 }
 
+impl Default for StoatState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StoatState {
     pub fn new() -> Self {
         Self {

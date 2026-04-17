@@ -107,7 +107,7 @@ fn close_mobile_right_wing() {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn runtime_mobile_ui_active() -> bool {
+pub(crate) fn runtime_mobile_ui_active() -> bool {
     let Some(window) = web_sys::window() else {
         return false;
     };
@@ -148,7 +148,7 @@ fn runtime_mobile_ui_active() -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-const fn runtime_mobile_ui_active() -> bool {
+pub(crate) const fn runtime_mobile_ui_active() -> bool {
     false
 }
 
@@ -310,6 +310,8 @@ pub fn MainLayout() -> Element {
             ServerContextMenu {}
             // Floating channel right-click / long-press context menu
             ChannelContextMenu {}
+            // Stacked context menus (plan §4.1.2) — Phase A host for new menus
+            crate::ui::context_menu::host::ContextMenuStack {}
             // Voice connection banner — spans full width when connected
             VoiceBanner {}
             // Main body: nav + sidebar + route content

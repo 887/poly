@@ -85,6 +85,12 @@ pub struct Message {
     pub timestamp: String,
 }
 
+impl Default for DiscordState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DiscordState {
     pub fn new() -> Self {
         Self {

@@ -59,6 +59,12 @@ pub struct Room {
     pub state_events: Vec<serde_json::Value>,
 }
 
+impl Default for MatrixState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MatrixState {
     pub fn new() -> Self {
         Self {

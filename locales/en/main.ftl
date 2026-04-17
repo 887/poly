@@ -890,5 +890,10 @@ presence-offline = Offline
 dm-contact-panel-title = Contact Info
 dm-contact-not-found = Contact not found
 
+# Context menus (shared items)
+menu-copy-text = Copy text
+menu-copy-id = Copy ID
+menu-view-profile = View profile
+
 # Demo backend
 demo-regenerate-data = Regenerate Demo Data

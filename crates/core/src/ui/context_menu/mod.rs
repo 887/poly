@@ -9,7 +9,9 @@
 //! and host component (§4.2) land in sibling files as they come online.
 //! Long-press extraction (§4.4) lives in `long_press.rs`.
 
+pub mod host;
 pub mod long_press;
+pub mod menus;
 
 use dioxus::prelude::{Element, EventHandler};
 use dioxus::events::MouseEvent;

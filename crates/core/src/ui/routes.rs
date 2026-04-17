@@ -1981,10 +1981,8 @@ fn record_route_visit(route: &Route) {
     static VISITED: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
     let set = VISITED.get_or_init(|| Mutex::new(HashSet::new()));
     let name = route_variant_name(route);
-    if let Ok(mut guard) = set.lock() {
-        if guard.insert(name) {
-            tracing::debug!(target: "poly::route_coverage", "visited route variant: {name}");
-        }
+    if let Ok(mut guard) = set.lock() && guard.insert(name) {
+        tracing::debug!(target: "poly::route_coverage", "visited route variant: {name}");
     }
 }
 
@@ -1993,7 +1991,7 @@ fn record_route_visit(route: &Route) {
 #[cfg(debug_assertions)]
 fn route_variant_name(route: &Route) -> &'static str {
     match route {
-        Route::Root {} => "Root",
+        Route::Root => "Root",
         Route::DmsHome { .. } => "DmsHome",
         Route::ConversationSearchRoute { .. } => "ConversationSearchRoute",
         Route::NewConversationRoute { .. } => "NewConversationRoute",
@@ -2015,15 +2013,15 @@ fn route_variant_name(route: &Route) -> &'static str {
         Route::NotificationsRoute { .. } => "NotificationsRoute",
         Route::SavedItemsRoute { .. } => "SavedItemsRoute",
         Route::ServerOverviewRoute { .. } => "ServerOverviewRoute",
-        Route::SettingsRoute {} => "SettingsRoute",
+        Route::SettingsRoute => "SettingsRoute",
         Route::SettingsSectionRoute { .. } => "SettingsSectionRoute",
-        Route::SearchRoute {} => "SearchRoute",
+        Route::SearchRoute => "SearchRoute",
         Route::AccountSearchRoute { .. } => "AccountSearchRoute",
         Route::AccountSettingsRoute { .. } => "AccountSettingsRoute",
         Route::CreateServerRoute { .. } => "CreateServerRoute",
         Route::ServerSettingsRoute { .. } => "ServerSettingsRoute",
         Route::ServerSettingsSectionRoute { .. } => "ServerSettingsSectionRoute",
-        Route::SignupPicker {} => "SignupPicker",
+        Route::SignupPicker => "SignupPicker",
         Route::ClientSignup { .. } => "ClientSignup",
         Route::ReauthAccount { .. } => "ReauthAccount",
         Route::PageNotFound { .. } => "PageNotFound",

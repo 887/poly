@@ -69,11 +69,11 @@ impl AuthState {
         else {
             return;
         };
-        if let Some(parent) = path.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
-                tracing::warn!("could not create auth dir {}: {e}", parent.display());
-                return;
-            }
+        if let Some(parent) = path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            tracing::warn!("could not create auth dir {}: {e}", parent.display());
+            return;
         }
         let snapshot: HashMap<String, String> = self
             .tokens

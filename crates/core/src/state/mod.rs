@@ -310,6 +310,53 @@ pub struct ContextMenuState {
     pub backend_slug: String,
 }
 
+/// Where a stacked context menu is anchored on screen.
+///
+/// Part of plan-context-menu-quality-control.md §4.1 — the runtime stack
+/// uses this to distinguish cursor-anchored desktop menus from the
+/// mobile center-overlay variant and anchored-below submenus.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MenuAnchor {
+    /// `position: fixed; left: {x}px; top: {y}px` — desktop cursor anchor.
+    Cursor { x: f64, y: f64 },
+    /// Mobile: centered overlay with scrim. The runtime coerces Cursor to
+    /// Center when `runtime_mobile_ui_active()` returns true (§4.3.1).
+    Center,
+    /// Submenu anchored below a parent menu item — used by
+    /// `has_arrow: true` items on desktop (§4.2.2).
+    AnchoredBelow { x: f64, y: f64, width: f64 },
+}
+
+/// One entry on the active context-menu stack.
+///
+/// The stack-shaped replacement for the older `context_menu` /
+/// `channel_context_menu` scalar fields (plan §2.3.2 / §4.1).
+/// During Phase A both shapes coexist: existing `ServerContextMenu` /
+/// `ChannelContextMenu` / `MsgContextMenuOverlay` still read the scalar
+/// fields; new menus (`ForumPostContextMenu`, `UserRowContextMenu`) push
+/// onto this stack. The scalar fields will be removed once every menu
+/// migrates.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActiveContextMenu {
+    /// Monotonic id. Used as the stack key so submenu pushes / pops stay
+    /// stable under re-renders.
+    pub id: u64,
+    /// Where to anchor this menu.
+    pub anchor: MenuAnchor,
+    /// Opaque payload — usually a JSON snapshot of the trigger's props
+    /// the menu will decode on render. Kept as `serde_json::Value` (not a
+    /// typed `ContextMenuNode`) so the stack can hold heterogeneous
+    /// menus without a central `enum ContextMenuKind`.
+    pub ctx_json: serde_json::Value,
+    /// Stable menu-type tag — the `type_name::<Self>()` of the
+    /// `ContextMenuFor` impl. The host uses this to dispatch to the
+    /// right render function.
+    pub menu_type: &'static str,
+    /// Should an outside click pop this entry? True for top-level menus,
+    /// false for keyboard-driven submenus.
+    pub dismiss_on_outside: bool,
+}
+
 /// State for the active right-click channel context menu.
 #[derive(Debug, Clone)]
 pub struct ChannelContextMenuState {
@@ -364,6 +411,13 @@ pub struct AppState {
     pub context_menu: Option<ContextMenuState>,
     /// Active right-click channel context menu, if any.
     pub channel_context_menu: Option<ChannelContextMenuState>,
+    /// Stack of context menus for the new Phase A runtime (plan §4.1).
+    ///
+    /// Empty = no overlay. Pushing opens a submenu; popping closes it.
+    /// Consumed by `ui::context_menu::host::ContextMenuStack`. The older
+    /// `context_menu` / `channel_context_menu` scalar fields above will
+    /// be retired once every menu-opening site migrates.
+    pub context_menu_stack: Vec<ActiveContextMenu>,
 }
 
 impl Default for AppState {
@@ -381,6 +435,7 @@ impl Default for AppState {
             search_type_seed: None,
             context_menu: None,
             channel_context_menu: None,
+            context_menu_stack: Vec::new(),
         }
     }
 }

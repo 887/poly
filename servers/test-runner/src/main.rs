@@ -60,10 +60,10 @@ async fn wait_for_health(port: u16, timeout: Duration) -> bool {
     let url = format!("http://127.0.0.1:{}/health", port);
     let deadline = tokio::time::Instant::now() + timeout;
     while tokio::time::Instant::now() < deadline {
-        if let Ok(resp) = client.get(&url).send().await {
-            if resp.status().is_success() {
-                return true;
-            }
+        if let Ok(resp) = client.get(&url).send().await
+            && resp.status().is_success()
+        {
+            return true;
         }
         sleep(Duration::from_millis(500)).await;
     }

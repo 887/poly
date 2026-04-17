@@ -298,6 +298,43 @@ fn ServerRow(record: ServerRecord) -> Element {
 }
 ```
 
+## CRITICAL: `#[context_menu(...)]` on ALL `#[component]` Functions
+
+⚠️ **EVERY `#[component]` function MUST have `#[context_menu(...)]` directly above it.**
+The `lint-gate` build script (`crates/lint-gate/build/context_menu_coverage.rs`) runs on
+every `cargo check` and emits `cargo::error=` for any `#[component]` site without one.
+`baseline.json` is empty — there is no grandfathering — so a missing decorator fails the
+build instantly on a fresh rebuild.
+
+### Pick one of four variants
+
+```rust
+#[context_menu(None)]            // Opt out entirely. prevent_default() only; no menu.
+#[context_menu(allow_default)]   // Let the native browser menu fire (images, inputs).
+#[context_menu(inherit)]         // Defer to the parent component's menu surface.
+#[context_menu(ForumPostMenu)]   // Attach a typed menu (must `impl ContextMenuFor`).
+```
+
+Rule of thumb when in doubt: default to `None`. It's the safest — no native menu, no
+inherited menu, nothing. Upgrade to `inherit` once you know the component sits inside
+a menu-owning parent, or to `(Foo)` once you've authored a `ContextMenuFor<Props>` impl
+in `crates/core/src/ui/context_menu/menus.rs`.
+
+Authoring a real menu: see `plan-context-menu-quality-control.md` §2.3 and the two Phase A
+examples `ForumPostContextMenu` / `UserRowContextMenu` in `ui/context_menu/menus.rs`.
+
+### Regenerating `baseline.json` after a cleanup wave
+
+If you land a batch of decorators that *should* be grandfathered (rare — baseline is
+usually kept empty), refresh the baseline in one shot:
+
+```sh
+cargo check --features regen-baseline -p poly-lint-gate
+```
+
+This rewrites `crates/lint-gate/baseline.json` with the current violation set and does
+not fail the build for that run.
+
 ## CRITICAL: `#[rustfmt::skip]` on ALL `#[component]` Functions
 
 ⚠️ **EVERY `#[component]` function MUST have `#[rustfmt::skip]` on the line immediately before it.**

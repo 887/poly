@@ -1,0 +1,13 @@
+error: `#[connected(...)]` requires at least one edge: `linked`, `entry_point`, or `programmatic<Tag>`
+ --> tests/compile-fail/empty_connected.rs:3:1
+  |
+3 | #[connected()]
+  | ^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `connected` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/compile-fail/empty_connected.rs:4:18
+  |
+4 | fn SomeRoute() {}
+  |                  ^ consider adding a `main` function to `$DIR/tests/compile-fail/empty_connected.rs`

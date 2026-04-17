@@ -11,7 +11,6 @@ use axum::Json;
 use serde::Deserialize;
 
 use crate::state::{StoatEvent, StoatState};
-use poly_test_common::TokenAuth;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -751,12 +750,11 @@ async fn bonfire_handler(mut socket: WebSocket, state: std::sync::Arc<StoatState
     let token = loop {
         match socket.recv().await {
             Some(Ok(WsMessage::Text(text))) => {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if json.get("type").and_then(|t| t.as_str()) == Some("Authenticate") {
-                        if let Some(t) = json.get("token").and_then(|t| t.as_str()) {
-                            break t.to_string();
-                        }
-                    }
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text)
+                    && json.get("type").and_then(|t| t.as_str()) == Some("Authenticate")
+                    && let Some(t) = json.get("token").and_then(|t| t.as_str())
+                {
+                    break t.to_string();
                 }
             }
             Some(Ok(WsMessage::Close(_))) | None => return,

@@ -46,21 +46,19 @@ impl Parse for Arg {
 
         // Try to parse as a bare ident first for the three keyword forms.
         let fork = input.fork();
-        if let Ok(ident) = fork.parse::<Ident>() {
-            if fork.is_empty() {
-                let s = ident.to_string();
-                if s == "None" {
-                    input.parse::<Ident>()?;
-                    return Ok(Arg::None);
-                }
-                if s == "allow_default" {
-                    input.parse::<Ident>()?;
-                    return Ok(Arg::AllowDefault);
-                }
-                if s == "inherit" {
-                    input.parse::<Ident>()?;
-                    return Ok(Arg::Inherit);
-                }
+        if let Ok(ident) = fork.parse::<Ident>() && fork.is_empty() {
+            let s = ident.to_string();
+            if s == "None" {
+                input.parse::<Ident>()?;
+                return Ok(Arg::None);
+            }
+            if s == "allow_default" {
+                input.parse::<Ident>()?;
+                return Ok(Arg::AllowDefault);
+            }
+            if s == "inherit" {
+                input.parse::<Ident>()?;
+                return Ok(Arg::Inherit);
             }
         }
 

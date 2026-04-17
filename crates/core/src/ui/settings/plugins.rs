@@ -313,29 +313,28 @@ fn toggle_native_backend(
             });
         }
         #[cfg(feature = "hackernews")]
-        if toggled_re == "hackernews" {
-            if let Some(storage) = crate::STORAGE.get() {
-                spawn(async move {
-                    crate::ui::restore_hackernews_accounts(storage, client_manager, chat_data)
-                        .await;
-                });
-            }
+        if toggled_re == "hackernews"
+            && let Some(storage) = crate::STORAGE.get()
+        {
+            spawn(async move {
+                crate::ui::restore_hackernews_accounts(storage, client_manager, chat_data).await;
+            });
         }
         #[cfg(feature = "github")]
-        if toggled_re == "github" {
-            if let Some(storage) = crate::STORAGE.get() {
-                spawn(async move {
-                    crate::ui::restore_github_accounts(storage, client_manager, chat_data).await;
-                });
-            }
+        if toggled_re == "github"
+            && let Some(storage) = crate::STORAGE.get()
+        {
+            spawn(async move {
+                crate::ui::restore_github_accounts(storage, client_manager, chat_data).await;
+            });
         }
         #[cfg(feature = "forgejo")]
-        if toggled_re == "forgejo" {
-            if let Some(storage) = crate::STORAGE.get() {
-                spawn(async move {
-                    crate::ui::restore_forgejo_accounts(storage, client_manager, chat_data).await;
-                });
-            }
+        if toggled_re == "forgejo"
+            && let Some(storage) = crate::STORAGE.get()
+        {
+            spawn(async move {
+                crate::ui::restore_forgejo_accounts(storage, client_manager, chat_data).await;
+            });
         }
     }
 }

@@ -211,8 +211,9 @@ async fn show_tool_help(client: &McpClient, tool_name: &str) -> anyhow::Result<(
             println!("Description: {desc}");
             println!();
 
-            if let Some(schema) = t.get("inputSchema") {
-                if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
+            if let Some(schema) = t.get("inputSchema")
+                && let Some(props) = schema.get("properties").and_then(|p| p.as_object())
+            {
                     let required: Vec<&str> = schema
                         .get("required")
                         .and_then(|r| r.as_array())
@@ -240,7 +241,6 @@ async fn show_tool_help(client: &McpClient, tool_name: &str) -> anyhow::Result<(
                         };
                         println!("  --{key:<16} {ptype:<10} {pdesc}{req}");
                     }
-                }
             }
         }
         None => {

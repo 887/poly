@@ -43,7 +43,11 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
                 rule: "context_menu_coverage".into(),
                 path: rel.clone(),
                 line: (i as u32) + 1,
-                detail: format!("#[component] fn {fn_name} missing #[context_menu(...)]"),
+                detail: format!(
+                    "#[component] fn {fn_name} missing #[context_menu(...)] — add one of \
+                     `(YourMenu)` (attach a menu), `(None)` (opt out), `(allow_default)` \
+                     (native menu, e.g. images/inputs), or `(inherit)` (defer to parent)"
+                ),
             });
         }
     }

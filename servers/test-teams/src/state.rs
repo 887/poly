@@ -99,6 +99,12 @@ pub struct Reaction {
     pub created_date_time: String,
 }
 
+impl Default for TeamsState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TeamsState {
     pub fn new() -> Self {
         Self {

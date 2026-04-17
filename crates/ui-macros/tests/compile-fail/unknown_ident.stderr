@@ -1,0 +1,11 @@
+error: unknown edge kind `banana` — expected `linked`, `entry_point`, or `programmatic<Tag>`
+ --> tests/compile-fail/unknown_ident.rs:3:13
+  |
+3 | #[connected(banana)]
+  |             ^^^^^^
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/compile-fail/unknown_ident.rs:4:18
+  |
+4 | fn SomeRoute() {}
+  |                  ^ consider adding a `main` function to `$DIR/tests/compile-fail/unknown_ident.rs`

@@ -1,0 +1,11 @@
+error: `programmatic` must be followed by `<Tag>` (e.g. `programmatic<SignupCompletionLanding>`)
+ --> tests/compile-fail/programmatic_no_angle.rs:3:13
+  |
+3 | #[connected(programmatic)]
+  |             ^^^^^^^^^^^^
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/compile-fail/programmatic_no_angle.rs:4:18
+  |
+4 | fn SomeRoute() {}
+  |                  ^ consider adding a `main` function to `$DIR/tests/compile-fail/programmatic_no_angle.rs`

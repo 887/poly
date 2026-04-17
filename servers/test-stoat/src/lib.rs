@@ -15,7 +15,7 @@ pub mod routes;
 pub mod state;
 
 use axum::Router;
-use axum::routing::{delete, get, post};
+use axum::routing::{get, post};
 use poly_test_common::health_handler;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;

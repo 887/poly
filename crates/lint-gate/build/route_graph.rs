@@ -296,3 +296,6 @@ fn relative(p: &Path, root: &Path) -> String {
         .to_string_lossy()
         .into_owned()
 }
+
+// Tests for parse_variants / scan_callsites live in `crates/lint-gate/src/lib.rs`
+// (scanner_tests module) — build-script code cannot carry #[test] items directly.

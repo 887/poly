@@ -186,10 +186,10 @@ pub async fn logout(
     State(state): State<Arc<LemmyState>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    if let Some(auth) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
-        if let Some(token) = auth.strip_prefix("Bearer ") {
-            state.auth.revoke(token);
-        }
+    if let Some(auth) = headers.get("authorization").and_then(|v| v.to_str().ok())
+        && let Some(token) = auth.strip_prefix("Bearer ")
+    {
+        state.auth.revoke(token);
     }
     Json(json!({}))
 }

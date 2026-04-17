@@ -722,3 +722,8 @@ search-type-dms = DMs
 search-type-groups = Groupes
 search-showing-of = { $count } sur { $total } affichés
 search-load-more = Défilez pour en voir plus…
+
+# Context menus (shared items)
+menu-copy-text = Copy text
+menu-copy-id = Copy ID
+menu-view-profile = View profile

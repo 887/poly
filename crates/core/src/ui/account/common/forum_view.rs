@@ -5,6 +5,7 @@
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
+use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
 use crate::ui::favorites_sidebar::restore_server_channel;
 use crate::ui::routes::Route;
 use chrono::DateTime;
@@ -650,11 +651,11 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
 // Post card
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TODO(context-menu): audit — should be (ForumPostContextMenu) once that menu exists; (inherit) for now
-#[context_menu(inherit)]
+#[context_menu(crate::ui::context_menu::menus::ForumPostContextMenu)]
 #[rustfmt::skip]
 #[component]
 fn ForumPostCard(post: Message, on_click: EventHandler<()>) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let score = post_score(&post);
     let comments_count = reaction_count(&post, "💬");
     let author_name = post.author.display_name.clone();
@@ -665,10 +666,27 @@ fn ForumPostCard(post: Message, on_click: EventHandler<()>) -> Element {
     let text = post_text(&post.content).to_string();
     let sc = score_class(score);
 
+    let ctx_post_id = post.id.clone();
+    let ctx_author_id = post.author.id.clone();
+    let ctx_author_name = post.author.display_name.clone();
+    let ctx_text = text.clone();
+
     rsx! {
         div {
             class: "forum-post-card",
             onclick: move |_| on_click.call(()),
+            oncontextmenu: move |evt| {
+                evt.prevent_default();
+                evt.stop_propagation();
+                let ctx = ForumPostCtx {
+                    post_id: ctx_post_id.clone(),
+                    author_id: ctx_author_id.clone(),
+                    author_name: ctx_author_name.clone(),
+                    text: ctx_text.clone(),
+                };
+                let entry = forum_post_entry(ctx, &evt);
+                app_state.write().context_menu_stack.push(entry);
+            },
             div { class: "forum-post-votes",
                 button { class: "forum-vote-btn up", title: "Upvote",
                     onclick: |e: MouseEvent| e.stop_propagation(),
@@ -775,11 +793,11 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
 // Recursive comment component (named ForumComment to avoid struct/component clash)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TODO(context-menu): audit — should be (ForumPostContextMenu) once that menu exists; (inherit) for now
-#[context_menu(inherit)]
+#[context_menu(crate::ui::context_menu::menus::ForumPostContextMenu)]
 #[rustfmt::skip]
 #[component]
 fn ForumComment(node: ForumCommentNode) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let msg = &node.msg;
     let depth = node.depth;
     let children = node.children.clone();
@@ -796,6 +814,11 @@ fn ForumComment(node: ForumCommentNode) -> Element {
     let time_str = forum_ts(msg.timestamp);
     let text = post_text(&msg.content).to_string();
     let score_label = format!("{score:+}");
+
+    let ctx_post_id = msg.id.clone();
+    let ctx_author_id = msg.author.id.clone();
+    let ctx_author_name = msg.author.display_name.clone();
+    let ctx_text = text.clone();
 
     let indent_px = (depth.min(4) * 20) as i32;
     let border_color = match depth % 4 {
@@ -822,6 +845,18 @@ fn ForumComment(node: ForumCommentNode) -> Element {
         div {
             class: "forum-comment",
             style: "margin-left: {indent_px}px; border-left: 2px solid {border_color};",
+            oncontextmenu: move |evt| {
+                evt.prevent_default();
+                evt.stop_propagation();
+                let ctx = ForumPostCtx {
+                    post_id: ctx_post_id.clone(),
+                    author_id: ctx_author_id.clone(),
+                    author_name: ctx_author_name.clone(),
+                    text: ctx_text.clone(),
+                };
+                let entry = forum_post_entry(ctx, &evt);
+                app_state.write().context_menu_stack.push(entry);
+            },
             div { class: "forum-comment-header",
                 button {
                     class: "forum-comment-collapse",

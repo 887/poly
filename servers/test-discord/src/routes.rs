@@ -49,7 +49,7 @@ fn auth_user(
     user_id_str
         .parse::<u64>()
         .ok()
-        .and_then(|n| Id::<UserMarker>::new_checked(n))
+        .and_then(Id::<UserMarker>::new_checked)
         .ok_or_else(|| discord_error(StatusCode::UNAUTHORIZED, 40001, "401: Unauthorized"))
 }
 
