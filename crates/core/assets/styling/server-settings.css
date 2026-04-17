@@ -40,6 +40,16 @@
     border-radius: 2px;
     margin: 0 4px;
     transition: background 60ms;
+    /* Reset UA defaults so <button class="context-menu-item"> looks identical
+       to <div class="context-menu-item"> — without these, browsers render
+       the button face (light gray) under the light text, making items
+       unreadable inside the dark menu panel. */
+    background: transparent;
+    border: none;
+    appearance: none;
+    width: calc(100% - 8px);
+    font-family: inherit;
+    text-align: left;
 }
 
 .context-menu-item:hover {

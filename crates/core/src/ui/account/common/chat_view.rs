@@ -3191,6 +3191,7 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
         div {
             class: if is_loading_history { "message-list loading-history" } else { "message-list" },
             id: "message-list-scroll",
+            oncontextmenu: move |evt| evt.prevent_default(),
             onscroll: move |_| {
                 if scroll_frame_pending.swap(true, Ordering::AcqRel) {
                     return;
