@@ -183,13 +183,25 @@ that is not a `UiNoopReason` variant because the macro signature is `($r:expr)` 
 - [ ] **0.3** Store false positives in `docs/plans/ui-action-false-positives.toml`
   keyed by file+line, same pattern as lint-gate baseline.
 
-### Phase A — Primitives in `crates/ui-macros`
+### Phase A — New crate `crates/ui-types` + primitives
 
-- [ ] **A.1** Add `UiNoopReason` enum to `crates/ui-macros/src/lib.rs` as documented above.
+`UiNoopReason` and `ui_noop!` cannot live in `crates/ui-macros` — proc-macro crates can
+only export proc-macros, not regular types or `macro_rules!` macros. This is the same
+constraint we hit for the context-menu and connected-routes plans: those proc-macros emit
+tokens that reference types in `crates/core`; the macros themselves carry no types.
+
+Solution: a new `crates/ui-types` crate (thin, no heavy deps) that exports `UiNoopReason`
+and `ui_noop!`. Both `crates/core` and any `clients/*` crate that uses interactive elements
+add `poly-ui-types` to their `[dependencies]`. `crates/ui-macros` does not depend on it.
+
+- [ ] **A.1** Create `crates/ui-types/` with `Cargo.toml` and `src/lib.rs`. No deps beyond `std`.
+  Add to workspace `Cargo.toml` members list.
+
+- [ ] **A.2** Add `UiNoopReason` enum to `crates/ui-types/src/lib.rs` as documented above.
   Six initial variants: `DragHandle`, `ReadOnlyIndicator`, `DecorativeIcon`, `LayoutSpacer`,
   `EventBarrier`, `ProgressIndicator`. Mark `#[non_exhaustive]`.
 
-- [ ] **A.2** Add `ui_noop!` macro:
+- [ ] **A.3** Add `ui_noop!` macro to `crates/ui-types/src/lib.rs`:
   ```rust
   /// Marks an event handler as intentionally passive.
   ///
@@ -214,10 +226,13 @@ that is not a `UiNoopReason` variant because the macro signature is `($r:expr)` 
   }
   ```
 
-- [ ] **A.3** Trybuild compile-fail fixtures:
+- [ ] **A.4** Add `poly-ui-types` dependency to `crates/core/Cargo.toml` and any
+  `clients/*/Cargo.toml` that has interactive components.
+
+- [ ] **A.5** Trybuild compile-fail fixtures in `crates/ui-types/tests/`:
   - `ui_noop!()` → compile error (missing argument)
   - `ui_noop!("DragHandle")` → compile error (string, not enum)
-  - `onclick: move |_| {}` → lint error (Rule A)
+  - `onclick: move |_| {}` → lint error (Rule A — scanner level, not compile level)
   - `ui_noop!(UiNoopReason::DragHandle)` → OK
 
 ### Phase B — Lint-gate scanner `ui_action_coverage.rs`
