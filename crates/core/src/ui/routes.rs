@@ -400,6 +400,9 @@ pub enum Route {
 /// Called from [`RouterConfig::on_update`] *before* dependent components
 /// re-render.
 pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
+    #[cfg(debug_assertions)]
+    record_route_visit(route);
+
     // Compute the URL string before borrowing app_state mutably.
     // Routable derives Display, so format!("{route}") gives the URL path.
     let route_url = format!("{route}");
@@ -1961,5 +1964,68 @@ fn ForumCommentsRoute(
                 p { "Comments feed — coming soon." }
             }
         }
+    }
+}
+
+/// Runtime route-coverage counter (plan-connected-routes §7.4).
+///
+/// Debug-only. On each call, records the visited `Route` variant in a
+/// process-wide set and logs the first observation at `debug` level via
+/// `tracing`. Lets a dev session's visited set be diffed against the full
+/// `Route` enum to find routes that were declared but never exercised.
+#[cfg(debug_assertions)]
+fn record_route_visit(route: &Route) {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+
+    static VISITED: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
+    let set = VISITED.get_or_init(|| Mutex::new(HashSet::new()));
+    let name = route_variant_name(route);
+    if let Ok(mut guard) = set.lock() {
+        if guard.insert(name) {
+            tracing::debug!(target: "poly::route_coverage", "visited route variant: {name}");
+        }
+    }
+}
+
+/// Short discriminant name for a `Route` value. Used only by the
+/// debug-assertions coverage counter; no runtime consumer in release builds.
+#[cfg(debug_assertions)]
+fn route_variant_name(route: &Route) -> &'static str {
+    match route {
+        Route::Root {} => "Root",
+        Route::DmsHome { .. } => "DmsHome",
+        Route::ConversationSearchRoute { .. } => "ConversationSearchRoute",
+        Route::NewConversationRoute { .. } => "NewConversationRoute",
+        Route::DmChat { .. } => "DmChat",
+        Route::DmPendingCall { .. } => "DmPendingCall",
+        Route::DmPendingVideoCall { .. } => "DmPendingVideoCall",
+        Route::DmPendingAddCall { .. } => "DmPendingAddCall",
+        Route::DmPendingAddVideoCall { .. } => "DmPendingAddVideoCall",
+        Route::DmMediaViewerRoute { .. } => "DmMediaViewerRoute",
+        Route::CreateChannelRoute { .. } => "CreateChannelRoute",
+        Route::ServerChat { .. } => "ServerChat",
+        Route::ServerMediaViewerRoute { .. } => "ServerMediaViewerRoute",
+        Route::ForumPostRoute { .. } => "ForumPostRoute",
+        Route::CreateForumPostRoute { .. } => "CreateForumPostRoute",
+        Route::ForumSearchRoute { .. } => "ForumSearchRoute",
+        Route::ForumCommentsRoute { .. } => "ForumCommentsRoute",
+        Route::ServerHome { .. } => "ServerHome",
+        Route::FriendsRoute { .. } => "FriendsRoute",
+        Route::NotificationsRoute { .. } => "NotificationsRoute",
+        Route::SavedItemsRoute { .. } => "SavedItemsRoute",
+        Route::ServerOverviewRoute { .. } => "ServerOverviewRoute",
+        Route::SettingsRoute {} => "SettingsRoute",
+        Route::SettingsSectionRoute { .. } => "SettingsSectionRoute",
+        Route::SearchRoute {} => "SearchRoute",
+        Route::AccountSearchRoute { .. } => "AccountSearchRoute",
+        Route::AccountSettingsRoute { .. } => "AccountSettingsRoute",
+        Route::CreateServerRoute { .. } => "CreateServerRoute",
+        Route::ServerSettingsRoute { .. } => "ServerSettingsRoute",
+        Route::ServerSettingsSectionRoute { .. } => "ServerSettingsSectionRoute",
+        Route::SignupPicker {} => "SignupPicker",
+        Route::ClientSignup { .. } => "ClientSignup",
+        Route::ReauthAccount { .. } => "ReauthAccount",
+        Route::PageNotFound { .. } => "PageNotFound",
     }
 }

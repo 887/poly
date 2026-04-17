@@ -1231,11 +1231,6 @@ fn ChannelItemRow(channel: Channel) -> Element {
         .unwrap_or_else(|| "demo".to_string());
     let instance_id_for_menu = app_state.read().nav.active_instance_id.clone().unwrap_or_default();
 
-    // Long-press detection for mobile (touchstart → 500 ms → context menu).
-    // A monotonically-increasing generation counter lets the touchend/touchmove
-    // handlers cancel an in-flight timer without needing a JS clearTimeout handle.
-    let mut touch_cancel_gen: Signal<u32> = use_signal(|| 0);
-
     let type_icon = match ch_type {
         ChannelType::Text => "#",
         ChannelType::Voice => "🔊",
@@ -1264,14 +1259,28 @@ fn ChannelItemRow(channel: Channel) -> Element {
         Vec::new()
     };
 
-    // Pre-clone menu data for each closure that needs it.
-    // (oncontextmenu and ontouchstart both need their own owned copies.)
-    let ch_id_ctx = ch_id_for_menu.clone();
-    let ch_name_ctx = ch_name_for_menu.clone();
-    let account_id_ctx = account_id_for_menu.clone();
-    let server_id_ctx = server_id_for_menu.clone();
-    let instance_id_ctx = instance_id_for_menu.clone();
-    let backend_slug_ctx = backend_slug_for_menu.clone();
+    // Long-press handler for mobile — 500 ms sustained touch opens the same
+    // channel context menu as right-click.
+    let long_press = {
+        let ch_id = ch_id_for_menu.clone();
+        let ch_name = ch_name_for_menu.clone();
+        let account_id = account_id_for_menu.clone();
+        let server_id = server_id_for_menu.clone();
+        let instance_id = instance_id_for_menu.clone();
+        let backend_slug = backend_slug_for_menu.clone();
+        crate::ui::context_menu::long_press::LongPress::default_500ms(move |x, y| {
+            app_state.write().channel_context_menu = Some(ChannelContextMenuState {
+                x,
+                y,
+                channel_id: ch_id.clone(),
+                channel_name: ch_name.clone(),
+                account_id: account_id.clone(),
+                server_id: server_id.clone(),
+                instance_id: instance_id.clone(),
+                backend_slug: backend_slug.clone(),
+            });
+        })
+    };
 
     rsx! {
         div {
@@ -1291,81 +1300,10 @@ fn ChannelItemRow(channel: Channel) -> Element {
                     backend_slug: backend_slug_for_menu.clone(),
                 });
             },
-            // Mobile long-press: open context menu after 500 ms of sustained touch.
-            ontouchstart: {
-                let ch_id_ts = ch_id_ctx.clone();
-                let ch_name_ts = ch_name_ctx.clone();
-                let account_id_ts = account_id_ctx.clone();
-                let server_id_ts = server_id_ctx.clone();
-                let instance_id_ts = instance_id_ctx.clone();
-                let backend_slug_ts = backend_slug_ctx.clone();
-                move |evt: TouchEvent| {
-                    evt.prevent_default();
-                    evt.stop_propagation();
-                    // Grab the first touch point's client coordinates.
-                    let (x, y) = evt.touches()
-                        .first()
-                        .map(|t| {
-                            let c = t.client_coordinates();
-                            (c.x, c.y)
-                        })
-                        .unwrap_or((0.0, 0.0));
-
-                    // Advance the generation so any previous pending timer is invalidated.
-                    let touch_gen = {
-                        let next = touch_cancel_gen.peek().wrapping_add(1);
-                        touch_cancel_gen.set(next);
-                        next
-                    };
-
-                    let ch_id_ts = ch_id_ts.clone();
-                    let ch_name_ts = ch_name_ts.clone();
-                    let account_id_ts = account_id_ts.clone();
-                    let server_id_ts = server_id_ts.clone();
-                    let instance_id_ts = instance_id_ts.clone();
-                    let backend_slug_ts = backend_slug_ts.clone();
-
-                    spawn(async move {
-                        // Wait 500 ms via JS setTimeout.
-                        let mut eval = dioxus::prelude::document::eval(
-                            "setTimeout(() => dioxus.send(true), 500)"
-                        );
-                        let Ok(true) = eval.recv::<bool>().await else {
-                            return;
-                        };
-                        // If the generation hasn't changed, the touch was not cancelled.
-                        if *touch_cancel_gen.peek() != touch_gen {
-                            return;
-                        }
-                        app_state.write().channel_context_menu = Some(ChannelContextMenuState {
-                            x,
-                            y,
-                            channel_id: ch_id_ts,
-                            channel_name: ch_name_ts,
-                            account_id: account_id_ts,
-                            server_id: server_id_ts,
-                            instance_id: instance_id_ts,
-                            backend_slug: backend_slug_ts,
-                        });
-                    });
-                }
-            },
-            // Cancel the long-press timer on release, movement, or cancel.
-            ontouchend: move |evt| {
-                evt.stop_propagation();
-                let next = touch_cancel_gen.peek().wrapping_add(1);
-                touch_cancel_gen.set(next);
-            },
-            ontouchmove: move |evt| {
-                evt.stop_propagation();
-                let next = touch_cancel_gen.peek().wrapping_add(1);
-                touch_cancel_gen.set(next);
-            },
-            ontouchcancel: move |evt| {
-                evt.stop_propagation();
-                let next = touch_cancel_gen.peek().wrapping_add(1);
-                touch_cancel_gen.set(next);
-            },
+            ontouchstart: long_press.on_touch_start(),
+            ontouchend: long_press.on_touch_end(),
+            ontouchmove: long_press.on_touch_move(),
+            ontouchcancel: long_press.on_touch_cancel(),
             onclick: move |_| {
                 if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
                 {

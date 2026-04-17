@@ -1,0 +1,80 @@
+# Context-menu coverage — machine-readable companion to
+# `docs/plans/plan-context-menu-quality-control.md` §1.1.2.
+#
+# Snapshot taken 2026-04-17 by `scripts/audit_context_menus.sh`.
+#
+# Summary (317 annotated `#[component]`s under crates/core/src/ui/** and clients/*/src/**):
+#
+#   decorator          | count
+#   -------------------+-------
+#   #[context_menu(None)]          | 121
+#   #[context_menu(inherit)]       | 177
+#   #[context_menu(allow_default)] |  19
+#
+# Rows in `context-menu-coverage.csv` carry the per-component classification
+# (file, line, component, decorator, has_oncontextmenu, has_ontouchstart,
+# prevent_default_count). Consumers that only need the bleeding list / TODOs
+# / per-backend extras use this TOML.
+
+[summary]
+snapshot_date = "2026-04-17"
+total_components = 317
+decorator_none = 121
+decorator_inherit = 177
+decorator_allow_default = 19
+custom_menu_types = 3  # ServerContextMenu, ChannelContextMenu, MsgContextMenuOverlay
+
+# Components marked `inherit` that have no `oncontextmenu` / `ontouchstart` of
+# their own — the de-facto leaves. 172 of 177 — the remaining 5 are wrappers
+# that still stop_propagation but defer menu authoring to the parent.
+# These are safe today because the MainLayout root guard (§4.5.1) catches the
+# bubbled event. They become load-bearing once Phase A runtime lands and the
+# macro's DOM wrapper starts emitting real handlers per §2.2.
+[summary.bleeding]
+inherit_no_handlers = 172
+note = "`inherit` children rely on a parent's menu. Today the root guard suppresses the native menu everywhere, so a child falling through to no menu is cosmetically blank but not user-facing broken."
+
+# Surfaces where a custom menu already dispatches today.
+[[existing_menus]]
+type = "ServerContextMenu"
+triggered_from = [
+    "crates/core/src/ui/favorites_sidebar.rs",
+    "crates/core/src/ui/account/common/account_server_bar.rs",
+]
+per_backend_extras_dir = "crates/core/src/ui/account/{demo,stoat,discord,matrix,teams,poly_native}/context_menu.rs"
+
+[[existing_menus]]
+type = "ChannelContextMenu"
+triggered_from = ["crates/core/src/ui/account/common/channel_list.rs"]
+supports_long_press = true
+
+[[existing_menus]]
+type = "MsgContextMenuOverlay"
+triggered_from = ["crates/core/src/ui/account/common/chat_view.rs"]
+supports_long_press = false  # TODO §4.4
+
+# TODO context menus that must be authored in Phase A.
+[[todo_menus]]
+type = "ForumPostContextMenu"
+site = "crates/core/src/ui/account/common/forum_view.rs:653"
+site_alt = "crates/core/src/ui/account/common/forum_view.rs:778"
+notes = "Right-click on a forum post row must NOT bleed ServerContextMenu items."
+
+[[todo_menus]]
+type = "UserRowContextMenu"
+site = "crates/core/src/ui/account/common/dm_user_sidebar.rs:91"
+notes = "`DmMemberRow` currently `#[context_menu(inherit)]` with a TODO comment."
+
+# Per-backend menu gaps for forum-style clients (plan §1.1.4).
+# Today only messenger-backend crates carry a `context_menu.rs` module.
+[forum_backend_gaps]
+hackernews = { has_context_menu = false, needs = ["ForumPostContextMenu"] }
+lemmy      = { has_context_menu = false, needs = ["ForumPostContextMenu", "UserRowContextMenu"] }
+github     = { has_context_menu = false, needs = ["ForumPostContextMenu"] }
+forgejo    = { has_context_menu = false, needs = ["ForumPostContextMenu"] }
+
+# How to refresh this file: run
+#   ./scripts/audit_context_menus.sh > docs/plans/context-menu-coverage.csv
+# then re-aggregate the [summary.*] counts by hand. The TODO list and forum
+# gaps are maintained manually — the CSV does not track backend-specific
+# menu gaps.

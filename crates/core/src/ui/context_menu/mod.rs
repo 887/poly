@@ -5,9 +5,11 @@
 //! for the DSL and §3.1.4 for the diagnostic hook.
 //!
 //! Phase A scope (this file): just the trait and its
-//! `#[diagnostic::on_unimplemented]` annotation. The stack runtime (§4.1),
-//! host component (§4.2), and long-press extraction (§4.4) land in
-//! sibling files as they come online.
+//! `#[diagnostic::on_unimplemented]` annotation. The stack runtime (§4.1)
+//! and host component (§4.2) land in sibling files as they come online.
+//! Long-press extraction (§4.4) lives in `long_press.rs`.
+
+pub mod long_press;
 
 use dioxus::prelude::{Element, EventHandler};
 use dioxus::events::MouseEvent;
