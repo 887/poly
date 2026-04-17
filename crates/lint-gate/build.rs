@@ -18,6 +18,8 @@ mod allow_ban;
 mod baseline;
 #[path = "build/context_menu_coverage.rs"]
 mod context_menu_coverage;
+#[path = "build/nav_push_ban.rs"]
+mod nav_push_ban;
 #[path = "build/route_graph.rs"]
 mod route_graph;
 #[path = "build/walk.rs"]
@@ -48,6 +50,7 @@ fn main() {
     let mut violations: Vec<baseline::Violation> = Vec::new();
     allow_ban::scan(&walker, &mut violations);
     context_menu_coverage::scan(&walker, &mut violations);
+    nav_push_ban::scan(&walker, &mut violations);
     route_graph::scan(&ws_root, &mut violations);
 
     if regen {

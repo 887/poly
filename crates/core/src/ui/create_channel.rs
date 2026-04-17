@@ -94,7 +94,7 @@ pub(crate) fn CreateChannelPage(
                         button {
                             class: "btn btn-secondary",
                             onclick: move |_| {
-                                navigator().push(Route::ServerHome {
+                                crate::nav!(Route::ServerHome {
                                     backend:     backend_nav.clone(),
                                     instance_id: instance_id_nav.clone(),
                                     account_id:  account_id_nav.clone(),
@@ -191,7 +191,7 @@ fn do_create_channel(
                 }
                 app_state.write().nav.selected_channel = Some(channel_id.clone());
                 creating.set(false);
-                navigator().push(Route::ServerChat {
+                crate::nav!(Route::ServerChat {
                     backend,
                     instance_id,
                     account_id,

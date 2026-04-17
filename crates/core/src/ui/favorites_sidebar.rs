@@ -305,14 +305,14 @@ pub fn FavoritesBar() -> Element {
                                 close_mobile_drawer();
                                 match (search_account.clone(), search_backend.clone(), search_instance.clone()) {
                                     (Some(account_id), Some(backend), Some(instance_id)) => {
-                                        navigator().push(Route::AccountSearchRoute {
+                                        crate::nav!(Route::AccountSearchRoute {
                                             backend,
                                             instance_id,
                                             account_id,
                                         });
                                     }
                                     _ => {
-                                        navigator().push(Route::SearchRoute);
+                                        crate::nav!(Route::SearchRoute);
                                     }
                                 }
                             },
@@ -330,7 +330,7 @@ pub fn FavoritesBar() -> Element {
                             class: if is_app_settings { "server-icon active" } else { "server-icon" },
                             onclick: move |_| {
                                 close_mobile_drawer();
-                                navigator().push(Route::SettingsRoute);
+                                crate::nav!(Route::SettingsRoute);
                             },
                             title: "{t(\"nav-settings\")}",
                             div { class: "icon-settings", "⚙" }
@@ -582,7 +582,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                             .trim_start_matches("http://")
                             .trim_end_matches('/')
                             .to_string();
-                        navigator().push(Route::ReauthAccount {
+                        crate::nav!(Route::ReauthAccount {
                             backend: slug,
                             instance_id,
                             account_id: aid.clone(),

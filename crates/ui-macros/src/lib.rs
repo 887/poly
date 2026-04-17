@@ -15,6 +15,8 @@
 
 use proc_macro::TokenStream;
 
+mod connected;
+mod context_menu;
 mod rsx_size;
 
 /// `MAX_RSX_LINES` gate. Apply above `#[component]` (or any `fn`):
@@ -37,22 +39,26 @@ pub fn rsx_body_size(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// `#[context_menu(...)]` — contract declaration for a `#[component]`.
 ///
-/// Phase A: a transparent pass-through. Phase B will parse the Foo /
-/// None / allow_default / inherit variants and enforce coverage via
+/// Parses one of: `Foo` (menu type), `None` (opt-out), `allow_default`
+/// (native menu), `inherit` (forward to parent). Invalid forms emit a
+/// `compile_error!` at the attribute span. The function body is passed
+/// through unchanged; coverage is enforced by
 /// `crates/lint-gate/build/context_menu_coverage.rs`.
 #[proc_macro_attribute]
-pub fn context_menu(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
+pub fn context_menu(attr: TokenStream, item: TokenStream) -> TokenStream {
+    context_menu::expand(attr, item)
 }
 
 /// `#[connected(...)]` — route-graph edge declaration (item attribute).
 ///
-/// Phase A: a transparent pass-through. Phase B will parse the
-/// `linked | entry_point | programmatic<T>` variants and contribute
-/// callsites to `crates/lint-gate/build/route_graph.rs`.
+/// Parses a comma-separated list of edges; each edge is one of
+/// `linked` / `entry_point` / `programmatic<Tag>`. Malformed input emits
+/// `compile_error!` at the attribute span. The wrapped enum variant is
+/// passed through unchanged; Phase B/C will additionally emit a
+/// `linkme::distributed_slice` entry per edge (see plan §3.4).
 #[proc_macro_attribute]
-pub fn connected(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
+pub fn connected(attr: TokenStream, item: TokenStream) -> TokenStream {
+    connected::expand(attr, item)
 }
 
 /// `#[derive(Connected)]` — enables `#[connected(...)]` helper attributes on

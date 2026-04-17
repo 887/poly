@@ -94,7 +94,7 @@ fn VoiceBannerChannelLink(
             onclick: move |_| {
                 if connection_kind == VoiceConnectionKind::TemporaryCall {
                     if let Some(dm_id) = dm_id.clone() {
-                        navigator().push(Route::DmChat {
+                        crate::nav!(Route::DmChat {
                             backend: backend_slug.clone(),
                             instance_id: instance_id.clone(),
                             account_id: account_id.clone(),

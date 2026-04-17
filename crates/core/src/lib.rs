@@ -82,6 +82,19 @@ macro_rules! t {
     };
 }
 
+/// `nav!(Route::X { ... })` — push a route on the router history.
+///
+/// Preferred over bare `navigator().push(Route::...)`. The lint-gate
+/// `nav_push_ban.rs` scan bans the bare form outside of this macro so every
+/// navigation callsite is greppable by a single name (`nav!`). Expansion is
+/// a zero-cost call through `dioxus::prelude::navigator().push(route)`.
+#[macro_export]
+macro_rules! nav {
+    ($route:expr $(,)?) => {{
+        ::dioxus::prelude::navigator().push($route)
+    }};
+}
+
 /// Global storage handle — initialised exactly once at app startup.
 ///
 /// Access via `poly_core::STORAGE.get()`. Returns `None` until initialised.

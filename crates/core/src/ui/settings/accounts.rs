@@ -154,7 +154,7 @@ pub(super) fn AccountsSettings() -> Element {
             // Navigate to the plugin-driven, routable signup picker at /signup.
             button {
                 class: "btn btn-primary",
-                onclick: move |_| { let _ = navigator().push(Route::SignupPicker); },
+                onclick: move |_| { let _ = crate::nav!(Route::SignupPicker); },
                 "{t(\"settings-add-account\")}"
             }
         }

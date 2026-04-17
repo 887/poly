@@ -341,7 +341,7 @@ async fn remove_backend_account_now(
     if let Some(storage) = crate::STORAGE.get() {
         let _ = storage.remove_account_token(&backend_slug, &account_id).await;
     }
-    navigator().push(Route::SettingsRoute);
+    crate::nav!(Route::SettingsRoute);
 }
 
 /// Ensure the Poly signup flow always has an identity key available.
@@ -372,7 +372,7 @@ async fn ensure_poly_signup_identity(client: &str) -> Option<Vec<u8>> {
 /// Passed as [`SignupContext::navigate_back`] so plugins can offer a back-
 /// button without depending on poly-core routes directly.
 fn navigate_back_to_settings() {
-    navigator().push(Route::SettingsRoute);
+    crate::nav!(Route::SettingsRoute);
 }
 
 // ── Left sidebar ─────────────────────────────────────────────────────────────
@@ -415,7 +415,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                         div {
                             class,
                             onclick: move |_| {
-                                navigator().push(Route::ClientSignup { client: slug.clone() });
+                                crate::nav!(Route::ClientSignup { client: slug.clone() });
                             },
                             span { class: "signup-nav-icon", "{icon}" }
                             div { class: "signup-nav-item-text",
@@ -435,7 +435,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                     div {
                         class,
                         onclick: move |_| {
-                            navigator().push(Route::ClientSignup { client: "test".to_string() });
+                            crate::nav!(Route::ClientSignup { client: "test".to_string() });
                         },
                         span { class: "signup-nav-icon", "\u{1F9EA}" }
                         span { "Test Accounts" }

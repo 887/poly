@@ -62,6 +62,7 @@ pub(crate) mod create_channel;
 pub(crate) mod create_forum_post;
 pub(crate) mod create_server;
 pub(crate) mod code_explorer;
+pub(crate) mod context_menu;
 pub(crate) mod demo;
 mod electron_titlebar;
 mod favorites_sidebar;

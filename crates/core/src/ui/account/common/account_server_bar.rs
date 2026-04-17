@@ -392,7 +392,7 @@ fn AccountServerIcon(
                 .await;
             });
         }
-        navigator().push(Route::ServerHome {
+        crate::nav!(Route::ServerHome {
             backend: bslug_click.clone(),
             instance_id: instance_id.clone(),
             account_id: aid_click.clone(),
@@ -580,7 +580,7 @@ fn AccountBarFriendsButton(
                 chat_data.write().channels.clear();
                 chat_data.write().messages.clear();
                 chat_data.write().members.clear();
-                navigator().push(Route::FriendsRoute {
+                crate::nav!(Route::FriendsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
                     account_id: account_id.clone(),
@@ -632,7 +632,7 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                 cd.channels.clear();
                 cd.messages.clear();
                 cd.members.clear();
-                navigator().push(Route::NotificationsRoute {
+                crate::nav!(Route::NotificationsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
                     account_id: account_id.clone(),
@@ -683,7 +683,7 @@ fn CreateServerButton(account_id: String) -> Element {
             class: "create-server-pill",
             title: "{create_label}",
             onclick: move |_| {
-                navigator().push(Route::CreateServerRoute {
+                crate::nav!(Route::CreateServerRoute {
                     backend:     backend_slug.clone(),
                     instance_id: instance_id.clone(),
                     account_id:  account_id.clone(),

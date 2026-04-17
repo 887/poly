@@ -87,7 +87,7 @@ pub(crate) fn CreateServerPage(
                         button {
                             class: "btn btn-secondary",
                             onclick: move |_| {
-                                navigator().push(Route::DmsHome {
+                                crate::nav!(Route::DmsHome {
                                     backend:     backend_nav.clone(),
                                     instance_id: instance_id_nav.clone(),
                                     account_id:  account_id_nav.clone(),
@@ -166,7 +166,7 @@ fn do_create_server(
                 }
                 creating.set(false);
                 // Navigate to the new server's home.
-                navigator().push(Route::ServerHome {
+                crate::nav!(Route::ServerHome {
                     backend,
                     instance_id,
                     account_id,

@@ -161,7 +161,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
                                 button {
                                     class: "special-page-sidebar-button notif-reauth-button",
                                     onclick: move |_| {
-                                        navigator().push(Route::ReauthAccount {
+                                        crate::nav!(Route::ReauthAccount {
                                             backend: slug.clone(),
                                             instance_id: iid.clone(),
                                             account_id: aid.clone(),

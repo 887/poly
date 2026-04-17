@@ -38,7 +38,7 @@ pub fn AccountSwitcher() -> Element {
                 title: "{t(\"account-switch\")}",
                 onclick: move |_| {
                     app_state.write().settings_section = SettingsSection::Accounts;
-                    navigator().push(Route::SettingsRoute);
+                    crate::nav!(Route::SettingsRoute);
                 },
                 "👥"
             }
@@ -81,7 +81,7 @@ pub fn AccountSwitcher() -> Element {
                 title: "{t(\"nav-settings\")}",
                 onclick: move |_| {
                     app_state.write().settings_section = SettingsSection::General;
-                    navigator().push(Route::SettingsRoute);
+                    crate::nav!(Route::SettingsRoute);
                 },
                 "⚙"
             }

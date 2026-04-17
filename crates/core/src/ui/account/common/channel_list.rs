@@ -655,7 +655,7 @@ fn DMFriendsView() -> Element {
                         _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
                     }
                 };
-                navigator().push(Route::SavedItemsRoute {
+                crate::nav!(Route::SavedItemsRoute {
                     backend: backend_slug,
                     instance_id,
                     account_id,

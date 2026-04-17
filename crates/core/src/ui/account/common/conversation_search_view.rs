@@ -303,7 +303,7 @@ pub fn ConversationSearchView() -> Element {
                                     sublabel: account_label.clone(),
                                     on_click: move |_| {
                                         close_mobile_drawer();
-                                        navigator().push(Route::DmChat {
+                                        crate::nav!(Route::DmChat {
                                             backend: row_backend_slug.clone(),
                                             instance_id: row_instance_id.clone(),
                                             account_id: aid.clone(),
@@ -347,7 +347,7 @@ pub fn ConversationSearchView() -> Element {
                                     sublabel: account_label.clone(),
                                     on_click: move |_| {
                                         close_mobile_drawer();
-                                        navigator().push(Route::DmChat {
+                                        crate::nav!(Route::DmChat {
                                             backend: row_backend_slug.clone(),
                                             instance_id: row_instance_id.clone(),
                                             account_id: aid.clone(),

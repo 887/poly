@@ -389,7 +389,7 @@ fn ServerNode(
                                         sublabel: String::new(),
                                         on_click: move |_| {
                                             close_mobile_drawer();
-                                            navigator().push(Route::ServerChat {
+                                            crate::nav!(Route::ServerChat {
                                                 backend: bs.clone(),
                                                 instance_id: iid.clone(),
                                                 account_id: aid.clone(),
@@ -715,7 +715,7 @@ pub fn SearchPage(
                                     sublabel: attribution,
                                     on_click: move |_| {
                                         close_mobile_drawer();
-                                        navigator().push(Route::DmChat {
+                                        crate::nav!(Route::DmChat {
                                             backend: bs.clone(),
                                             instance_id: iid.clone(),
                                             account_id: aid.clone(),
@@ -787,7 +787,7 @@ pub fn SearchPage(
                                     sublabel: attribution,
                                     on_click: move |_| {
                                         close_mobile_drawer();
-                                        navigator().push(Route::DmChat {
+                                        crate::nav!(Route::DmChat {
                                             backend: bs.clone(),
                                             instance_id: iid.clone(),
                                             account_id: aid.clone(),
