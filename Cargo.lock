@@ -6432,6 +6432,7 @@ dependencies = [
  "poly-stoat",
  "poly-teams",
  "poly-ui-macros",
+ "poly-ui-types",
  "pulldown-cmark",
  "reqwest 0.13.2",
  "serde",
@@ -7136,6 +7137,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+ "trybuild",
+]
+
+[[package]]
+name = "poly-ui-types"
+version = "0.1.0"
+dependencies = [
  "trybuild",
 ]
 

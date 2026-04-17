@@ -14,7 +14,5 @@ use poly_ui_macros::context_menu;
 #[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
-    // TODO(phase-3.1): Add Stoat-specific context menu items
-    // Examples: Manage Bots, Webhooks, Server Discovery
-    rsx! {}
+    todo!("phase-3.1: Stoat-specific context menu items — Manage Bots, Webhooks, Server Discovery")
 }

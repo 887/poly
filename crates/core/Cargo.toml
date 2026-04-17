@@ -43,6 +43,11 @@ poly-lint-gate = { workspace = true }
 # #[derive(Connected)]. See `crates/ui-macros/src/lib.rs`.
 poly-ui-macros = { workspace = true }
 
+# Shared UI primitive types: UiNoopReason + ui_noop! macro.
+# Lives in its own crate because ui-macros is a proc-macro crate and
+# cannot export regular types or macro_rules macros.
+poly-ui-types = { workspace = true }
+
 # Backend clients (feature-gated)
 poly-demo = { workspace = true, optional = true }
 poly-stoat = { workspace = true, optional = true }

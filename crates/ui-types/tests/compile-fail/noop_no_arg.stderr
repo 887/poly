@@ -1,0 +1,11 @@
+error: unexpected end of macro invocation
+ --> tests/compile-fail/noop_no_arg.rs:4:5
+  |
+4 |     ui_noop!();
+  |     ^^^^^^^^^^ missing tokens in macro arguments
+  |
+note: while trying to match meta-variable `$reason:expr`
+ --> src/lib.rs
+  |
+  |     ($reason:expr) => {{
+  |      ^^^^^^^^^^^^

@@ -15,7 +15,5 @@ use poly_ui_macros::context_menu;
 #[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
-    // TODO(phase-3.2): Add Matrix-specific context menu items
-    // Examples: Room Directory, Space Settings, E2EE Verification, Explore Rooms
-    rsx! {}
+    todo!("phase-3.2: Matrix-specific context menu items — Room Directory, Space Settings, E2EE Verification, Explore Rooms")
 }

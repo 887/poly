@@ -8,9 +8,9 @@
 //!  1. Banned `#[allow(...)]` attributes (plan-component-lints.md §3.2).
 //!  2. Context-menu decorator coverage (plan-context-menu-quality-control.md §3.1.2).
 //!  3. Connected-routes graph reachability (plan-connected-routes-static-check.md §3).
+//!  4. UI action coverage (plan-ui-completeness.md §B).
 //!
-//! Today only rule 1 is implemented; rules 2 and 3 are wired as stubs and will
-//! be filled in as their plans execute.
+//! Existing violations are grandfathered via `baseline.json`.
 
 #[path = "build/allow_ban.rs"]
 mod allow_ban;
@@ -22,6 +22,8 @@ mod context_menu_coverage;
 mod nav_push_ban;
 #[path = "build/route_graph.rs"]
 mod route_graph;
+#[path = "build/ui_action_coverage.rs"]
+mod ui_action_coverage;
 #[path = "build/walk.rs"]
 mod walk;
 
@@ -32,6 +34,15 @@ fn main() {
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-changed={}", ws_root.display());
     println!("cargo::rerun-if-env-changed=CARGO_FEATURE_REGEN_BASELINE");
+    println!(
+        "cargo::rerun-if-changed={}",
+        ws_root
+            .join("crates")
+            .join("lint-gate")
+            .join("build")
+            .join("ui_action_baseline.toml")
+            .display()
+    );
 
     let regen = std::env::var("CARGO_FEATURE_REGEN_BASELINE").is_ok();
     let baseline_path = ws_root
@@ -52,12 +63,14 @@ fn main() {
     context_menu_coverage::scan(&walker, &mut violations);
     nav_push_ban::scan(&walker, &mut violations);
     route_graph::scan(&ws_root, &mut violations);
+    ui_action_coverage::scan(&walker, &mut violations);
 
     if regen {
         for v in &violations {
             // §5.3.2: route-graph violations are never grandfathered — the whole
             // point of the graph scan is to catch new orphans immediately. Regen
-            // only silences allow_ban / context_menu_coverage / nav_push_ban.
+            // only silences allow_ban / context_menu_coverage / nav_push_ban /
+            // ui_action_coverage.
             if v.rule == "route_graph" {
                 println!("cargo::error={}", v.to_error_line());
             } else {

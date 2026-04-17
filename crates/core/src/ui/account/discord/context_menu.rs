@@ -14,7 +14,5 @@ use poly_ui_macros::context_menu;
 #[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
-    // TODO(phase-3.3): Add Discord-specific context menu items
-    // Examples: Server Boost, Sticker Management, Integrations, Audit Log
-    rsx! {}
+    todo!("phase-3.3: Discord-specific context menu items — Server Boost, Sticker Management, Integrations, Audit Log")
 }

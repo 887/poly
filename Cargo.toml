@@ -7,6 +7,7 @@ members = [
     "crates/plugin-host",
     "crates/plugin-host-tests",
     "crates/ui-macros",
+    "crates/ui-types",
     "clients/client",
     "clients/demo",
     "clients/stoat",
@@ -218,6 +219,7 @@ poly-electron-devtools-mcp = { path = "mcp/electron-devtools-mcp" }
 poly-devtools-protocol = { path = "mcp/devtools-protocol" }
 poly-lint-gate = { path = "crates/lint-gate" }
 poly-ui-macros = { path = "crates/ui-macros" }
+poly-ui-types = { path = "crates/ui-types" }
 
 # ── Workspace-wide lint policy ───────────────────────────────────────────────
 # rust-analyzer, cargo clippy, and cargo cranky all respect these.

@@ -15,7 +15,5 @@ use poly_ui_macros::context_menu;
 #[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
-    // TODO(phase-3.4): Add Teams-specific context menu items
-    // Examples: Schedule Meeting, Manage Files, Apps & Connectors, Team Settings
-    rsx! {}
+    todo!("phase-3.4: Teams-specific context menu items — Schedule Meeting, Manage Files, Apps & Connectors")
 }

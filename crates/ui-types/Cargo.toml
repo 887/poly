@@ -1,0 +1,10 @@
+[package]
+name = "poly-ui-types"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# intentionally empty — no deps beyond std
+
+[dev-dependencies]
+trybuild = { version = "1", features = ["diff"] }
