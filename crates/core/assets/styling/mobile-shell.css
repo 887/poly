@@ -49,15 +49,15 @@
 
 .poly-app.poly-mobile-runtime-active .server-sidebar,
 .poly-app.poly-mobile-runtime-active .account-server-bar {
-    /* absolute (not fixed) + no z-index so NO stacking context is created.
-       This lets position:fixed descendants like .sidebar-tooltip (z:1000)
-       escape to the root stacking context and paint above .poly-split-content
-       (z:470). The sidebars themselves still paint behind the content because
-       they have no positive z-index and content has z:470. */
-    position: absolute;
+    position: fixed;
     top: 0;
     bottom: 0;
     box-shadow: none;
+    /* z-index intentionally NOT raised: sidebars sit at their base z:410,
+       below .poly-split-content (z:470). The content drawer slides over them
+       when closed; when the left wing is open the content shifts right and
+       the sidebars are uncovered. Tooltips are portaled to document.body in
+       the mouseover handler to escape the sidebar's stacking context. */
 }
 
 .poly-app.poly-mobile-runtime-active .server-sidebar {
@@ -83,6 +83,16 @@
     min-width: 0;
     min-height: 0;
     height: 100%;
+    /* The shell covers the whole viewport and is a later DOM sibling of the
+       fixed server-sidebar / account-server-bar. Without this, its (transparent)
+       area at x=0-144 swallows clicks destined for the rails. Make the shell
+       hit-transparent and restore interactivity on its real children so the
+       drawer panel, backdrop, and content column still receive events. */
+    pointer-events: none;
+}
+
+.poly-app.poly-mobile-runtime-active .poly-split-shell > * {
+    pointer-events: auto;
 }
 
 .poly-app.poly-mobile-runtime-active .poly-split-sidebar {
@@ -261,16 +271,11 @@
 }
 
 .poly-app.poly-mobile-runtime-active .voice-account-footer {
-    /* Extend left over both rails (server-sidebar 72 + account-server-bar 72
-       = 144px) so the Cat (demo) footer visually spans the full bottom edge,
-       matching desktop. The footer lives inside .poly-split-sidebar which
-       starts at x=144px. */
-    width: calc(100% + 144px);
-    margin-left: -144px;
-    /* No z-index: keep it auto so it doesn't create a stacking context that
-       would trap the voice settings popup. Content at z:470 paints above, so
-       this sits behind the content column when drawer is closed — but the
-       footer region is below content's visible area so no conflict. */
+    /* Extend left over the account-server-bar (72px) only, NOT over the
+       favorites server-sidebar. Matches desktop where the footer covers one
+       rail's worth of column. */
+    width: calc(100% + 72px);
+    margin-left: -72px;
 }
 
 .poly-app.poly-mobile-runtime-active .account-view-main,

@@ -407,8 +407,13 @@ fn AccountServerIcon(
             r#"(function(){{
                 var icon = document.querySelector('[data-tip-id="{}"]');
                 if (!icon) return;
-                var tip = icon.querySelector('.sidebar-tooltip');
-                if (!tip) return;
+                var tip = icon._tooltipEl;
+                if (!tip) {{
+                    tip = icon.querySelector('.sidebar-tooltip');
+                    if (!tip) return;
+                    document.body.appendChild(tip);
+                    icon._tooltipEl = tip;
+                }}
                 var r = icon.getBoundingClientRect();
                 var mirrored = document.querySelector('.poly-app.poly-menu-mirrored') !== null;
                 tip.style.top = (r.top + r.height / 2) + 'px';
@@ -432,8 +437,8 @@ fn AccountServerIcon(
             r#"(function(){{
                 var icon = document.querySelector('[data-tip-id="{}"]');
                 if (!icon) return;
-                var tip = icon.querySelector('.sidebar-tooltip');
-                if (tip) tip.style.display = '';
+                var tip = icon._tooltipEl;
+                if (tip) tip.style.display = 'none';
             }})()"#,
             sid
         ));

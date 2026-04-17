@@ -158,10 +158,19 @@ pub fn FavoritesBar() -> Element {
             (function() {
                 if (document._sidebarTooltipInit) return;
                 document._sidebarTooltipInit = true;
+                function portalTip(icon) {
+                    var tip = icon._tooltipEl;
+                    if (tip) return tip;
+                    tip = icon.querySelector('.sidebar-tooltip');
+                    if (!tip) return null;
+                    document.body.appendChild(tip);
+                    icon._tooltipEl = tip;
+                    return tip;
+                }
                 document.addEventListener('mouseover', function(e) {
                     var icon = e.target.closest('.server-icon');
                     if (!icon) return;
-                    var tip = icon.querySelector('.sidebar-tooltip');
+                    var tip = portalTip(icon);
                     if (!tip) return;
                     var r = icon.getBoundingClientRect();
                     var mirrored = document.querySelector('.poly-app.poly-menu-mirrored') !== null;
@@ -180,8 +189,8 @@ pub fn FavoritesBar() -> Element {
                     if (!icon) return;
                     var related = e.relatedTarget;
                     if (related && icon.contains(related)) return;
-                    var tip = icon.querySelector('.sidebar-tooltip');
-                    if (tip) tip.style.display = '';
+                    var tip = icon._tooltipEl;
+                    if (tip) tip.style.display = 'none';
                 });
             })()
         "#);

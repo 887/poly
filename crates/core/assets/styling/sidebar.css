@@ -162,9 +162,12 @@
     border-top: 1px solid var(--sidebar-separator);
 }
 
-/* ── Sidebar tooltip (custom hover popup) ── */
+/* ── Sidebar tooltip (custom hover popup) ──
+   The JS handler in favorites_sidebar.rs portals each tooltip to document.body
+   on first hover so it escapes the sidebar's stacking context. Style therefore
+   targets .sidebar-tooltip directly, not as a descendant of .server-icon. */
 
-.server-icon .sidebar-tooltip {
+.sidebar-tooltip {
     display: none;
     position: fixed;
     background-color: var(--bg-floating, #111214);
@@ -177,10 +180,6 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     flex-direction: column;
     gap: 2px;
-}
-
-.server-icon:hover > .sidebar-tooltip {
-    display: flex;
 }
 
 /* Signal-driven visibility for draggable icons where :hover is unreliable */
