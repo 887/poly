@@ -268,6 +268,65 @@ pub async fn get_contents(
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/repos/{owner}/{repo}/issues/{index} — single issue
+// ---------------------------------------------------------------------------
+
+pub async fn get_issue(
+    State(state): State<Arc<ForgejoState>>,
+    headers: HeaderMap,
+    Path((owner, repo, index)): Path<(String, String, i64)>,
+) -> impl IntoResponse {
+    if token_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    let full_name = format!("{owner}/{repo}");
+    if let Some(issues) = state.issues.get(&full_name) {
+        if let Some(issue) = issues.iter().find(|i| i.number == index) {
+            return Json(issue_json(issue)).into_response();
+        }
+    }
+
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({ "message": "issue not found" })),
+    )
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/user/starred/{owner}/{repo} — 204 if starred, 404 if not
+// ---------------------------------------------------------------------------
+
+pub async fn check_starred(
+    State(state): State<Arc<ForgejoState>>,
+    headers: HeaderMap,
+    Path((owner, repo)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = match token_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+
+    let full_name = format!("{owner}/{repo}");
+    let is_starred = state
+        .starred
+        .get(&user_id)
+        .map(|set| set.contains(&full_name))
+        .unwrap_or(false);
+
+    if is_starred {
+        (StatusCode::NO_CONTENT, "").into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "message": "not starred" })),
+        )
+            .into_response()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // POST /test/auth/token — test-only bypass
 // ---------------------------------------------------------------------------
 

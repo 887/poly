@@ -110,6 +110,59 @@ impl ForgejoApi {
         self.get(&path).await
     }
 
+    /// Paged issues/PRs endpoint — used by `get_view_rows`.
+    ///
+    /// `state` is `"open"`, `"closed"`, or `"all"`.
+    /// `issue_type` is `"issues"` or `"pulls"`.
+    /// `page` is 1-based.
+    pub async fn list_repo_issues_paged(
+        &self,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        issue_type: &str,
+        page: u32,
+    ) -> ClientResult<Vec<ForgejoIssue>> {
+        let path = format!(
+            "/repos/{owner}/{repo}/issues?state={state}&type={issue_type}&page={page}&limit=30&sort=updated"
+        );
+        self.get(&path).await
+    }
+
+    /// `GET /repos/{owner}/{repo}/issues/{index}` — single issue or PR.
+    pub async fn get_issue(
+        &self,
+        owner: &str,
+        repo: &str,
+        index: u64,
+    ) -> ClientResult<ForgejoIssue> {
+        let path = format!("/repos/{owner}/{repo}/issues/{index}");
+        self.get(&path).await
+    }
+
+    /// `GET /user/starred/{owner}/{repo}` — 204 if starred, 404 if not.
+    ///
+    /// Returns `Ok(true)` on 204, `Ok(false)` on 404, `Err` on other errors.
+    pub async fn is_starred(&self, owner: &str, repo: &str) -> ClientResult<bool> {
+        let path = format!("/user/starred/{owner}/{repo}");
+        let url = self.url(&path);
+        let mut req = self.http.get(url);
+        if let Some(token) = &self.token {
+            req = req.header("Authorization", format!("token {token}"));
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        match resp.status().as_u16() {
+            204 => Ok(true),
+            404 => Ok(false),
+            code => Err(ClientError::Network(format!(
+                "GET /user/starred returned HTTP {code}"
+            ))),
+        }
+    }
+
     /// `GET /repos/{owner}/{repo}/issues/{number}/comments`
     pub async fn list_issue_comments(
         &self,

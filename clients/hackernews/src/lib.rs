@@ -27,8 +27,8 @@ use async_trait::async_trait;
 use futures::stream::{self, Stream};
 #[cfg(feature = "native")]
 use mapping::{
-    build_channels, build_server, hn_comment_to_message, hn_item_to_message, hn_user_to_user,
-    post_id_from_channel,
+    build_channels, build_server, hn_comment_to_message, hn_item_to_message, hn_item_to_view_row,
+    hn_user_to_user, post_id_from_channel,
 };
 #[cfg(feature = "native")]
 use poly_client::*;
@@ -434,22 +434,112 @@ impl ClientBackend for HackerNewsClient {
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
-        _cursor: Option<Cursor>,
+        channel_id: &str,
+        cursor: Option<Cursor>,
         _sort_id: Option<&str>,
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        // WP 5 initial: return empty page. Real HN fetch is follow-up.
-        Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None })
+        let feed = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!("unknown channel: {channel_id}"))
+        })?;
+
+        // Determine page offset from cursor (Offset kind).
+        let offset: usize = cursor
+            .as_ref()
+            .and_then(|c| {
+                if c.kind == CursorKind::Offset {
+                    c.value.parse().ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+
+        // Get the view descriptor's page_size; default to 30.
+        let page_size: usize = 30;
+
+        let ids = self.api.get_feed_ids(feed).await?;
+        let slice: Vec<u64> = ids
+            .into_iter()
+            .skip(offset)
+            .take(page_size)
+            .collect();
+
+        let next_cursor = if slice.len() == page_size {
+            Some(Cursor {
+                kind: CursorKind::Offset,
+                value: (offset + page_size).to_string(),
+            })
+        } else {
+            None
+        };
+
+        let items = self.api.get_items_batch(&slice).await?;
+
+        let rows = items
+            .iter()
+            .filter(|item| !item.deleted.unwrap_or(false) && !item.dead.unwrap_or(false))
+            .map(hn_item_to_view_row)
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor })
     }
 
     async fn get_view_detail(
         &self,
         _channel_id: &str,
-        _row_id: &str,
+        row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        let story_id: u64 = row_id.parse().map_err(|_| {
+            ClientError::NotFound(format!("invalid story id: {row_id}"))
+        })?;
+
+        let story = self
+            .api
+            .get_item(story_id)
+            .await?
+            .ok_or_else(|| ClientError::NotFound(format!("story not found: {story_id}")))?;
+
+        // Build the body block: prefer text body, fall back to URL.
+        let body_html = if let Some(ref text) = story.text {
+            format!("<p>{text}</p>")
+        } else if let Some(ref url) = story.url {
+            let title = story.title.as_deref().unwrap_or("Link");
+            format!("<p><a href=\"{url}\">{title}</a></p>")
+        } else {
+            let title = story.title.as_deref().unwrap_or("(no title)");
+            format!("<p>{title}</p>")
+        };
+
+        // Fetch top-level comments (depth 1 for Pack E).
+        let top_kids: Vec<u64> = story.kids.clone().unwrap_or_default()
+            .into_iter()
+            .take(50)
+            .collect();
+        let _comments = if !top_kids.is_empty() {
+            self.api.get_items_batch(&top_kids).await.unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let comments_section = if !top_kids.is_empty() {
+            Some(poly_client::TreeSpec {
+                root_page_size: top_kids.len() as u32,
+                max_depth: 1,
+            })
+        } else {
+            None
+        };
+
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html: body_html,
+                stylesheet: None,
+                max_height_px: None,
+            },
+            comments_section,
+        })
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {

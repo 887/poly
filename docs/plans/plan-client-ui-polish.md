@@ -16,7 +16,7 @@
 | **B** | ActionOutcome dispatch (Navigate push, Toast system, Pending polling spinner, shared handler), SidebarInvalidated event consumer, P4 toolbar re-fetch, P5 infinite scroll, P7 SplitBody loading | ✅ **pushed** |
 | **C** | Plugin settings storage round-trip via host-api KV, ChannelSettingsPage wiring, scroll-spy registration, save-confirmation toasts, field descriptions | ⏳ queued |
 | **D** | SpacesRooms proper tree (Matrix), Communities tabs (Lemmy), Feed tabs clickable (HN), RepoTree children (GitHub/Forgejo), sidebar error badge | ⏳ queued |
-| **E** | Real API integration for Lemmy/HN/GitHub/Forgejo `get_view_rows` + `get_view_detail`, state-aware menu items (Subscribe/Unsubscribe conditional) | ⏳ queued |
+| **E** | Real API integration for Lemmy/HN/GitHub/Forgejo `get_view_rows` + `get_view_detail`, state-aware menu items (Subscribe/Unsubscribe conditional) | 🟡 IN PROGRESS — GitHub (E.3) ✅, Forgejo (E.4) ✅, Lemmy/HN pending |
 | **F** | Capability gating migration (phase-2.20 leftover): DMs/Friends/Notifications tabs, notification filter enum, composer gated on read-only, unconditional routes | ⏳ queued |
 | **G** | Custom-block shadow-root upgrade + security audit + usage lint | ⏳ queued |
 | **H** | Cleanup — BackendCapabilities D12 flags, backend_emoji slug match, dead forum_view helpers, UI snapshot goldens, MCP tool filtering | ⏳ queued |

@@ -424,6 +424,192 @@ async fn test_base_url() {
 }
 
 // ---------------------------------------------------------------------------
+// Pack E.2 — get_view_rows integration tests (§1.2 layer c)
+// ---------------------------------------------------------------------------
+
+/// `get_view_rows("hn-top", ...)` returns non-empty rows with correct fields.
+#[tokio::test]
+async fn test_get_view_rows_top() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    let page = client
+        .get_view_rows("hn-top", None, None, None, None)
+        .await
+        .expect("get_view_rows(hn-top) should succeed");
+
+    assert!(!page.rows.is_empty(), "expected at least one row");
+    for row in &page.rows {
+        assert!(!row.id.is_empty(), "row.id must not be empty");
+        assert!(!row.primary_text.is_empty(), "row.primary_text must not be empty");
+        // secondary_text is Some (url or "by <author>")
+        assert!(row.secondary_text.is_some(), "row.secondary_text must be Some");
+        // meta contains score + comments + age
+        let meta = row.meta_text.as_deref().expect("meta_text must be Some");
+        assert!(meta.contains("pt"), "meta must contain score: {meta}");
+        assert!(meta.contains("comments"), "meta must mention comments: {meta}");
+    }
+}
+
+/// All 6 feed channels produce non-empty ViewRow pages.
+#[tokio::test]
+async fn test_get_view_rows_all_feeds() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    let feeds = ["hn-top", "hn-new", "hn-best", "hn-ask", "hn-show", "hn-jobs-ch"];
+    for feed_id in &feeds {
+        let page = client
+            .get_view_rows(feed_id, None, None, None, None)
+            .await
+            .unwrap_or_else(|e| panic!("get_view_rows({feed_id}) failed: {e:?}"));
+        assert!(!page.rows.is_empty(), "feed '{feed_id}' should have at least one row");
+    }
+}
+
+/// Cursor pagination: second page starts where first page ended.
+#[tokio::test]
+async fn test_get_view_rows_cursor_pagination() {
+    use poly_client::{ClientBackend, Cursor, CursorKind};
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    // Seed has 4 story items for the top feed; page_size is 30 so we get all on page 1.
+    // To test pagination, we'd need a seed with >30 items. Instead verify that a cursor
+    // with offset=2 returns from position 2 onward and row ids differ from offset=0.
+    let page0 = client
+        .get_view_rows("hn-top", None, None, None, None)
+        .await
+        .expect("page 0 should succeed");
+
+    let page1 = client
+        .get_view_rows(
+            "hn-top",
+            Some(Cursor { kind: CursorKind::Offset, value: "2".to_string() }),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("page 1 should succeed");
+
+    // page0 has all 4 rows; page1 starts at index 2 so has 2 rows
+    assert!(page0.rows.len() >= page1.rows.len(), "page starting at offset 2 should have fewer or equal rows");
+    // The first row of page1 should match page0[2]
+    if !page1.rows.is_empty() && page0.rows.len() > 2 {
+        assert_eq!(page1.rows[0].id, page0.rows[2].id, "offset cursor must skip correctly");
+    }
+}
+
+/// Unknown channel ID returns a NotFound error.
+#[tokio::test]
+async fn test_get_view_rows_unknown_channel() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    let result = client
+        .get_view_rows("hn-unknown-feed", None, None, None, None)
+        .await;
+    assert!(result.is_err(), "unknown channel should return error");
+}
+
+// ---------------------------------------------------------------------------
+// Pack E.2 — get_view_detail integration tests (§1.2 layer c)
+// ---------------------------------------------------------------------------
+
+/// `get_view_detail` for a story with a URL returns a body block with the link.
+#[tokio::test]
+async fn test_get_view_detail_url_story() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    // Story 1001 has url "https://example.com/new-internet" and kids [2001, 2002].
+    let detail = client
+        .get_view_detail("hn-top", "1001")
+        .await
+        .expect("get_view_detail(1001) should succeed");
+
+    assert!(
+        !detail.body_block.sanitized_html.is_empty(),
+        "body_block must not be empty"
+    );
+    assert!(
+        detail.body_block.sanitized_html.contains("example.com"),
+        "body_block should reference the story URL"
+    );
+    // Story 1001 has 2 kids → comments_section should be Some
+    assert!(
+        detail.comments_section.is_some(),
+        "story with kids must have comments_section"
+    );
+}
+
+/// `get_view_detail` for an Ask HN story returns its text body.
+#[tokio::test]
+async fn test_get_view_detail_text_story() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    // Story 1002 has text content and no URL.
+    let detail = client
+        .get_view_detail("hn-top", "1002")
+        .await
+        .expect("get_view_detail(1002) should succeed");
+
+    assert!(
+        !detail.body_block.sanitized_html.is_empty(),
+        "body_block must not be empty"
+    );
+    assert!(
+        detail.body_block.sanitized_html.contains("<p>"),
+        "body should be wrapped in <p>"
+    );
+}
+
+/// `get_view_detail` for a story with no kids returns None for comments_section.
+#[tokio::test]
+async fn test_get_view_detail_no_kids() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    // Story 1003 has empty kids list.
+    let detail = client
+        .get_view_detail("hn-top", "1003")
+        .await
+        .expect("get_view_detail(1003) should succeed");
+
+    assert!(
+        detail.comments_section.is_none(),
+        "story with no kids must have no comments_section"
+    );
+}
+
+/// `get_view_detail` with an invalid row id returns an error.
+#[tokio::test]
+async fn test_get_view_detail_invalid_id() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    let result = client.get_view_detail("hn-top", "not-a-number").await;
+    assert!(result.is_err(), "invalid id should return error");
+}
+
+// ---------------------------------------------------------------------------
 // Pack C.2 — settings storage round-trip
 // ---------------------------------------------------------------------------
 

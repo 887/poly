@@ -15,6 +15,7 @@ plugin-forgejo-signup-connecting = Connecting…
 
 plugin-forgejo-menu-open-in-forgejo-label = Open in Forgejo
 plugin-forgejo-menu-star-repo-label = Star Repo
+plugin-forgejo-menu-unstar-repo-label = Unstar Repo
 plugin-forgejo-menu-watch-repo-label = Watch Repo
 
 plugin-forgejo-setting-preferences-label = Preferences

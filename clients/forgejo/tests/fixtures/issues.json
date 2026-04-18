@@ -1,0 +1,38 @@
+[
+  {
+    "id": 101,
+    "number": 1,
+    "title": "Support curved dam designs",
+    "body": "It would be great to support curved dam designs for better water flow.",
+    "user": {
+      "id": 1,
+      "login": "otter",
+      "full_name": "Otter",
+      "avatar_url": "https://forgejo.example.com/avatars/otter"
+    },
+    "state": "open",
+    "created_at": "2026-01-01T10:00:00Z",
+    "updated_at": "2026-01-03T10:00:00Z",
+    "html_url": "https://forgejo.example.com/otter/dam-builder/issues/1",
+    "comments": 2,
+    "pull_request": null
+  },
+  {
+    "id": 102,
+    "number": 2,
+    "title": "Water pressure calculations are off",
+    "body": "The current calculations do not account for seasonal pressure variance.",
+    "user": {
+      "id": 2,
+      "login": "flamingo",
+      "full_name": "Flamingo",
+      "avatar_url": "https://forgejo.example.com/avatars/flamingo"
+    },
+    "state": "open",
+    "created_at": "2026-01-02T11:00:00Z",
+    "updated_at": "2026-01-02T11:00:00Z",
+    "html_url": "https://forgejo.example.com/otter/dam-builder/issues/2",
+    "comments": 1,
+    "pull_request": null
+  }
+]

@@ -14,8 +14,8 @@
 
 use chrono::{DateTime, Utc};
 use poly_client::{
-    BackendType, Category, Channel, ChannelType, Message, MessageContent, PresenceStatus, Server,
-    User,
+    BackendType, Category, Channel, ChannelType, CustomBlock, MenuTargetKind, Message,
+    MessageContent, PresenceStatus, Server, TreeSpec, User, ViewDetail, ViewRow,
 };
 
 use crate::types::{ForgejoComment, ForgejoIssue, ForgejoRepo, ForgejoUser};
@@ -187,6 +187,82 @@ pub fn split_full_name(full_name: &str) -> (String, String) {
     } else {
         (full_name.to_string(), full_name.to_string())
     }
+}
+
+// ---------------------------------------------------------------------------
+// ViewRow / ViewDetail mappers (Pack E.4)
+// ---------------------------------------------------------------------------
+
+/// Map a [`ForgejoIssue`] into a [`ViewRow`] for the list pane.
+///
+/// Pure function — suitable for unit testing without a running client.
+#[must_use]
+pub fn map_issue_to_viewrow(issue: &ForgejoIssue) -> ViewRow {
+    ViewRow {
+        id: issue.number.to_string(),
+        primary_text: issue.title.clone(),
+        secondary_text: Some(format!("#{} by {}", issue.number, issue.user.login)),
+        meta_text: Some(format!(
+            "SCORE:0 · {} comments · {}",
+            issue.comments,
+            humanize_age(&issue.created_at)
+        )),
+        icon: None,
+        badge: Some(issue.state.clone()),
+        context_menu_target_kind: MenuTargetKind::Channel,
+    }
+}
+
+/// Build a [`ViewDetail`] for a single issue: body as `CustomBlock` plus
+/// an optional comments section.
+#[must_use]
+pub fn issue_to_view_detail(issue: &ForgejoIssue, comment_count: u32) -> ViewDetail {
+    let body_html = format!(
+        "<p>{}</p>",
+        html_escape(&issue.body.clone().unwrap_or_default())
+    );
+    ViewDetail {
+        body_block: CustomBlock {
+            sanitized_html: body_html,
+            stylesheet: None,
+            max_height_px: None,
+        },
+        comments_section: if comment_count > 0 {
+            Some(TreeSpec {
+                root_page_size: comment_count,
+                max_depth: 1,
+            })
+        } else {
+            None
+        },
+    }
+}
+
+/// Return a human-readable age string from an RFC3339 timestamp.
+///
+/// Examples: "just now", "5m", "3h", "2d", "4mo", "1y"
+#[must_use]
+pub fn humanize_age(created_at: &str) -> String {
+    let Ok(dt) = DateTime::parse_from_rfc3339(created_at) else {
+        return "unknown".to_string();
+    };
+    let secs = (Utc::now() - dt.with_timezone(&Utc)).num_seconds().max(0);
+    match secs {
+        s if s < 60 => "just now".to_string(),
+        s if s < 3600 => format!("{}m", s / 60),
+        s if s < 86400 => format!("{}h", s / 3600),
+        s if s < 86400 * 30 => format!("{}d", s / 86400),
+        s if s < 86400 * 365 => format!("{}mo", s / (86400 * 30)),
+        s => format!("{}y", s / (86400 * 365)),
+    }
+}
+
+/// Minimal HTML escape for issue body text.
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn parse_ts(s: &str) -> DateTime<Utc> {

@@ -76,18 +76,12 @@ fn account_color(account_id: &str) -> String {
     format!("hsl({hue}, 65%, 55%)")
 }
 
-/// Emoji icon for a backend slug.
-fn backend_emoji(slug: &str) -> &'static str {
-    match slug {
-        "demo" => "🧪",
-        "stoat" => "🦦",
-        "matrix" => "🟩",
-        "discord" => "🟣",
-        "teams" => "🟦",
-        "poly" => "🔷",
-        _ => "💬",
-    }
-}
+/// Emoji icon for a backend. TODO(polish-plan P54): replace with
+/// plugin-declared `IconSource` once the settings row UI adopts the
+/// new icon pipeline. Until then every account renders with a single
+/// neutral fallback — the previous slug ladder violated WP 7's
+/// plugin-declarative rule.
+fn backend_emoji(_slug: &str) -> &'static str { "📡" }
 
 /// A single row in the accounts list showing account icon, name, backend, and settings gear.
 #[rustfmt::skip]

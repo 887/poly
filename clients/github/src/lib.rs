@@ -122,6 +122,23 @@ impl GitHubClient {
         }
     }
 
+    /// Look up the cached repo for a server ID and return `(owner, repo)`.
+    /// Returns `None` if not found in cache.
+    async fn resolve_owner_repo_from_server_id(
+        &self,
+        server_id: &str,
+    ) -> Option<(String, String)> {
+        let cache = self.repos.lock().await;
+        cache.iter().find_map(|r| {
+            if mapping::server_id_for_repo(r) == server_id {
+                let (owner, repo) = mapping::split_full_name(&r.full_name);
+                Some((owner, repo))
+            } else {
+                None
+            }
+        })
+    }
+
     fn session_login(&self) -> &str {
         self.session
             .as_ref()
@@ -454,11 +471,30 @@ impl ClientBackend for GitHubClient {
     async fn get_context_menu_items(
         &self,
         target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
         if target != MenuTargetKind::Server {
             return Ok(Vec::new());
         }
+
+        // Resolve state-aware star label when authenticated and target_id
+        // resolves to a known repo.
+        let star_label_key = if self.is_authenticated() {
+            match self.resolve_owner_repo_from_server_id(target_id).await {
+                Some((owner, repo)) => {
+                    let starred = self.cli.is_starred(&owner, &repo).await.unwrap_or(false);
+                    if starred {
+                        "plugin-github-menu-unstar-repo-label"
+                    } else {
+                        "plugin-github-menu-star-repo-label"
+                    }
+                }
+                None => "plugin-github-menu-star-repo-label",
+            }
+        } else {
+            "plugin-github-menu-star-repo-label"
+        };
+
         Ok(vec![
             MenuItem {
                 id: "open-in-github".to_string(),
@@ -474,7 +510,7 @@ impl ClientBackend for GitHubClient {
                 id: "star-repo".to_string(),
                 parent_id: None,
                 slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-github-menu-star-repo-label".to_string(),
+                label_key: star_label_key.to_string(),
                 icon: None,
                 item_variant: MenuItemVariant::Normal,
                 shortcut: None,
@@ -615,22 +651,68 @@ impl ClientBackend for GitHubClient {
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
         _cursor: Option<Cursor>,
         _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
+        filter_id: Option<&str>,
+        tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        // WP 5 initial: return empty page. Real GitHub fetch is follow-up.
-        Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None })
+        // Discussions tab — GitHub Discussions require GraphQL; skip for Pack E.
+        if tab_id == Some("discussions") {
+            return Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None });
+        }
+
+        let (owner, repo) = parse_forum_channel(channel_id)?;
+        let state = filter_id.unwrap_or("open");
+
+        // Determine which kind of items to return based on tab_id or channel prefix.
+        let want_pulls = tab_id == Some("pulls")
+            || channel_id.starts_with("gh-pulls-");
+        let want_issues = tab_id == Some("issues")
+            || channel_id.starts_with("gh-issues-");
+
+        // Fetch via issues endpoint (returns issues + PRs mixed).
+        let endpoint = format!(
+            "/repos/{owner}/{repo}/issues?state={state}&per_page=50&sort=updated"
+        );
+        let raw: Vec<types::GhIssue> = self
+            .cli
+            .api_get(&endpoint, &[])
+            .await
+            .map_err(Self::convert_err)?;
+
+        let rows: Vec<_> = raw
+            .iter()
+            .filter(|i| {
+                if want_pulls {
+                    i.is_pull_request()
+                } else if want_issues {
+                    !i.is_pull_request()
+                } else {
+                    true
+                }
+            })
+            .map(mapping::map_issue_to_viewrow)
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
     }
 
     async fn get_view_detail(
         &self,
-        _channel_id: &str,
-        _row_id: &str,
+        channel_id: &str,
+        row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        let (owner, repo) = parse_forum_channel(channel_id)?;
+        let number: u64 = row_id
+            .parse()
+            .map_err(|_| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
+        let issue = self
+            .cli
+            .get_issue(&owner, &repo, number)
+            .await
+            .map_err(Self::convert_err)?;
+        Ok(mapping::issue_to_view_detail(&issue, issue.comments))
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
@@ -678,6 +760,17 @@ fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
     s.split_once('-')
         .map(|(o, r)| (o.to_string(), r.to_string()))
         .ok_or_else(|| ClientError::NotFound(format!("malformed owner-repo segment: {s}")))
+}
+
+/// Extract `(owner, repo)` from a forum channel ID.
+///
+/// Handles both `gh-issues-{owner}-{repo}` and `gh-pulls-{owner}-{repo}`.
+fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
+    let rest = channel_id
+        .strip_prefix("gh-issues-")
+        .or_else(|| channel_id.strip_prefix("gh-pulls-"))
+        .ok_or_else(|| ClientError::NotFound(format!("not a forum channel: {channel_id}")))?;
+    split_owner_repo(rest)
 }
 
 fn decode_b64(s: &str) -> Vec<u8> {

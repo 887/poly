@@ -321,6 +321,51 @@ pub async fn list_posts(
     Json(json!({ "posts": posts, "next_page": null })).into_response()
 }
 
+#[derive(Deserialize)]
+pub struct GetPostQuery {
+    pub id: Option<i64>,
+}
+
+/// GET /api/v3/post?id={id} — fetch a single post.
+pub async fn get_post(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(q): Query<GetPostQuery>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    let Some(post_id) = q.id else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "missing_id" })),
+        )
+            .into_response();
+    };
+
+    let found = state
+        .posts
+        .iter()
+        .flat_map(|entry| entry.value().clone())
+        .find(|p| p.id == post_id);
+
+    match found {
+        Some(p) => Json(json!({
+            "post_view": post_view(&p),
+            "community_view": null,
+            "moderators": [],
+            "cross_posts": [],
+        }))
+        .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "couldnt_find_post" })),
+        )
+            .into_response(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Private Messages
 // ---------------------------------------------------------------------------

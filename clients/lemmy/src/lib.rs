@@ -27,8 +27,9 @@ mod guest;
 
 #[cfg(feature = "native")]
 use api::{
-    LemmyHttpClient, LemmySession, community_to_channel, map_comment_to_message,
+    LemmyHttpClient, LemmySession, community_to_channel, cursor_to_page, map_comment_to_message,
     map_community_to_server, map_person, map_pm_to_dm_channel, map_post_to_message,
+    map_post_to_viewrow, next_page_cursor,
 };
 #[cfg(feature = "native")]
 use async_trait::async_trait;
@@ -473,51 +474,85 @@ impl ClientBackend for LemmyClient {
     async fn get_context_menu_items(
         &self,
         target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
         match target {
-            MenuTargetKind::Server => Ok(vec![
-                MenuItem {
-                    id: "view-community".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-lemmy-menu-view-community-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "subscribe-community".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-lemmy-menu-subscribe-community-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "view-modlog".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-lemmy-menu-view-modlog-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "block-community".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::BeforeLeave,
-                    label_key: "plugin-lemmy-menu-block-community-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Destructive,
-                    shortcut: None,
-                    block: None,
-                },
-            ]),
+            MenuTargetKind::Server => {
+                // Pack E.1 (P43): probe subscription state and pick between
+                // Subscribe / Unsubscribe. Any lookup error falls back to
+                // "Subscribe" — safer default (can't accidentally unsubscribe
+                // someone with a stale menu).
+                let subscribed = match Self::parse_community_id(target_id) {
+                    Ok(cid) => match self.http.fetch_community(cid).await {
+                        Ok(view) => view
+                            .subscribed
+                            .as_deref()
+                            .map(|s| s == "Subscribed" || s == "Pending")
+                            .unwrap_or(false),
+                        // Lookup failed (network / auth): default to unsubscribed.
+                        Err(_) => false,
+                    },
+                    Err(_) => false,
+                };
+
+                let sub_item = if subscribed {
+                    MenuItem {
+                        id: "unsubscribe-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-unsubscribe-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "subscribe-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-subscribe-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+
+                Ok(vec![
+                    MenuItem {
+                        id: "view-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-view-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    sub_item,
+                    MenuItem {
+                        id: "view-modlog".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-view-modlog-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "block-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-lemmy-menu-block-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
             _ => Ok(Vec::new()),
         }
     }
@@ -635,22 +670,88 @@ impl ClientBackend for LemmyClient {
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
+        channel_id: &str,
+        cursor: Option<Cursor>,
+        sort_id: Option<&str>,
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        // WP 5 initial: return empty page. Real Lemmy API integration is follow-up.
-        Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None })
+        let community_id = Self::parse_feed_channel(channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "get_view_rows: channel must be a lemmy-feed-{{id}}: {channel_id}"
+            ))
+        })?;
+
+        let page = cursor_to_page(cursor.as_ref());
+        let sort = sort_id.unwrap_or("Hot");
+        let page_size: u32 = 25;
+
+        let resp = self
+            .http
+            .fetch_posts_paged(community_id, sort, page, page_size)
+            .await?;
+
+        let now = chrono::Utc::now();
+        let rows: Vec<ViewRow> = resp.posts.iter().map(|v| map_post_to_viewrow(v, now)).collect();
+        let next_cursor = next_page_cursor(page, page_size as usize, rows.len());
+
+        Ok(ViewRowsPage { rows, next_cursor })
     }
 
     async fn get_view_detail(
         &self,
         _channel_id: &str,
-        _row_id: &str,
+        row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        // row_id is either the post's integer id (from map_post_to_viewrow when
+        // `ap_id` was absent) or the `ap_id` URL. Try integer first; if that
+        // fails, extract the numeric suffix from a `.../post/{id}` URL.
+        let post_id = row_id
+            .parse::<i64>()
+            .ok()
+            .or_else(|| {
+                row_id
+                    .rsplit('/')
+                    .next()
+                    .and_then(|last| last.parse::<i64>().ok())
+            })
+            .ok_or_else(|| {
+                ClientError::NotFound(format!("get_view_detail: cannot parse row id: {row_id}"))
+            })?;
+
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
+
+        let post_view = self.http.fetch_post(post_id).await?;
+        let body = post_view.post.body.clone().unwrap_or_default();
+        let url_line = post_view
+            .post
+            .url
+            .as_deref()
+            .map(|u| format!("<p><a href=\"{}\">{}</a></p>", html_escape(u), html_escape(u)))
+            .unwrap_or_default();
+        let sanitized_html = format!(
+            "<h3>{}</h3>{}<p>{}</p>",
+            html_escape(&post_view.post.name),
+            url_line,
+            html_escape(&body),
+        );
+
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html,
+                stylesheet: None,
+                max_height_px: None,
+            },
+            comments_section: Some(TreeSpec {
+                root_page_size: 25,
+                max_depth: 8,
+            }),
+        })
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {

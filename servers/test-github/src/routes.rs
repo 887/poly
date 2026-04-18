@@ -64,6 +64,7 @@ fn issue_json(i: &crate::state::Issue) -> Value {
         "html_url": i.html_url,
         "comments": i.comments,
         "pull_request": i.pull_request,
+        "reactions": { "total_count": i.reactions_total },
     })
 }
 
@@ -265,6 +266,52 @@ pub async fn get_contents(
         Json(json!({ "message": "Not Found" })),
     )
         .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /repos/{owner}/{repo}/issues/{number}  — single issue
+// ---------------------------------------------------------------------------
+
+pub async fn get_issue(
+    State(state): State<Arc<GitHubState>>,
+    headers: HeaderMap,
+    Path((owner, repo, number)): Path<(String, String, i64)>,
+) -> impl IntoResponse {
+    if token_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    let full_name = format!("{owner}/{repo}");
+    let found = state
+        .issues
+        .get(&full_name)
+        .and_then(|issues| issues.iter().find(|i| i.number == number).cloned());
+
+    match found {
+        Some(issue) => Json(issue_json(&issue)).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "message": "Not Found" }))).into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GET /user/starred/{owner}/{repo}  — check if authenticated user has starred
+// ---------------------------------------------------------------------------
+
+pub async fn check_starred(
+    State(state): State<Arc<GitHubState>>,
+    headers: HeaderMap,
+    Path((owner, repo)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = match token_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+    let key = format!("{user_id}/{owner}/{repo}");
+    if state.starred.contains(&key) {
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        (StatusCode::NOT_FOUND, Json(json!({ "message": "Not Found" }))).into_response()
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -14,8 +14,8 @@
 
 use chrono::{DateTime, Utc};
 use poly_client::{
-    Category, Channel, ChannelType, Message, MessageContent, PresenceStatus, Server, User,
-    BackendType,
+    Category, Channel, ChannelType, CustomBlock, MenuTargetKind, Message, MessageContent,
+    PresenceStatus, Server, User, ViewDetail, ViewRow, BackendType,
 };
 
 use crate::types::{GhIssue, GhIssueComment, GhRepo, GhUser};
@@ -147,6 +147,83 @@ pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
     ]
 }
 
+// ---------------------------------------------------------------------------
+// ViewRow / ViewDetail mappers (Pack E.3)
+// ---------------------------------------------------------------------------
+
+/// Map a [`GhIssue`] into a [`ViewRow`] for the list pane.
+///
+/// Pure function — suitable for unit testing without a running client.
+#[must_use]
+pub fn map_issue_to_viewrow(issue: &GhIssue) -> ViewRow {
+    ViewRow {
+        id: issue.number.to_string(),
+        primary_text: issue.title.clone(),
+        secondary_text: Some(format!("#{} by {}", issue.number, issue.user.login)),
+        meta_text: Some(format!(
+            "SCORE:{} · {} comments · {}",
+            issue.reactions.total_count,
+            issue.comments,
+            humanize_age(&issue.created_at)
+        )),
+        icon: None,
+        badge: Some(issue.state.clone()),
+        context_menu_target_kind: MenuTargetKind::Channel,
+    }
+}
+
+/// Build a [`ViewDetail`] for a single issue: body as `CustomBlock` plus
+/// a comments section describing the thread shape.
+#[must_use]
+pub fn issue_to_view_detail(issue: &GhIssue, comment_count: u32) -> ViewDetail {
+    let body_html = format!(
+        "<p>{}</p>",
+        html_escape(&issue.body.clone().unwrap_or_default())
+    );
+    ViewDetail {
+        body_block: CustomBlock {
+            sanitized_html: body_html,
+            stylesheet: None,
+            max_height_px: None,
+        },
+        comments_section: if comment_count > 0 {
+            Some(poly_client::TreeSpec {
+                root_page_size: comment_count,
+                max_depth: 1,
+            })
+        } else {
+            None
+        },
+    }
+}
+
+/// Return a human-readable age string from an RFC3339 timestamp.
+///
+/// Examples: "just now", "5m", "3h", "2d", "4mo", "1y"
+#[must_use]
+pub fn humanize_age(created_at: &str) -> String {
+    let Ok(dt) = DateTime::parse_from_rfc3339(created_at) else {
+        return "unknown".to_string();
+    };
+    let secs = (Utc::now() - dt.with_timezone(&Utc)).num_seconds().max(0);
+    match secs {
+        s if s < 60 => "just now".to_string(),
+        s if s < 3600 => format!("{}m", s / 60),
+        s if s < 86400 => format!("{}h", s / 3600),
+        s if s < 86400 * 30 => format!("{}d", s / 86400),
+        s if s < 86400 * 365 => format!("{}mo", s / (86400 * 30)),
+        s => format!("{}y", s / (86400 * 365)),
+    }
+}
+
+/// Minimal HTML escape for issue body text.
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
 /// Convert one issue/PR into a Forum-style top-level [`Message`].
 ///
 /// The body is rendered as plain text; the URL is appended so the UI can
@@ -194,6 +271,118 @@ pub fn split_full_name(full_name: &str) -> (String, String) {
         (o.to_string(), n.to_string())
     } else {
         (full_name.to_string(), full_name.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::*;
+    use crate::types::{GhReactions, GhUser};
+
+    fn make_issue(number: u64, title: &str, is_pr: bool) -> crate::types::GhIssue {
+        crate::types::GhIssue {
+            id: number,
+            number,
+            title: title.to_string(),
+            body: Some("test body".to_string()),
+            user: GhUser {
+                id: 1,
+                login: "testuser".to_string(),
+                avatar_url: None,
+            },
+            state: "open".to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            html_url: format!("https://github.com/owner/repo/issues/{number}"),
+            pull_request: if is_pr { Some(serde_json::json!({})) } else { None },
+            comments: 3,
+            reactions: GhReactions { total_count: 7 },
+        }
+    }
+
+    #[test]
+    fn test_map_issue_to_viewrow_fields() {
+        let issue = make_issue(42, "Fix the bug", false);
+        let row = map_issue_to_viewrow(&issue);
+
+        assert_eq!(row.id, "42");
+        assert_eq!(row.primary_text, "Fix the bug");
+        assert_eq!(row.secondary_text.as_deref(), Some("#42 by testuser"));
+        let meta = row.meta_text.unwrap();
+        assert!(meta.contains("SCORE:7"), "meta should contain SCORE:7");
+        assert!(meta.contains("3 comments"), "meta should contain comment count");
+        assert_eq!(row.badge, Some("open".to_string()));
+    }
+
+    #[test]
+    fn test_map_issue_to_viewrow_pr_state() {
+        let issue = make_issue(5, "My PR", true);
+        let row = map_issue_to_viewrow(&issue);
+        assert_eq!(row.id, "5");
+        assert_eq!(row.badge, Some("open".to_string()));
+    }
+
+    #[test]
+    fn test_humanize_age_recent() {
+        // "just now" when timestamp is essentially now
+        let now = Utc::now().to_rfc3339();
+        let result = humanize_age(&now);
+        assert_eq!(result, "just now");
+    }
+
+    #[test]
+    fn test_humanize_age_minutes() {
+        let ts = (Utc::now() - chrono::Duration::minutes(10)).to_rfc3339();
+        assert_eq!(humanize_age(&ts), "10m");
+    }
+
+    #[test]
+    fn test_humanize_age_hours() {
+        let ts = (Utc::now() - chrono::Duration::hours(5)).to_rfc3339();
+        assert_eq!(humanize_age(&ts), "5h");
+    }
+
+    #[test]
+    fn test_humanize_age_days() {
+        let ts = (Utc::now() - chrono::Duration::days(3)).to_rfc3339();
+        assert_eq!(humanize_age(&ts), "3d");
+    }
+
+    #[test]
+    fn test_humanize_age_invalid() {
+        assert_eq!(humanize_age("not-a-date"), "unknown");
+    }
+
+    #[test]
+    fn test_issue_to_view_detail_with_comments() {
+        let issue = make_issue(1, "Title", false);
+        let detail = issue_to_view_detail(&issue, 3);
+        assert!(detail.body_block.sanitized_html.contains("test body"));
+        assert!(detail.comments_section.is_some());
+    }
+
+    #[test]
+    fn test_issue_to_view_detail_no_comments() {
+        let issue = make_issue(2, "Title", false);
+        let detail = issue_to_view_detail(&issue, 0);
+        assert!(detail.comments_section.is_none());
+    }
+
+    #[test]
+    fn test_html_escape_in_body() {
+        let mut issue = make_issue(10, "Escape test", false);
+        issue.body = Some("<script>alert('xss')</script>".to_string());
+        let detail = issue_to_view_detail(&issue, 0);
+        assert!(
+            !detail.body_block.sanitized_html.contains("<script>"),
+            "raw <script> must be escaped"
+        );
+        assert!(
+            detail.body_block.sanitized_html.contains("&lt;script&gt;"),
+            "must contain HTML-escaped form"
+        );
     }
 }
 

@@ -4,9 +4,9 @@ use serde_json::{Value, json};
 
 use crate::state::BackendPool;
 use poly_client::{
-    AuthCredentials, BackendType, ClientBackend, Cursor, CursorKind, DmSupport, FriendModel,
-    MenuTargetKind, MessageContent, MessageQuery, MessagingModel, NotificationSupport,
-    PluginManifest, SettingsScope, VoiceSupport,
+    AuthCredentials, BackendCapabilities, BackendType, ClientBackend, Cursor, CursorKind,
+    DmSupport, FriendModel, MenuTargetKind, MessageContent, MessageQuery, MessagingModel,
+    NotificationSupport, PluginManifest, SettingsScope, VoiceSupport,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -70,6 +70,84 @@ fn parse_backend_type(s: &str) -> Option<BackendType> {
         "hackernews" | "hn" => Some(BackendType::from("hackernews")),
         _ => None,
     }
+}
+
+// ─── Capability-driven tool filtering (polish plan P51) ─────────────────────
+
+/// Return `true` if a tool name is meaningful for the given backend's declared
+/// capabilities.
+///
+/// * Legacy Discord-shaped tools (`list_friends`, `list_dms`, `send_message`,
+///   …) are gated on the relevant capability field — e.g. `list_friends`
+///   disappears for Hacker News / GitHub because they have no friend concept.
+/// * The new client-ui surface tools (`context_menu_*`, `invoke_context_action`,
+///   `plugin_settings_*`, `sidebar_*`, `channel_view`, `view_rows`,
+///   `composer_buttons`, `message_actions`, `invoke_*_action`) are always
+///   exposed: per D9 of `plan-client-ui-surface.md` the plugin returns an
+///   empty declaration list when a surface is unsupported, so the tool is
+///   always safe to call.
+/// * Account-management and test-harness tools (`login`, `logout`,
+///   `list_accounts`, `list_plugins`, `list_plugin_tools`, `test_*`) are
+///   backend-agnostic and always exposed.
+#[must_use]
+pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
+    match tool_name {
+        // Account management and meta — always advertised.
+        "login" | "logout" | "list_accounts" | "list_plugins" | "list_plugin_tools"
+        | "test_signin" | "test_health" | "test_reseed" => true,
+
+        // Legacy Discord-shaped read tools gated on capability.
+        "list_servers" | "list_channels" | "get_messages" | "get_user" => true,
+        "list_friends" => !matches!(caps.friends, FriendModel::None),
+        "list_dms" => !matches!(caps.dms, DmSupport::None),
+
+        // Legacy write tool gated on messaging model.
+        "send_message" => matches!(caps.messaging, MessagingModel::Full),
+
+        // New client-ui surface — always exposed; plugins return empty
+        // lists for unsupported surfaces per D9.
+        "context_menu_server"
+        | "context_menu_channel"
+        | "context_menu_user"
+        | "context_menu_message"
+        | "context_menu_dm"
+        | "context_menu_category"
+        | "invoke_context_action"
+        | "plugin_settings_sections"
+        | "plugin_setting_get"
+        | "plugin_setting_set"
+        | "sidebar_declaration"
+        | "invoke_sidebar_action"
+        | "channel_view"
+        | "view_rows"
+        | "composer_buttons"
+        | "message_actions"
+        | "invoke_composer_action"
+        | "invoke_message_action" => true,
+
+        // Unknown tool names are excluded by default — this prevents a
+        // future-added handler from being silently exposed before it has
+        // a capability entry here.
+        _ => false,
+    }
+}
+
+/// Return the subset of [`tool_list`] appropriate for a backend slug.
+/// Used by MCP clients that want the narrowest honest tool surface per
+/// account. `tool_list()` itself stays unfiltered so generic `tools/list`
+/// RPCs keep advertising every callable tool.
+#[must_use]
+pub fn tool_list_for_backend(slug: &str) -> Vec<Value> {
+    let caps = poly_client::capabilities_for_slug(slug);
+    tool_list()
+        .into_iter()
+        .filter(|t| {
+            t.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| should_expose_tool(n, &caps))
+                .unwrap_or(false)
+        })
+        .collect()
 }
 
 // ─── Tool list ───────────────────────────────────────────────────────────────
@@ -138,7 +216,9 @@ pub fn tool_list() -> Vec<Value> {
         // Read tools
         json!({
             "name": "list_servers",
-            "description": "List servers/guilds/teams/spaces for a connected backend account.",
+            "deprecated": true,
+            "description": "[DEPRECATED — prefer sidebar_declaration via the client-ui surface] \
+                            List servers/guilds/teams/spaces for a connected backend account.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -150,7 +230,9 @@ pub fn tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "list_channels",
-            "description": "List channels in a server.",
+            "deprecated": true,
+            "description": "[DEPRECATED — prefer sidebar_declaration via the client-ui surface] \
+                            List channels in a server.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -163,7 +245,9 @@ pub fn tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "get_messages",
-            "description": "Get messages from a channel (paginated).",
+            "deprecated": true,
+            "description": "[DEPRECATED — prefer view_rows via the client-ui surface] \
+                            Get messages from a channel (paginated).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -177,7 +261,9 @@ pub fn tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "list_dms",
-            "description": "List DM channels for an account.",
+            "deprecated": true,
+            "description": "[DEPRECATED — prefer sidebar_declaration via the client-ui surface] \
+                            List DM channels for an account.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -189,7 +275,9 @@ pub fn tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "list_friends",
-            "description": "List friends for an account.",
+            "deprecated": true,
+            "description": "[DEPRECATED — prefer context_menu_user + invoke_context_action via the client-ui surface] \
+                            List friends for an account.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -201,7 +289,9 @@ pub fn tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "get_user",
-            "description": "Get user profile by ID.",
+            "deprecated": true,
+            "description": "[DEPRECATED — prefer context_menu_user via the client-ui surface] \
+                            Get user profile by ID.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -216,7 +306,9 @@ pub fn tool_list() -> Vec<Value> {
         // Write tools
         json!({
             "name": "send_message",
-            "description": "Send a message to a channel.",
+            "deprecated": true,
+            "description": "[DEPRECATED — prefer invoke_composer_action via the client-ui surface] \
+                            Send a message to a channel.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -270,9 +362,9 @@ pub fn tool_list() -> Vec<Value> {
         }),
 
         // ─── Client-provided UI surface (WP 8, plan-client-ui-surface §7) ────
-        // TODO(WP 8 follow-up, phase-2.20 D4): capability-driven tool filtering
-        // — drop tools that return empty/NotSupported on the active account.
-        // For WP 8 initial we advertise ALL new surface tools unconditionally.
+        // Capability-driven filtering lives in `should_expose_tool` /
+        // `tool_list_for_backend` (polish plan P51). These surface tools
+        // always stay in `tool_list()` — they're safe on any backend per D9.
         json!({
             "name": "context_menu_server",
             "description": "Return plugin-declared context-menu items for a server target.",
@@ -1259,5 +1351,136 @@ async fn handle_invoke_message_action(args: &Value, pool: &BackendPool) -> Value
     match entry.backend.invoke_message_action(action_id, channel_id, message_id).await {
         Ok(outcome) => ok_result(serde_json::to_string_pretty(&outcome).unwrap_or_default()),
         Err(e) => err_result(format!("invoke_message_action failed: {e}")),
+    }
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    //! Table-driven coverage for `should_expose_tool` (polish plan P51).
+    //! Every known backend slug × every known tool name is exercised against
+    //! the capability-derived truth table.
+
+    use super::*;
+
+    /// All backend slugs `capabilities_for_slug` recognises plus the
+    /// fallback branch (any unknown slug returns READ_ONLY_FEED).
+    const KNOWN_SLUGS: &[&str] = &[
+        "demo", "stoat", "matrix", "discord", "teams", "poly",
+        "lemmy", "hackernews", "github", "forgejo", "demo_forum",
+    ];
+
+    /// Backend-agnostic tools — exposed regardless of slug.
+    const ALWAYS_EXPOSED: &[&str] = &[
+        "login", "logout", "list_accounts", "list_plugins", "list_plugin_tools",
+        "test_signin", "test_health", "test_reseed",
+        "list_servers", "list_channels", "get_messages", "get_user",
+        "context_menu_server", "context_menu_channel", "context_menu_user",
+        "context_menu_message", "context_menu_dm", "context_menu_category",
+        "invoke_context_action", "plugin_settings_sections",
+        "plugin_setting_get", "plugin_setting_set",
+        "sidebar_declaration", "invoke_sidebar_action",
+        "channel_view", "view_rows", "composer_buttons", "message_actions",
+        "invoke_composer_action", "invoke_message_action",
+    ];
+
+    #[test]
+    fn always_exposed_tools_pass_on_every_backend() {
+        for slug in KNOWN_SLUGS {
+            let caps = poly_client::capabilities_for_slug(slug);
+            for tool in ALWAYS_EXPOSED {
+                assert!(
+                    should_expose_tool(tool, &caps),
+                    "tool '{tool}' should be exposed on backend '{slug}'"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn list_friends_gated_on_friend_model() {
+        for slug in KNOWN_SLUGS {
+            let caps = poly_client::capabilities_for_slug(slug);
+            let exposed = should_expose_tool("list_friends", &caps);
+            let expected = !matches!(caps.friends, FriendModel::None);
+            assert_eq!(exposed, expected, "list_friends on '{slug}'");
+        }
+    }
+
+    #[test]
+    fn list_dms_gated_on_dm_support() {
+        for slug in KNOWN_SLUGS {
+            let caps = poly_client::capabilities_for_slug(slug);
+            let exposed = should_expose_tool("list_dms", &caps);
+            let expected = !matches!(caps.dms, DmSupport::None);
+            assert_eq!(exposed, expected, "list_dms on '{slug}'");
+        }
+    }
+
+    #[test]
+    fn send_message_gated_on_messaging_model() {
+        for slug in KNOWN_SLUGS {
+            let caps = poly_client::capabilities_for_slug(slug);
+            let exposed = should_expose_tool("send_message", &caps);
+            let expected = matches!(caps.messaging, MessagingModel::Full);
+            assert_eq!(exposed, expected, "send_message on '{slug}'");
+        }
+    }
+
+    #[test]
+    fn hackernews_is_read_only_feed_shape() {
+        // Concrete expectations — HN is the canonical read-only slug.
+        let caps = poly_client::capabilities_for_slug("hackernews");
+        assert!(!should_expose_tool("send_message", &caps));
+        assert!(!should_expose_tool("list_friends", &caps));
+        assert!(!should_expose_tool("list_dms", &caps));
+        assert!(should_expose_tool("get_messages", &caps));
+        assert!(should_expose_tool("view_rows", &caps));
+    }
+
+    #[test]
+    fn discord_is_full_social_chat_shape() {
+        let caps = poly_client::capabilities_for_slug("discord");
+        assert!(should_expose_tool("send_message", &caps));
+        assert!(should_expose_tool("list_friends", &caps));
+        assert!(should_expose_tool("list_dms", &caps));
+    }
+
+    #[test]
+    fn unknown_tool_name_not_exposed() {
+        let caps = poly_client::capabilities_for_slug("discord");
+        assert!(!should_expose_tool("not_a_real_tool", &caps));
+        assert!(!should_expose_tool("", &caps));
+    }
+
+    fn tool_names(list: &[Value]) -> std::collections::HashSet<String> {
+        list.iter()
+            .filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
+            .collect()
+    }
+
+    #[test]
+    fn tool_list_for_backend_filters_hn() {
+        let list = tool_list_for_backend("hackernews");
+        let names = tool_names(&list);
+        assert!(!names.contains("send_message"));
+        assert!(!names.contains("list_friends"));
+        assert!(!names.contains("list_dms"));
+        // Client-ui surface tools stay exposed on HN.
+        assert!(names.contains("context_menu_server"));
+        assert!(names.contains("view_rows"));
+    }
+
+    #[test]
+    fn tool_list_unfiltered_still_advertises_all_legacy_tools() {
+        // Guard: `tool_list()` itself must stay unfiltered so generic
+        // `tools/list` RPCs keep every tool name callable.
+        let list = tool_list();
+        let names = tool_names(&list);
+        for t in ["send_message", "list_friends", "list_dms"] {
+            assert!(names.contains(t), "'{t}' dropped from tool_list()");
+        }
     }
 }

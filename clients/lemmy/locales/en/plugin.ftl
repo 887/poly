@@ -15,6 +15,7 @@ plugin-lemmy-signup-connect-btn = Connect
 
 plugin-lemmy-menu-view-community-label = View Community
 plugin-lemmy-menu-subscribe-community-label = Subscribe
+plugin-lemmy-menu-unsubscribe-community-label = Unsubscribe
 plugin-lemmy-menu-view-modlog-label = View Modlog
 plugin-lemmy-menu-block-community-label = Block Community
 

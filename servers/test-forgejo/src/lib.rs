@@ -34,8 +34,16 @@ pub fn router_with_state(state: Arc<ForgejoState>) -> Router {
         .route("/api/v1/user", get(routes::get_user))
         .route("/api/v1/user/repos", get(routes::list_user_repos))
         .route(
+            "/api/v1/user/starred/{owner}/{repo}",
+            get(routes::check_starred),
+        )
+        .route(
             "/api/v1/repos/{owner}/{repo}/issues",
             get(routes::list_issues),
+        )
+        .route(
+            "/api/v1/repos/{owner}/{repo}/issues/{index}",
+            get(routes::get_issue),
         )
         .route(
             "/api/v1/repos/{owner}/{repo}/issues/{number}/comments",

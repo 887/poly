@@ -106,9 +106,58 @@ pub async fn channel_view_descriptor_well_formed(backend: &PluginBackend, ch_id:
 
 /// Fetch the first page of rows, then the next page using the returned cursor, and assert
 /// that pagination is consistent (no duplicate IDs, cursors change).
+///
+/// Backends that do not implement a non-chat view for the channel
+/// (`NotSupported` / `NotFound`) are skipped quietly.
 #[allow(dead_code)]
 pub async fn view_rows_paginate(backend: &PluginBackend, ch_id: &str) {
-    todo!("WP 5: implement per plan")
+    let page1 = match backend.get_view_rows(ch_id, None, None, None, None).await {
+        Ok(p) => p,
+        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return,
+        Err(e) => panic!("unexpected error from get_view_rows({ch_id}): {e:?}"),
+    };
+
+    // An empty first page is valid — just nothing to compare.
+    if page1.rows.is_empty() {
+        return;
+    }
+
+    for row in &page1.rows {
+        assert!(!row.id.is_empty(), "row id must be non-empty");
+        assert!(!row.primary_text.is_empty(), "primary_text must be non-empty");
+    }
+
+    let Some(cursor1) = page1.next_cursor.clone() else {
+        return;
+    };
+
+    let page2 = match backend
+        .get_view_rows(ch_id, Some(cursor1.clone()), None, None, None)
+        .await
+    {
+        Ok(p) => p,
+        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return,
+        Err(e) => panic!("unexpected error from paginated get_view_rows({ch_id}): {e:?}"),
+    };
+
+    // Pages must not share row IDs.
+    let ids1: std::collections::HashSet<&str> =
+        page1.rows.iter().map(|r| r.id.as_str()).collect();
+    for row in &page2.rows {
+        assert!(
+            !ids1.contains(row.id.as_str()),
+            "page 2 duplicates row id from page 1: {}",
+            row.id
+        );
+    }
+
+    // Cursors must differ when a second page is produced.
+    if let Some(cursor2) = page2.next_cursor {
+        assert_ne!(
+            cursor1, cursor2,
+            "cursor must advance between pages, got the same value twice"
+        );
+    }
 }
 
 /// Verify that the cursor returned by a view rows response is a valid structured value

@@ -45,6 +45,17 @@ pub struct GhUser {
     pub avatar_url: Option<String>,
 }
 
+/// Reaction counts embedded in an issue response.
+///
+/// GitHub returns `reactions` only when the API request accepts
+/// `application/vnd.github+json`. We deserialise the sub-object
+/// optionally so that mock responses without it still round-trip.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct GhReactions {
+    #[serde(rename = "total_count", default)]
+    pub total_count: i64,
+}
+
 /// One issue or pull request as returned by `gh api /repos/{owner}/{repo}/issues`.
 ///
 /// PRs are issues in the GitHub data model — they appear in the same listing
@@ -66,6 +77,9 @@ pub struct GhIssue {
     pub pull_request: Option<serde_json::Value>,
     #[serde(default)]
     pub comments: u32,
+    /// Reaction counts (optional — absent in some API contexts).
+    #[serde(default)]
+    pub reactions: GhReactions,
 }
 
 impl GhIssue {

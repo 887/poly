@@ -19,6 +19,8 @@ pub struct ForgejoState {
     pub contents: DashMap<String, Vec<ContentEntry>>,
     /// "repo_full_name/path" → ContentEntry (file content)
     pub file_contents: DashMap<String, ContentEntry>,
+    /// username → Set of starred repo full_names
+    pub starred: DashMap<String, std::collections::HashSet<String>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -91,6 +93,7 @@ impl ForgejoState {
             comments: DashMap::new(),
             contents: DashMap::new(),
             file_contents: DashMap::new(),
+            starred: DashMap::new(),
         }
     }
 
@@ -263,6 +266,11 @@ impl ForgejoState {
         ];
         self.comments.insert("otter/dam-builder/2".to_string(), dam2_comments);
 
+        // --- Starred repos (otter has starred fish-finder but NOT dam-builder) ---
+        let mut otter_starred = std::collections::HashSet::new();
+        otter_starred.insert("otter/fish-finder".to_string());
+        self.starred.insert("otter".to_string(), otter_starred);
+
         // --- Contents for otter/dam-builder (root listing) ---
         let root_listing = vec![
             ContentEntry {
@@ -315,6 +323,7 @@ impl ForgejoState {
         self.comments.clear();
         self.contents.clear();
         self.file_contents.clear();
+        self.starred.clear();
     }
 }
 

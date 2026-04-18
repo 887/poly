@@ -379,3 +379,221 @@ async fn test_settings_storage_round_trip() {
         .expect("get_setting_value should succeed");
     assert_eq!(got, "false");
 }
+
+// ---------------------------------------------------------------------------
+// Pack E.4 — get_view_rows + get_view_detail + state-aware menu
+// ---------------------------------------------------------------------------
+
+/// `get_view_rows` on the issues channel returns non-empty ViewRows.
+#[tokio::test]
+async fn test_get_view_rows_issues() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows("fj-issues-otter-dam-builder", None, None, Some("open"), Some("issues"))
+        .await
+        .expect("get_view_rows should succeed");
+
+    assert!(!page.rows.is_empty(), "should have issue rows");
+    // 2 issues seeded; no PR in issues channel
+    assert_eq!(page.rows.len(), 2, "exactly 2 issues");
+
+    let row = &page.rows[0];
+    assert!(!row.primary_text.is_empty(), "primary_text must not be empty");
+    assert!(
+        row.secondary_text.as_deref().unwrap_or("").contains('#'),
+        "secondary_text should contain #N"
+    );
+    assert!(
+        row.meta_text.as_deref().unwrap_or("").contains("comments"),
+        "meta_text should mention comments"
+    );
+    assert!(
+        row.meta_text.as_deref().unwrap_or("").starts_with("SCORE:"),
+        "meta_text should start with SCORE:"
+    );
+    assert_eq!(
+        page.next_cursor, None,
+        "fewer than 30 rows: next_cursor should be None"
+    );
+}
+
+/// `get_view_rows` on the pulls channel returns only PRs.
+#[tokio::test]
+async fn test_get_view_rows_pulls() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows("fj-pulls-otter-dam-builder", None, None, Some("open"), Some("pulls"))
+        .await
+        .expect("get_view_rows pulls should succeed");
+
+    assert!(!page.rows.is_empty(), "should have PR rows");
+    // 1 PR seeded in dam-builder
+    assert_eq!(page.rows.len(), 1, "exactly 1 PR");
+    assert!(
+        page.rows[0].primary_text.contains("beaver collaboration"),
+        "PR title should match"
+    );
+}
+
+/// `get_view_rows` for discussions tab returns empty (Forgejo has no discussions API).
+#[tokio::test]
+async fn test_get_view_rows_discussions_empty() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows("fj-issues-otter-dam-builder", None, None, None, Some("discussions"))
+        .await
+        .expect("discussions tab should succeed (empty)");
+
+    assert!(page.rows.is_empty(), "discussions returns empty for Forgejo");
+}
+
+/// `get_view_detail` returns a ViewDetail with a non-empty body block.
+#[tokio::test]
+async fn test_get_view_detail() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    let detail = client
+        .get_view_detail("fj-issues-otter-dam-builder", "1")
+        .await
+        .expect("get_view_detail should succeed");
+
+    assert!(
+        !detail.body_block.sanitized_html.is_empty(),
+        "body_block should have content"
+    );
+    assert!(
+        detail.body_block.sanitized_html.contains("&lt;") || detail.body_block.sanitized_html.starts_with("<p>"),
+        "body should be HTML-wrapped"
+    );
+    // Issue #1 has 2 comments — comments_section should be Some
+    assert!(
+        detail.comments_section.is_some(),
+        "issue with comments should have comments_section"
+    );
+    assert_eq!(
+        detail.comments_section.unwrap().root_page_size,
+        2,
+        "comment count should match seeded data"
+    );
+}
+
+/// `get_view_detail` with an invalid row_id returns an error.
+#[tokio::test]
+async fn test_get_view_detail_not_found() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    let result = client
+        .get_view_detail("fj-issues-otter-dam-builder", "9999")
+        .await;
+
+    assert!(result.is_err(), "unknown issue number should return error");
+}
+
+// ---------------------------------------------------------------------------
+// Pack E.4 — unit tests for mapping functions
+// ---------------------------------------------------------------------------
+
+/// `map_issue_to_viewrow` produces the correct ViewRow shape from a fixture.
+#[test]
+fn test_map_issue_to_viewrow_unit() {
+    let fixture: Vec<serde_json::Value> = serde_json::from_str(
+        include_str!("fixtures/issues.json"),
+    )
+    .expect("fixture should be valid JSON");
+
+    let issue: poly_forgejo::ForgejoIssue =
+        serde_json::from_value(fixture[0].clone()).expect("first issue should deserialize");
+
+    let row = poly_forgejo::map_issue_to_viewrow(&issue);
+
+    assert_eq!(row.id, "1");
+    assert_eq!(row.primary_text, "Support curved dam designs");
+    assert_eq!(row.secondary_text.as_deref(), Some("#1 by otter"));
+    assert!(
+        row.meta_text.as_deref().unwrap_or("").starts_with("SCORE:0"),
+        "meta should start with SCORE:0"
+    );
+    assert!(
+        row.meta_text.as_deref().unwrap_or("").contains("2 comments"),
+        "meta should include comment count"
+    );
+    assert_eq!(row.badge.as_deref(), Some("open"));
+}
+
+/// State-aware menu: unstarred repo shows "star-repo" label key.
+#[tokio::test]
+async fn test_context_menu_unstarred() {
+    use poly_client::{ClientBackend, MenuTargetKind};
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    let servers = client.get_servers().await.unwrap();
+
+    // dam-builder is NOT starred by otter
+    let server = servers.iter().find(|s| s.name == "otter/dam-builder").unwrap();
+    let items = client
+        .get_context_menu_items(MenuTargetKind::Server, &server.id)
+        .await
+        .expect("menu items should succeed");
+
+    let star_item = items.iter().find(|i| i.id == "star-repo").unwrap();
+    assert_eq!(
+        star_item.label_key,
+        "plugin-forgejo-menu-star-repo-label",
+        "unstarred repo should show star label"
+    );
+}
+
+/// State-aware menu: starred repo shows "unstar-repo" label key.
+#[tokio::test]
+async fn test_context_menu_starred() {
+    use poly_client::{ClientBackend, MenuTargetKind};
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    let servers = client.get_servers().await.unwrap();
+
+    // fish-finder IS starred by otter
+    let server = servers.iter().find(|s| s.name == "otter/fish-finder").unwrap();
+    let items = client
+        .get_context_menu_items(MenuTargetKind::Server, &server.id)
+        .await
+        .expect("menu items should succeed");
+
+    let star_item = items.iter().find(|i| i.id == "star-repo").unwrap();
+    assert_eq!(
+        star_item.label_key,
+        "plugin-forgejo-menu-unstar-repo-label",
+        "starred repo should show unstar label"
+    );
+}

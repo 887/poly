@@ -46,6 +46,7 @@ pub fn router_with_state(state: Arc<LemmyState>) -> Router {
         .route("/api/v3/community", get(routes::get_community))
         // Posts (messages in a community channel)
         .route("/api/v3/post/list", get(routes::list_posts))
+        .route("/api/v3/post", get(routes::get_post))
         // Private messages
         .route("/api/v3/private_message/list", get(routes::list_private_messages))
         // User

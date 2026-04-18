@@ -20,6 +20,8 @@ pub struct GitHubState {
     pub subdir_contents: DashMap<String, Vec<ContentEntry>>,
     /// "repo_full_name/path" → ContentEntry (file content)
     pub file_contents: DashMap<String, ContentEntry>,
+    /// "{user}/{owner}/{repo}" keys for starred repos
+    pub starred: dashmap::DashSet<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -56,6 +58,9 @@ pub struct Issue {
     pub html_url: String,
     pub comments: i32,
     pub pull_request: Option<serde_json::Value>,
+    /// Total reaction count (thumbs up etc.) — surfaced in `reactions.total_count` JSON field.
+    #[serde(default)]
+    pub reactions_total: i64,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -91,6 +96,7 @@ impl GitHubState {
             contents: DashMap::new(),
             subdir_contents: DashMap::new(),
             file_contents: DashMap::new(),
+            starred: dashmap::DashSet::new(),
         }
     }
 
@@ -184,6 +190,7 @@ impl GitHubState {
                 html_url: "https://github.com/penguin/iceberg-os/issues/1".to_string(),
                 comments: 2,
                 pull_request: None,
+                reactions_total: 5,
             },
             Issue {
                 id: 1002,
@@ -199,6 +206,7 @@ impl GitHubState {
                 html_url: "https://github.com/penguin/iceberg-os/issues/2".to_string(),
                 comments: 1,
                 pull_request: None,
+                reactions_total: 3,
             },
             Issue {
                 id: 1003,
@@ -214,6 +222,7 @@ impl GitHubState {
                 html_url: "https://github.com/penguin/iceberg-os/pull/3".to_string(),
                 comments: 0,
                 pull_request: Some(serde_json::json!({})),
+                reactions_total: 1,
             },
         ];
         self.issues
@@ -234,7 +243,12 @@ impl GitHubState {
             html_url: "https://github.com/chameleon/color-shift/issues/1".to_string(),
             comments: 0,
             pull_request: None,
+            reactions_total: 0,
         }];
+
+        // --- Seed a starred repo for penguin: penguin/iceberg-os ---
+        self.starred
+            .insert("penguin/penguin/iceberg-os".to_string());
         self.issues
             .insert("chameleon/color-shift".to_string(), color_issues);
 
@@ -374,6 +388,7 @@ impl GitHubState {
         self.contents.clear();
         self.subdir_contents.clear();
         self.file_contents.clear();
+        self.starred.clear();
     }
 }
 

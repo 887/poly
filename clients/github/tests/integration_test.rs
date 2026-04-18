@@ -401,6 +401,266 @@ async fn test_logout() {
 }
 
 // ---------------------------------------------------------------------------
+// Pack E.3 — get_view_rows + get_view_detail + state-aware menu
+// ---------------------------------------------------------------------------
+
+/// `get_view_rows` with tab "issues" returns only real issues, not PRs.
+#[tokio::test]
+async fn test_get_view_rows_issues_tab() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let channel_id = "gh-issues-penguin-iceberg-os";
+    let page = client
+        .get_view_rows(channel_id, None, None, None, Some("issues"))
+        .await
+        .expect("get_view_rows should succeed");
+
+    assert!(!page.rows.is_empty(), "should return issue rows");
+    // No PR should appear in the issues tab
+    for row in &page.rows {
+        assert!(
+            !row.primary_text.contains("ice crystal caching"),
+            "PR should not appear in issues tab"
+        );
+    }
+    // Issues should be present
+    let titles: Vec<&str> = page.rows.iter().map(|r| r.primary_text.as_str()).collect();
+    assert!(
+        titles.contains(&"Add thermal regulation module"),
+        "thermal issue should appear"
+    );
+    assert!(
+        titles.contains(&"Memory leak in snowflake allocator"),
+        "memory leak issue should appear"
+    );
+}
+
+/// `get_view_rows` with tab "pulls" returns only PRs.
+#[tokio::test]
+async fn test_get_view_rows_pulls_tab() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let channel_id = "gh-pulls-penguin-iceberg-os";
+    let page = client
+        .get_view_rows(channel_id, None, None, None, Some("pulls"))
+        .await
+        .expect("get_view_rows pulls should succeed");
+
+    assert!(!page.rows.is_empty(), "should return PR rows");
+    assert_eq!(page.rows.len(), 1, "iceberg-os has one PR");
+    assert_eq!(page.rows[0].primary_text, "Implement ice crystal caching");
+    assert_eq!(page.rows[0].badge, Some("open".to_string()));
+}
+
+/// `get_view_rows` with tab "discussions" returns empty.
+#[tokio::test]
+async fn test_get_view_rows_discussions_tab_empty() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows(
+            "gh-issues-penguin-iceberg-os",
+            None,
+            None,
+            None,
+            Some("discussions"),
+        )
+        .await
+        .expect("discussions tab should return empty page, not error");
+
+    assert!(page.rows.is_empty(), "discussions tab must return empty rows");
+}
+
+/// ViewRow fields follow the expected shape.
+#[tokio::test]
+async fn test_get_view_rows_row_fields() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows(
+            "gh-issues-penguin-iceberg-os",
+            None,
+            None,
+            None,
+            Some("issues"),
+        )
+        .await
+        .unwrap();
+
+    let row = page
+        .rows
+        .iter()
+        .find(|r| r.primary_text == "Add thermal regulation module")
+        .expect("thermal issue row must be present");
+
+    // id = issue number
+    assert_eq!(row.id, "1");
+    // secondary_text contains "#1 by penguin"
+    let sec = row.secondary_text.as_deref().unwrap_or("");
+    assert!(sec.contains("#1"), "secondary_text should contain #1");
+    assert!(sec.contains("penguin"), "secondary_text should contain author");
+    // meta_text contains score + comments
+    let meta = row.meta_text.as_deref().unwrap_or("");
+    assert!(meta.contains("SCORE:5"), "meta_text should contain SCORE:5");
+    assert!(meta.contains("2 comments"), "meta_text should contain comment count");
+    // badge = state
+    assert_eq!(row.badge, Some("open".to_string()));
+}
+
+/// `get_view_detail` returns a CustomBlock with the issue body.
+#[tokio::test]
+async fn test_get_view_detail() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let detail = client
+        .get_view_detail("gh-issues-penguin-iceberg-os", "1")
+        .await
+        .expect("get_view_detail should succeed");
+
+    assert!(
+        detail.body_block.sanitized_html.contains("heat management"),
+        "detail body should contain issue body text"
+    );
+    // Issue #1 has 2 comments → comments_section should be Some
+    assert!(
+        detail.comments_section.is_some(),
+        "issue with comments should have comments_section"
+    );
+}
+
+/// `get_view_detail` for an issue with no comments returns None comments_section.
+#[tokio::test]
+async fn test_get_view_detail_no_comments() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    // PR #3 has 0 comments
+    let detail = client
+        .get_view_detail("gh-issues-penguin-iceberg-os", "3")
+        .await
+        .expect("get_view_detail for PR should succeed");
+
+    assert!(
+        detail.comments_section.is_none(),
+        "item with 0 comments should have no comments_section"
+    );
+}
+
+/// `get_context_menu_items` shows "unstar" when repo is already starred.
+#[tokio::test]
+async fn test_context_menu_star_state_aware() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    // Populate repos cache so server_id → owner/repo lookup works
+    client.get_servers().await.unwrap();
+
+    // Find the server ID for penguin/iceberg-os
+    let servers = client.get_servers().await.unwrap();
+    let iceberg = servers
+        .iter()
+        .find(|s| s.name == "penguin/iceberg-os")
+        .expect("iceberg-os must be present");
+
+    let items = client
+        .get_context_menu_items(poly_client::MenuTargetKind::Server, &iceberg.id)
+        .await
+        .expect("get_context_menu_items should succeed");
+
+    let star_item = items
+        .iter()
+        .find(|i| i.id == "star-repo")
+        .expect("star-repo item must be present");
+
+    // penguin has starred iceberg-os in seeded data
+    assert_eq!(
+        star_item.label_key,
+        "plugin-github-menu-unstar-repo-label",
+        "starred repo should show unstar label"
+    );
+}
+
+/// `get_context_menu_items` shows "star" when repo is not starred.
+#[tokio::test]
+async fn test_context_menu_unstarred_shows_star() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let servers = client.get_servers().await.unwrap();
+    let fish = servers
+        .iter()
+        .find(|s| s.name == "penguin/fish-tracker")
+        .expect("fish-tracker must be present");
+
+    let items = client
+        .get_context_menu_items(poly_client::MenuTargetKind::Server, &fish.id)
+        .await
+        .expect("get_context_menu_items should succeed");
+
+    let star_item = items
+        .iter()
+        .find(|i| i.id == "star-repo")
+        .expect("star-repo item must be present");
+
+    assert_eq!(
+        star_item.label_key,
+        "plugin-github-menu-star-repo-label",
+        "unstarred repo should show star label"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Pack C.2 — settings storage round-trip
 // ---------------------------------------------------------------------------
 

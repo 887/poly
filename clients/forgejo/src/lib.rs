@@ -24,7 +24,9 @@ mod types;
 #[cfg(feature = "native")]
 pub use api::ForgejoApi;
 #[cfg(feature = "native")]
-pub use mapping::{BACKEND_SLUG, issue_thread_channel_id};
+pub use mapping::{BACKEND_SLUG, issue_thread_channel_id, map_issue_to_viewrow};
+#[cfg(feature = "native")]
+pub use types::ForgejoIssue;
 
 #[cfg(feature = "native")]
 use async_trait::async_trait;
@@ -351,11 +353,42 @@ impl ClientBackend for ForgejoClient {
     async fn get_context_menu_items(
         &self,
         target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
         if target != MenuTargetKind::Server {
             return Ok(Vec::new());
         }
+
+        // P44 state-aware star label: check whether the authenticated user
+        // has already starred this repo.  Forgejo: GET /user/starred/{owner}/{repo}
+        // returns 204 if starred, 404 if not.
+        let star_label_key = if self.is_authenticated() {
+            // Resolve (owner, repo) from the cached repo list.
+            let maybe_owner_repo = {
+                let cache = self.repos.lock().await;
+                cache.iter().find_map(|r| {
+                    if mapping::server_id_for_repo(r) == target_id {
+                        let (o, n) = mapping::split_full_name(&r.full_name);
+                        Some((o, n))
+                    } else {
+                        None
+                    }
+                })
+            };
+            if let Some((owner, repo)) = maybe_owner_repo {
+                let starred = self.api.is_starred(&owner, &repo).await.unwrap_or(false);
+                if starred {
+                    "plugin-forgejo-menu-unstar-repo-label"
+                } else {
+                    "plugin-forgejo-menu-star-repo-label"
+                }
+            } else {
+                "plugin-forgejo-menu-star-repo-label"
+            }
+        } else {
+            "plugin-forgejo-menu-star-repo-label"
+        };
+
         Ok(vec![
             MenuItem {
                 id: "open-in-forgejo".to_string(),
@@ -371,7 +404,7 @@ impl ClientBackend for ForgejoClient {
                 id: "star-repo".to_string(),
                 parent_id: None,
                 slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-forgejo-menu-star-repo-label".to_string(),
+                label_key: star_label_key.to_string(),
                 icon: None,
                 item_variant: MenuItemVariant::Normal,
                 shortcut: None,
@@ -512,22 +545,56 @@ impl ClientBackend for ForgejoClient {
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
-        _cursor: Option<Cursor>,
+        channel_id: &str,
+        cursor: Option<Cursor>,
         _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
+        filter_id: Option<&str>,
+        tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        // WP 5 initial: return empty page. Real Forgejo fetch is follow-up.
-        Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None })
+        // Pack E.4 — Discussions tab: Forgejo lacks a discussions API.
+        if tab_id == Some("discussions") {
+            return Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None });
+        }
+
+        let (owner, repo) = parse_forum_channel(channel_id)?;
+        let state = filter_id.unwrap_or("open");
+
+        let want_pulls = tab_id == Some("pulls") || channel_id.starts_with("fj-pulls-");
+        let issue_type = if want_pulls { "pulls" } else { "issues" };
+
+        let page: u32 = cursor
+            .as_ref()
+            .and_then(|c| c.value.parse().ok())
+            .unwrap_or(1);
+
+        let raw = self
+            .api
+            .list_repo_issues_paged(&owner, &repo, state, issue_type, page)
+            .await?;
+
+        let rows: Vec<_> = raw.iter().map(mapping::map_issue_to_viewrow).collect();
+
+        // If a full page was returned there may be more; advertise next page.
+        let next_cursor = if rows.len() == 30 {
+            Some(Cursor { kind: CursorKind::Offset, value: (page + 1).to_string() })
+        } else {
+            None
+        };
+
+        Ok(ViewRowsPage { rows, next_cursor })
     }
 
     async fn get_view_detail(
         &self,
-        _channel_id: &str,
-        _row_id: &str,
+        channel_id: &str,
+        row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        let (owner, repo) = parse_forum_channel(channel_id)?;
+        let index: u64 = row_id
+            .parse()
+            .map_err(|_| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
+        let issue = self.api.get_issue(&owner, &repo, index).await?;
+        Ok(mapping::issue_to_view_detail(&issue, issue.comments))
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
@@ -593,6 +660,18 @@ impl ClientBackend for ForgejoClient {
             truncated: false,
         })
     }
+}
+
+/// Extract `(owner, repo)` from a forum channel ID.
+///
+/// Handles `fj-issues-{owner}-{repo}` and `fj-pulls-{owner}-{repo}`.
+#[cfg(feature = "native")]
+fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
+    let rest = channel_id
+        .strip_prefix("fj-issues-")
+        .or_else(|| channel_id.strip_prefix("fj-pulls-"))
+        .ok_or_else(|| ClientError::NotFound(format!("not a forum channel: {channel_id}")))?;
+    split_owner_repo(rest)
 }
 
 #[cfg(feature = "native")]

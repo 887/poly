@@ -331,6 +331,164 @@ async fn test_unauthenticated_get_servers_fails() {
 // Pack C.2 — settings storage round-trip
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Pack E.1 — real API integration (views + state-aware menus)
+// ---------------------------------------------------------------------------
+
+/// `get_view_rows` on a community feed channel returns populated rows with
+/// the expected shape (SCORE: prefix, MenuTargetKind::Message target).
+#[tokio::test]
+async fn test_get_view_rows_populated() {
+    let base_url = start_test_server().await;
+    let mut client = LemmyClient::new(&base_url);
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "testuser".to_string(),
+            password: "password123".to_string(),
+        })
+        .await
+        .unwrap();
+
+    let page = client
+        .get_view_rows("lemmy-feed-1", None, Some("hot"), None, None)
+        .await
+        .expect("get_view_rows should succeed");
+
+    assert!(!page.rows.is_empty(), "rust community should produce rows");
+    let row = &page.rows[0];
+    assert!(!row.primary_text.is_empty(), "primary_text must be populated");
+    let meta = row.meta_text.as_deref().expect("meta_text required");
+    assert!(
+        meta.starts_with("SCORE:"),
+        "meta_text must lead with SCORE: for vote-card rendering, got {meta}"
+    );
+    assert_eq!(
+        row.context_menu_target_kind,
+        poly_client::MenuTargetKind::Message
+    );
+    // Fixture community has only 2 posts → under page_size → no next cursor.
+    assert!(page.next_cursor.is_none(), "short page must not have next cursor");
+}
+
+/// `get_view_rows` on a non-feed channel returns a NotFound error.
+#[tokio::test]
+async fn test_get_view_rows_invalid_channel() {
+    let base_url = start_test_server().await;
+    let mut client = LemmyClient::new(&base_url);
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "testuser".to_string(),
+            password: "password123".to_string(),
+        })
+        .await
+        .unwrap();
+
+    let result = client
+        .get_view_rows("lemmy-post-1", None, None, None, None)
+        .await;
+    assert!(matches!(result, Err(poly_client::ClientError::NotFound(_))));
+}
+
+/// `get_view_detail` fetches a single post and wraps it in a custom block.
+#[tokio::test]
+async fn test_get_view_detail_returns_custom_block() {
+    let base_url = start_test_server().await;
+    let mut client = LemmyClient::new(&base_url);
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "testuser".to_string(),
+            password: "password123".to_string(),
+        })
+        .await
+        .unwrap();
+
+    // Row ids produced by map_post_to_viewrow are the post's ap_id.
+    let page = client
+        .get_view_rows("lemmy-feed-1", None, None, None, None)
+        .await
+        .unwrap();
+    let row = page.rows.first().expect("fixture seeds at least one post");
+
+    let detail = client
+        .get_view_detail("lemmy-feed-1", &row.id)
+        .await
+        .expect("get_view_detail should succeed");
+
+    assert!(
+        detail.body_block.sanitized_html.contains("<h3>"),
+        "body should include a headline"
+    );
+    assert!(
+        detail.comments_section.is_some(),
+        "comments section must be Some"
+    );
+}
+
+/// `get_view_detail` on a bogus row id returns a parse error.
+#[tokio::test]
+async fn test_get_view_detail_bad_row_id() {
+    let base_url = start_test_server().await;
+    let mut client = LemmyClient::new(&base_url);
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "testuser".to_string(),
+            password: "password123".to_string(),
+        })
+        .await
+        .unwrap();
+
+    let result = client.get_view_detail("lemmy-feed-1", "not-a-post").await;
+    assert!(matches!(result, Err(poly_client::ClientError::NotFound(_))));
+}
+
+/// Context-menu items for a subscribed community include Unsubscribe, not Subscribe.
+#[tokio::test]
+async fn test_context_menu_subscribed_shows_unsubscribe() {
+    let base_url = start_test_server().await;
+    let mut client = LemmyClient::new(&base_url);
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "testuser".to_string(),
+            password: "password123".to_string(),
+        })
+        .await
+        .unwrap();
+
+    // Mock server seeds communities 1 and 2 as subscribed=true.
+    let items = client
+        .get_context_menu_items(poly_client::MenuTargetKind::Server, "lemmy-community-1")
+        .await
+        .expect("context menu should succeed");
+
+    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    assert!(
+        ids.contains(&"unsubscribe-community"),
+        "subscribed community must expose Unsubscribe, got {ids:?}"
+    );
+    assert!(
+        !ids.contains(&"subscribe-community"),
+        "subscribed community must NOT also expose Subscribe, got {ids:?}"
+    );
+}
+
+/// Unauthenticated / unreachable community lookup defaults to the "Subscribe" item.
+#[tokio::test]
+async fn test_context_menu_unauthenticated_defaults_to_subscribe() {
+    // No server running at this port → community lookup fails → defaults.
+    let client = LemmyClient::new("http://127.0.0.1:1");
+    let items = client
+        .get_context_menu_items(poly_client::MenuTargetKind::Server, "lemmy-community-1")
+        .await
+        .expect("context menu should not error even when lookup fails");
+
+    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    assert!(
+        ids.contains(&"subscribe-community"),
+        "fallback must offer Subscribe, got {ids:?}"
+    );
+    assert!(!ids.contains(&"unsubscribe-community"));
+}
+
 #[tokio::test]
 async fn test_settings_storage_round_trip() {
     use poly_client::SettingsScope;

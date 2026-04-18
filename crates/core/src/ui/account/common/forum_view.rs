@@ -3,7 +3,7 @@
 //! `ChannelType::HackerNews` channels.
 
 use crate::client_manager::ClientManager;
-use crate::state::chat_data::{backend_badge, user_color};
+use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use crate::ui::client_ui::ClientView;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
@@ -315,79 +315,11 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Post card
+// (Removed `ForumPostCard` per polish plan P55 — replaced by `ListBodyRow` in
+// `client_ui::view::list_body` during the client-ui refactor. The helpers
+// below (`post_score`, `reaction_count`, `forum_ts`, …) remain because they
+// are still called from `ForumThreadView` / `ForumComment`.)
 // ─────────────────────────────────────────────────────────────────────────────
-
-#[ui_action(inherit)]
-#[context_menu(crate::ui::context_menu::menus::ForumPostContextMenu)]
-#[rustfmt::skip]
-#[component]
-fn ForumPostCard(post: Message, on_click: EventHandler<()>) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
-    let score = post_score(&post);
-    let comments_count = reaction_count(&post, "💬");
-    let author_name = post.author.display_name.clone();
-    let author_initial = author_name.chars().next().unwrap_or('?').to_uppercase().to_string();
-    let avatar_url = post.author.avatar_url.clone();
-    let author_color = user_color(&post.author.id);
-    let time_str = forum_ts(post.timestamp);
-    let text = post_text(&post.content).to_string();
-    let sc = score_class(score);
-
-    let ctx_post_id = post.id.clone();
-    let ctx_author_id = post.author.id.clone();
-    let ctx_author_name = post.author.display_name.clone();
-    let ctx_text = text.clone();
-
-    rsx! {
-        div {
-            class: "forum-post-card",
-            onclick: move |_| on_click.call(()),
-            oncontextmenu: move |evt| {
-                evt.prevent_default();
-                evt.stop_propagation();
-                let ctx = ForumPostCtx {
-                    post_id: ctx_post_id.clone(),
-                    author_id: ctx_author_id.clone(),
-                    author_name: ctx_author_name.clone(),
-                    text: ctx_text.clone(),
-                };
-                let entry = forum_post_entry(ctx, &evt);
-                app_state.write().context_menu_stack.push(entry);
-            },
-            div { class: "forum-post-votes",
-                button { class: "forum-vote-btn up", title: "Upvote",
-                    onclick: |e: MouseEvent| e.stop_propagation(),
-                    "▲"
-                }
-                span { class: "{sc}", "{score}" }
-                button { class: "forum-vote-btn down", title: "Downvote",
-                    onclick: |e: MouseEvent| e.stop_propagation(),
-                    "▼"
-                }
-            }
-            div { class: "forum-post-body",
-                div { class: "forum-post-author-row",
-                    if let Some(ref url) = avatar_url {
-                        img { class: "forum-post-avatar", src: "{url}", alt: "{author_name}" }
-                    } else {
-                        div {
-                            class: "forum-post-avatar forum-post-avatar-initial",
-                            style: "background:{author_color}",
-                            "{author_initial}"
-                        }
-                    }
-                    span { class: "forum-post-author-name", "{author_name}" }
-                    span { class: "forum-post-time", "· {time_str}" }
-                }
-                p { class: "forum-post-content", "{text}" }
-                div { class: "forum-post-footer",
-                    span { class: "forum-post-comments", "💬 {comments_count} comments" }
-                }
-            }
-        }
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Thread view

@@ -5,8 +5,9 @@
 
 use chrono::{DateTime, Utc};
 use poly_client::{
-    Attachment, BackendType, Category, Channel, ChannelType, ClientError, ClientResult, DmChannel,
-    Message, MessageContent, PresenceStatus, Reaction, Server, User,
+    Attachment, BackendType, Category, Channel, ChannelType, ClientError, ClientResult, Cursor,
+    CursorKind, DmChannel, MenuTargetKind, Message, MessageContent, PresenceStatus, Reaction,
+    Server, User, ViewRow,
 };
 use poly_host_bridge::http::{HttpClient, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -60,6 +61,11 @@ pub struct LemmyCommunity {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CommunityView {
     pub community: LemmyCommunity,
+    /// Subscription state from Lemmy's `SubscribedType` enum — one of
+    /// `"Subscribed"`, `"NotSubscribed"`, or `"Pending"`. Optional because
+    /// unauthenticated list responses omit it.
+    #[serde(default)]
+    pub subscribed: Option<String>,
 }
 
 /// Response from `GET /api/v3/community/list`.
@@ -73,6 +79,10 @@ pub struct CommunityListResponse {
 pub struct PostCounts {
     pub upvotes: i64,
     pub downvotes: i64,
+    #[serde(default)]
+    pub score: i64,
+    #[serde(default)]
+    pub comments: i64,
 }
 
 /// A Lemmy post.
@@ -84,6 +94,8 @@ pub struct LemmyPost {
     pub url: Option<String>,
     pub published: DateTime<Utc>,
     pub updated: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub ap_id: Option<String>,
 }
 
 /// A post view as returned in list responses.
@@ -274,6 +286,73 @@ pub fn map_post_to_message(view: &PostView) -> Message {
         reply_to: None,
         edited: post.updated.is_some(),
     }
+}
+
+/// Format an approximate age like "3h" / "2d" / "5m" from a publish time.
+///
+/// Pure fn — takes `now` explicitly so tests can pin the clock.
+pub fn humanize_age(published: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let secs = (now - published).num_seconds().max(0);
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else if secs < 86_400 {
+        format!("{}h", secs / 3600)
+    } else {
+        format!("{}d", secs / 86_400)
+    }
+}
+
+/// Map a `PostView` to a Poly `ViewRow` (Pack E.1).
+///
+/// Pure mapping — no I/O. Used by `get_view_rows`. The `SCORE:` prefix on
+/// `meta_text` is load-bearing: ListBody/TreeBody render the vote-card
+/// shape when it appears (per Pack A).
+pub fn map_post_to_viewrow(view: &PostView, now: DateTime<Utc>) -> ViewRow {
+    let post = &view.post;
+    let creator = &view.creator;
+    let counts = &view.counts;
+
+    let id = post.ap_id.clone().unwrap_or_else(|| post.id.to_string());
+    let secondary = format!("by {}", creator.display_name.clone().unwrap_or_else(|| creator.name.clone()));
+    let meta = format!(
+        "SCORE:{} · {} comments · {}",
+        counts.score,
+        counts.comments,
+        humanize_age(post.published, now)
+    );
+
+    ViewRow {
+        id,
+        primary_text: post.name.clone(),
+        secondary_text: Some(secondary),
+        meta_text: Some(meta),
+        icon: None,
+        badge: None,
+        context_menu_target_kind: MenuTargetKind::Message,
+    }
+}
+
+/// Build a next-page `Cursor` for offset-paginated Lemmy endpoints.
+pub fn next_page_cursor(current_page: u32, page_size: usize, rows_returned: usize) -> Option<Cursor> {
+    if rows_returned < page_size {
+        return None;
+    }
+    Some(Cursor {
+        kind: CursorKind::Offset,
+        value: (current_page + 1).to_string(),
+    })
+}
+
+/// Parse a Lemmy view cursor (offset-based) back into a 1-indexed page number.
+pub fn cursor_to_page(cursor: Option<&Cursor>) -> u32 {
+    cursor
+        .and_then(|c| match c.kind {
+            CursorKind::Offset => c.value.parse::<u32>().ok(),
+            _ => None,
+        })
+        .unwrap_or(1)
 }
 
 /// Map a `CommentView` to a Poly `Message`.
@@ -543,6 +622,81 @@ impl LemmyHttpClient {
             .map_err(|e| ClientError::Network(e.to_string()))
     }
 
+    /// `GET /api/v3/post/list` with explicit sort / page / limit.
+    ///
+    /// `sort` is passed straight through to Lemmy (`Hot`, `New`, `Top`, …).
+    pub async fn fetch_posts_paged(
+        &self,
+        community_id: i64,
+        sort: &str,
+        page: u32,
+        limit: u32,
+    ) -> ClientResult<PostListResponse> {
+        let jwt = self.jwt()?;
+        // Title-case the sort id so we accept both "hot" and "Hot" from the toolbar.
+        let sort_param = {
+            let mut chars = sort.chars();
+            match chars.next() {
+                Some(c) => c.to_ascii_uppercase().to_string() + chars.as_str(),
+                None => "Hot".to_string(),
+            }
+        };
+        let url = self.url(&format!(
+            "/api/v3/post/list?community_id={community_id}&sort={sort_param}&page={page}&limit={limit}"
+        ));
+        let resp = self
+            .http
+            .get(url)
+            .bearer_auth(&jwt)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "GET /api/v3/post/list returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        resp.json::<PostListResponse>()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    /// `GET /api/v3/post?id={id}` — fetch a single post by id.
+    pub async fn fetch_post(&self, post_id: i64) -> ClientResult<PostView> {
+        let jwt = self.jwt()?;
+        let url = self.url(&format!("/api/v3/post?id={post_id}"));
+        let resp = self
+            .http
+            .get(url)
+            .bearer_auth(&jwt)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if resp.status() == StatusCode::NOT_FOUND {
+            return Err(ClientError::NotFound(format!("post {post_id} not found")));
+        }
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "GET /api/v3/post returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        #[derive(Deserialize)]
+        struct SinglePostResponse {
+            post_view: PostView,
+        }
+
+        resp.json::<SinglePostResponse>()
+            .await
+            .map(|r| r.post_view)
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
     /// `GET /api/v3/post/list?community_id={id}&sort=Hot&limit=20`
     pub async fn fetch_posts(&self, community_id: i64) -> ClientResult<PostListResponse> {
         let jwt = self.jwt()?;
@@ -659,3 +813,78 @@ impl LemmyHttpClient {
             .map_err(|e| ClientError::Network(e.to_string()))
     }
 }
+
+// ── Unit tests (Pack E.1 layer-a) ────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+
+    use super::*;
+    use chrono::TimeZone;
+
+    /// Parse the checked-in Lemmy post-list fixture and exercise the pure
+    /// `map_post_to_viewrow` mapping. NO NETWORK.
+    #[test]
+    fn map_post_to_viewrow_from_fixture() {
+        let raw = include_str!("../tests/fixtures/post_list.json");
+        let resp: PostListResponse =
+            serde_json::from_str(raw).expect("fixture must deserialize as PostListResponse");
+
+        assert_eq!(resp.posts.len(), 2);
+
+        // Pin the clock so humanize_age output is deterministic.
+        let now = Utc.with_ymd_and_hms(2026, 4, 18, 12, 0, 0).unwrap();
+
+        let row0 = map_post_to_viewrow(&resp.posts[0], now);
+        assert_eq!(row0.id, "https://lemmy.example.com/post/101");
+        assert_eq!(row0.primary_text, "Rust 2025 edition is here");
+        assert_eq!(row0.secondary_text.as_deref(), Some("by Alice A."));
+        let meta = row0.meta_text.expect("meta required");
+        assert!(meta.starts_with("SCORE:42"), "meta must lead with SCORE:42, got {meta}");
+        assert!(meta.contains("12 comments"), "meta must include comment count: {meta}");
+        assert!(meta.contains("2h"), "meta must include humanized age 2h: {meta}");
+        assert_eq!(row0.context_menu_target_kind, MenuTargetKind::Message);
+
+        // Row 1: creator has no display_name → falls back to `name`.
+        let row1 = map_post_to_viewrow(&resp.posts[1], now);
+        assert_eq!(row1.secondary_text.as_deref(), Some("by bob"));
+        let meta1 = row1.meta_text.expect("meta required");
+        assert!(meta1.starts_with("SCORE:128"));
+        assert!(meta1.contains("5 comments"));
+    }
+
+    #[test]
+    fn humanize_age_buckets() {
+        let base = Utc.with_ymd_and_hms(2026, 4, 18, 12, 0, 0).unwrap();
+        assert_eq!(
+            humanize_age(base - chrono::Duration::seconds(30), base),
+            "30s"
+        );
+        assert_eq!(
+            humanize_age(base - chrono::Duration::minutes(5), base),
+            "5m"
+        );
+        assert_eq!(humanize_age(base - chrono::Duration::hours(3), base), "3h");
+        assert_eq!(humanize_age(base - chrono::Duration::days(2), base), "2d");
+    }
+
+    #[test]
+    fn cursor_round_trip_offset() {
+        let c = Cursor {
+            kind: CursorKind::Offset,
+            value: "3".to_string(),
+        };
+        assert_eq!(cursor_to_page(Some(&c)), 3);
+        assert_eq!(cursor_to_page(None), 1);
+
+        // Full page → next cursor advances.
+        let next = next_page_cursor(3, 25, 25).expect("full page must produce next cursor");
+        assert_eq!(next.value, "4");
+        assert_eq!(next.kind, CursorKind::Offset);
+
+        // Short page → no next cursor.
+        assert!(next_page_cursor(3, 25, 10).is_none());
+    }
+}
+

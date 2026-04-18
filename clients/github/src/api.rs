@@ -227,7 +227,7 @@ impl GhCli {
             .await
             .map_err(|e| GhError::Parse(format!("failed to read response body: {}", e)))?;
 
-        if status != 200 {
+        if !status.is_success() {
             return Err(GhError::Exit {
                 code: status.as_u16() as i32,
                 stderr: String::from_utf8_lossy(&bytes).into_owned(),
@@ -281,6 +281,30 @@ impl GhCli {
     ) -> Result<Vec<GhIssueComment>, GhError> {
         let endpoint = format!("/repos/{owner}/{repo}/issues/{number}/comments?per_page=100");
         self.api_get(&endpoint, &[]).await
+    }
+
+    /// Fetch a single issue or PR by number.
+    pub async fn get_issue(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<GhIssue, GhError> {
+        let endpoint = format!("/repos/{owner}/{repo}/issues/{number}");
+        self.api_get(&endpoint, &[]).await
+    }
+
+    /// Check whether the authenticated user has starred a repo.
+    ///
+    /// Returns `Ok(true)` on 204, `Ok(false)` on 404.
+    /// Any other error is propagated.
+    pub async fn is_starred(&self, owner: &str, repo: &str) -> Result<bool, GhError> {
+        let endpoint = format!("/user/starred/{owner}/{repo}");
+        match self.api_raw(&endpoint, &[]).await {
+            Ok(_) => Ok(true),
+            Err(GhError::Exit { code: 404, .. }) => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 
     /// Fetch the contents of a path in a repo at HEAD of the default branch.

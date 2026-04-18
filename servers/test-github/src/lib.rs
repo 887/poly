@@ -37,8 +37,16 @@ pub fn router_with_state(state: Arc<GitHubState>) -> Router {
             get(routes::list_issues),
         )
         .route(
+            "/repos/{owner}/{repo}/issues/{number}",
+            get(routes::get_issue),
+        )
+        .route(
             "/repos/{owner}/{repo}/issues/{number}/comments",
             get(routes::list_comments),
+        )
+        .route(
+            "/user/starred/{owner}/{repo}",
+            get(routes::check_starred),
         )
         .route(
             "/repos/{owner}/{repo}/contents",
