@@ -1,15 +1,35 @@
 //! Harness helpers for composer toolbar and per-message action surface testing.
 //!
-//! Skeletons only — bodies are `todo!()`. Filled in WP 6.
+//! Pack A.3 — bodies filled.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, unused_variables)]
 
+use poly_client::{ClientBackend, ComposerSlot};
 use poly_plugin_host::PluginBackend;
 
 /// Verify that the composer toolbar buttons declared for the given channel are well-formed.
-#[allow(dead_code)]
+///
+/// Checks:
+/// - Every button has a non-empty `id` (kebab-case action id).
+/// - Every button has a non-empty `label_key`.
+/// - `position` is a valid `ComposerSlot` variant.
 pub async fn composer_buttons_well_formed(backend: &PluginBackend, ch_id: &str) {
-    todo!("WP 6: implement per plan")
+    let buttons = backend
+        .get_composer_buttons(ch_id)
+        .await
+        .expect("get_composer_buttons should not fail");
+
+    // Shape assertions — no items is valid (plugin may declare none).
+    for button in &buttons {
+        assert!(!button.id.is_empty(), "ComposerButton.id must not be empty");
+        assert!(
+            !button.label_key.is_empty(),
+            "ComposerButton.label_key must not be empty for button {:?}",
+            button.id
+        );
+        // position is an enum so it is always valid if deserialized.
+        let _ = button.position;
+    }
 }
 
 /// Verify that the per-message action items declared for a given message are well-formed.
@@ -19,7 +39,19 @@ pub async fn message_actions_well_formed(
     ch_id: &str,
     msg_id: &str,
 ) {
-    todo!("WP 6: implement per plan")
+    let items = backend
+        .get_message_actions(ch_id, msg_id)
+        .await
+        .expect("get_message_actions should not fail");
+
+    for item in &items {
+        assert!(!item.id.is_empty(), "MenuItem.id must not be empty");
+        assert!(
+            !item.label_key.is_empty(),
+            "MenuItem.label_key must not be empty for item {:?}",
+            item.id
+        );
+    }
 }
 
 /// Invoke a known composer action ID and verify the returned outcome is well-formed.
@@ -29,7 +61,13 @@ pub async fn invoke_composer_action_roundtrip(
     ch_id: &str,
     action_id: &str,
 ) {
-    todo!("WP 6: implement per plan")
+    // invoke_composer_action returns Result<ActionOutcome, ClientError>.
+    // For a known action id the plugin should return Ok(...).
+    let outcome = backend.invoke_composer_action(action_id, ch_id).await;
+    assert!(
+        outcome.is_ok(),
+        "invoke_composer_action({action_id}) should succeed for known action id"
+    );
 }
 
 /// Invoke a known per-message action ID and verify the returned outcome is well-formed.
@@ -40,5 +78,9 @@ pub async fn invoke_message_action_roundtrip(
     msg_id: &str,
     action_id: &str,
 ) {
-    todo!("WP 6: implement per plan")
+    let outcome = backend.invoke_message_action(action_id, ch_id, msg_id).await;
+    assert!(
+        outcome.is_ok(),
+        "invoke_message_action({action_id}) should succeed for known action id"
+    );
 }

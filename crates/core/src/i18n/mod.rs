@@ -425,9 +425,144 @@ pub fn t_args(key: &str, args: &[(&str, &str)]) -> String {
         return result.to_string();
     }
 
-    // Key not found anywhere — return the key itself as fallback
+    // Key not found anywhere — return a Title-Cased fallback derived from the key.
+    // Strip `plugin-<id>-<surface>-` prefix and trailing `-label`/`-desc` suffix,
+    // then split on `-` and Title-Case each word.  This gives a readable fallback
+    // when a plugin author forgets an FTL entry — better than a raw kebab string.
     tracing::warn!("Missing i18n key: {key}");
-    key.to_string()
+    title_case_fallback(key)
+}
+
+/// Returns `true` if the given key has an FTL entry in the current locale or
+/// the English fallback bundle.  Does NOT trigger the title-case fallback.
+///
+/// Used by `lookup_optional_desc` (settings sections) to distinguish "plugin
+/// author provided a description" from "plugin author omitted one".
+pub fn has_key(key: &str) -> bool {
+    let state = I18N
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // Try current locale first
+    if let Some(bundle) = state.bundles.get(&state.current_locale) {
+        if bundle.get_message(key).and_then(|m| m.value()).is_some() {
+            return true;
+        }
+    }
+    // Fallback to English
+    if state.current_locale != DEFAULT_LOCALE {
+        if let Some(bundle) = state.bundles.get(DEFAULT_LOCALE) {
+            if bundle.get_message(key).and_then(|m| m.value()).is_some() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Convert a kebab-case FTL key to a human-readable Title-Cased string.
+///
+/// Steps:
+/// 1. Strip a leading `plugin-<id>-<surface>-` prefix (up to the 3rd `-`-separated
+///    segment) if the key starts with `plugin-`.
+/// 2. Strip a trailing `-label` or `-desc` suffix.
+/// 3. Split remaining segments on `-`, Title-Case each, join with space.
+///
+/// Examples:
+/// - `plugin-demo-menu-regenerate-demo-data-label` → `"Regenerate Demo Data"`
+/// - `plugin-stoat-setting-show-avatars-label`     → `"Show Avatars"`
+/// - `some-bare-key`                               → `"Some Bare Key"`
+pub fn title_case_fallback(key: &str) -> String {
+    // Strip plugin prefix: `plugin-<id>-<surface>-`
+    let after_prefix = if let Some(rest) = key.strip_prefix("plugin-") {
+        // Skip plugin-id segment
+        if let Some(after_id) = rest.splitn(2, '-').nth(1) {
+            // Skip surface/section segment
+            if let Some(after_surface) = after_id.splitn(2, '-').nth(1) {
+                after_surface
+            } else {
+                after_id
+            }
+        } else {
+            rest
+        }
+    } else {
+        key
+    };
+
+    // Strip trailing `-label` or `-desc`
+    let stripped = after_prefix
+        .strip_suffix("-label")
+        .or_else(|| after_prefix.strip_suffix("-desc"))
+        .unwrap_or(after_prefix);
+
+    // Title-Case each `-`-separated word
+    stripped
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(test)]
+mod tests_title_case {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::title_case_fallback;
+
+    #[test]
+    fn full_plugin_label_key() {
+        assert_eq!(
+            title_case_fallback("plugin-demo-menu-regenerate-demo-data-label"),
+            "Regenerate Demo Data"
+        );
+    }
+
+    #[test]
+    fn plugin_setting_label() {
+        assert_eq!(
+            title_case_fallback("plugin-stoat-setting-show-avatars-label"),
+            "Show Avatars"
+        );
+    }
+
+    #[test]
+    fn plugin_desc_suffix() {
+        assert_eq!(
+            title_case_fallback("plugin-demo-setting-enabled-desc"),
+            "Enabled"
+        );
+    }
+
+    #[test]
+    fn bare_key_no_prefix() {
+        assert_eq!(title_case_fallback("some-bare-key"), "Some Bare Key");
+    }
+
+    #[test]
+    fn single_segment() {
+        assert_eq!(title_case_fallback("label"), "Label");
+    }
+
+    #[test]
+    fn plugin_no_surface_segment() {
+        assert_eq!(title_case_fallback("plugin-demo-title"), "Title");
+    }
+
+    #[test]
+    fn trailing_label_stripped() {
+        assert_eq!(title_case_fallback("my-cool-feature-label"), "My Cool Feature");
+    }
+
+    #[test]
+    fn trailing_desc_stripped() {
+        assert_eq!(title_case_fallback("my-cool-feature-desc"), "My Cool Feature");
+    }
 }
 
 // ── Dioxus reactive hooks ─────────────────────────────────────────────────────

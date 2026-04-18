@@ -645,6 +645,15 @@
     color: var(--text-primary);
 }
 
+/* P31: composer hook button interactive states */
+.composer-hook-button:hover {
+    opacity: 0.8;
+}
+
+.composer-hook-button:active {
+    transform: scale(0.95);
+}
+
 .gif-btn {
     font-size: 0.7rem;
     font-weight: 700;

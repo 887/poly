@@ -1,0 +1,286 @@
+/* Poly — Plugin-declared non-chat view styling (ListBody / CardBody /
+ * TreeBody / SplitBody + ViewHeader + ViewToolbar).
+ *
+ * Keep these classnames in sync with `crates/core/src/ui/client_ui/view/`.
+ * The new `.view-*` classes are the polished Pack A surface; the older
+ * `.client-view-*` classes remain as aliases for anything that may still
+ * reference them externally (snapshots, docs).
+ * ===================================================================== */
+
+/* ===========================
+ * View shell
+ * =========================== */
+.client-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--bg-primary);
+}
+
+.client-view-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* ===========================
+ * P8 — View header
+ * =========================== */
+.view-header,
+.client-view-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+}
+
+.view-header-title,
+.client-view-header-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.view-header-subtitle,
+.client-view-header-subtitle {
+    margin: 4px 0 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.view-header-info {
+    margin-top: 12px;
+}
+
+/* ===========================
+ * P1 — Toolbar tabs (HotNew separator)
+ * =========================== */
+.client-view-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--bg-surface);
+}
+
+.view-toolbar-tabs,
+.client-view-toolbar-tabs,
+.client-view-toolbar-sorts,
+.client-view-toolbar-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.view-toolbar-tab,
+.client-view-tab,
+.client-view-sort,
+.client-view-filter-chip {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.view-toolbar-tab:hover,
+.client-view-tab:hover,
+.client-view-sort:hover,
+.client-view-filter-chip:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.view-toolbar-tab.selected,
+.client-view-tab.selected,
+.client-view-sort.selected,
+.client-view-filter-chip.selected {
+    background: var(--bg-active);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+}
+
+/* ===========================
+ * P2 — Row cards (ListBody / TreeBody / CardBody)
+ * =========================== */
+.view-row-card,
+.client-view-list-row,
+.client-view-tree-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-primary);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.view-row-card:hover,
+.client-view-list-row:hover,
+.client-view-tree-row:hover,
+.client-view-card:hover {
+    background: var(--bg-hover);
+}
+
+.view-row-icon,
+.client-view-row-icon {
+    flex: 0 0 auto;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.view-row-text,
+.client-view-row-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.view-row-primary,
+.client-view-row-primary {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.view-row-secondary,
+.client-view-row-secondary {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.view-row-meta,
+.client-view-row-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.view-row-badge,
+.client-view-row-badge {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: var(--badge-bg);
+    color: var(--badge-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* ===========================
+ * Card body grid
+ * =========================== */
+.client-view-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    padding: 16px;
+}
+
+.client-view-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 16px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.client-view-card:hover {
+    border-color: var(--border-secondary);
+}
+
+/* ===========================
+ * P3 — Inline row detail
+ * =========================== */
+.view-row-detail {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-primary);
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+}
+
+.view-row-detail-loading,
+.view-row-detail-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ===========================
+ * Split body
+ * =========================== */
+.client-view-split {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) 2fr;
+    gap: 0;
+    height: 100%;
+    min-height: 0;
+}
+
+.client-view-split-list {
+    border-right: 1px solid var(--border-primary);
+    overflow-y: auto;
+}
+
+.client-view-split-detail {
+    overflow-y: auto;
+    padding: 16px 20px;
+}
+
+.client-view-split-row {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-primary);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.client-view-split-row:hover {
+    background: var(--bg-hover);
+}
+
+.client-view-split-row.selected {
+    background: var(--bg-active);
+}
+
+.client-view-split-placeholder {
+    color: var(--text-muted);
+    padding: 24px;
+    text-align: center;
+}
+
+/* ===========================
+ * Loading / error / empty states
+ * =========================== */
+.client-view-list-loading,
+.client-view-list-error,
+.client-view-list-empty,
+.client-view-tree-loading,
+.client-view-tree-error,
+.client-view-tree-empty,
+.client-view-cards-loading,
+.client-view-cards-error,
+.client-view-cards-empty,
+.client-view-loading,
+.client-view-error {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+}

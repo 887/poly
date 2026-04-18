@@ -28,7 +28,7 @@
 //! plugin-declared panels match the host-owned panels visually.
 
 use crate::client_manager::ClientManager;
-use crate::i18n::t;
+use crate::i18n::{has_key, t};
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{
@@ -75,6 +75,16 @@ impl UiAction for PluginSettingFieldAction {
     }
 }
 
+/// P23 — resolve an optional FTL description key.
+///
+/// Returns `Some(resolved)` when the key is present in the bundle, `None`
+/// when `t()` echoes back the raw key (indicating the plugin omitted the FTL
+/// entry). Callers use this to omit the desc `<p>` entirely rather than
+/// showing a raw kebab-case key in the UI.
+pub fn lookup_optional_desc(key: &str) -> Option<String> {
+    if has_key(key) { Some(t(key)) } else { None }
+}
+
 /// Render a plugin-declared settings section.
 ///
 /// See the module docs for the prop contract. One `use_resource` per field
@@ -98,15 +108,21 @@ pub fn PluginSettingsSection(
     let has_info_block = section.info_block.is_some();
 
     let fields = section.fields.clone();
+    // P48: unique id for aria-labelledby on the region.
+    let header_id = format!("plugin-section-header-{section_key}");
 
     rsx! {
-        div { class: "settings-section plugin-section",
+        // P48: settings section is a landmark region labelled by its heading.
+        div {
+            class: "settings-section plugin-section",
+            role: "region",
+            aria_labelledby: "{header_id}",
             // 1. Section header (icon + label).
             div { class: "plugin-section-header",
                 if !icon.is_empty() {
                     span { class: "plugin-section-icon", "{icon}" }
                 }
-                h2 { class: "plugin-section-title", "{header_label}" }
+                h2 { id: "{header_id}", class: "plugin-section-title", "{header_label}" }
             }
             // 2. Optional info-block — stub until WP 5 ships CustomBlock.
             if has_info_block {
@@ -166,8 +182,10 @@ fn PluginSettingField(
     let field_key = field.key.clone();
     // Resolve both FTL keys through the host i18n store. `t()` returns the
     // raw key on miss so empty plugin bundles still render something.
+    // P23: use lookup_optional_desc so the desc is omitted when the plugin
+    // hasn't provided an FTL entry for it (t() would echo the key back).
     let label_key = t(&format!("setting-{}-label", field.key));
-    let desc_key = t(&format!("setting-{}-desc", field.key));
+    let desc_opt = lookup_optional_desc(&format!("setting-{}-desc", field.key));
 
     // Fetch current value from the plugin on mount.
     let value_res = {
@@ -202,7 +220,7 @@ fn PluginSettingField(
             render_widget(
                 field.clone(),
                 label_key,
-                desc_key,
+                desc_opt,
                 current_json,
                 account_id,
                 scope,
@@ -226,7 +244,7 @@ fn render_error_row(label: &str, msg: &str) -> Element {
 fn render_widget(
     field: SettingDescriptor,
     label_key: String,
-    desc_key: String,
+    desc_opt: Option<String>,
     current_json: String,
     account_id: String,
     scope: SettingsScope,
@@ -234,41 +252,48 @@ fn render_widget(
 ) -> Element {
     match field.kind {
         SettingKind::Toggle => render_toggle(
-            field, label_key, desc_key, current_json, account_id, scope, scope_id,
+            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
         ),
         SettingKind::TextInput => render_text_input(
-            field, label_key, desc_key, current_json, account_id, scope, scope_id,
+            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
         ),
         SettingKind::Select => render_select(
-            field, label_key, desc_key, current_json, account_id, scope, scope_id,
+            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
         ),
         SettingKind::Slider => render_slider(
-            field, label_key, desc_key, current_json, account_id, scope, scope_id,
+            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
         ),
-        SettingKind::InfoLabel => render_info_label(label_key, desc_key, current_json),
+        SettingKind::InfoLabel => render_info_label(label_key, desc_opt, current_json),
     }
 }
 
 fn render_toggle(
     field: SettingDescriptor,
     label_key: String,
-    desc_key: String,
+    desc_opt: Option<String>,
     current_json: String,
     account_id: String,
     scope: SettingsScope,
     scope_id: String,
 ) -> Element {
     let checked = serde_json::from_str::<bool>(&current_json).unwrap_or(false);
+    let checked_str = if checked { "true" } else { "false" };
     let key = field.key.clone();
     rsx! {
         div { class: "settings-toggle-row",
             div { class: "settings-toggle-label-group",
                 label { class: "settings-toggle-label", "{label_key}" }
-                p { class: "settings-toggle-desc", "{desc_key}" }
+                // P23: only render desc when the FTL key resolves to a real string.
+                if let Some(desc) = desc_opt {
+                    p { class: "settings-toggle-desc", "{desc}" }
+                }
             }
             label { class: "toggle-switch",
+                // P48: role=switch + aria-checked for screen readers.
                 input {
                     r#type: "checkbox",
+                    role: "switch",
+                    aria_checked: "{checked_str}",
                     checked,
                     onchange: move |evt| {
                         let new_val = evt.checked();
@@ -290,7 +315,7 @@ fn render_toggle(
 fn render_text_input(
     field: SettingDescriptor,
     label_key: String,
-    desc_key: String,
+    desc_opt: Option<String>,
     current_json: String,
     account_id: String,
     scope: SettingsScope,
@@ -302,7 +327,10 @@ fn render_text_input(
         div { class: "settings-text-row",
             div { class: "settings-toggle-label-group",
                 label { class: "settings-toggle-label", "{label_key}" }
-                p { class: "settings-toggle-desc", "{desc_key}" }
+                // P23: only render desc when FTL key resolves to a real string.
+                if let Some(desc) = desc_opt {
+                    p { class: "settings-toggle-desc", "{desc}" }
+                }
             }
             input {
                 class: "settings-text-input",
@@ -327,7 +355,7 @@ fn render_text_input(
 fn render_select(
     field: SettingDescriptor,
     label_key: String,
-    desc_key: String,
+    desc_opt: Option<String>,
     current_json: String,
     account_id: String,
     scope: SettingsScope,
@@ -341,7 +369,10 @@ fn render_select(
         div { class: "settings-select-row",
             div { class: "settings-toggle-label-group",
                 label { class: "settings-toggle-label", "{label_key}" }
-                p { class: "settings-toggle-desc", "{desc_key}" }
+                // P23: only render desc when FTL key resolves to a real string.
+                if let Some(desc) = desc_opt {
+                    p { class: "settings-toggle-desc", "{desc}" }
+                }
             }
             select {
                 class: "settings-select",
@@ -374,7 +405,7 @@ fn render_select(
 fn render_slider(
     field: SettingDescriptor,
     label_key: String,
-    desc_key: String,
+    desc_opt: Option<String>,
     current_json: String,
     account_id: String,
     scope: SettingsScope,
@@ -392,11 +423,19 @@ fn render_slider(
         div { class: "settings-slider-row",
             div { class: "settings-toggle-label-group",
                 label { class: "settings-toggle-label", "{label_key}" }
-                p { class: "settings-toggle-desc", "{desc_key}" }
+                // P23: only render desc when FTL key resolves to a real string.
+                if let Some(desc) = desc_opt {
+                    p { class: "settings-toggle-desc", "{desc}" }
+                }
             }
             input {
                 class: "settings-slider",
                 r#type: "range",
+                // P48: slider ARIA attributes.
+                role: "slider",
+                aria_valuemin: "{min}",
+                aria_valuemax: "{max}",
+                aria_valuenow: "{value}",
                 min: "{min}",
                 max: "{max}",
                 step: "{step}",
@@ -419,10 +458,13 @@ fn render_slider(
     }
 }
 
-fn render_info_label(label_key: String, desc_key: String, current_json: String) -> Element {
+fn render_info_label(label_key: String, desc_opt: Option<String>, current_json: String) -> Element {
     // InfoLabel is non-interactive. The stored JSON string is the body text
-    // if any; otherwise fall back to the desc-key.
-    let body = serde_json::from_str::<String>(&current_json).unwrap_or(desc_key);
+    // if any; otherwise fall back to the desc (if present).
+    let body = serde_json::from_str::<String>(&current_json)
+        .ok()
+        .or(desc_opt)
+        .unwrap_or_default();
     rsx! {
         div { class: "settings-info-row",
             label { class: "settings-toggle-label", "{label_key}" }
@@ -484,4 +526,27 @@ fn resolve_backend(
         .read()
         .get_backend(account_id)
         .ok_or_else(|| ClientError::NotFound(format!("no backend for account {account_id}")))
+}
+
+// ─── Unit tests ──────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::lookup_optional_desc;
+
+    /// P23: when the FTL key is missing, lookup_optional_desc returns None.
+    #[test]
+    fn optional_desc_missing_returns_none() {
+        let result = lookup_optional_desc("__nonexistent-key-for-test-desc__");
+        assert!(result.is_none(), "missing FTL key should yield None");
+    }
+
+    /// P23: a key equal to its own resolved value means no FTL entry → None.
+    #[test]
+    fn optional_desc_echoed_key_returns_none() {
+        let fake_key = "plugin-test-setting-noop-desc";
+        let result = lookup_optional_desc(fake_key);
+        assert!(result.is_none());
+    }
 }

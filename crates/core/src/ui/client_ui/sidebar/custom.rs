@@ -7,8 +7,9 @@
 //! tree is visible in snapshots.
 
 use crate::i18n::t;
+use crate::ui::client_ui::custom_block::sanitize_html;
 use dioxus::prelude::*;
-use poly_client::{SidebarDeclaration, SidebarItem, SidebarSection};
+use poly_client::{IconSource, SidebarDeclaration, SidebarItem, SidebarSection};
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Render a plugin-declared sidebar declaration.
@@ -20,7 +21,10 @@ pub fn CustomSidebar(declaration: SidebarDeclaration) -> Element {
     let sections = declaration.sections.clone();
 
     rsx! {
-        aside { class: "client-sidebar custom-sidebar",
+        aside {
+            class: "client-sidebar custom-sidebar",
+            role: "navigation",
+            aria_label: t("ui-sidebar-nav-label"),
             if has_header_block {
                 div { class: "custom-sidebar-header-block",
                     // WP 5 will render the sanitized CustomBlock here.
@@ -124,15 +128,20 @@ fn build_node(
 fn SidebarItemRow(node: SidebarNode, depth: usize) -> Element {
     let label = t(&node.item.label_key);
     let badge = node.item.badge.clone();
+    let icon = node.item.icon.clone();
     let children = node.children.clone();
     let has_children = !children.is_empty();
     let indent = format!("padding-left: {}px;", 8 + depth.saturating_mul(12));
 
     rsx! {
-        li { class: "custom-sidebar-item",
+        li {
+            class: "custom-sidebar-item",
+            role: "menuitem",
             div {
                 class: "custom-sidebar-item-row",
                 style: "{indent}",
+                // P30: render icon if declared
+                {render_sidebar_icon(icon)}
                 span { class: "custom-sidebar-item-label", "{label}" }
                 if let Some(b) = badge {
                     span { class: "custom-sidebar-item-badge", "{b}" }
@@ -150,5 +159,59 @@ fn SidebarItemRow(node: SidebarNode, depth: usize) -> Element {
                 }
             }
         }
+    }
+}
+
+/// P30 — render an `Option<IconSource>` as a sidebar icon span.
+/// - `Emoji(s)` → `span.sidebar-item-icon` with the emoji text.
+/// - `Svg(s)`   → sanitize via `sanitize_html`, then inject as inner HTML.
+/// - `None`     → nothing.
+fn render_sidebar_icon(icon: Option<IconSource>) -> Element {
+    match icon {
+        None => rsx! {},
+        Some(IconSource::Emoji(s)) => rsx! {
+            span { class: "sidebar-item-icon", "{s}" }
+        },
+        Some(IconSource::Svg(raw)) => {
+            let sanitized = sanitize_html(&raw);
+            rsx! {
+                span {
+                    class: "sidebar-item-icon sidebar-item-icon-svg",
+                    dangerous_inner_html: "{sanitized}",
+                }
+            }
+        }
+    }
+}
+
+// ─── Unit tests ──────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::render_sidebar_icon;
+    use poly_client::IconSource;
+
+    /// P30: Emoji variant renders without error.
+    #[test]
+    fn sidebar_icon_emoji_renders_text() {
+        let el = render_sidebar_icon(Some(IconSource::Emoji("🎉".to_string())));
+        assert!(el.is_ok(), "Emoji icon should produce a valid element");
+    }
+
+    /// P30: SVG variant renders without error.
+    #[test]
+    fn sidebar_icon_svg_renders_element() {
+        let svg = r#"<svg viewBox="0 0 16 16"><path d="M8 0L16 16H0z"/></svg>"#;
+        let el = render_sidebar_icon(Some(IconSource::Svg(svg.to_string())));
+        assert!(el.is_ok(), "Svg icon should produce a valid element");
+    }
+
+    /// P30: None variant renders without error (produces empty element).
+    #[test]
+    fn sidebar_icon_none_renders_empty() {
+        let el = render_sidebar_icon(None);
+        assert!(el.is_ok(), "None icon should produce a valid (empty) element");
     }
 }

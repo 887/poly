@@ -44,6 +44,7 @@ const PARTIALS: &[&str] = &[
     "media-viewer.css",        // Route-backed fullscreen message media viewer
     "code-explorer.css",       // GitHub / code-channel two-pane explorer
     "server-overview.css",     // Forge backend repo/server overview landing page
+    "client-view.css",         // Plugin-declared non-chat view (list/card/tree/split body, toolbar, header)
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

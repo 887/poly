@@ -176,11 +176,15 @@ fn render_composer_button(
 
     rsx! {
         button {
+            // P48: explicit type + aria-label so the button is accessible.
+            r#type: "button",
             id: "{button_id_attr}",
             class: "toolbar-btn composer-hook-button",
             title: "{title}",
+            aria_label: "{title}",
             onclick,
-            "{icon}"
+            // P15: wrap icon in a span so CSS can independently style it.
+            span { class: "composer-button-icon", "{icon}" }
         }
     }
 }
@@ -237,6 +241,9 @@ pub fn MessageActions(
     }
 
     rsx! {
+        // P33: prepend a separator before plugin-contributed items so they
+        // are visually distinct from the host-universal action bar items.
+        div { class: "message-action-separator" }
         for item in items {
             {render_message_action_item(
                 item,

@@ -20,21 +20,21 @@ pub fn TreeBody(channel_id: String, account_id: String, spec: TreeSpec) -> Eleme
 
     // Guard against runaway plugins — `max_depth * root_page_size` is a
     // reasonable upper ceiling on visible rows for the initial page.
-    let max_rows = spec
-        .root_page_size
-        .saturating_mul(spec.max_depth.max(1))
-        .max(spec.root_page_size) as usize;
+    let max_rows = max_visible_rows(&spec);
 
     match &*rows_res.read_unchecked() {
         None => rsx! {
-            div { class: "client-view-tree client-view-tree-loading",
+            div {
+                class: "client-view-tree client-view-tree-loading",
+                role: "tree",
+                "aria-busy": "true",
                 span { "Loading…" }
             }
         },
         Some(Err(err)) => {
             tracing::debug!("TreeBody: get_view_rows failed: {err:?}");
             rsx! {
-                div { class: "client-view-tree client-view-tree-error",
+                div { class: "client-view-tree client-view-tree-error", role: "tree",
                     span { "Failed to load thread" }
                 }
             }
@@ -46,13 +46,13 @@ pub fn TreeBody(channel_id: String, account_id: String, spec: TreeSpec) -> Eleme
             }
             if rows.is_empty() {
                 rsx! {
-                    div { class: "client-view-tree client-view-tree-empty",
+                    div { class: "client-view-tree client-view-tree-empty", role: "tree",
                         span { "No items" }
                     }
                 }
             } else {
                 rsx! {
-                    div { class: "client-view-tree",
+                    div { class: "client-view-tree", role: "tree",
                         for (idx, row) in rows.into_iter().enumerate() {
                             {
                                 let id = row.id.clone();
@@ -69,14 +69,15 @@ pub fn TreeBody(channel_id: String, account_id: String, spec: TreeSpec) -> Eleme
                                 rsx! {
                                     div {
                                         key: "{id}",
-                                        class: "client-view-tree-row",
+                                        class: "client-view-tree-row view-row-card",
+                                        role: "treeitem",
                                         style: "padding-left: {indent_px}px;",
-                                        div { class: "client-view-row-primary", "{primary}" }
+                                        h3 { class: "client-view-row-primary view-row-primary", "{primary}" }
                                         if let Some(sec) = secondary {
-                                            div { class: "client-view-row-secondary", "{sec}" }
+                                            span { class: "client-view-row-secondary view-row-secondary", "{sec}" }
                                         }
                                         if let Some(meta) = meta {
-                                            div { class: "client-view-row-meta", "{meta}" }
+                                            span { class: "client-view-row-meta view-row-meta", "{meta}" }
                                         }
                                     }
                                 }
@@ -86,5 +87,51 @@ pub fn TreeBody(channel_id: String, account_id: String, spec: TreeSpec) -> Eleme
                 }
             }
         }
+    }
+}
+
+/// Pure helper — the upper-bound cap on rendered rows. Extracted so unit
+/// tests can pin the formula without spinning up a Dioxus virtual DOM.
+pub(crate) fn max_visible_rows(spec: &TreeSpec) -> usize {
+    spec.root_page_size
+        .saturating_mul(spec.max_depth.max(1))
+        .max(spec.root_page_size) as usize
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn max_visible_rows_multiplies_page_size_by_depth() {
+        let spec = TreeSpec {
+            root_page_size: 10,
+            max_depth: 3,
+        };
+        assert_eq!(max_visible_rows(&spec), 30);
+    }
+
+    #[test]
+    fn max_visible_rows_floors_depth_at_one() {
+        let spec = TreeSpec {
+            root_page_size: 10,
+            max_depth: 0,
+        };
+        assert_eq!(max_visible_rows(&spec), 10);
+    }
+
+    #[test]
+    fn max_visible_rows_handles_saturating_overflow() {
+        // Runaway plugin returns absurd values; saturating_mul caps without
+        // panicking, and the `.max(root_page_size)` keeps the value sane.
+        let spec = TreeSpec {
+            root_page_size: u32::MAX,
+            max_depth: u32::MAX,
+        };
+        // Still a finite usize on 64-bit targets; on 32-bit it saturates at
+        // u32::MAX which is the function contract.
+        let v = max_visible_rows(&spec);
+        assert!(v >= u32::MAX as usize);
     }
 }
