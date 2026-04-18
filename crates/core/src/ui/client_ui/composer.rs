@@ -16,6 +16,8 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::ui::account::server::context_menu::ContextMenuItem;
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
+use crate::ui::client_ui::toast::ToastMessage;
 use dioxus::prelude::*;
 use poly_client::{
     ActionOutcome, ClientError, ComposerButton, ComposerSlot, MenuItem, MenuItemVariant,
@@ -315,7 +317,7 @@ async fn invoke_composer(account_id: &str, action_id: &str, channel_id: &str) {
         guard.invoke_composer_action(action_id, channel_id).await
     };
 
-    log_outcome("invoke_composer_action", action_id, outcome);
+    dispatch_outcome(account_id, outcome, client_manager);
 }
 
 async fn invoke_message(
@@ -344,23 +346,34 @@ async fn invoke_message(
             .await
     };
 
-    log_outcome("invoke_message_action", action_id, outcome);
+    dispatch_outcome(account_id, outcome, client_manager);
 }
 
-fn log_outcome(what: &str, action_id: &str, outcome: Result<ActionOutcome, ClientError>) {
-    match outcome {
-        Ok(ActionOutcome::Navigate(route)) => {
-            // Route-routing wires up in WP 7 / WP 8 (see ClientMenu::dispatch_action).
-            tracing::info!("{what}({action_id}): Navigate({route}) — wiring pending");
-        }
-        Ok(ActionOutcome::Toast(payload)) => {
-            tracing::info!("{what}({action_id}): toast {payload:?}");
-        }
-        Ok(other) => {
-            tracing::debug!("{what}({action_id}): outcome {other:?}");
-        }
-        Err(err) => {
-            tracing::warn!("{what}({action_id}) failed: {err:?}");
-        }
-    }
+/// Pack B: replace the prior `log_outcome` shim with the shared
+/// [`handle_action_outcome`] dispatcher. If the toast queue / refresh signal
+/// aren't in context (e.g. snapshot test harness), fall back to a log-only
+/// path so the component never panics in limited mounts.
+fn dispatch_outcome(
+    account_id: &str,
+    outcome: Result<ActionOutcome, ClientError>,
+    client_manager: Signal<ClientManager>,
+) {
+    let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
+        tracing::info!(
+            "composer: action outcome (no-toast-ctx) account={account_id}: {outcome:?}"
+        );
+        return;
+    };
+    let Some(refresh_sidebar) = try_consume_context::<Signal<u32>>() else {
+        tracing::debug!("composer: no sidebar refresh signal in context");
+        return;
+    };
+    let cx = ActionOutcomeCx {
+        toast_queue,
+        refresh_sidebar,
+        refresh_target: None,
+        client_manager,
+        account_id: account_id.to_string(),
+    };
+    handle_action_outcome(outcome, cx);
 }

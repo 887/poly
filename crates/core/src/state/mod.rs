@@ -418,6 +418,12 @@ pub struct AppState {
     /// `context_menu` / `channel_context_menu` scalar fields above will
     /// be retired once every menu-opening site migrates.
     pub context_menu_stack: Vec<ActiveContextMenu>,
+    /// Pack B P28 — monotonic counter incremented on receipt of a
+    /// [`poly_client::ClientEvent::SidebarInvalidated`] event from any
+    /// active backend. `ClientSidebar` reads this into its `use_resource`
+    /// dependency list so an increment forces a re-fetch of
+    /// `get_sidebar_declaration`.
+    pub sidebar_invalidated_tick: u32,
 }
 
 impl Default for AppState {
@@ -436,6 +442,7 @@ impl Default for AppState {
             context_menu: None,
             channel_context_menu: None,
             context_menu_stack: Vec::new(),
+            sidebar_invalidated_tick: 0,
         }
     }
 }

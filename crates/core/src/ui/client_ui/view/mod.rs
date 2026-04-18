@@ -89,6 +89,11 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
     // the body engines short-circuit their filter pass.
     let filter = use_signal(String::new);
     let refresh_tick = use_signal(|| 0u32);
+    // P4 — parent-owned toolbar selection signals. Toolbar writes on
+    // click; body engines read and pass into `get_view_rows`.
+    let selected_sort = use_signal(|| None::<String>);
+    let selected_filter = use_signal(|| None::<String>);
+    let selected_tab = use_signal(|| None::<String>);
     let filter_str = filter.read().clone();
     rsx! {
         div { class: "client-view",
@@ -96,7 +101,14 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                 ViewHeader { header: h }
             }
             if let Some(t) = toolbar {
-                ViewToolbar { toolbar: t, filter, refresh_tick }
+                ViewToolbar {
+                    toolbar: t,
+                    filter,
+                    refresh_tick,
+                    selected_sort,
+                    selected_filter,
+                    selected_tab,
+                }
             }
             div { class: "client-view-body",
                 {
@@ -107,6 +119,9 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                                 account_id: account_id.clone(),
                                 spec,
                                 filter: filter_str.clone(),
+                                selected_sort,
+                                selected_filter,
+                                selected_tab,
                             }
                         },
                         ViewBody::CardBody(spec) => rsx! {
@@ -122,6 +137,9 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                                 account_id: account_id.clone(),
                                 spec,
                                 filter: filter_str.clone(),
+                                selected_sort,
+                                selected_filter,
+                                selected_tab,
                             }
                         },
                         ViewBody::SplitBody(spec) => rsx! {

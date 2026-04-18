@@ -493,7 +493,7 @@ pub(crate) async fn toggle_demo_forum_on(
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
-    app_state: Signal<AppState>,
+    mut app_state: Signal<AppState>,
     mut chat_data: Signal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) {
@@ -567,6 +567,12 @@ pub(crate) fn spawn_event_stream_listener(
                 }
                 ClientEvent::TypingStarted { .. } => {
                     // TODO(phase-3): show typing indicator in chat view
+                }
+                ClientEvent::SidebarInvalidated => {
+                    // P28 — bump the tick so `ClientSidebar`'s
+                    // `use_resource` re-fetches `get_sidebar_declaration`.
+                    let mut s = app_state.write();
+                    s.sidebar_invalidated_tick = s.sidebar_invalidated_tick.wrapping_add(1);
                 }
                 _ => {}
             }

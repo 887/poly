@@ -13,7 +13,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn CardBody(channel_id: String, account_id: String, spec: CardSpec) -> Element {
     let _ = spec;
-    let rows_res = fetch_first_page(channel_id.clone(), account_id.clone());
+    let rows_res = fetch_first_page(channel_id.clone(), account_id.clone(), None, None, None);
 
     match &*rows_res.read_unchecked() {
         None => rsx! {

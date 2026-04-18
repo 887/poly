@@ -58,14 +58,45 @@ pub fn ViewToolbar(
     /// the parent can `.restart()` its `use_resource`.
     #[props(default)]
     refresh_tick: Signal<u32>,
+    /// P4 — parent-owned selected sort id. Toolbar writes; body engines
+    /// read (and pass it into `get_view_rows`) so changing sort re-fetches.
+    #[props(default)]
+    selected_sort: Signal<Option<String>>,
+    /// P4 — parent-owned selected filter id.
+    #[props(default)]
+    selected_filter: Signal<Option<String>>,
+    /// P4 — parent-owned selected tab id.
+    #[props(default)]
+    selected_tab: Signal<Option<String>>,
 ) -> Element {
     let default_sort = default_id(&toolbar.sort_options);
     let default_filter = default_id(&toolbar.filter_options);
     let default_tab = default_id(&toolbar.tabs);
 
-    let mut selected_sort = use_signal(|| default_sort);
-    let mut selected_filter = use_signal(|| default_filter);
-    let mut selected_tab = use_signal(|| default_tab);
+    // P4 — seed the parent-owned signals with the plugin's declared
+    // default the first time this toolbar renders. Use `with_mut` so we
+    // don't overwrite a parent-provided selection.
+    let mut selected_sort = selected_sort;
+    let mut selected_filter = selected_filter;
+    let mut selected_tab = selected_tab;
+    {
+        let mut s = selected_sort.write();
+        if s.is_none() {
+            *s = default_sort.clone();
+        }
+    }
+    {
+        let mut f = selected_filter.write();
+        if f.is_none() {
+            *f = default_filter.clone();
+        }
+    }
+    {
+        let mut t = selected_tab.write();
+        if t.is_none() {
+            *t = default_tab.clone();
+        }
+    }
 
     let sorts = toolbar.sort_options.clone();
     let filters = toolbar.filter_options.clone();

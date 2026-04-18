@@ -127,7 +127,20 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                     div { class: "client-view-split-placeholder", "Select an item" }
                 } else {
                     match &*detail_res.read_unchecked() {
-                        None => rsx! { div { class: "client-view-split-loading", "Loading…" } },
+                        // P7 — visible loading state while the plugin
+                        // resolves `get_view_detail`. The ARIA-busy
+                        // attribute and the `.view-row-detail-spinner`
+                        // class drive an SR announcement + the spin
+                        // animation declared in the theme CSS.
+                        None => rsx! {
+                            div {
+                                class: "client-view-split-loading view-row-detail-loading",
+                                "aria-busy": "true",
+                                role: "status",
+                                span { class: "view-row-detail-spinner", "" }
+                                span { "Loading…" }
+                            }
+                        },
                         Some(Err(err)) => {
                             tracing::debug!("SplitBody: get_view_detail failed: {err:?}");
                             rsx! { div { class: "client-view-split-error", "Failed to load detail" } }

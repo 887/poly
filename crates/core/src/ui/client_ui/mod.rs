@@ -7,16 +7,20 @@
 //!
 //! All six components are skeletons at WP 1; filled in WPs 2-6.
 
+pub mod action_outcome;
 pub mod composer;
 pub mod custom_block;
 pub mod menu;
 pub mod settings_section;
 pub mod sidebar;
+pub mod toast;
 pub mod view;
 
+pub use action_outcome::{handle_action_outcome, ActionOutcomeCx};
 pub use composer::{ClientComposerAction, ClientMessageAction, ComposerHooks, MessageActions};
 pub use custom_block::CustomBlock;
 pub use menu::ClientMenu;
 pub use settings_section::PluginSettingsSection;
 pub use sidebar::ClientSidebar;
+pub use toast::{push_toast, ToastMessage, ToastOverlay};
 pub use view::ClientView;

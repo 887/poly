@@ -277,6 +277,23 @@ Each item below is tagged `severity`, `surface`, and `parent-WP` so we can sort/
 |---|---|---|---|
 | P61 | 🟠 | **Mic / speaker buttons** in account bar render on non-voice backends. Same capability gate as P57. | `crates/core/src/ui/account/common/account_bar.rs`, `voice_banner.rs` |
 
+### 4.15 Visual regression (user-reported, 2026-04-18)
+
+User feedback during Pack A/B rollout. These are the "it looks like shit" complaints that Pack A missed.
+
+| # | Severity | Item | Files |
+|---|---|---|---|
+| P62 | 🔴 | **Filter input has no styling.** `.forum-filter-input` CSS missing — renders as a plain browser `<input>`. Needs dark-theme background, subtle border, padding, rounded corners, focus ring. | `crates/core/assets/styling/` |
+| P63 | 🟠 | **Settings use browser `<input type="checkbox">`** instead of the common left/right toggle switch. Every toggle setting in `PluginSettingsSection` + existing host settings. Replace with `.toggle-switch` pattern (slider that moves on click; already used in legacy `plugin_settings.rs`). | `crates/core/src/ui/client_ui/settings_section.rs`, theme CSS |
+| P64 | 🟠 | **Sharp corners everywhere.** Context menu, settings cards, toast overlay, forum post cards, sidebar items — all 0 border-radius or tiny 4px. Move to 8-12px border-radius across the board to match modern messenger apps. | theme CSS globally |
+| P65 | 🔴 | **User reports can't click a post** (as of 2026-04-18 after TreeBodyRow fix). Previous verification worked; double-check via poly-web + if broken, investigate hover / pointer-events / z-index conflict. | list_body.rs, tree_body.rs, CSS |
+| P66 | 🟠 | **Sort dropdown unstyled** — renders as native `<select>`. Match the rest of the UI with custom-styled dropdown (arrow icon, rounded, dark bg). | `.forum-sort-select` CSS |
+| P67 | 🟠 | **Refresh button visual weight wrong** — tiny `↻` glyph with no button styling. Give it a circular button treatment matching the rest of the toolbar. | `.forum-refresh-btn` CSS |
+
+| # | Severity | Item | Files |
+|---|---|---|---|
+| P61 | 🟠 | **Mic / speaker buttons** in account bar render on non-voice backends. Same capability gate as P57. | `crates/core/src/ui/account/common/account_bar.rs`, `voice_banner.rs` |
+
 ---
 
 ## 5. Proposed Sequencing

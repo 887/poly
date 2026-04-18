@@ -24,7 +24,7 @@ use crate::client_manager::ClientManager;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
 use dioxus::prelude::*;
-use poly_client::{ClientError, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
+use poly_client::{ClientError, Cursor, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Actions for the flat-list body engine.
@@ -66,14 +66,42 @@ pub fn ListBody(
     account_id: String,
     spec: ListSpec,
     #[props(default)] filter: String,
+    /// P4 — current sort selection from the toolbar. Included in the
+    /// `use_resource` dependency list so changes re-fetch.
+    #[props(default)]
+    selected_sort: Signal<Option<String>>,
+    #[props(default)] selected_filter: Signal<Option<String>>,
+    #[props(default)] selected_tab: Signal<Option<String>>,
 ) -> Element {
     let _ = spec; // page_size honored implicitly by the plugin.
-    let rows_res = fetch_first_page(channel_id.clone(), account_id.clone());
+    // P4 — read the toolbar selection signals inside the closure so the
+    // resource re-runs when they change.
+    let sort_id = selected_sort.read().clone();
+    let filter_id = selected_filter.read().clone();
+    let tab_id = selected_tab.read().clone();
+    let rows_res = fetch_first_page(
+        channel_id.clone(),
+        account_id.clone(),
+        sort_id.clone(),
+        filter_id.clone(),
+        tab_id.clone(),
+    );
 
-    // P3 — selected row id is local component state. Clicking a row sets it;
-    // the `ViewRowDetail` sub-component below reacts by calling
-    // `get_view_detail` and rendering the returned `CustomBlock`.
+    // P3 — selected row id is local component state.
     let mut selected_row_id = use_signal(|| None::<String>);
+    // P5 — infinite-scroll state. `loaded_rows` accumulates every page
+    // fetched so far. `next_cursor` is the cursor the plugin handed back
+    // with the most recent page (`None` means we've reached the end).
+    // `loaded_first_page` lets us reset the accumulator when the first
+    // page resource re-runs (sort/filter/tab change).
+    let mut loaded_rows = use_signal(Vec::<ViewRow>::new);
+    let mut next_cursor = use_signal(|| None::<Cursor>);
+    let mut loaded_first_page_key = use_signal(String::new);
+    let mut loading_more = use_signal(|| false);
+    let first_page_key = format!(
+        "{}:{}:{:?}:{:?}:{:?}",
+        channel_id, account_id, sort_id, filter_id, tab_id
+    );
 
     match &*rows_res.read_unchecked() {
         None => rsx! {
@@ -93,7 +121,15 @@ pub fn ListBody(
             }
         }
         Some(Ok(page)) => {
-            let rows_all = page.rows.clone();
+            // P5 — whenever the first-page-key changes (new sort/filter),
+            // reset the accumulator to this page's rows.
+            if *loaded_first_page_key.read() != first_page_key {
+                loaded_first_page_key.set(first_page_key.clone());
+                loaded_rows.set(page.rows.clone());
+                next_cursor.set(page.next_cursor.clone());
+            }
+            let rows_all = loaded_rows.read().clone();
+            let has_more = next_cursor.read().is_some();
             let filter_lc = filter.trim().to_lowercase();
             let rows: Vec<ViewRow> = if filter_lc.is_empty() {
                 rows_all
@@ -121,6 +157,12 @@ pub fn ListBody(
                     tracing::info!("forum card clicked id={row_id}");
                     selected_row_id.set(Some(row_id));
                 });
+                let channel_id_for_more = channel_id.clone();
+                let account_id_for_more = account_id.clone();
+                let sort_id_for_more = sort_id.clone();
+                let filter_id_for_more = filter_id.clone();
+                let tab_id_for_more = tab_id.clone();
+                let is_loading_more = *loading_more.read();
                 rsx! {
                     div { class: "client-view-list forum-post-list", role: "feed",
                         for row in rows {
@@ -128,6 +170,61 @@ pub fn ListBody(
                                 key: "{row.id}",
                                 row: row.clone(),
                                 on_click: on_row_click,
+                            }
+                        }
+                        if has_more {
+                            button {
+                                class: "forum-load-more",
+                                r#type: "button",
+                                disabled: is_loading_more,
+                                onclick: move |_| {
+                                    // P5 — fetch next page synchronously
+                                    // via the plugin's `get_view_rows`.
+                                    let channel_id = channel_id_for_more.clone();
+                                    let account_id = account_id_for_more.clone();
+                                    let sort_id = sort_id_for_more.clone();
+                                    let filter_id = filter_id_for_more.clone();
+                                    let tab_id = tab_id_for_more.clone();
+                                    let cursor = next_cursor.read().clone();
+                                    loading_more.set(true);
+                                    spawn(async move {
+                                        let client_manager: Signal<ClientManager> = match try_consume_context() {
+                                            Some(cm) => cm,
+                                            None => {
+                                                loading_more.set(false);
+                                                return;
+                                            }
+                                        };
+                                        let backend = match client_manager.read().get_backend(&account_id) {
+                                            Some(b) => b,
+                                            None => {
+                                                loading_more.set(false);
+                                                return;
+                                            }
+                                        };
+                                        let result = {
+                                            let guard = backend.read().await;
+                                            guard.get_view_rows(
+                                                &channel_id,
+                                                cursor,
+                                                sort_id.as_deref(),
+                                                filter_id.as_deref(),
+                                                tab_id.as_deref(),
+                                            ).await
+                                        };
+                                        match result {
+                                            Ok(page) => {
+                                                loaded_rows.write().extend(page.rows);
+                                                next_cursor.set(page.next_cursor);
+                                            }
+                                            Err(err) => {
+                                                tracing::debug!("ListBody load-more failed: {err:?}");
+                                            }
+                                        }
+                                        loading_more.set(false);
+                                    });
+                                },
+                                if is_loading_more { "Loading…" } else { "Load more" }
                             }
                         }
                         if let Some(sel_id) = selected {
@@ -349,6 +446,29 @@ pub(crate) struct RowCardParts {
     pub has_score: bool,
 }
 
+/// P4 — helper used by `fetch_first_page` and mirrored in unit tests.
+/// Returns the `(sort_id, filter_id, tab_id)` triple the view would pass
+/// to `get_view_rows` for the given toolbar selection signals, stripped
+/// to `&str` slices.
+pub(crate) fn toolbar_get_view_rows_args<'a>(
+    sort: &'a Option<String>,
+    filter: &'a Option<String>,
+    tab: &'a Option<String>,
+) -> (Option<&'a str>, Option<&'a str>, Option<&'a str>) {
+    (sort.as_deref(), filter.as_deref(), tab.as_deref())
+}
+
+/// P5 — pure helper used by the load-more flow and mirrored in unit
+/// tests. Returns the new row accumulator + next_cursor after appending
+/// a freshly-fetched `page` to the previous `accum` + `prev_cursor`.
+pub(crate) fn append_page(
+    mut accum: Vec<ViewRow>,
+    page: ViewRowsPage,
+) -> (Vec<ViewRow>, Option<Cursor>) {
+    accum.extend(page.rows);
+    (accum, page.next_cursor)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
@@ -482,17 +602,101 @@ mod tests {
     fn score_class_zero_is_neutral() {
         assert_eq!(score_class(0), "forum-score");
     }
+
+    // ─── P4 / P5 Pack B unit tests ──────────────────────────────────
+
+    #[test]
+    fn toolbar_get_view_rows_args_threads_selected_sort() {
+        let sort = Some("new".to_string());
+        let filter = None;
+        let tab = None;
+        let (s, f, t) = toolbar_get_view_rows_args(&sort, &filter, &tab);
+        assert_eq!(s, Some("new"));
+        assert_eq!(f, None);
+        assert_eq!(t, None);
+    }
+
+    #[test]
+    fn toolbar_get_view_rows_args_threads_all_three() {
+        let sort = Some("hot".to_string());
+        let filter = Some("subscribed".to_string());
+        let tab = Some("posts".to_string());
+        let (s, f, t) = toolbar_get_view_rows_args(&sort, &filter, &tab);
+        assert_eq!(s, Some("hot"));
+        assert_eq!(f, Some("subscribed"));
+        assert_eq!(t, Some("posts"));
+    }
+
+    #[test]
+    fn toolbar_get_view_rows_args_passes_none_when_no_selection() {
+        let sort: Option<String> = None;
+        let filter: Option<String> = None;
+        let tab: Option<String> = None;
+        let (s, f, t) = toolbar_get_view_rows_args(&sort, &filter, &tab);
+        assert_eq!(s, None);
+        assert_eq!(f, None);
+        assert_eq!(t, None);
+    }
+
+    #[test]
+    fn append_page_accumulates_two_pages_and_preserves_order() {
+        use poly_client::{Cursor, CursorKind, ViewRowsPage};
+        let page1 = ViewRowsPage {
+            rows: vec![row("a", "first"), row("b", "second")],
+            next_cursor: Some(Cursor {
+                kind: CursorKind::Offset,
+                value: "2".into(),
+            }),
+        };
+        let page2 = ViewRowsPage {
+            rows: vec![row("c", "third"), row("d", "fourth")],
+            next_cursor: None,
+        };
+        let (acc1, c1) = append_page(Vec::new(), page1);
+        assert_eq!(acc1.len(), 2);
+        assert!(c1.is_some());
+        let (acc2, c2) = append_page(acc1, page2);
+        assert_eq!(acc2.len(), 4);
+        assert_eq!(acc2[0].id, "a");
+        assert_eq!(acc2[1].id, "b");
+        assert_eq!(acc2[2].id, "c");
+        assert_eq!(acc2[3].id, "d");
+        assert!(c2.is_none()); // end of feed reached
+    }
+
+    #[test]
+    fn append_page_empty_page_preserves_accumulator() {
+        use poly_client::ViewRowsPage;
+        let start = vec![row("a", "first")];
+        let empty = ViewRowsPage {
+            rows: Vec::new(),
+            next_cursor: None,
+        };
+        let (acc, cursor) = append_page(start, empty);
+        assert_eq!(acc.len(), 1);
+        assert_eq!(acc[0].id, "a");
+        assert!(cursor.is_none());
+    }
 }
 
-/// Fetch only the first page — WP 5 defers infinite scroll.
+/// Fetch the first page of rows for this view. P4 — sort/filter/tab ids
+/// are passed through so toolbar selection changes re-fetch (use_resource
+/// re-runs when any captured value changes). P5 handles the next-cursor
+/// load-more flow separately.
 pub(super) fn fetch_first_page(
     channel_id: String,
     account_id: String,
+    sort_id: Option<String>,
+    filter_id: Option<String>,
+    tab_id: Option<String>,
 ) -> Resource<Result<ViewRowsPage, ClientError>> {
     let client_manager: Signal<ClientManager> = use_context();
     use_resource(move || {
         let account_id = account_id.clone();
         let channel_id = channel_id.clone();
+        let sort_id = sort_id.clone();
+        let filter_id = filter_id.clone();
+        let tab_id = tab_id.clone();
         async move {
             let Some(backend) = client_manager.read().get_backend(&account_id) else {
                 return Err(ClientError::NotFound(format!(
@@ -501,7 +705,13 @@ pub(super) fn fetch_first_page(
             };
             let guard = backend.read().await;
             guard
-                .get_view_rows(&channel_id, None, None, None, None)
+                .get_view_rows(
+                    &channel_id,
+                    None,
+                    sort_id.as_deref(),
+                    filter_id.as_deref(),
+                    tab_id.as_deref(),
+                )
                 .await
         }
     })

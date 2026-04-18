@@ -323,6 +323,9 @@ pub fn MainLayout() -> Element {
             // Global user profile modal — now rendered inside router context
             // so action buttons can navigate safely.
             UserProfileModal {}
+            // Pack B: global toast overlay (top-right corner) — reads the
+            // Signal<Vec<ToastMessage>> provided by `App`.
+            crate::ui::client_ui::ToastOverlay {}
         }
     }
 }

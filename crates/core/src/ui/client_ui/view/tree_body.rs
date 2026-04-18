@@ -15,9 +15,10 @@
 //! render flat.
 
 use super::list_body::{fetch_first_page, parse_score_meta, score_class, ViewRowDetail};
+use crate::client_manager::ClientManager;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_client::{TreeSpec, ViewRow};
+use poly_client::{Cursor, TreeSpec, ViewRow};
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Actions emitted by [`TreeBody`]. Currently the forum-style vote buttons
@@ -46,13 +47,34 @@ pub fn TreeBody(
     account_id: String,
     spec: TreeSpec,
     #[props(default)] filter: String,
+    /// P4 — toolbar selection signals, same semantics as ListBody.
+    #[props(default)]
+    selected_sort: Signal<Option<String>>,
+    #[props(default)] selected_filter: Signal<Option<String>>,
+    #[props(default)] selected_tab: Signal<Option<String>>,
 ) -> Element {
-    let rows_res = fetch_first_page(channel_id.clone(), account_id.clone());
+    let sort_id = selected_sort.read().clone();
+    let filter_id = selected_filter.read().clone();
+    let tab_id = selected_tab.read().clone();
+    let rows_res = fetch_first_page(
+        channel_id.clone(),
+        account_id.clone(),
+        sort_id.clone(),
+        filter_id.clone(),
+        tab_id.clone(),
+    );
 
     // P3 (TreeBody) — selected row id for inline detail rendering.
-    // Mirrors ListBody. Click dispatch goes through TreeBodyRow so
-    // Dioxus 0.7 template tracking keeps event handlers bound.
     let mut selected_row_id = use_signal(|| None::<String>);
+    // P5 — infinite scroll state (mirrors ListBody).
+    let mut loaded_rows = use_signal(Vec::<ViewRow>::new);
+    let mut next_cursor = use_signal(|| None::<Cursor>);
+    let mut loaded_first_page_key = use_signal(String::new);
+    let mut loading_more = use_signal(|| false);
+    let first_page_key = format!(
+        "{}:{}:{:?}:{:?}:{:?}",
+        channel_id, account_id, sort_id, filter_id, tab_id
+    );
 
     // Guard against runaway plugins — `max_depth * root_page_size` is a
     // reasonable upper ceiling on visible rows for the initial page.
@@ -76,10 +98,17 @@ pub fn TreeBody(
             }
         }
         Some(Ok(page)) => {
-            let mut rows = page.rows.clone();
+            // P5 — reset accumulator when first-page key changes.
+            if *loaded_first_page_key.read() != first_page_key {
+                loaded_first_page_key.set(first_page_key.clone());
+                loaded_rows.set(page.rows.clone());
+                next_cursor.set(page.next_cursor.clone());
+            }
+            let mut rows = loaded_rows.read().clone();
             if max_rows > 0 && rows.len() > max_rows {
                 rows.truncate(max_rows);
             }
+            let has_more = next_cursor.read().is_some();
             let filter_lc = filter.trim().to_lowercase();
             let rows: Vec<ViewRow> = if filter_lc.is_empty() {
                 rows
@@ -106,6 +135,12 @@ pub fn TreeBody(
                     tracing::info!("forum tree card clicked id={row_id}");
                     selected_row_id.set(Some(row_id));
                 });
+                let channel_id_for_more = channel_id.clone();
+                let account_id_for_more = account_id.clone();
+                let sort_id_for_more = sort_id.clone();
+                let filter_id_for_more = filter_id.clone();
+                let tab_id_for_more = tab_id.clone();
+                let is_loading_more = *loading_more.read();
                 rsx! {
                     div { class: "client-view-tree forum-post-list", role: "tree",
                         for row in rows {
@@ -113,6 +148,59 @@ pub fn TreeBody(
                                 key: "{row.id}",
                                 row: row.clone(),
                                 on_click: on_row_click,
+                            }
+                        }
+                        if has_more {
+                            button {
+                                class: "forum-load-more",
+                                r#type: "button",
+                                disabled: is_loading_more,
+                                onclick: move |_| {
+                                    let channel_id = channel_id_for_more.clone();
+                                    let account_id = account_id_for_more.clone();
+                                    let sort_id = sort_id_for_more.clone();
+                                    let filter_id = filter_id_for_more.clone();
+                                    let tab_id = tab_id_for_more.clone();
+                                    let cursor = next_cursor.read().clone();
+                                    loading_more.set(true);
+                                    spawn(async move {
+                                        let client_manager: Signal<ClientManager> = match try_consume_context() {
+                                            Some(cm) => cm,
+                                            None => {
+                                                loading_more.set(false);
+                                                return;
+                                            }
+                                        };
+                                        let backend = match client_manager.read().get_backend(&account_id) {
+                                            Some(b) => b,
+                                            None => {
+                                                loading_more.set(false);
+                                                return;
+                                            }
+                                        };
+                                        let result = {
+                                            let guard = backend.read().await;
+                                            guard.get_view_rows(
+                                                &channel_id,
+                                                cursor,
+                                                sort_id.as_deref(),
+                                                filter_id.as_deref(),
+                                                tab_id.as_deref(),
+                                            ).await
+                                        };
+                                        match result {
+                                            Ok(page) => {
+                                                loaded_rows.write().extend(page.rows);
+                                                next_cursor.set(page.next_cursor);
+                                            }
+                                            Err(err) => {
+                                                tracing::debug!("TreeBody load-more failed: {err:?}");
+                                            }
+                                        }
+                                        loading_more.set(false);
+                                    });
+                                },
+                                if is_loading_more { "Loading…" } else { "Load more" }
                             }
                         }
                         if let Some(sel_id) = selected {

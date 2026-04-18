@@ -1259,6 +1259,16 @@ pub fn App() -> Element {
     // prop-comparison skip optimization that can suppress signal-triggered re-renders).
     provide_context(app_state);
 
+    // Pack B wiring — global toast queue + sidebar refresh counter so
+    // `ActionOutcome::Toast`, `Pending`, and `RefreshSidebar` cross the last
+    // mile into user-visible UX. See `ui::client_ui::action_outcome` +
+    // `ui::client_ui::toast` for details.
+    let toast_queue: Signal<Vec<crate::ui::client_ui::ToastMessage>> =
+        use_signal(Vec::new);
+    provide_context(toast_queue);
+    let sidebar_refresh: Signal<u32> = use_signal(|| 0u32);
+    provide_context(sidebar_refresh);
+
     use_future(move || async move {
         init_storage(
             theme_config,

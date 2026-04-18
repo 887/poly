@@ -39,10 +39,12 @@
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
 use crate::ui::client_ui::custom_block::{sanitize_html, CustomBlock};
+use crate::ui::client_ui::toast::ToastMessage;
 use dioxus::prelude::*;
 use poly_client::{
-    ActionOutcome, ClientError, CustomBlock as CustomBlockData, IconSource, MenuItem,
+    ClientError, CustomBlock as CustomBlockData, IconSource, MenuItem,
     MenuItemVariant, MenuSlot, MenuTargetKind,
 };
 use poly_ui_macros::{context_menu, ui_action};
@@ -577,11 +579,11 @@ fn render_info_block(item: MenuItem) -> Element {
     }
 }
 
-/// Invoke a plugin action and handle the [`ActionOutcome`] at WP-2 scope.
-///
-/// Only `Navigate` is wired through to the navigator here. Toast/Pending/
-/// RefreshTarget/OpenSettings/OpenModal are logged for now — full routing
-/// lands in WP 7 / WP 8.
+/// Invoke a plugin action and route the [`ActionOutcome`] through the shared
+/// handler (Pack B / P10 / P11 / P12). All variants now cross the last mile
+/// into user-visible UX: Navigate pushes via the router, Toast enqueues onto
+/// the global toast queue, Pending spawns a poll loop with a sticky working
+/// toast.
 async fn dispatch_action(
     account_id: String,
     action_id: String,
@@ -608,22 +610,23 @@ async fn dispatch_action(
             .await
     };
 
-    match outcome {
-        Ok(ActionOutcome::Navigate(route)) => {
-            tracing::info!("ClientMenu: Navigate({route}) — wiring pending");
-        }
-        Ok(ActionOutcome::Toast(payload)) => {
-            tracing::info!("ClientMenu: toast {payload:?}");
-        }
-        Ok(other) => {
-            tracing::debug!("ClientMenu: action outcome: {other:?}");
-        }
-        Err(err) => {
-            tracing::warn!(
-                "ClientMenu: invoke_context_action({action_id}) failed: {err:?}"
-            );
-        }
-    }
+    let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
+        tracing::debug!("ClientMenu: no toast queue in context — logging only");
+        tracing::info!("ClientMenu: action outcome (no-toast-ctx): {outcome:?}");
+        return;
+    };
+    let Some(refresh_sidebar) = try_consume_context::<Signal<u32>>() else {
+        tracing::debug!("ClientMenu: no sidebar refresh signal in context");
+        return;
+    };
+    let cx = ActionOutcomeCx {
+        toast_queue,
+        refresh_sidebar,
+        refresh_target: None,
+        client_manager,
+        account_id: account_id.clone(),
+    };
+    handle_action_outcome(outcome, cx);
 }
 
 // ─────────────────────────────────────────────────────────────────────
