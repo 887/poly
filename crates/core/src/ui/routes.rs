@@ -50,10 +50,11 @@ use super::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
 };
 use super::account::{
-    AccountSettingsPage, ChannelList, ChatView, ConversationSearchView, ForumView, ForumPostView,
+    AccountSettingsPage, ChatView, ConversationSearchView, ForumView, ForumPostView,
     FriendsPanel, NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
     ServerSettingsPage, VoiceChannelView,
 };
+use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
 use super::main_layout::MainLayout;
 use super::server_overview::ServerOverviewPage;
@@ -961,7 +962,7 @@ fn DmsLayout() -> Element {
             sidebar_class: "channel-list-wrapper".to_string(),
             content_class: String::new(),
             sidebar: rsx! {
-                ChannelList {}
+                ClientSidebar {}
                 VoiceAccountFooter {}
             },
             content: rsx! {
@@ -993,7 +994,7 @@ fn ServerLayout() -> Element {
             sidebar_class: "channel-list-wrapper".to_string(),
             content_class: String::new(),
             sidebar: rsx! {
-                ChannelList {}
+                ClientSidebar {}
                 VoiceAccountFooter {}
             },
             content: rsx! {
