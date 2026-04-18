@@ -644,6 +644,44 @@ impl BackendCapabilities {
             && matches!(self.friends, FriendModel::None)
     }
 
+    // ── Pack-F capability gates (UI affordance predicates) ─────────────────
+    //
+    // Small predicates used by `AccountServerBar`, `AccountBar`, `ChatView`
+    // etc. to decide whether to render account-scoped affordances (DMs tab,
+    // Friends tab, Notifications tab, voice mic/deafen, composer textarea).
+    //
+    // Keeping them as methods on `BackendCapabilities` rather than free
+    // helpers in `crates/core` means the predicate logic lives next to the
+    // field definitions and can be reused from plugin-level tests
+    // (`clients/<name>/tests/capabilities.rs`).
+
+    /// `true` if the DMs tab / sidebar column should be rendered.
+    pub const fn should_show_dms(&self) -> bool {
+        !matches!(self.dms, DmSupport::None)
+    }
+
+    /// `true` if the Friends tab / management page should be rendered.
+    pub const fn should_show_friends(&self) -> bool {
+        !matches!(self.friends, FriendModel::None)
+    }
+
+    /// `true` if the Notifications tab / inbox should be rendered.
+    pub const fn should_show_notifications(&self) -> bool {
+        !matches!(self.notifications, NotificationSupport::None)
+    }
+
+    /// `true` if voice affordances (mic, deafen, voice bar) should render.
+    pub const fn should_show_voice(&self) -> bool {
+        !matches!(self.voice, VoiceSupport::None)
+    }
+
+    /// `true` if the message composer (textarea + send button) should be
+    /// writable. `false` for read-only feeds (HN, GitHub) — the composer
+    /// is replaced by a static "this channel is read-only" notice.
+    pub const fn composer_writable(&self) -> bool {
+        matches!(self.messaging, MessagingModel::Full)
+    }
+
     /// Full social chat (Discord, Matrix, Teams).
     pub const FULL_SOCIAL_CHAT: Self = Self {
         messaging: MessagingModel::Full,
@@ -1308,4 +1346,117 @@ pub struct ChatCommand {
     pub usage: Option<String>,
     /// Scope in which this command is available.
     pub scope: CommandScope,
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod pack_f_capability_gates {
+    //! Pack-F regression: per-backend capability-gate helpers must match
+    //! the declared `capabilities_for_slug` table. Table-driven to catch
+    //! drift when a new backend is added or a declaration flips.
+
+    use super::*;
+
+    fn expected(
+        slug: &str,
+    ) -> (
+        bool, // should_show_dms
+        bool, // should_show_friends
+        bool, // should_show_notifications
+        bool, // should_show_voice
+        bool, // composer_writable
+    ) {
+        match slug {
+            "hackernews" => (false, false, false, false, false),
+            "github" | "forgejo" => (false, false, true, false, false),
+            "lemmy" | "demo_forum" => (false, false, true, false, true),
+            "matrix" => (true, true, true, false, true),
+            "stoat" => (true, true, true, false, true),
+            "teams" => (true, true, true, true, true),
+            "discord" | "demo" | "poly" => (true, true, true, true, true),
+            _ => (false, false, false, false, false),
+        }
+    }
+
+    fn check(slug: &str) {
+        let caps = capabilities_for_slug(slug);
+        let (dms, friends, notifs, voice, composer) = expected(slug);
+        assert_eq!(caps.should_show_dms(), dms, "{slug}: should_show_dms");
+        assert_eq!(
+            caps.should_show_friends(),
+            friends,
+            "{slug}: should_show_friends"
+        );
+        assert_eq!(
+            caps.should_show_notifications(),
+            notifs,
+            "{slug}: should_show_notifications"
+        );
+        assert_eq!(caps.should_show_voice(), voice, "{slug}: should_show_voice");
+        assert_eq!(
+            caps.composer_writable(),
+            composer,
+            "{slug}: composer_writable"
+        );
+    }
+
+    #[test]
+    fn hackernews_hides_everything_social() {
+        check("hackernews");
+    }
+
+    #[test]
+    fn github_shows_only_notifications() {
+        check("github");
+    }
+
+    #[test]
+    fn forgejo_shows_only_notifications() {
+        check("forgejo");
+    }
+
+    #[test]
+    fn lemmy_writeable_forum_no_social() {
+        check("lemmy");
+    }
+
+    #[test]
+    fn demo_forum_matches_lemmy() {
+        check("demo_forum");
+    }
+
+    #[test]
+    fn matrix_full_social_no_voice() {
+        check("matrix");
+    }
+
+    #[test]
+    fn stoat_full_social_no_voice() {
+        check("stoat");
+    }
+
+    #[test]
+    fn teams_full_social_with_voice() {
+        check("teams");
+    }
+
+    #[test]
+    fn discord_full_everything() {
+        check("discord");
+    }
+
+    #[test]
+    fn demo_full_everything() {
+        check("demo");
+    }
+
+    #[test]
+    fn poly_full_everything() {
+        check("poly");
+    }
+
+    #[test]
+    fn unknown_slug_is_read_only_feed() {
+        check("definitely-not-a-real-plugin");
+    }
 }

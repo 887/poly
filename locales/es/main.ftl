@@ -736,3 +736,36 @@ ui-settings-save-failed = No se pudo guardar la configuración
 channel-settings-title = Configuración del canal
 channel-settings-no-plugin-sections = No hay configuración por canal para este backend.
 
+# TODO(translate): Pack D — Sidebar stock-layout strings (P24/P25/P26/P27/P29).
+# Mirrors keys added in locales/en/main.ftl at the same offset.
+ui-sidebar-nav-label = Sidebar navigation
+ui-sidebar-plugin-error = Plugin sidebar failed to load — showing channels
+ui-sidebar-spaces-header = Spaces
+ui-sidebar-spaces-loading = Loading spaces…
+ui-sidebar-spaces-error = Failed to load spaces
+ui-sidebar-spaces-empty = No spaces joined
+ui-sidebar-communities-header = Communities
+ui-sidebar-communities-loading = Loading communities…
+ui-sidebar-communities-error = Failed to load communities
+ui-sidebar-communities-empty = No communities subscribed
+ui-sidebar-communities-tab-subscribed = Subscribed
+ui-sidebar-communities-tab-local = Local
+ui-sidebar-communities-tab-all = All
+ui-sidebar-communities-local-coming-soon = Coming soon — local browse
+ui-sidebar-communities-all-coming-soon = Coming soon — federated browse
+ui-sidebar-feed-header = Feeds
+ui-sidebar-feed-selected = Selected feed
+ui-sidebar-feed-top = Top
+ui-sidebar-feed-new = New
+ui-sidebar-feed-best = Best
+ui-sidebar-feed-ask = Ask
+ui-sidebar-feed-show = Show
+ui-sidebar-feed-jobs = Jobs
+ui-sidebar-repos-header = Repositories
+ui-sidebar-repos-loading = Loading repositories…
+ui-sidebar-repos-error = Failed to load repositories
+ui-sidebar-repos-empty = No repositories connected
+ui-sidebar-repo-issues = Issues
+ui-sidebar-repo-pulls = Pull Requests
+ui-sidebar-repo-discussions = Discussions
+

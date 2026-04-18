@@ -417,3 +417,193 @@
     min-width: 18px;
     text-align: center;
 }
+
+/* ===========================
+ * Pack D — stock sidebar layouts (P24/P25/P26/P27/P29)
+ * =========================== */
+
+.client-sidebar .sidebar-header {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    padding: 10px 12px 6px 12px;
+    margin: 0;
+}
+
+/* P29 — sidebar error badge (shown above fallback ChannelList). */
+.client-sidebar-error-badge {
+    background: var(--danger-bg, rgba(220, 53, 69, 0.15));
+    color: var(--danger-text, #dc3545);
+    padding: 6px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+/* P25 — generic sidebar tab strip (Communities tabs reuse this). */
+.sidebar-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.sidebar-tab {
+    flex: 1 1 auto;
+    padding: 4px 10px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sidebar-tab.selected {
+    background: var(--bg-active);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+}
+
+/* P24 — SpacesRoomsLayout nested tree. */
+.spaces-rooms-space-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.spaces-rooms-space {
+    padding: 4px 8px;
+}
+
+.spaces-rooms-space-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    padding: 4px 4px 2px 4px;
+}
+
+.spaces-rooms-room-list {
+    list-style: none;
+    padding: 0 0 0 16px;
+    margin: 0;
+}
+
+.spaces-rooms-room {
+    padding: 2px 6px;
+    color: var(--text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.spaces-rooms-room:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* P25 — Communities list + placeholder states. */
+.communities-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.community-row {
+    padding: 6px 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.community-row:hover {
+    background: var(--bg-hover);
+}
+
+.communities-coming-soon,
+.communities-empty,
+.communities-loading,
+.communities-error,
+.spaces-rooms-empty,
+.spaces-rooms-loading,
+.spaces-rooms-error,
+.repo-tree-empty,
+.repo-tree-loading,
+.repo-tree-error {
+    padding: 12px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+/* P26 — Feed rows clickable. */
+.feed-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.feed-row {
+    padding: 6px 12px;
+    cursor: pointer;
+    color: var(--text-primary);
+    border-radius: 4px;
+    margin: 1px 4px;
+}
+
+.feed-row:hover {
+    background: var(--bg-hover);
+}
+
+.feed-row.selected {
+    background: var(--bg-active);
+    font-weight: 600;
+}
+
+.feed-active-indicator {
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* P27 — Repo tree tabs clickable. */
+.repo-tree-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.repo-tree-repo {
+    padding: 6px 8px;
+}
+
+.repo-tree-repo-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    padding: 2px 4px;
+}
+
+.repo-tree-tabs {
+    list-style: none;
+    padding: 0 0 0 16px;
+    margin: 0;
+}
+
+.repo-tree-tab {
+    padding: 3px 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.repo-tree-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}

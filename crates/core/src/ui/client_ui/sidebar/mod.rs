@@ -36,6 +36,7 @@ pub use repo_tree::RepoTreeLayout;
 pub use spaces_rooms::SpacesRoomsLayout;
 
 use crate::client_manager::ClientManager;
+use crate::i18n::t;
 use crate::state::AppState;
 use dioxus::prelude::*;
 use poly_client::{ClientError, SidebarDeclaration, SidebarLayoutKind};
@@ -101,8 +102,18 @@ pub fn ClientSidebar() -> Element {
         },
         Some(Err(err)) => {
             tracing::warn!("ClientSidebar: get_sidebar_declaration failed: {err:?}");
+            let msg = t("ui-sidebar-plugin-error");
             rsx! {
                 aside { class: "client-sidebar client-sidebar-error",
+                    // P29 — discrete error badge above the fallback layout so
+                    // users know the plugin's sidebar declaration failed but
+                    // still have working channel navigation.
+                    div {
+                        class: "client-sidebar-error-badge",
+                        role: "status",
+                        aria_live: "polite",
+                        "{msg}"
+                    }
                     // Fall back to the stock channel list so the user still
                     // has navigation even when the plugin errors.
                     ChannelListLayout {}

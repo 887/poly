@@ -3904,9 +3904,28 @@ fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing
 }
 
 fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
+    // Pack F (P59) — composer gating on read-only backends. HN / GitHub
+    // declare `MessagingModel::ReadOnly`; replace the textarea+send with a
+    // static notice so users don't type into a control that silently no-ops.
+    let backend_slug = ctx
+        .app_state
+        .read()
+        .nav
+        .active_backend
+        .as_ref()
+        .map(|b| b.slug().to_string())
+        .unwrap_or_else(|| "demo".to_string());
+    let composer_writable =
+        poly_client::capabilities_for_slug(&backend_slug).composer_writable();
+
     rsx! {
         div { class: "message-input-area",
-            if ctx.channel_id.is_some() {
+            if !composer_writable {
+                div {
+                    class: "message-input-disabled message-input-readonly",
+                    "{t(\"chat-readonly-notice\")}"
+                }
+            } else if ctx.channel_id.is_some() {
                 {render_message_input_enabled(ctx)}
             } else {
                 div { class: "message-input-disabled", {t("chat-select-channel")} }

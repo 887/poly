@@ -288,14 +288,16 @@ fn AccountBarControls(
     mut chat_data: Signal<ChatData>,
 ) -> Element {
     let nav = app_state.read().nav.clone();
+    let backend_slug = nav
+        .active_backend
+        .map(|backend| backend.slug().to_string())
+        .unwrap_or_else(|| "demo".to_string());
+    // Pack F (P61) — hide mic/deafen on backends with no voice support.
+    let show_voice = poly_client::capabilities_for_slug(&backend_slug).should_show_voice();
     let settings_target = nav.active_account_id.clone().map(|account_id| {
-        let backend = nav
-            .active_backend
-            .map(|backend| backend.slug().to_string())
-            .unwrap_or_else(|| "demo".to_string());
         let instance_id = nav.active_instance_id.unwrap_or_else(|| "demo".to_string());
         Route::AccountSettingsRoute {
-            backend,
+            backend: backend_slug.clone(),
             instance_id,
             account_id,
         }
@@ -303,32 +305,34 @@ fn AccountBarControls(
 
     rsx! {
         div { class: "account-bar-controls",
-            button {
-                class: if is_muted { "account-btn active" } else { "account-btn" },
-                title: if is_muted { t("voice-unmute") } else { t("voice-mute") },
-                onclick: move |_| {
-                    if let Some(ref mut vc) = chat_data.write().voice_connection {
-                        vc.is_muted = !vc.is_muted;
+            if show_voice {
+                button {
+                    class: if is_muted { "account-btn active" } else { "account-btn" },
+                    title: if is_muted { t("voice-unmute") } else { t("voice-mute") },
+                    onclick: move |_| {
+                        if let Some(ref mut vc) = chat_data.write().voice_connection {
+                            vc.is_muted = !vc.is_muted;
+                        }
+                    },
+                    if is_muted {
+                        "🔇"
+                    } else {
+                        "🎤"
                     }
-                },
-                if is_muted {
-                    "🔇"
-                } else {
-                    "🎤"
                 }
-            }
-            button {
-                class: if is_deafened { "account-btn active" } else { "account-btn" },
-                title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
-                onclick: move |_| {
-                    if let Some(ref mut vc) = chat_data.write().voice_connection {
-                        vc.is_deafened = !vc.is_deafened;
+                button {
+                    class: if is_deafened { "account-btn active" } else { "account-btn" },
+                    title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
+                    onclick: move |_| {
+                        if let Some(ref mut vc) = chat_data.write().voice_connection {
+                            vc.is_deafened = !vc.is_deafened;
+                        }
+                    },
+                    if is_deafened {
+                        "🔕"
+                    } else {
+                        "🔊"
                     }
-                },
-                if is_deafened {
-                    "🔕"
-                } else {
-                    "🔊"
                 }
             }
             button {

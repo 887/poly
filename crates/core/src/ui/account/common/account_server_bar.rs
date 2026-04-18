@@ -150,25 +150,39 @@ pub fn AccountServerBar() -> Element {
         .filter(|n| !n.read && n.account_id == account_id)
         .count();
 
+    // Pack F (P57) — capability-gate the per-account nav buttons. HN / Lemmy /
+    // GitHub declare `dms/friends/notifications = None` and must not render
+    // these buttons; Discord / Stoat / Matrix keep the full row.
+    let caps = poly_client::capabilities_for_slug(&backend_slug);
+    let show_dms = caps.should_show_dms();
+    let show_friends = caps.should_show_friends();
+    let show_notifs = caps.should_show_notifications();
+
     rsx! {
         nav { class: "account-server-bar",
             // DMs / Friends button — account-scoped
-            AccountBarDmsButton {
-                current_view,
-                backend_slug: backend_slug.clone(),
-                instance_id: instance_id.clone(),
-                account_id: account_id.clone(),
+            if show_dms {
+                AccountBarDmsButton {
+                    current_view,
+                    backend_slug: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                }
             }
 
-            AccountBarFriendsButton {
-                current_view,
-                backend_slug: backend_slug.clone(),
-                instance_id: instance_id.clone(),
-                account_id: account_id.clone(),
+            if show_friends {
+                AccountBarFriendsButton {
+                    current_view,
+                    backend_slug: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                }
             }
 
             // Notifications button — account-scoped
-            AccountBarNotifsButton { current_view, notif_count }
+            if show_notifs {
+                AccountBarNotifsButton { current_view, notif_count }
+            }
 
             // Separator
             div { class: "sidebar-separator" }

@@ -73,6 +73,7 @@ chat-unread-banner = { $count } new messages since { $time } on { $date }
 chat-unread-divider = New
 chat-jump-to-present = Jump to Present
 chat-viewing-older-messages = You're Viewing Older Messages
+chat-readonly-notice = This channel is read-only
 
 # Channels
 channel-text = Text Channel
@@ -905,4 +906,44 @@ ui-settings-save-failed = Failed to save setting
 # Channel settings page (Pack C.3)
 channel-settings-title = Channel Settings
 channel-settings-no-plugin-sections = No per-channel settings for this backend.
+
+# Sidebar — stock layout strings (Pack D: P24/P25/P26/P27/P29)
+ui-sidebar-nav-label = Sidebar navigation
+ui-sidebar-plugin-error = Plugin sidebar failed to load — showing channels
+
+# P24 — SpacesRoomsLayout (Matrix)
+ui-sidebar-spaces-header = Spaces
+ui-sidebar-spaces-loading = Loading spaces…
+ui-sidebar-spaces-error = Failed to load spaces
+ui-sidebar-spaces-empty = No spaces joined
+
+# P25 — CommunitiesLayout (Lemmy)
+ui-sidebar-communities-header = Communities
+ui-sidebar-communities-loading = Loading communities…
+ui-sidebar-communities-error = Failed to load communities
+ui-sidebar-communities-empty = No communities subscribed
+ui-sidebar-communities-tab-subscribed = Subscribed
+ui-sidebar-communities-tab-local = Local
+ui-sidebar-communities-tab-all = All
+ui-sidebar-communities-local-coming-soon = Coming soon — local browse
+ui-sidebar-communities-all-coming-soon = Coming soon — federated browse
+
+# P26 — FeedLayout (Hacker News)
+ui-sidebar-feed-header = Feeds
+ui-sidebar-feed-selected = Selected feed
+ui-sidebar-feed-top = Top
+ui-sidebar-feed-new = New
+ui-sidebar-feed-best = Best
+ui-sidebar-feed-ask = Ask
+ui-sidebar-feed-show = Show
+ui-sidebar-feed-jobs = Jobs
+
+# P27 — RepoTreeLayout (GitHub / Forgejo)
+ui-sidebar-repos-header = Repositories
+ui-sidebar-repos-loading = Loading repositories…
+ui-sidebar-repos-error = Failed to load repositories
+ui-sidebar-repos-empty = No repositories connected
+ui-sidebar-repo-issues = Issues
+ui-sidebar-repo-pulls = Pull Requests
+ui-sidebar-repo-discussions = Discussions
 
