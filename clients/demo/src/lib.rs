@@ -1091,9 +1091,13 @@ impl ClientBackend for DemoClient3 {
         if !dm_msgs.is_empty() {
             return Ok(dm_msgs);
         }
-        // Thread comments — channel_id is a post ID (starts with "fpost-")
-        if channel_id.starts_with("fpost-") {
-            let comments = data::demo3_post_comments(channel_id);
+        // Thread comments — channel_id is a post ID or the "hn-post-<id>"
+        // pseudo-channel that ForumPostView uses to fetch comments.
+        let stripped = channel_id
+            .strip_prefix("hn-post-")
+            .unwrap_or(channel_id);
+        if stripped.starts_with("fpost-") {
+            let comments = data::demo3_post_comments(stripped);
             if !comments.is_empty() {
                 return Ok(comments);
             }
