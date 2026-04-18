@@ -18,9 +18,7 @@
       "mcp__poly-electron",
       "mcp__poly-desktop",
       "mcp__poly-web",
-      "mcp__poly-memory",
-      "mcp__chrome-devtools",
-      "mcp__chrome-devtools-headless"
+      "mcp__poly-memory"
     ]
   },
   "hooks": {
