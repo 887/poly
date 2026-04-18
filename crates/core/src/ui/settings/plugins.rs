@@ -167,12 +167,15 @@ fn NativePluginRow(
     rsx! {
         div {
             class: if available { "plugin-row" } else { "plugin-row plugin-row-unavailable" },
-            label { class: "plugin-row-toggle",
+            label { class: "plugin-row-toggle toggle-switch",
                 input {
                     r#type: "checkbox",
+                    role: "switch",
                     checked: enabled,
+                    "aria-checked": if enabled { "true" } else { "false" },
                     onchange: move |_| on_toggle.call(slug_for_toggle.clone()),
                 }
+                span { class: "toggle-slider" }
             }
             div { class: "plugin-row-icon", "{icon}" }
             div { class: "plugin-row-info",
