@@ -26,9 +26,12 @@ plugin-matrix-menu-explore-rooms-label = Explore Rooms
 
 plugin-matrix-setting-space-settings-label = Space Settings
 plugin-matrix-setting-display-name-label = Display Name
+plugin-matrix-setting-display-name-desc = The name shown to other members in this Space.
 plugin-matrix-setting-topic-label = Topic
+plugin-matrix-setting-topic-desc = A short description or topic shown at the top of the Space.
 plugin-matrix-setting-privacy-label = Privacy
 plugin-matrix-setting-allow-guests-label = Allow Guests
+plugin-matrix-setting-allow-guests-desc = When enabled, users without a Matrix account can join and read this Space.
 
 # Composer buttons
 plugin-matrix-composer-me-label = /me action

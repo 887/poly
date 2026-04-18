@@ -57,3 +57,49 @@ plugin-poly-profile-save = Guardar perfil
 plugin-poly-profile-saved = ¡Perfil guardado!
 plugin-poly-profile-avatar-coming-soon = Subida de avatar próximamente.
 plugin-poly-profile-banner-coming-soon = Subida de banner próximamente.
+
+# TODO(translate) — keys added by P46/P47
+# TODO(translate)
+plugin-poly-menu-invite-people-label = Invite People
+
+# TODO(translate)
+plugin-poly-menu-privacy-settings-label = Privacy Settings
+
+# TODO(translate)
+plugin-poly-menu-edit-per-server-profile-label = Edit Server Profile
+
+# TODO(translate)
+plugin-poly-menu-federation-settings-label = Federation Settings
+
+# TODO(translate)
+plugin-poly-setting-profile-label = Profile
+
+# TODO(translate)
+plugin-poly-setting-nickname-label = Nickname
+
+# TODO(translate)
+plugin-poly-setting-nickname-desc = Display this name instead of your account name in this server.
+
+# TODO(translate)
+plugin-poly-setting-avatar-url-label = Avatar URL
+
+# TODO(translate)
+plugin-poly-setting-avatar-url-desc = URL of the image to use as your avatar in this server. Leave empty to use your account avatar.
+
+# TODO(translate)
+plugin-poly-setting-privacy-label = Privacy
+
+# TODO(translate)
+plugin-poly-setting-allow-dms-from-server-members-label = Allow DMs from Members
+
+# TODO(translate)
+plugin-poly-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
+
+# TODO(translate)
+plugin-poly-setting-federation-label = Federation
+
+# TODO(translate)
+plugin-poly-setting-allow-federation-label = Allow Federation
+
+# TODO(translate)
+plugin-poly-setting-allow-federation-desc = When enabled, this server can communicate with other federated Poly servers.

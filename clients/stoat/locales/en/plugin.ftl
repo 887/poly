@@ -26,9 +26,12 @@ plugin-stoat-menu-manage-bots-label = Manage Bots
 
 plugin-stoat-setting-profile-label = Profile
 plugin-stoat-setting-nickname-label = Nickname
+plugin-stoat-setting-nickname-desc = Display this name instead of your account name in this server.
 plugin-stoat-setting-avatar-url-label = Avatar URL
+plugin-stoat-setting-avatar-url-desc = URL of the image to use as your avatar in this server. Leave empty to use your account avatar.
 plugin-stoat-setting-privacy-label = Privacy
 plugin-stoat-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-stoat-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
 
 # Composer buttons
 plugin-stoat-composer-emoji-label = Emoji

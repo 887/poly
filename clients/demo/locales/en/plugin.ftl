@@ -17,7 +17,9 @@ plugin-demo-menu-regenerate-demo-data-label = Regenerate Demo Data
 
 plugin-demo-setting-preferences-label = Preferences
 plugin-demo-setting-regenerate-on-start-label = Regenerate on Start
+plugin-demo-setting-regenerate-on-start-desc = Automatically regenerate fresh demo data each time the app starts.
 plugin-demo-setting-message-count-label = Message Count
+plugin-demo-setting-message-count-desc = Number of sample messages to generate per demo channel.
 
 # --- Forum view (Tree) ---
 plugin-demo-view-posts-title = Posts

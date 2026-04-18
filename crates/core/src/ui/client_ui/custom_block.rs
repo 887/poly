@@ -9,22 +9,29 @@
 //! `dangerous_inner_html`. An optional `stylesheet` is namespaced via
 //! [`prefix_css_selectors`] so it cannot leak out of the block.
 //!
-//! # Shadow-root tradeoff (WP 5 initial)
+//! # Shadow-root upgrade (P38)
 //!
-//! The plan (§4.6) calls for a real shadow-root so plugin CSS is fully
-//! isolated from host CSS. Dioxus 0.7 has no ergonomic shadow-root primitive,
-//! and injecting a shadow-root via `dioxus::document::eval` post-mount is
-//! fragile (SSR hydration, effect ordering, escaping). For WP 5 we ship the
-//! simpler variant: the sanitized HTML renders inside a scoped
-//! `<div class="custom-block custom-block-{id}">` and the stylesheet's
-//! selectors are rewritten with a `.custom-block-{id}` prefix so they only
-//! match descendants. This is weaker than a shadow-root (host CSS still
-//! bleeds in, `!important` rules from host still win) but it is enough to
-//! prevent plugin CSS from leaking onto host elements — which is the
-//! *security* concern. Visual bleed from host into plugin is cosmetic.
+//! Plan §4.6 / P38 calls for a real shadow-root so plugin CSS is fully
+//! isolated from host CSS — not just prefixed. We ship **both** paths:
 //!
-//! TODO(plan §4.6): upgrade to real shadow-root when Dioxus grows a
-//! first-class primitive or when a robust eval-based approach is available.
+//! 1. **Scoped-CSS fallback (SSR + initial hydration):** the sanitized HTML
+//!    renders inside `<div class="custom-block cb-{id}">` and the
+//!    stylesheet's selectors are rewritten with a `.cb-{id}` prefix. This
+//!    gives a usable result before JS runs (SSR pre-paint) and as a
+//!    permanent fallback if the `document::eval` call fails.
+//! 2. **True shadow-root attach (post-mount JS):** a `use_effect` on the
+//!    client runs `document::eval(…)` which finds the `.cb-{id}` host div,
+//!    calls `host.attachShadow({ mode: 'open' })`, and moves the sanitized
+//!    HTML + stylesheet into the shadow tree. Because the sanitized HTML is
+//!    stashed in `data-*` attributes on the host div, the JS never has to
+//!    receive large strings through `eval(…)` arguments — it reads them
+//!    back from the attached node. This keeps eval snippets short and
+//!    avoids the escaping pitfalls called out in the plan.
+//!
+//! Ammonia sanitization stays the **primary** defense. Shadow-root gives us
+//! DOM isolation (host CSS can't bleed in, plugin CSS can't leak out), not
+//! sanitization: a `<script>` tag inside a shadow root still executes. See
+//! `docs/security/custom-block-audit.md` for the threat model.
 
 use dioxus::prelude::*;
 use poly_client::CustomBlock as CustomBlockData;
@@ -240,29 +247,86 @@ fn next_scope_id() -> u64 {
     SCOPE_COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
+/// JS snippet for post-mount shadow-root attach. Kept short; reads the
+/// sanitized payload from `data-*` attrs on the host so we don't have to
+/// interpolate large strings into `eval()`.
+const SHADOW_ATTACH_JS: &str = r#"(function(scope){var host=document.querySelector('.custom-block.'+scope);if(!host||host.dataset.shadowAttached==='1')return;if(typeof host.attachShadow!=='function')return;var html=host.getAttribute('data-sanitized-html')||'';var css=host.getAttribute('data-stylesheet')||'';var fb=host.querySelector('.custom-block-content');if(fb)fb.style.display='none';var root=host.attachShadow({mode:'open'});if(css){var s=document.createElement('style');s.textContent=css;root.appendChild(s);}var w=document.createElement('div');w.className='custom-block-content';w.innerHTML=html;root.appendChild(w);host.dataset.shadowAttached='1';})"#;
+
+/// Stylesheet sanitizer: strip `javascript:` / `expression(...)` / `@import`
+/// / `behavior:` / `-moz-binding` declarations before CSS enters either the
+/// scoped-prefix path or the shadow-root. Ammonia doesn't own CSS (the WIT
+/// stylesheet field is a raw string) so this is our only defense there.
+pub fn sanitize_stylesheet(css: &str) -> String {
+    if css.is_empty() {
+        return String::new();
+    }
+    let mut out = String::with_capacity(css.len());
+    for decl in css.split(';') {
+        let lower = decl.to_ascii_lowercase();
+        if lower.contains("javascript:")
+            || lower.contains("expression(")
+            || lower.trim_start().starts_with("@import")
+            || lower.contains("-moz-binding")
+            || lower.contains("behavior:")
+        {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(';');
+        }
+        out.push_str(decl);
+    }
+    out
+}
+
 #[ui_action(None)]
 #[context_menu(inherit)]
 #[component]
 pub fn CustomBlock(block: CustomBlockData) -> Element {
-    // Stable per-mount scope id. `use_hook` gives us a value computed once
-    // per component instance — matches the lifetime of the custom-block's
-    // DOM node.
     let scope_id = use_hook(next_scope_id);
     let scope_class = format!("cb-{}", scope_id);
 
+    // Primary defense: ammonia. Shadow-root is DOM isolation, not
+    // sanitization — a `<script>` inside a shadow still runs.
     let sanitized = sanitize_html(&block.sanitized_html);
-    let scoped_css = block
-        .stylesheet
-        .as_ref()
-        .map(|css| prefix_css_selectors(css, &scope_class));
+    let sanitized_css =
+        sanitize_stylesheet(block.stylesheet.as_deref().unwrap_or(""));
+    let scoped_css = if sanitized_css.is_empty() {
+        None
+    } else {
+        Some(prefix_css_selectors(&sanitized_css, &scope_class))
+    };
 
     let root_class = format!("custom-block {}", scope_class);
     let root_style = block
         .max_height_px
         .map(|h| format!("max-height: {}px; overflow: auto;", h));
 
+    // Post-mount effect: upgrade from scoped-CSS (fallback) to real
+    // shadow-root. `document::eval` only does anything on wasm/web;
+    // native/SSR keeps the scoped-CSS fallback as the final render.
+    let scope_for_effect = scope_class.clone();
+    use_effect(move || {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let script = format!("{}(\"{}\");", SHADOW_ATTACH_JS, scope_for_effect);
+            let _ = dioxus::document::eval(&script);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = &scope_for_effect;
+        }
+    });
+
+    let data_html = sanitized.clone();
+    let data_css = sanitized_css.clone();
+
     rsx! {
-        div { class: "{root_class}", style: root_style,
+        div {
+            class: "{root_class}",
+            style: root_style,
+            "data-sanitized-html": "{data_html}",
+            "data-stylesheet": "{data_css}",
             if let Some(css) = scoped_css {
                 style { dangerous_inner_html: "{css}" }
             }
@@ -400,5 +464,81 @@ mod tests {
         let input = r#"<a href="https://example.com">link</a>"#;
         let sanitized = sanitize_html(input);
         assert!(sanitized.contains(r#"href="https://example.com""#), "got: {sanitized}");
+    }
+
+    // ─── P38 / P39 — Pack G shadow-root + stylesheet hardening ─────────
+
+    #[test]
+    fn shadow_root_script_stripped_via_eval_path() {
+        // The shadow-root JS reads from `data-sanitized-html`. Whatever
+        // lands in that attribute has already been through ammonia.
+        // Verify no `<script>` ever survives sanitization, regardless of
+        // where it would be injected.
+        let input = r#"<p>ok</p><script>window.stolen=document.cookie</script>"#;
+        let sanitized = sanitize_html(input);
+        assert!(!sanitized.contains("<script"), "got: {sanitized}");
+        assert!(!sanitized.contains("window.stolen"), "got: {sanitized}");
+    }
+
+    #[test]
+    fn shadow_root_use_xlink_external_blocked() {
+        // `<use xlink:href="http://attacker/sprite.svg#id">` is a known
+        // SVG external-ref vector. `<use>` is NOT in the tag allowlist,
+        // so ammonia strips it — neither the tag nor the attr survives.
+        let input = r#"<svg><use xlink:href="http://attacker/sprite.svg#a"/></svg>"#;
+        let sanitized = sanitize_html(input);
+        assert!(!sanitized.contains("<use"), "got: {sanitized}");
+        assert!(!sanitized.contains("xlink:href"), "got: {sanitized}");
+        assert!(!sanitized.contains("attacker"), "got: {sanitized}");
+    }
+
+    #[test]
+    fn shadow_root_css_javascript_url_blocked() {
+        let css = "p { background-image: url(javascript:alert(1)); color: red; }";
+        let cleaned = sanitize_stylesheet(css);
+        assert!(!cleaned.contains("javascript:"), "got: {cleaned}");
+        // Legitimate declaration on the same rule is preserved.
+        assert!(cleaned.contains("color: red"), "got: {cleaned}");
+    }
+
+    #[test]
+    fn shadow_root_use_foreign_object_stripped() {
+        let input = r#"<svg><foreignObject><img src="x" onerror="alert(1)"/></foreignObject></svg>"#;
+        let sanitized = sanitize_html(input);
+        assert!(!sanitized.contains("<foreignObject"), "got: {sanitized}");
+        assert!(!sanitized.contains("onerror"), "got: {sanitized}");
+    }
+
+    #[test]
+    fn shadow_root_css_expression_blocked() {
+        // IE legacy. Modern browsers ignore, but strip anyway.
+        let css = "div { width: expression(alert(1)); color: blue; }";
+        let cleaned = sanitize_stylesheet(css);
+        assert!(!cleaned.contains("expression("), "got: {cleaned}");
+        assert!(cleaned.contains("color: blue"), "got: {cleaned}");
+    }
+
+    #[test]
+    fn shadow_root_css_at_import_blocked() {
+        let css = "@import url(http://attacker/evil.css); p { color: red; }";
+        let cleaned = sanitize_stylesheet(css);
+        assert!(!cleaned.contains("@import"), "got: {cleaned}");
+        assert!(!cleaned.contains("attacker"), "got: {cleaned}");
+    }
+
+    #[test]
+    fn shadow_root_css_moz_binding_blocked() {
+        let css = "div { -moz-binding: url(http://x/xbl#evil); color: red; }";
+        let cleaned = sanitize_stylesheet(css);
+        assert!(!cleaned.contains("-moz-binding"), "got: {cleaned}");
+    }
+
+    #[test]
+    fn stylesheet_sanitizer_preserves_safe_css() {
+        let css = "p { color: red } div.foo { background: #fff; padding: 4px }";
+        let cleaned = sanitize_stylesheet(css);
+        assert!(cleaned.contains("color: red"));
+        assert!(cleaned.contains("background: #fff"));
+        assert!(cleaned.contains("padding: 4px"));
     }
 }

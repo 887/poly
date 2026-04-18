@@ -246,6 +246,87 @@ pub enum SettingsScope {
     PerUser,
 }
 
+impl SettingsScope {
+    /// Stable string label matching the WIT representation.
+    ///
+    /// Used as the storage-key prefix in plugin-side settings persistence
+    /// (Pack C P18) and as the string form in [`SettingsAnchor::scope`].
+    #[must_use]
+    pub fn as_label(self) -> &'static str {
+        match self {
+            Self::AccountGlobal => "account-global",
+            Self::PerServer => "per-server",
+            Self::PerChannel => "per-channel",
+            Self::PerUser => "per-user",
+        }
+    }
+}
+
+/// Compose a plugin-side settings storage key from (scope, scope-id, key).
+///
+/// This is the canonical key format used by every `ClientBackend` impl that
+/// keeps a per-instance `HashMap<String, String>` for its settings storage
+/// (Pack C P18). Centralizing it here means scope isolation (setting on
+/// per-server scope-id `"A"` vs `"B"`) is enforced uniformly across backends.
+#[must_use]
+pub fn settings_storage_key(scope: SettingsScope, scope_id: &str, key: &str) -> String {
+    format!("{}:{}:{}", scope.as_label(), scope_id, key)
+}
+
+/// Shared in-memory settings storage cell used by `ClientBackend` impls
+/// that don't yet persist to disk / host-api.kv (Pack C P18).
+///
+/// Wraps a `RwLock<HashMap<String, String>>` keyed by
+/// [`settings_storage_key`]. Every demo/HTTP backend embeds one of these
+/// and defers to [`Self::get`] / [`Self::set`] in its `get_setting_value` /
+/// `set_setting_value` impls.
+///
+/// Each backend instance owns its own cell — cross-backend isolation is
+/// guaranteed by construction. Cross-scope (and cross-scope-id) isolation
+/// is guaranteed by the composite key format.
+#[derive(Debug, Default)]
+pub struct SettingsStorageCell {
+    inner: std::sync::RwLock<std::collections::HashMap<String, String>>,
+}
+
+impl SettingsStorageCell {
+    /// Construct an empty cell.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Fetch a previously-set value for (scope, scope_id, key).
+    ///
+    /// Returns `None` when either (a) the key was never written or (b) the
+    /// internal RwLock was poisoned (poisoning is treated as "absent" to
+    /// keep backends free of panics — callers fall through to the declared
+    /// default).
+    #[must_use]
+    pub fn get(&self, scope: SettingsScope, scope_id: &str, key: &str) -> Option<String> {
+        let storage_key = settings_storage_key(scope, scope_id, key);
+        self.inner.read().ok()?.get(&storage_key).cloned()
+    }
+
+    /// Store `value` under (scope, scope_id, key).
+    ///
+    /// Returns an [`ClientError::Internal`] if the RwLock is poisoned.
+    pub fn set(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<(), crate::ClientError> {
+        let storage_key = settings_storage_key(scope, scope_id, key);
+        self.inner
+            .write()
+            .map_err(|e| crate::ClientError::Internal(format!("settings lock: {e}")))?
+            .insert(storage_key, value.to_string());
+        Ok(())
+    }
+}
+
 /// D11 — one settings section; scope + section-key + fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettingsSection {

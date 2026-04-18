@@ -15,3 +15,46 @@ plugin-matrix-signup-password-label = Mot de passe
 plugin-matrix-signup-password-placeholder = Entrez votre mot de passe
 plugin-matrix-signup-connect-btn = Se connecter
 plugin-matrix-signup-connecting = Connexion…
+
+# TODO(translate) — keys added by P46/P47
+# TODO(translate)
+plugin-matrix-menu-space-settings-label = Space Settings
+
+# TODO(translate)
+plugin-matrix-menu-edit-per-space-profile-label = Edit Space Profile
+
+# TODO(translate)
+plugin-matrix-menu-e2ee-verification-label = E2EE Verification
+
+# TODO(translate)
+plugin-matrix-menu-explore-rooms-label = Explore Rooms
+
+# TODO(translate)
+plugin-matrix-setting-space-settings-label = Space Settings
+
+# TODO(translate)
+plugin-matrix-setting-display-name-label = Display Name
+
+# TODO(translate)
+plugin-matrix-setting-display-name-desc = The name shown to other members in this Space.
+
+# TODO(translate)
+plugin-matrix-setting-topic-label = Topic
+
+# TODO(translate)
+plugin-matrix-setting-topic-desc = A short description or topic shown at the top of the Space.
+
+# TODO(translate)
+plugin-matrix-setting-privacy-label = Privacy
+
+# TODO(translate)
+plugin-matrix-setting-allow-guests-label = Allow Guests
+
+# TODO(translate)
+plugin-matrix-setting-allow-guests-desc = When enabled, users without a Matrix account can join and read this Space.
+
+# TODO(translate)
+plugin-matrix-composer-me-label = /me action
+
+# TODO(translate)
+plugin-matrix-message-action-verify-sender-label = Verify Sender

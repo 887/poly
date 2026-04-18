@@ -67,8 +67,12 @@ plugin-poly-menu-federation-settings-label = Federation Settings
 # --- Declarative settings sections (WP 3) ---
 plugin-poly-setting-profile-label = Profile
 plugin-poly-setting-nickname-label = Nickname
+plugin-poly-setting-nickname-desc = Display this name instead of your account name in this server.
 plugin-poly-setting-avatar-url-label = Avatar URL
+plugin-poly-setting-avatar-url-desc = URL of the image to use as your avatar in this server. Leave empty to use your account avatar.
 plugin-poly-setting-privacy-label = Privacy
 plugin-poly-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-poly-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
 plugin-poly-setting-federation-label = Federation
 plugin-poly-setting-allow-federation-label = Allow Federation
+plugin-poly-setting-allow-federation-desc = When enabled, this server can communicate with other federated Poly servers.

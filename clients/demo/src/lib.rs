@@ -78,6 +78,10 @@ use std::pin::Pin;
 pub struct DemoClient {
     authenticated: bool,
     session: Option<Session>,
+    /// Pack C P18 — in-memory settings storage. Demo backends never persist
+    /// across process restarts; this cell gives round-trip semantics within
+    /// one session.
+    settings_storage: SettingsStorageCell,
 }
 
 #[cfg(feature = "native")]
@@ -87,6 +91,7 @@ impl DemoClient {
         Self {
             authenticated: false,
             session: None,
+            settings_storage: SettingsStorageCell::new(),
         }
     }
 }
@@ -500,9 +505,13 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_setting_value(
-        &self, _scope: SettingsScope, _scope_id: &str, key: &str,
+        &self, scope: SettingsScope, scope_id: &str, key: &str,
     ) -> Result<String, ClientError> {
-        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        // Pack C P18: check in-memory storage first (written via
+        // set_setting_value); fall through to declared default if unset.
+        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
+            return Ok(value);
+        }
         for section in self.get_settings_sections().await? {
             for field in section.fields {
                 if field.key == key {
@@ -514,10 +523,11 @@ impl ClientBackend for DemoClient {
     }
 
     async fn set_setting_value(
-        &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
+        &self, scope: SettingsScope, scope_id: &str, key: &str, value: &str,
     ) -> Result<(), ClientError> {
-        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
-        Err(ClientError::NotSupported("settings storage not yet wired".into()))
+        // Pack C P18: persist into the per-instance in-memory cell. Demo
+        // backends intentionally don't persist across restarts.
+        self.settings_storage.set(scope, scope_id, key, value)
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
@@ -588,6 +598,8 @@ impl ClientBackend for DemoClient {
 pub struct DemoClient2 {
     authenticated: bool,
     session: Option<Session>,
+    /// Pack C P18 — in-memory settings storage. See [`DemoClient`].
+    settings_storage: SettingsStorageCell,
 }
 
 #[cfg(feature = "native")]
@@ -597,6 +609,7 @@ impl DemoClient2 {
         Self {
             authenticated: false,
             session: None,
+            settings_storage: SettingsStorageCell::new(),
         }
     }
 }
@@ -905,9 +918,13 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn get_setting_value(
-        &self, _scope: SettingsScope, _scope_id: &str, key: &str,
+        &self, scope: SettingsScope, scope_id: &str, key: &str,
     ) -> Result<String, ClientError> {
-        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        // Pack C P18: check in-memory storage first (written via
+        // set_setting_value); fall through to declared default if unset.
+        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
+            return Ok(value);
+        }
         for section in self.get_settings_sections().await? {
             for field in section.fields {
                 if field.key == key {
@@ -919,10 +936,11 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn set_setting_value(
-        &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
+        &self, scope: SettingsScope, scope_id: &str, key: &str, value: &str,
     ) -> Result<(), ClientError> {
-        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
-        Err(ClientError::NotSupported("settings storage not yet wired".into()))
+        // Pack C P18: persist into the per-instance in-memory cell. Demo
+        // backends intentionally don't persist across restarts.
+        self.settings_storage.set(scope, scope_id, key, value)
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
@@ -993,6 +1011,8 @@ impl ClientBackend for DemoClient2 {
 pub struct DemoClient3 {
     authenticated: bool,
     session: Option<Session>,
+    /// Pack C P18 — in-memory settings storage. See [`DemoClient`].
+    settings_storage: SettingsStorageCell,
 }
 
 #[cfg(feature = "native")]
@@ -1002,6 +1022,7 @@ impl DemoClient3 {
         Self {
             authenticated: false,
             session: None,
+            settings_storage: SettingsStorageCell::new(),
         }
     }
 }
@@ -1276,9 +1297,13 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn get_setting_value(
-        &self, _scope: SettingsScope, _scope_id: &str, key: &str,
+        &self, scope: SettingsScope, scope_id: &str, key: &str,
     ) -> Result<String, ClientError> {
-        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        // Pack C P18: check in-memory storage first (written via
+        // set_setting_value); fall through to declared default if unset.
+        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
+            return Ok(value);
+        }
         for section in self.get_settings_sections().await? {
             for field in section.fields {
                 if field.key == key {
@@ -1290,10 +1315,11 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn set_setting_value(
-        &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
+        &self, scope: SettingsScope, scope_id: &str, key: &str, value: &str,
     ) -> Result<(), ClientError> {
-        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
-        Err(ClientError::NotSupported("settings storage not yet wired".into()))
+        // Pack C P18: persist into the per-instance in-memory cell. Demo
+        // backends intentionally don't persist across restarts.
+        self.settings_storage.set(scope, scope_id, key, value)
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
