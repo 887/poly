@@ -99,7 +99,7 @@ For UI-only changes (CSS / RSX), skip step 4 (unit tests) but always run step 3 
 - `jj status`, `jj diff`, `jj log`, `jj show` for inspection
 - `jj new`, `jj describe`, `jj commit` for creating changes
 - `jj git push` to push to remote
-- **After pushing, always run `jj new`** to finalize the change and start a clean working copy. "Commit and push" means: `jj describe` → `jj git push` → `jj new`.
+- **"Commit and push" means: `jj describe` → `jj bookmark set main -r @` → `jj git push --bookmark main`.** That's it. Do NOT run `jj new` after. `jj git push` auto-advances `@` to a fresh empty commit (the pushed commit becomes immutable so jj automatically creates a new empty working copy on top). A redundant `jj new` creates a second empty commit that shows up as a rejected empty-ancestor on the next push.
 - Only fall back to `git` if `jj` cannot accomplish the task
 
 ---
