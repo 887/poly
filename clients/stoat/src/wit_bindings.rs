@@ -16,8 +16,21 @@ wit_bindgen::generate!({
     path: "../../wit",
 });
 
+pub use exports::poly::messenger::client_composer::Guest as ClientComposerGuest;
+pub use exports::poly::messenger::client_menus::ActionOutcome;
+pub use exports::poly::messenger::client_menus::Guest as ClientMenusGuest;
+pub use exports::poly::messenger::client_menus::MenuItem;
+pub use exports::poly::messenger::client_menus::MenuTargetKind;
+pub use exports::poly::messenger::client_menus::PendingHandle;
+pub use exports::poly::messenger::client_settings::Guest as ClientSettingsGuest;
+pub use exports::poly::messenger::client_settings::SettingsScope;
+pub use exports::poly::messenger::client_settings::SettingsSection;
+pub use exports::poly::messenger::client_sidebar::Guest as ClientSidebarGuest;
+pub use exports::poly::messenger::client_sidebar::SidebarDeclaration;
+pub use exports::poly::messenger::client_sidebar::SidebarLayoutKind;
+pub use exports::poly::messenger::client_views::Cursor;
+pub use exports::poly::messenger::client_views::Guest as ClientViewsGuest;
 pub use exports::poly::messenger::messenger_client::Guest;
 pub use exports::poly::messenger::plugin_metadata::Guest as PluginMetadataGuest;
 pub use exports::poly::messenger::plugin_metadata::PluginManifest;
-pub use exports::poly::messenger::plugin_metadata::SettingDescriptor;
 pub use poly::messenger::types as wit;

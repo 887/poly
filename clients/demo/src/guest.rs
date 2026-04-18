@@ -13,7 +13,8 @@ use std::cell::RefCell;
 use poly_client as pc;
 
 use crate::wit_bindings::{
-    MessengerClientGuest, PluginMetadataGuest, SettingDescriptor, SettingKind, export, wit,
+    ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
+    ClientViewsGuest, MessengerClientGuest, PluginMetadataGuest, export, wit,
 };
 
 // ─── State Management ──────────────────────────────────────────────
@@ -32,17 +33,6 @@ thread_local! {
 }
 
 // ─── Bridge: poly-client → WIT types (for return values) ──────────
-
-fn to_wit_backend_type(bt: pc::BackendType) -> wit::BackendType {
-    match bt.as_str() {
-        "stoat" => wit::BackendType::Stoat,
-        "matrix" => wit::BackendType::Matrix,
-        "discord" => wit::BackendType::Discord,
-        "teams" => wit::BackendType::Teams,
-        "demo" => wit::BackendType::Demo,
-        _ => wit::BackendType::Poly,
-    }
-}
 
 fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
     match ps {
@@ -71,7 +61,7 @@ fn to_wit_user(u: &pc::User) -> wit::User {
         display_name: u.display_name.clone(),
         avatar_url: u.avatar_url.clone(),
         presence: to_wit_presence(u.presence),
-        backend: to_wit_backend_type(u.backend.clone()),
+        backend: u.backend.as_str().to_string(),
     }
 }
 
@@ -90,7 +80,7 @@ fn to_wit_server(s: pc::Server) -> wit::Server {
         icon_url: s.icon_url,
         banner_url: s.banner_url,
         categories: s.categories.iter().map(to_wit_category).collect(),
-        backend: to_wit_backend_type(s.backend),
+        backend: s.backend.as_str().to_string(),
         unread_count: s.unread_count,
         mention_count: s.mention_count,
         account_id: s.account_id,
@@ -202,7 +192,7 @@ fn to_wit_session(s: pc::Session) -> wit::Session {
         id: s.id,
         user: to_wit_user(&s.user),
         token: s.token,
-        backend: to_wit_backend_type(s.backend),
+        backend: s.backend.as_str().to_string(),
         icon_emoji: s.icon_emoji,
         instance_id: s.instance_id,
         backend_url: s.backend_url,
@@ -215,7 +205,7 @@ fn to_wit_group(g: pc::Group) -> wit::Group {
         members: g.members.iter().map(to_wit_user).collect(),
         name: g.name,
         last_message: g.last_message.map(to_wit_message),
-        backend: to_wit_backend_type(g.backend),
+        backend: g.backend.as_str().to_string(),
         account_id: g.account_id,
     }
 }
@@ -226,7 +216,7 @@ fn to_wit_dm_channel(dm: pc::DmChannel) -> wit::DmChannel {
         user: to_wit_user(&dm.user),
         last_message: dm.last_message.map(to_wit_message),
         unread_count: dm.unread_count,
-        backend: to_wit_backend_type(dm.backend),
+        backend: dm.backend.as_str().to_string(),
         account_id: dm.account_id,
     }
 }
@@ -268,7 +258,7 @@ fn to_wit_notification(n: pc::Notification) -> wit::Notification {
     wit::Notification {
         id: n.id,
         kind: to_wit_notification_kind(&n.kind),
-        backend: to_wit_backend_type(n.backend),
+        backend: n.backend.as_str().to_string(),
         account_id: n.account_id,
         timestamp: n.timestamp.to_rfc3339(),
         read: n.read,
@@ -584,8 +574,8 @@ impl MessengerClientGuest for DemoPlugin {
         // Demo plugin does not use WebSocket connections.
     }
 
-    fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Demo
+    fn get_backend_type() -> String {
+        "demo".to_string()
     }
 
     fn get_backend_name() -> String {
@@ -645,15 +635,6 @@ impl PluginMetadataGuest for DemoPlugin {
         }
     }
 
-    fn get_settings_schema() -> Vec<SettingDescriptor> {
-        vec![SettingDescriptor {
-            key: "enabled".to_string(),
-            kind: SettingKind::Toggle,
-            default_value: "false".to_string(),
-            extra: String::new(),
-        }]
-    }
-
     fn get_display_name_key() -> String {
         "plugin-demo-title".to_string()
     }
@@ -669,6 +650,139 @@ impl PluginMetadataGuest for DemoPlugin {
             description: "Demo backend with hardcoded fixture data — no network or subprocess access.".to_string(),
             homepage: None,
         }
+    }
+}
+
+// ─── New UI Surface Stubs ──────────────────────────────────────────
+
+use crate::wit_bindings::exports::poly::messenger::client_menus as menus_exp;
+use crate::wit_bindings::exports::poly::messenger::client_settings as settings_exp;
+use crate::wit_bindings::exports::poly::messenger::client_sidebar as sidebar_exp;
+use crate::wit_bindings::exports::poly::messenger::client_views as views_exp;
+use crate::wit_bindings::exports::poly::messenger::client_composer as composer_exp;
+
+impl ClientMenusGuest for DemoPlugin {
+    fn get_context_menu_items(
+        _target: menus_exp::MenuTargetKind,
+        _target_id: String,
+    ) -> Result<Vec<menus_exp::MenuItem>, menus_exp::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn invoke_context_action(
+        action_id: String,
+        _target: menus_exp::MenuTargetKind,
+        _target_id: String,
+    ) -> Result<menus_exp::ActionOutcome, menus_exp::ClientError> {
+        Err(menus_exp::ClientError::NotFound(action_id))
+    }
+
+    fn poll_action(
+        _handle: menus_exp::PendingHandle,
+    ) -> Result<menus_exp::ActionOutcome, menus_exp::ClientError> {
+        Ok(menus_exp::ActionOutcome::Completed)
+    }
+}
+
+impl ClientSettingsGuest for DemoPlugin {
+    fn get_settings_sections(
+    ) -> Result<Vec<settings_exp::SettingsSection>, settings_exp::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn get_setting_value(
+        _scope: settings_exp::SettingsScope,
+        _scope_id: String,
+        _key: String,
+    ) -> Result<String, settings_exp::ClientError> {
+        Ok("null".to_string())
+    }
+
+    fn set_setting_value(
+        _scope: settings_exp::SettingsScope,
+        _scope_id: String,
+        _key: String,
+        _value: String,
+    ) -> Result<(), settings_exp::ClientError> {
+        Ok(())
+    }
+}
+
+impl ClientSidebarGuest for DemoPlugin {
+    fn get_sidebar_declaration(
+    ) -> Result<sidebar_exp::SidebarDeclaration, sidebar_exp::ClientError> {
+        Ok(sidebar_exp::SidebarDeclaration {
+            layout: sidebar_exp::SidebarLayoutKind::ChannelList,
+            sections: vec![],
+            header_block: None,
+        })
+    }
+
+    fn invoke_sidebar_action(
+        action_id: String,
+    ) -> Result<sidebar_exp::ActionOutcome, sidebar_exp::ClientError> {
+        Err(sidebar_exp::ClientError::NotFound(action_id))
+    }
+}
+
+impl ClientViewsGuest for DemoPlugin {
+    fn get_channel_view(
+        _channel_id: String,
+    ) -> Result<views_exp::ViewDescriptor, views_exp::ClientError> {
+        Err(views_exp::ClientError::NotSupported(
+            "demo plugin does not support non-chat views".to_string(),
+        ))
+    }
+
+    fn get_view_rows(
+        _channel_id: String,
+        _cursor: Option<views_exp::Cursor>,
+        _sort_id: Option<String>,
+        _filter_id: Option<String>,
+        _tab_id: Option<String>,
+    ) -> Result<views_exp::ViewRowsPage, views_exp::ClientError> {
+        Err(views_exp::ClientError::NotSupported(
+            "demo plugin does not support non-chat views".to_string(),
+        ))
+    }
+
+    fn get_view_detail(
+        _channel_id: String,
+        _row_id: String,
+    ) -> Result<views_exp::ViewDetail, views_exp::ClientError> {
+        Err(views_exp::ClientError::NotSupported(
+            "demo plugin does not support non-chat views".to_string(),
+        ))
+    }
+}
+
+impl ClientComposerGuest for DemoPlugin {
+    fn get_composer_buttons(
+        _channel_id: String,
+    ) -> Result<Vec<composer_exp::ComposerButton>, composer_exp::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn get_message_actions(
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<Vec<composer_exp::MenuItem>, composer_exp::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn invoke_composer_action(
+        action_id: String,
+        _channel_id: String,
+    ) -> Result<composer_exp::ActionOutcome, composer_exp::ClientError> {
+        Err(composer_exp::ClientError::NotFound(action_id))
+    }
+
+    fn invoke_message_action(
+        action_id: String,
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<composer_exp::ActionOutcome, composer_exp::ClientError> {
+        Err(composer_exp::ClientError::NotFound(action_id))
     }
 }
 

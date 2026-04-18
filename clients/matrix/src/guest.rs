@@ -7,7 +7,11 @@
 
 use std::cell::RefCell;
 
-use crate::wit_bindings::{Guest, PluginMetadataGuest, SettingDescriptor, export, wit};
+use crate::wit_bindings::{
+    ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
+    ClientViewsGuest, Guest, PluginMetadataGuest, export,
+    wit,
+};
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_HOMESERVER: &str = "https://matrix.org";
@@ -187,10 +191,10 @@ impl Guest for MatrixPlugin {
                         display_name,
                         avatar_url: profile.avatar_url,
                         presence: wit::PresenceStatus::Online,
-                        backend: wit::BackendType::Matrix,
+                        backend: "matrix".to_string(),
                     },
                     token,
-                    backend: wit::BackendType::Matrix,
+                    backend: "matrix".to_string(),
                     icon_emoji: Some("\u{1f7e6}".to_string()),
                     instance_id,
                     backend_url: Some(DEFAULT_HOMESERVER.to_string()),
@@ -257,10 +261,10 @@ impl Guest for MatrixPlugin {
                         display_name,
                         avatar_url: profile.avatar_url,
                         presence: wit::PresenceStatus::Online,
-                        backend: wit::BackendType::Matrix,
+                        backend: "matrix".to_string(),
                     },
                     token: login.access_token,
-                    backend: wit::BackendType::Matrix,
+                    backend: "matrix".to_string(),
                     icon_emoji: Some("\u{1f7e6}".to_string()),
                     instance_id,
                     backend_url: Some(DEFAULT_HOMESERVER.to_string()),
@@ -365,7 +369,7 @@ impl Guest for MatrixPlugin {
             display_name,
             avatar_url: profile.avatar_url,
             presence: wit::PresenceStatus::Offline,
-            backend: wit::BackendType::Matrix,
+            backend: "matrix".to_string(),
         })
     }
 
@@ -428,8 +432,8 @@ impl Guest for MatrixPlugin {
         // Events are emitted during sync HTTP response processing.
     }
 
-    fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Matrix
+    fn get_backend_type() -> String {
+        "matrix".to_string()
     }
 
     fn get_backend_name() -> String {
@@ -438,17 +442,17 @@ impl Guest for MatrixPlugin {
 
     fn get_backend_capabilities() -> wit::BackendCapabilities {
         wit::BackendCapabilities {
-            supports_voice: false,
-            supports_video: false,
+            supports_voice: true,
+            supports_video: true,
             supports_dms: true,
-            supports_groups: false,
+            supports_groups: true,
             supports_send_messages: true,
             supports_presence: true,
-            supports_search: false,
+            supports_search: true,
             supports_reactions: true,
             supports_typing_indicators: true,
-            supports_file_upload: false,
-            landing: wit::LandingPage::DirectMessages,
+            supports_file_upload: true,
+            landing: wit::LandingPage::FirstServer,
         }
     }
 
@@ -475,10 +479,6 @@ impl PluginMetadataGuest for MatrixPlugin {
         }
     }
 
-    fn get_settings_schema() -> Vec<SettingDescriptor> {
-        vec![]
-    }
-
     fn get_display_name_key() -> String {
         "plugin-matrix-title".to_string()
     }
@@ -496,6 +496,131 @@ impl PluginMetadataGuest for MatrixPlugin {
                 .to_string(),
             homepage: Some("https://matrix.org".to_string()),
         }
+    }
+}
+
+impl ClientMenusGuest for MatrixPlugin {
+    fn get_context_menu_items(
+        _target: crate::wit_bindings::MenuTargetKind,
+        _target_id: String,
+    ) -> Result<Vec<crate::wit_bindings::MenuItem>, wit::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn invoke_context_action(
+        action_id: String,
+        _target: crate::wit_bindings::MenuTargetKind,
+        _target_id: String,
+    ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+
+    fn poll_action(
+        _handle: crate::wit_bindings::PendingHandle,
+    ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
+        Ok(crate::wit_bindings::ActionOutcome::Completed)
+    }
+}
+
+impl ClientSettingsGuest for MatrixPlugin {
+    fn get_settings_sections(
+    ) -> Result<Vec<crate::wit_bindings::SettingsSection>, wit::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn get_setting_value(
+        _scope: crate::wit_bindings::SettingsScope,
+        _scope_id: String,
+        _key: String,
+    ) -> Result<String, wit::ClientError> {
+        Ok("null".to_string())
+    }
+
+    fn set_setting_value(
+        _scope: crate::wit_bindings::SettingsScope,
+        _scope_id: String,
+        _key: String,
+        _value: String,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+}
+
+impl ClientSidebarGuest for MatrixPlugin {
+    fn get_sidebar_declaration(
+    ) -> Result<crate::wit_bindings::SidebarDeclaration, wit::ClientError> {
+        Ok(crate::wit_bindings::SidebarDeclaration {
+            layout: crate::wit_bindings::SidebarLayoutKind::SpacesRooms,
+            sections: vec![],
+            header_block: None,
+        })
+    }
+
+    fn invoke_sidebar_action(
+        action_id: String,
+    ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+}
+
+impl ClientViewsGuest for MatrixPlugin {
+    fn get_channel_view(
+        _channel_id: String,
+    ) -> Result<crate::wit_bindings::ViewDescriptor, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "matrix has no non-chat views".to_string(),
+        ))
+    }
+
+    fn get_view_rows(
+        _channel_id: String,
+        _cursor: Option<crate::wit_bindings::Cursor>,
+        _sort_id: Option<String>,
+        _filter_id: Option<String>,
+        _tab_id: Option<String>,
+    ) -> Result<crate::wit_bindings::ViewRowsPage, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "matrix has no non-chat views".to_string(),
+        ))
+    }
+
+    fn get_view_detail(
+        _channel_id: String,
+        _row_id: String,
+    ) -> Result<crate::wit_bindings::ViewDetail, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "matrix has no non-chat views".to_string(),
+        ))
+    }
+}
+
+impl ClientComposerGuest for MatrixPlugin {
+    fn get_composer_buttons(
+        _channel_id: String,
+    ) -> Result<Vec<crate::wit_bindings::ComposerButton>, wit::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn get_message_actions(
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<Vec<crate::wit_bindings::MenuItem>, wit::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn invoke_composer_action(
+        action_id: String,
+        _channel_id: String,
+    ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+
+    fn invoke_message_action(
+        action_id: String,
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
     }
 }
 

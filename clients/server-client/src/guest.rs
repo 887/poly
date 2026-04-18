@@ -1,25 +1,34 @@
 //! WASM Component Model guest implementation for the Poly Server client plugin.
 //!
 //! Stub implementation — the real WASM version will route HTTP/WebSocket
-//! calls through host-api imports. For now, returns "not yet implemented".
+//! calls through host-api imports. For now, returns minimal-behavior defaults
+//! for all six Pack-E WIT surfaces.
+//!
 //! DECISION(D21): WASM Plugin Backends.
 
 #![allow(unsafe_code)]
 
-use crate::wit_bindings::{Guest, PluginMetadataGuest, SettingDescriptor, export, wit};
+use crate::wit_bindings::{
+    ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
+    ClientViewsGuest, MessengerClientGuest, PluginManifest, PluginMetadataGuest, export, wit,
+};
+
+// ─── Plugin struct ─────────────────────────────────────────────────
 
 struct PolyServerPlugin;
 
-impl Guest for PolyServerPlugin {
+// ─── messenger-client ──────────────────────────────────────────────
+
+impl MessengerClientGuest for PolyServerPlugin {
     fn authenticate(_credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
         Err(wit::ClientError::Internal(
-            "Poly Server client WASM impl not yet complete".into(),
+            "Poly Server WASM impl not yet complete".to_string(),
         ))
     }
 
     fn logout() -> Result<(), wit::ClientError> {
         Err(wit::ClientError::Internal(
-            "Poly Server client WASM impl not yet complete".into(),
+            "Poly Server WASM impl not yet complete".to_string(),
         ))
     }
 
@@ -48,7 +57,7 @@ impl Guest for PolyServerPlugin {
         _content: wit::MessageContent,
     ) -> Result<wit::Message, wit::ClientError> {
         Err(wit::ClientError::Internal(
-            "Poly Server client WASM impl not yet complete".into(),
+            "Poly Server WASM impl not yet complete".to_string(),
         ))
     }
 
@@ -58,7 +67,7 @@ impl Guest for PolyServerPlugin {
         _content: wit::MessageContent,
     ) -> Result<wit::Message, wit::ClientError> {
         Err(wit::ClientError::Internal(
-            "Poly Server reply sending not yet implemented".into(),
+            "Poly Server WASM impl not yet complete".to_string(),
         ))
     }
 
@@ -97,7 +106,7 @@ impl Guest for PolyServerPlugin {
         _pinned: bool,
     ) -> Result<(), wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "Poly server pin mutation not yet implemented".to_string(),
+            "pin mutation not yet implemented".to_string(),
         ))
     }
 
@@ -131,13 +140,13 @@ impl Guest for PolyServerPlugin {
 
     fn open_direct_message_channel(_user_id: String) -> Result<wit::DmChannel, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "Poly server WASM open DM not yet implemented".to_string(),
+            "open DM not yet implemented".to_string(),
         ))
     }
 
     fn open_saved_messages_channel() -> Result<wit::DmChannel, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "Poly server WASM saved messages not yet implemented".to_string(),
+            "saved messages not yet implemented".to_string(),
         ))
     }
 
@@ -160,25 +169,212 @@ impl Guest for PolyServerPlugin {
     }
 
     fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
-        // TODO: Parse Poly server WebSocket events, call emit-event
+        // TODO: Parse Poly server WebSocket events and call host emit-event.
     }
 
-    fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::from("poly")
+    fn get_backend_type() -> String {
+        "poly".to_string()
     }
 
     fn get_backend_name() -> String {
         "Poly Server".to_string()
     }
-}
 
-impl PluginMetadataGuest for PolyServerPlugin {
-    fn get_translations(_locale: String) -> String {
-        String::new()
+    fn get_backend_capabilities() -> wit::BackendCapabilities {
+        wit::BackendCapabilities {
+            supports_voice: false,
+            supports_video: false,
+            supports_dms: true,
+            supports_groups: true,
+            supports_send_messages: true,
+            supports_presence: true,
+            supports_search: true,
+            supports_reactions: true,
+            supports_typing_indicators: true,
+            supports_file_upload: true,
+            landing: wit::LandingPage::FirstServer,
+        }
     }
 
-    fn get_settings_schema() -> Vec<SettingDescriptor> {
-        vec![]
+    fn list_files(
+        _channel_id: String,
+        _path: String,
+    ) -> Result<Vec<wit::FileEntry>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "poly-server has no code channels".to_string(),
+        ))
+    }
+
+    fn read_file(
+        _channel_id: String,
+        _path: String,
+    ) -> Result<wit::FileContent, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "poly-server has no code channels".to_string(),
+        ))
+    }
+}
+
+// ─── client-menus ─────────────────────────────────────────────────
+
+use crate::wit_bindings::exports::poly::messenger::client_menus as menus;
+
+impl ClientMenusGuest for PolyServerPlugin {
+    fn get_context_menu_items(
+        _target: menus::MenuTargetKind,
+        _target_id: String,
+    ) -> Result<Vec<menus::MenuItem>, menus::ClientError> {
+        Ok(vec![])
+    }
+
+    fn invoke_context_action(
+        action_id: String,
+        _target: menus::MenuTargetKind,
+        _target_id: String,
+    ) -> Result<menus::ActionOutcome, menus::ClientError> {
+        Err(menus::ClientError::NotFound(action_id))
+    }
+
+    fn poll_action(
+        _handle: menus::PendingHandle,
+    ) -> Result<menus::ActionOutcome, menus::ClientError> {
+        Err(menus::ClientError::NotSupported(
+            "no pending actions".to_string(),
+        ))
+    }
+}
+
+// ─── client-settings ──────────────────────────────────────────────
+
+use crate::wit_bindings::exports::poly::messenger::client_settings as settings;
+
+impl ClientSettingsGuest for PolyServerPlugin {
+    fn get_settings_sections(
+    ) -> Result<Vec<settings::SettingsSection>, settings::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_setting_value(
+        _scope: settings::SettingsScope,
+        _scope_id: String,
+        key: String,
+    ) -> Result<String, settings::ClientError> {
+        Err(settings::ClientError::NotFound(key))
+    }
+
+    fn set_setting_value(
+        _scope: settings::SettingsScope,
+        _scope_id: String,
+        _key: String,
+        _value: String,
+    ) -> Result<(), settings::ClientError> {
+        Err(settings::ClientError::NotSupported(
+            "settings not yet implemented".to_string(),
+        ))
+    }
+}
+
+// ─── client-sidebar ───────────────────────────────────────────────
+
+use crate::wit_bindings::exports::poly::messenger::client_sidebar as sidebar;
+
+impl ClientSidebarGuest for PolyServerPlugin {
+    fn get_sidebar_declaration(
+    ) -> Result<sidebar::SidebarDeclaration, sidebar::ClientError> {
+        Ok(sidebar::SidebarDeclaration {
+            layout: sidebar::SidebarLayoutKind::ChannelList,
+            sections: vec![],
+            header_block: None,
+        })
+    }
+
+    fn invoke_sidebar_action(
+        action_id: String,
+    ) -> Result<sidebar::ActionOutcome, sidebar::ClientError> {
+        Err(sidebar::ClientError::NotFound(action_id))
+    }
+}
+
+// ─── client-views ─────────────────────────────────────────────────
+
+use crate::wit_bindings::exports::poly::messenger::client_views as views;
+
+impl ClientViewsGuest for PolyServerPlugin {
+    fn get_channel_view(
+        channel_id: String,
+    ) -> Result<views::ViewDescriptor, views::ClientError> {
+        Err(views::ClientError::NotSupported(format!(
+            "channel {channel_id} has no custom view"
+        )))
+    }
+
+    fn get_view_rows(
+        channel_id: String,
+        _cursor: Option<views::Cursor>,
+        _sort_id: Option<String>,
+        _filter_id: Option<String>,
+        _tab_id: Option<String>,
+    ) -> Result<views::ViewRowsPage, views::ClientError> {
+        Err(views::ClientError::NotSupported(format!(
+            "channel {channel_id} has no custom view"
+        )))
+    }
+
+    fn get_view_detail(
+        channel_id: String,
+        row_id: String,
+    ) -> Result<views::ViewDetail, views::ClientError> {
+        Err(views::ClientError::NotFound(format!(
+            "{channel_id}/{row_id}"
+        )))
+    }
+}
+
+// ─── client-composer ──────────────────────────────────────────────
+
+use crate::wit_bindings::exports::poly::messenger::client_composer as composer;
+
+impl ClientComposerGuest for PolyServerPlugin {
+    fn get_composer_buttons(
+        _channel_id: String,
+    ) -> Result<Vec<composer::ComposerButton>, composer::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_message_actions(
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<Vec<composer::MenuItem>, composer::ClientError> {
+        Ok(vec![])
+    }
+
+    fn invoke_composer_action(
+        action_id: String,
+        _channel_id: String,
+    ) -> Result<composer::ActionOutcome, composer::ClientError> {
+        Err(composer::ClientError::NotFound(action_id))
+    }
+
+    fn invoke_message_action(
+        action_id: String,
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<composer::ActionOutcome, composer::ClientError> {
+        Err(composer::ClientError::NotFound(action_id))
+    }
+}
+
+// ─── plugin-metadata ──────────────────────────────────────────────
+
+impl PluginMetadataGuest for PolyServerPlugin {
+    fn get_translations(locale: String) -> String {
+        match locale.as_str() {
+            "de" => include_str!("../locales/de/plugin.ftl").to_string(),
+            "fr" => include_str!("../locales/fr/plugin.ftl").to_string(),
+            "es" => include_str!("../locales/es/plugin.ftl").to_string(),
+            // en or any unknown locale → English (same contract as WIT)
+            _ => include_str!("../locales/en/plugin.ftl").to_string(),
+        }
     }
 
     fn get_display_name_key() -> String {
@@ -186,8 +382,20 @@ impl PluginMetadataGuest for PolyServerPlugin {
     }
 
     fn get_icon() -> String {
-        "🔐".to_string()
+        "\u{1F510}".to_string()
+    }
+
+    fn get_plugin_manifest() -> PluginManifest {
+        PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec![],
+            description: "Poly Server backend — HTTP + WebSocket client for poly-server instances."
+                .to_string(),
+            homepage: None,
+        }
     }
 }
+
+// ─── Component export registration ────────────────────────────────
 
 export!(PolyServerPlugin with_types_in crate::wit_bindings);

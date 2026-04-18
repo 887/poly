@@ -1,4 +1,4 @@
-//! WIT bindings for the demo messenger plugin.
+//! WIT bindings for the Lemmy messenger plugin.
 //!
 //! This module isolates the `wit-bindgen` code generation, which produces unsafe FFI stubs.
 //! The `#![allow(unsafe_code)]` is confined to this module only.
@@ -16,12 +16,12 @@ wit_bindgen::generate!({
     path: "../../wit",
 });
 
-pub use exports::poly::messenger::client_composer::Guest as ClientComposerGuest;
+pub use exports::poly::messenger::messenger_client::Guest as MessengerClientGuest;
+pub use exports::poly::messenger::plugin_metadata::Guest as PluginMetadataGuest;
+pub use exports::poly::messenger::plugin_metadata::PluginManifest;
 pub use exports::poly::messenger::client_menus::Guest as ClientMenusGuest;
 pub use exports::poly::messenger::client_settings::Guest as ClientSettingsGuest;
 pub use exports::poly::messenger::client_sidebar::Guest as ClientSidebarGuest;
 pub use exports::poly::messenger::client_views::Guest as ClientViewsGuest;
-pub use exports::poly::messenger::messenger_client::Guest as MessengerClientGuest;
-pub use exports::poly::messenger::plugin_metadata::Guest as PluginMetadataGuest;
-pub use exports::poly::messenger::plugin_metadata::PluginManifest;
+pub use exports::poly::messenger::client_composer::Guest as ClientComposerGuest;
 pub use poly::messenger::types as wit;

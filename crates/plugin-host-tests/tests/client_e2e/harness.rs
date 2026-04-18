@@ -18,6 +18,8 @@ use poly_client::{
 };
 use poly_plugin_host::PluginBackend;
 
+pub type HarnessResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
 #[allow(dead_code)]
 fn is_stub_error(error: &ClientError) -> bool {
     let message = match error {
@@ -71,12 +73,12 @@ pub fn assert_backend_name(backend: &PluginBackend, expected: &str) {
 pub async fn authenticate_with_token(
     backend: &mut PluginBackend,
     token: &str,
-) -> poly_client::Session {
+) -> HarnessResult<poly_client::Session> {
     let creds = AuthCredentials::Token(token.to_string());
     let session = backend
         .authenticate(creds)
         .await
-        .expect("authenticate() should succeed");
+        .map_err(|e| format!("authenticate() should succeed: {e:?}"))?;
 
     // Session must have non-empty fields
     assert!(!session.id.is_empty(), "session.id should not be empty");
@@ -89,7 +91,7 @@ pub async fn authenticate_with_token(
         "session.user.display_name should not be empty"
     );
 
-    session
+    Ok(session)
 }
 
 /// Verify that authenticate returns an error for stubs that are not implemented.
@@ -127,16 +129,19 @@ pub async fn logout_succeeds(backend: &mut PluginBackend) {
 
 /// Get servers and verify the response is valid.
 /// Returns the list for further inspection.
-pub async fn get_servers(backend: &PluginBackend) -> Vec<poly_client::Server> {
+pub async fn get_servers(backend: &PluginBackend) -> HarnessResult<Vec<poly_client::Server>> {
     backend
         .get_servers()
         .await
-        .expect("get_servers() should not error")
+        .map_err(|e| format!("get_servers() should not error: {e:?}").into())
 }
 
 /// Get servers and verify we got at least `min_count` entries.
-pub async fn get_servers_non_empty(backend: &PluginBackend, min_count: usize) {
-    let servers = get_servers(backend).await;
+pub async fn get_servers_non_empty(
+    backend: &PluginBackend,
+    min_count: usize,
+) -> HarnessResult {
+    let servers = get_servers(backend).await?;
     assert!(
         servers.len() >= min_count,
         "Expected at least {min_count} servers, got {}",
@@ -148,18 +153,20 @@ pub async fn get_servers_non_empty(backend: &PluginBackend, min_count: usize) {
         assert!(!server.id.is_empty(), "server.id should not be empty");
         assert!(!server.name.is_empty(), "server.name should not be empty");
     }
+    Ok(())
 }
 
 /// Get a specific server by ID and verify it matches.
-pub async fn get_server_by_id(backend: &PluginBackend, server_id: &str) {
+pub async fn get_server_by_id(backend: &PluginBackend, server_id: &str) -> HarnessResult {
     let server = backend
         .get_server(server_id)
         .await
-        .expect("get_server() should succeed for valid ID");
+        .map_err(|e| format!("get_server() should succeed for valid ID: {e:?}"))?;
     assert_eq!(
         server.id, server_id,
         "Returned server ID should match requested"
     );
+    Ok(())
 }
 
 /// Get a non-existent server and verify we get NotFound.
@@ -175,16 +182,23 @@ pub async fn get_server_not_found(backend: &PluginBackend) {
 // ─── Data Retrieval: Channels ──────────────────────────────────────
 
 /// Get channels for a server and verify the response.
-pub async fn get_channels(backend: &PluginBackend, server_id: &str) -> Vec<poly_client::Channel> {
+pub async fn get_channels(
+    backend: &PluginBackend,
+    server_id: &str,
+) -> HarnessResult<Vec<poly_client::Channel>> {
     backend
         .get_channels(server_id)
         .await
-        .expect("get_channels() should not error")
+        .map_err(|e| format!("get_channels() should not error: {e:?}").into())
 }
 
 /// Get channels and verify we got at least `min_count`.
-pub async fn get_channels_non_empty(backend: &PluginBackend, server_id: &str, min_count: usize) {
-    let channels = get_channels(backend, server_id).await;
+pub async fn get_channels_non_empty(
+    backend: &PluginBackend,
+    server_id: &str,
+    min_count: usize,
+) -> HarnessResult {
+    let channels = get_channels(backend, server_id).await?;
     assert!(
         channels.len() >= min_count,
         "Expected at least {min_count} channels for server '{server_id}', got {}",
@@ -195,15 +209,17 @@ pub async fn get_channels_non_empty(backend: &PluginBackend, server_id: &str, mi
         assert!(!channel.id.is_empty(), "channel.id should not be empty");
         assert!(!channel.name.is_empty(), "channel.name should not be empty");
     }
+    Ok(())
 }
 
 /// Get a specific channel by ID.
-pub async fn get_channel_by_id(backend: &PluginBackend, channel_id: &str) {
+pub async fn get_channel_by_id(backend: &PluginBackend, channel_id: &str) -> HarnessResult {
     let channel = backend
         .get_channel(channel_id)
         .await
-        .expect("get_channel() should succeed for valid ID");
+        .map_err(|e| format!("get_channel() should succeed for valid ID: {e:?}"))?;
     assert_eq!(channel.id, channel_id, "Returned channel ID should match");
+    Ok(())
 }
 
 /// Get a non-existent channel and verify NotFound.
@@ -219,7 +235,10 @@ pub async fn get_channel_not_found(backend: &PluginBackend) {
 // ─── Data Retrieval: Messages ──────────────────────────────────────
 
 /// Get messages for a channel with default query.
-pub async fn get_messages(backend: &PluginBackend, channel_id: &str) -> Vec<poly_client::Message> {
+pub async fn get_messages(
+    backend: &PluginBackend,
+    channel_id: &str,
+) -> HarnessResult<Vec<poly_client::Message>> {
     let query = MessageQuery {
         before: None,
         after: None,
@@ -229,12 +248,16 @@ pub async fn get_messages(backend: &PluginBackend, channel_id: &str) -> Vec<poly
     backend
         .get_messages(channel_id, query)
         .await
-        .expect("get_messages() should not error")
+        .map_err(|e| format!("get_messages() should not error: {e:?}").into())
 }
 
 /// Get messages and verify non-empty with valid structure.
-pub async fn get_messages_non_empty(backend: &PluginBackend, channel_id: &str, min_count: usize) {
-    let messages = get_messages(backend, channel_id).await;
+pub async fn get_messages_non_empty(
+    backend: &PluginBackend,
+    channel_id: &str,
+    min_count: usize,
+) -> HarnessResult {
+    let messages = get_messages(backend, channel_id).await?;
     assert!(
         messages.len() >= min_count,
         "Expected at least {min_count} messages in '{channel_id}', got {}",
@@ -248,6 +271,7 @@ pub async fn get_messages_non_empty(backend: &PluginBackend, channel_id: &str, m
             "message.author.id should not be empty"
         );
     }
+    Ok(())
 }
 
 /// Send a text message and verify the response.
@@ -255,93 +279,102 @@ pub async fn send_text_message(
     backend: &PluginBackend,
     channel_id: &str,
     text: &str,
-) -> poly_client::Message {
+) -> HarnessResult<poly_client::Message> {
     let content = MessageContent::Text(text.to_string());
     let msg = backend
         .send_message(channel_id, content)
         .await
-        .expect("send_message() should succeed");
+        .map_err(|e| format!("send_message() should succeed: {e:?}"))?;
 
     assert!(!msg.id.is_empty(), "Sent message should have an ID");
-    msg
+    Ok(msg)
 }
 
 // ─── Data Retrieval: Users ─────────────────────────────────────────
 
 /// Get a user by ID.
-pub async fn get_user(backend: &PluginBackend, user_id: &str) -> poly_client::User {
+pub async fn get_user(
+    backend: &PluginBackend,
+    user_id: &str,
+) -> HarnessResult<poly_client::User> {
     backend
         .get_user(user_id)
         .await
-        .expect("get_user() should succeed for valid ID")
+        .map_err(|e| format!("get_user() should succeed for valid ID: {e:?}").into())
 }
 
 /// Get friends list.
-pub async fn get_friends(backend: &PluginBackend) -> Vec<poly_client::User> {
+pub async fn get_friends(backend: &PluginBackend) -> HarnessResult<Vec<poly_client::User>> {
     backend
         .get_friends()
         .await
-        .expect("get_friends() should not error")
+        .map_err(|e| format!("get_friends() should not error: {e:?}").into())
 }
 
 /// Get channel members.
 pub async fn get_channel_members(
     backend: &PluginBackend,
     channel_id: &str,
-) -> Vec<poly_client::User> {
+) -> HarnessResult<Vec<poly_client::User>> {
     backend
         .get_channel_members(channel_id)
         .await
-        .expect("get_channel_members() should not error")
+        .map_err(|e| format!("get_channel_members() should not error: {e:?}").into())
 }
 
 // ─── Data Retrieval: Groups ────────────────────────────────────────
 
 /// Get groups list.
-pub async fn get_groups(backend: &PluginBackend) -> Vec<poly_client::Group> {
+pub async fn get_groups(backend: &PluginBackend) -> HarnessResult<Vec<poly_client::Group>> {
     backend
         .get_groups()
         .await
-        .expect("get_groups() should not error")
+        .map_err(|e| format!("get_groups() should not error: {e:?}").into())
 }
 
 // ─── Data Retrieval: DMs ───────────────────────────────────────────
 
 /// Get DM channels list.
-pub async fn get_dm_channels(backend: &PluginBackend) -> Vec<poly_client::DmChannel> {
+pub async fn get_dm_channels(
+    backend: &PluginBackend,
+) -> HarnessResult<Vec<poly_client::DmChannel>> {
     backend
         .get_dm_channels()
         .await
-        .expect("get_dm_channels() should not error")
+        .map_err(|e| format!("get_dm_channels() should not error: {e:?}").into())
 }
 
 /// Open or create a DM channel with the target user.
 pub async fn open_direct_message_channel(
     backend: &PluginBackend,
     user_id: &str,
-) -> poly_client::DmChannel {
+) -> HarnessResult<poly_client::DmChannel> {
     backend
         .open_direct_message_channel(user_id)
         .await
-        .expect("open_direct_message_channel() should not error")
+        .map_err(|e| format!("open_direct_message_channel() should not error: {e:?}").into())
 }
 
 /// Open the Saved Messages / self-DM channel.
-pub async fn open_saved_messages_channel(backend: &PluginBackend) -> poly_client::DmChannel {
+pub async fn open_saved_messages_channel(
+    backend: &PluginBackend,
+) -> HarnessResult<poly_client::DmChannel> {
     backend
         .open_saved_messages_channel()
         .await
-        .expect("open_saved_messages_channel() should not error")
+        .map_err(|e| format!("open_saved_messages_channel() should not error: {e:?}").into())
 }
 
 // ─── Data Retrieval: Notifications ─────────────────────────────────
 
 /// Get notifications list.
-pub async fn get_notifications(backend: &PluginBackend) -> Vec<poly_client::Notification> {
+pub async fn get_notifications(
+    backend: &PluginBackend,
+) -> HarnessResult<Vec<poly_client::Notification>> {
     backend
         .get_notifications()
         .await
-        .expect("get_notifications() should not error")
+        .map_err(|e| format!("get_notifications() should not error: {e:?}").into())
 }
 
 // ─── Voice ─────────────────────────────────────────────────────────
@@ -350,29 +383,32 @@ pub async fn get_notifications(backend: &PluginBackend) -> Vec<poly_client::Noti
 pub async fn get_voice_participants(
     backend: &PluginBackend,
     channel_id: &str,
-) -> Vec<poly_client::VoiceParticipant> {
+) -> HarnessResult<Vec<poly_client::VoiceParticipant>> {
     backend
         .get_voice_participants(channel_id)
         .await
-        .expect("get_voice_participants() should not error")
+        .map_err(|e| format!("get_voice_participants() should not error: {e:?}").into())
 }
 
 // ─── Presence ──────────────────────────────────────────────────────
 
 /// Get a user's presence status.
-pub async fn get_presence(backend: &PluginBackend, user_id: &str) -> PresenceStatus {
+pub async fn get_presence(
+    backend: &PluginBackend,
+    user_id: &str,
+) -> HarnessResult<PresenceStatus> {
     backend
         .get_presence(user_id)
         .await
-        .expect("get_presence() should not error")
+        .map_err(|e| format!("get_presence() should not error: {e:?}").into())
 }
 
 /// Set presence status without error.
-pub async fn set_presence(backend: &PluginBackend, status: PresenceStatus) {
+pub async fn set_presence(backend: &PluginBackend, status: PresenceStatus) -> HarnessResult {
     backend
         .set_presence(status)
         .await
-        .expect("set_presence() should not error");
+        .map_err(|e| format!("set_presence() should not error: {e:?}").into())
 }
 
 // ─── Events ────────────────────────────────────────────────────────
@@ -394,25 +430,38 @@ pub fn event_stream_is_valid(backend: &PluginBackend) {
     feature = "test-teams",
     feature = "test-server"
 ))]
-pub async fn assert_stub_returns_empty_lists(backend: &PluginBackend) {
-    let servers = backend.get_servers().await.expect("get_servers ok");
+pub async fn assert_stub_returns_empty_lists(backend: &PluginBackend) -> HarnessResult {
+    let servers = backend
+        .get_servers()
+        .await
+        .map_err(|e| format!("get_servers ok: {e:?}"))?;
     assert!(servers.is_empty(), "Stub get_servers() should be empty");
 
-    let friends = backend.get_friends().await.expect("get_friends ok");
+    let friends = backend
+        .get_friends()
+        .await
+        .map_err(|e| format!("get_friends ok: {e:?}"))?;
     assert!(friends.is_empty(), "Stub get_friends() should be empty");
 
-    let groups = backend.get_groups().await.expect("get_groups ok");
+    let groups = backend
+        .get_groups()
+        .await
+        .map_err(|e| format!("get_groups ok: {e:?}"))?;
     assert!(groups.is_empty(), "Stub get_groups() should be empty");
 
-    let dms = backend.get_dm_channels().await.expect("get_dm_channels ok");
+    let dms = backend
+        .get_dm_channels()
+        .await
+        .map_err(|e| format!("get_dm_channels ok: {e:?}"))?;
     assert!(dms.is_empty(), "Stub get_dm_channels() should be empty");
 
     let notifs = backend
         .get_notifications()
         .await
-        .expect("get_notifications ok");
+        .map_err(|e| format!("get_notifications ok: {e:?}"))?;
     assert!(
         notifs.is_empty(),
         "Stub get_notifications() should be empty"
     );
+    Ok(())
 }

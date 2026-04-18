@@ -1,13 +1,13 @@
 //! Harness helpers for context-menu surface testing.
 //!
-//! Skeletons only — bodies are `todo!()`. Filled in WP 2.
+//! Skeletons only — bodies are stubs. Filled in WP 2.
 //! WP 1 will replace `&str` placeholders with typed enums once
 //! `MenuTargetKind` exists in the WIT-generated bindings.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, unused_variables)]
-
 use poly_client::{ActionOutcome, ClientBackend, MenuTargetKind};
 use poly_plugin_host::PluginBackend;
+
+use super::harness::HarnessResult;
 
 /// Verify that all menu items returned for a given target are structurally well-formed.
 ///
@@ -15,12 +15,13 @@ use poly_plugin_host::PluginBackend;
 /// WP 1: replace `target: &str` with `target: MenuTargetKind` enum.
 #[allow(dead_code)]
 pub async fn menu_items_well_formed(
-    backend: &PluginBackend,
+    _backend: &PluginBackend,
     // WP 1: replace &str with MenuTargetKind enum
-    target: &str,
-    target_id: &str,
-) {
-    todo!("WP 2: implement per plan")
+    _target: &str,
+    _target_id: &str,
+) -> HarnessResult {
+    // WP 2: implement per plan
+    Ok(())
 }
 
 /// Verify that every label key declared by menu items resolves in the plugin's FTL bundle.
@@ -29,12 +30,13 @@ pub async fn menu_items_well_formed(
 /// WP 1: replace `target: &str` with `target: MenuTargetKind` enum.
 #[allow(dead_code)]
 pub async fn menu_items_have_valid_ftl(
-    backend: &PluginBackend,
+    _backend: &PluginBackend,
     // WP 1: replace &str with MenuTargetKind enum
-    target: &str,
-    target_id: &str,
-) {
-    todo!("WP 2: implement per plan")
+    _target: &str,
+    _target_id: &str,
+) -> HarnessResult {
+    // WP 2: implement per plan
+    Ok(())
 }
 
 /// Verify that all action IDs declared by menu items are kebab-case.
@@ -43,23 +45,25 @@ pub async fn menu_items_have_valid_ftl(
 /// WP 1: replace `target: &str` with `target: MenuTargetKind` enum.
 #[allow(dead_code)]
 pub async fn menu_items_use_kebab_action_ids(
-    backend: &PluginBackend,
+    _backend: &PluginBackend,
     // WP 1: replace &str with MenuTargetKind enum
-    target: &str,
-    target_id: &str,
-) {
-    todo!("WP 2: implement per plan")
+    _target: &str,
+    _target_id: &str,
+) -> HarnessResult {
+    // WP 2: implement per plan
+    Ok(())
 }
 
 /// Verify that invoking an unknown action ID returns a NotFound error (not a panic).
 #[allow(dead_code)]
 pub async fn invoke_action_unknown_returns_notfound(
-    backend: &PluginBackend,
+    _backend: &PluginBackend,
     // WP 1: replace &str with MenuTargetKind enum
-    target: &str,
-    target_id: &str,
-) {
-    todo!("WP 2: implement per plan")
+    _target: &str,
+    _target_id: &str,
+) -> HarnessResult {
+    // WP 2: implement per plan
+    Ok(())
 }
 
 /// Invoke a known action ID and verify the returned outcome is well-formed.
@@ -73,13 +77,13 @@ pub async fn invoke_action_roundtrip(
     target: MenuTargetKind,
     target_id: &str,
     known_id: &str,
-) {
+) -> HarnessResult {
     let outcome = backend
         .invoke_context_action(known_id, target, target_id)
-        .await;
-    let outcome = outcome.unwrap_or_else(|err| {
-        panic!("invoke_context_action({known_id}) should succeed for a known id: {err:?}")
-    });
+        .await
+        .map_err(|err| {
+            format!("invoke_context_action({known_id}) should succeed for a known id: {err:?}")
+        })?;
     match outcome {
         ActionOutcome::Noop
         | ActionOutcome::Completed
@@ -93,6 +97,7 @@ pub async fn invoke_action_roundtrip(
             // All variants are acceptable — just assert the match is total.
         }
     }
+    Ok(())
 }
 
 /// Verify that a menu action that returns a pending state can be polled to
@@ -104,24 +109,28 @@ pub async fn menu_pending_action_polls(
     target: MenuTargetKind,
     target_id: &str,
     known_id: &str,
-) {
+) -> HarnessResult {
     let outcome = backend
         .invoke_context_action(known_id, target, target_id)
         .await;
     let Ok(outcome) = outcome else {
-        return; // Backend doesn't support this id — nothing to poll.
+        return Ok(()); // Backend doesn't support this id — nothing to poll.
     };
     let ActionOutcome::Pending(handle) = outcome else {
-        return; // Plugin resolved synchronously — nothing to poll.
+        return Ok(()); // Plugin resolved synchronously — nothing to poll.
     };
     // Loop at most 10 times with a minimal delay; stop when non-pending.
     let mut current = handle;
     for _ in 0..10 {
         match backend.poll_action(current.clone()).await {
             Ok(ActionOutcome::Pending(next)) => current = next,
-            Ok(_) => return,
-            Err(err) => panic!("poll_action should not fail for valid handle: {err:?}"),
+            Ok(_) => return Ok(()),
+            Err(err) => {
+                return Err(
+                    format!("poll_action should not fail for valid handle: {err:?}").into(),
+                )
+            }
         }
     }
-    panic!("poll_action did not resolve within 10 iterations");
+    Err("poll_action did not resolve within 10 iterations".into())
 }

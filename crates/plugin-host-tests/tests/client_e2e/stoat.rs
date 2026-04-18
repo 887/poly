@@ -11,13 +11,14 @@ use poly_plugin_host::host_impl::{MockHttpResponse, PluginHostState};
 
 use super::harness;
 
-async fn load_stoat() -> poly_plugin_host::PluginBackend {
-    poly_plugin_loader_tests::load_plugin("stoat", "poly_stoat.wasm")
-        .await
-        .unwrap()
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+async fn load_stoat() -> Result<poly_plugin_host::PluginBackend, Box<dyn std::error::Error>> {
+    poly_plugin_loader_tests::load_plugin("stoat", "poly_stoat.wasm").await
 }
 
-async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
+async fn load_stoat_with_auth_mocks(
+) -> Result<poly_plugin_host::PluginBackend, Box<dyn std::error::Error>> {
     let host_state = PluginHostState::new("stoat")
         .with_mock_http_response(
             "POST",
@@ -32,7 +33,7 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
                     "token": "test-session-token",
                     "name": "Poly"
                 }))
-                .unwrap(),
+                .map_err(|e| format!("json serialization failed: {e:?}"))?,
             }),
         )
         .with_mock_http_response(
@@ -48,7 +49,7 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
                     "online": true,
                     "status": { "presence": "Focus" }
                 }))
-                .unwrap(),
+                .map_err(|e| format!("json serialization failed: {e:?}"))?,
             }),
         )
         .with_mock_http_response(
@@ -64,7 +65,7 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
                     "online": true,
                     "status": { "presence": "Idle" }
                 }))
-                .unwrap(),
+                .map_err(|e| format!("json serialization failed: {e:?}"))?,
             }),
         )
         .with_mock_http_response(
@@ -80,7 +81,7 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
                     "recipients": ["user_1", "user_2"],
                     "last_message_id": "msg_dm_1"
                 }))
-                .unwrap(),
+                .map_err(|e| format!("json serialization failed: {e:?}"))?,
             }),
         )
         .with_mock_http_response(
@@ -95,7 +96,7 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
                     "user": "user_1",
                     "last_message_id": "msg_saved_1"
                 }))
-                .unwrap(),
+                .map_err(|e| format!("json serialization failed: {e:?}"))?,
             }),
         )
         .with_mock_http_response(
@@ -119,24 +120,25 @@ async fn load_stoat_with_auth_mocks() -> poly_plugin_host::PluginBackend {
 
     poly_plugin_loader_tests::load_plugin_with_host_state("stoat", "poly_stoat.wasm", host_state)
         .await
-        .unwrap()
 }
 
 #[tokio::test]
-async fn stoat_backend_type() {
-    let backend = load_stoat().await;
+async fn stoat_backend_type() -> TestResult {
+    let backend = load_stoat().await?;
     harness::assert_backend_type(&backend, BackendType::from("stoat"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_backend_name() {
-    let backend = load_stoat().await;
+async fn stoat_backend_name() -> TestResult {
+    let backend = load_stoat().await?;
     harness::assert_backend_name(&backend, "Stoat");
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_authenticate_email_password_uses_real_guest_path() {
-    let mut backend = load_stoat_with_auth_mocks().await;
+async fn stoat_authenticate_email_password_uses_real_guest_path() -> TestResult {
+    let mut backend = load_stoat_with_auth_mocks().await?;
 
     let session = backend
         .authenticate(poly_client::AuthCredentials::EmailPassword {
@@ -144,7 +146,7 @@ async fn stoat_authenticate_email_password_uses_real_guest_path() {
             password: "secret".to_string(),
         })
         .await
-        .expect("Stoat mocked guest auth should succeed");
+        .map_err(|e| format!("Stoat mocked guest auth should succeed: {e:?}"))?;
 
     assert_eq!(session.id, "session_1");
     assert_eq!(session.user.id, "user_1");
@@ -155,123 +157,134 @@ async fn stoat_authenticate_email_password_uses_real_guest_path() {
         session.backend_url.as_deref(),
         Some("https://api.stoat.chat")
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_authenticate_token_uses_real_guest_path() {
-    let mut backend = load_stoat_with_auth_mocks().await;
+async fn stoat_authenticate_token_uses_real_guest_path() -> TestResult {
+    let mut backend = load_stoat_with_auth_mocks().await?;
 
     let session = backend
         .authenticate(poly_client::AuthCredentials::Token(
             "test-session-token".to_string(),
         ))
         .await
-        .expect("Stoat mocked guest token auth should succeed");
+        .map_err(|e| format!("Stoat mocked guest token auth should succeed: {e:?}"))?;
 
     assert_eq!(session.user.id, "user_1");
     assert_eq!(session.backend, BackendType::from("stoat"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_is_not_authenticated() {
-    let backend = load_stoat().await;
+async fn stoat_is_not_authenticated() -> TestResult {
+    let backend = load_stoat().await?;
     assert!(!backend.is_authenticated());
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_dummy_auth_no_longer_returns_stub_marker() {
-    let mut backend = load_stoat().await;
+async fn stoat_dummy_auth_no_longer_returns_stub_marker() -> TestResult {
+    let mut backend = load_stoat().await?;
     harness::authenticate_does_not_use_stub_path(
         &mut backend,
         poly_client::AuthCredentials::Token("dummy-token".to_string()),
     )
     .await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_get_server_not_found() {
-    let backend = load_stoat().await;
+async fn stoat_get_server_not_found() -> TestResult {
+    let backend = load_stoat().await?;
     harness::get_server_not_found(&backend).await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_get_channel_not_found() {
-    let backend = load_stoat().await;
+async fn stoat_get_channel_not_found() -> TestResult {
+    let backend = load_stoat().await?;
     harness::get_channel_not_found(&backend).await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_set_presence_ok() {
-    let backend = load_stoat().await;
-    harness::set_presence(&backend, poly_client::PresenceStatus::Online).await;
+async fn stoat_set_presence_ok() -> TestResult {
+    let backend = load_stoat().await?;
+    harness::set_presence(&backend, poly_client::PresenceStatus::Online).await
 }
 
 #[tokio::test]
-async fn stoat_event_stream() {
-    let backend = load_stoat().await;
+async fn stoat_event_stream() -> TestResult {
+    let backend = load_stoat().await?;
     harness::event_stream_is_valid(&backend);
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_logout() {
-    let mut backend = load_stoat_with_auth_mocks().await;
-    let _session = backend
-        .authenticate(poly_client::AuthCredentials::Token(
-            "test-session-token".to_string(),
-        ))
-        .await
-        .expect("mocked token auth succeeds");
-    harness::logout_succeeds(&mut backend).await;
-}
-
-#[tokio::test]
-async fn stoat_open_direct_message_channel_uses_real_guest_path() {
-    let mut backend = load_stoat_with_auth_mocks().await;
+async fn stoat_logout() -> TestResult {
+    let mut backend = load_stoat_with_auth_mocks().await?;
     backend
         .authenticate(poly_client::AuthCredentials::Token(
             "test-session-token".to_string(),
         ))
         .await
-        .expect("mocked token auth succeeds");
+        .map_err(|e| format!("mocked token auth succeeds: {e:?}"))?;
+    harness::logout_succeeds(&mut backend).await;
+    Ok(())
+}
 
-    let dm = harness::open_direct_message_channel(&backend, "user_2").await;
+#[tokio::test]
+async fn stoat_open_direct_message_channel_uses_real_guest_path() -> TestResult {
+    let mut backend = load_stoat_with_auth_mocks().await?;
+    backend
+        .authenticate(poly_client::AuthCredentials::Token(
+            "test-session-token".to_string(),
+        ))
+        .await
+        .map_err(|e| format!("mocked token auth succeeds: {e:?}"))?;
+
+    let dm = harness::open_direct_message_channel(&backend, "user_2").await?;
     assert_eq!(dm.id, "dm_1");
     assert_eq!(dm.user.id, "user_2");
     assert_eq!(dm.user.display_name, "Otter Pal");
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_open_saved_messages_channel_uses_real_guest_path() {
-    let mut backend = load_stoat_with_auth_mocks().await;
+async fn stoat_open_saved_messages_channel_uses_real_guest_path() -> TestResult {
+    let mut backend = load_stoat_with_auth_mocks().await?;
     backend
         .authenticate(poly_client::AuthCredentials::Token(
             "test-session-token".to_string(),
         ))
         .await
-        .expect("mocked token auth succeeds");
+        .map_err(|e| format!("mocked token auth succeeds: {e:?}"))?;
 
-    let dm = harness::open_saved_messages_channel(&backend).await;
+    let dm = harness::open_saved_messages_channel(&backend).await?;
     assert_eq!(dm.id, "saved_1");
     assert_eq!(dm.user.id, "user_1");
     assert_eq!(dm.user.display_name, "Stoaty McStoat");
+    Ok(())
 }
 
 #[tokio::test]
-async fn stoat_group_member_mutations_use_real_guest_path() {
-    let mut backend = load_stoat_with_auth_mocks().await;
+async fn stoat_group_member_mutations_use_real_guest_path() -> TestResult {
+    let mut backend = load_stoat_with_auth_mocks().await?;
     backend
         .authenticate(poly_client::AuthCredentials::Token(
             "test-session-token".to_string(),
         ))
         .await
-        .expect("mocked token auth succeeds");
+        .map_err(|e| format!("mocked token auth succeeds: {e:?}"))?;
 
     backend
         .add_group_member("group_1", "user_4")
         .await
-        .expect("guest add_group_member succeeds");
+        .map_err(|e| format!("guest add_group_member succeeds: {e:?}"))?;
     backend
         .remove_group_member("group_1", "user_3")
         .await
-        .expect("guest remove_group_member succeeds");
+        .map_err(|e| format!("guest remove_group_member succeeds: {e:?}"))?;
+    Ok(())
 }

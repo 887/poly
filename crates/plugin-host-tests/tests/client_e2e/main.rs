@@ -19,17 +19,7 @@
 //!     --target wasm32-wasip2
 //! ```
 
-// Test binary — allow expect/unwrap for test assertions and setup
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
-#[cfg(any(
-    feature = "test-demo",
-    feature = "test-stoat",
-    feature = "test-matrix",
-    feature = "test-discord",
-    feature = "test-teams",
-    feature = "test-server"
-))]
 mod harness;
 
 mod harness_menus;

@@ -2,10 +2,10 @@
 //!
 //! Pack A.3 — bodies filled.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, unused_variables, dead_code)]
-
 use poly_client::ClientBackend;
 use poly_plugin_host::PluginBackend;
+
+use super::harness::HarnessResult;
 
 /// Verify that the composer toolbar buttons declared for the given channel are well-formed.
 ///
@@ -13,11 +13,14 @@ use poly_plugin_host::PluginBackend;
 /// - Every button has a non-empty `id` (kebab-case action id).
 /// - Every button has a non-empty `label_key`.
 /// - `position` is a valid `ComposerSlot` variant.
-pub async fn composer_buttons_well_formed(backend: &PluginBackend, ch_id: &str) {
+pub async fn composer_buttons_well_formed(
+    backend: &PluginBackend,
+    ch_id: &str,
+) -> HarnessResult {
     let buttons = backend
         .get_composer_buttons(ch_id)
         .await
-        .expect("get_composer_buttons should not fail");
+        .map_err(|e| format!("get_composer_buttons should not fail: {e:?}"))?;
 
     // Shape assertions — no items is valid (plugin may declare none).
     for button in &buttons {
@@ -30,6 +33,7 @@ pub async fn composer_buttons_well_formed(backend: &PluginBackend, ch_id: &str) 
         // position is an enum so it is always valid if deserialized.
         let _ = button.position;
     }
+    Ok(())
 }
 
 /// Verify that the per-message action items declared for a given message are well-formed.
@@ -38,11 +42,11 @@ pub async fn message_actions_well_formed(
     backend: &PluginBackend,
     ch_id: &str,
     msg_id: &str,
-) {
+) -> HarnessResult {
     let items = backend
         .get_message_actions(ch_id, msg_id)
         .await
-        .expect("get_message_actions should not fail");
+        .map_err(|e| format!("get_message_actions should not fail: {e:?}"))?;
 
     for item in &items {
         assert!(!item.id.is_empty(), "MenuItem.id must not be empty");
@@ -52,6 +56,7 @@ pub async fn message_actions_well_formed(
             item.id
         );
     }
+    Ok(())
 }
 
 /// Invoke a known composer action ID and verify the returned outcome is well-formed.
@@ -60,7 +65,7 @@ pub async fn invoke_composer_action_roundtrip(
     backend: &PluginBackend,
     ch_id: &str,
     action_id: &str,
-) {
+) -> HarnessResult {
     // invoke_composer_action returns Result<ActionOutcome, ClientError>.
     // For a known action id the plugin should return Ok(...).
     let outcome = backend.invoke_composer_action(action_id, ch_id).await;
@@ -68,6 +73,7 @@ pub async fn invoke_composer_action_roundtrip(
         outcome.is_ok(),
         "invoke_composer_action({action_id}) should succeed for known action id"
     );
+    Ok(())
 }
 
 /// Invoke a known per-message action ID and verify the returned outcome is well-formed.
@@ -77,10 +83,11 @@ pub async fn invoke_message_action_roundtrip(
     ch_id: &str,
     msg_id: &str,
     action_id: &str,
-) {
+) -> HarnessResult {
     let outcome = backend.invoke_message_action(action_id, ch_id, msg_id).await;
     assert!(
         outcome.is_ok(),
         "invoke_message_action({action_id}) should succeed for known action id"
     );
+    Ok(())
 }

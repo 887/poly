@@ -7,7 +7,11 @@
 
 use std::cell::RefCell;
 
-use crate::wit_bindings::{Guest, PluginMetadataGuest, SettingDescriptor, export, wit};
+use crate::wit_bindings::{
+    ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
+    ClientViewsGuest, Cursor, Guest, MenuItem, MenuTargetKind, PendingHandle, PluginMetadataGuest,
+    SidebarDeclaration, SidebarLayoutKind, SettingsScope, export, wit,
+};
 use serde::{Deserialize, Serialize};
 
 const OFFICIAL_STOAT_BASE_URL: &str = "https://api.stoat.chat";
@@ -134,7 +138,7 @@ fn to_session(
         display_name,
         avatar_url: None,
         presence: map_presence(&user),
-        backend: wit::BackendType::Stoat,
+        backend: "stoat".to_string(),
     };
 
     let instance_id = instance_id_for_base_url(base_url);
@@ -150,7 +154,7 @@ fn to_session(
         id: session_id,
         user: wit_user,
         token,
-        backend: wit::BackendType::Stoat,
+        backend: "stoat".to_string(),
         icon_emoji: Some("🦦".to_string()),
         instance_id,
         backend_url: Some(base_url.to_string()),
@@ -298,7 +302,7 @@ fn to_wit_user(user: &StoatGuestUser) -> wit::User {
             .unwrap_or_else(|| user.username.clone()),
         avatar_url: None,
         presence: map_presence(user),
-        backend: wit::BackendType::Stoat,
+        backend: "stoat".to_string(),
     }
 }
 
@@ -330,7 +334,7 @@ fn open_dm_like_channel(user_id: &str) -> Result<wit::DmChannel, wit::ClientErro
         user: to_wit_user(&dm_user),
         last_message: None,
         unread_count: 0,
-        backend: wit::BackendType::Stoat,
+        backend: "stoat".to_string(),
         account_id: session.user_id,
     })
 }
@@ -559,8 +563,8 @@ impl Guest for StoatPlugin {
         // TODO(3.1.5): Parse Bonfire WebSocket events, call emit-event
     }
 
-    fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Stoat
+    fn get_backend_type() -> String {
+        "stoat".to_string()
     }
 
     fn get_backend_name() -> String {
@@ -569,17 +573,17 @@ impl Guest for StoatPlugin {
 
     fn get_backend_capabilities() -> wit::BackendCapabilities {
         wit::BackendCapabilities {
-            supports_voice: false,
-            supports_video: false,
+            supports_voice: true,
+            supports_video: true,
             supports_dms: true,
-            supports_groups: false,
+            supports_groups: true,
             supports_send_messages: true,
             supports_presence: true,
-            supports_search: false,
-            supports_reactions: false,
+            supports_search: true,
+            supports_reactions: true,
             supports_typing_indicators: true,
-            supports_file_upload: false,
-            landing: wit::LandingPage::DirectMessages,
+            supports_file_upload: true,
+            landing: wit::LandingPage::FirstServer,
         }
     }
 
@@ -607,10 +611,6 @@ impl PluginMetadataGuest for StoatPlugin {
         }
     }
 
-    fn get_settings_schema() -> Vec<SettingDescriptor> {
-        vec![]
-    }
-
     fn get_display_name_key() -> String {
         "plugin-stoat-title".to_string()
     }
@@ -622,12 +622,136 @@ impl PluginMetadataGuest for StoatPlugin {
     fn get_plugin_manifest() -> crate::wit_bindings::PluginManifest {
         crate::wit_bindings::PluginManifest {
             exec_programs: vec![],
-            http_hosts: vec!["api.stoat.chat".to_string()],
+            http_hosts: vec!["stoat.chat".to_string()],
             description: "Connect to Stoat, a self-hosted instant messaging platform. \
                           Supports text channels, group DMs, and presence status."
                 .to_string(),
-            homepage: Some("https://stoat.app".to_string()),
+            homepage: Some("https://stoat.chat".to_string()),
         }
+    }
+}
+
+impl ClientMenusGuest for StoatPlugin {
+    fn get_context_menu_items(
+        _target: MenuTargetKind,
+        _target_id: String,
+    ) -> Result<Vec<MenuItem>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn invoke_context_action(
+        action_id: String,
+        _target: MenuTargetKind,
+        _target_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+
+    fn poll_action(
+        _handle: PendingHandle,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Ok(ActionOutcome::Completed)
+    }
+}
+
+impl ClientSettingsGuest for StoatPlugin {
+    fn get_settings_sections(
+    ) -> Result<Vec<crate::wit_bindings::SettingsSection>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_setting_value(
+        _scope: SettingsScope,
+        _scope_id: String,
+        _key: String,
+    ) -> Result<String, wit::ClientError> {
+        Ok("null".to_string())
+    }
+
+    fn set_setting_value(
+        _scope: SettingsScope,
+        _scope_id: String,
+        _key: String,
+        _value: String,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+}
+
+impl ClientSidebarGuest for StoatPlugin {
+    fn get_sidebar_declaration() -> Result<SidebarDeclaration, wit::ClientError> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: vec![],
+            header_block: None,
+        })
+    }
+
+    fn invoke_sidebar_action(
+        action_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+}
+
+impl ClientViewsGuest for StoatPlugin {
+    fn get_channel_view(
+        _channel_id: String,
+    ) -> Result<crate::wit_bindings::exports::poly::messenger::client_views::ViewDescriptor, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "stoat does not support non-chat views".to_string(),
+        ))
+    }
+
+    fn get_view_rows(
+        _channel_id: String,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<String>,
+        _filter_id: Option<String>,
+        _tab_id: Option<String>,
+    ) -> Result<crate::wit_bindings::exports::poly::messenger::client_views::ViewRowsPage, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "stoat does not support view rows".to_string(),
+        ))
+    }
+
+    fn get_view_detail(
+        _channel_id: String,
+        _row_id: String,
+    ) -> Result<crate::wit_bindings::exports::poly::messenger::client_views::ViewDetail, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "stoat does not support view detail".to_string(),
+        ))
+    }
+}
+
+impl ClientComposerGuest for StoatPlugin {
+    fn get_composer_buttons(
+        _channel_id: String,
+    ) -> Result<Vec<crate::wit_bindings::exports::poly::messenger::client_composer::ComposerButton>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_message_actions(
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<Vec<MenuItem>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn invoke_composer_action(
+        action_id: String,
+        _channel_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+
+    fn invoke_message_action(
+        action_id: String,
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
     }
 }
 

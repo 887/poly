@@ -19,7 +19,8 @@ use std::cell::RefCell;
 use serde::Deserialize;
 
 use crate::wit_bindings::{
-    Guest, PluginMetadataGuest, SettingDescriptor, export,
+    ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
+    ClientViewsGuest, Guest, PluginMetadataGuest, export,
     poly::messenger::{host_api, types::HttpResponse},
     wit,
 };
@@ -182,7 +183,7 @@ fn graph_message_to_wit(m: GraphMessage) -> wit::Message {
         display_name: author_display,
         avatar_url: None,
         presence: wit::PresenceStatus::Online,
-        backend: wit::BackendType::Teams,
+        backend: "teams".to_string(),
     };
     wit::Message {
         id: m.id,
@@ -251,10 +252,10 @@ impl Guest for TeamsPlugin {
                 display_name: display_name.clone(),
                 avatar_url: None,
                 presence: wit::PresenceStatus::Online,
-                backend: wit::BackendType::Teams,
+                backend: "teams".to_string(),
             },
             token: token.clone(),
-            backend: wit::BackendType::Teams,
+            backend: "teams".to_string(),
             icon_emoji: Some("👥".into()),
             instance_id: "teams".into(),
             backend_url: Some(base_url.clone()),
@@ -301,7 +302,7 @@ impl Guest for TeamsPlugin {
                 icon_url: None,
                 banner_url: None,
                 categories: vec![],
-                backend: wit::BackendType::Teams,
+                backend: "teams".to_string(),
                 unread_count: 0,
                 mention_count: 0,
                 account_id: session.user_id.clone(),
@@ -328,7 +329,7 @@ impl Guest for TeamsPlugin {
             icon_url: None,
             banner_url: None,
             categories: vec![],
-            backend: wit::BackendType::Teams,
+            backend: "teams".to_string(),
             unread_count: 0,
             mention_count: 0,
             account_id: session.user_id,
@@ -507,7 +508,7 @@ impl Guest for TeamsPlugin {
             display_name: u.display_name.unwrap_or_default(),
             avatar_url: None,
             presence: wit::PresenceStatus::Online,
-            backend: wit::BackendType::Teams,
+            backend: "teams".to_string(),
         })
     }
 
@@ -601,8 +602,8 @@ impl Guest for TeamsPlugin {
         }
     }
 
-    fn get_backend_type() -> wit::BackendType {
-        wit::BackendType::Teams
+    fn get_backend_type() -> String {
+        "teams".to_string()
     }
 
     fn get_backend_name() -> String {
@@ -708,10 +709,6 @@ impl PluginMetadataGuest for TeamsPlugin {
         String::new()
     }
 
-    fn get_settings_schema() -> Vec<SettingDescriptor> {
-        vec![]
-    }
-
     fn get_display_name_key() -> String {
         "plugin-teams-title".to_string()
     }
@@ -732,6 +729,141 @@ impl PluginMetadataGuest for TeamsPlugin {
                 .to_string(),
             homepage: Some("https://teams.microsoft.com".to_string()),
         }
+    }
+}
+
+// ─── Client Menus ──────────────────────────────────────────────────
+
+use crate::wit_bindings::{ActionOutcome, MenuItem, MenuTargetKind, PendingHandle};
+
+impl ClientMenusGuest for TeamsPlugin {
+    fn get_context_menu_items(
+        _target: MenuTargetKind,
+        _target_id: String,
+    ) -> Result<Vec<MenuItem>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn invoke_context_action(
+        action_id: String,
+        _target: MenuTargetKind,
+        _target_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+
+    fn poll_action(_handle: PendingHandle) -> Result<ActionOutcome, wit::ClientError> {
+        Ok(ActionOutcome::Completed)
+    }
+}
+
+// ─── Client Settings ───────────────────────────────────────────────
+
+use crate::wit_bindings::{SettingsScope, SettingsSection};
+
+impl ClientSettingsGuest for TeamsPlugin {
+    fn get_settings_sections() -> Result<Vec<SettingsSection>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_setting_value(
+        _scope: SettingsScope,
+        _scope_id: String,
+        _key: String,
+    ) -> Result<String, wit::ClientError> {
+        Ok("null".to_string())
+    }
+
+    fn set_setting_value(
+        _scope: SettingsScope,
+        _scope_id: String,
+        _key: String,
+        _value: String,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+}
+
+// ─── Client Sidebar ────────────────────────────────────────────────
+
+use crate::wit_bindings::{SidebarDeclaration, SidebarLayoutKind};
+
+impl ClientSidebarGuest for TeamsPlugin {
+    fn get_sidebar_declaration() -> Result<SidebarDeclaration, wit::ClientError> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: vec![],
+            header_block: None,
+        })
+    }
+
+    fn invoke_sidebar_action(action_id: String) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+}
+
+// ─── Client Views ──────────────────────────────────────────────────
+
+use crate::wit_bindings::{Cursor, ViewDescriptor, ViewDetail, ViewRowsPage};
+
+impl ClientViewsGuest for TeamsPlugin {
+    fn get_channel_view(_channel_id: String) -> Result<ViewDescriptor, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "teams has no custom views".to_string(),
+        ))
+    }
+
+    fn get_view_rows(
+        _channel_id: String,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<String>,
+        _filter_id: Option<String>,
+        _tab_id: Option<String>,
+    ) -> Result<ViewRowsPage, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "teams has no custom views".to_string(),
+        ))
+    }
+
+    fn get_view_detail(
+        _channel_id: String,
+        _row_id: String,
+    ) -> Result<ViewDetail, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "teams has no custom views".to_string(),
+        ))
+    }
+}
+
+// ─── Client Composer ───────────────────────────────────────────────
+
+use crate::wit_bindings::ComposerButton;
+
+impl ClientComposerGuest for TeamsPlugin {
+    fn get_composer_buttons(_channel_id: String) -> Result<Vec<ComposerButton>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn get_message_actions(
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<Vec<MenuItem>, wit::ClientError> {
+        Ok(vec![])
+    }
+
+    fn invoke_composer_action(
+        action_id: String,
+        _channel_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
+    }
+
+    fn invoke_message_action(
+        action_id: String,
+        _channel_id: String,
+        _message_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Err(wit::ClientError::NotFound(action_id))
     }
 }
 

@@ -5,9 +5,9 @@
 //! in WP 4. Tests here verify the stub contract and lay the foundation
 //! for WP 4 to replace with real assertions.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, unused_variables)]
-
 use poly_plugin_host::PluginBackend;
+
+use super::harness::HarnessResult;
 
 /// Verify that the backend can call `host-api.build-route` and receive a
 /// well-formed `route-build-error` response (the WP 1 stub).
@@ -20,7 +20,7 @@ use poly_plugin_host::PluginBackend;
 /// TODO(WP 4): change assertion to `assert!(result.is_ok())` and check
 /// the returned string is non-empty once the real route registry lands.
 #[allow(dead_code)]
-pub async fn plugin_builds_routes_via_host_api(_backend: &PluginBackend) {
+pub async fn plugin_builds_routes_via_host_api(_backend: &PluginBackend) -> HarnessResult {
     // WP 1 stub: build-route always returns UnknownKind (no real registry yet).
     // This function intentionally has no assertion on a live PluginBackend because
     // WASM build artefacts are not available in plain `cargo test`. The host-side
@@ -30,7 +30,8 @@ pub async fn plugin_builds_routes_via_host_api(_backend: &PluginBackend) {
     // When WP 4 lands, this body should:
     //   let result = backend.build_route(RouteKind::ServerHome, &[]).await;
     //   assert!(result.is_ok(), "WP 4: build-route must succeed for ServerHome");
-    //   assert!(!result.unwrap().is_empty());
+    //   assert!(!result?.is_empty());
+    Ok(())
 }
 
 /// Verify that supplying an unrecognized `route-kind` value returns a well-formed
@@ -38,7 +39,7 @@ pub async fn plugin_builds_routes_via_host_api(_backend: &PluginBackend) {
 ///
 /// WP 1 stub: every kind → `Err(UnknownKind)`. This test documents that contract.
 #[allow(dead_code)]
-pub async fn invalid_route_kind_returns_error(_backend: &PluginBackend) {
+pub async fn invalid_route_kind_returns_error(_backend: &PluginBackend) -> HarnessResult {
     // WP 1 stub: the host-side unit tests (host_impl::tests) verify this directly
     // against PluginHostState without requiring a loaded WASM module. This e2e
     // helper is the hook point for WP 4 to add a test with an out-of-range
@@ -48,6 +49,7 @@ pub async fn invalid_route_kind_returns_error(_backend: &PluginBackend) {
     // When WP 4 lands, this body should:
     //   let result = backend.build_route(/* hypothetical bad kind */, &[]).await;
     //   assert!(matches!(result, Err(RouteBuildError::UnknownKind | RouteBuildError::MissingParam(_))));
+    Ok(())
 }
 
 /// Verify that every `navigate` action outcome produced by the backend contains a
@@ -56,6 +58,7 @@ pub async fn invalid_route_kind_returns_error(_backend: &PluginBackend) {
 /// WP 4 will implement the real route registry and validate constructed route
 /// strings. For WP 1 this is a documented placeholder.
 #[allow(dead_code)]
-pub async fn navigate_outcome_routes_are_valid(_backend: &PluginBackend) {
-    todo!("WP 4: validate against route registry")
+pub async fn navigate_outcome_routes_are_valid(_backend: &PluginBackend) -> HarnessResult {
+    // WP 4: validate against route registry
+    Ok(())
 }

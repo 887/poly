@@ -50,19 +50,6 @@ poly-client = { workspace = true }
 # Dioxus — signup page component (native + wasm-http only; not on WASI)
 dioxus = { workspace = true, optional = true }
 
-# Native-only dependencies (feature-gated)
-# HTTP client
-reqwest = { workspace = true, features = [
-    "json",
-    "multipart",
-], optional = true }
-
-# WebSocket client
-tokio-tungstenite = { workspace = true, features = [
-    "native-tls",
-], optional = true }
-futures-util = { workspace = true, optional = true }
-
 # Cryptography (Ed25519 challenge-response auth)
 ed25519-dalek = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
@@ -75,7 +62,6 @@ serde_json = { workspace = true, optional = true }
 tokio = { version = "1", default-features = false, features = [
     "sync",
 ], optional = true }
-tokio-stream = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 
@@ -87,6 +73,20 @@ tracing = { workspace = true, optional = true }
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]
 wit-bindgen = { workspace = true }
+
+# Native-only dependencies: reqwest uses native-tls (OpenSSL on Linux) and
+# tokio-tungstenite pulls in native-tls → openssl-sys. Gate them out of
+# any wasm build so openssl-sys is never a dependency on wasm32-wasip2.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+reqwest = { workspace = true, features = [
+    "json",
+    "multipart",
+], optional = true }
+tokio-tungstenite = { workspace = true, features = [
+    "native-tls",
+], optional = true }
+futures-util = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
 
 [dev-dependencies]
 # We spin up a real poly-server in-process for integration tests

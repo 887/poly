@@ -1,11 +1,11 @@
 //! Harness helpers for channel-view surface testing (forum, feed, issue-tracker, custom-block).
 //!
-//! Skeletons only — bodies are `todo!()`. Filled in WP 5.
-
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, unused_variables)]
+//! Skeletons only — bodies are stubs. Filled in WP 5.
 
 use poly_client::{ClientBackend, ClientError, ViewBody};
 use poly_plugin_host::PluginBackend;
+
+use super::harness::HarnessResult;
 
 /// Verify that the view descriptor returned for the given channel is structurally well-formed.
 ///
@@ -25,12 +25,19 @@ use poly_plugin_host::PluginBackend;
 /// accepted and exits quietly — the assertion only fires when a
 /// descriptor is actually produced.
 #[allow(dead_code)]
-pub async fn channel_view_descriptor_well_formed(backend: &PluginBackend, ch_id: &str) {
+pub async fn channel_view_descriptor_well_formed(
+    backend: &PluginBackend,
+    ch_id: &str,
+) -> HarnessResult {
     let result = backend.get_channel_view(ch_id).await;
     let desc = match result {
         Ok(d) => d,
-        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return,
-        Err(e) => panic!("unexpected error from get_channel_view({ch_id}): {e:?}"),
+        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return Ok(()),
+        Err(e) => {
+            return Err(
+                format!("unexpected error from get_channel_view({ch_id}): {e:?}").into(),
+            )
+        }
     };
 
     if let Some(toolbar) = &desc.toolbar {
@@ -102,6 +109,7 @@ pub async fn channel_view_descriptor_well_formed(backend: &PluginBackend, ch_id:
             );
         }
     }
+    Ok(())
 }
 
 /// Fetch the first page of rows, then the next page using the returned cursor, and assert
@@ -110,16 +118,20 @@ pub async fn channel_view_descriptor_well_formed(backend: &PluginBackend, ch_id:
 /// Backends that do not implement a non-chat view for the channel
 /// (`NotSupported` / `NotFound`) are skipped quietly.
 #[allow(dead_code)]
-pub async fn view_rows_paginate(backend: &PluginBackend, ch_id: &str) {
+pub async fn view_rows_paginate(backend: &PluginBackend, ch_id: &str) -> HarnessResult {
     let page1 = match backend.get_view_rows(ch_id, None, None, None, None).await {
         Ok(p) => p,
-        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return,
-        Err(e) => panic!("unexpected error from get_view_rows({ch_id}): {e:?}"),
+        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return Ok(()),
+        Err(e) => {
+            return Err(
+                format!("unexpected error from get_view_rows({ch_id}): {e:?}").into(),
+            )
+        }
     };
 
     // An empty first page is valid — just nothing to compare.
     if page1.rows.is_empty() {
-        return;
+        return Ok(());
     }
 
     for row in &page1.rows {
@@ -128,7 +140,7 @@ pub async fn view_rows_paginate(backend: &PluginBackend, ch_id: &str) {
     }
 
     let Some(cursor1) = page1.next_cursor.clone() else {
-        return;
+        return Ok(());
     };
 
     let page2 = match backend
@@ -136,8 +148,12 @@ pub async fn view_rows_paginate(backend: &PluginBackend, ch_id: &str) {
         .await
     {
         Ok(p) => p,
-        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return,
-        Err(e) => panic!("unexpected error from paginated get_view_rows({ch_id}): {e:?}"),
+        Err(ClientError::NotSupported(_)) | Err(ClientError::NotFound(_)) => return Ok(()),
+        Err(e) => {
+            return Err(
+                format!("unexpected error from paginated get_view_rows({ch_id}): {e:?}").into(),
+            )
+        }
     };
 
     // Pages must not share row IDs.
@@ -158,21 +174,24 @@ pub async fn view_rows_paginate(backend: &PluginBackend, ch_id: &str) {
             "cursor must advance between pages, got the same value twice"
         );
     }
+    Ok(())
 }
 
 /// Verify that the cursor returned by a view rows response is a valid structured value
 /// (can be serialized and deserialized round-trip).
 #[allow(dead_code)]
-pub async fn view_cursor_is_structured(backend: &PluginBackend, ch_id: &str) {
-    todo!("WP 5: implement per plan")
+pub async fn view_cursor_is_structured(_backend: &PluginBackend, _ch_id: &str) -> HarnessResult {
+    // WP 5: implement per plan
+    Ok(())
 }
 
 /// Fetch a view detail row and verify it returns a well-formed custom-block payload.
 #[allow(dead_code)]
 pub async fn view_detail_returns_custom_block(
-    backend: &PluginBackend,
-    ch_id: &str,
-    row_id: &str,
-) {
-    todo!("WP 5: implement per plan")
+    _backend: &PluginBackend,
+    _ch_id: &str,
+    _row_id: &str,
+) -> HarnessResult {
+    // WP 5: implement per plan
+    Ok(())
 }

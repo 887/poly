@@ -35,34 +35,34 @@ mod wit_bindings;
 #[cfg(target_os = "wasi")]
 mod guest;
 
-/// [`ClientBackend`](poly_client::ClientBackend) implementation (native + wasm-http).
-#[cfg(feature = "wasm-http")]
+/// [`ClientBackend`](poly_client::ClientBackend) implementation (native + wasm-http, non-WASI).
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub mod backend;
-/// Error types (native + wasm-http).
-#[cfg(feature = "wasm-http")]
+/// Error types (native + wasm-http, non-WASI).
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub mod error;
-/// HTTP REST client (native + wasm-http).
-#[cfg(feature = "wasm-http")]
+/// HTTP REST client (native + wasm-http, non-WASI).
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub mod http;
-/// Wire-format models matching poly-server JSON payloads (native + wasm-http).
-#[cfg(feature = "wasm-http")]
+/// Wire-format models matching poly-server JSON payloads (native + wasm-http, non-WASI).
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub mod models;
 /// Dioxus signup page component (native + wasm-http; gated on wasm-http since native implies it).
-#[cfg(feature = "wasm-http")]
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub mod signup;
 /// WebSocket client for real-time events (native only — requires tokio-tungstenite).
-#[cfg(feature = "native")]
+#[cfg(all(feature = "native", not(target_family = "wasm")))]
 pub mod ws;
 
-#[cfg(feature = "wasm-http")]
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub use backend::PolyServerBackend;
-#[cfg(feature = "wasm-http")]
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub use error::{PolyServerError, Result};
-#[cfg(feature = "wasm-http")]
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub use http::{PolyServerConfig, PolyServerHttpClient, SessionState};
-#[cfg(feature = "wasm-http")]
+#[cfg(all(feature = "wasm-http", not(target_family = "wasm")))]
 pub use models::*;
-#[cfg(feature = "native")]
+#[cfg(all(feature = "native", not(target_family = "wasm")))]
 pub use ws::PolyServerWsClient;
 
 // ─── Native plugin metadata ─────────────────────────────────────────────────
