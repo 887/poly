@@ -1,0 +1,11 @@
+error: `#[ui_action(...)]` accepts exactly one argument
+ --> tests/compile-fail/ui_action_multiple_args.rs:3:13
+  |
+3 | #[ui_action(Foo, Bar)]
+  |             ^^^
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/compile-fail/ui_action_multiple_args.rs:4:22
+  |
+4 | fn SomeComponent() {}
+  |                      ^ consider adding a `main` function to `$DIR/tests/compile-fail/ui_action_multiple_args.rs`

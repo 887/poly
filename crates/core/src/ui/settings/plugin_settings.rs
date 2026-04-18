@@ -15,6 +15,7 @@
 //! [`crate::i18n::init`]). Keys use the `plugin-<id>-*` prefix.
 
 use crate::i18n::t;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -27,9 +28,22 @@ use poly_ui_macros::{context_menu, ui_action};
 ///
 /// Strings come from the plugin's own FTL bundle (prefixed `plugin-demo-`),
 /// registered by [`crate::i18n::init`] at startup.
+pub enum DemoPluginSettingsAction {
+    /// Toggle demo accounts/servers on or off.
+    ToggleDemoMode,
+}
+
+impl UiAction for DemoPluginSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::ToggleDemoMode => todo!("phase-E: toggle demo mode"),
+        }
+    }
+}
+
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(DemoPluginSettingsAction)]
 #[component]
 pub fn DemoPluginSettings() -> Element {
     let mut app_state: Signal<crate::state::AppState> = use_context();
@@ -107,7 +121,7 @@ pub fn demo_settings_render_fn() -> Element {
 #[cfg(feature = "stoat")]
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn StoatPluginSettings() -> Element {
     rsx! {
@@ -142,9 +156,24 @@ pub fn stoat_settings_render_fn() -> Element {
 /// Strings come from the `server-client` plugin's own FTL bundle
 /// (prefixed `plugin-poly-`), registered by [`crate::i18n::init`] at startup.
 #[cfg(feature = "server")]
+pub enum PolyServerPluginSettingsAction {
+    /// Toggle whether WebSocket transport is used for Poly Server connections.
+    ToggleWebSocket(bool),
+}
+
+#[cfg(feature = "server")]
+impl UiAction for PolyServerPluginSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::ToggleWebSocket(_enabled) => todo!("phase-E: toggle poly server WebSocket"),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(PolyServerPluginSettingsAction)]
 #[component]
 pub fn PolyServerPluginSettings() -> Element {
     // Read the stored setting. If storage is not yet initialised, default to true.
@@ -240,7 +269,7 @@ pub fn poly_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "hackernews")]
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn HackerNewsPluginSettings() -> Element {
     rsx! {
@@ -264,7 +293,7 @@ pub fn hackernews_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "lemmy")]
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn LemmyPluginSettings() -> Element {
     rsx! {
@@ -294,7 +323,7 @@ pub fn lemmy_settings_render_fn() -> Element {
 #[cfg(feature = "discord")]
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn DiscordPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -328,7 +357,7 @@ pub fn discord_settings_render_fn() -> Element {
 #[cfg(feature = "teams")]
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn TeamsPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -360,7 +389,7 @@ pub fn teams_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "github")]
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn GitHubPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -392,7 +421,7 @@ pub fn github_settings_render_fn() -> Element {
 
 #[context_menu(None)]
 #[cfg(feature = "forgejo")]
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn ForgejoPluginSettings() -> Element {
     use poly_client::ClientBackend as _;
@@ -427,7 +456,7 @@ pub fn forgejo_settings_render_fn() -> Element {
 /// hosts it claims it may contact, plus the plugin's homepage. The manifest
 #[context_menu(None)]
 /// is purely for transparency: the host does NOT sandbox or block based on it.
-#[ui_action(inherit)]
+#[ui_action(None)]
 #[component]
 pub fn PluginManifestPanel(manifest: poly_client::PluginManifest) -> Element {
     let exec_list = manifest.exec_programs.join(", ");
@@ -466,5 +495,26 @@ pub fn PluginManifestPanel(manifest: poly_client::PluginManifest) -> Element {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn demo_plugin_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<DemoPluginSettingsAction>();
+        let _ = DemoPluginSettingsAction::ToggleDemoMode;
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn poly_server_plugin_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<PolyServerPluginSettingsAction>();
+        let _ = PolyServerPluginSettingsAction::ToggleWebSocket(true);
     }
 }

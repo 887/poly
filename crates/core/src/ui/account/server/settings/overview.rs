@@ -15,6 +15,7 @@
 
 use crate::i18n::t;
 use crate::state::ChatData;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::BackendType;
 use poly_ui_macros::{context_menu, ui_action};
@@ -40,10 +41,24 @@ fn is_local_only(backend: Option<&BackendType>) -> bool {
     backend.map_or(false, |b| matches!(b.as_str(), "matrix" | "teams"))
 }
 
+pub enum IconPanelAction {
+    SetUrl(String),
+    Save,
+}
+
+impl UiAction for IconPanelAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetUrl(_) => todo!("phase-E: update icon url input"),
+            Self::Save => todo!("phase-E: save server icon url"),
+        }
+    }
+}
+
 /// Icon URL input, live preview, and save button.
 ///
 /// Used by [`ServerOverviewSettings`] for both full and local-only modes.
-#[ui_action(inherit)]
+#[ui_action(IconPanelAction)]
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
@@ -140,10 +155,24 @@ fn IconPanel(
     }
 }
 
+pub enum BannerPanelAction {
+    SetUrl(String),
+    Save,
+}
+
+impl UiAction for BannerPanelAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetUrl(_) => todo!("phase-E: update banner url input"),
+            Self::Save => todo!("phase-E: save server banner url"),
+        }
+    }
+}
+
 /// Banner URL input, live preview, and save button.
 ///
 /// Shown only for backends that support banner images (Demo, Stoat, Discord, Poly).
-#[ui_action(inherit)]
+#[ui_action(BannerPanelAction)]
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
@@ -231,6 +260,18 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
     }
 }
 
+pub enum ServerOverviewSettingsAction {
+    SetIconOverrideEnabled(bool),
+}
+
+impl UiAction for ServerOverviewSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetIconOverrideEnabled(_) => todo!("phase-E: toggle local icon override checkbox"),
+        }
+    }
+}
+
 /// Overview settings panel — server icon and banner configuration.
 ///
 /// The first section shown in server settings (default section).
@@ -243,7 +284,7 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
 /// Currently all saves are local-only (stored in `AppSettings`). Phase 3 will
 /// add `ClientBackend::update_server_icon` / `update_server_banner` for
 /// Demo, Stoat, Discord, and Poly backends.
-#[ui_action(inherit)]
+#[ui_action(ServerOverviewSettingsAction)]
 #[context_menu(inherit)]
 #[component]
 pub fn ServerOverviewSettings(
@@ -317,5 +358,34 @@ pub fn ServerOverviewSettings(
                 initial_url: current_banner,
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_overview_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ServerOverviewSettingsAction>();
+        let _ = ServerOverviewSettingsAction::SetIconOverrideEnabled(true);
+    }
+
+    #[test]
+    fn icon_panel_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<IconPanelAction>();
+        let _ = IconPanelAction::SetUrl("https://example.com/icon.png".to_string());
+        let _ = IconPanelAction::Save;
+    }
+
+    #[test]
+    fn banner_panel_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<BannerPanelAction>();
+        let _ = BannerPanelAction::SetUrl("https://example.com/banner.png".to_string());
+        let _ = BannerPanelAction::Save;
     }
 }

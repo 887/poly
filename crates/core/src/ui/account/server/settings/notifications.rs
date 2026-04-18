@@ -9,14 +9,37 @@
 //! - Mobile Push Notifications
 
 use crate::i18n::t;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
+
+pub enum ServerNotificationsSettingsAction {
+    SetLevel(NotifLevel),
+    SetSuppressEveryone(bool),
+    SetSuppressRoles(bool),
+    SetSuppressHighlights(bool),
+    SetMuteEvents(bool),
+    SetMobilePush(bool),
+}
+
+impl UiAction for ServerNotificationsSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetLevel(_) => todo!("phase-E: update server notification level"),
+            Self::SetSuppressEveryone(_) => todo!("phase-E: update suppress_everyone"),
+            Self::SetSuppressRoles(_) => todo!("phase-E: update suppress_roles"),
+            Self::SetSuppressHighlights(_) => todo!("phase-E: update suppress_highlights"),
+            Self::SetMuteEvents(_) => todo!("phase-E: update mute_events"),
+            Self::SetMobilePush(_) => todo!("phase-E: update mobile_push"),
+        }
+    }
+}
 
 /// Per-server notification settings panel.
 ///
 /// Notification preferences are currently in-memory only (no storage
 /// persistence yet — that is planned for Phase 2.11).
-#[ui_action(inherit)]
+#[ui_action(ServerNotificationsSettingsAction)]
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
@@ -120,8 +143,26 @@ fn NotifToggleRow(label: String, checked: bool, onchange: EventHandler<bool>) ->
 
 /// Notification level for a server.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum NotifLevel {
+pub(super) enum NotifLevel {
     All,
     Mentions,
     Nothing,
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_notifications_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ServerNotificationsSettingsAction>();
+        let _ = ServerNotificationsSettingsAction::SetLevel(NotifLevel::All);
+        let _ = ServerNotificationsSettingsAction::SetSuppressEveryone(true);
+        let _ = ServerNotificationsSettingsAction::SetSuppressRoles(false);
+        let _ = ServerNotificationsSettingsAction::SetSuppressHighlights(true);
+        let _ = ServerNotificationsSettingsAction::SetMuteEvents(false);
+        let _ = ServerNotificationsSettingsAction::SetMobilePush(true);
+    }
 }

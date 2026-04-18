@@ -43,6 +43,24 @@ impl UiAction for BackupSettingsAction {
     }
 }
 
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    /// Structural test: all variants construct and the type implements UiAction.
+    #[test]
+    fn backup_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<BackupSettingsAction>();
+        let _ = BackupSettingsAction::SyncNow("https://backup.example.com".into());
+        let _ = BackupSettingsAction::RemoveServer("https://backup.example.com".into());
+        let _ = BackupSettingsAction::ReauthServer("https://backup.example.com".into());
+        let _ = BackupSettingsAction::AddServer("https://backup.example.com".into());
+    }
+}
+
 // ── Supporting types ──────────────────────────────────────────────────────────
 
 /// Probe status for step 1 of the add-server wizard.

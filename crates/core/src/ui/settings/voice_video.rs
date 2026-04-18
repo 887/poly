@@ -38,6 +38,25 @@ impl UiAction for VoiceVideoSettingsAction {
     }
 }
 
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    /// Structural test: all variants construct and the type implements UiAction.
+    #[test]
+    fn voice_video_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<VoiceVideoSettingsAction>();
+        let _ = VoiceVideoSettingsAction::SetInputVolume(80);
+        let _ = VoiceVideoSettingsAction::SetOutputVolume(70);
+        let _ = VoiceVideoSettingsAction::SetVadMode("vad".into());
+        let _ = VoiceVideoSettingsAction::SetNoiseSuppression("standard".into());
+        let _ = VoiceVideoSettingsAction::SetEchoCancellation(true);
+    }
+}
+
 /// Persist current voice settings to storage.
 fn persist_voice_settings(settings: VoiceSettings) {
     spawn(async move {

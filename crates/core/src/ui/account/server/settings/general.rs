@@ -6,13 +6,28 @@
 use super::super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
+
+pub enum ServerGeneralSettingsAction {
+    ShowLeaveConfirm,
+    HideLeaveConfirm,
+}
+
+impl UiAction for ServerGeneralSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::ShowLeaveConfirm => todo!("phase-E: show inline leave-server confirm"),
+            Self::HideLeaveConfirm => todo!("phase-E: hide inline leave-server confirm"),
+        }
+    }
+}
 
 /// General settings panel for a server.
 ///
 /// Shows server info and a leave-server action with an inline confirm.
-#[ui_action(inherit)]
+#[ui_action(ServerGeneralSettingsAction)]
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
@@ -132,5 +147,19 @@ fn LeaveServerConfirm(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_general_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ServerGeneralSettingsAction>();
+        let _ = ServerGeneralSettingsAction::ShowLeaveConfirm;
+        let _ = ServerGeneralSettingsAction::HideLeaveConfirm;
     }
 }

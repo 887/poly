@@ -24,12 +24,25 @@ pub enum LayoutSettingsAction {
 }
 
 impl UiAction for LayoutSettingsAction {
-    fn apply(self, _cx: ActionCx<'_>) {
+    fn apply(self, cx: ActionCx<'_>) {
         match self {
-            Self::SetLayoutMode(_mode) => todo!("phase-E: persist layout mode"),
-            Self::SetMirrorMenu(_enabled) => todo!("phase-E: persist mirror menu layout"),
-            Self::SetMirrorChatMessages(_enabled) => {
-                todo!("phase-E: persist mirror chat messages")
+            Self::SetLayoutMode(mode) => {
+                cx.state.layout_mode = mode;
+                if dioxus::core::Runtime::try_current().is_some() {
+                    spawn(async move { persist_layout_mode(mode).await });
+                }
+            }
+            Self::SetMirrorMenu(enabled) => {
+                cx.state.mirror_menu_layout = enabled;
+                if dioxus::core::Runtime::try_current().is_some() {
+                    spawn(async move { persist_mirror_menu_layout(enabled).await });
+                }
+            }
+            Self::SetMirrorChatMessages(enabled) => {
+                cx.state.mirror_chat_messages = enabled;
+                if dioxus::core::Runtime::try_current().is_some() {
+                    spawn(async move { persist_mirror_chat_messages(enabled).await });
+                }
             }
         }
     }
@@ -449,5 +462,73 @@ pub(super) fn GeneralSettings() -> Element {
             p { class: "settings-description", "{t(\"settings-general-description\")}" }
             ResetSection {}
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    #[test]
+    fn set_layout_mode_force_mobile_updates_state() {
+        let mut state = AppState::default();
+        LayoutSettingsAction::SetLayoutMode(LayoutMode::ForceMobile)
+            .apply(crate::ui::actions::ActionCx::test(&mut state));
+        assert_eq!(state.layout_mode, LayoutMode::ForceMobile);
+    }
+
+    #[test]
+    fn set_layout_mode_auto_width_updates_state() {
+        let mut state = AppState::default();
+        state.layout_mode = LayoutMode::ForceMobile;
+        LayoutSettingsAction::SetLayoutMode(LayoutMode::AutoWidth)
+            .apply(crate::ui::actions::ActionCx::test(&mut state));
+        assert_eq!(state.layout_mode, LayoutMode::AutoWidth);
+    }
+
+    #[test]
+    fn set_layout_mode_force_desktop_updates_state() {
+        let mut state = AppState::default();
+        LayoutSettingsAction::SetLayoutMode(LayoutMode::ForceDesktop)
+            .apply(crate::ui::actions::ActionCx::test(&mut state));
+        assert_eq!(state.layout_mode, LayoutMode::ForceDesktop);
+    }
+
+    #[test]
+    fn set_mirror_menu_true_updates_state() {
+        let mut state = AppState::default();
+        assert!(!state.mirror_menu_layout);
+        LayoutSettingsAction::SetMirrorMenu(true)
+            .apply(crate::ui::actions::ActionCx::test(&mut state));
+        assert!(state.mirror_menu_layout);
+    }
+
+    #[test]
+    fn set_mirror_menu_false_updates_state() {
+        let mut state = AppState::default();
+        state.mirror_menu_layout = true;
+        LayoutSettingsAction::SetMirrorMenu(false)
+            .apply(crate::ui::actions::ActionCx::test(&mut state));
+        assert!(!state.mirror_menu_layout);
+    }
+
+    #[test]
+    fn set_mirror_chat_messages_true_updates_state() {
+        let mut state = AppState::default();
+        assert!(!state.mirror_chat_messages);
+        LayoutSettingsAction::SetMirrorChatMessages(true)
+            .apply(crate::ui::actions::ActionCx::test(&mut state));
+        assert!(state.mirror_chat_messages);
+    }
+
+    #[test]
+    fn set_mirror_chat_messages_false_updates_state() {
+        let mut state = AppState::default();
+        state.mirror_chat_messages = true;
+        LayoutSettingsAction::SetMirrorChatMessages(false)
+            .apply(crate::ui::actions::ActionCx::test(&mut state));
+        assert!(!state.mirror_chat_messages);
     }
 }

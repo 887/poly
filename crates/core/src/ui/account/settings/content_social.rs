@@ -23,6 +23,7 @@
 
 use crate::i18n::t;
 use crate::state::ChatData;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{DmSpamFilterLevel, SensitiveContentLevel};
 use poly_ui_macros::{context_menu, ui_action};
@@ -81,9 +82,25 @@ fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Ele
     }
 }
 
+pub enum SensitiveMediaSectionAction {
+    SetDmFriends(SensitiveContentLevel),
+    SetDmOthers(SensitiveContentLevel),
+    SetServerChannels(SensitiveContentLevel),
+}
+
+impl UiAction for SensitiveMediaSectionAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetDmFriends(_) => todo!("phase-E: update sensitive_content_dm_friends"),
+            Self::SetDmOthers(_) => todo!("phase-E: update sensitive_content_dm_others"),
+            Self::SetServerChannels(_) => todo!("phase-E: update sensitive_content_server_channels"),
+        }
+    }
+}
+
 /// Sensitive Media section — three select rows.
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(SensitiveMediaSectionAction)]
 #[context_menu(inherit)]
 #[component]
 fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -119,9 +136,21 @@ fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
     }
 }
 
+pub enum SpamFilterSectionAction {
+    SetLevel(DmSpamFilterLevel),
+}
+
+impl UiAction for SpamFilterSectionAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetLevel(_) => todo!("phase-E: update dm_spam_filter level"),
+        }
+    }
+}
+
 /// DM Spam Filter section — three radio options.
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(SpamFilterSectionAction)]
 #[context_menu(inherit)]
 #[component]
 fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -160,9 +189,23 @@ fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
     }
 }
 
+pub enum AgeRestrictedSectionAction {
+    SetAllowServers(bool),
+    SetAllowCommands(bool),
+}
+
+impl UiAction for AgeRestrictedSectionAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetAllowServers(_) => todo!("phase-E: update allow_age_restricted_servers"),
+            Self::SetAllowCommands(_) => todo!("phase-E: update allow_age_restricted_commands_in_dms"),
+        }
+    }
+}
+
 /// Age-Restricted Content section — age access toggles.
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(AgeRestrictedSectionAction)]
 #[context_menu(inherit)]
 #[component]
 fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -188,9 +231,23 @@ fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
     }
 }
 
+pub enum SocialPermissionsSectionAction {
+    SetAllowDmsFromMembers(bool),
+    SetAllowMessageRequests(bool),
+}
+
+impl UiAction for SocialPermissionsSectionAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetAllowDmsFromMembers(_) => todo!("phase-E: update allow_dms_from_server_members"),
+            Self::SetAllowMessageRequests(_) => todo!("phase-E: update allow_message_requests"),
+        }
+    }
+}
+
 /// Social Permissions section — DM and message request controls.
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(SocialPermissionsSectionAction)]
 #[context_menu(inherit)]
 #[component]
 fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -219,9 +276,25 @@ fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
     }
 }
 
+pub enum FriendRequestsSectionAction {
+    SetFromEveryone(bool),
+    SetFromFriendsOfFriends(bool),
+    SetFromServerMembers(bool),
+}
+
+impl UiAction for FriendRequestsSectionAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetFromEveryone(_) => todo!("phase-E: update friend_request_from_everyone"),
+            Self::SetFromFriendsOfFriends(_) => todo!("phase-E: update friend_request_from_friends_of_friends"),
+            Self::SetFromServerMembers(_) => todo!("phase-E: update friend_request_from_server_members"),
+        }
+    }
+}
+
 /// Friend Requests section — three permission checkboxes.
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(FriendRequestsSectionAction)]
 #[context_menu(inherit)]
 #[component]
 fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
@@ -256,6 +329,19 @@ fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
 
 // ─── entry point ────────────────────────────────────────────────────────────
 
+pub enum ContentSocialSettingsAction {
+    /// Placeholder — all real mutations are dispatched by sub-section components.
+    Noop,
+}
+
+impl UiAction for ContentSocialSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::Noop => {}
+        }
+    }
+}
+
 /// Content & Social settings page for a single account.
 ///
 /// Reads policy from `ChatData::content_policy`. All writes go directly back to `ChatData`.
@@ -265,7 +351,7 @@ fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`] when the
 /// "content-social" section is active.
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(ContentSocialSettingsAction)]
 #[context_menu(inherit)]
 #[component]
 pub fn ContentSocialSettings(_account_id: String) -> Element {
@@ -279,5 +365,59 @@ pub fn ContentSocialSettings(_account_id: String) -> Element {
             FriendRequestsSection { chat_data }
             AgeRestrictedSection { chat_data }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_social_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ContentSocialSettingsAction>();
+        let _ = ContentSocialSettingsAction::Noop;
+    }
+
+    #[test]
+    fn sensitive_media_section_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<SensitiveMediaSectionAction>();
+        let _ = SensitiveMediaSectionAction::SetDmFriends(SensitiveContentLevel::Show);
+        let _ = SensitiveMediaSectionAction::SetDmOthers(SensitiveContentLevel::Hide);
+        let _ = SensitiveMediaSectionAction::SetServerChannels(SensitiveContentLevel::WarnFirst);
+    }
+
+    #[test]
+    fn spam_filter_section_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<SpamFilterSectionAction>();
+        let _ = SpamFilterSectionAction::SetLevel(DmSpamFilterLevel::FilterAll);
+    }
+
+    #[test]
+    fn age_restricted_section_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<AgeRestrictedSectionAction>();
+        let _ = AgeRestrictedSectionAction::SetAllowServers(true);
+        let _ = AgeRestrictedSectionAction::SetAllowCommands(false);
+    }
+
+    #[test]
+    fn social_permissions_section_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<SocialPermissionsSectionAction>();
+        let _ = SocialPermissionsSectionAction::SetAllowDmsFromMembers(true);
+        let _ = SocialPermissionsSectionAction::SetAllowMessageRequests(false);
+    }
+
+    #[test]
+    fn friend_requests_section_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<FriendRequestsSectionAction>();
+        let _ = FriendRequestsSectionAction::SetFromEveryone(true);
+        let _ = FriendRequestsSectionAction::SetFromFriendsOfFriends(true);
+        let _ = FriendRequestsSectionAction::SetFromServerMembers(false);
     }
 }

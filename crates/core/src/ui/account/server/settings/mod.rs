@@ -20,6 +20,7 @@ mod profile;
 
 use crate::i18n::t;
 use crate::state::AppState;
+use crate::ui::actions::{ActionCx, UiAction};
 use poly_ui_macros::{context_menu, ui_action};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::main_layout::close_mobile_drawer;
@@ -95,7 +96,21 @@ fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
     }
 }
 
-#[ui_action(inherit)]
+pub enum ServerSettingsSearchBarAction {
+    SetFilter(String),
+    ClearFilter,
+}
+
+impl UiAction for ServerSettingsSearchBarAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetFilter(_) => todo!("phase-E: update server settings search filter"),
+            Self::ClearFilter => todo!("phase-E: clear server settings search filter"),
+        }
+    }
+}
+
+#[ui_action(ServerSettingsSearchBarAction)]
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
@@ -412,5 +427,19 @@ fn ServerSettingsNavItem(
                 span { class: "settings-nav-match-count", "(1)" }
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_settings_search_bar_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ServerSettingsSearchBarAction>();
+        let _ = ServerSettingsSearchBarAction::SetFilter("test".to_string());
+        let _ = ServerSettingsSearchBarAction::ClearFilter;
     }
 }

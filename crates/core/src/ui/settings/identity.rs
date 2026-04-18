@@ -42,6 +42,24 @@ impl UiAction for IdentitySettingsAction {
     }
 }
 
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    /// Structural test: all variants construct and the type implements UiAction.
+    #[test]
+    fn identity_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<IdentitySettingsAction>();
+        let _ = IdentitySettingsAction::CreateIdentity;
+        let _ = IdentitySettingsAction::DeleteIdentity("acc123".into());
+        let _ = IdentitySettingsAction::CopyAccountId("acc123".into());
+        let _ = IdentitySettingsAction::ShowRecoveryPhrase("acc123".into());
+    }
+}
+
 #[derive(Clone, PartialEq)]
 struct LinkedPolyAccount {
     account_id: String,

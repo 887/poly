@@ -27,13 +27,43 @@ pub enum AccountsSettingsAction {
 }
 
 impl UiAction for AccountsSettingsAction {
-    fn apply(self, _cx: ActionCx<'_>) {
+    fn apply(self, cx: ActionCx<'_>) {
         match self {
-            Self::AddAccount => todo!("phase-E: navigate to signup picker"),
+            Self::AddAccount => {
+                if let Some(nav) = cx.navigator {
+                    nav.push(Route::SignupPicker);
+                }
+            }
             Self::OpenAccountSettings(_account_id) => {
+                // Requires backend slug + instance_id in addition to account_id —
+                // those are only available in the component context. Kept for phase-E.
                 todo!("phase-E: navigate to account settings")
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    /// `AddAccount` with no navigator should be a no-op (no panic).
+    #[test]
+    fn add_account_no_navigator_is_noop() {
+        let mut state = AppState::default();
+        // navigator is None in test context — action must not panic
+        AccountsSettingsAction::AddAccount.apply(crate::ui::actions::ActionCx::test(&mut state));
+    }
+
+    /// Structural test: all variants construct and the type implements UiAction.
+    #[test]
+    fn accounts_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<AccountsSettingsAction>();
+        let _ = AccountsSettingsAction::AddAccount;
+        let _ = AccountsSettingsAction::OpenAccountSettings("acc123".into());
     }
 }
 

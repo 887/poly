@@ -1,5 +1,6 @@
 {
   // Rust Analyzer
+  "rust-analyzer.diagnostics.disabled": ["unlinked-file"],
   "rust-analyzer.cargo.features": "all",
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.check.allTargets": true,

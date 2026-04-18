@@ -1,0 +1,13 @@
+error: `#[ui_action(...)]` requires exactly one argument: `MyActionEnum` (typed enum implementing `UiAction`), `None` (display-only, no semantic actions), or `inherit` (sub-component, delegates to parent).
+ --> tests/compile-fail/ui_action_empty.rs:3:1
+  |
+3 | #[ui_action()]
+  | ^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `ui_action` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/compile-fail/ui_action_empty.rs:4:22
+  |
+4 | fn SomeComponent() {}
+  |                      ^ consider adding a `main` function to `$DIR/tests/compile-fail/ui_action_empty.rs`

@@ -45,6 +45,28 @@ impl UiAction for PluginsSettingsAction {
     }
 }
 
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    /// Structural test: all variants construct and the type implements UiAction.
+    #[test]
+    fn plugins_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<PluginsSettingsAction>();
+        let _ = PluginsSettingsAction::ToggleNativeBackend("demo".into());
+        let _ = PluginsSettingsAction::ToggleWasmPlugin(0);
+        let _ = PluginsSettingsAction::RemoveWasmPlugin(0);
+        let _ = PluginsSettingsAction::AddWasmPlugin(WasmPluginEntry {
+            url: "https://example.com/plugin.wasm".into(),
+            name: None,
+            enabled: true,
+        });
+    }
+}
+
 /// WIT version string appended to WASM plugin fetch URLs.
 const WIT_VERSION: &str = "0.1.0";
 

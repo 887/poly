@@ -4,11 +4,26 @@
 //! server. Profile photo override is planned for Phase 2.11.
 
 use crate::i18n::t;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
+pub enum ServerProfileSettingsAction {
+    SetNickname(String),
+    Save,
+}
+
+impl UiAction for ServerProfileSettingsAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        match self {
+            Self::SetNickname(_) => todo!("phase-E: update server nickname input"),
+            Self::Save => todo!("phase-E: persist server nickname via storage"),
+        }
+    }
+}
+
 /// Per-server profile settings panel.
-#[ui_action(inherit)]
+#[ui_action(ServerProfileSettingsAction)]
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
@@ -51,5 +66,19 @@ pub fn ServerProfileSettings(server_id: String, server_name: String) -> Element 
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_profile_settings_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ServerProfileSettingsAction>();
+        let _ = ServerProfileSettingsAction::SetNickname("TestNick".to_string());
+        let _ = ServerProfileSettingsAction::Save;
     }
 }
