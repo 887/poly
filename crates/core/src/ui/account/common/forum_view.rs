@@ -195,8 +195,14 @@ pub fn ForumView() -> Element {
             }
         };
     }
+    // Key forces a full remount on channel change so use_resource inside
+    // ClientView (and its body engines) picks up the new channel_id.
+    // Without this, switching servers keeps showing the previous server's
+    // posts because use_resource holds a captured String that Dioxus
+    // can't track reactively.
+    let key = format!("{}:{}", channel_id, account_id);
     rsx! {
-        ClientView { channel_id, account_id }
+        ClientView { key: "{key}", channel_id, account_id }
     }
 }
 

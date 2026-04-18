@@ -112,9 +112,17 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
             }
             div { class: "client-view-body",
                 {
+                    // Force a full remount of the body engine when channel_id
+                    // or account_id changes. use_resource inside the body
+                    // captures these as plain Strings, not Signals, so Dioxus
+                    // can't track reactivity on them; without a key-based
+                    // remount, switching servers leaves a stale resource and
+                    // the forum keeps showing the previous server's posts.
+                    let body_key = format!("{}:{}", channel_id, account_id);
                     match body {
                         ViewBody::ListBody(spec) => rsx! {
                             ListBody {
+                                key: "{body_key}",
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
@@ -126,6 +134,7 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                         },
                         ViewBody::CardBody(spec) => rsx! {
                             CardBody {
+                                key: "{body_key}",
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
@@ -133,6 +142,7 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                         },
                         ViewBody::TreeBody(spec) => rsx! {
                             TreeBody {
+                                key: "{body_key}",
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
@@ -144,6 +154,7 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                         },
                         ViewBody::SplitBody(spec) => rsx! {
                             SplitBody {
+                                key: "{body_key}",
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
