@@ -1,8 +1,8 @@
 # Plan — Client-UI Surface Polish (Post-WP 9 Cleanup)
 
 > **Created:** 2026-04-18
-> **Last updated:** 2026-04-18 (Packs A, B, J shipped + critical forum bug sweep)
-> **Status:** 🟢 IN PROGRESS — 3 of 9 packs shipped, remainder queued
+> **Last updated:** 2026-04-18 (all 10 packs shipped)
+> **Status:** ✅ COMPLETE — 10 of 10 packs shipped to main
 > **Parent:** `docs/plans/plan-client-ui-surface.md` (the 31-decision refactor that landed WPs 0-9, now ✅ COMPLETED structurally)
 > **Scope:** every cosmetic / rough-edge / deferred-TODO item carried over from WP 0-9, plus the fixes shipped in `fix(client-ui-surface)` and `fix(demo)` follow-up commits
 > **Goal:** take the functional-but-rough landing from 'works' to 'polished enough to demo without apologies'
@@ -14,14 +14,24 @@
 |---|---|---|
 | **A** | Visual polish (view toolbar tabs, card styling, row click, view header, menu submenu+icons+error+loading, composer icons+empty slots+separator, settings desc, FTL fallback, ARIA on all new components) | ✅ **pushed** |
 | **B** | ActionOutcome dispatch (Navigate push, Toast system, Pending polling spinner, shared handler), SidebarInvalidated event consumer, P4 toolbar re-fetch, P5 infinite scroll, P7 SplitBody loading | ✅ **pushed** |
-| **C** | Plugin settings storage round-trip via host-api KV, ChannelSettingsPage wiring, scroll-spy registration, save-confirmation toasts, field descriptions | ⏳ queued |
-| **D** | SpacesRooms proper tree (Matrix), Communities tabs (Lemmy), Feed tabs clickable (HN), RepoTree children (GitHub/Forgejo), sidebar error badge | ⏳ queued |
-| **E** | Real API integration for Lemmy/HN/GitHub/Forgejo `get_view_rows` + `get_view_detail`, state-aware menu items (Subscribe/Unsubscribe conditional) | 🟡 IN PROGRESS — GitHub (E.3) ✅, Forgejo (E.4) ✅, Lemmy/HN pending |
-| **F** | Capability gating migration (phase-2.20 leftover): DMs/Friends/Notifications tabs, notification filter enum, composer gated on read-only, unconditional routes | ⏳ queued |
-| **G** | Custom-block shadow-root upgrade + security audit + usage lint | ⏳ queued |
-| **H** | Cleanup — BackendCapabilities D12 flags, backend_emoji slug match, dead forum_view helpers, UI snapshot goldens, MCP tool filtering | ⏳ queued |
-| **I** | i18n — `-desc` FTL keys per setting, non-English locale seeds | ⏳ queued |
-| **J** | Filter/dropdown/refresh CSS, toggle switches everywhere, rounded corners globally, emoji font fallback | ✅ **pushed** |
+| **C** | Plugin settings storage round-trip (10/10 backends via SettingsStorageCell), ChannelSettingsPage + route, scroll-spy registration, save-confirmation toasts, field descriptions | ✅ **pushed** |
+| **D** | SpacesRooms proper tree (Matrix), Communities tabs (Lemmy), Feed tabs clickable (HN), RepoTree children (GitHub/Forgejo), sidebar error badge | ✅ **pushed** |
+| **E** | Real API integration for Lemmy/HN/GitHub/Forgejo `get_view_rows` + `get_view_detail`, state-aware menu items (Subscribe/Unsubscribe + Star/Unstar conditional) | ✅ **pushed** |
+| **F** | Capability gating migration (phase-2.20 leftover): DMs/Friends/Notifications tabs, notification filter enum, composer gated on read-only, unconditional routes, voice UI | ✅ **pushed** |
+| **G** | Custom-block shadow-root upgrade + expanded XSS corpus (11 new tests) | ✅ **pushed** |
+| **H** | Cleanup — MCP capability-driven tool filtering, legacy tool deprecation notes, backend_emoji slug match replaced, ForumPostCard dead code deleted | ✅ **pushed** |
+| **I** | i18n — 27 `-desc` FTL keys across 10 plugins, 30 non-English locale files seeded with TODO(translate) markers | ✅ **pushed** |
+| **J** | Filter/dropdown/refresh CSS, toggle switches everywhere (plugin-row + all settings), rounded corners globally, emoji font fallback chain | ✅ **pushed** |
+
+**Test counts at completion:** poly-core 179 · poly-client 17 · poly-lint-gate 40 · poly-chat-mcp 9 · poly-lemmy 25 · poly-hackernews 42 · poly-github 23 · poly-forgejo 22 · poly-demo 6 = **363 tests passing**. `cargo check --workspace` clean.
+
+**Known follow-ups flagged inside pack commits (not blocking, not re-scoped as new packs):**
+- D12 `BackendCapabilities` field removal from `clients/client/src/types.rs` — deferred from Pack H to avoid racing with Pack E plugin edits; straightforward cleanup available now that E has landed.
+- UI snapshot goldens — deferred from Pack H; needs Playwright setup + credentials for non-demo backends. Track in a dedicated "snapshot-infra" pack later.
+- True Matrix m.space.parent/child nesting in SpacesRoomsLayout — Pack D flagged as TODO; requires backend API work.
+- HN discussions tab — Pack E.2 returns empty because HN public API doesn't expose comments-per-feed; acceptable.
+- GitHub/Forgejo discussions tab — empty placeholder (GitHub needs GraphQL, Forgejo has no discussions endpoint). Acceptable.
+- Custom-block usage lint scanner — Pack G agent's report mentions it wasn't landed; can be a small follow-up.
 
 ### Additional fixes shipped alongside the packs (landed on main, not tracked as a pack because they were bug hotfixes during UX verification):
 
