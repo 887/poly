@@ -117,87 +117,17 @@ pub fn ListBody(
                 }
             } else {
                 let selected = selected_row_id.read().clone();
+                let on_row_click = EventHandler::new(move |row_id: String| {
+                    tracing::info!("forum card clicked id={row_id}");
+                    selected_row_id.set(Some(row_id));
+                });
                 rsx! {
                     div { class: "client-view-list forum-post-list", role: "feed",
                         for row in rows {
-                            {
-                                let id = row.id.clone();
-                                let id_for_click = id.clone();
-                                let primary = row.primary_text.clone();
-                                let secondary = row.secondary_text.clone();
-                                let meta_raw = row.meta_text.clone();
-                                let icon = row.icon.clone();
-                                let badge = row.badge.clone();
-
-                                let (maybe_score, meta_rest): (Option<i64>, String) =
-                                    meta_raw.as_deref().map_or((None, String::new()), parse_score_meta);
-
-                                if let Some(score) = maybe_score {
-                                    // Lemmy-style forum card
-                                    let sc_class = score_class(score);
-                                    rsx! {
-                                        div {
-                                            key: "{id}",
-                                            class: "forum-post-card",
-                                            role: "article",
-                                            onclick: move |_| selected_row_id.set(Some(id_for_click.clone())),
-                                            div { class: "forum-post-votes",
-                                                button {
-                                                    class: "forum-vote-btn up",
-                                                    "aria-label": "Upvote",
-                                                    onclick: move |e: Event<MouseData>| {
-                                                        e.stop_propagation();
-                                                        tracing::debug!("forum upvote clicked (stub)");
-                                                    },
-                                                    "▲"
-                                                }
-                                                span { class: "{sc_class}", "{score}" }
-                                                button {
-                                                    class: "forum-vote-btn down",
-                                                    "aria-label": "Downvote",
-                                                    onclick: move |e: Event<MouseData>| {
-                                                        e.stop_propagation();
-                                                        tracing::debug!("forum downvote clicked (stub)");
-                                                    },
-                                                    "▼"
-                                                }
-                                            }
-                                            div { class: "forum-post-content",
-                                                div { class: "forum-post-title", "{primary}" }
-                                                if let Some(sec) = secondary {
-                                                    div { class: "forum-post-author-row", "{sec}" }
-                                                }
-                                                if !meta_rest.is_empty() {
-                                                    div { class: "forum-post-meta", "{meta_rest}" }
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    rsx! {
-                                        div {
-                                            key: "{id}",
-                                            class: "client-view-list-row view-row-card",
-                                            role: "article",
-                                            onclick: move |_| selected_row_id.set(Some(id_for_click.clone())),
-                                            if let Some(icon) = icon {
-                                                span { class: "client-view-row-icon view-row-icon", "{icon}" }
-                                            }
-                                            div { class: "client-view-row-text view-row-text",
-                                                h3 { class: "client-view-row-primary view-row-primary", "{primary}" }
-                                                if let Some(sec) = secondary {
-                                                    span { class: "client-view-row-secondary view-row-secondary", "{sec}" }
-                                                }
-                                                if let Some(meta) = meta_raw {
-                                                    span { class: "client-view-row-meta view-row-meta", "{meta}" }
-                                                }
-                                            }
-                                            if let Some(badge) = badge {
-                                                span { class: "client-view-row-badge view-row-badge", "{badge}" }
-                                            }
-                                        }
-                                    }
-                                }
+                            ListBodyRow {
+                                key: "{row.id}",
+                                row: row.clone(),
+                                on_click: on_row_click,
                             }
                         }
                         if let Some(sel_id) = selected {
@@ -208,6 +138,92 @@ pub fn ListBody(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Single row of the flat-list body. Extracted as a helper component so
+/// `onclick` handlers are registered on a stable per-row vnode rather than
+/// inside the `for row in rows { { let ... ; rsx!{...} } }` block expression
+/// pattern — Dioxus 0.7 template tracking would drop these handlers in some
+/// cases, leaving row clicks as dead taps (see P3 selected-row bug).
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
+    let id = row.id.clone();
+    let id_for_click = id.clone();
+    let primary = row.primary_text.clone();
+    let secondary = row.secondary_text.clone();
+    let meta_raw = row.meta_text.clone();
+    let icon = row.icon.clone();
+    let badge = row.badge.clone();
+
+    let (maybe_score, meta_rest): (Option<i64>, String) = meta_raw
+        .as_deref()
+        .map_or((None, String::new()), parse_score_meta);
+
+    if let Some(score) = maybe_score {
+        let sc_class = score_class(score);
+        rsx! {
+            div {
+                class: "forum-post-card",
+                role: "article",
+                onclick: move |_| on_click.call(id_for_click.clone()),
+                div { class: "forum-post-votes",
+                    button {
+                        class: "forum-vote-btn up",
+                        "aria-label": "Upvote",
+                        onclick: move |e: Event<MouseData>| {
+                            e.stop_propagation();
+                            tracing::debug!("forum upvote clicked (stub)");
+                        },
+                        "▲"
+                    }
+                    span { class: "{sc_class}", "{score}" }
+                    button {
+                        class: "forum-vote-btn down",
+                        "aria-label": "Downvote",
+                        onclick: move |e: Event<MouseData>| {
+                            e.stop_propagation();
+                            tracing::debug!("forum downvote clicked (stub)");
+                        },
+                        "▼"
+                    }
+                }
+                div { class: "forum-post-content",
+                    div { class: "forum-post-title", "{primary}" }
+                    if let Some(sec) = secondary {
+                        div { class: "forum-post-author-row", "{sec}" }
+                    }
+                    if !meta_rest.is_empty() {
+                        div { class: "forum-post-meta", "{meta_rest}" }
+                    }
+                }
+            }
+        }
+    } else {
+        rsx! {
+            div {
+                class: "client-view-list-row view-row-card",
+                role: "article",
+                onclick: move |_| on_click.call(id_for_click.clone()),
+                if let Some(icon) = icon {
+                    span { class: "client-view-row-icon view-row-icon", "{icon}" }
+                }
+                div { class: "client-view-row-text view-row-text",
+                    h3 { class: "client-view-row-primary view-row-primary", "{primary}" }
+                    if let Some(sec) = secondary {
+                        span { class: "client-view-row-secondary view-row-secondary", "{sec}" }
+                    }
+                    if let Some(meta) = meta_raw {
+                        span { class: "client-view-row-meta view-row-meta", "{meta}" }
+                    }
+                }
+                if let Some(badge) = badge {
+                    span { class: "client-view-row-badge view-row-badge", "{badge}" }
                 }
             }
         }

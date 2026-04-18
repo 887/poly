@@ -14,7 +14,7 @@
 //! with a vote column instead of the generic tree row. Non-forum rows still
 //! render flat.
 
-use super::list_body::{fetch_first_page, parse_score_meta, score_class};
+use super::list_body::{fetch_first_page, parse_score_meta, score_class, ViewRowDetail};
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{TreeSpec, ViewRow};
@@ -48,8 +48,11 @@ pub fn TreeBody(
     #[props(default)] filter: String,
 ) -> Element {
     let rows_res = fetch_first_page(channel_id.clone(), account_id.clone());
-    let _ = channel_id; // reserved for future refresh wiring
-    let _ = account_id;
+
+    // P3 (TreeBody) — selected row id for inline detail rendering.
+    // Mirrors ListBody. Click dispatch goes through TreeBodyRow so
+    // Dioxus 0.7 template tracking keeps event handlers bound.
+    let mut selected_row_id = use_signal(|| None::<String>);
 
     // Guard against runaway plugins — `max_depth * root_page_size` is a
     // reasonable upper ceiling on visible rows for the initial page.
@@ -98,81 +101,106 @@ pub fn TreeBody(
                     }
                 }
             } else {
+                let selected = selected_row_id.read().clone();
+                let on_row_click = EventHandler::new(move |row_id: String| {
+                    tracing::info!("forum tree card clicked id={row_id}");
+                    selected_row_id.set(Some(row_id));
+                });
                 rsx! {
                     div { class: "client-view-tree forum-post-list", role: "tree",
-                        for (idx, row) in rows.into_iter().enumerate() {
-                            {
-                                let id = row.id.clone();
-                                let primary = row.primary_text.clone();
-                                let secondary = row.secondary_text.clone();
-                                let meta_raw = row.meta_text.clone();
-                                let depth = 0_u32;
-                                let indent_px = (depth * 16) as i32;
-                                let _ = idx;
-
-                                let (maybe_score, meta_rest): (Option<i64>, String) =
-                                    meta_raw.as_deref().map_or((None, String::new()), parse_score_meta);
-
-                                if let Some(score) = maybe_score {
-                                    let sc_class = score_class(score);
-                                    rsx! {
-                                        div {
-                                            key: "{id}",
-                                            class: "forum-post-card",
-                                            role: "treeitem",
-                                            style: "padding-left: {indent_px}px;",
-                                            div { class: "forum-post-votes",
-                                                button {
-                                                    class: "forum-vote-btn up",
-                                                    "aria-label": "Upvote",
-                                                    onclick: move |e: Event<MouseData>| {
-                                                        e.stop_propagation();
-                                                        tracing::debug!("forum upvote clicked (stub)");
-                                                    },
-                                                    "▲"
-                                                }
-                                                span { class: "{sc_class}", "{score}" }
-                                                button {
-                                                    class: "forum-vote-btn down",
-                                                    "aria-label": "Downvote",
-                                                    onclick: move |e: Event<MouseData>| {
-                                                        e.stop_propagation();
-                                                        tracing::debug!("forum downvote clicked (stub)");
-                                                    },
-                                                    "▼"
-                                                }
-                                            }
-                                            div { class: "forum-post-content",
-                                                div { class: "forum-post-title", "{primary}" }
-                                                if let Some(sec) = secondary {
-                                                    div { class: "forum-post-author-row", "{sec}" }
-                                                }
-                                                if !meta_rest.is_empty() {
-                                                    div { class: "forum-post-meta", "{meta_rest}" }
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    rsx! {
-                                        div {
-                                            key: "{id}",
-                                            class: "client-view-tree-row view-row-card",
-                                            role: "treeitem",
-                                            style: "padding-left: {indent_px}px;",
-                                            h3 { class: "client-view-row-primary view-row-primary", "{primary}" }
-                                            if let Some(sec) = secondary {
-                                                span { class: "client-view-row-secondary view-row-secondary", "{sec}" }
-                                            }
-                                            if let Some(meta) = meta_raw {
-                                                span { class: "client-view-row-meta view-row-meta", "{meta}" }
-                                            }
-                                        }
-                                    }
-                                }
+                        for row in rows {
+                            TreeBodyRow {
+                                key: "{row.id}",
+                                row: row.clone(),
+                                on_click: on_row_click,
+                            }
+                        }
+                        if let Some(sel_id) = selected {
+                            ViewRowDetail {
+                                channel_id: channel_id.clone(),
+                                account_id: account_id.clone(),
+                                row_id: sel_id,
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Single row of the tree body. Extracted as a helper component so Dioxus
+/// 0.7 template tracking keeps `onclick` handlers bound across renders
+/// (see the equivalent `ListBodyRow` docstring in `list_body.rs`).
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+pub fn TreeBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
+    let id = row.id.clone();
+    let id_for_click = id.clone();
+    let primary = row.primary_text.clone();
+    let secondary = row.secondary_text.clone();
+    let meta_raw = row.meta_text.clone();
+    let depth = 0_u32;
+    let indent_px = (depth * 16) as i32;
+
+    let (maybe_score, meta_rest): (Option<i64>, String) = meta_raw
+        .as_deref()
+        .map_or((None, String::new()), parse_score_meta);
+
+    if let Some(score) = maybe_score {
+        let sc_class = score_class(score);
+        rsx! {
+            div {
+                class: "forum-post-card",
+                role: "treeitem",
+                style: "padding-left: {indent_px}px;",
+                onclick: move |_| on_click.call(id_for_click.clone()),
+                div { class: "forum-post-votes",
+                    button {
+                        class: "forum-vote-btn up",
+                        "aria-label": "Upvote",
+                        onclick: move |e: Event<MouseData>| {
+                            e.stop_propagation();
+                            tracing::debug!("forum upvote clicked (stub)");
+                        },
+                        "▲"
+                    }
+                    span { class: "{sc_class}", "{score}" }
+                    button {
+                        class: "forum-vote-btn down",
+                        "aria-label": "Downvote",
+                        onclick: move |e: Event<MouseData>| {
+                            e.stop_propagation();
+                            tracing::debug!("forum downvote clicked (stub)");
+                        },
+                        "▼"
+                    }
+                }
+                div { class: "forum-post-content",
+                    div { class: "forum-post-title", "{primary}" }
+                    if let Some(sec) = secondary {
+                        div { class: "forum-post-author-row", "{sec}" }
+                    }
+                    if !meta_rest.is_empty() {
+                        div { class: "forum-post-meta", "{meta_rest}" }
+                    }
+                }
+            }
+        }
+    } else {
+        rsx! {
+            div {
+                class: "client-view-tree-row view-row-card",
+                role: "treeitem",
+                style: "padding-left: {indent_px}px;",
+                onclick: move |_| on_click.call(id_for_click.clone()),
+                h3 { class: "client-view-row-primary view-row-primary", "{primary}" }
+                if let Some(sec) = secondary {
+                    span { class: "client-view-row-secondary view-row-secondary", "{sec}" }
+                }
+                if let Some(meta) = meta_raw {
+                    span { class: "client-view-row-meta view-row-meta", "{meta}" }
                 }
             }
         }
