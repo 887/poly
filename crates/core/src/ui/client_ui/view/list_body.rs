@@ -152,10 +152,40 @@ pub fn ListBody(
                     }
                 }
             } else {
-                let selected = selected_row_id.read().clone();
+                // `selected_row_id` still exists on the component but is
+                // unused now that we route-push to ForumPostRoute. Kept so
+                // future inline-preview modes can flip back without a refactor.
+                let _unused_selected = selected_row_id.read().clone();
+                // Pull the route params once — forum post click routes to
+                // a full-page ForumPostView like the old LemmyForumView did.
+                let app_state: Signal<crate::state::AppState> = use_context();
+                let snap = app_state.read();
+                let backend_slug_for_click = snap
+                    .nav
+                    .active_backend
+                    .as_ref()
+                    .map(|b| b.slug().to_string())
+                    .unwrap_or_default();
+                let instance_id_for_click = snap.nav.active_instance_id.clone().unwrap_or_default();
+                let server_id_for_click = snap.nav.selected_server.clone().unwrap_or_default();
+                let channel_id_for_click = snap
+                    .nav
+                    .selected_channel
+                    .clone()
+                    .unwrap_or_else(|| channel_id.clone());
+                let account_id_for_click = account_id.clone();
+                drop(snap);
+                let nav = navigator();
                 let on_row_click = EventHandler::new(move |row_id: String| {
-                    tracing::info!("forum card clicked id={row_id}");
-                    selected_row_id.set(Some(row_id));
+                    tracing::info!("forum card clicked id={row_id} — routing to ForumPostRoute");
+                    nav.push(crate::ui::routes::Route::ForumPostRoute {
+                        backend: backend_slug_for_click.clone(),
+                        instance_id: instance_id_for_click.clone(),
+                        account_id: account_id_for_click.clone(),
+                        server_id: server_id_for_click.clone(),
+                        channel_id: channel_id_for_click.clone(),
+                        post_id: row_id,
+                    });
                 });
                 let channel_id_for_more = channel_id.clone();
                 let account_id_for_more = account_id.clone();
@@ -227,13 +257,8 @@ pub fn ListBody(
                                 if is_loading_more { "Loading…" } else { "Load more" }
                             }
                         }
-                        if let Some(sel_id) = selected {
-                            ViewRowDetail {
-                                channel_id: channel_id.clone(),
-                                account_id: account_id.clone(),
-                                row_id: sel_id,
-                            }
-                        }
+                        // Inline ViewRowDetail removed — we now route-push to
+                        // ForumPostRoute instead (matches the old Lemmy UX).
                     }
                 }
             }
