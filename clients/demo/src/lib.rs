@@ -535,58 +535,21 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
-        // Demo declares a Tree view for any non-chat channel. Chat channels
-        // are routed through `chat_view.rs` before this is called; forum-style
-        // channels (e.g. `demo_forum` posts) need a structured view.
-        // `get_view_rows` still returns empty until real forum data lands.
-        Ok(ViewDescriptor {
-            kind: ViewKind::Tree,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-demo-view-posts-title".to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: Some(ViewToolbar {
-                sort_options: vec![
-                    ToolbarOption {
-                        id: "hot".to_string(),
-                        label_key: "plugin-demo-sort-hot".to_string(),
-                        icon: None,
-                        default_selected: true,
-                    },
-                    ToolbarOption {
-                        id: "new".to_string(),
-                        label_key: "plugin-demo-sort-new".to_string(),
-                        icon: None,
-                        default_selected: false,
-                    },
-                ],
-                filter_options: vec![],
-                tabs: vec![],
-                action_items: vec![],
-            }),
-            body: ViewBody::TreeBody(TreeSpec {
-                root_page_size: 25,
-                max_depth: 8,
-            }),
-        })
+        // Chat-only backend; no structured view.
+        Err(ClientError::NotSupported("chat-only backend; no structured view".into()))
     }
 
     async fn get_view_rows(
         &self, _channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        // Empty page — real forum-row generation is a follow-up.
-        Ok(ViewRowsPage {
-            rows: Vec::new(),
-            next_cursor: None,
-        })
+        Err(ClientError::NotSupported("chat-only backend; no view rows".into()))
     }
 
     async fn get_view_detail(
         &self, _channel_id: &str, _row_id: &str,
     ) -> Result<ViewDetail, ClientError> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        Err(ClientError::NotSupported("chat-only backend; no view detail".into()))
     }
 
     async fn get_composer_buttons(
@@ -977,58 +940,21 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
-        // Demo declares a Tree view for any non-chat channel. Chat channels
-        // are routed through `chat_view.rs` before this is called; forum-style
-        // channels (e.g. `demo_forum` posts) need a structured view.
-        // `get_view_rows` still returns empty until real forum data lands.
-        Ok(ViewDescriptor {
-            kind: ViewKind::Tree,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-demo-view-posts-title".to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: Some(ViewToolbar {
-                sort_options: vec![
-                    ToolbarOption {
-                        id: "hot".to_string(),
-                        label_key: "plugin-demo-sort-hot".to_string(),
-                        icon: None,
-                        default_selected: true,
-                    },
-                    ToolbarOption {
-                        id: "new".to_string(),
-                        label_key: "plugin-demo-sort-new".to_string(),
-                        icon: None,
-                        default_selected: false,
-                    },
-                ],
-                filter_options: vec![],
-                tabs: vec![],
-                action_items: vec![],
-            }),
-            body: ViewBody::TreeBody(TreeSpec {
-                root_page_size: 25,
-                max_depth: 8,
-            }),
-        })
+        // Chat-only backend; no structured view.
+        Err(ClientError::NotSupported("chat-only backend; no structured view".into()))
     }
 
     async fn get_view_rows(
         &self, _channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        // Empty page — real forum-row generation is a follow-up.
-        Ok(ViewRowsPage {
-            rows: Vec::new(),
-            next_cursor: None,
-        })
+        Err(ClientError::NotSupported("chat-only backend; no view rows".into()))
     }
 
     async fn get_view_detail(
         &self, _channel_id: &str, _row_id: &str,
     ) -> Result<ViewDetail, ClientError> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        Err(ClientError::NotSupported("chat-only backend; no view detail".into()))
     }
 
     async fn get_composer_buttons(
@@ -1419,20 +1345,62 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn get_view_rows(
-        &self, _channel_id: &str, _cursor: Option<Cursor>,
+        &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        // Empty page — real forum-row generation is a follow-up.
+        let posts = data::demo3_messages(channel_id);
+        let rows = posts
+            .into_iter()
+            .map(|msg| {
+                let body = match &msg.content {
+                    MessageContent::Text(t) => t.clone(),
+                    MessageContent::WithAttachments { text, .. } => text.clone(),
+                };
+                let comment_count = data::demo3_post_comments(&msg.id).len();
+                ViewRow {
+                    id: msg.id.clone(),
+                    primary_text: body,
+                    secondary_text: Some(format!("by {}", msg.author.display_name)),
+                    meta_text: Some(format!(
+                        "{} comments · {}",
+                        comment_count,
+                        msg.timestamp.to_rfc3339(),
+                    )),
+                    icon: None,
+                    badge: None,
+                    context_menu_target_kind: MenuTargetKind::Message,
+                }
+            })
+            .collect();
         Ok(ViewRowsPage {
-            rows: Vec::new(),
+            rows,
             next_cursor: None,
         })
     }
 
     async fn get_view_detail(
-        &self, _channel_id: &str, _row_id: &str,
+        &self, channel_id: &str, row_id: &str,
     ) -> Result<ViewDetail, ClientError> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        // Find the post body from the forum messages.
+        let body_html = data::demo3_messages(channel_id)
+            .into_iter()
+            .find(|msg| msg.id == row_id)
+            .map(|msg| match msg.content {
+                MessageContent::Text(t) => format!("<p>{}</p>", t),
+                MessageContent::WithAttachments { text, .. } => format!("<p>{}</p>", text),
+            })
+            .unwrap_or_else(|| format!("<p>(post {row_id} not found)</p>"));
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html: body_html,
+                stylesheet: None,
+                max_height_px: None,
+            },
+            comments_section: Some(TreeSpec {
+                root_page_size: 25,
+                max_depth: 8,
+            }),
+        })
     }
 
     async fn get_composer_buttons(
