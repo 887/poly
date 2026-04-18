@@ -1,10 +1,13 @@
 # Plan — Client-Provided UI Surface: Context Menus, Settings, Sidebars, Views
 
 > **Created:** 2026-04-18
-> **Status:** 🟢 APPROVED (decisions locked — ready for implementation)
+> **Status:** 🟡 STRUCTURALLY COMPLETE — polish outstanding
+> **What shipped (WPs 0–9 landed and pushed to main 2026-04-18):** the WIT surface, the `ClientBackend` trait migration across 10 backends, the 6 host components (`ClientMenu`, `PluginSettingsSection`, `ClientSidebar`, `ClientView`, `ComposerHooks`, `CustomBlock`), the 2 lint scanners (FTL key + action-id kebab-case), the forbid-slug-match scanner, 18 new MCP tools, and 3 documentation files. Per-backend Rust UI files deleted per D7. The user's original bug (Lemmy showing Discord-only items) is fixed.
+> **What is NOT done:** ~61 follow-up polish items catalogued in `plan-client-ui-polish.md` — placeholders (Sidebar non-ChannelList layouts, inert feed tabs), unwired interactions (`ActionOutcome::Navigate/Toast/Pending` logged but not actioned; toolbar sort/filter doesn't re-fetch; row click no-op), missing data (plugin settings storage stubbed; `get_view_rows` empty for Lemmy/HN/GitHub/Forgejo), cleanup debt (`BackendCapabilities` D12 flags pending removal; `backend_emoji` survivor; dead forum_view helpers), and accessibility gaps.
 > **Scope:** WIT spec, `ClientBackend` trait, `crates/core/src/ui/account/*`, `clients/*`
 > **Supersedes the scope of:** `docs/plans/plan-context-menu-quality-control.md` (narrowly structural), `docs/archive/phases/phase-2.20-plugin-capabilities-plan.md` (narrowly flags-only)
 > **Builds on:** `plan-ui-completeness`, `plan-ui-action-types` (both ✅ DONE)
+> **Continued by:** `docs/plans/plan-client-ui-polish.md` — the 61-item polish/cleanup plan for WPs 0-9 follow-ups
 > **Execution model:** All work packages will be executed by AI coding agents in a single integrated pass. Work-package structure exists solely to partition the graph for scheduling parallel agents and to define integration milestones — not as time estimates.
 
 ---
