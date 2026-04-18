@@ -40,7 +40,7 @@ pub enum VoiceBannerAction {
 }
 
 impl UiAction for VoiceBannerAction {
-    fn apply(self, cx: ActionCx<'_>) {
+    fn apply(self, _cx: ActionCx<'_>) {
         match self {
             Self::ToggleMute => {
                 todo!("phase-E: VoiceBannerAction::ToggleMute requires ChatData signal");

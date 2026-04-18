@@ -88,7 +88,7 @@ pub fn ListBody(
     );
 
     // P3 — selected row id is local component state.
-    let mut selected_row_id = use_signal(|| None::<String>);
+    let selected_row_id = use_signal(|| None::<String>);
     // P5 — infinite-scroll state. `loaded_rows` accumulates every page
     // fetched so far. `next_cursor` is the cursor the plugin handed back
     // with the most recent page (`None` means we've reached the end).

@@ -2,9 +2,9 @@
 //!
 //! Pack A.3 — bodies filled.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, unused_variables)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, unused_variables, dead_code)]
 
-use poly_client::{ClientBackend, ComposerSlot};
+use poly_client::ClientBackend;
 use poly_plugin_host::PluginBackend;
 
 /// Verify that the composer toolbar buttons declared for the given channel are well-formed.

@@ -65,7 +65,7 @@ pub fn TreeBody(
     );
 
     // P3 (TreeBody) — selected row id for inline detail rendering.
-    let mut selected_row_id = use_signal(|| None::<String>);
+    let selected_row_id = use_signal(|| None::<String>);
     // P5 — infinite scroll state (mirrors ListBody).
     let mut loaded_rows = use_signal(Vec::<ViewRow>::new);
     let mut next_cursor = use_signal(|| None::<Cursor>);

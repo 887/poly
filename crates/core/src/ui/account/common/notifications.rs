@@ -89,7 +89,7 @@ impl UiAction for NotificationsViewAction {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum NotificationMenuFilter {
+pub enum NotificationMenuFilter {
     All,
     Mentions,
     FriendRequests,
