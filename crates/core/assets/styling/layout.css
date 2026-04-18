@@ -13,7 +13,11 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    /* Text fonts first, then emoji fallbacks so platform-native color emoji
+       (incl. regional-indicator flag pairs like 🇩🇪) render correctly even
+       when a user's system doesn't set a color-emoji default. */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
+        'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Twemoji Mozilla', 'EmojiOne Color', 'Android Emoji';
     background-color: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.5;
