@@ -70,14 +70,16 @@ fn SensitiveMediaRow(
 #[component]
 fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Element {
     rsx! {
-        label { class: "content-social-toggle-row",
+        label { class: "content-social-toggle-row toggle-switch",
             span { class: "content-social-toggle-label", "{label}" }
             input {
                 r#type: "checkbox",
-                class: "content-social-toggle",
+                role: "switch",
+                "aria-checked": if checked { "true" } else { "false" },
                 checked,
                 onchange: move |e| on_change.call(e.checked()),
             }
+            span { class: "toggle-slider" }
         }
     }
 }

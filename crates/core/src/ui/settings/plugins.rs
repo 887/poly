@@ -221,12 +221,15 @@ fn WasmPluginRow(
     let idx_remove = index;
     rsx! {
         div { class: "plugin-row",
-            label { class: "plugin-row-toggle",
+            label { class: "plugin-row-toggle toggle-switch",
                 input {
                     r#type: "checkbox",
+                    role: "switch",
                     checked: entry.enabled,
+                    "aria-checked": if entry.enabled { "true" } else { "false" },
                     onchange: move |_| on_toggle.call(idx_toggle),
                 }
+                span { class: "toggle-slider" }
             }
             div { class: "plugin-row-icon", "🔌" }
             div { class: "plugin-row-info",

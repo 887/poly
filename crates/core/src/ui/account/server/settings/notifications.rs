@@ -131,11 +131,15 @@ fn NotifToggleRow(label: String, checked: bool, onchange: EventHandler<bool>) ->
     rsx! {
         label { class: "notif-toggle-row",
             span { class: "notif-toggle-label", "{label}" }
-            input {
-                r#type: "checkbox",
-                class: "notif-toggle-checkbox",
-                checked,
-                onchange: move |e| onchange.call(e.checked()),
+            label { class: "toggle-switch",
+                input {
+                    r#type: "checkbox",
+                    role: "switch",
+                    "aria-checked": if checked { "true" } else { "false" },
+                    checked,
+                    onchange: move |e| onchange.call(e.checked()),
+                }
+                span { class: "toggle-slider" }
             }
         }
     }
