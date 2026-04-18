@@ -1388,15 +1388,26 @@ impl ClientBackend for DemoClient3 {
     async fn get_view_detail(
         &self, channel_id: &str, row_id: &str,
     ) -> Result<ViewDetail, ClientError> {
-        // Find the post body from the forum messages.
+        // Find the post body from the forum messages. User text is HTML-escaped
+        // before wrapping so that &, <, > in the source don't break the output,
+        // and so UTF-8 multi-byte characters (em-dash etc.) pass through the
+        // sanitizer as-is instead of getting mojibake'd by HTML parsing.
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
         let body_html = data::demo3_messages(channel_id)
             .into_iter()
             .find(|msg| msg.id == row_id)
             .map(|msg| match msg.content {
-                MessageContent::Text(t) => format!("<p>{}</p>", t),
-                MessageContent::WithAttachments { text, .. } => format!("<p>{}</p>", text),
+                MessageContent::Text(t) => format!("<p>{}</p>", html_escape(&t)),
+                MessageContent::WithAttachments { text, .. } => {
+                    format!("<p>{}</p>", html_escape(&text))
+                }
             })
-            .unwrap_or_else(|| format!("<p>(post {row_id} not found)</p>"));
+            .unwrap_or_else(|| format!("<p>(post {} not found)</p>", html_escape(row_id)));
         Ok(ViewDetail {
             body_block: CustomBlock {
                 sanitized_html: body_html,
