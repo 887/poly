@@ -774,7 +774,40 @@ impl ClientBackend for MatrixClient {
     }
 
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(Vec::new())
+        Ok(vec![
+            SettingsSection {
+                scope: SettingsScope::PerServer,
+                section_key: "space-settings".to_string(),
+                icon: None,
+                fields: vec![
+                    SettingDescriptor {
+                        key: "display-name".to_string(),
+                        kind: SettingKind::TextInput,
+                        default_value: "\"\"".to_string(),
+                        extra: String::new(),
+                    },
+                    SettingDescriptor {
+                        key: "topic".to_string(),
+                        kind: SettingKind::TextInput,
+                        default_value: "\"\"".to_string(),
+                        extra: String::new(),
+                    },
+                ],
+                info_block: None,
+            },
+            SettingsSection {
+                scope: SettingsScope::PerServer,
+                section_key: "privacy".to_string(),
+                icon: None,
+                fields: vec![SettingDescriptor {
+                    key: "allow-guests".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "false".to_string(),
+                    extra: String::new(),
+                }],
+                info_block: None,
+            },
+        ])
     }
 
     async fn get_setting_value(
@@ -783,6 +816,14 @@ impl ClientBackend for MatrixClient {
         _scope_id: &str,
         key: &str,
     ) -> ClientResult<String> {
+        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
         Err(ClientError::NotFound(format!("setting: {key}")))
     }
 
@@ -793,7 +834,8 @@ impl ClientBackend for MatrixClient {
         _key: &str,
         _value: &str,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("settings not yet implemented".into()))
+        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
+        Err(ClientError::NotSupported("settings storage not yet wired".into()))
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {

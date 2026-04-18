@@ -21,8 +21,11 @@ mod notifications;
 #[cfg(feature = "server")]
 mod profile;
 
+use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::client_ui::PluginSettingsSection;
+use poly_client::{SettingsScope, SettingsSection as PluginSettingsSectionData};
 use poly_ui_macros::{context_menu, ui_action};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::settings::scroll_spy::scroll_to_settings_section;
@@ -238,6 +241,32 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     let mut search_text = use_signal(String::new);
     let mut active_section = use_signal(|| "notifications".to_string());
 
+    // Plugin-declared AccountGlobal settings sections for this account's backend.
+    // Empty when the backend declares no account-global sections.
+    let plugin_sections = {
+        let account_id = account_id.clone();
+        use_resource(move || {
+            let account_id = account_id.clone();
+            async move {
+                let client_manager: Signal<ClientManager> = match try_consume_context() {
+                    Some(cm) => cm,
+                    None => return Vec::<PluginSettingsSectionData>::new(),
+                };
+                let Some(backend) = client_manager.read().get_backend(&account_id) else {
+                    return Vec::new();
+                };
+                let guard = backend.read().await;
+                guard
+                    .get_settings_sections()
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|s| matches!(s.scope, SettingsScope::AccountGlobal))
+                    .collect()
+            }
+        })
+    };
+
     // Whether to show the poly-server Profile tab.
     // Compile-time: only available with the "server" feature.
     // Runtime: only when the active backend is "poly".
@@ -325,6 +354,35 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                     }
                     div { class: "settings-sections-stack",
                         { profile_section_element(show_profile, account_id.clone()) }
+                        // Plugin-declared AccountGlobal sections render after
+                        // the host Profile block (if any) but before the host
+                        // Notifications / Content-Social blocks.
+                        {
+                            let sections = plugin_sections
+                                .read_unchecked()
+                                .as_ref()
+                                .cloned()
+                                .unwrap_or_default();
+                            rsx! {
+                                for plugin_section in sections.into_iter() {
+                                    {
+                                        let section_key = plugin_section.section_key.clone();
+                                        rsx! {
+                                            div {
+                                                class: "settings-section-block",
+                                                id: "acct-section-plugin-{section_key}",
+                                                PluginSettingsSection {
+                                                    key: "account-global-{section_key}",
+                                                    section: plugin_section,
+                                                    account_id: account_id.clone(),
+                                                    scope_id: String::new(),
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         div {
                             id: "acct-section-notifications",
                             class: if sf.is_empty() || acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-hidden" },

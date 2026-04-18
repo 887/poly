@@ -16,3 +16,7 @@ plugin-forgejo-signup-connecting = Connecting…
 plugin-forgejo-menu-open-in-forgejo-label = Open in Forgejo
 plugin-forgejo-menu-star-repo-label = Star Repo
 plugin-forgejo-menu-watch-repo-label = Watch Repo
+
+plugin-forgejo-setting-preferences-label = Preferences
+plugin-forgejo-setting-show-private-repos-label = Show Private Repositories
+plugin-forgejo-setting-default-issue-state-label = Default Issue State

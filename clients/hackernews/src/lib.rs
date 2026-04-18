@@ -339,7 +339,26 @@ impl ClientBackend for HackerNewsClient {
     }
 
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(Vec::new())
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "default-feed".to_string(),
+                    kind: SettingKind::Select,
+                    default_value: "\"top\"".to_string(),
+                    extra: "[\"top\",\"new\",\"best\",\"ask\",\"show\",\"jobs\"]".to_string(),
+                },
+                SettingDescriptor {
+                    key: "items-per-page".to_string(),
+                    kind: SettingKind::Slider,
+                    default_value: "30".to_string(),
+                    extra: "{\"min\":10,\"max\":100,\"step\":5}".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
     }
 
     async fn get_setting_value(
@@ -348,6 +367,14 @@ impl ClientBackend for HackerNewsClient {
         _scope_id: &str,
         key: &str,
     ) -> ClientResult<String> {
+        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
         Err(ClientError::NotFound(format!("setting: {key}")))
     }
 
@@ -358,7 +385,8 @@ impl ClientBackend for HackerNewsClient {
         _key: &str,
         _value: &str,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("settings not yet implemented".into()))
+        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
+        Err(ClientError::NotSupported("settings storage not yet wired".into()))
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {

@@ -477,19 +477,47 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
-        Ok(Vec::new())
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "regenerate-on-start".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "false".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "message-count".to_string(),
+                    kind: SettingKind::Slider,
+                    default_value: "50".to_string(),
+                    extra: "{\"min\":10,\"max\":500,\"step\":10}".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
     }
 
     async fn get_setting_value(
         &self, _scope: SettingsScope, _scope_id: &str, key: &str,
     ) -> Result<String, ClientError> {
+        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
         Err(ClientError::NotFound(format!("setting: {key}")))
     }
 
     async fn set_setting_value(
         &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
     ) -> Result<(), ClientError> {
-        Err(ClientError::NotSupported("settings not yet implemented".into()))
+        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
+        Err(ClientError::NotSupported("settings storage not yet wired".into()))
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
@@ -851,19 +879,47 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
-        Ok(Vec::new())
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "regenerate-on-start".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "false".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "message-count".to_string(),
+                    kind: SettingKind::Slider,
+                    default_value: "50".to_string(),
+                    extra: "{\"min\":10,\"max\":500,\"step\":10}".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
     }
 
     async fn get_setting_value(
         &self, _scope: SettingsScope, _scope_id: &str, key: &str,
     ) -> Result<String, ClientError> {
+        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
         Err(ClientError::NotFound(format!("setting: {key}")))
     }
 
     async fn set_setting_value(
         &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
     ) -> Result<(), ClientError> {
-        Err(ClientError::NotSupported("settings not yet implemented".into()))
+        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
+        Err(ClientError::NotSupported("settings storage not yet wired".into()))
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
@@ -1187,19 +1243,47 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
-        Ok(Vec::new())
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "regenerate-on-start".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "false".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "message-count".to_string(),
+                    kind: SettingKind::Slider,
+                    default_value: "50".to_string(),
+                    extra: "{\"min\":10,\"max\":500,\"step\":10}".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
     }
 
     async fn get_setting_value(
         &self, _scope: SettingsScope, _scope_id: &str, key: &str,
     ) -> Result<String, ClientError> {
+        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
         Err(ClientError::NotFound(format!("setting: {key}")))
     }
 
     async fn set_setting_value(
         &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
     ) -> Result<(), ClientError> {
-        Err(ClientError::NotSupported("settings not yet implemented".into()))
+        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
+        Err(ClientError::NotSupported("settings storage not yet wired".into()))
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {

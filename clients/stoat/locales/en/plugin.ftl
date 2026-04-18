@@ -23,3 +23,9 @@ plugin-stoat-menu-invite-people-label = Invite People
 plugin-stoat-menu-privacy-settings-label = Privacy Settings
 plugin-stoat-menu-edit-per-server-profile-label = Edit Server Profile
 plugin-stoat-menu-manage-bots-label = Manage Bots
+
+plugin-stoat-setting-profile-label = Profile
+plugin-stoat-setting-nickname-label = Nickname
+plugin-stoat-setting-avatar-url-label = Avatar URL
+plugin-stoat-setting-privacy-label = Privacy
+plugin-stoat-setting-allow-dms-from-server-members-label = Allow DMs from Members

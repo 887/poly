@@ -18,9 +18,12 @@ mod notifications;
 mod overview;
 mod profile;
 
+use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::AppState;
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::PluginSettingsSection;
+use poly_client::{SettingsScope, SettingsSection as PluginSettingsSectionData};
 use poly_ui_macros::{context_menu, ui_action};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::main_layout::close_mobile_drawer;
@@ -203,8 +206,41 @@ fn ServerSettingsContent(
     server_id: String,
     server_name: String,
 ) -> Element {
-    let _ = (&backend, &instance_id, &account_id);
+    let _ = (&backend, &instance_id);
     let filter = search_text.read().to_lowercase();
+
+    // Fetch plugin-declared PerServer settings sections for this account's
+    // backend. Empty when the backend declares no per-server sections.
+    let plugin_sections = {
+        let account_id = account_id.clone();
+        use_resource(move || {
+            let account_id = account_id.clone();
+            async move {
+                let client_manager: Signal<ClientManager> = match try_consume_context() {
+                    Some(cm) => cm,
+                    None => return Vec::<PluginSettingsSectionData>::new(),
+                };
+                let Some(backend) = client_manager.read().get_backend(&account_id) else {
+                    return Vec::new();
+                };
+                let guard = backend.read().await;
+                guard
+                    .get_settings_sections()
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|s| matches!(s.scope, SettingsScope::PerServer))
+                    .collect()
+            }
+        })
+    };
+
+    let plugin_sections_snapshot = plugin_sections
+        .read_unchecked()
+        .as_ref()
+        .cloned()
+        .unwrap_or_default();
+
     rsx! {
         div { class: "settings-page-panel",
             ServerSettingsContentHeader { search_text, server_name: server_name.clone() }
@@ -221,7 +257,30 @@ fn ServerSettingsContent(
                         } else {
                             "settings-section-block"
                         };
+                        // Plugin-declared PerServer sections render in their own
+                        // sibling blocks after "Overview" but before "Notifications".
+                        let inject_plugin_sections =
+                            matches!(section, ServerSettingsSection::Notifications);
                         rsx! {
+                            if inject_plugin_sections {
+                                for plugin_section in plugin_sections_snapshot.clone().into_iter() {
+                                    {
+                                        let section_key = plugin_section.section_key.clone();
+                                        rsx! {
+                                            div {
+                                                class: "settings-section-block",
+                                                id: "server-settings-section-plugin-{section_key}",
+                                                PluginSettingsSection {
+                                                    key: "per-server-{section_key}",
+                                                    section: plugin_section,
+                                                    account_id: account_id.clone(),
+                                                    scope_id: server_id.clone(),
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             div { id, class,
                                 match section {
                                     ServerSettingsSection::Overview => rsx! {

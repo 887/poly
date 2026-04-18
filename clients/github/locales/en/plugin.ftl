@@ -13,3 +13,7 @@ plugin-github-signup-connecting = Checking gh auth…
 plugin-github-menu-open-in-github-label = Open in GitHub
 plugin-github-menu-star-repo-label = Star Repo
 plugin-github-menu-watch-repo-label = Watch Repo
+
+plugin-github-setting-preferences-label = Preferences
+plugin-github-setting-show-private-repos-label = Show Private Repositories
+plugin-github-setting-default-issue-state-label = Default Issue State

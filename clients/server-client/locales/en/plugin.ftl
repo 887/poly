@@ -63,3 +63,12 @@ plugin-poly-menu-invite-people-label = Invite People
 plugin-poly-menu-privacy-settings-label = Privacy Settings
 plugin-poly-menu-edit-per-server-profile-label = Edit Server Profile
 plugin-poly-menu-federation-settings-label = Federation Settings
+
+# --- Declarative settings sections (WP 3) ---
+plugin-poly-setting-profile-label = Profile
+plugin-poly-setting-nickname-label = Nickname
+plugin-poly-setting-avatar-url-label = Avatar URL
+plugin-poly-setting-privacy-label = Privacy
+plugin-poly-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-poly-setting-federation-label = Federation
+plugin-poly-setting-allow-federation-label = Allow Federation

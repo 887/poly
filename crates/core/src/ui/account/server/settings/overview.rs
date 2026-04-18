@@ -1,15 +1,13 @@
 //! Server overview settings — icon and banner configuration.
 //!
-//! Allows users to customise the server icon and banner image URLs.
-//!
-//! ## Backend-awareness
-//! | Backend | Icon | Banner | Notes |
-//! |---|---|---|---|
-//! | Demo, Stoat, Discord, Poly | ✅ | ✅ | Stored locally; Phase 3 adds API calls |
-//! | Matrix, Teams | ✅ (opt-in) | — | Checkbox enables local-only override |
+//! Allows users to customise the server icon and banner image URLs. Both
+//! fields always render; writes are local-only overrides stored in
+//! `AppSettings`. Backend-specific gating (previously: banner-only for some
+//! slugs, checkbox-gated icon for Matrix/Teams) was removed in WP 3 — plugin-
+//! declared `PerServer` settings sections take that role now.
 //!
 //! ## Components
-//! - [`ServerOverviewSettings`] — root, dispatches to sub-panels
+//! - [`ServerOverviewSettings`] — root, always shows icon + banner panels
 //! - [`IconPanel`] — icon URL input + preview
 //! - [`BannerPanel`] — banner URL input + preview
 
@@ -17,29 +15,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_client::BackendType;
 use poly_ui_macros::{context_menu, ui_action};
-
-/// Determine whether a backend slug identifies a backend that owns its servers
-/// and can set icon/banner programmatically (Phase 3 API calls).
-/// For Phase 2, all writes are local-only even for supported backends.
-fn backend_from_slug(slug: &str) -> Option<BackendType> {
-    match slug {
-        "" => None,
-        s => Some(BackendType::from(s)),
-    }
-}
-
-/// Returns `true` for backends that support user-facing banner images.
-fn supports_banner(backend: Option<&BackendType>) -> bool {
-    backend.map_or(false, |b| matches!(b.as_str(), "demo" | "stoat" | "discord" | "poly"))
-}
-
-/// Returns `true` for backends where server icon changes must be local-only
-/// (Matrix workspaces, Teams channels — no "server" ownership).
-fn is_local_only(backend: Option<&BackendType>) -> bool {
-    backend.map_or(false, |b| matches!(b.as_str(), "matrix" | "teams"))
-}
 
 pub enum IconPanelAction {
     SetUrl(String),
@@ -260,31 +236,20 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
     }
 }
 
-pub enum ServerOverviewSettingsAction {
-    SetIconOverrideEnabled(bool),
-}
-
-impl UiAction for ServerOverviewSettingsAction {
-    fn apply(self, _cx: ActionCx<'_>) {
-        match self {
-            Self::SetIconOverrideEnabled(_) => todo!("phase-E: toggle local icon override checkbox"),
-        }
-    }
-}
-
 /// Overview settings panel — server icon and banner configuration.
 ///
 /// The first section shown in server settings (default section).
-/// Shows icon and banner URL inputs with live previews. For Matrix/Teams
-/// backends, the icon section is gated behind a "local override" checkbox
-/// since those backends don't have user-owned servers.
+/// Always renders icon and banner URL inputs with live previews. Backend-
+/// specific gating (banner-only-for-some-backends, checkbox-gated icon for
+/// Matrix/Teams) was removed in WP 3; plugin-declared `PerServer` settings
+/// sections handle backend-specific overrides now.
 ///
 /// # Phase 3 note
 /// <!-- TODO(phase-3): wire icon/banner saves to backend API calls -->
 /// Currently all saves are local-only (stored in `AppSettings`). Phase 3 will
 /// add `ClientBackend::update_server_icon` / `update_server_banner` for
-/// Demo, Stoat, Discord, and Poly backends.
-#[ui_action(ServerOverviewSettingsAction)]
+/// backends that support programmatic server-asset writes.
+#[ui_action(None)]
 #[context_menu(inherit)]
 #[component]
 pub fn ServerOverviewSettings(
@@ -292,11 +257,8 @@ pub fn ServerOverviewSettings(
     server_name: String,
     backend_slug: String,
 ) -> Element {
+    let _ = backend_slug; // backend slug no longer gates rendering; kept for prop stability
     let chat_data: Signal<ChatData> = use_context();
-
-    let backend = backend_from_slug(&backend_slug);
-    let show_banner = supports_banner(backend.as_ref());
-    let local_only = is_local_only(backend.as_ref());
 
     // Read current icon / banner URLs from chat_data (may already include
     // any override applied by apply_server_icon_overrides).
@@ -316,47 +278,20 @@ pub fn ServerOverviewSettings(
         .and_then(|s| s.banner_url.clone())
         .unwrap_or_default();
 
-    // For local-only backends, gate the icon panel behind a checkbox.
-    let mut icon_override_enabled = use_signal(|| !current_icon.is_empty());
-
     rsx! {
         // ── Icon ──────────────────────────────────────────────────────────
-        if local_only {
-            div { class: "settings-section",
-                h3 { class: "settings-section-title", "{t(\"server-overview-icon\")}" }
-                label { class: "settings-checkbox-label",
-                    input {
-                        r#type: "checkbox",
-                        checked: icon_override_enabled(),
-                        onchange: move |e| icon_override_enabled.set(e.checked()),
-                    }
-                    span { " {t(\"server-overview-local-override\")}" }
-                }
-            }
-            if icon_override_enabled() {
-                IconPanel {
-                    server_id: server_id.clone(),
-                    server_name: server_name.clone(),
-                    initial_url: current_icon,
-                    local_only: true,
-                }
-            }
-        } else {
-            IconPanel {
-                server_id: server_id.clone(),
-                server_name: server_name.clone(),
-                initial_url: current_icon,
-                local_only: false,
-            }
+        IconPanel {
+            server_id: server_id.clone(),
+            server_name: server_name.clone(),
+            initial_url: current_icon,
+            local_only: false,
         }
 
         // ── Banner ────────────────────────────────────────────────────────
-        if show_banner {
-            BannerPanel {
-                server_id: server_id.clone(),
-                server_name: server_name.clone(),
-                initial_url: current_banner,
-            }
+        BannerPanel {
+            server_id: server_id.clone(),
+            server_name: server_name.clone(),
+            initial_url: current_banner,
         }
     }
 }
@@ -365,13 +300,6 @@ pub fn ServerOverviewSettings(
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn server_overview_settings_action_variants_compile() {
-        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
-        assert_ui_action::<ServerOverviewSettingsAction>();
-        let _ = ServerOverviewSettingsAction::SetIconOverrideEnabled(true);
-    }
 
     #[test]
     fn icon_panel_action_variants_compile() {

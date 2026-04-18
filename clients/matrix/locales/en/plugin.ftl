@@ -23,3 +23,9 @@ plugin-matrix-menu-space-settings-label = Space Settings
 plugin-matrix-menu-edit-per-space-profile-label = Edit Space Profile
 plugin-matrix-menu-e2ee-verification-label = E2EE Verification
 plugin-matrix-menu-explore-rooms-label = Explore Rooms
+
+plugin-matrix-setting-space-settings-label = Space Settings
+plugin-matrix-setting-display-name-label = Display Name
+plugin-matrix-setting-topic-label = Topic
+plugin-matrix-setting-privacy-label = Privacy
+plugin-matrix-setting-allow-guests-label = Allow Guests

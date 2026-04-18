@@ -7,3 +7,7 @@ plugin-teams-menu-team-settings-label = Team Settings
 plugin-teams-menu-edit-per-team-profile-label = Edit Team Profile
 plugin-teams-menu-schedule-meeting-label = Schedule Meeting
 plugin-teams-menu-manage-files-label = Manage Files
+
+plugin-teams-setting-team-profile-label = Team Profile
+plugin-teams-setting-display-name-label = Display Name
+plugin-teams-setting-description-label = Description

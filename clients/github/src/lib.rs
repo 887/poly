@@ -504,7 +504,26 @@ impl ClientBackend for GitHubClient {
     }
 
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(Vec::new())
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "show-private-repos".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "true".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "default-issue-state".to_string(),
+                    kind: SettingKind::Select,
+                    default_value: "\"open\"".to_string(),
+                    extra: "[\"open\",\"closed\",\"all\"]".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
     }
 
     async fn get_setting_value(
@@ -513,6 +532,14 @@ impl ClientBackend for GitHubClient {
         _scope_id: &str,
         key: &str,
     ) -> ClientResult<String> {
+        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
         Err(ClientError::NotFound(format!("setting: {key}")))
     }
 
@@ -523,7 +550,8 @@ impl ClientBackend for GitHubClient {
         _key: &str,
         _value: &str,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("settings not yet implemented".into()))
+        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
+        Err(ClientError::NotSupported("settings storage not yet wired".into()))
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {

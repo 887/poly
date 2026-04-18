@@ -14,3 +14,7 @@ plugin-demo-setting-enabled-desc = When enabled, Poly loads sample accounts with
 
 # --- Context menu ---
 plugin-demo-menu-regenerate-demo-data-label = Regenerate Demo Data
+
+plugin-demo-setting-preferences-label = Preferences
+plugin-demo-setting-regenerate-on-start-label = Regenerate on Start
+plugin-demo-setting-message-count-label = Message Count

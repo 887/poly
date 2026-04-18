@@ -17,3 +17,7 @@ plugin-lemmy-menu-view-community-label = View Community
 plugin-lemmy-menu-subscribe-community-label = Subscribe
 plugin-lemmy-menu-view-modlog-label = View Modlog
 plugin-lemmy-menu-block-community-label = Block Community
+
+plugin-lemmy-setting-community-label = Community
+plugin-lemmy-setting-mute-community-label = Mute Community
+plugin-lemmy-setting-show-nsfw-label = Show NSFW Content
