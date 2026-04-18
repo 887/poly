@@ -132,12 +132,45 @@ fn score_class(score: i64) -> &'static str {
 #[component]
 pub fn ForumView() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let (channel_id, account_id) = {
+    let chat_data: Signal<ChatData> = use_context();
+
+    // Channel id resolution (fixes back-button + server-switch bugs):
+    //   1. Prefer `nav.selected_channel` (set by sync_route_to_app_state on
+    //      ServerChat routes).
+    //   2. Fall back to `chat_data.current_channel.id` (set by
+    //      load_server_data after click nav).
+    //   3. Finally, pick the first channel in the loaded channels list —
+    //      handles ServerHome route which intentionally leaves
+    //      selected_channel = None, and also handles the 'navigate back from
+    //      ForumPostRoute' flow where nav.selected_channel may be stale until
+    //      load_server_data resolves.
+    let account_id = app_state
+        .read()
+        .nav
+        .active_account_id
+        .clone()
+        .unwrap_or_default();
+    let channel_id = {
         let s = app_state.read();
-        (
-            s.nav.selected_channel.clone().unwrap_or_default(),
-            s.nav.active_account_id.clone().unwrap_or_default(),
-        )
+        if let Some(id) = s.nav.selected_channel.clone() {
+            if !id.is_empty() {
+                id
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    };
+    let channel_id = if channel_id.is_empty() {
+        let cd = chat_data.read();
+        cd.current_channel
+            .as_ref()
+            .map(|ch| ch.id.clone())
+            .or_else(|| cd.channels.first().map(|ch| ch.id.clone()))
+            .unwrap_or_default()
+    } else {
+        channel_id
     };
     if channel_id.is_empty() || account_id.is_empty() {
         return rsx! {
