@@ -14,3 +14,5 @@ plugin-hackernews-signup-account-btn = Add Hacker News
 plugin-hackernews-setting-preferences-label = Preferences
 plugin-hackernews-setting-default-feed-label = Default Feed
 plugin-hackernews-setting-items-per-page-label = Items Per Page
+
+plugin-hackernews-view-stories-title = Stories

@@ -402,7 +402,24 @@ impl ClientBackend for HackerNewsClient {
     }
 
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+        Ok(ViewDescriptor {
+            kind: ViewKind::FlatList,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-hackernews-view-stories-title".to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: None, // HN toolbar already lives in the sidebar
+            body: ViewBody::ListBody(ListSpec {
+                row_template: RowTemplate {
+                    primary_field: "title".to_string(),
+                    secondary_field: Some("url".to_string()),
+                    meta_field: Some("score-comments-age".to_string()),
+                    icon_field: None,
+                },
+                page_size: 30,
+            }),
+        })
     }
 
     async fn get_view_rows(
@@ -413,7 +430,8 @@ impl ClientBackend for HackerNewsClient {
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+        // WP 5 initial: return empty page. Real HN fetch is follow-up.
+        Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None })
     }
 
     async fn get_view_detail(

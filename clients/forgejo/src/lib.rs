@@ -466,7 +466,39 @@ impl ClientBackend for ForgejoClient {
     }
 
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+        Ok(ViewDescriptor {
+            kind: ViewKind::Split,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-forgejo-view-issues-title".to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: Some(ViewToolbar {
+                sort_options: vec![],
+                filter_options: vec![
+                    ToolbarOption { id: "open".to_string(), label_key: "plugin-forgejo-filter-open".to_string(), icon: None, default_selected: true },
+                    ToolbarOption { id: "closed".to_string(), label_key: "plugin-forgejo-filter-closed".to_string(), icon: None, default_selected: false },
+                ],
+                tabs: vec![
+                    ToolbarOption { id: "issues".to_string(), label_key: "plugin-forgejo-tab-issues".to_string(), icon: None, default_selected: true },
+                    ToolbarOption { id: "pulls".to_string(), label_key: "plugin-forgejo-tab-pulls".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "discussions".to_string(), label_key: "plugin-forgejo-tab-discussions".to_string(), icon: None, default_selected: false },
+                ],
+                action_items: vec![],
+            }),
+            body: ViewBody::SplitBody(SplitSpec {
+                list_side: ListSpec {
+                    row_template: RowTemplate {
+                        primary_field: "title".to_string(),
+                        secondary_field: Some("number".to_string()),
+                        meta_field: Some("state-labels-author".to_string()),
+                        icon_field: None,
+                    },
+                    page_size: 30,
+                },
+                detail_view_kind: ViewKind::FlatList,
+            }),
+        })
     }
 
     async fn get_view_rows(
@@ -477,7 +509,8 @@ impl ClientBackend for ForgejoClient {
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+        // WP 5 initial: return empty page. Real Forgejo fetch is follow-up.
+        Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None })
     }
 
     async fn get_view_detail(

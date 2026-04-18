@@ -17,3 +17,10 @@ plugin-github-menu-watch-repo-label = Watch Repo
 plugin-github-setting-preferences-label = Preferences
 plugin-github-setting-show-private-repos-label = Show Private Repositories
 plugin-github-setting-default-issue-state-label = Default Issue State
+
+plugin-github-view-issues-title = Issues & PRs
+plugin-github-filter-open = Open
+plugin-github-filter-closed = Closed
+plugin-github-tab-issues = Issues
+plugin-github-tab-pulls = Pull Requests
+plugin-github-tab-discussions = Discussions

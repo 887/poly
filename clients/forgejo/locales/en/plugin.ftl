@@ -20,3 +20,10 @@ plugin-forgejo-menu-watch-repo-label = Watch Repo
 plugin-forgejo-setting-preferences-label = Preferences
 plugin-forgejo-setting-show-private-repos-label = Show Private Repositories
 plugin-forgejo-setting-default-issue-state-label = Default Issue State
+
+plugin-forgejo-view-issues-title = Issues & PRs
+plugin-forgejo-filter-open = Open
+plugin-forgejo-filter-closed = Closed
+plugin-forgejo-tab-issues = Issues
+plugin-forgejo-tab-pulls = Pull Requests
+plugin-forgejo-tab-discussions = Discussions

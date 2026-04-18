@@ -21,3 +21,8 @@ plugin-lemmy-menu-block-community-label = Block Community
 plugin-lemmy-setting-community-label = Community
 plugin-lemmy-setting-mute-community-label = Mute Community
 plugin-lemmy-setting-show-nsfw-label = Show NSFW Content
+
+plugin-lemmy-view-posts-title = Posts
+plugin-lemmy-sort-hot = Hot
+plugin-lemmy-sort-new = New
+plugin-lemmy-sort-top = Top

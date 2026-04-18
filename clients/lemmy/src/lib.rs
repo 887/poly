@@ -600,7 +600,28 @@ impl ClientBackend for LemmyClient {
     }
 
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+        Ok(ViewDescriptor {
+            kind: ViewKind::Tree,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-lemmy-view-posts-title".to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: Some(ViewToolbar {
+                sort_options: vec![
+                    ToolbarOption { id: "hot".to_string(), label_key: "plugin-lemmy-sort-hot".to_string(), icon: None, default_selected: true },
+                    ToolbarOption { id: "new".to_string(), label_key: "plugin-lemmy-sort-new".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "top".to_string(), label_key: "plugin-lemmy-sort-top".to_string(), icon: None, default_selected: false },
+                ],
+                filter_options: vec![],
+                tabs: vec![],
+                action_items: vec![],
+            }),
+            body: ViewBody::TreeBody(TreeSpec {
+                root_page_size: 25,
+                max_depth: 8,
+            }),
+        })
     }
 
     async fn get_view_rows(
@@ -611,7 +632,8 @@ impl ClientBackend for LemmyClient {
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+        // WP 5 initial: return empty page. Real Lemmy API integration is follow-up.
+        Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None })
     }
 
     async fn get_view_detail(

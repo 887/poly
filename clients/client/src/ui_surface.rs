@@ -552,21 +552,13 @@ mod tests {
         }
     }
 
-    // ── SVG sanitizer allowlist (D27) — WP 5 placeholder ───────────
-
-    #[test]
-    #[ignore = "WP 5: custom-block component"]
-    fn svg_sanitizer_strips_script_tags() {
-        // Will test the ammonia-based SVG sanitizer once WP 5 ships.
-        // Allowlist: path/g/circle/rect/polygon/polyline/line; attrs: d/fill/stroke/viewBox.
-        // Blocked: <script>, <foreignObject>, event-handler attrs (onclick, etc.).
-    }
-
-    #[test]
-    #[ignore = "WP 5: custom-block component"]
-    fn svg_sanitizer_allows_path_and_viewbox() {}
-
-    #[test]
-    #[ignore = "WP 5: custom-block component"]
-    fn svg_sanitizer_strips_foreign_object() {}
+    // ── SVG sanitizer allowlist (D27) ─────────────────────────────
+    //
+    // WP 5 moved the live sanitizer tests to
+    // `crates/core/src/ui/client_ui/custom_block.rs` (alongside
+    // `sanitize_html`, `build_sanitizer`, `prefix_css_selectors`). That
+    // crate is where `ammonia` lives — `poly-client` is a pure data-type
+    // crate and would pull in the whole sanitizer stack just to test it.
+    // See `svg_path_allowed`, `svg_script_stripped`, `foreign_object_stripped`
+    // in that file for the migrated coverage.
 }

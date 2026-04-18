@@ -5,73 +5,14 @@
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
+use crate::ui::client_ui::ClientView;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
 use crate::ui::favorites_sidebar::restore_server_channel;
 use crate::ui::routes::Route;
 use chrono::DateTime;
 use dioxus::prelude::*;
-use poly_client::{ChannelType, Message, MessageContent, MessageQuery};
+use poly_client::{Message, MessageContent, MessageQuery};
 use poly_ui_macros::{context_menu, ui_action};
-
-const PAGE_SIZE: usize = 20;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sort
-// ─────────────────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum ForumSort {
-    #[default]
-    Hot,
-    Active,
-    Scaled,
-    Controversial,
-    New,
-    Old,
-    MostComments,
-    NewComments,
-    TopHour,
-    TopSixHours,
-    TopTwelveHours,
-    TopDay,
-    TopWeek,
-    TopMonth,
-    TopThreeMonths,
-    TopSixMonths,
-    TopNineMonths,
-    TopYear,
-    TopAllTime,
-}
-
-impl ForumSort {
-    fn value(self) -> &'static str {
-        match self {
-            Self::Hot => "hot", Self::Active => "active", Self::Scaled => "scaled",
-            Self::Controversial => "controversial", Self::New => "new", Self::Old => "old",
-            Self::MostComments => "most_comments", Self::NewComments => "new_comments",
-            Self::TopHour => "top_hour", Self::TopSixHours => "top_six_hours",
-            Self::TopTwelveHours => "top_twelve_hours", Self::TopDay => "top_day",
-            Self::TopWeek => "top_week", Self::TopMonth => "top_month",
-            Self::TopThreeMonths => "top_three_months", Self::TopSixMonths => "top_six_months",
-            Self::TopNineMonths => "top_nine_months", Self::TopYear => "top_year",
-            Self::TopAllTime => "top_all_time",
-        }
-    }
-
-    fn from_value(s: &str) -> Self {
-        match s {
-            "active" => Self::Active, "scaled" => Self::Scaled,
-            "controversial" => Self::Controversial, "new" => Self::New, "old" => Self::Old,
-            "most_comments" => Self::MostComments, "new_comments" => Self::NewComments,
-            "top_hour" => Self::TopHour, "top_six_hours" => Self::TopSixHours,
-            "top_twelve_hours" => Self::TopTwelveHours, "top_day" => Self::TopDay,
-            "top_week" => Self::TopWeek, "top_month" => Self::TopMonth,
-            "top_three_months" => Self::TopThreeMonths, "top_six_months" => Self::TopSixMonths,
-            "top_nine_months" => Self::TopNineMonths, "top_year" => Self::TopYear,
-            "top_all_time" => Self::TopAllTime, _ => Self::Hot,
-        }
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Comment tree node — stores a Message + its recursively resolved children
@@ -181,365 +122,32 @@ fn score_class(score: i64) -> &'static str {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top-level ForumView — dispatches to HN feed or Lemmy forum based on channel type
+// Top-level ForumView — thin wrapper over `ClientView`. The plugin declares
+// its own view-descriptor (list / card-grid / tree / split); the host engine
+// renders it. Legacy HN/Lemmy-specific rendering is gone (plan WP 5).
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[ui_action(None)]
 #[context_menu(None)]
-#[rustfmt::skip]
 #[component]
 pub fn ForumView() -> Element {
-    let chat_data: Signal<ChatData> = use_context();
-    let is_hn = chat_data.read().current_channel.as_ref()
-        .is_some_and(|ch| ch.channel_type == ChannelType::HackerNews);
-    if is_hn { rsx! { HnFeedView {} } } else { rsx! { LemmyForumView {} } }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Hacker News feed view — filter input, infinite scroll, no Lemmy sort dropdown
-// ─────────────────────────────────────────────────────────────────────────────
-
-#[ui_action(inherit)]
-#[context_menu(None)]
-#[rustfmt::skip]
-#[component]
-fn HnFeedView() -> Element {
-    let chat_data: Signal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
-    let nav = navigator();
-
-    let mut filter = use_signal(String::new);
-    let mut visible_count = use_signal(|| PAGE_SIZE);
-
-    let channel_id_for_reset = app_state.read().nav.selected_channel.clone().unwrap_or_default();
-    use_effect(move || {
-        let _ = channel_id_for_reset.clone();
-        visible_count.set(PAGE_SIZE);
-        filter.set(String::new());
-    });
-
-    let snapshot = chat_data.read();
-    let current_channel = snapshot.current_channel.clone();
-    let current_server = snapshot.current_server.clone();
-    let posts = snapshot.messages.clone();
-    drop(snapshot);
-
-    let channel_name = current_channel.as_ref().map(|ch| ch.name.clone()).unwrap_or_default();
-    let server_name = current_server
-        .as_ref()
-        .map(|s| format!("{} {}", backend_badge(&s.backend), s.backend.display_name()))
-        .unwrap_or_default();
-
-    let route_params = {
+    let (channel_id, account_id) = {
         let s = app_state.read();
         (
-            s.nav.active_backend.as_ref().map(|b| b.slug().to_string()).unwrap_or_default(),
-            s.nav.active_instance_id.clone().unwrap_or_default(),
-            s.nav.active_account_id.clone().unwrap_or_default(),
-            s.nav.selected_server.clone().unwrap_or_default(),
             s.nav.selected_channel.clone().unwrap_or_default(),
+            s.nav.active_account_id.clone().unwrap_or_default(),
         )
     };
-
-    let filter_text = filter.read().to_lowercase();
-    let filtered: Vec<Message> = if filter_text.is_empty() {
-        posts
-    } else {
-        posts.into_iter().filter(|p| post_text(&p.content).to_lowercase().contains(&filter_text)).collect()
-    };
-
-    let vc = *visible_count.read();
-    let total = filtered.len();
-    let has_more = total > vc;
-    let visible_posts: Vec<Message> = filtered.into_iter().take(vc).collect();
-
-    rsx! {
-        div { class: "forum-view",
-            div { class: "forum-header",
-                div { class: "forum-header-info",
-                    span { class: "forum-channel-name", "🟠 {channel_name}" }
-                    if !server_name.is_empty() {
-                        span { class: "chat-source-badge", "{server_name}" }
-                    }
-                }
-                div { class: "hn-feed-controls",
-                    input {
-                        class: "hn-filter-input",
-                        r#type: "text",
-                        placeholder: "Filter posts…",
-                        value: "{filter.read()}",
-                        oninput: move |e| {
-                            filter.set(e.value());
-                            visible_count.set(PAGE_SIZE);
-                        },
-                    }
-                    button {
-                        class: "forum-refresh-btn",
-                        title: "Refresh",
-                        onclick: {
-                            let account_id = app_state.read().nav.active_account_id.clone();
-                            let b = account_id.as_deref()
-                                .and_then(|aid| client_manager.read().get_backend(aid));
-                            let channel_id = app_state.read().nav.selected_channel.clone().unwrap_or_default();
-                            move |_| {
-                                if let Some(ref b) = b {
-                                    let b = b.clone();
-                                    let cid = channel_id.clone();
-                                    let mut cd = chat_data;
-                                    spawn(async move {
-                                        let msgs = b.read().await
-                                            .get_messages(&cid, MessageQuery::default())
-                                            .await
-                                            .unwrap_or_default();
-                                        cd.write().messages = msgs;
-                                    });
-                                }
-                            }
-                        },
-                        "↻"
-                    }
-                }
+    if channel_id.is_empty() || account_id.is_empty() {
+        return rsx! {
+            div { class: "forum-view-missing-context",
+                "No channel selected"
             }
-            div {
-                class: "hn-feed-list",
-                onscroll: move |_| {
-                    if has_more {
-                        spawn(async move {
-                            let near = document::eval(
-                                "(function(){var e=document.querySelector('.hn-feed-list');\
-                                return e?(e.scrollTop+e.clientHeight>=e.scrollHeight-400):false;})()"
-                            )
-                            .await
-                            .ok()
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false);
-                            if near { visible_count.set(vc + PAGE_SIZE); }
-                        });
-                    }
-                },
-                if visible_posts.is_empty() {
-                    div { class: "forum-empty",
-                        div { class: "forum-empty-icon", "🟠" }
-                        p { "No posts." }
-                    }
-                }
-                for post in visible_posts {
-                    {
-                        let post2 = post.clone();
-                        let post_id = post.id.clone();
-                        let (backend, instance_id, account_id2, server_id, channel_id) = route_params.clone();
-                        let nav2 = nav;
-                        rsx! {
-                            ForumPostCard {
-                                key: "{post_id}",
-                                post: post2.clone(),
-                                on_click: move |_| {
-                                    nav2.push(Route::ForumPostRoute {
-                                        backend: backend.clone(),
-                                        instance_id: instance_id.clone(),
-                                        account_id: account_id2.clone(),
-                                        server_id: server_id.clone(),
-                                        channel_id: channel_id.clone(),
-                                        post_id: post_id.clone(),
-                                    });
-                                },
-                            }
-                        }
-                    }
-                }
-                if has_more {
-                    div { class: "forum-load-more hn-load-more", id: "forum-scroll-sentinel",
-                        onclick: move |_| visible_count.set(vc + PAGE_SIZE),
-                        "Loading more…"
-                    }
-                }
-            }
-        }
+        };
     }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Lemmy/Reddit-style forum view (original implementation)
-// ─────────────────────────────────────────────────────────────────────────────
-
-#[ui_action(inherit)]
-#[context_menu(None)]
-#[rustfmt::skip]
-#[component]
-fn LemmyForumView() -> Element {
-    let chat_data: Signal<ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
-    let nav = navigator();
-
-    let mut sort = use_signal(|| ForumSort::Hot);
-    let mut visible_count = use_signal(|| PAGE_SIZE);
-
-    // Reset visible count when channel changes so scroll-position doesn't leak between channels.
-    let channel_id_for_reset = app_state.read().nav.selected_channel.clone().unwrap_or_default();
-    use_effect(move || {
-        let _ = channel_id_for_reset.clone(); // track dependency
-        visible_count.set(PAGE_SIZE);
-    });
-
-    let snapshot = chat_data.read();
-    let current_channel = snapshot.current_channel.clone();
-    let current_server = snapshot.current_server.clone();
-    let posts = snapshot.messages.clone();
-    drop(snapshot);
-
-    let channel_name = current_channel.as_ref().map(|ch| ch.name.clone()).unwrap_or_default();
-    let server_name = current_server
-        .as_ref()
-        .map(|s| format!("{} {}", backend_badge(&s.backend), s.backend.display_name()))
-        .unwrap_or_default();
-
-    // Route params for post navigation
-    let route_params = {
-        let s = app_state.read();
-        (
-            s.nav.active_backend.as_ref().map(|b| b.slug().to_string()).unwrap_or_default(),
-            s.nav.active_instance_id.clone().unwrap_or_default(),
-            s.nav.active_account_id.clone().unwrap_or_default(),
-            s.nav.selected_server.clone().unwrap_or_default(),
-            s.nav.selected_channel.clone().unwrap_or_default(),
-        )
-    };
-
-    let account_id = app_state.read().nav.active_account_id.clone();
-    let _backend_for_load = account_id.as_deref()
-        .and_then(|aid| client_manager.read().get_backend(aid));
-
-    let mut sorted_posts = posts.clone();
-    match *sort.read() {
-        ForumSort::Hot | ForumSort::Active | ForumSort::Scaled | ForumSort::Controversial
-        | ForumSort::MostComments | ForumSort::TopHour | ForumSort::TopSixHours
-        | ForumSort::TopTwelveHours | ForumSort::TopDay | ForumSort::TopWeek
-        | ForumSort::TopMonth | ForumSort::TopThreeMonths | ForumSort::TopSixMonths
-        | ForumSort::TopNineMonths | ForumSort::TopYear | ForumSort::TopAllTime => {
-            sorted_posts.sort_by_key(|b| std::cmp::Reverse(post_score(b)))
-        }
-        ForumSort::New | ForumSort::NewComments => {
-            sorted_posts.sort_by_key(|b| std::cmp::Reverse(b.timestamp))
-        }
-        ForumSort::Old => sorted_posts.sort_by(|a, b| a.timestamp.cmp(&b.timestamp)),
-    }
-
-    let current_sort = *sort.read();
-    let vc = *visible_count.read();
-    let total_posts = sorted_posts.len();
-    let has_more = total_posts > vc;
-    // Drain sorted_posts — must be after total_posts is computed.
-    let visible_posts: Vec<Message> = sorted_posts.into_iter().take(vc).collect();
-
     rsx! {
-        div { class: "forum-view",
-            // Header with sort tabs
-            div { class: "forum-header",
-                div { class: "forum-header-info",
-                    span { class: "forum-channel-name", "📋 {channel_name}" }
-                    if !server_name.is_empty() {
-                        span { class: "chat-source-badge", "{server_name}" }
-                    }
-                }
-                div { class: "forum-sort-tabs",
-                    select {
-                        class: "forum-sort-select",
-                        value: current_sort.value(),
-                        onchange: move |e| sort.set(ForumSort::from_value(&e.value())),
-                        option { value: "hot", "Hot" }
-                        option { value: "active", "Active" }
-                        option { value: "scaled", "Scaled" }
-                        option { value: "controversial", "Controversial" }
-                        option { value: "new", "New" }
-                        option { value: "old", "Old" }
-                        option { value: "most_comments", "Most Comments" }
-                        option { value: "new_comments", "New Comments" }
-                        option { disabled: true, value: "", "──────────────" }
-                        option { value: "top_hour", "Top Hour" }
-                        option { value: "top_six_hours", "Top Six Hours" }
-                        option { value: "top_twelve_hours", "Top Twelve Hours" }
-                        option { value: "top_day", "Top Day" }
-                        option { value: "top_week", "Top Week" }
-                        option { value: "top_month", "Top Month" }
-                        option { value: "top_three_months", "Top Three Months" }
-                        option { value: "top_six_months", "Top Six Months" }
-                        option { value: "top_nine_months", "Top Nine Months" }
-                        option { value: "top_year", "Top Year" }
-                        option { value: "top_all_time", "Top All Time" }
-                    }
-                    button {
-                        class: "forum-refresh-btn",
-                        title: "Refresh posts",
-                        onclick: {
-                            let account_id2 = app_state.read().nav.active_account_id.clone();
-                            let b = account_id2.as_deref()
-                                .and_then(|aid| client_manager.read().get_backend(aid));
-                            let channel_id = app_state.read().nav.selected_channel.clone().unwrap_or_default();
-                            move |_| {
-                                if let Some(ref b) = b {
-                                    let b = b.clone();
-                                    let cid = channel_id.clone();
-                                    let mut cd = chat_data;
-                                    spawn(async move {
-                                        let msgs = b.read().await
-                                            .get_messages(&cid, poly_client::MessageQuery::default())
-                                            .await
-                                            .unwrap_or_default();
-                                        cd.write().messages = msgs;
-                                    });
-                                }
-                            }
-                        },
-                        "↻"
-                    }
-                }
-            }
-
-            // Post list
-            div { class: "forum-post-list",
-                if visible_posts.is_empty() {
-                    div { class: "forum-empty",
-                        div { class: "forum-empty-icon", "📋" }
-                        p { "No posts yet." }
-                    }
-                }
-                for post in visible_posts {
-                    {
-                        let post2 = post.clone();
-                        let post_id = post.id.clone();
-                        let (backend, instance_id, account_id2, server_id, channel_id) = route_params.clone();
-                        let nav2 = nav;
-                        rsx! {
-                            ForumPostCard {
-                                key: "{post_id}",
-                                post: post2.clone(),
-                                on_click: move |_| {
-                                    nav2.push(Route::ForumPostRoute {
-                                        backend: backend.clone(),
-                                        instance_id: instance_id.clone(),
-                                        account_id: account_id2.clone(),
-                                        server_id: server_id.clone(),
-                                        channel_id: channel_id.clone(),
-                                        post_id: post_id.clone(),
-                                    });
-                                },
-                            }
-                        }
-                    }
-                }
-                // Load-more sentinel: visible when there are more posts; clicking loads next page.
-                if has_more {
-                    div {
-                        class: "forum-load-more",
-                        id: "forum-scroll-sentinel",
-                        onclick: move |_| visible_count.set(vc + PAGE_SIZE),
-                        "Load more ({total_posts - vc} remaining)"
-                    }
-                }
-            }
-        }
+        ClientView { channel_id, account_id }
     }
 }
 
