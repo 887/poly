@@ -11,3 +11,6 @@ plugin-teams-menu-manage-files-label = Manage Files
 plugin-teams-setting-team-profile-label = Team Profile
 plugin-teams-setting-display-name-label = Display Name
 plugin-teams-setting-description-label = Description
+
+# Composer buttons
+plugin-teams-composer-mention-label = Mention someone

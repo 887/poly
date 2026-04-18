@@ -25,6 +25,8 @@ use super::media_picker::MediaPickerPopup;
 use super::user_profile_modal::open_user_profile;
 use super::user_sidebar::UserSidebar;
 use crate::client_manager::ClientManager;
+use crate::ui::client_ui::{ComposerHooks, MessageActions};
+use poly_client::ComposerSlot;
 use crate::i18n::{t, t_args};
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
 use crate::state::{AppState, ChatData};
@@ -3796,6 +3798,30 @@ fn render_message_actions(
                 onclick: move |_| tracing::debug!("Forward (stub)"),
                 "➡️"
             }
+            // WP 6 — plan-client-ui-surface §7 WP 6 / §4.5. Plugin-declared
+            // per-message actions render *after* host universal items so
+            // host controls stay in stable positions.
+            {
+                let account_id = ctx
+                    .app_state
+                    .read()
+                    .nav
+                    .active_account_id
+                    .clone()
+                    .unwrap_or_default();
+                let channel_id = ctx.channel_id.clone().unwrap_or_default();
+                if !account_id.is_empty() && !channel_id.is_empty() {
+                    rsx! {
+                        MessageActions {
+                            account_id,
+                            channel_id,
+                            message_id: msg_id.clone(),
+                        }
+                    }
+                } else {
+                    rsx! {}
+                }
+            }
         }
     }
 }
@@ -4000,7 +4026,29 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
         new_messages_while_scrolled_up: ctx.new_messages_while_scrolled_up,
     };
 
+    // WP 6 — plan-client-ui-surface §7 WP 6 / §4.5. Plugin-contributed
+    // composer buttons are mounted per-slot around the input. The chat view
+    // itself stays untouched (D8 preservation) — only these three
+    // `ComposerHooks` instances hook into the plugin surface.
+    let active_account_id = ctx
+        .app_state
+        .read()
+        .nav
+        .active_account_id
+        .clone()
+        .unwrap_or_default();
+    let channel_for_hooks = channel_id.clone().unwrap_or_default();
+    let has_channel =
+        !active_account_id.is_empty() && !channel_for_hooks.is_empty();
+
     rsx! {
+        if has_channel {
+            ComposerHooks {
+                account_id: active_account_id.clone(),
+                channel_id: channel_for_hooks.clone(),
+                slot: ComposerSlot::AboveInput,
+            }
+        }
         div { class: "message-input-row",
             div { class: "message-input-shell",
                 button {
@@ -4008,6 +4056,13 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                     title: t("chat-attach-file"),
                     onclick: move |_| open_composer_file_picker(),
                     "➕"
+                }
+                if has_channel {
+                    ComposerHooks {
+                        account_id: active_account_id.clone(),
+                        channel_id: channel_for_hooks.clone(),
+                        slot: ComposerSlot::LeftOfInput,
+                    }
                 }
                 div { class: "message-input-text-area",
                     textarea {
@@ -4034,6 +4089,13 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                     }
                 }
                 {render_composer_toolbar(show_input_emoji)}
+                if has_channel {
+                    ComposerHooks {
+                        account_id: active_account_id.clone(),
+                        channel_id: channel_for_hooks.clone(),
+                        slot: ComposerSlot::RightOfInput,
+                    }
+                }
                 {render_send_button(ctx)}
             }
         }

@@ -443,6 +443,7 @@ impl ClientBackend for HackerNewsClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        // HackerNews is read-only — no composer.
         Ok(Vec::new())
     }
 
@@ -451,6 +452,7 @@ impl ClientBackend for HackerNewsClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
+        // HackerNews is read-only — no per-message actions.
         Ok(Vec::new())
     }
 

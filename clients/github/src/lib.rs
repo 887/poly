@@ -623,6 +623,7 @@ impl ClientBackend for GitHubClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        // GitHub is a code-review/issue tracker — composer contributions are out of scope for this client.
         Ok(Vec::new())
     }
 
@@ -631,6 +632,7 @@ impl ClientBackend for GitHubClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
+        // GitHub is a code-review/issue tracker — per-message actions are out of scope for this client.
         Ok(Vec::new())
     }
 

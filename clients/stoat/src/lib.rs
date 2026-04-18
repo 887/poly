@@ -1162,7 +1162,12 @@ impl ClientBackend for StoatClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(Vec::new())
+        Ok(vec![ComposerButton {
+            id: "emoji-picker".to_string(),
+            label_key: "plugin-stoat-composer-emoji-label".to_string(),
+            icon: "😀".to_string(),
+            position: ComposerSlot::RightOfInput,
+        }])
     }
 
     async fn get_message_actions(
@@ -1170,7 +1175,16 @@ impl ClientBackend for StoatClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        Ok(vec![MenuItem {
+            id: "report".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-stoat-message-action-report-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
     }
 
     async fn invoke_composer_action(
@@ -1178,7 +1192,10 @@ impl ClientBackend for StoatClient {
         action_id: &str,
         _channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+        match action_id {
+            "emoji-picker" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
+        }
     }
 
     async fn invoke_message_action(
@@ -1187,7 +1204,10 @@ impl ClientBackend for StoatClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+        match action_id {
+            "report" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
+        }
     }
 }
 

@@ -648,7 +648,12 @@ impl ClientBackend for TeamsClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(Vec::new())
+        Ok(vec![ComposerButton {
+            id: "mention".to_string(),
+            label_key: "plugin-teams-composer-mention-label".to_string(),
+            icon: "@".to_string(),
+            position: ComposerSlot::RightOfInput,
+        }])
     }
 
     async fn get_message_actions(
@@ -656,6 +661,7 @@ impl ClientBackend for TeamsClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
+        // Teams has no backend-specific per-message actions beyond host universals.
         Ok(Vec::new())
     }
 
@@ -664,7 +670,10 @@ impl ClientBackend for TeamsClient {
         action_id: &str,
         _channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+        match action_id {
+            "mention" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
+        }
     }
 
     async fn invoke_message_action(

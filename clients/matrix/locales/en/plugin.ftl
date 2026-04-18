@@ -29,3 +29,8 @@ plugin-matrix-setting-display-name-label = Display Name
 plugin-matrix-setting-topic-label = Topic
 plugin-matrix-setting-privacy-label = Privacy
 plugin-matrix-setting-allow-guests-label = Allow Guests
+
+# Composer buttons
+plugin-matrix-composer-me-label = /me action
+# Message actions
+plugin-matrix-message-action-verify-sender-label = Verify Sender

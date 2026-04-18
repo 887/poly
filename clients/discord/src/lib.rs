@@ -507,7 +507,12 @@ impl ClientBackend for DiscordClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(Vec::new())
+        Ok(vec![ComposerButton {
+            id: "stickers".to_string(),
+            label_key: "plugin-discord-composer-stickers-label".to_string(),
+            icon: "🎨".to_string(),
+            position: ComposerSlot::RightOfInput,
+        }])
     }
 
     async fn get_message_actions(
@@ -515,7 +520,16 @@ impl ClientBackend for DiscordClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        Ok(vec![MenuItem {
+            id: "pin-message".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-discord-message-action-pin-message-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
     }
 
     async fn invoke_composer_action(
@@ -523,7 +537,10 @@ impl ClientBackend for DiscordClient {
         action_id: &str,
         _channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+        match action_id {
+            "stickers" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
+        }
     }
 
     async fn invoke_message_action(
@@ -532,6 +549,9 @@ impl ClientBackend for DiscordClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+        match action_id {
+            "pin-message" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
+        }
     }
 }

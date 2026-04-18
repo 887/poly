@@ -554,12 +554,14 @@ impl ClientBackend for DemoClient {
     async fn get_composer_buttons(
         &self, _channel_id: &str,
     ) -> Result<Vec<ComposerButton>, ClientError> {
+        // Demo client — no real composer extensions; exists solely for UI smoke testing.
         Ok(Vec::new())
     }
 
     async fn get_message_actions(
         &self, _channel_id: &str, _message_id: &str,
     ) -> Result<Vec<MenuItem>, ClientError> {
+        // Demo client — no real message actions; exists solely for UI smoke testing.
         Ok(Vec::new())
     }
 
@@ -956,12 +958,14 @@ impl ClientBackend for DemoClient2 {
     async fn get_composer_buttons(
         &self, _channel_id: &str,
     ) -> Result<Vec<ComposerButton>, ClientError> {
+        // Demo client — no real composer extensions; exists solely for UI smoke testing.
         Ok(Vec::new())
     }
 
     async fn get_message_actions(
         &self, _channel_id: &str, _message_id: &str,
     ) -> Result<Vec<MenuItem>, ClientError> {
+        // Demo client — no real message actions; exists solely for UI smoke testing.
         Ok(Vec::new())
     }
 
@@ -1320,12 +1324,14 @@ impl ClientBackend for DemoClient3 {
     async fn get_composer_buttons(
         &self, _channel_id: &str,
     ) -> Result<Vec<ComposerButton>, ClientError> {
+        // Demo client — no real composer extensions; exists solely for UI smoke testing.
         Ok(Vec::new())
     }
 
     async fn get_message_actions(
         &self, _channel_id: &str, _message_id: &str,
     ) -> Result<Vec<MenuItem>, ClientError> {
+        // Demo client — no real message actions; exists solely for UI smoke testing.
         Ok(Vec::new())
     }
 

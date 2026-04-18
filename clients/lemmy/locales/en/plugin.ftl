@@ -26,3 +26,8 @@ plugin-lemmy-view-posts-title = Posts
 plugin-lemmy-sort-hot = Hot
 plugin-lemmy-sort-new = New
 plugin-lemmy-sort-top = Top
+
+# Message actions
+plugin-lemmy-message-action-upvote-label = Upvote
+plugin-lemmy-message-action-downvote-label = Downvote
+plugin-lemmy-message-action-report-label = Report

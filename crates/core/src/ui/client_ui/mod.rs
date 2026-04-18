@@ -14,7 +14,7 @@ pub mod settings_section;
 pub mod sidebar;
 pub mod view;
 
-pub use composer::{ComposerHooks, MessageActions};
+pub use composer::{ClientComposerAction, ClientMessageAction, ComposerHooks, MessageActions};
 pub use custom_block::CustomBlock;
 pub use menu::ClientMenu;
 pub use settings_section::PluginSettingsSection;

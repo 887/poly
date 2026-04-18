@@ -29,3 +29,8 @@ plugin-stoat-setting-nickname-label = Nickname
 plugin-stoat-setting-avatar-url-label = Avatar URL
 plugin-stoat-setting-privacy-label = Privacy
 plugin-stoat-setting-allow-dms-from-server-members-label = Allow DMs from Members
+
+# Composer buttons
+plugin-stoat-composer-emoji-label = Emoji
+# Message actions
+plugin-stoat-message-action-report-label = Report

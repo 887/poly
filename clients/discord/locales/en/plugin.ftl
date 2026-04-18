@@ -14,3 +14,8 @@ plugin-discord-setting-mentions-only-label = Only @mentions
 plugin-discord-setting-mute-category-label = Mute Category
 plugin-discord-setting-privacy-label = Privacy
 plugin-discord-setting-allow-dms-from-server-members-label = Allow DMs from Members
+
+# Composer buttons
+plugin-discord-composer-stickers-label = Stickers
+# Message actions
+plugin-discord-message-action-pin-message-label = Pin Message

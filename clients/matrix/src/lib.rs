@@ -874,7 +874,12 @@ impl ClientBackend for MatrixClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(Vec::new())
+        Ok(vec![ComposerButton {
+            id: "me-action".to_string(),
+            label_key: "plugin-matrix-composer-me-label".to_string(),
+            icon: "🎭".to_string(),
+            position: ComposerSlot::LeftOfInput,
+        }])
     }
 
     async fn get_message_actions(
@@ -882,7 +887,16 @@ impl ClientBackend for MatrixClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        Ok(vec![MenuItem {
+            id: "verify-sender".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-matrix-message-action-verify-sender-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
     }
 
     async fn invoke_composer_action(
@@ -890,7 +904,10 @@ impl ClientBackend for MatrixClient {
         action_id: &str,
         _channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+        match action_id {
+            "me-action" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
+        }
     }
 
     async fn invoke_message_action(
@@ -899,7 +916,10 @@ impl ClientBackend for MatrixClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+        match action_id {
+            "verify-sender" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
+        }
     }
 }
 

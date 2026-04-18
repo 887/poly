@@ -645,6 +645,7 @@ impl ClientBackend for LemmyClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        // Lemmy is a read/vote platform — no freeform composer beyond post creation.
         Ok(Vec::new())
     }
 
@@ -653,7 +654,38 @@ impl ClientBackend for LemmyClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        Ok(vec![
+            MenuItem {
+                id: "upvote".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-lemmy-message-action-upvote-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "downvote".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-lemmy-message-action-downvote-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "report".to_string(),
+                parent_id: None,
+                slot: MenuSlot::BeforeLeave,
+                label_key: "plugin-lemmy-message-action-report-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+        ])
     }
 
     async fn invoke_composer_action(
@@ -670,7 +702,10 @@ impl ClientBackend for LemmyClient {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+        match action_id {
+            "upvote" | "downvote" | "report" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
+        }
     }
 
     // ── Backend info ──────────────────────────────────────────────────────────

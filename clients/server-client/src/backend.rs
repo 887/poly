@@ -870,6 +870,7 @@ impl ClientBackend for PolyServerBackend {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        // poly-server is a generic host; composer extensions are declared by server-side plugins, not the client.
         Ok(Vec::new())
     }
 
@@ -878,6 +879,7 @@ impl ClientBackend for PolyServerBackend {
         _channel_id: &str,
         _message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
+        // poly-server is a generic host; message actions are declared by server-side plugins, not the client.
         Ok(Vec::new())
     }
 
