@@ -32,6 +32,14 @@
 ))]
 mod harness;
 
+mod harness_menus;
+mod harness_settings;
+mod harness_sidebar;
+mod harness_views;
+mod harness_composer;
+mod harness_custom_block;
+mod harness_build_route;
+
 #[cfg(feature = "test-demo")]
 mod demo;
 
