@@ -15,5 +15,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[rustfmt::skip]
 #[component]
 pub fn ServerContextMenuExtras(server_id: String, account_id: String) -> Element {
-    todo!("phase-3+: Poly-native context menu items — Federation Settings, Server Admin, Custom Emoji Management")
+    rsx! {
+        // phase-3+: Poly-native extras not yet implemented
+    }
 }
