@@ -6,6 +6,7 @@
 //! WP 4 follow-up — for now items render as inert rows so the declared
 //! tree is visible in snapshots.
 
+use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::{SidebarDeclaration, SidebarItem, SidebarSection};
 use poly_ui_macros::{context_menu, ui_action};
@@ -41,7 +42,9 @@ pub fn CustomSidebar(declaration: SidebarDeclaration) -> Element {
 #[context_menu(inherit)]
 #[component]
 fn CustomSidebarSection(section: SidebarSection) -> Element {
-    let header = section.header_key.clone();
+    // Resolve FTL key via the host i18n store; `t()` falls back to the raw
+    // key when no translation is registered.
+    let header = section.header_key.as_deref().map(t);
     let items = section.items.clone();
     let tree = reconstruct_tree(items);
 
@@ -119,7 +122,7 @@ fn build_node(
 #[context_menu(inherit)]
 #[component]
 fn SidebarItemRow(node: SidebarNode, depth: usize) -> Element {
-    let label = node.item.label_key.clone();
+    let label = t(&node.item.label_key);
     let badge = node.item.badge.clone();
     let children = node.children.clone();
     let has_children = !children.is_empty();

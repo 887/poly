@@ -26,6 +26,7 @@
 //! with `tracing::warn!`.
 
 use crate::client_manager::ClientManager;
+use crate::i18n::t;
 use crate::ui::account::server::context_menu::ContextMenuItem;
 use dioxus::prelude::*;
 use poly_client::{
@@ -213,10 +214,10 @@ fn render_leaf(
     target_id: String,
     account_id: String,
 ) -> Element {
-    // FTL resolution belongs to the plugin's own bundle (not yet wired —
-    // docs/plans/plan-client-ui-surface.md §4.3). For now display the key
-    // itself so authors see it.
-    let label = item.label_key.clone();
+    // Plugin FTL bundles are merged into the host's global i18n bundle under
+    // the `plugin-<id>-*` namespace via `plugin_metadata::get_translations`.
+    // `t()` falls back to the raw key when no translation is registered.
+    let label = t(&item.label_key);
     let action_id = item.id.clone();
     let onclick = move |_evt: MouseEvent| {
         let action_id = action_id.clone();
@@ -244,7 +245,7 @@ fn render_submenu(
 ) -> Element {
     // Local signal — hover to open, leave to close.
     let mut open = use_signal(|| false);
-    let label = item.label_key.clone();
+    let label = t(&item.label_key);
 
     // Pre-render the nested items so the submenu body is static rsx.
     let mut ids: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -306,7 +307,7 @@ fn render_info_block(item: MenuItem) -> Element {
     // WP 5 ships the real CustomBlock renderer; until then emit a stub so the
     // slot is visible in snapshots.
     let has_block = item.block.is_some();
-    let label = item.label_key.clone();
+    let label = t(&item.label_key);
     rsx! {
         div {
             class: "context-menu-item context-menu-info-row disabled",

@@ -28,6 +28,7 @@
 //! plugin-declared panels match the host-owned panels visually.
 
 use crate::client_manager::ClientManager;
+use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{
@@ -89,7 +90,11 @@ pub fn PluginSettingsSection(
 ) -> Element {
     let icon = section.icon.clone().unwrap_or_default();
     let section_key = section.section_key.clone();
-    let header_label = format!("setting-{section_key}-label");
+    // FTL keys for plugin settings follow `setting-<section>-label` /
+    // `setting-<field>-label` / `-desc`. Plugin FTL bundles are merged into
+    // the host i18n store at plugin-init time, so `t()` resolves them
+    // (returning the raw key on miss).
+    let header_label = t(&format!("setting-{section_key}-label"));
     let has_info_block = section.info_block.is_some();
 
     let fields = section.fields.clone();
@@ -159,8 +164,10 @@ fn PluginSettingField(
     let client_manager: Signal<ClientManager> = use_context();
 
     let field_key = field.key.clone();
-    let label_key = format!("setting-{}-label", field.key);
-    let desc_key = format!("setting-{}-desc", field.key);
+    // Resolve both FTL keys through the host i18n store. `t()` returns the
+    // raw key on miss so empty plugin bundles still render something.
+    let label_key = t(&format!("setting-{}-label", field.key));
+    let desc_key = t(&format!("setting-{}-desc", field.key));
 
     // Fetch current value from the plugin on mount.
     let value_res = {

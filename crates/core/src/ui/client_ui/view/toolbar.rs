@@ -6,6 +6,7 @@
 //! The `action_items` list is ignored for now (they'd render via
 //! [`crate::ui::client_ui::ClientMenu`] when an overflow menu lands).
 
+use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{ToolbarOption, ViewToolbar as ViewToolbarData};
@@ -56,7 +57,7 @@ pub fn ViewToolbar(toolbar: ViewToolbarData) -> Element {
                         {
                             let id = tab.id.clone();
                             let is_selected = selected_tab.read().as_deref() == Some(id.as_str());
-                            let label = tab.label_key.clone();
+                            let label = t(&tab.label_key);
                             let cls = if is_selected {
                                 "client-view-tab selected"
                             } else {
@@ -80,7 +81,7 @@ pub fn ViewToolbar(toolbar: ViewToolbarData) -> Element {
                         {
                             let id = opt.id.clone();
                             let is_selected = selected_sort.read().as_deref() == Some(id.as_str());
-                            let label = opt.label_key.clone();
+                            let label = t(&opt.label_key);
                             let cls = if is_selected {
                                 "client-view-sort selected"
                             } else {
@@ -104,7 +105,7 @@ pub fn ViewToolbar(toolbar: ViewToolbarData) -> Element {
                         {
                             let id = opt.id.clone();
                             let is_selected = selected_filter.read().as_deref() == Some(id.as_str());
-                            let label = opt.label_key.clone();
+                            let label = t(&opt.label_key);
                             let cls = if is_selected {
                                 "client-view-filter-chip selected"
                             } else {

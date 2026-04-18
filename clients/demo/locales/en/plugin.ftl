@@ -18,3 +18,8 @@ plugin-demo-menu-regenerate-demo-data-label = Regenerate Demo Data
 plugin-demo-setting-preferences-label = Preferences
 plugin-demo-setting-regenerate-on-start-label = Regenerate on Start
 plugin-demo-setting-message-count-label = Message Count
+
+# --- Forum view (Tree) ---
+plugin-demo-view-posts-title = Posts
+plugin-demo-sort-hot = Hot
+plugin-demo-sort-new = New

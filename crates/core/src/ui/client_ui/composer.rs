@@ -13,6 +13,7 @@
 //! items in the surrounding chat view continue to work.
 
 use crate::client_manager::ClientManager;
+use crate::i18n::t;
 use crate::ui::account::server::context_menu::ContextMenuItem;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
@@ -146,9 +147,9 @@ fn render_composer_button(
     account_id: String,
     channel_id: String,
 ) -> Element {
-    // FTL resolution is the plugin's responsibility (see menu.rs). For now we
-    // show the key itself as tooltip so authors can verify it.
-    let title = button.label_key.clone();
+    // Plugin FTL bundles are merged into the host i18n store under the
+    // `plugin-<id>-*` namespace — resolve via `t()` with raw-key fallback.
+    let title = t(&button.label_key);
     let icon = button.icon.clone();
     let action_id = button.id.clone();
     let button_id_attr = format!("composer-button-{}", button.id);
@@ -264,7 +265,7 @@ fn render_message_action_item(
     }
 
     let danger = item.item_variant == MenuItemVariant::Destructive;
-    let label = item.label_key.clone();
+    let label = t(&item.label_key);
     let action_id = item.id.clone();
 
     let onclick = move |_evt: MouseEvent| {
