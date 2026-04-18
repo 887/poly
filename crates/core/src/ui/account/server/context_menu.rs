@@ -7,24 +7,26 @@
 //! in a server icon sets `app_state.write().context_menu = Some(...)`.
 //! A global click on the `MainLayout` root div clears it.
 //!
-//! ## Menu items
+//! ## Menu items (host-universal)
 //! - Mark as Read
-//! - Invite to Server
 //! - Unmute / Mute Server
 //! - Notification Settings → ServerSettings::Notifications
 //! - Hide Muted Channels (toggle)
 //! - Show All Channels (toggle)
-//! - Privacy Settings → ServerSettings::General (stub)
-//! - Edit Per-server Profile → ServerSettings::Profile
+//! - Add to Favorites / Remove from Favorites (inline confirm)
 //! - Leave Server → ServerSettings::General (inline confirm there)
 //! - Copy Server ID
+//!
+//! Backend-specific items (Invite, Privacy, Per-server Profile, …) are now
+//! declared by plugins via the `client-menus` WIT interface and rendered by
+//! [`crate::ui::client_ui::ClientMenu`].
 
 use super::super::super::routes::Route;
-use super::super::backend_server_context_menu_extras;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
+use crate::ui::client_ui::ClientMenu;
 use dioxus::prelude::*;
-use poly_client::BackendType;
+use poly_client::MenuTargetKind;
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Server right-click context menu.
@@ -106,18 +108,6 @@ pub fn ServerContextMenu() -> Element {
                     let mut close = close;
                     move |_| {
                         // TODO(phase-3): mark all channels read via backend
-                        close();
-                    }
-                },
-            }
-
-            // Invite to Server
-            ContextMenuItem {
-                label: t("server-menu-invite"),
-                onclick: {
-                    let mut close = close;
-                    move |_| {
-                        // TODO(phase-3): generate invite URL
                         close();
                     }
                 },
@@ -211,56 +201,6 @@ pub fn ServerContextMenu() -> Element {
 
             div { class: "context-menu-separator" }
 
-            // Privacy Settings → server settings general (stub)
-            {
-                let sid = server_id.clone();
-                let aid = account_id.clone();
-                let iid = instance_id.clone();
-                let bslug = backend_slug.clone();
-                let mut close = close;
-                rsx! {
-                    ContextMenuItem {
-                        label: t("server-menu-privacy"),
-                        onclick: move |_| {
-                            close();
-                            navigator()
-                                .push(Route::ServerSettingsRoute {
-                                    backend: bslug.clone(),
-                                    instance_id: iid.clone(),
-                                    account_id: aid.clone(),
-                                    server_id: sid.clone(),
-                                });
-                        },
-                    }
-                }
-            }
-
-            // Edit Per-server Profile → server settings profile tab
-            {
-                let sid = server_id.clone();
-                let aid = account_id.clone();
-                let iid = instance_id.clone();
-                let bslug = backend_slug.clone();
-                let mut close = close;
-                rsx! {
-                    ContextMenuItem {
-                        label: t("server-menu-edit-profile"),
-                        onclick: move |_| {
-                            close();
-                            navigator()
-                                .push(Route::ServerSettingsRoute {
-                                    backend: bslug.clone(),
-                                    instance_id: iid.clone(),
-                                    account_id: aid.clone(),
-                                    server_id: sid.clone(),
-                                });
-                        },
-                    }
-                }
-            }
-
-            div { class: "context-menu-separator" }
-
             // Leave Server → server settings general tab (has inline confirm)
             {
                 let sid = server_id.clone();
@@ -304,15 +244,13 @@ pub fn ServerContextMenu() -> Element {
                 }
             }
 
-            // ── Backend-specific extras ───────────────────────────────
-            // Dispatches to per-backend context menu modules (demo/, stoat/,
-            // discord/, matrix/, teams/, poly_native/) based on BackendType.
-            // DECISION(D20): Per-backend UI dispatch by BackendType match.
-            {
-                let backend = Some(BackendType::from_slug(&backend_slug));
-                rsx! {
-                    {backend_server_context_menu_extras(backend, &server_id, &account_id)}
-                }
+            // Plugin-declared backend items (D10 — Invite, Privacy,
+            // Per-server Profile, …). Rendered by `ClientMenu` which fetches
+            // items from the backend's `client-menus` WIT interface.
+            ClientMenu {
+                target: MenuTargetKind::Server,
+                target_id: server_id.clone(),
+                account_id: account_id.clone(),
             }
         }
     }
@@ -323,7 +261,7 @@ pub fn ServerContextMenu() -> Element {
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
-fn ContextMenuItem(
+pub(crate) fn ContextMenuItem(
     label: String,
     #[props(default = false)] danger: bool,
     #[props(default = false)] has_arrow: bool,

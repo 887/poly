@@ -112,90 +112,9 @@ pub use server::{ServerContextMenu, ServerSettingsPage};
 pub use settings::AccountSettingsPage;
 
 // ── Backend dispatch ─────────────────────────────────────────────────────────
-
-use dioxus::prelude::*;
-use poly_client::BackendType;
-
-/// Render backend-specific context menu extras for a server.
-///
-/// Called by `ServerContextMenu` to insert backend-specific items below
-/// the common menu items. Returns empty RSX for backends that haven't
-/// implemented custom items yet.
-///
-/// ## Dispatch
-/// Uses `BackendType` to select the correct per-backend module.
-/// Feature-gated backends return empty RSX when not compiled.
-// DECISION(D20): Per-backend UI dispatch by BackendType match.
-pub fn backend_server_context_menu_extras(
-    backend: Option<BackendType>,
-    server_id: &str,
-    account_id: &str,
-) -> Element {
-    let Some(bt) = backend else {
-        return rsx! {};
-    };
-    match bt.as_str() {
-        "demo" => {
-            #[cfg(feature = "demo")]
-            return rsx! {
-                demo::context_menu::ServerContextMenuExtras {
-                    server_id: server_id.to_string(),
-                    account_id: account_id.to_string(),
-                }
-            };
-            #[cfg(not(feature = "demo"))]
-            rsx! {}
-        }
-        "stoat" => {
-            #[cfg(feature = "stoat")]
-            return rsx! {
-                stoat::context_menu::ServerContextMenuExtras {
-                    server_id: server_id.to_string(),
-                    account_id: account_id.to_string(),
-                }
-            };
-            #[cfg(not(feature = "stoat"))]
-            rsx! {}
-        }
-        "discord" => {
-            #[cfg(feature = "discord")]
-            return rsx! {
-                discord::context_menu::ServerContextMenuExtras {
-                    server_id: server_id.to_string(),
-                    account_id: account_id.to_string(),
-                }
-            };
-            #[cfg(not(feature = "discord"))]
-            rsx! {}
-        }
-        "matrix" => {
-            #[cfg(feature = "matrix")]
-            return rsx! {
-                matrix::context_menu::ServerContextMenuExtras {
-                    server_id: server_id.to_string(),
-                    account_id: account_id.to_string(),
-                }
-            };
-            #[cfg(not(feature = "matrix"))]
-            rsx! {}
-        }
-        "teams" => {
-            #[cfg(feature = "teams")]
-            return rsx! {
-                teams::context_menu::ServerContextMenuExtras {
-                    server_id: server_id.to_string(),
-                    account_id: account_id.to_string(),
-                }
-            };
-            #[cfg(not(feature = "teams"))]
-            rsx! {}
-        }
-        // Poly native server — always compiled (our own protocol)
-        _ => rsx! {
-            poly_native::context_menu::ServerContextMenuExtras {
-                server_id: server_id.to_string(),
-                account_id: account_id.to_string(),
-            }
-        },
-    }
-}
+//
+// Backend-specific UI used to live in per-backend Rust modules
+// (`{demo,stoat,discord,matrix,teams,poly_native}::context_menu`). Those are
+// gone — backends now declare their own context-menu items via the
+// `client-menus` WIT interface and the host renders them uniformly through
+// [`crate::ui::client_ui::ClientMenu`].

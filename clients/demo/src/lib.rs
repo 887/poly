@@ -444,15 +444,30 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_context_menu_items(
-        &self, _target: MenuTargetKind, _target_id: &str,
+        &self, target: MenuTargetKind, _target_id: &str,
     ) -> Result<Vec<MenuItem>, ClientError> {
-        Ok(Vec::new())
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+        Ok(vec![MenuItem {
+            id: "regenerate-demo-data".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-demo-menu-regenerate-demo-data-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
     }
 
     async fn invoke_context_action(
         &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "regenerate-demo-data" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(
@@ -803,15 +818,30 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn get_context_menu_items(
-        &self, _target: MenuTargetKind, _target_id: &str,
+        &self, target: MenuTargetKind, _target_id: &str,
     ) -> Result<Vec<MenuItem>, ClientError> {
-        Ok(Vec::new())
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+        Ok(vec![MenuItem {
+            id: "regenerate-demo-data".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-demo-menu-regenerate-demo-data-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
     }
 
     async fn invoke_context_action(
         &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "regenerate-demo-data" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(
@@ -1124,15 +1154,30 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn get_context_menu_items(
-        &self, _target: MenuTargetKind, _target_id: &str,
+        &self, target: MenuTargetKind, _target_id: &str,
     ) -> Result<Vec<MenuItem>, ClientError> {
-        Ok(Vec::new())
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+        Ok(vec![MenuItem {
+            id: "regenerate-demo-data".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-demo-menu-regenerate-demo-data-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
     }
 
     async fn invoke_context_action(
         &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "regenerate-demo-data" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(

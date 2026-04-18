@@ -690,10 +690,54 @@ impl ClientBackend for PolyServerBackend {
 
     async fn get_context_menu_items(
         &self,
-        _target: MenuTargetKind,
+        target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+        Ok(vec![
+            MenuItem {
+                id: "invite-people".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-poly-menu-invite-people-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "privacy-settings".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-poly-menu-privacy-settings-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "edit-per-server-profile".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-poly-menu-edit-per-server-profile-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "federation-settings".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-poly-menu-federation-settings-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+        ])
     }
 
     async fn invoke_context_action(
@@ -702,7 +746,11 @@ impl ClientBackend for PolyServerBackend {
         _target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "invite-people" | "privacy-settings" | "edit-per-server-profile"
+            | "federation-settings" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {

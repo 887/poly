@@ -320,6 +320,8 @@ impl ClientBackend for HackerNewsClient {
         _target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
+        // HackerNews is a read-only feed — no server/channel/user/message
+        // concepts that support declarative menu items.
         Ok(Vec::new())
     }
 

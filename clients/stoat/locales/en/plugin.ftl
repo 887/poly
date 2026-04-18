@@ -18,3 +18,8 @@ plugin-stoat-signup-password-label = Password
 plugin-stoat-signup-password-placeholder = Enter your password
 plugin-stoat-signup-connect-btn = Sign In
 plugin-stoat-signup-connecting = Signing in…
+
+plugin-stoat-menu-invite-people-label = Invite People
+plugin-stoat-menu-privacy-settings-label = Privacy Settings
+plugin-stoat-menu-edit-per-server-profile-label = Edit Server Profile
+plugin-stoat-menu-manage-bots-label = Manage Bots

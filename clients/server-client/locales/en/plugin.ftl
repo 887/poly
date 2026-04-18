@@ -57,3 +57,9 @@ plugin-poly-profile-save = Save Profile
 plugin-poly-profile-saved = Profile saved!
 plugin-poly-profile-avatar-coming-soon = Avatar upload coming soon.
 plugin-poly-profile-banner-coming-soon = Banner upload coming soon.
+
+# --- Server context menu items ---
+plugin-poly-menu-invite-people-label = Invite People
+plugin-poly-menu-privacy-settings-label = Privacy Settings
+plugin-poly-menu-edit-per-server-profile-label = Edit Server Profile
+plugin-poly-menu-federation-settings-label = Federation Settings

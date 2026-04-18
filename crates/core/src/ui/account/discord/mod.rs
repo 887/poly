@@ -13,5 +13,8 @@
 //!
 //! ## Feature gate
 //! This module is only compiled when the `discord` feature is enabled.
-
-pub mod context_menu;
+//!
+//! ## Status
+//! Discord-specific menu items now ship via the `client-menus` WIT interface
+//! (see `docs/plans/plan-client-ui-surface.md`); the old Rust
+//! `context_menu` module was removed in WP 2.

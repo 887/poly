@@ -322,20 +322,63 @@ impl ClientBackend for DiscordClient {
     // ── WP 1 / plan-client-ui-surface stubs ─────────────────────────────────
 
     async fn get_context_menu_items(
-        &self,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        &self, target: MenuTargetKind, _target_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        match target {
+            MenuTargetKind::Server => Ok(vec![
+                MenuItem {
+                    id: "invite-people".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-discord-menu-invite-people-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "privacy-settings".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-discord-menu-privacy-settings-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "edit-per-server-profile".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-discord-menu-edit-per-server-profile-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "server-boost".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-discord-menu-server-boost-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+            ]),
+            _ => Ok(Vec::new()),
+        }
     }
 
     async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        match action_id {
+            "invite-people" | "privacy-settings" | "edit-per-server-profile"
+            | "server-boost" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown action: {other}"))),
+        }
     }
 
     async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {

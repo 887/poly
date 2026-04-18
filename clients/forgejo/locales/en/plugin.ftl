@@ -12,3 +12,7 @@ plugin-forgejo-signup-token-label = Personal Access Token
 plugin-forgejo-signup-token-placeholder = Paste your token here
 plugin-forgejo-signup-connect-btn = Connect
 plugin-forgejo-signup-connecting = Connecting…
+
+plugin-forgejo-menu-open-in-forgejo-label = Open in Forgejo
+plugin-forgejo-menu-star-repo-label = Star Repo
+plugin-forgejo-menu-watch-repo-label = Watch Repo

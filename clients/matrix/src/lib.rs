@@ -706,10 +706,54 @@ impl ClientBackend for MatrixClient {
 
     async fn get_context_menu_items(
         &self,
-        _target: MenuTargetKind,
+        target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        match target {
+            MenuTargetKind::Server => Ok(vec![
+                MenuItem {
+                    id: "space-settings".into(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-matrix-menu-space-settings-label".into(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "edit-per-space-profile".into(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-matrix-menu-edit-per-space-profile-label".into(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "e2ee-verification".into(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-matrix-menu-e2ee-verification-label".into(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "explore-rooms".into(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-matrix-menu-explore-rooms-label".into(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+            ]),
+            _ => Ok(Vec::new()),
+        }
     }
 
     async fn invoke_context_action(
@@ -718,7 +762,11 @@ impl ClientBackend for MatrixClient {
         _target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "space-settings" | "edit-per-space-profile" | "e2ee-verification"
+            | "explore-rooms" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {

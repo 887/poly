@@ -468,10 +468,54 @@ impl ClientBackend for LemmyClient {
 
     async fn get_context_menu_items(
         &self,
-        _target: MenuTargetKind,
+        target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        match target {
+            MenuTargetKind::Server => Ok(vec![
+                MenuItem {
+                    id: "view-community".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-lemmy-menu-view-community-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "subscribe-community".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-lemmy-menu-subscribe-community-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "view-modlog".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-lemmy-menu-view-modlog-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "block-community".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::BeforeLeave,
+                    label_key: "plugin-lemmy-menu-block-community-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Destructive,
+                    shortcut: None,
+                    block: None,
+                },
+            ]),
+            _ => Ok(Vec::new()),
+        }
     }
 
     async fn invoke_context_action(
@@ -480,7 +524,12 @@ impl ClientBackend for LemmyClient {
         _target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "view-community" | "subscribe-community" | "view-modlog" | "block-community" => {
+                Ok(ActionOutcome::Noop)
+            }
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {

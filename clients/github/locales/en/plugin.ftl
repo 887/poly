@@ -10,3 +10,6 @@ plugin-github-signup-hostname-label = GHE Hostname
 plugin-github-signup-hostname-placeholder = github.example.com
 plugin-github-signup-connect-btn = Connect via gh CLI
 plugin-github-signup-connecting = Checking gh auth…
+plugin-github-menu-open-in-github-label = Open in GitHub
+plugin-github-menu-star-repo-label = Star Repo
+plugin-github-menu-watch-repo-label = Watch Repo

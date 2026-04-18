@@ -346,10 +346,44 @@ impl ClientBackend for ForgejoClient {
 
     async fn get_context_menu_items(
         &self,
-        _target: MenuTargetKind,
+        target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+        Ok(vec![
+            MenuItem {
+                id: "open-in-forgejo".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-forgejo-menu-open-in-forgejo-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "star-repo".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-forgejo-menu-star-repo-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "watch-repo".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-forgejo-menu-watch-repo-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+        ])
     }
 
     async fn invoke_context_action(
@@ -358,7 +392,10 @@ impl ClientBackend for ForgejoClient {
         _target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "open-in-forgejo" | "star-repo" | "watch-repo" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {

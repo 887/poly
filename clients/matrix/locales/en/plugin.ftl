@@ -18,3 +18,8 @@ plugin-matrix-signup-password-label = Password
 plugin-matrix-signup-password-placeholder = Enter your password
 plugin-matrix-signup-connect-btn = Sign In
 plugin-matrix-signup-connecting = Signing in…
+
+plugin-matrix-menu-space-settings-label = Space Settings
+plugin-matrix-menu-edit-per-space-profile-label = Edit Space Profile
+plugin-matrix-menu-e2ee-verification-label = E2EE Verification
+plugin-matrix-menu-explore-rooms-label = Explore Rooms

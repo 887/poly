@@ -10,5 +10,8 @@
 //! ui/account/poly_native/  ← YOU ARE HERE — Poly native server overrides
 //! ui/account/common/       ← Shared UI components (used as fallback)
 //! ```
-
-pub mod context_menu;
+//!
+//! ## Status
+//! Poly-native menu items now ship via the `client-menus` WIT interface
+//! (see `docs/plans/plan-client-ui-surface.md`); the old Rust
+//! `context_menu` module was removed in WP 2.

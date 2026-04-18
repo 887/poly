@@ -12,3 +12,8 @@ plugin-lemmy-signup-password-label = Password
 plugin-lemmy-signup-password-placeholder = ••••••••
 plugin-lemmy-signup-connecting = Connecting…
 plugin-lemmy-signup-connect-btn = Connect
+
+plugin-lemmy-menu-view-community-label = View Community
+plugin-lemmy-menu-subscribe-community-label = Subscribe
+plugin-lemmy-menu-view-modlog-label = View Modlog
+plugin-lemmy-menu-block-community-label = Block Community

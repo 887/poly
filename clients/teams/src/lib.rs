@@ -493,10 +493,54 @@ impl ClientBackend for TeamsClient {
 
     async fn get_context_menu_items(
         &self,
-        _target: MenuTargetKind,
+        target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+        Ok(vec![
+            MenuItem {
+                id: "team-settings".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-teams-menu-team-settings-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "edit-per-team-profile".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-teams-menu-edit-per-team-profile-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "schedule-meeting".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-teams-menu-schedule-meeting-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "manage-files".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-teams-menu-manage-files-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+        ])
     }
 
     async fn invoke_context_action(
@@ -505,7 +549,12 @@ impl ClientBackend for TeamsClient {
         _target: MenuTargetKind,
         _target_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+        match action_id {
+            "team-settings" | "edit-per-team-profile" | "schedule-meeting" | "manage-files" => {
+                Ok(ActionOutcome::Noop)
+            }
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
     }
 
     async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
