@@ -51,17 +51,18 @@ fn user_color(account_id: &str) -> String {
     format!("hsl({hue}, 65%, 55%)")
 }
 
-/// Emoji icon for a backend type.
-fn backend_icon(bt: &BackendType) -> &'static str {
-    match bt.as_str() {
-        "demo" => "🧪",
-        "stoat" => "🦦",
-        "matrix" => "🟩",
-        "discord" => "🟣",
-        "teams" => "🟦",
-        "poly" => "🔷",
-        _ => "💬",
-    }
+/// Generic fallback icon for a backend in the search sidebar.
+///
+/// Pre-WP-7 this was a `match bt.as_str()` slug ladder. Per D27 (plan
+/// `plan-client-ui-surface.md`), backend icons are plugin-declared and
+/// rendered by the declarative UI surface. The global search UI does not
+/// yet consume the plugin's `icon` field; until that wiring lands, every
+/// account uses a single generic placeholder here.
+///
+/// DECISION(D27): do not re-introduce slug→emoji mapping in this file —
+/// it belongs in the plugin's declaration.
+fn backend_icon(_bt: &BackendType) -> &'static str {
+    "📡"
 }
 
 /// Build a compact attribution string for a node: "Cat · Demo".

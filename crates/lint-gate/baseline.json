@@ -1,34 +1,3 @@
 {
-  "violations": [
-    {
-      "rule": "ftl_label_key_coverage",
-      "path": "clients/client/src/types.rs",
-      "line": 659,
-      "detail": "FTL key 'cap-label-messaging' declared but missing from bundle; expected in clients/client/locales/en/*.ftl; file: clients/client/src/types.rs:659"
-    },
-    {
-      "rule": "ftl_label_key_coverage",
-      "path": "clients/client/src/types.rs",
-      "line": 667,
-      "detail": "FTL key 'cap-label-dms' declared but missing from bundle; expected in clients/client/locales/en/*.ftl; file: clients/client/src/types.rs:667"
-    },
-    {
-      "rule": "ftl_label_key_coverage",
-      "path": "clients/client/src/types.rs",
-      "line": 674,
-      "detail": "FTL key 'cap-label-friends' declared but missing from bundle; expected in clients/client/locales/en/*.ftl; file: clients/client/src/types.rs:674"
-    },
-    {
-      "rule": "ftl_label_key_coverage",
-      "path": "clients/client/src/types.rs",
-      "line": 681,
-      "detail": "FTL key 'cap-label-notifications' declared but missing from bundle; expected in clients/client/locales/en/*.ftl; file: clients/client/src/types.rs:681"
-    },
-    {
-      "rule": "ftl_label_key_coverage",
-      "path": "clients/client/src/types.rs",
-      "line": 689,
-      "detail": "FTL key 'cap-label-voice' declared but missing from bundle; expected in clients/client/locales/en/*.ftl; file: clients/client/src/types.rs:689"
-    }
-  ]
+  "violations": []
 }

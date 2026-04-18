@@ -27,20 +27,20 @@ impl BackendId {
         &self.0
     }
 
-    /// Human-readable display name for known slugs; falls back to the slug
-    /// itself for unknown backends.
+    /// Human-readable display name for the backend.
+    ///
+    /// # Deprecation
+    ///
+    /// Per D12 of `docs/plans/plan-client-ui-surface.md`, the authoritative
+    /// human-readable backend name is the plugin's own `backend-name` WIT
+    /// export (`ClientBackend::backend_name()` on the trait). UI callers
+    /// should prefer the plugin-provided string. This method stays as a
+    /// fallback for call sites that only have a `BackendType` (slug) in
+    /// hand, and simply returns the slug itself — never a hardcoded brand
+    /// name. TODO(D12): migrate remaining callers to the plugin-provided
+    /// `backend_name()` and delete this method.
     pub fn display_name(&self) -> &str {
-        match self.0.as_str() {
-            "stoat" => "Stoat",
-            "matrix" => "Matrix",
-            "discord" => "Discord",
-            "teams" => "Teams",
-            "demo" => "Demo",
-            "demo_forum" => "Demo Forum",
-            "poly" => "Poly Server",
-            "hackernews" => "Hacker News",
-            other => other,
-        }
+        self.0.as_str()
     }
 
     /// URL path segment used to identify this backend in routes.
@@ -554,6 +554,21 @@ pub enum VoiceSupport {
 /// and which MCP tools are honest to advertise.
 ///
 /// See `docs/plans/phase-2.20-plugin-capabilities-plan.md` for rationale.
+///
+/// # WP 7 inventory — D12 minimal flag set
+///
+/// Per D12 of `docs/plans/plan-client-ui-surface.md`, the source of truth
+/// for "does this backend expose X?" is now the plugin's declared items
+/// (menus/settings/sidebar/composer). `BackendCapabilities` is kept as a
+/// *minimal* shape summary — messaging model, DMs, friends, notifications,
+/// voice, landing page — plus a few feature flags used by host-owned
+/// affordances that have not yet been moved behind a plugin declaration.
+///
+/// The fields below are candidates for deletion once their call sites
+/// migrate to reading plugin-declared items directly. Each TODO(D12) tag
+/// marks a field that is *potentially* deletable but still has live
+/// readers elsewhere in the workspace — do not remove without following
+/// the reader graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackendCapabilities {
     pub messaging: MessagingModel,
@@ -562,11 +577,24 @@ pub struct BackendCapabilities {
     pub notifications: NotificationSupport,
     pub voice: VoiceSupport,
     pub landing: LandingPage,
+    // TODO(D12): presence — gate behind plugin-declared sidebar/account-bar
+    // items; delete once no host code reads this flag directly.
     pub presence: bool,
+    // TODO(D12): typing_indicators — gate behind plugin-declared composer
+    // hooks (WP 6); delete once no host composer reads this flag directly.
     pub typing_indicators: bool,
+    // TODO(D12): reactions — move to plugin-declared per-message action
+    // items (WP 6 extension); delete once migration completes.
     pub reactions: bool,
+    // TODO(D12): search_messages — move to plugin-declared search surface;
+    // delete once search UI stops reading this flag.
     pub search_messages: bool,
+    // TODO(D12): attachments — move to plugin-declared composer hooks
+    // (WP 6); delete once composer stops reading this flag directly.
     pub attachments: bool,
+    // TODO(D12): create_server / create_channel — replaced by plugin-
+    // declared sidebar action items (WP 4). Delete once sidebar code
+    // no longer checks these flags.
     pub create_server: bool,
     pub create_channel: bool,
 }

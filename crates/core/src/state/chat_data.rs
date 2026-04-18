@@ -180,20 +180,18 @@ pub fn format_file_size(bytes: u64) -> String {
     format!("{gb:.2} GB")
 }
 
-/// Get an emoji badge for a backend type (used as source indicator).
-pub fn backend_badge(backend: &BackendType) -> &'static str {
-    match backend.as_str() {
-        "stoat" => "🟣",
-        "matrix" => "🔵",
-        "discord" => "🟢",
-        "teams" => "🟡",
-        "demo" => "🧪",
-        "demo_forum" => "📋",
-        "poly" => "🔶",
-        "hackernews" => "🟠",
-        "github" => "🐙",
-        _ => "⬜",
-    }
+/// Generic fallback badge shown as a backend source indicator.
+///
+/// Pre-WP-7 this function was a `match backend.as_str()` slug ladder. Per
+/// D27 (plan `plan-client-ui-surface.md`), backend icons are plugin-declared
+/// — the host no longer hard-codes them. Until every caller migrates to the
+/// plugin's declared icon field, this returns a single generic placeholder
+/// for all backends.
+///
+/// DECISION(D27): do not re-introduce slug→emoji mapping in this file —
+/// it belongs in the plugin's declaration.
+pub fn backend_badge(_backend: &BackendType) -> &'static str {
+    "⬜"
 }
 
 /// Get a deterministic color for a user ID (for avatar and username coloring).

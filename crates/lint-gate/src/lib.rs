@@ -833,6 +833,197 @@ mod ui_action_tests {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// forbid_backend_slug_match — per-file scan logic mirrored from
+// build/forbid_backend_slug_match.rs so that `cargo test -p poly-lint-gate`
+// can exercise the scanner without depending on the build-script module path.
+// Keep in sync with the build/ copy.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+#[allow(dead_code)]
+pub mod forbid_backend_slug_match {
+    pub struct Violation {
+        pub rule: String,
+        pub path: String,
+        pub line: u32,
+        pub detail: String,
+    }
+
+    const BACKEND_SLUG_LITERALS: &[&str] = &[
+        "\"discord\"",
+        "\"stoat\"",
+        "\"matrix\"",
+        "\"teams\"",
+        "\"demo\"",
+        "\"poly\"",
+        "\"lemmy\"",
+        "\"hackernews\"",
+        "\"github\"",
+        "\"forgejo\"",
+    ];
+
+    const LOOKAHEAD_LINES: usize = 30;
+
+    pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
+        let mut out = Vec::new();
+        if !path.contains("crates/core/src/ui/") {
+            return out;
+        }
+        let lines: Vec<&str> = src.lines().collect();
+        for (idx, raw) in lines.iter().enumerate() {
+            if !is_match_as_str_line(raw) {
+                continue;
+            }
+            let start = idx + 1;
+            let end = (start + LOOKAHEAD_LINES).min(lines.len());
+            let follows_slug = lines
+                .get(start..end)
+                .unwrap_or(&[])
+                .iter()
+                .any(|l| {
+                    BACKEND_SLUG_LITERALS.iter().any(|slug| l.contains(slug))
+                });
+            if !follows_slug {
+                continue;
+            }
+            out.push(Violation {
+                rule: "forbid_backend_slug_match_in_ui".to_string(),
+                path: path.to_string(),
+                line: (idx as u32) + 1,
+                detail:
+                    "slug-match found in UI — use plugin-declared items \
+                     (see plan-client-ui-surface.md §4)"
+                        .to_string(),
+            });
+        }
+        out
+    }
+
+    pub fn is_match_as_str_line(line: &str) -> bool {
+        let t = line.trim_start();
+        if t.starts_with("//") {
+            return false;
+        }
+        if !t.contains("match ") {
+            return false;
+        }
+        if !t.contains(".as_str()") {
+            return false;
+        }
+        let Some((_, after)) = t.split_once("match ") else {
+            return false;
+        };
+        let Some(as_str_pos) = after.find(".as_str()") else {
+            return false;
+        };
+        let expr = &after[..as_str_pos];
+        if expr.contains('{') || expr.contains(';') {
+            return false;
+        }
+        true
+    }
+}
+
+#[cfg(test)]
+mod forbid_backend_slug_match_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    const UI_PATH: &str = "crates/core/src/ui/fixture.rs";
+
+    #[test]
+    fn forbid_slug_match_detects_discord_arm() {
+        let src = r#"
+            fn icon(bt: &BackendType) -> &'static str {
+                match bt.as_str() {
+                    "discord" => "🟣",
+                    "matrix" => "🔵",
+                    _ => "⬜",
+                }
+            }
+        "#;
+        let violations = super::forbid_backend_slug_match::scan_src(src, UI_PATH);
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.rule == "forbid_backend_slug_match_in_ui"),
+            "`match bt.as_str()` with slug arms in UI must be flagged"
+        );
+    }
+
+    #[test]
+    fn forbid_slug_match_allows_channel_type_match() {
+        let src = r#"
+            fn icon(ch: &Channel) -> &'static str {
+                match ch.channel_type {
+                    ChannelType::Forum => "📋",
+                    ChannelType::Text => "💬",
+                    _ => "❓",
+                }
+            }
+        "#;
+        let violations = super::forbid_backend_slug_match::scan_src(src, UI_PATH);
+        assert!(
+            violations.is_empty(),
+            "typed enum match (ChannelType::…) must not be flagged; got {} violations",
+            violations.len()
+        );
+    }
+
+    #[test]
+    fn forbid_slug_match_allows_out_of_ui_dir() {
+        // Same offending source, but the path is outside `crates/core/src/ui/`.
+        // State/plugin/bridge layers legitimately map slugs — they are out of
+        // scope for this scanner.
+        let src = r#"
+            match slug.as_str() {
+                "discord" => "Discord",
+                "matrix" => "Matrix",
+                _ => slug,
+            }
+        "#;
+        let non_ui_path = "clients/client/src/types.rs";
+        let violations = super::forbid_backend_slug_match::scan_src(src, non_ui_path);
+        assert!(
+            violations.is_empty(),
+            "files outside crates/core/src/ui/ must not be flagged"
+        );
+    }
+
+    #[test]
+    fn forbid_slug_match_ignores_unrelated_as_str_match() {
+        // `match X.as_str()` with no backend-slug literals in the next 30
+        // lines must not fire — the scan is slug-specific, not a blanket
+        // ban on string matching.
+        let src = r#"
+            fn level(v: &str) -> u8 {
+                match v.as_str() {
+                    "low" => 0,
+                    "high" => 2,
+                    _ => 1,
+                }
+            }
+        "#;
+        let violations = super::forbid_backend_slug_match::scan_src(src, UI_PATH);
+        assert!(
+            violations.is_empty(),
+            "non-slug match on .as_str() must not be flagged"
+        );
+    }
+
+    #[test]
+    fn is_match_as_str_line_guards_against_false_positives() {
+        assert!(super::forbid_backend_slug_match::is_match_as_str_line(
+            "            match bt.as_str() {"
+        ));
+        assert!(!super::forbid_backend_slug_match::is_match_as_str_line(
+            "// match bt.as_str() — description only"
+        ));
+        assert!(!super::forbid_backend_slug_match::is_match_as_str_line(
+            "let hits: Vec<_> = text.match_indices(\"foo\").collect();"
+        ));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ftl_label_key_coverage — per-file scan logic mirrored from
 // build/ftl_label_key_coverage.rs so that `cargo test -p poly-lint-gate` can
 // exercise the scanner without depending on the build-script module path.
