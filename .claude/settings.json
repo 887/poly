@@ -22,5 +22,28 @@
       "mcp__chrome-devtools",
       "mcp__chrome-devtools-headless"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for d in .claude/worktrees/agent-*/; do [ -d \"$d\" ] && [ ! -e \"${d}target\" ] && id=$(basename \"$d\") && mkdir -p /media/games/workspacemsg-worktree-targets/\"$id\" && ln -s /media/games/workspacemsg-worktree-targets/\"$id\" \"${d}target\"; done 2>/dev/null; exit 0"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "find .claude/worktrees -maxdepth 1 -name 'agent-*' -mtime +1 2>/dev/null | while read wt; do id=$(basename \"$wt\"); rm -rf \"$wt\" \"/media/games/workspacemsg-worktree-targets/$id\"; done; git worktree prune 2>/dev/null; exit 0"
+          }
+        ]
+      }
+    ]
   }
 }
