@@ -8,6 +8,132 @@
 pub const VERSION: &str = "1";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// action_id_naming — D25 kebab-case validator + per-file scanner mirrored from
+// build/action_id_naming.rs so that `cargo test -p poly-lint-gate` can
+// exercise the logic without depending on the build-script module path.
+// Keep in sync with the build/ copy.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+#[allow(dead_code)]
+pub mod action_id_naming {
+    pub struct Violation {
+        pub rule: String,
+        pub path: String,
+        pub line: u32,
+        pub detail: String,
+    }
+
+    const DECL_KEYWORDS: &[&str] = &["MenuItem", "ComposerButton", "SidebarItem"];
+
+    /// Per-file scan — returns violations for `src` at `path`.
+    pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
+        let mut out = Vec::new();
+        let lines: Vec<&str> = src.lines().collect();
+        let mut in_decl_depth: Option<i32> = None;
+        let mut brace_depth: i32 = 0;
+
+        for (line_idx, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+
+            let line_delta: i32 = line
+                .chars()
+                .map(|c| match c {
+                    '{' => 1,
+                    '}' => -1,
+                    _ => 0,
+                })
+                .sum();
+
+            let opens_decl = DECL_KEYWORDS
+                .iter()
+                .any(|kw| trimmed.contains(kw) && trimmed.contains('{'));
+
+            let was_in_decl = in_decl_depth.is_some();
+
+            if opens_decl && in_decl_depth.is_none() {
+                in_decl_depth = Some(brace_depth + 1);
+            }
+
+            let currently_in_decl = in_decl_depth.is_some() || was_in_decl;
+
+            if currently_in_decl {
+                if let Some(id) = extract_id_field(trimmed) {
+                    if !id.is_empty() && !is_kebab_case(&id) {
+                        out.push(Violation {
+                            rule: "action_id_naming".into(),
+                            path: path.to_string(),
+                            line: (line_idx as u32) + 1,
+                            detail: format!(
+                                "action ID '{id}' is not kebab-case — use lowercase letters, \
+                                 digits, and hyphens only, starting with a letter \
+                                 (e.g. 'invite-user'); file: {path}:{}",
+                                line_idx + 1
+                            ),
+                        });
+                    }
+                }
+            }
+
+            brace_depth += line_delta;
+
+            if let Some(entry_depth) = in_decl_depth {
+                if brace_depth < entry_depth {
+                    in_decl_depth = None;
+                }
+            }
+        }
+
+        out
+    }
+
+    /// Extract the string literal value after `id:` on a line.
+    pub fn extract_id_field(line: &str) -> Option<String> {
+        let pos = line.find("id:")?;
+        let after = &line[pos + 3..];
+        let after = after.trim_start();
+        let after = after.strip_prefix('"')?;
+        let end = after.find('"')?;
+        Some(after[..end].to_string())
+    }
+
+    /// Returns `true` iff `s` matches `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`.
+    ///
+    /// This is the D25 kebab-case convention: starts with lowercase letter,
+    /// segments separated by single hyphens, no trailing hyphen, no digits
+    /// as the first character, no underscores, no uppercase.
+    pub fn is_kebab_case(s: &str) -> bool {
+        if s.is_empty() {
+            return false;
+        }
+        let mut chars = s.chars().peekable();
+
+        // First character must be a lowercase ASCII letter.
+        match chars.next() {
+            Some(c) if c.is_ascii_lowercase() => {}
+            _ => return false,
+        }
+
+        // Remaining characters: lowercase letters, digits, or hyphens.
+        // A hyphen must not be followed by another hyphen (no trailing hyphen).
+        let mut prev_was_hyphen = false;
+        for c in chars {
+            if c == '-' {
+                if prev_was_hyphen {
+                    return false;
+                }
+                prev_was_hyphen = true;
+            } else if c.is_ascii_lowercase() || c.is_ascii_digit() {
+                prev_was_hyphen = false;
+            } else {
+                return false;
+            }
+        }
+
+        !prev_was_hyphen
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ui_action_coverage — per-file scan logic mirrored from
 // build/ui_action_coverage.rs so that `cargo test -p poly-lint-gate` can
 // exercise the scanner without depending on the build-script module path.
@@ -703,5 +829,280 @@ mod ui_action_tests {
         "#;
         let violations = super::ui_action_coverage::scan(src, "test.rs");
         assert!(violations.is_empty(), "rsx with content should not be flagged");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ftl_label_key_coverage — per-file scan logic mirrored from
+// build/ftl_label_key_coverage.rs so that `cargo test -p poly-lint-gate` can
+// exercise the scanner without depending on the build-script module path.
+// Keep in sync with the build/ copy.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+#[allow(dead_code)]
+pub mod ftl_label_key_coverage {
+    use std::collections::HashSet;
+
+    pub struct Violation {
+        pub rule: String,
+        pub path: String,
+        pub line: u32,
+        pub detail: String,
+    }
+
+    /// Per-file scan. `ftl_keys`: message IDs from the plugin's English bundle.
+    pub fn scan_src(
+        src: &str,
+        path: &str,
+        ftl_keys: &HashSet<String>,
+        plugin_name: &str,
+    ) -> Vec<Violation> {
+        let mut out = Vec::new();
+        for (line_idx, line) in src.lines().enumerate() {
+            let trimmed = line.trim();
+            if !trimmed.contains("label_key") && !trimmed.contains("label-key") {
+                continue;
+            }
+            if let Some(key) = extract_label_key(trimmed) {
+                if key.is_empty() {
+                    continue;
+                }
+                if !ftl_keys.contains(&key) {
+                    let ftl_hint = format!("clients/{plugin_name}/locales/en/*.ftl");
+                    out.push(Violation {
+                        rule: "ftl_label_key_coverage".into(),
+                        path: path.to_string(),
+                        line: (line_idx as u32) + 1,
+                        detail: format!(
+                            "FTL key '{key}' declared but missing from bundle; \
+                             expected in {ftl_hint}; file: {path}:{}",
+                            line_idx + 1
+                        ),
+                    });
+                }
+            }
+        }
+        out
+    }
+
+    /// Extract the string literal value after `label_key:` or `label-key:`.
+    pub fn extract_label_key(line: &str) -> Option<String> {
+        for prefix in &["label_key", "label-key"] {
+            let Some(pos) = line.find(prefix) else { continue };
+            let after = &line[pos + prefix.len()..];
+            let after = after.trim_start();
+            let after = after.strip_prefix(':')?.trim_start();
+            let after = after.strip_prefix('"')?;
+            let end = after.find('"')?;
+            return Some(after[..end].to_string());
+        }
+        None
+    }
+
+    /// Parse FTL message identifiers from raw FTL source text.
+    pub fn parse_ftl_keys(ftl_source: &str) -> HashSet<String> {
+        let mut keys = HashSet::new();
+        for line in ftl_source.lines() {
+            let first = line.chars().next().unwrap_or(' ');
+            if !first.is_ascii_alphanumeric() {
+                continue;
+            }
+            if let Some(eq_pos) = line.find(" =") {
+                let id = &line[..eq_pos];
+                if id
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                {
+                    keys.insert(id.to_string());
+                }
+            }
+        }
+        keys
+    }
+}
+
+#[cfg(test)]
+mod ftl_label_key_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    fn make_ftl_keys(keys: &[&str]) -> std::collections::HashSet<String> {
+        keys.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn ftl_label_key_missing_is_violation() {
+        let src = r#"
+            MenuItem {
+                label_key: "bogus-key",
+                id: "invite-user",
+            }
+        "#;
+        let ftl_keys = make_ftl_keys(&["other-key"]);
+        let violations =
+            super::ftl_label_key_coverage::scan_src(src, "test.rs", &ftl_keys, "demo");
+        assert!(
+            violations.iter().any(|v| v.rule == "ftl_label_key_coverage"),
+            "missing FTL key should be a violation"
+        );
+        let v = violations
+            .iter()
+            .find(|v| v.rule == "ftl_label_key_coverage")
+            .unwrap();
+        assert!(v.detail.contains("bogus-key"), "violation detail should name the missing key");
+    }
+
+    #[test]
+    fn ftl_label_key_present_is_ok() {
+        let src = r#"
+            MenuItem {
+                label_key: "invite-user-label",
+                id: "invite-user",
+            }
+        "#;
+        let ftl_keys = make_ftl_keys(&["invite-user-label", "other-key"]);
+        let violations =
+            super::ftl_label_key_coverage::scan_src(src, "test.rs", &ftl_keys, "demo");
+        assert!(
+            violations.iter().all(|v| v.rule != "ftl_label_key_coverage"),
+            "present FTL key should not be a violation"
+        );
+    }
+
+    #[test]
+    fn parse_ftl_keys_extracts_message_ids() {
+        let ftl = "invite-user = Invite User\nmute-server = Mute\n# comment\n.attr = nope\n";
+        let keys = super::ftl_label_key_coverage::parse_ftl_keys(ftl);
+        assert!(keys.contains("invite-user"));
+        assert!(keys.contains("mute-server"));
+        assert!(!keys.contains(".attr"));
+    }
+}
+
+#[cfg(test)]
+mod action_id_naming_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    #[test]
+    fn action_id_kebab_case_is_ok() {
+        let src = r#"
+            MenuItem {
+                id: "invite-user",
+                label_key: "invite-user-label",
+            }
+        "#;
+        let violations = super::action_id_naming::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().all(|v| v.rule != "action_id_naming"),
+            "kebab-case 'invite-user' should not be a violation"
+        );
+    }
+
+    #[test]
+    fn action_id_snake_case_is_violation() {
+        let src = r#"
+            MenuItem {
+                id: "invite_user",
+            }
+        "#;
+        let violations = super::action_id_naming::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().any(|v| v.rule == "action_id_naming"),
+            "snake_case 'invite_user' should be a violation"
+        );
+        let v = violations
+            .iter()
+            .find(|v| v.rule == "action_id_naming")
+            .unwrap();
+        assert!(v.detail.contains("invite_user"));
+    }
+
+    #[test]
+    fn action_id_camel_case_is_violation() {
+        let src = r#"
+            SidebarItem {
+                id: "inviteUser",
+            }
+        "#;
+        let violations = super::action_id_naming::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().any(|v| v.rule == "action_id_naming"),
+            "camelCase 'inviteUser' should be a violation"
+        );
+    }
+
+    #[test]
+    fn action_id_with_leading_digit_is_violation() {
+        let src = r#"
+            ComposerButton {
+                id: "2fa-setup",
+            }
+        "#;
+        let violations = super::action_id_naming::scan_src(src, "test.rs");
+        assert!(
+            violations.iter().any(|v| v.rule == "action_id_naming"),
+            "'2fa-setup' starts with digit — should be a violation"
+        );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WP 1 — D25 kebab-case validator tests (plan §7 item 3)
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod kebab_case_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::action_id_naming::is_kebab_case;
+
+    #[test]
+    fn invite_user_is_ok() {
+        assert!(is_kebab_case("invite-user"), "'invite-user' must be valid kebab-case");
+    }
+
+    #[test]
+    fn invite_underscore_user_is_fail() {
+        assert!(!is_kebab_case("invite_user"), "'invite_user' must fail (underscore)");
+    }
+
+    #[test]
+    fn invite_camel_user_is_fail() {
+        assert!(!is_kebab_case("inviteUser"), "'inviteUser' must fail (camelCase)");
+    }
+
+    #[test]
+    fn digit_start_is_fail() {
+        assert!(!is_kebab_case("2fa-setup"), "'2fa-setup' must fail (starts with digit)");
+    }
+
+    #[test]
+    fn empty_string_is_fail() {
+        assert!(!is_kebab_case(""), "empty string must fail");
+    }
+
+    // Additional edge-case coverage.
+
+    #[test]
+    fn single_word_lowercase_is_ok() {
+        assert!(is_kebab_case("mute"), "'mute' must be valid kebab-case");
+    }
+
+    #[test]
+    fn trailing_hyphen_is_fail() {
+        assert!(!is_kebab_case("mute-"), "trailing hyphen must fail");
+    }
+
+    #[test]
+    fn double_hyphen_is_fail() {
+        assert!(!is_kebab_case("mute--server"), "double hyphen must fail");
+    }
+
+    #[test]
+    fn uppercase_letter_is_fail() {
+        assert!(!is_kebab_case("Mute-server"), "uppercase first letter must fail");
+    }
+
+    #[test]
+    fn digits_in_segment_are_ok() {
+        assert!(is_kebab_case("enable-2fa"), "'enable-2fa' must be valid kebab-case");
     }
 }

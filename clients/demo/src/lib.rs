@@ -442,6 +442,95 @@ impl ClientBackend for DemoClient {
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities::FULL_SOCIAL_CHAT
     }
+
+    async fn get_context_menu_items(
+        &self, _target: MenuTargetKind, _target_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_context_action(
+        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+    }
+
+    async fn poll_action(
+        &self, _handle: PendingHandle,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound("no pending actions".into()))
+    }
+
+    async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn get_setting_value(
+        &self, _scope: SettingsScope, _scope_id: &str, key: &str,
+    ) -> Result<String, ClientError> {
+        Err(ClientError::NotFound(format!("setting: {key}")))
+    }
+
+    async fn set_setting_value(
+        &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
+    ) -> Result<(), ClientError> {
+        Err(ClientError::NotSupported("settings not yet implemented".into()))
+    }
+
+    async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(
+        &self, action_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
+        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    }
+
+    async fn get_view_rows(
+        &self, _channel_id: &str, _cursor: Option<Cursor>,
+        _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
+    ) -> Result<ViewRowsPage, ClientError> {
+        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+    }
+
+    async fn get_view_detail(
+        &self, _channel_id: &str, _row_id: &str,
+    ) -> Result<ViewDetail, ClientError> {
+        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+    }
+
+    async fn get_composer_buttons(
+        &self, _channel_id: &str,
+    ) -> Result<Vec<ComposerButton>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn get_message_actions(
+        &self, _channel_id: &str, _message_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_composer_action(
+        &self, action_id: &str, _channel_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+    }
+
+    async fn invoke_message_action(
+        &self, action_id: &str, _channel_id: &str, _message_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+    }
 }
 
 /// Second demo messenger client — the "dog" account (demo2 / 🐶).
@@ -712,6 +801,95 @@ impl ClientBackend for DemoClient2 {
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities::FULL_SOCIAL_CHAT
     }
+
+    async fn get_context_menu_items(
+        &self, _target: MenuTargetKind, _target_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_context_action(
+        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+    }
+
+    async fn poll_action(
+        &self, _handle: PendingHandle,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound("no pending actions".into()))
+    }
+
+    async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn get_setting_value(
+        &self, _scope: SettingsScope, _scope_id: &str, key: &str,
+    ) -> Result<String, ClientError> {
+        Err(ClientError::NotFound(format!("setting: {key}")))
+    }
+
+    async fn set_setting_value(
+        &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
+    ) -> Result<(), ClientError> {
+        Err(ClientError::NotSupported("settings not yet implemented".into()))
+    }
+
+    async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(
+        &self, action_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
+        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    }
+
+    async fn get_view_rows(
+        &self, _channel_id: &str, _cursor: Option<Cursor>,
+        _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
+    ) -> Result<ViewRowsPage, ClientError> {
+        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+    }
+
+    async fn get_view_detail(
+        &self, _channel_id: &str, _row_id: &str,
+    ) -> Result<ViewDetail, ClientError> {
+        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+    }
+
+    async fn get_composer_buttons(
+        &self, _channel_id: &str,
+    ) -> Result<Vec<ComposerButton>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn get_message_actions(
+        &self, _channel_id: &str, _message_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_composer_action(
+        &self, action_id: &str, _channel_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+    }
+
+    async fn invoke_message_action(
+        &self, action_id: &str, _channel_id: &str, _message_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+    }
 }
 
 /// Third demo messenger client — the "lemming" account (demo_forum / 🐭).
@@ -943,5 +1121,94 @@ impl ClientBackend for DemoClient3 {
             landing: poly_client::LandingPage::FirstServer,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         }
+    }
+
+    async fn get_context_menu_items(
+        &self, _target: MenuTargetKind, _target_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_context_action(
+        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+    }
+
+    async fn poll_action(
+        &self, _handle: PendingHandle,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound("no pending actions".into()))
+    }
+
+    async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn get_setting_value(
+        &self, _scope: SettingsScope, _scope_id: &str, key: &str,
+    ) -> Result<String, ClientError> {
+        Err(ClientError::NotFound(format!("setting: {key}")))
+    }
+
+    async fn set_setting_value(
+        &self, _scope: SettingsScope, _scope_id: &str, _key: &str, _value: &str,
+    ) -> Result<(), ClientError> {
+        Err(ClientError::NotSupported("settings not yet implemented".into()))
+    }
+
+    async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(
+        &self, action_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
+        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    }
+
+    async fn get_view_rows(
+        &self, _channel_id: &str, _cursor: Option<Cursor>,
+        _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
+    ) -> Result<ViewRowsPage, ClientError> {
+        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+    }
+
+    async fn get_view_detail(
+        &self, _channel_id: &str, _row_id: &str,
+    ) -> Result<ViewDetail, ClientError> {
+        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+    }
+
+    async fn get_composer_buttons(
+        &self, _channel_id: &str,
+    ) -> Result<Vec<ComposerButton>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn get_message_actions(
+        &self, _channel_id: &str, _message_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_composer_action(
+        &self, action_id: &str, _channel_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+    }
+
+    async fn invoke_message_action(
+        &self, action_id: &str, _channel_id: &str, _message_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
 }

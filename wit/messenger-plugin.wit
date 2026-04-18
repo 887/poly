@@ -13,16 +13,6 @@ package poly:messenger@0.1.0;
 
 /// All types shared between host and guest.
 interface types {
-    /// Identifies which messenger backend a resource belongs to.
-    enum backend-type {
-        stoat,
-        matrix,
-        discord,
-        teams,
-        demo,
-        poly,
-    }
-
     /// Online presence status for a remote user.
     enum presence-status {
         online,
@@ -133,12 +123,15 @@ interface types {
     }
 
     /// A user on a messaging platform.
+    ///
+    /// D17 — `backend` is a plugin-provided slug string (formerly the
+    /// `backend-type` enum, now removed).
     record user {
         id: string,
         display-name: string,
         avatar-url: option<string>,
         presence: presence-status,
-        backend: backend-type,
+        backend: string,
     }
 
     /// A channel category / folder within a server.
@@ -149,13 +142,15 @@ interface types {
     }
 
     /// A server / community / workspace.
+    ///
+    /// D17 — `backend` is a plugin-provided slug string.
     record server {
         id: string,
         name: string,
         icon-url: option<string>,
         banner-url: option<string>,
         categories: list<category>,
-        backend: backend-type,
+        backend: string,
         unread-count: u32,
         /// Total @mention count across all channels (sum of channel mention-counts).
         /// Distinct from unread-count: only counts direct @mentions.
@@ -278,11 +273,13 @@ interface types {
     }
 
     /// An authenticated session with a backend.
+    ///
+    /// D17 — `backend` is a plugin-provided slug string.
     record session {
         id: string,
         user: user,
         token: string,
-        backend: backend-type,
+        backend: string,
         icon-emoji: option<string>,
         instance-id: string,
         backend-url: option<string>,
@@ -315,22 +312,26 @@ interface types {
     }
 
     /// A group chat (multi-user DM).
+    ///
+    /// D17 — `backend` is a plugin-provided slug string.
     record group {
         id: string,
         members: list<user>,
         name: option<string>,
         last-message: option<message>,
-        backend: backend-type,
+        backend: string,
         account-id: string,
     }
 
     /// A direct message channel.
+    ///
+    /// D17 — `backend` is a plugin-provided slug string.
     record dm-channel {
         id: string,
         user: user,
         last-message: option<message>,
         unread-count: u32,
-        backend: backend-type,
+        backend: string,
         account-id: string,
     }
 
@@ -359,10 +360,12 @@ interface types {
     }
 
     /// A notification from a backend.
+    ///
+    /// D17 — `backend` is a plugin-provided slug string.
     record notification {
         id: string,
         kind: notification-kind,
-        backend: backend-type,
+        backend: string,
         account-id: string,
         /// RFC3339 timestamp.
         timestamp: string,
@@ -381,12 +384,14 @@ interface types {
     }
 
     /// The local user's voice connection state.
+    ///
+    /// D17 — `backend` is a plugin-provided slug string.
     record voice-connection {
         channel-id: string,
         server-id: string,
         channel-name: string,
         server-name: string,
-        backend: backend-type,
+        backend: string,
         account-id: string,
         instance-id: string,
         is-muted: bool,
@@ -396,9 +401,11 @@ interface types {
     }
 
     /// Identifies a configured account.
+    ///
+    /// D17 — `backend` is a plugin-provided slug string.
     record account {
         id: string,
-        backend: backend-type,
+        backend: string,
         display-name: string,
         connected: bool,
     }
@@ -432,6 +439,9 @@ interface types {
     // ─── Event Types ───────────────────────────────────────────
 
     /// A real-time event from a messenger backend.
+    ///
+    /// D19 — `sidebar-invalidated` signals that a plugin's sidebar
+    /// declaration has changed; the host re-fetches the sidebar.
     variant client-event {
         message-received(message-received-event),
         message-edited(message-edited-event),
@@ -446,6 +456,9 @@ interface types {
         voice-user-joined(voice-channel-event),
         voice-user-left(voice-user-left-event),
         voice-state-updated(voice-channel-event),
+        /// D19 — plugin signals "re-fetch my sidebar declaration".
+        /// No payload: the host calls `client-sidebar.get-sidebar-declaration`.
+        sidebar-invalidated,
     }
 
     record message-received-event {
@@ -475,8 +488,9 @@ interface types {
         timestamp: string,
     }
 
+    /// D17 — `backend` is a plugin-provided slug string.
     record connection-state-changed-event {
-        backend: backend-type,
+        backend: string,
         connected: bool,
     }
 
@@ -581,6 +595,626 @@ interface host-api {
         program: string,
         args: list<string>,
     ) -> result<exec-output, string>;
+
+    /// D20 — the set of host-owned route kinds a plugin may target.
+    ///
+    /// Plugins never construct raw route strings. They call `build-route`
+    /// with one of these kinds plus the relevant params; the host returns
+    /// a validated route string which the plugin hands back via
+    /// `action-outcome::navigate`.
+    enum route-kind {
+        server-home,
+        channel,
+        dm,
+        friends,
+        notifications,
+        settings-account,
+        settings-server,
+        settings-channel,
+        voice,
+        search,
+        sidebar-item,
+    }
+
+    /// D20 — errors returned by `build-route` when the plugin supplies
+    /// an unknown kind or an invalid / missing parameter.
+    variant route-build-error {
+        unknown-kind,
+        missing-param(string),
+        invalid-param(string),
+    }
+
+    /// D20 — plugin builds route strings via the host. Never constructs raw.
+    ///
+    /// Params are a list of key/value tuples (kebab-case keys; URL-encoded
+    /// values). The host validates both the kind and the required params
+    /// for that kind, and returns a route string ready to pass to
+    /// `action-outcome::navigate`.
+    build-route: func(
+        kind: route-kind,
+        params: list<tuple<string, string>>,
+    ) -> result<string, route-build-error>;
+}
+
+// ─── Client UI Common Types ────────────────────────────────────────
+
+/// Shared types used across the client-UI surfaces (menus, settings,
+/// sidebar, views, composer). Factored out so each surface can `use`
+/// them without circular dependencies.
+interface client-ui-common {
+    /// D4 — sanitized HTML rendered in a shadow-root by the host.
+    /// Allowlist is documented in plan §4.6.
+    record custom-block {
+        sanitized-html: string,
+        stylesheet: option<string>,
+        max-height-px: option<u32>,
+    }
+
+    /// D27 — icon for menu items, sidebar items, settings sections,
+    /// composer buttons. Either an emoji string OR a sanitized SVG
+    /// path string (host strips scripts + event handlers).
+    variant icon-source {
+        emoji(string),
+        svg(string),
+    }
+
+    /// D23 — structured paged-data cursor.
+    record cursor {
+        kind: cursor-kind,
+        value: string,
+    }
+
+    /// D23 — cursor payload shape; covers offset-, timestamp-, id-,
+    /// and opaque-cursor paging models used across backends.
+    enum cursor-kind {
+        offset,
+        timestamp,
+        id,
+        opaque,
+    }
+}
+
+// ─── Client Menus ──────────────────────────────────────────────────
+
+/// D11 — plugin-declared context-menu items merged into host context menus.
+///
+/// Host calls `get-context-menu-items` every time the user opens a menu
+/// (D24 — no caching). Items carry opaque kebab-case action IDs (D14, D25)
+/// that the host dispatches back via `invoke-context-action`.
+interface client-menus {
+    use types.{client-error};
+    use client-ui-common.{custom-block, icon-source};
+
+    /// D6 — what the menu is attached to. Host passes this to
+    /// `get-context-menu-items` along with the target's id.
+    enum menu-target-kind {
+        category,
+        channel,
+        dm,
+        message,
+        server,
+        user,
+    }
+
+    /// D6 — named slots in host context menus. Plugin items declare
+    /// which slot they occupy; host inserts separators between occupied
+    /// slots.
+    enum menu-slot {
+        /// above host items
+        top,
+        /// after Favorites block, before middle separators
+        after-favorites,
+        /// above Leave/Remove
+        before-leave,
+        /// below host items
+        bottom,
+    }
+
+    /// Variant of a menu item — governs rendering + interaction.
+    enum menu-item-variant {
+        /// Standard clickable row.
+        normal,
+        /// Red / destructive styling (Leave, Block, Delete).
+        destructive,
+        /// Row is a submenu header; `submenu` field is populated.
+        submenu-header,
+        /// Non-clickable row that renders an optional `custom-block`.
+        info-block,
+    }
+
+    /// D6 / D14 / D25 / D27 / D28 — a single plugin-declared menu item.
+    ///
+    /// Submenus (D28 — unbounded depth): WIT forbids recursive records, so
+    /// menus are returned as a flat list with `parent-id` pointers. The host
+    /// reconstructs the tree by linking children (items whose `parent-id`
+    /// equals some parent's `id`) under their parents. Items with
+    /// `parent-id == none` are top-level. Cycle detection is the host's job;
+    /// items referencing an unknown `parent-id` are dropped with a warning.
+    record menu-item {
+        /// Opaque plugin action id (D14); kebab-case (D25). Unique within
+        /// a single `get-context-menu-items` response.
+        id: string,
+        /// D28 — `some(parent.id)` to place this item under a
+        /// submenu-header parent; `none` for top-level items.
+        parent-id: option<string>,
+        /// D6 — which host slot this item lives in (only meaningful for
+        /// top-level items — ignored when `parent-id` is set).
+        slot: menu-slot,
+        /// FTL key: `plugin-<id>-menu-<key>-label` (D21 lint-checked).
+        label-key: string,
+        /// D27 — emoji OR sanitized SVG.
+        icon: option<icon-source>,
+        /// Rendering style: normal | destructive | submenu-header | info-block.
+        item-variant: menu-item-variant,
+        shortcut: option<string>,
+        /// Only populated when `item-variant == info-block` (D4).
+        block: option<custom-block>,
+    }
+
+    /// D16 — toast tones for `action-outcome::toast`.
+    enum toast-tone {
+        info,
+        success,
+        warning,
+        error,
+    }
+
+    /// D16 — a toast emitted by an action. `label-key` is resolved via
+    /// the plugin's FTL bundle.
+    record toast-payload {
+        label-key: string,
+        tone: toast-tone,
+    }
+
+    /// D16 — jump target for `action-outcome::open-settings`. Scope is
+    /// one of the string forms of `client-settings.settings-scope`
+    /// (`"account-global"`, `"per-server"`, …).
+    record settings-anchor {
+        scope: string,
+        scope-id: string,
+        section-key: string,
+    }
+
+    /// D16 — reference to a plugin-declared modal (reserved for future use).
+    record modal-ref {
+        modal-id: string,
+        /// Opaque JSON blob passed back to the plugin on invocation.
+        context: string,
+    }
+
+    /// D16 — handle for a pending async action. Passed back to
+    /// `poll-action` by the host until the action resolves.
+    record pending-handle {
+        /// Plugin-opaque; the host returns it verbatim via `poll-action`.
+        action-ref: string,
+        /// FTL key for "Saving…" / "Uploading…".
+        progress-hint: option<string>,
+    }
+
+    /// D16 / D30 — outcome of an invoked plugin action.
+    variant action-outcome {
+        /// No UI change.
+        noop,
+        /// D16 — slow op; host polls via `poll-action`.
+        pending(pending-handle),
+        /// D16 — done, no UI change.
+        completed,
+        /// D30 — re-fetch just the target object.
+        refresh-target,
+        /// Host rebuilds the sidebar.
+        refresh-sidebar,
+        /// D20 — must be built via `host-api.build-route`.
+        navigate(string),
+        /// Show an FTL-keyed toast.
+        toast(toast-payload),
+        /// Jump into a settings-section.
+        open-settings(settings-anchor),
+        /// Open a plugin-declared modal.
+        open-modal(modal-ref),
+    }
+
+    /// D24 — host calls this every time the user opens a context menu.
+    /// Plugin returns ALL items for the target; host merges with its
+    /// universal items (Copy ID, Favorites, Leave, Mark Read — D10).
+    get-context-menu-items: func(
+        target: menu-target-kind,
+        target-id: string,
+    ) -> result<list<menu-item>, client-error>;
+
+    /// D14 / D22 — dispatch a plugin action. Unknown ids return
+    /// `client-error::not-found(action-id)`.
+    invoke-context-action: func(
+        action-id: string,
+        target: menu-target-kind,
+        target-id: string,
+    ) -> result<action-outcome, client-error>;
+
+    /// D16 — poll a pending async action for its final outcome.
+    poll-action: func(handle: pending-handle) -> result<action-outcome, client-error>;
+}
+
+// ─── Client Settings ───────────────────────────────────────────────
+
+/// D11 / D18 — plugin-declared settings sections (account-global,
+/// per-server, per-channel, per-user). Replaces the removed
+/// `plugin-metadata.get-settings-schema`. `setting-kind` and
+/// `setting-descriptor` live here (moved from `plugin-metadata`).
+interface client-settings {
+    use types.{client-error};
+    use client-ui-common.{custom-block};
+
+    /// D18 — the type of setting control to render.
+    enum setting-kind {
+        /// Boolean toggle / checkbox.
+        toggle,
+        /// Single-line text input.
+        text-input,
+        /// Dropdown with a fixed list of options.
+        select,
+        /// Numeric slider (min / max / step encoded in `extra`).
+        slider,
+        /// Read-only informational label row.
+        info-label,
+    }
+
+    /// D18 — one entry in a plugin's settings schema.
+    ///
+    /// `key` is the storage key AND the FTL key suffix for label/description.
+    /// FTL lookup: `plugin-<plugin-id>-setting-<key>-label`
+    ///             `plugin-<plugin-id>-setting-<key>-desc`   (optional)
+    /// Storage is owned by the plugin via `host-api.storage-*` (D15).
+    record setting-descriptor {
+        /// Unique key within this plugin (snake_case). Used as storage key.
+        key: string,
+        /// The kind of widget to render.
+        kind: setting-kind,
+        /// JSON-serialized default value (e.g. "true", "\"option-a\"", "42").
+        default-value: string,
+        /// For `select` kind: JSON array of option values. For `slider`:
+        /// JSON object `{"min":0,"max":100,"step":1}`. Empty otherwise.
+        extra: string,
+    }
+
+    /// D11 — where a settings section applies.
+    enum settings-scope {
+        /// The plugin's account-wide settings panel. Replaces the legacy
+        /// `get-settings-schema` surface (D18).
+        account-global,
+        per-server,
+        per-channel,
+        per-user,
+    }
+
+    /// D11 — one settings section; scope + section-key + fields.
+    record settings-section {
+        scope: settings-scope,
+        /// FTL key suffix + URL anchor.
+        section-key: string,
+        icon: option<string>,
+        fields: list<setting-descriptor>,
+        /// Optional informational panel (D4).
+        info-block: option<custom-block>,
+    }
+
+    /// Return every settings section this plugin contributes, across
+    /// every scope. Host filters by scope at render time. Return an
+    /// empty list if the plugin has no settings.
+    get-settings-sections: func() -> result<list<settings-section>, client-error>;
+
+    /// D15 — plugin owns storage via `host-api.storage-*`. This function
+    /// is the plugin's accessor; internally it reads from its own KV
+    /// namespace. Returns a JSON-encoded value.
+    get-setting-value: func(
+        scope: settings-scope,
+        /// server-id, channel-id, user-id, or "" for `account-global`.
+        scope-id: string,
+        key: string,
+    ) -> result<string, client-error>;
+
+    /// D15 — write a JSON-encoded value to the plugin's KV namespace.
+    set-setting-value: func(
+        scope: settings-scope,
+        scope-id: string,
+        key: string,
+        /// JSON-encoded value.
+        value: string,
+    ) -> result<_, client-error>;
+}
+
+// ─── Client Sidebar ────────────────────────────────────────────────
+
+/// D11 / D5 / D19 — plugin-declared sidebar layout. The host ships five
+/// stock layouts; plugins may also go fully custom with `sections`.
+/// Refresh is event-driven via `client-event::sidebar-invalidated` (D19).
+interface client-sidebar {
+    use types.{client-error};
+    use client-ui-common.{custom-block, icon-source};
+    use client-menus.{action-outcome};
+
+    /// D5 — stock layout kinds the host renders natively. `custom` asks
+    /// the host to render `sidebar-declaration.sections` verbatim.
+    enum sidebar-layout-kind {
+        /// Discord/Stoat/Teams/poly-native.
+        channel-list,
+        /// Matrix: spaces containing rooms.
+        spaces-rooms,
+        /// Lemmy/Reddit: subscribed communities.
+        communities,
+        /// HN/Mastodon: feed tabs (Top/New/Best/Ask/Show/Jobs).
+        feed,
+        /// GitHub/Forgejo: repo tree.
+        repo-tree,
+        /// Plugin supplies sections explicitly.
+        custom,
+    }
+
+    /// D5 — the shape a sidebar-item navigates to when clicked.
+    enum sidebar-route-kind {
+        /// Opens chat-view.
+        channel,
+        /// Opens `client-views` forum layout.
+        forum,
+        /// Opens `client-views` feed layout.
+        feed,
+        /// Opens code-browser.
+        code,
+        /// Opens issue-list view.
+        issue-tracker,
+        /// Invokes a plugin-declared modal.
+        modal,
+        /// Opens in system browser.
+        external,
+        /// Plugin returns a `client-views::view-descriptor` on click.
+        custom-view,
+    }
+
+    /// D5 — a single row in the sidebar.
+    ///
+    /// Nesting: WIT forbids recursive records, so sidebar items are
+    /// returned in a flat list per section with `parent-id` pointers.
+    /// The host reconstructs the tree (analogous to `menu-item`
+    /// submenu handling). Items with `parent-id == none` are section
+    /// roots; children reference a parent by id.
+    record sidebar-item {
+        id: string,
+        /// `some(parent.id)` to nest under another sidebar item; `none`
+        /// for section-root rows.
+        parent-id: option<string>,
+        label-key: string,
+        icon: option<icon-source>,
+        /// "new", "3", etc. Raw string; not an FTL key.
+        badge: option<string>,
+        route-kind: sidebar-route-kind,
+    }
+
+    /// D5 — a grouping of sidebar items (optionally with a header).
+    record sidebar-section {
+        /// FTL key; None for anonymous (header-less) group.
+        header-key: option<string>,
+        collapsible: bool,
+        default-collapsed: bool,
+        items: list<sidebar-item>,
+    }
+
+    /// D5 — top-level sidebar declaration returned by the plugin.
+    record sidebar-declaration {
+        layout: sidebar-layout-kind,
+        /// Populated when `layout == custom`.
+        sections: list<sidebar-section>,
+        /// Optional info panel at top (D4).
+        header-block: option<custom-block>,
+    }
+
+    /// D19 — return the current sidebar declaration. Host re-calls on
+    /// receipt of `client-event::sidebar-invalidated`.
+    get-sidebar-declaration: func() -> result<sidebar-declaration, client-error>;
+
+    /// D14 / D25 — dispatch a sidebar-item click (kebab-case `id`).
+    invoke-sidebar-action: func(
+        action-id: string,
+    ) -> result<action-outcome, client-error>;
+}
+
+// ─── Client Views ──────────────────────────────────────────────────
+
+/// D11 / D5 — plugin-declared non-chat views (forum, feed, issue tracker).
+/// The host ships a closed set of body engines (list / card-grid / tree /
+/// split); the plugin composes them via a `view-descriptor`.
+interface client-views {
+    use types.{client-error};
+    use client-ui-common.{custom-block, cursor};
+    use client-menus.{menu-item, menu-target-kind};
+
+    /// D5 — closed set of body engines the host can render.
+    enum view-kind {
+        /// Generic list (posts, issues, stories).
+        flat-list,
+        /// Post-card grid (Reddit, Mastodon).
+        card-grid,
+        /// Nested (Lemmy threaded).
+        tree,
+        /// Master-detail.
+        split,
+    }
+
+    /// D5 — a single selectable option in a toolbar (sort/filter/tab).
+    record toolbar-option {
+        id: string,
+        label-key: string,
+        icon: option<string>,
+        default-selected: bool,
+    }
+
+    /// D5 — view header: titles + optional info block.
+    record view-header {
+        title-key: option<string>,
+        subtitle-key: option<string>,
+        info-block: option<custom-block>,
+    }
+
+    /// D5 — view toolbar: sort / filter / tabs / action items.
+    record view-toolbar {
+        /// Hot / Top / New / Best / …
+        sort-options: list<toolbar-option>,
+        /// Week / Month / Year / All.
+        filter-options: list<toolbar-option>,
+        /// Issues / PRs / Discussions.
+        tabs: list<toolbar-option>,
+        /// Reuses `menu-item` from `client-menus`.
+        action-items: list<menu-item>,
+    }
+
+    /// D5 — bindings from feed-field names to row-template positions.
+    record row-template {
+        /// e.g. "title".
+        primary-field: string,
+        /// e.g. "url" / "author".
+        secondary-field: option<string>,
+        /// e.g. "score · comments · age".
+        meta-field: option<string>,
+        icon-field: option<string>,
+    }
+
+    /// D5 — list body: row template + page size.
+    record list-spec {
+        row-template: row-template,
+        page-size: u32,
+    }
+
+    /// D5 — card body (Reddit/Mastodon style).
+    record card-spec {
+        primary-field: string,
+    }
+
+    /// D5 — threaded tree body (Lemmy-style comments).
+    record tree-spec {
+        root-page-size: u32,
+        max-depth: u32,
+    }
+
+    /// D5 — split body: list on one side, detail on the other.
+    record split-spec {
+        list-side: list-spec,
+        detail-view-kind: view-kind,
+    }
+
+    /// D5 — which body engine to render.
+    variant view-body {
+        list-body(list-spec),
+        card-body(card-spec),
+        tree-body(tree-spec),
+        split-body(split-spec),
+    }
+
+    /// D5 — top-level descriptor for a non-chat view of a channel.
+    record view-descriptor {
+        kind: view-kind,
+        header: option<view-header>,
+        toolbar: option<view-toolbar>,
+        body: view-body,
+    }
+
+    /// D5 — one row in a paged view. `primary-text` etc. are raw content,
+    /// NOT FTL keys. `context-menu-target-kind` is what right-clicking
+    /// this row targets (so the host can call
+    /// `client-menus::get-context-menu-items`).
+    record view-row {
+        id: string,
+        primary-text: string,
+        secondary-text: option<string>,
+        meta-text: option<string>,
+        icon: option<string>,
+        badge: option<string>,
+        context-menu-target-kind: menu-target-kind,
+    }
+
+    /// D23 — one page of rows plus an optional next-cursor.
+    record view-rows-page {
+        rows: list<view-row>,
+        next-cursor: option<cursor>,
+    }
+
+    /// D5 — detail payload for `split` views.
+    record view-detail {
+        /// Plugin-authored content, sanitized by the host (D4).
+        body-block: custom-block,
+        /// Optional threaded comments section.
+        comments-section: option<tree-spec>,
+    }
+
+    /// D5 — fetch the channel's view descriptor.
+    get-channel-view: func(
+        channel-id: string,
+    ) -> result<view-descriptor, client-error>;
+
+    /// D23 — paged data feed. Host calls on scroll with the previous
+    /// page's `next-cursor` (or `None` for the first page).
+    get-view-rows: func(
+        channel-id: string,
+        cursor: option<cursor>,
+        sort-id: option<string>,
+        filter-id: option<string>,
+        tab-id: option<string>,
+    ) -> result<view-rows-page, client-error>;
+
+    /// D5 — detail fetch for split views.
+    get-view-detail: func(
+        channel-id: string,
+        row-id: string,
+    ) -> result<view-detail, client-error>;
+}
+
+// ─── Client Composer ───────────────────────────────────────────────
+
+/// D11 / D8 — plugin-contributed composer-toolbar buttons and
+/// per-message action items. Everything else in the chat view remains
+/// host-owned.
+interface client-composer {
+    use types.{client-error};
+    use client-menus.{menu-item, action-outcome};
+
+    /// D8 — where a composer button appears relative to the input.
+    enum composer-slot {
+        /// File upload / attach.
+        left-of-input,
+        /// Send / emoji / voice.
+        right-of-input,
+        /// Sticker drawer toggle.
+        above-input,
+    }
+
+    /// D8 — a single plugin-contributed composer button.
+    record composer-button {
+        id: string,
+        label-key: string,
+        icon: string,
+        position: composer-slot,
+    }
+
+    /// D8 — composer-toolbar buttons for the given channel.
+    get-composer-buttons: func(
+        channel-id: string,
+    ) -> result<list<composer-button>, client-error>;
+
+    /// D8 — per-message actions, merged into the message hover/overflow
+    /// menu. Reuses `menu-item` from `client-menus`.
+    get-message-actions: func(
+        channel-id: string,
+        message-id: string,
+    ) -> result<list<menu-item>, client-error>;
+
+    /// D14 / D25 — dispatch a composer button action.
+    invoke-composer-action: func(
+        action-id: string,
+        channel-id: string,
+    ) -> result<action-outcome, client-error>;
+
+    /// D14 / D25 — dispatch a per-message action.
+    invoke-message-action: func(
+        action-id: string,
+        channel-id: string,
+        message-id: string,
+    ) -> result<action-outcome, client-error>;
 }
 
 // ─── Messenger Client (exports — plugin provides to host) ──────────
@@ -609,7 +1243,6 @@ interface messenger-client {
         voice-participant,
         presence-status,
         client-event,
-        backend-type,
         backend-capabilities,
         file-entry,
         file-content,
@@ -711,8 +1344,10 @@ interface messenger-client {
     /// with zero polling overhead.
     handle-ws-data: func(handle: u64, data: list<u8>);
 
-    /// The type of backend this plugin connects to.
-    get-backend-type: func() -> backend-type;
+    /// D17 — the backend slug for this plugin (e.g. "discord", "matrix",
+    /// "lemmy"). Returned as a string because the legacy `backend-type`
+    /// enum has been removed.
+    get-backend-type: func() -> string;
 
     /// Human-readable name for this backend.
     get-backend-name: func() -> string;
@@ -731,15 +1366,16 @@ interface messenger-client {
 
 // ─── Plugin Metadata (optional exports — host uses if present) ─────
 
-/// Plugin metadata: localisation, settings schema, and display information.
+/// Plugin metadata: localisation and display information.
 ///
-/// This interface is OPTIONAL — plugins do not have to implement it.
+/// D18 — the legacy `get-settings-schema` and its companion
+/// `setting-kind` / `setting-descriptor` records have moved to the
+/// `client-settings` interface. This interface now only covers
+/// translations, display name, icon, and the informational manifest.
+///
 /// When present, the host uses it to:
 /// - Load the plugin's FTL translation strings into the global i18n system
 ///   under the `plugin.<id>.*` namespace prefix.
-/// - Build the structured settings UI from the schema returned by
-///   `get-settings-schema`, so the host renders the settings page from
-///   the plugin's own definition (no hard-coded host UI per backend).
 ///
 /// ## Translation key convention
 ///
@@ -748,58 +1384,14 @@ interface messenger-client {
 /// Example for the demo plugin:
 ///   `plugin-demo-title = Demo Settings`
 ///   `plugin-demo-toggle-label = Enable Demo Data`
-///
-/// ## Settings schema
-///
-/// The settings schema is a flat list of `setting-descriptor` records.
-/// The host renders each one using the appropriate control widget. The
-/// plugin's FTL keys supply all user-visible labels and descriptions.
 interface plugin-metadata {
     use types.{plugin-manifest};
-
-    /// The type of setting control to render.
-    enum setting-kind {
-        /// Boolean toggle / checkbox.
-        toggle,
-        /// Single-line text input.
-        text-input,
-        /// Dropdown with a fixed list of options.
-        select,
-        /// Numeric slider (min / max / step encoded in `extra`).
-        slider,
-        /// Read-only informational label row.
-        info-label,
-    }
-
-    /// One entry in a plugin's settings schema.
-    ///
-    /// `key` is the storage key AND the FTL key suffix for label/description.
-    /// FTL lookup: `plugin-<plugin-id>-setting-<key>-label`
-    ///             `plugin-<plugin-id>-setting-<key>-desc`   (optional)
-    /// Storage key in SurrealDB: `plugin/<plugin-id>/<key>`
-    record setting-descriptor {
-        /// Unique key within this plugin (snake_case). Used as storage key.
-        key: string,
-        /// The kind of widget to render.
-        kind: setting-kind,
-        /// JSON-serialized default value (e.g. "true", "\"option-a\"", "42").
-        default-value: string,
-        /// For `select` kind: JSON array of option values. For `slider`:
-        /// JSON object `{"min":0,"max":100,"step":1}`. Empty otherwise.
-        extra: string,
-    }
 
     /// Return the raw FTL source text for a given locale code (e.g. "en", "de").
     ///
     /// Returns an empty string if the locale is not supported by this plugin,
     /// in which case the host falls back to the English bundle.
     get-translations: func(locale: string) -> string;
-
-    /// Return the ordered list of settings this plugin exposes.
-    ///
-    /// The host renders them in the plugin's settings panel in list order.
-    /// Return an empty list if the plugin has no configurable settings.
-    get-settings-schema: func() -> list<setting-descriptor>;
 
     /// Return the plugin's human-readable display name FTL key.
     ///
@@ -823,12 +1415,18 @@ interface plugin-metadata {
 
 /// The complete plugin world — what a messenger plugin must satisfy.
 ///
-/// A valid plugin WASM component must:
-/// 1. Import (use) the host-api interface for all I/O
-/// 2. Export (implement) the messenger-client interface
-/// 3. Optionally export plugin-metadata for i18n and settings schema
+/// Per D9 every plugin must export every client-UI surface. Per D18 the
+/// old `plugin-metadata.get-settings-schema` has been folded into
+/// `client-settings`. Per D17 the `backend-type` enum is gone; backend
+/// identity is a slug string.
 world messenger-plugin {
     import host-api;
     export messenger-client;
+    export client-ui-common;
+    export client-menus;
+    export client-settings;
+    export client-sidebar;
+    export client-views;
+    export client-composer;
     export plugin-metadata;
 }

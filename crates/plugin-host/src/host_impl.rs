@@ -487,4 +487,140 @@ impl host_api::Host for PluginHostState {
             stderr: output.stderr,
         })
     }
+
+    /// D20 — build a validated route string on behalf of the plugin.
+    ///
+    /// Stubbed for WP 1.A: every kind currently returns `UnknownKind`.
+    /// The real route registry (mapping each `route-kind` + params to
+    /// a concrete Dioxus route) is wired up in WP 4.
+    ///
+    /// TODO(WP 4): replace stub with the host route registry.
+    async fn build_route(
+        &mut self,
+        kind: host_api::RouteKind,
+        params: Vec<(String, String)>,
+    ) -> Result<String, host_api::RouteBuildError> {
+        let _ = (kind, params);
+        Err(host_api::RouteBuildError::UnknownKind)
+    }
+}
+
+// ─── WP 1 unit tests — build_route (plan §7 item 1) ──────────────────
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::*;
+    use crate::engine::poly::messenger::host_api;
+    use host_api::Host as _;
+
+    /// Helper: assert a build_route result is `Err(UnknownKind)`.
+    ///
+    /// `RouteBuildError` is WIT-generated and doesn't derive `PartialEq`, so we
+    /// use `matches!` instead of `assert_eq!`.
+    fn assert_unknown_kind(result: Result<String, host_api::RouteBuildError>, label: &str) {
+        assert!(
+            matches!(result, Err(host_api::RouteBuildError::UnknownKind)),
+            "{label}: expected Err(UnknownKind), got Ok(_) or different variant"
+        );
+    }
+
+    /// Happy-path stub: WP 1 always returns UnknownKind (real routes land in WP 4).
+    /// Each test covers one of the 11 `route-kind` variants defined in the WIT.
+    #[tokio::test]
+    async fn build_route_server_home_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(host_api::RouteKind::ServerHome, vec![])
+            .await;
+        assert_unknown_kind(result, "ServerHome");
+    }
+
+    #[tokio::test]
+    async fn build_route_channel_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(
+                host_api::RouteKind::Channel,
+                vec![("channel-id".to_string(), "abc123".to_string())],
+            )
+            .await;
+        assert_unknown_kind(result, "Channel");
+    }
+
+    #[tokio::test]
+    async fn build_route_dm_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state.build_route(host_api::RouteKind::Dm, vec![]).await;
+        assert_unknown_kind(result, "Dm");
+    }
+
+    #[tokio::test]
+    async fn build_route_friends_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state.build_route(host_api::RouteKind::Friends, vec![]).await;
+        assert_unknown_kind(result, "Friends");
+    }
+
+    #[tokio::test]
+    async fn build_route_notifications_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(host_api::RouteKind::Notifications, vec![])
+            .await;
+        assert_unknown_kind(result, "Notifications");
+    }
+
+    #[tokio::test]
+    async fn build_route_settings_account_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(host_api::RouteKind::SettingsAccount, vec![])
+            .await;
+        assert_unknown_kind(result, "SettingsAccount");
+    }
+
+    #[tokio::test]
+    async fn build_route_settings_server_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(host_api::RouteKind::SettingsServer, vec![])
+            .await;
+        assert_unknown_kind(result, "SettingsServer");
+    }
+
+    #[tokio::test]
+    async fn build_route_settings_channel_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(host_api::RouteKind::SettingsChannel, vec![])
+            .await;
+        assert_unknown_kind(result, "SettingsChannel");
+    }
+
+    #[tokio::test]
+    async fn build_route_voice_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state.build_route(host_api::RouteKind::Voice, vec![]).await;
+        assert_unknown_kind(result, "Voice");
+    }
+
+    #[tokio::test]
+    async fn build_route_search_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(host_api::RouteKind::Search, vec![])
+            .await;
+        assert_unknown_kind(result, "Search");
+    }
+
+    #[tokio::test]
+    async fn build_route_sidebar_item_returns_unknown_kind() {
+        let mut state = PluginHostState::new("test");
+        let result = state
+            .build_route(host_api::RouteKind::SidebarItem, vec![])
+            .await;
+        assert_unknown_kind(result, "SidebarItem");
+    }
 }

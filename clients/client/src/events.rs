@@ -70,4 +70,9 @@ pub enum ClientEvent {
         channel_id: String,
         participant: VoiceParticipant,
     },
+
+    /// D19 — the plugin's sidebar declaration has changed; the host
+    /// should re-fetch via
+    /// [`ClientBackend::get_sidebar_declaration`](crate::ClientBackend::get_sidebar_declaration).
+    SidebarInvalidated,
 }

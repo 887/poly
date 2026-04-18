@@ -24,9 +24,11 @@ use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Engine, Store};
 
 use poly_client::{
-    AuthCredentials, BackendType, Channel, ClientBackend, ClientError, ClientEvent, ClientResult,
-    CustomEmoji, DmChannel, Group, Message, MessageContent, MessageQuery, MessageSearchHit,
-    MessageSearchQuery, Notification, PresenceStatus, Server, Session, StickerItem, User,
+    ActionOutcome, AuthCredentials, BackendType, Channel, ClientBackend, ClientError, ClientEvent,
+    ClientResult, ComposerButton, Cursor, CustomEmoji, DmChannel, Group, MenuItem, MenuTargetKind,
+    Message, MessageContent, MessageQuery, MessageSearchHit, MessageSearchQuery, Notification,
+    PendingHandle, PresenceStatus, Server, Session, SettingsScope, SettingsSection,
+    SidebarDeclaration, StickerItem, User, ViewDescriptor, ViewDetail, ViewRowsPage,
     VoiceParticipant,
 };
 
@@ -163,7 +165,8 @@ impl PluginRegistry {
             .call_get_backend_type(&mut store)
             .await
             .map_err(|e| format!("Failed to get backend_type from '{plugin_id}': {e}"))?;
-        let cached_backend_type = bridge::from_wit_backend_type(wit_backend_type);
+        // D17 — WIT backend-type is now plain `string` (slug).
+        let cached_backend_type = BackendType::from_slug(&wit_backend_type);
 
         // Refuel before the next call
         let _ = store.set_fuel(1_000_000_000);
@@ -197,31 +200,18 @@ impl PluginRegistry {
             }
         }
 
-        // Load settings schema
+        // Load settings schema.
+        //
+        // D18 — `plugin-metadata.get-settings-schema` has been removed.
+        // The equivalent lives in `client-settings.get-settings-sections`,
+        // which will be surfaced through `ClientBackend` in WP 1.C. For
+        // now, start with an empty schema so the host compiles. Plugin
+        // settings UI will be re-wired as part of that work package.
+        //
+        // TODO(WP 1.C): call client-settings::get-settings-sections and
+        // pick the `scope == account-global` section to build this list.
         let _ = store.set_fuel(1_000_000_000);
-        let schema_raw = match meta.call_get_settings_schema(&mut store).await {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::warn!("Plugin '{plugin_id}' get-settings-schema failed: {e}");
-                vec![]
-            }
-        };
-        // Convert WIT setting-descriptor records to our portable SettingDescriptor type.
-        let schema: Vec<SettingDescriptor> = schema_raw
-            .into_iter()
-            .map(|sd| SettingDescriptor {
-                key: sd.key,
-                kind: match sd.kind {
-                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::Toggle => SettingKind::Toggle,
-                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::TextInput => SettingKind::TextInput,
-                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::Select => SettingKind::Select,
-                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::Slider => SettingKind::Slider,
-                    crate::engine::exports::poly::messenger::plugin_metadata::SettingKind::InfoLabel => SettingKind::InfoLabel,
-                },
-                default_value: sd.default_value,
-                extra: sd.extra,
-            })
-            .collect();
+        let schema: Vec<SettingDescriptor> = Vec::new();
 
         let _ = store.set_fuel(1_000_000_000);
         let display_name_key = match meta.call_get_display_name_key(&mut store).await {
@@ -866,5 +856,297 @@ impl ClientBackend for PluginBackend {
 
     fn backend_name(&self) -> &str {
         &self.cached_backend_name
+    }
+
+    // ── Client-provided UI surface (WP 1.C) ────────────────────────
+
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        refuel(&self.store).await;
+        let wit_target = bridge::to_wit_menu_target_kind(target);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_menus()
+            .call_get_context_menu_items(&mut *store, wit_target, target_id)
+            .await;
+        match result {
+            Ok(Ok(items)) => Ok(items.into_iter().map(bridge::from_wit_menu_item).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        refuel(&self.store).await;
+        let wit_target = bridge::to_wit_menu_target_kind(target);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_menus()
+            .call_invoke_context_action(&mut *store, action_id, wit_target, target_id)
+            .await;
+        match result {
+            Ok(Ok(outcome)) => Ok(bridge::from_wit_action_outcome(outcome)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn poll_action(&self, handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        refuel(&self.store).await;
+        let wit_handle = bridge::to_wit_pending_handle(handle);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_menus()
+            .call_poll_action(&mut *store, &wit_handle)
+            .await;
+        match result {
+            Ok(Ok(outcome)) => Ok(bridge::from_wit_action_outcome(outcome)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_settings()
+            .call_get_settings_sections(&mut *store)
+            .await;
+        match result {
+            Ok(Ok(sections)) => Ok(sections
+                .into_iter()
+                .map(bridge::from_wit_settings_section)
+                .collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+    ) -> ClientResult<String> {
+        refuel(&self.store).await;
+        let wit_scope = bridge::to_wit_settings_scope(scope);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_settings()
+            .call_get_setting_value(&mut *store, wit_scope, scope_id, key)
+            .await;
+        match result {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn set_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+        value: &str,
+    ) -> ClientResult<()> {
+        refuel(&self.store).await;
+        let wit_scope = bridge::to_wit_settings_scope(scope);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_settings()
+            .call_set_setting_value(&mut *store, wit_scope, scope_id, key, value)
+            .await;
+        convert_result_unit(result)
+    }
+
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_sidebar()
+            .call_get_sidebar_declaration(&mut *store)
+            .await;
+        match result {
+            Ok(Ok(decl)) => Ok(bridge::from_wit_sidebar_declaration(decl)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_sidebar()
+            .call_invoke_sidebar_action(&mut *store, action_id)
+            .await;
+        match result {
+            Ok(Ok(outcome)) => Ok(bridge::from_wit_sidebar_action_outcome(outcome)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_views()
+            .call_get_channel_view(&mut *store, channel_id)
+            .await;
+        match result {
+            Ok(Ok(d)) => Ok(bridge::from_wit_view_descriptor(d)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        cursor: Option<Cursor>,
+        sort_id: Option<&str>,
+        filter_id: Option<&str>,
+        tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        refuel(&self.store).await;
+        let wit_cursor = cursor.map(bridge::to_wit_view_cursor);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_views()
+            .call_get_view_rows(
+                &mut *store,
+                channel_id,
+                wit_cursor.as_ref(),
+                sort_id,
+                filter_id,
+                tab_id,
+            )
+            .await;
+        match result {
+            Ok(Ok(page)) => Ok(bridge::from_wit_view_rows_page(page)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_view_detail(
+        &self,
+        channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_views()
+            .call_get_view_detail(&mut *store, channel_id, row_id)
+            .await;
+        match result {
+            Ok(Ok(d)) => Ok(bridge::from_wit_view_detail(d)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_composer_buttons(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<Vec<ComposerButton>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_composer()
+            .call_get_composer_buttons(&mut *store, channel_id)
+            .await;
+        match result {
+            Ok(Ok(buttons)) => Ok(buttons
+                .into_iter()
+                .map(bridge::from_wit_composer_button)
+                .collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_message_actions(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_composer()
+            .call_get_message_actions(&mut *store, channel_id, message_id)
+            .await;
+        match result {
+            Ok(Ok(items)) => Ok(items
+                .into_iter()
+                .map(bridge::from_wit_composer_menu_item)
+                .collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        channel_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_composer()
+            .call_invoke_composer_action(&mut *store, action_id, channel_id)
+            .await;
+        match result {
+            Ok(Ok(outcome)) => Ok(bridge::from_wit_composer_action_outcome(outcome)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_client_composer()
+            .call_invoke_message_action(&mut *store, action_id, channel_id, message_id)
+            .await;
+        match result {
+            Ok(Ok(outcome)) => Ok(bridge::from_wit_composer_action_outcome(outcome)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
     }
 }

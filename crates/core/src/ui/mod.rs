@@ -58,6 +58,7 @@
 
 pub mod account;
 pub mod actions;
+pub mod client_ui;
 pub use actions::{ActionCx, UiAction};
 pub(crate) mod code_explorer;
 pub(crate) mod context_menu;

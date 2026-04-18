@@ -10,17 +10,23 @@
 //!  3. Connected-routes graph reachability (plan-connected-routes-static-check.md §3).
 //!  4. UI action coverage (plan-ui-completeness.md §B).
 //!  5. UI action-enum coverage (typed-ui-action-enums plan Phase C).
+//!  6. FTL label-key coverage (plan-client-ui-surface.md D21).
+//!  7. Action ID naming convention — kebab-case (plan-client-ui-surface.md D25).
 //!
 //! Existing violations are grandfathered via `baseline.json`.
 
 #[path = "build/action_enum_coverage.rs"]
 mod action_enum_coverage;
+#[path = "build/action_id_naming.rs"]
+mod action_id_naming;
 #[path = "build/allow_ban.rs"]
 mod allow_ban;
 #[path = "build/baseline.rs"]
 mod baseline;
 #[path = "build/context_menu_coverage.rs"]
 mod context_menu_coverage;
+#[path = "build/ftl_label_key_coverage.rs"]
+mod ftl_label_key_coverage;
 #[path = "build/nav_push_ban.rs"]
 mod nav_push_ban;
 #[path = "build/route_graph.rs"]
@@ -64,7 +70,9 @@ fn main() {
     let mut violations: Vec<baseline::Violation> = Vec::new();
     allow_ban::scan(&walker, &mut violations);
     action_enum_coverage::scan(&walker, &mut violations);
+    action_id_naming::scan(&walker, &mut violations);
     context_menu_coverage::scan(&walker, &mut violations);
+    ftl_label_key_coverage::scan(&walker, &mut violations);
     nav_push_ban::scan(&walker, &mut violations);
     route_graph::scan(&ws_root, &mut violations);
     ui_action_coverage::scan(&walker, &mut violations);

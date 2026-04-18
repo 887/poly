@@ -8,9 +8,11 @@
 
 pub mod events;
 pub mod types;
+pub mod ui_surface;
 
 pub use events::*;
 pub use types::*;
+pub use ui_surface::*;
 
 use async_trait::async_trait;
 use futures::stream::Stream;
@@ -400,6 +402,110 @@ pub trait ClientBackend: Send + Sync {
         let _ = (channel_id, path);
         Err(ClientError::NotSupported("read_file".to_string()))
     }
+
+    // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ----
+    //
+    // Per D9 these methods have **no default implementation** — every
+    // backend is required to implement them (explicit empty list for
+    // backends that have nothing to contribute).
+
+    /// D11 — return plugin-declared context menu items for `target`.
+    ///
+    /// Called by the host every time a context menu opens (D24, no
+    /// caching). Merge with host-universal items happens in the host.
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>>;
+
+    /// D14 / D22 — dispatch a plugin action. Unknown ids return
+    /// `ClientError::NotFound(action_id)`.
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<ActionOutcome>;
+
+    /// D16 — poll a pending async action for its final outcome.
+    async fn poll_action(&self, handle: PendingHandle) -> ClientResult<ActionOutcome>;
+
+    /// D11 / D18 — every settings section this plugin contributes across
+    /// every scope. Host filters by scope at render time.
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>>;
+
+    /// D15 — read a JSON-encoded setting value from the plugin.
+    async fn get_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+    ) -> ClientResult<String>;
+
+    /// D15 — write a JSON-encoded setting value via the plugin.
+    async fn set_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+        value: &str,
+    ) -> ClientResult<()>;
+
+    /// D5 / D19 — plugin's current sidebar declaration. Host re-calls on
+    /// receipt of [`ClientEvent::SidebarInvalidated`].
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration>;
+
+    /// D14 / D25 — dispatch a sidebar-item click.
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome>;
+
+    /// D5 — fetch a channel's non-chat view descriptor.
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor>;
+
+    /// D23 — paged data feed. `cursor == None` for the first page.
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        cursor: Option<Cursor>,
+        sort_id: Option<&str>,
+        filter_id: Option<&str>,
+        tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage>;
+
+    /// D5 — detail payload for `split` views.
+    async fn get_view_detail(
+        &self,
+        channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail>;
+
+    /// D8 — composer-toolbar buttons for the given channel.
+    async fn get_composer_buttons(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<Vec<ComposerButton>>;
+
+    /// D8 — per-message actions, merged into the message hover/overflow menu.
+    async fn get_message_actions(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>>;
+
+    /// D14 / D25 — dispatch a composer button action.
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        channel_id: &str,
+    ) -> ClientResult<ActionOutcome>;
+
+    /// D14 / D25 — dispatch a per-message action.
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<ActionOutcome>;
 }
 
 // ── Signup plugin interface ──────────────────────────────────────────────────

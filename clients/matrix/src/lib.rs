@@ -701,6 +701,116 @@ impl ClientBackend for MatrixClient {
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         }
     }
+
+    // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ---
+
+    async fn get_context_menu_items(
+        &self,
+        _target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        _target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
+    }
+
+    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound("no pending actions".into()))
+    }
+
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_setting_value(
+        &self,
+        _scope: SettingsScope,
+        _scope_id: &str,
+        key: &str,
+    ) -> ClientResult<String> {
+        Err(ClientError::NotFound(format!("setting: {key}")))
+    }
+
+    async fn set_setting_value(
+        &self,
+        _scope: SettingsScope,
+        _scope_id: &str,
+        _key: &str,
+        _value: &str,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("settings not yet implemented".into()))
+    }
+
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::SpacesRooms,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    }
+
+    async fn get_view_rows(
+        &self,
+        _channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+    }
+
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        _row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+    }
+
+    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_message_actions(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        Ok(Vec::new())
+    }
+
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+    }
+
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+    }
 }
 
 #[cfg(test)]
