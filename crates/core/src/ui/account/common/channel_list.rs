@@ -17,11 +17,35 @@ use super::chat_history::{
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChannelContextMenuState, ChatData, View};
+use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::close_mobile_drawer;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, DmChannel, Server, User, VoiceParticipant};
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the channel list sidebar.
+#[derive(Debug, Clone)]
+pub enum ChannelListAction {
+    /// User selected a server channel.
+    SelectChannel(String),
+    /// User selected a DM channel.
+    SelectDm(String),
+    /// User selected a group channel.
+    SelectGroup(String),
+    /// User clicked "New Conversation".
+    NewConversation,
+    /// User clicked "Saved Messages".
+    OpenSavedMessages,
+    /// User opened the server dropdown.
+    ToggleServerDropdown,
+}
+
+impl UiAction for ChannelListAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: ChannelListAction requires Signal + async handles");
+    }
+}
 
 fn dm_last_incoming_timestamp(dm: &DmChannel) -> Option<DateTime<Utc>> {
     dm.last_message
@@ -299,7 +323,7 @@ pub(crate) fn open_direct_message_from_active_account(
 /// Single connected voice participant entry.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(ChannelListAction)]
 #[component]
 pub fn ChannelList() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -1423,5 +1447,23 @@ fn VoiceParticipantEntry(participant: VoiceParticipant) -> Element {
                 span { class: "voice-user-icon", "📹" }
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_list_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ChannelListAction>();
+        let _ = ChannelListAction::SelectChannel("ch".into());
+        let _ = ChannelListAction::SelectDm("dm".into());
+        let _ = ChannelListAction::SelectGroup("grp".into());
+        let _ = ChannelListAction::NewConversation;
+        let _ = ChannelListAction::OpenSavedMessages;
+        let _ = ChannelListAction::ToggleServerDropdown;
     }
 }

@@ -7,9 +7,31 @@ use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
+use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the friends management panel.
+#[derive(Debug, Clone)]
+pub enum FriendsPanelAction {
+    /// User switched to the Friends tab.
+    ShowFriends,
+    /// User switched to the Ignored tab.
+    ShowIgnored,
+    /// User switched to the Blocked tab.
+    ShowBlocked,
+    /// User filtered by search text.
+    SetSearchFilter(String),
+    /// User clicked "Message" on a friend card.
+    MessageFriend(String),
+}
+
+impl UiAction for FriendsPanelAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: FriendsPanelAction requires Signal handles");
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FriendsManagementTab {
@@ -20,7 +42,7 @@ enum FriendsManagementTab {
 
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(FriendsPanelAction)]
 #[component]
 pub fn FriendsPanel(account_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -294,5 +316,22 @@ fn IgnoredUsersPlaceholder() -> Element {
             h3 { "{ignored_title}" }
             p { "{ignored_empty}" }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn friends_panel_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<FriendsPanelAction>();
+        let _ = FriendsPanelAction::ShowFriends;
+        let _ = FriendsPanelAction::ShowIgnored;
+        let _ = FriendsPanelAction::ShowBlocked;
+        let _ = FriendsPanelAction::SetSearchFilter("query".into());
+        let _ = FriendsPanelAction::MessageFriend("user-1".into());
     }
 }

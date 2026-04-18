@@ -17,6 +17,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::backend_badge;
 use crate::ui::account::common::VoiceAccountFooter;
+use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
@@ -25,6 +26,67 @@ use poly_client::{
     NotificationSupport, VoiceSupport,
 };
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the notifications view.
+#[derive(Debug, Clone)]
+pub enum NotificationsViewAction {
+    /// User changed the kind filter.
+    SetFilter(NotificationMenuFilter),
+    /// User marked all (matching filter) notifications as read.
+    MarkAllRead,
+    /// User accepted a friend request.
+    AcceptFriendRequest { notif_id: String, user_id: String },
+    /// User denied a friend request.
+    DenyFriendRequest { notif_id: String, user_id: String },
+    /// User accepted a server invite.
+    AcceptServerInvite(String),
+    /// User dismissed a notification.
+    Dismiss(String),
+    /// User clicked reauth for an account.
+    Reauth(String),
+}
+
+impl UiAction for NotificationsViewAction {
+    fn apply(self, cx: ActionCx<'_>) {
+        match self {
+            Self::SetFilter(_) => {
+                todo!("phase-E: NotificationsViewAction::SetFilter requires Signal handle");
+            }
+            Self::MarkAllRead => {
+                todo!("phase-E: NotificationsViewAction::MarkAllRead requires Signal handle");
+            }
+            Self::AcceptFriendRequest { .. }
+            | Self::DenyFriendRequest { .. }
+            | Self::AcceptServerInvite(_)
+            | Self::Dismiss(_) => {
+                todo!("phase-E: NotificationsViewAction requires ChatData signal + backend");
+            }
+            Self::Reauth(account_id) => {
+                // Navigator is optional in ActionCx — only available at runtime.
+                if let Some(ref nav) = cx.navigator {
+                    let instance_id = cx
+                        .state
+                        .nav
+                        .active_instance_id
+                        .clone()
+                        .unwrap_or_default();
+                    let backend = cx
+                        .state
+                        .nav
+                        .active_backend
+                        .as_ref()
+                        .map(|b| b.slug().to_string())
+                        .unwrap_or_default();
+                    nav.push(Route::ReauthAccount {
+                        backend,
+                        instance_id,
+                        account_id,
+                    });
+                }
+            }
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum NotificationMenuFilter {
@@ -104,7 +166,7 @@ pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
 /// because its BackendCapabilities declares no friends/servers/voice.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(NotificationsViewAction)]
 #[component]
 pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -697,5 +759,24 @@ mod tests {
         // Default capability preset is READ_ONLY_FEED → NotificationSupport::None.
         let filters = filters_for_backend("definitely-not-a-real-plugin");
         assert!(filters.is_empty());
+    }
+
+    #[test]
+    fn notifications_view_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<NotificationsViewAction>();
+        let _ = NotificationsViewAction::SetFilter(NotificationMenuFilter::All);
+        let _ = NotificationsViewAction::MarkAllRead;
+        let _ = NotificationsViewAction::AcceptFriendRequest {
+            notif_id: "n1".into(),
+            user_id: "u1".into(),
+        };
+        let _ = NotificationsViewAction::DenyFriendRequest {
+            notif_id: "n2".into(),
+            user_id: "u2".into(),
+        };
+        let _ = NotificationsViewAction::AcceptServerInvite("n3".into());
+        let _ = NotificationsViewAction::Dismiss("n4".into());
+        let _ = NotificationsViewAction::Reauth("acc".into());
     }
 }

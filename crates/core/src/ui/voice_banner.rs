@@ -19,9 +19,47 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the voice connection banner.
+#[derive(Debug, Clone)]
+pub enum VoiceBannerAction {
+    /// Toggle microphone mute.
+    ToggleMute,
+    /// Toggle deafen.
+    ToggleDeafen,
+    /// Disconnect from voice.
+    Disconnect,
+    /// Navigate to the voice channel.
+    GoToChannel,
+    /// Swap to first held call.
+    SwapHeldCall,
+}
+
+impl UiAction for VoiceBannerAction {
+    fn apply(self, cx: ActionCx<'_>) {
+        match self {
+            Self::ToggleMute => {
+                todo!("phase-E: VoiceBannerAction::ToggleMute requires ChatData signal");
+            }
+            Self::ToggleDeafen => {
+                todo!("phase-E: VoiceBannerAction::ToggleDeafen requires ChatData signal");
+            }
+            Self::Disconnect => {
+                todo!("phase-E: VoiceBannerAction::Disconnect requires ChatData signal");
+            }
+            Self::GoToChannel => {
+                todo!("phase-E: VoiceBannerAction::GoToChannel requires Navigator + ChatData");
+            }
+            Self::SwapHeldCall => {
+                todo!("phase-E: VoiceBannerAction::SwapHeldCall requires ChatData signal");
+            }
+        }
+    }
+}
 
 #[context_menu(inherit)]
 #[rustfmt::skip]
@@ -204,7 +242,7 @@ fn VoiceBannerControls(
 /// at the top of the layout. Hidden when not in a voice channel.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(VoiceBannerAction)]
 #[component]
 pub fn VoiceBanner() -> Element {
     let app_state: Signal<AppState> = use_context();
@@ -259,5 +297,22 @@ pub fn VoiceBanner() -> Element {
             }
             VoiceBannerControls { is_muted, is_deafened, held_count, chat_data }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn voice_banner_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<VoiceBannerAction>();
+        let _ = VoiceBannerAction::ToggleMute;
+        let _ = VoiceBannerAction::ToggleDeafen;
+        let _ = VoiceBannerAction::Disconnect;
+        let _ = VoiceBannerAction::GoToChannel;
+        let _ = VoiceBannerAction::SwapHeldCall;
     }
 }

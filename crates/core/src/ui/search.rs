@@ -12,6 +12,7 @@
 
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
+use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
@@ -19,6 +20,25 @@ use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use poly_client::BackendType;
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the global search page.
+#[derive(Debug, Clone)]
+pub enum SearchPageAction {
+    /// User typed a new search query.
+    SetQuery(String),
+    /// User toggled an account filter.
+    ToggleAccount(String),
+    /// User toggled a type filter (servers/dms/groups).
+    ToggleType(String),
+    /// User navigated to a result.
+    NavigateTo(String),
+}
+
+impl UiAction for SearchPageAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: SearchPageAction requires Signal handles");
+    }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -462,7 +482,7 @@ fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Elem
 /// Global search page — sidebar with account filters + right tree of all nodes.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(SearchPageAction)]
 #[component]
 pub fn SearchPage(
     /// When `Some(account_id)`, the search is initialised with only that account
@@ -816,5 +836,21 @@ pub fn SearchPage(
                 }
             },
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_page_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<SearchPageAction>();
+        let _ = SearchPageAction::SetQuery("q".into());
+        let _ = SearchPageAction::ToggleAccount("acc".into());
+        let _ = SearchPageAction::ToggleType("servers".into());
+        let _ = SearchPageAction::NavigateTo("dest".into());
     }
 }

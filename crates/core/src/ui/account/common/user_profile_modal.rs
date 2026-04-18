@@ -26,9 +26,36 @@ use crate::i18n::t;
 use crate::state::AppState;
 use crate::state::ChatData;
 use crate::state::chat_data::{backend_badge, user_color};
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User, VoiceConnectionKind};
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the user profile modal.
+#[derive(Debug, Clone)]
+pub enum UserProfileModalAction {
+    /// Close the modal.
+    Close,
+    /// Open a DM with the displayed user.
+    OpenDm,
+    /// Initiate a voice call with the displayed user.
+    Call,
+    /// Initiate a video call with the displayed user.
+    VideoCall,
+}
+
+impl UiAction for UserProfileModalAction {
+    fn apply(self, cx: ActionCx<'_>) {
+        match self {
+            Self::Close => {
+                cx.state.nav.profile_modal_user = None;
+            }
+            Self::OpenDm | Self::Call | Self::VideoCall => {
+                todo!("phase-E: UserProfileModalAction requires Signal handles");
+            }
+        }
+    }
+}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -73,7 +100,7 @@ fn close_modal(mut app_state: Signal<AppState>) {
 ///
 /// Render this **once** from `AppBody` — it is a no-op when
 /// `AppState.nav.profile_modal_user` is `None`.
-#[ui_action(inherit)]
+#[ui_action(UserProfileModalAction)]
 #[rustfmt::skip]
 #[context_menu(inherit)]
 #[component]
@@ -340,5 +367,21 @@ fn NoteEditor() -> Element {
             }
             span { class: "poly-profile-note-count", "{len}/256" }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_profile_modal_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<UserProfileModalAction>();
+        let _ = UserProfileModalAction::Close;
+        let _ = UserProfileModalAction::OpenDm;
+        let _ = UserProfileModalAction::Call;
+        let _ = UserProfileModalAction::VideoCall;
     }
 }

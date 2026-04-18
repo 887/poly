@@ -18,6 +18,7 @@ use poly_client::{
 };
 use poly_plugin_host::PluginBackend;
 
+#[allow(dead_code)]
 fn is_stub_error(error: &ClientError) -> bool {
     let message = match error {
         ClientError::AuthFailed(message)
@@ -36,6 +37,7 @@ fn is_stub_error(error: &ClientError) -> bool {
 }
 
 /// Verify a plugin-path auth call does not fall back to a stub guest error.
+#[allow(dead_code)]
 pub async fn authenticate_does_not_use_stub_path(
     backend: &mut PluginBackend,
     credentials: AuthCredentials,

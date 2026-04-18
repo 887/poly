@@ -22,9 +22,37 @@ use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{ChannelType, VoiceConnectionKind, VoiceParticipant};
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the voice/video channel view.
+#[derive(Debug, Clone)]
+pub enum VoiceChannelViewAction {
+    /// User clicked the join voice button.
+    Join,
+    /// User clicked disconnect.
+    Disconnect,
+    /// User toggled mute.
+    ToggleMute,
+    /// User toggled deafen.
+    ToggleDeafen,
+    /// User toggled camera.
+    ToggleCamera,
+    /// User toggled screen share.
+    ToggleScreenShare,
+    /// User toggled noise cancellation.
+    ToggleNoiseCancel,
+    /// User clicked a participant tile to open their profile.
+    OpenParticipantProfile(String),
+}
+
+impl UiAction for VoiceChannelViewAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: VoiceChannelViewAction requires Signal + async handles");
+    }
+}
 
 // ── JS snippets ───────────────────────────────────────────────────────────────
 
@@ -237,7 +265,7 @@ async fn join_voice_channel(
 /// `VoiceChatBar` when connected and the local screen share area when streaming.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(VoiceChannelViewAction)]
 #[component]
 pub fn VoiceChannelView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
@@ -744,5 +772,25 @@ fn VoiceChatBar(mut chat_data: Signal<ChatData>) -> Element {
                 "📵"
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn voice_channel_view_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<VoiceChannelViewAction>();
+        let _ = VoiceChannelViewAction::Join;
+        let _ = VoiceChannelViewAction::Disconnect;
+        let _ = VoiceChannelViewAction::ToggleMute;
+        let _ = VoiceChannelViewAction::ToggleDeafen;
+        let _ = VoiceChannelViewAction::ToggleCamera;
+        let _ = VoiceChannelViewAction::ToggleScreenShare;
+        let _ = VoiceChannelViewAction::ToggleNoiseCancel;
+        let _ = VoiceChannelViewAction::OpenParticipantProfile("user-1".into());
     }
 }

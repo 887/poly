@@ -28,10 +28,34 @@ use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
     request_restore_scroll_position_or_bottom,
 };
+use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the favorites sidebar (Bar 1).
+#[derive(Debug, Clone)]
+pub enum FavoritesBarAction {
+    /// User clicked an account icon to switch accounts.
+    SwitchAccount(String),
+    /// User clicked the global search button.
+    OpenSearch,
+    /// User clicked the app settings button.
+    OpenSettings,
+    /// User dropped a server onto the favorites bar.
+    DropServer(String),
+    /// User dragged a favorite server to reorder it.
+    ReorderFavorite { drag_id: String, target_id: String },
+    /// User reordered account icons via drag-and-drop.
+    ReorderAccount { drag_id: String, target_id: String },
+}
+
+impl UiAction for FavoritesBarAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: FavoritesBarAction requires Signal + async handles");
+    }
+}
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
@@ -85,7 +109,7 @@ pub(crate) fn SidebarTooltip(
 /// source badge, spacer, Demo toggle, App Settings.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(FavoritesBarAction)]
 #[component]
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
@@ -1300,4 +1324,28 @@ pub async fn restore_server_channel(
     apply_server_icon_overrides(&mut chat_data).await;
 
     target.as_ref().map(|channel| channel.id.clone())
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn favorites_bar_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<FavoritesBarAction>();
+        let _ = FavoritesBarAction::SwitchAccount("acc".into());
+        let _ = FavoritesBarAction::OpenSearch;
+        let _ = FavoritesBarAction::OpenSettings;
+        let _ = FavoritesBarAction::DropServer("srv".into());
+        let _ = FavoritesBarAction::ReorderFavorite {
+            drag_id: "a".into(),
+            target_id: "b".into(),
+        };
+        let _ = FavoritesBarAction::ReorderAccount {
+            drag_id: "a".into(),
+            target_id: "b".into(),
+        };
+    }
 }

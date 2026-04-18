@@ -33,6 +33,7 @@
 use crate::client_manager::{BackendHandle, ClientManager};
 use crate::i18n::t;
 use crate::state::ChatData;
+use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::favorites_sidebar::FavoritesBar;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -40,6 +41,51 @@ use poly_client::{SignupCompleted, SignupContext};
 use std::collections::HashMap;
 use std::sync::Arc;
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the signup picker page (`/signup`).
+#[derive(Debug, Clone)]
+pub(crate) enum SignupPickerPageAction {
+    /// User selected a backend to sign up with.
+    SelectBackend(String),
+}
+
+impl UiAction for SignupPickerPageAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: SignupPickerPageAction requires Navigator");
+    }
+}
+
+/// Actions for the per-backend signup page (`/signup/:client`).
+#[derive(Debug, Clone)]
+pub(crate) enum ClientSignupPageAction {
+    /// Signup flow completed for a backend.
+    Complete,
+    /// User navigated back.
+    Back,
+}
+
+impl UiAction for ClientSignupPageAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: ClientSignupPageAction requires Navigator + backend handles");
+    }
+}
+
+/// Actions for the reauth page.
+#[derive(Debug, Clone)]
+pub(crate) enum ReauthAccountPageAction {
+    /// Reauth completed — refresh credentials for the account.
+    Complete,
+    /// User confirmed removal of the account.
+    RemoveAccount,
+    /// User cancelled removal.
+    CancelRemove,
+}
+
+impl UiAction for ReauthAccountPageAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        todo!("phase-E: ReauthAccountPageAction requires Signal + async handles");
+    }
+}
 
 // ── Shared signup-commit callback builder ───────────────────────────────────
 
@@ -547,7 +593,7 @@ fn TestAccountsPanel() -> Element {
 /// in the right panel prompting the user to pick an account type.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(SignupPickerPageAction)]
 #[component]
 pub(crate) fn SignupPickerPage() -> Element {
     rsx! {
@@ -573,7 +619,7 @@ pub(crate) fn SignupPickerPage() -> Element {
 /// `on_complete` callback.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(ClientSignupPageAction)]
 #[component]
 pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
@@ -708,7 +754,7 @@ fn ReauthNav(backend_slug: String, display_name: String) -> Element {
 /// "Remove this account" button.
 #[context_menu(None)]
 #[rustfmt::skip]
-#[ui_action(inherit)]
+#[ui_action(ReauthAccountPageAction)]
 #[component]
 pub(crate) fn ReauthAccountPage(
     backend: String,
@@ -802,5 +848,35 @@ pub(crate) fn ReauthAccountPage(
             ReauthNav { backend_slug: backend.clone(), display_name: display_name.clone() }
             { right_content }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signup_page_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<SignupPickerPageAction>();
+        let _ = SignupPickerPageAction::SelectBackend("demo".into());
+    }
+
+    #[test]
+    fn client_signup_page_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ClientSignupPageAction>();
+        let _ = ClientSignupPageAction::Complete;
+        let _ = ClientSignupPageAction::Back;
+    }
+
+    #[test]
+    fn reauth_account_page_action_variants_compile() {
+        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
+        assert_ui_action::<ReauthAccountPageAction>();
+        let _ = ReauthAccountPageAction::Complete;
+        let _ = ReauthAccountPageAction::RemoveAccount;
+        let _ = ReauthAccountPageAction::CancelRemove;
     }
 }
