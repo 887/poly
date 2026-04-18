@@ -933,3 +933,219 @@ async fn send_message_on_hackernews_returns_not_supported_error() {
         "expected a 'not supported' or 'read-only' error message, got: {}", text_of(&result)
     );
 }
+
+// ---------------------------------------------------------------------------
+// WP-8 — Client-provided UI surface via MCP
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn context_menu_tool_returns_plugin_items() {
+    // Discord plugin declares `invite-people`, `privacy-settings` etc. on Server
+    // targets. This exercises the MCP->ClientBackend round-trip for menus.
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let result = call(&mut pool, "context_menu_server", json!({
+        "backend": "discord",
+        "target_id": "100"
+    })).await;
+    assert_ok(&result);
+    let items: Vec<Value> = parse_text(&result);
+    assert!(!items.is_empty(), "discord should declare server-target menu items");
+    let ids: Vec<&str> = items.iter().filter_map(|i| i["id"].as_str()).collect();
+    assert!(
+        ids.contains(&"invite-people"),
+        "expected 'invite-people' in discord server menu, got: {ids:?}"
+    );
+}
+
+#[tokio::test]
+async fn invoke_context_action_via_mcp_roundtrip() {
+    // Discord's `invite-people` -> Ok(Noop). Round-trip asserts the MCP
+    // handler invoked the plugin and serialized the outcome.
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let result = call(&mut pool, "invoke_context_action", json!({
+        "backend": "discord",
+        "action_id": "invite-people",
+        "target_kind": "server",
+        "target_id": "100"
+    })).await;
+    assert_ok(&result);
+    let outcome = text_of(&result);
+    assert!(
+        outcome.contains("Noop"),
+        "expected Noop ActionOutcome, got: {outcome}"
+    );
+}
+
+#[tokio::test]
+async fn invoke_context_action_unknown_id_errors() {
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let result = call(&mut pool, "invoke_context_action", json!({
+        "backend": "discord",
+        "action_id": "definitely-not-a-real-action",
+        "target_kind": "server",
+        "target_id": "100"
+    })).await;
+    assert_err(&result);
+}
+
+#[tokio::test]
+async fn plugin_settings_sections_via_mcp() {
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let result = call(&mut pool, "plugin_settings_sections", json!({
+        "backend": "discord"
+    })).await;
+    assert_ok(&result);
+    let sections: Vec<Value> = parse_text(&result);
+    assert!(!sections.is_empty(), "discord should declare settings sections");
+    // Discord declares a per-server 'profile' section; verify at least one section
+    // has a section_key we recognize.
+    let keys: Vec<&str> = sections.iter().filter_map(|s| s["section_key"].as_str()).collect();
+    assert!(
+        keys.iter().any(|k| *k == "profile" || *k == "notification-rules" || *k == "privacy"),
+        "expected one of the discord-declared section keys, got: {keys:?}"
+    );
+}
+
+#[tokio::test]
+async fn plugin_setting_get_returns_default() {
+    // Discord `get_setting_value` falls back to the declared default when no
+    // kv is wired. We don't care about the exact value — just that the
+    // MCP path round-trips to the backend.
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let result = call(&mut pool, "plugin_setting_get", json!({
+        "backend": "discord",
+        "scope": "per-server",
+        "scope_id": "100",
+        "key": "mentions-only"
+    })).await;
+    assert_ok(&result);
+}
+
+#[tokio::test]
+async fn sidebar_declaration_via_mcp() {
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let result = call(&mut pool, "sidebar_declaration", json!({
+        "backend": "discord"
+    })).await;
+    assert_ok(&result);
+    let text = text_of(&result);
+    assert!(
+        text.contains("layout"),
+        "sidebar declaration should have a 'layout' field, got: {text}"
+    );
+}
+
+#[tokio::test]
+async fn composer_buttons_via_mcp() {
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let result = call(&mut pool, "composer_buttons", json!({
+        "backend": "discord",
+        "channel_id": "200"
+    })).await;
+    assert_ok(&result);
+    let btns: Vec<Value> = parse_text(&result);
+    // Discord declares a stickers button.
+    assert!(!btns.is_empty(), "discord declares at least one composer button");
+    let ids: Vec<&str> = btns.iter().filter_map(|b| b["id"].as_str()).collect();
+    assert!(ids.contains(&"stickers"), "expected 'stickers' button, got: {ids:?}");
+}
+
+#[tokio::test]
+async fn message_actions_and_invoke_via_mcp() {
+    let srv = TestSrv::discord().await;
+    let mut pool = BackendPool::new();
+    call(&mut pool, "test_signin", json!({
+        "backend": "discord", "url": srv.base_url, "username": "koala"
+    })).await;
+
+    let list = call(&mut pool, "message_actions", json!({
+        "backend": "discord",
+        "channel_id": "200",
+        "message_id": "m1"
+    })).await;
+    assert_ok(&list);
+    let items: Vec<Value> = parse_text(&list);
+    assert!(!items.is_empty());
+    let ids: Vec<&str> = items.iter().filter_map(|i| i["id"].as_str()).collect();
+    assert!(ids.contains(&"pin-message"), "expected 'pin-message' in list, got: {ids:?}");
+
+    let invoke = call(&mut pool, "invoke_message_action", json!({
+        "backend": "discord",
+        "action_id": "pin-message",
+        "channel_id": "200",
+        "message_id": "m1"
+    })).await;
+    assert_ok(&invoke);
+    assert!(text_of(&invoke).contains("Noop"));
+}
+
+#[tokio::test]
+async fn mcp_tools_new_surfaces_are_queryable() {
+    // Meta test: every new WP-8 tool name is registered in `tool_list()` so
+    // MCP `tools/list` advertises them to clients.
+    let names: std::collections::HashSet<String> = poly_chat_mcp::tools::tool_list()
+        .iter()
+        .filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
+        .collect();
+
+    for expected in [
+        "context_menu_server",
+        "context_menu_channel",
+        "context_menu_user",
+        "context_menu_message",
+        "context_menu_dm",
+        "context_menu_category",
+        "invoke_context_action",
+        "plugin_settings_sections",
+        "plugin_setting_get",
+        "plugin_setting_set",
+        "sidebar_declaration",
+        "invoke_sidebar_action",
+        "channel_view",
+        "view_rows",
+        "composer_buttons",
+        "message_actions",
+        "invoke_composer_action",
+        "invoke_message_action",
+    ] {
+        assert!(
+            names.contains(expected),
+            "new WP-8 tool '{expected}' missing from tool_list(); have: {names:?}"
+        );
+    }
+}

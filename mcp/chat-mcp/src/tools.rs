@@ -4,8 +4,9 @@ use serde_json::{Value, json};
 
 use crate::state::BackendPool;
 use poly_client::{
-    AuthCredentials, BackendType, ClientBackend, DmSupport, FriendModel, MessageContent,
-    MessageQuery, MessagingModel, NotificationSupport, PluginManifest, VoiceSupport,
+    AuthCredentials, BackendType, ClientBackend, Cursor, CursorKind, DmSupport, FriendModel,
+    MenuTargetKind, MessageContent, MessageQuery, MessagingModel, NotificationSupport,
+    PluginManifest, SettingsScope, VoiceSupport,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -24,6 +25,38 @@ fn str_arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
 
 fn u64_arg(args: &Value, key: &str) -> Option<u64> {
     args.get(key).and_then(|v| v.as_u64())
+}
+
+fn parse_menu_target(s: &str) -> Option<MenuTargetKind> {
+    match s {
+        "category" => Some(MenuTargetKind::Category),
+        "channel" => Some(MenuTargetKind::Channel),
+        "dm" => Some(MenuTargetKind::Dm),
+        "message" => Some(MenuTargetKind::Message),
+        "server" => Some(MenuTargetKind::Server),
+        "user" => Some(MenuTargetKind::User),
+        _ => None,
+    }
+}
+
+fn parse_settings_scope(s: &str) -> Option<SettingsScope> {
+    match s {
+        "account-global" | "account_global" => Some(SettingsScope::AccountGlobal),
+        "per-server" | "per_server" => Some(SettingsScope::PerServer),
+        "per-channel" | "per_channel" => Some(SettingsScope::PerChannel),
+        "per-user" | "per_user" => Some(SettingsScope::PerUser),
+        _ => None,
+    }
+}
+
+fn parse_cursor_kind(s: &str) -> Option<CursorKind> {
+    match s {
+        "offset" => Some(CursorKind::Offset),
+        "timestamp" => Some(CursorKind::Timestamp),
+        "id" => Some(CursorKind::Id),
+        "opaque" => Some(CursorKind::Opaque),
+        _ => None,
+    }
 }
 
 fn parse_backend_type(s: &str) -> Option<BackendType> {
@@ -235,6 +268,259 @@ pub fn tool_list() -> Vec<Value> {
                 "required": ["backend"]
             }
         }),
+
+        // ─── Client-provided UI surface (WP 8, plan-client-ui-surface §7) ────
+        // TODO(WP 8 follow-up, phase-2.20 D4): capability-driven tool filtering
+        // — drop tools that return empty/NotSupported on the active account.
+        // For WP 8 initial we advertise ALL new surface tools unconditionally.
+        json!({
+            "name": "context_menu_server",
+            "description": "Return plugin-declared context-menu items for a server target.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "target_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "target_id"]
+            }
+        }),
+        json!({
+            "name": "context_menu_channel",
+            "description": "Return plugin-declared context-menu items for a channel target.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "target_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "target_id"]
+            }
+        }),
+        json!({
+            "name": "context_menu_user",
+            "description": "Return plugin-declared context-menu items for a user target.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "target_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "target_id"]
+            }
+        }),
+        json!({
+            "name": "context_menu_message",
+            "description": "Return plugin-declared context-menu items for a message target.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "target_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "target_id"]
+            }
+        }),
+        json!({
+            "name": "context_menu_dm",
+            "description": "Return plugin-declared context-menu items for a DM target.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "target_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "target_id"]
+            }
+        }),
+        json!({
+            "name": "context_menu_category",
+            "description": "Return plugin-declared context-menu items for a category target.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "target_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "target_id"]
+            }
+        }),
+        json!({
+            "name": "invoke_context_action",
+            "description": "Invoke a plugin-declared context-menu action. Returns ActionOutcome as JSON.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "action_id": { "type": "string", "description": "Plugin-defined opaque action id (kebab-case)." },
+                    "target_kind": { "type": "string", "description": "One of: category, channel, dm, message, server, user." },
+                    "target_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "action_id", "target_kind", "target_id"]
+            }
+        }),
+        json!({
+            "name": "plugin_settings_sections",
+            "description": "Return the plugin-declared settings sections.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend"]
+            }
+        }),
+        json!({
+            "name": "plugin_setting_get",
+            "description": "Get a single plugin-declared setting value.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "scope": { "type": "string", "description": "One of: account-global, per-server, per-channel, per-user." },
+                    "scope_id": { "type": "string" },
+                    "key": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "scope", "scope_id", "key"]
+            }
+        }),
+        json!({
+            "name": "plugin_setting_set",
+            "description": "Set a single plugin-declared setting value.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "scope": { "type": "string", "description": "One of: account-global, per-server, per-channel, per-user." },
+                    "scope_id": { "type": "string" },
+                    "key": { "type": "string" },
+                    "value": { "type": "string", "description": "Serialized JSON value as a string." },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "scope", "scope_id", "key", "value"]
+            }
+        }),
+        json!({
+            "name": "sidebar_declaration",
+            "description": "Return the plugin-declared sidebar layout + sections.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend"]
+            }
+        }),
+        json!({
+            "name": "invoke_sidebar_action",
+            "description": "Invoke a plugin-declared sidebar action.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "action_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "action_id"]
+            }
+        }),
+        json!({
+            "name": "channel_view",
+            "description": "Return the plugin-declared view descriptor for a channel.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "channel_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "channel_id"]
+            }
+        }),
+        json!({
+            "name": "view_rows",
+            "description": "Paged row fetch for a plugin-declared view.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "channel_id": { "type": "string" },
+                    "cursor_kind": { "type": "string", "description": "Optional; one of offset/timestamp/id/opaque." },
+                    "cursor_value": { "type": "string", "description": "Optional; cursor payload." },
+                    "sort_id": { "type": "string" },
+                    "filter_id": { "type": "string" },
+                    "tab_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "channel_id"]
+            }
+        }),
+        json!({
+            "name": "composer_buttons",
+            "description": "Return plugin-declared composer-toolbar buttons for a channel.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "channel_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "channel_id"]
+            }
+        }),
+        json!({
+            "name": "message_actions",
+            "description": "Return plugin-declared per-message action items.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "channel_id": { "type": "string" },
+                    "message_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "channel_id", "message_id"]
+            }
+        }),
+        json!({
+            "name": "invoke_composer_action",
+            "description": "Invoke a plugin-declared composer action.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "action_id": { "type": "string" },
+                    "channel_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "action_id", "channel_id"]
+            }
+        }),
+        json!({
+            "name": "invoke_message_action",
+            "description": "Invoke a plugin-declared per-message action.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string" },
+                    "action_id": { "type": "string" },
+                    "channel_id": { "type": "string" },
+                    "message_id": { "type": "string" },
+                    "account_id": { "type": "string" }
+                },
+                "required": ["backend", "action_id", "channel_id", "message_id"]
+            }
+        }),
     ]
 }
 
@@ -259,6 +545,26 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool) -> Value
         "test_signin" => handle_test_signin(args, pool).await,
         "test_health" => handle_test_lifecycle(args, "health").await,
         "test_reseed" => handle_test_lifecycle(args, "reseed").await,
+
+        // Client-provided UI surface (WP 8).
+        "context_menu_server" => handle_context_menu(args, pool, MenuTargetKind::Server).await,
+        "context_menu_channel" => handle_context_menu(args, pool, MenuTargetKind::Channel).await,
+        "context_menu_user" => handle_context_menu(args, pool, MenuTargetKind::User).await,
+        "context_menu_message" => handle_context_menu(args, pool, MenuTargetKind::Message).await,
+        "context_menu_dm" => handle_context_menu(args, pool, MenuTargetKind::Dm).await,
+        "context_menu_category" => handle_context_menu(args, pool, MenuTargetKind::Category).await,
+        "invoke_context_action" => handle_invoke_context_action(args, pool).await,
+        "plugin_settings_sections" => handle_plugin_settings_sections(args, pool).await,
+        "plugin_setting_get" => handle_plugin_setting_get(args, pool).await,
+        "plugin_setting_set" => handle_plugin_setting_set(args, pool).await,
+        "sidebar_declaration" => handle_sidebar_declaration(args, pool).await,
+        "invoke_sidebar_action" => handle_invoke_sidebar_action(args, pool).await,
+        "channel_view" => handle_channel_view(args, pool).await,
+        "view_rows" => handle_view_rows(args, pool).await,
+        "composer_buttons" => handle_composer_buttons(args, pool).await,
+        "message_actions" => handle_message_actions(args, pool).await,
+        "invoke_composer_action" => handle_invoke_composer_action(args, pool).await,
+        "invoke_message_action" => handle_invoke_message_action(args, pool).await,
 
         _ => err_result(format!("unknown tool: {tool}")),
     }
@@ -698,4 +1004,260 @@ async fn handle_test_lifecycle(args: &Value, endpoint: &str) -> Value {
     }
 
     ok_result(serde_json::to_string_pretty(&results).unwrap_or_default())
+}
+
+// ─── Client-provided UI surface handlers (WP 8) ──────────────────────────────
+
+async fn handle_context_menu(args: &Value, pool: &BackendPool, target: MenuTargetKind) -> Value {
+    let target_id = match str_arg(args, "target_id") {
+        Some(t) => t,
+        None => return err_result("missing 'target_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_context_menu_items(target, target_id).await {
+        Ok(items) => ok_result(serde_json::to_string_pretty(&items).unwrap_or_default()),
+        Err(e) => err_result(format!("get_context_menu_items failed: {e}")),
+    }
+}
+
+async fn handle_invoke_context_action(args: &Value, pool: &BackendPool) -> Value {
+    let action_id = match str_arg(args, "action_id") {
+        Some(a) => a,
+        None => return err_result("missing 'action_id'"),
+    };
+    let target_kind_str = match str_arg(args, "target_kind") {
+        Some(k) => k,
+        None => return err_result("missing 'target_kind'"),
+    };
+    let target = match parse_menu_target(target_kind_str) {
+        Some(t) => t,
+        None => return err_result(format!("unknown target_kind: {target_kind_str}")),
+    };
+    let target_id = match str_arg(args, "target_id") {
+        Some(t) => t,
+        None => return err_result("missing 'target_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.invoke_context_action(action_id, target, target_id).await {
+        Ok(outcome) => ok_result(serde_json::to_string_pretty(&outcome).unwrap_or_default()),
+        Err(e) => err_result(format!("invoke_context_action failed: {e}")),
+    }
+}
+
+async fn handle_plugin_settings_sections(args: &Value, pool: &BackendPool) -> Value {
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_settings_sections().await {
+        Ok(sections) => ok_result(serde_json::to_string_pretty(&sections).unwrap_or_default()),
+        Err(e) => err_result(format!("get_settings_sections failed: {e}")),
+    }
+}
+
+async fn handle_plugin_setting_get(args: &Value, pool: &BackendPool) -> Value {
+    let scope_str = match str_arg(args, "scope") {
+        Some(s) => s,
+        None => return err_result("missing 'scope'"),
+    };
+    let scope = match parse_settings_scope(scope_str) {
+        Some(s) => s,
+        None => return err_result(format!("unknown scope: {scope_str}")),
+    };
+    let scope_id = match str_arg(args, "scope_id") {
+        Some(s) => s,
+        None => return err_result("missing 'scope_id'"),
+    };
+    let key = match str_arg(args, "key") {
+        Some(k) => k,
+        None => return err_result("missing 'key'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_setting_value(scope, scope_id, key).await {
+        Ok(v) => ok_result(v),
+        Err(e) => err_result(format!("get_setting_value failed: {e}")),
+    }
+}
+
+async fn handle_plugin_setting_set(args: &Value, pool: &BackendPool) -> Value {
+    let scope_str = match str_arg(args, "scope") {
+        Some(s) => s,
+        None => return err_result("missing 'scope'"),
+    };
+    let scope = match parse_settings_scope(scope_str) {
+        Some(s) => s,
+        None => return err_result(format!("unknown scope: {scope_str}")),
+    };
+    let scope_id = match str_arg(args, "scope_id") {
+        Some(s) => s,
+        None => return err_result("missing 'scope_id'"),
+    };
+    let key = match str_arg(args, "key") {
+        Some(k) => k,
+        None => return err_result("missing 'key'"),
+    };
+    let value = match str_arg(args, "value") {
+        Some(v) => v,
+        None => return err_result("missing 'value'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.set_setting_value(scope, scope_id, key, value).await {
+        Ok(()) => ok_result("ok"),
+        Err(e) => err_result(format!("set_setting_value failed: {e}")),
+    }
+}
+
+async fn handle_sidebar_declaration(args: &Value, pool: &BackendPool) -> Value {
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_sidebar_declaration().await {
+        Ok(d) => ok_result(serde_json::to_string_pretty(&d).unwrap_or_default()),
+        Err(e) => err_result(format!("get_sidebar_declaration failed: {e}")),
+    }
+}
+
+async fn handle_invoke_sidebar_action(args: &Value, pool: &BackendPool) -> Value {
+    let action_id = match str_arg(args, "action_id") {
+        Some(a) => a,
+        None => return err_result("missing 'action_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.invoke_sidebar_action(action_id).await {
+        Ok(outcome) => ok_result(serde_json::to_string_pretty(&outcome).unwrap_or_default()),
+        Err(e) => err_result(format!("invoke_sidebar_action failed: {e}")),
+    }
+}
+
+async fn handle_channel_view(args: &Value, pool: &BackendPool) -> Value {
+    let channel_id = match str_arg(args, "channel_id") {
+        Some(c) => c,
+        None => return err_result("missing 'channel_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_channel_view(channel_id).await {
+        Ok(d) => ok_result(serde_json::to_string_pretty(&d).unwrap_or_default()),
+        Err(e) => err_result(format!("get_channel_view failed: {e}")),
+    }
+}
+
+async fn handle_view_rows(args: &Value, pool: &BackendPool) -> Value {
+    let channel_id = match str_arg(args, "channel_id") {
+        Some(c) => c,
+        None => return err_result("missing 'channel_id'"),
+    };
+    let cursor = match (str_arg(args, "cursor_kind"), str_arg(args, "cursor_value")) {
+        (Some(kind_s), Some(val)) => match parse_cursor_kind(kind_s) {
+            Some(kind) => Some(Cursor { kind, value: val.to_string() }),
+            None => return err_result(format!("unknown cursor_kind: {kind_s}")),
+        },
+        (None, None) => None,
+        _ => return err_result("cursor_kind and cursor_value must both be present or both absent"),
+    };
+    let sort_id = str_arg(args, "sort_id");
+    let filter_id = str_arg(args, "filter_id");
+    let tab_id = str_arg(args, "tab_id");
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_view_rows(channel_id, cursor, sort_id, filter_id, tab_id).await {
+        Ok(page) => ok_result(serde_json::to_string_pretty(&page).unwrap_or_default()),
+        Err(e) => err_result(format!("get_view_rows failed: {e}")),
+    }
+}
+
+async fn handle_composer_buttons(args: &Value, pool: &BackendPool) -> Value {
+    let channel_id = match str_arg(args, "channel_id") {
+        Some(c) => c,
+        None => return err_result("missing 'channel_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_composer_buttons(channel_id).await {
+        Ok(btns) => ok_result(serde_json::to_string_pretty(&btns).unwrap_or_default()),
+        Err(e) => err_result(format!("get_composer_buttons failed: {e}")),
+    }
+}
+
+async fn handle_message_actions(args: &Value, pool: &BackendPool) -> Value {
+    let channel_id = match str_arg(args, "channel_id") {
+        Some(c) => c,
+        None => return err_result("missing 'channel_id'"),
+    };
+    let message_id = match str_arg(args, "message_id") {
+        Some(m) => m,
+        None => return err_result("missing 'message_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.get_message_actions(channel_id, message_id).await {
+        Ok(items) => ok_result(serde_json::to_string_pretty(&items).unwrap_or_default()),
+        Err(e) => err_result(format!("get_message_actions failed: {e}")),
+    }
+}
+
+async fn handle_invoke_composer_action(args: &Value, pool: &BackendPool) -> Value {
+    let action_id = match str_arg(args, "action_id") {
+        Some(a) => a,
+        None => return err_result("missing 'action_id'"),
+    };
+    let channel_id = match str_arg(args, "channel_id") {
+        Some(c) => c,
+        None => return err_result("missing 'channel_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.invoke_composer_action(action_id, channel_id).await {
+        Ok(outcome) => ok_result(serde_json::to_string_pretty(&outcome).unwrap_or_default()),
+        Err(e) => err_result(format!("invoke_composer_action failed: {e}")),
+    }
+}
+
+async fn handle_invoke_message_action(args: &Value, pool: &BackendPool) -> Value {
+    let action_id = match str_arg(args, "action_id") {
+        Some(a) => a,
+        None => return err_result("missing 'action_id'"),
+    };
+    let channel_id = match str_arg(args, "channel_id") {
+        Some(c) => c,
+        None => return err_result("missing 'channel_id'"),
+    };
+    let message_id = match str_arg(args, "message_id") {
+        Some(m) => m,
+        None => return err_result("missing 'message_id'"),
+    };
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    match entry.backend.invoke_message_action(action_id, channel_id, message_id).await {
+        Ok(outcome) => ok_result(serde_json::to_string_pretty(&outcome).unwrap_or_default()),
+        Err(e) => err_result(format!("invoke_message_action failed: {e}")),
+    }
 }
