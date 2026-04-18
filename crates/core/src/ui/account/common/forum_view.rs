@@ -164,11 +164,27 @@ pub fn ForumView() -> Element {
     };
     let channel_id = if channel_id.is_empty() {
         let cd = chat_data.read();
-        cd.current_channel
+        // Fall back to current_channel only if it's actually in the CURRENT
+        // server's channel list — after switching servers, `current_channel`
+        // can lag the `channels` vec for a tick. Taking a stale
+        // current_channel here leaks the previous server's posts into the new
+        // server's forum view.
+        let current_matches_server = cd
+            .current_channel
             .as_ref()
-            .map(|ch| ch.id.clone())
-            .or_else(|| cd.channels.first().map(|ch| ch.id.clone()))
-            .unwrap_or_default()
+            .is_some_and(|ch| cd.channels.iter().any(|c| c.id == ch.id));
+        if current_matches_server {
+            cd.current_channel
+                .as_ref()
+                .map(|ch| ch.id.clone())
+                .or_else(|| cd.channels.first().map(|ch| ch.id.clone()))
+                .unwrap_or_default()
+        } else {
+            cd.channels
+                .first()
+                .map(|ch| ch.id.clone())
+                .unwrap_or_default()
+        }
     } else {
         channel_id
     };
