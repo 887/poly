@@ -12,6 +12,7 @@
 - `jj status`, `jj diff`, `jj log`, `jj show` for inspection
 - `jj new`, `jj describe`, `jj commit` for creating changes
 - `jj git push` to push to remote
+- **"Commit and push" means: `jj describe` → `jj bookmark set main -r @` → `jj git push --bookmark main`.** That's it. Do NOT run `jj new` after. `jj git push` auto-advances `@` to a fresh empty commit (the pushed commit becomes immutable so jj automatically creates a new empty working copy on top). A redundant `jj new` creates a second empty commit that shows up as a rejected empty-ancestor on the next push (`Error: Won't push commit <id> since it has no description`).
 - Only fall back to `git` if `jj` cannot accomplish the task
 
 ---
