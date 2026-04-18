@@ -46,6 +46,118 @@ pub const DEMO3_ACCOUNT_NAME: &str = "Platypus (demo_forum)";
 /// The demo_forum backend type slug.
 pub const DEMO_FORUM_BACKEND: &str = "demo_forum";
 
+/// Compute the "post score" for a forum message from its reactions.
+///
+/// Mirrors the pre-refactor Lemmy scoring rule: take the **max** count
+/// across the upvote-style emojis (🔥 ❤️ 👍 🎉 🦀) rather than summing
+/// them, then subtract the 👎 count. Returned as an `i64` so it can go
+/// negative without wrap-around.
+pub fn forum_post_score(msg: &Message) -> i64 {
+    let reaction_count = |emoji: &str| -> u32 {
+        msg.reactions
+            .iter()
+            .find(|r| r.emoji == emoji)
+            .map(|r| r.count)
+            .unwrap_or(0)
+    };
+    let up = reaction_count("\u{1f525}") // 🔥
+        .max(reaction_count("\u{2764}\u{fe0f}")) // ❤️
+        .max(reaction_count("\u{1f44d}")) // 👍
+        .max(reaction_count("\u{1f389}")) // 🎉
+        .max(reaction_count("\u{1f980}")) as i64; // 🦀
+    let down = reaction_count("\u{1f44e}") as i64; // 👎
+    up - down
+}
+
+/// Humanize a timestamp relative to now. Mirrors the pre-refactor
+/// `forum_ts` helper so the forum rows show `"3h ago"` / `"2d ago"` /
+/// `"Mar 12, 2025"` in the same format the user saw before WP 5.
+pub fn forum_humanize_age(ts: chrono::DateTime<chrono::Utc>) -> String {
+    let now = chrono::Utc::now();
+    let diff = now.signed_duration_since(ts);
+    let secs = diff.num_seconds();
+    if secs < 60 {
+        return "just now".to_string();
+    }
+    let m = diff.num_minutes();
+    if m < 60 {
+        return format!("{m}m ago");
+    }
+    let h = diff.num_hours();
+    if h < 24 {
+        return format!("{h}h ago");
+    }
+    let d = diff.num_days();
+    if d < 7 {
+        return format!("{d}d ago");
+    }
+    ts.format("%b %-d, %Y").to_string()
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod forum_helper_tests {
+    use super::*;
+
+    fn msg_with(reactions: Vec<(&str, u32)>) -> Message {
+        Message {
+            id: "m".into(),
+            author: User {
+                id: "u".into(),
+                display_name: "U".into(),
+                avatar_url: None,
+                presence: PresenceStatus::Online,
+                backend: BackendType::from("demo"),
+            },
+            content: MessageContent::Text(String::new()),
+            timestamp: Utc::now(),
+            attachments: vec![],
+            reactions: reactions
+                .into_iter()
+                .map(|(e, c)| Reaction { emoji: e.into(), count: c, me: false })
+                .collect(),
+            reply_to: None,
+            edited: false,
+        }
+    }
+
+    #[test]
+    fn score_max_of_up_reactions_minus_down() {
+        let m = msg_with(vec![("\u{1f525}", 7), ("\u{1f44d}", 3), ("\u{1f44e}", 2)]);
+        assert_eq!(forum_post_score(&m), 7 - 2);
+    }
+
+    #[test]
+    fn score_no_reactions_is_zero() {
+        let m = msg_with(vec![]);
+        assert_eq!(forum_post_score(&m), 0);
+    }
+
+    #[test]
+    fn score_pure_downvotes_is_negative() {
+        let m = msg_with(vec![("\u{1f44e}", 4)]);
+        assert_eq!(forum_post_score(&m), -4);
+    }
+
+    #[test]
+    fn humanize_age_recent_is_just_now() {
+        let ts = Utc::now();
+        assert_eq!(forum_humanize_age(ts), "just now");
+    }
+
+    #[test]
+    fn humanize_age_hours_uses_h_ago() {
+        let ts = Utc::now() - Duration::hours(5);
+        assert_eq!(forum_humanize_age(ts), "5h ago");
+    }
+
+    #[test]
+    fn humanize_age_days_uses_d_ago() {
+        let ts = Utc::now() - Duration::days(3);
+        assert_eq!(forum_humanize_age(ts), "3d ago");
+    }
+}
+
 /// Generate a demo session for the platypus account (demo_forum).
 pub fn demo3_session() -> Session {
     Session {

@@ -83,13 +83,20 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
     let header = desc.header.clone();
     let toolbar = desc.toolbar.clone();
     let body = desc.body.clone();
+    // D30 — parent-owned filter + refresh signals; toolbar writes, bodies
+    // read. A non-forum view that never shows the filter input still has
+    // these signals sitting at their defaults (empty string / tick=0) and
+    // the body engines short-circuit their filter pass.
+    let filter = use_signal(String::new);
+    let refresh_tick = use_signal(|| 0u32);
+    let filter_str = filter.read().clone();
     rsx! {
         div { class: "client-view",
             if let Some(h) = header {
                 ViewHeader { header: h }
             }
             if let Some(t) = toolbar {
-                ViewToolbar { toolbar: t }
+                ViewToolbar { toolbar: t, filter, refresh_tick }
             }
             div { class: "client-view-body",
                 {
@@ -99,6 +106,7 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
+                                filter: filter_str.clone(),
                             }
                         },
                         ViewBody::CardBody(spec) => rsx! {
@@ -113,6 +121,7 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
+                                filter: filter_str.clone(),
                             }
                         },
                         ViewBody::SplitBody(spec) => rsx! {

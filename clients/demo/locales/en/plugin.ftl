@@ -22,4 +22,16 @@ plugin-demo-setting-message-count-label = Message Count
 # --- Forum view (Tree) ---
 plugin-demo-view-posts-title = Posts
 plugin-demo-sort-hot = Hot
+plugin-demo-sort-active = Active
 plugin-demo-sort-new = New
+plugin-demo-sort-old = Old
+plugin-demo-sort-most-comments = Most Comments
+plugin-demo-sort-new-comments = New Comments
+plugin-demo-sort-top-hour = Top Hour
+plugin-demo-sort-top-day = Top Day
+plugin-demo-sort-top-week = Top Week
+plugin-demo-sort-top-month = Top Month
+plugin-demo-sort-top-year = Top Year
+plugin-demo-sort-top-all-time = Top All Time
+plugin-demo-filter-placeholder = Filter posts…
+plugin-demo-refresh = Refresh

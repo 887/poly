@@ -1319,19 +1319,22 @@ impl ClientBackend for DemoClient3 {
                 info_block: None,
             }),
             toolbar: Some(ViewToolbar {
+                // Full Lemmy sort ladder — matches pre-refactor `ForumSort`
+                // enum. When `>4` options are present the host toolbar
+                // renders a `<select>` dropdown instead of tab chips.
                 sort_options: vec![
-                    ToolbarOption {
-                        id: "hot".to_string(),
-                        label_key: "plugin-demo-sort-hot".to_string(),
-                        icon: None,
-                        default_selected: true,
-                    },
-                    ToolbarOption {
-                        id: "new".to_string(),
-                        label_key: "plugin-demo-sort-new".to_string(),
-                        icon: None,
-                        default_selected: false,
-                    },
+                    ToolbarOption { id: "hot".to_string(), label_key: "plugin-demo-sort-hot".to_string(), icon: None, default_selected: true },
+                    ToolbarOption { id: "active".to_string(), label_key: "plugin-demo-sort-active".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "new".to_string(), label_key: "plugin-demo-sort-new".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "old".to_string(), label_key: "plugin-demo-sort-old".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "most_comments".to_string(), label_key: "plugin-demo-sort-most-comments".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "new_comments".to_string(), label_key: "plugin-demo-sort-new-comments".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "top_hour".to_string(), label_key: "plugin-demo-sort-top-hour".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "top_day".to_string(), label_key: "plugin-demo-sort-top-day".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "top_week".to_string(), label_key: "plugin-demo-sort-top-week".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "top_month".to_string(), label_key: "plugin-demo-sort-top-month".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "top_year".to_string(), label_key: "plugin-demo-sort-top-year".to_string(), icon: None, default_selected: false },
+                    ToolbarOption { id: "top_all_time".to_string(), label_key: "plugin-demo-sort-top-all-time".to_string(), icon: None, default_selected: false },
                 ],
                 filter_options: vec![],
                 tabs: vec![],
@@ -1349,6 +1352,10 @@ impl ClientBackend for DemoClient3 {
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
         let posts = data::demo3_messages(channel_id);
+        // Forum rows encode score / comment count / age in a greppable
+        // `SCORE:N ·` prefix on `meta_text`. The host `ListBody` / `TreeBody`
+        // engines pattern-match this prefix and render a Lemmy-style vote
+        // column; rows without the prefix fall back to the generic card.
         let rows = posts
             .into_iter()
             .map(|msg| {
@@ -1356,15 +1363,15 @@ impl ClientBackend for DemoClient3 {
                     MessageContent::Text(t) => t.clone(),
                     MessageContent::WithAttachments { text, .. } => text.clone(),
                 };
+                let score = data::forum_post_score(&msg);
                 let comment_count = data::demo3_post_comments(&msg.id).len();
+                let age = data::forum_humanize_age(msg.timestamp);
                 ViewRow {
                     id: msg.id.clone(),
                     primary_text: body,
                     secondary_text: Some(format!("by {}", msg.author.display_name)),
                     meta_text: Some(format!(
-                        "{} comments · {}",
-                        comment_count,
-                        msg.timestamp.to_rfc3339(),
+                        "SCORE:{score} · {comment_count} comments · {age}"
                     )),
                     icon: None,
                     badge: None,
