@@ -1,11 +1,40 @@
 # Plan — Client-UI Surface Polish (Post-WP 9 Cleanup)
 
 > **Created:** 2026-04-18
-> **Status:** 🟡 PLANNING
+> **Last updated:** 2026-04-18 (Packs A, B, J shipped + critical forum bug sweep)
+> **Status:** 🟢 IN PROGRESS — 3 of 9 packs shipped, remainder queued
 > **Parent:** `docs/plans/plan-client-ui-surface.md` (the 31-decision refactor that landed WPs 0-9, now ✅ COMPLETED structurally)
 > **Scope:** every cosmetic / rough-edge / deferred-TODO item carried over from WP 0-9, plus the fixes shipped in `fix(client-ui-surface)` and `fix(demo)` follow-up commits
 > **Goal:** take the functional-but-rough landing from 'works' to 'polished enough to demo without apologies'
 > **Test policy:** every pack lands its full test matrix at every applicable layer (see §1 below). A pack is not complete until its tests are green.
+
+## 0. Current status table
+
+| Pack | Scope | Status |
+|---|---|---|
+| **A** | Visual polish (view toolbar tabs, card styling, row click, view header, menu submenu+icons+error+loading, composer icons+empty slots+separator, settings desc, FTL fallback, ARIA on all new components) | ✅ **pushed** |
+| **B** | ActionOutcome dispatch (Navigate push, Toast system, Pending polling spinner, shared handler), SidebarInvalidated event consumer, P4 toolbar re-fetch, P5 infinite scroll, P7 SplitBody loading | ✅ **pushed** |
+| **C** | Plugin settings storage round-trip via host-api KV, ChannelSettingsPage wiring, scroll-spy registration, save-confirmation toasts, field descriptions | ⏳ queued |
+| **D** | SpacesRooms proper tree (Matrix), Communities tabs (Lemmy), Feed tabs clickable (HN), RepoTree children (GitHub/Forgejo), sidebar error badge | ⏳ queued |
+| **E** | Real API integration for Lemmy/HN/GitHub/Forgejo `get_view_rows` + `get_view_detail`, state-aware menu items (Subscribe/Unsubscribe conditional) | ⏳ queued |
+| **F** | Capability gating migration (phase-2.20 leftover): DMs/Friends/Notifications tabs, notification filter enum, composer gated on read-only, unconditional routes | ⏳ queued |
+| **G** | Custom-block shadow-root upgrade + security audit + usage lint | ⏳ queued |
+| **H** | Cleanup — BackendCapabilities D12 flags, backend_emoji slug match, dead forum_view helpers, UI snapshot goldens, MCP tool filtering | ⏳ queued |
+| **I** | i18n — `-desc` FTL keys per setting, non-English locale seeds | ⏳ queued |
+| **J** | Filter/dropdown/refresh CSS, toggle switches everywhere, rounded corners globally, emoji font fallback | ✅ **pushed** |
+
+### Additional fixes shipped alongside the packs (landed on main, not tracked as a pack because they were bug hotfixes during UX verification):
+
+| Fix | What it resolved |
+|---|---|
+| TreeBody row-click sub-component extraction | Dioxus 0.7 template tracking was dropping handlers inside `for row in rows { { block } rsx! {…} }` blocks. Extracted to typed child component with `EventHandler<String>` prop. |
+| Demo forum HTML-escape | User text in `get_view_detail` body now escaped before wrapping in `<p>…</p>` for safety. |
+| Post click route-push | Clicking a forum card now navigates to `/posts/{id}` (full `ForumPostView` with vote col + threaded comments), matching the old LemmyForumView UX instead of inline-pane. |
+| `hn-post-<id>` comment channel mapping | `ForumPostView` fetches comments via `get_messages("hn-post-{pid}")`; DemoClient3 now strips the prefix to resolve `demo3_post_comments`. Comments now render on forum post detail pages. |
+| Emoji font fallback chain | `body` CSS appends Noto/Apple/Segoe color-emoji fonts so regional-indicator flags (🇩🇪) render correctly when the system has a color-emoji font. |
+| `ForumView` channel-id fallback | Back-button to `ServerHome` route (no `selected_channel`) was showing "No channel selected". Now falls through to `chat_data.current_channel` then `chat_data.channels[0]`. |
+| Stale `current_channel` rejection | Server-switching kept stale `current_channel` from the old server during the brief load window. Now only trusts `current_channel` when its id appears in the current server's `channels` list; otherwise uses `channels[0]`. |
+| Key-based ClientView+body remount | `use_resource` captures `channel_id` as a plain String — Dioxus reactivity can't track it. Added `key={channel_id}:{account_id}` to `ClientView` in `ForumView` and to each body engine in `ClientView`'s body match, forcing a full remount on channel change so the fetch re-runs. |
 
 ---
 
