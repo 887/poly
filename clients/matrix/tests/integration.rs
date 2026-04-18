@@ -727,3 +727,22 @@ async fn test_event_stream_receives_sent_message() {
         "Did not receive MessageReceived for !general1:localhost with body '{body}' within 2 s"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Pack C.2 — settings storage round-trip
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_settings_storage_round_trip() {
+    use poly_client::{ClientBackend, SettingsScope};
+    let client = poly_matrix::MatrixClient::new();
+    client
+        .set_setting_value(SettingsScope::PerServer, "room1", "display-name", "matrix-nick")
+        .await
+        .expect("set_setting_value should succeed");
+    let got = client
+        .get_setting_value(SettingsScope::PerServer, "room1", "display-name")
+        .await
+        .expect("get_setting_value should succeed");
+    assert_eq!(got, "matrix-nick");
+}

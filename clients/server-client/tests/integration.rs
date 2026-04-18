@@ -917,3 +917,22 @@ async fn test_remove_friend() {
         "Alice should have no friends after removal"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Pack C.2 — settings storage round-trip
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_settings_storage_round_trip() {
+    use poly_client::{ClientBackend, SettingsScope};
+    let client = poly_server_client::PolyServerBackend::new("http://localhost:9333", [0u8; 32]);
+    client
+        .set_setting_value(SettingsScope::PerServer, "srv1", "nickname", "poly-nick")
+        .await
+        .expect("set_setting_value should succeed");
+    let got = client
+        .get_setting_value(SettingsScope::PerServer, "srv1", "nickname")
+        .await
+        .expect("get_setting_value should succeed");
+    assert_eq!(got, "poly-nick");
+}

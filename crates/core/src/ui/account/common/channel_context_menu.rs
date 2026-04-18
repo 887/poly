@@ -14,8 +14,10 @@
 //! - Copy Channel ID
 
 use crate::i18n::t;
+use crate::nav;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
+use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -82,6 +84,44 @@ pub fn ChannelContextMenu() -> Element {
             ChannelMenuItem {
                 label: if muted() { t("channel-menu-unmute") } else { t("channel-menu-mute") },
                 onclick: move |_| muted.toggle(),
+            }
+
+            div { class: "context-menu-separator" }
+
+            // Channel Settings — Pack C.3 / P19.
+            {
+                let server_id = menu.server_id.clone();
+                let account_id = menu.account_id.clone();
+                let channel_id_for_settings = channel_id.clone();
+                let backend_slug = app_state
+                    .read()
+                    .nav
+                    .active_backend
+                    .as_ref()
+                    .map(|b| b.slug().to_string())
+                    .unwrap_or_else(|| "demo".to_string());
+                let instance_id = app_state
+                    .read()
+                    .nav
+                    .active_instance_id
+                    .clone()
+                    .unwrap_or_default();
+                let mut close = close;
+                rsx! {
+                    ChannelMenuItem {
+                        label: t("channel-settings-title"),
+                        onclick: move |_| {
+                            nav!(Route::ChannelSettingsRoute {
+                                backend: backend_slug.clone(),
+                                instance_id: instance_id.clone(),
+                                account_id: account_id.clone(),
+                                server_id: server_id.clone(),
+                                channel_id: channel_id_for_settings.clone(),
+                            });
+                            close();
+                        },
+                    }
+                }
             }
 
             div { class: "context-menu-separator" }

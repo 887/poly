@@ -30,9 +30,11 @@
 use crate::client_manager::ClientManager;
 use crate::i18n::{has_key, t};
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::toast::{push_toast, ToastMessage};
 use dioxus::prelude::*;
 use poly_client::{
     ClientBackend, ClientError, SettingDescriptor, SettingKind, SettingsScope, SettingsSection,
+    ToastTone,
 };
 use poly_ui_macros::{context_menu, ui_action};
 use std::sync::Arc;
@@ -488,6 +490,9 @@ async fn load_value(
 
 /// Save a JSON-encoded value via the plugin. Errors are logged; the caller
 /// does not surface them inline (the next load will show the persisted state).
+///
+/// On success pushes a `ui-settings-saved` Success toast; on error pushes a
+/// `ui-settings-save-failed` Error toast (Pack C.3 / P22).
 async fn save_value(
     account_id: &str,
     scope: SettingsScope,
@@ -504,17 +509,37 @@ async fn save_value(
             return;
         }
     };
+    let toast_queue: Option<Signal<Vec<ToastMessage>>> = try_consume_context();
     let Ok(backend) = resolve_backend(&client_manager, account_id) else {
         tracing::warn!(
             "PluginSettingsSection: no backend for account {account_id} during save"
         );
+        if let Some(q) = toast_queue {
+            push_toast(
+                q,
+                ToastMessage::new("ui-settings-save-failed", ToastTone::Error),
+            );
+        }
         return;
     };
     let guard = backend.read().await;
-    if let Err(err) = guard.set_setting_value(scope, scope_id, key, value_json).await {
-        tracing::warn!(
-            "PluginSettingsSection: save {key}={value_json} failed: {err:?}"
-        );
+    match guard.set_setting_value(scope, scope_id, key, value_json).await {
+        Ok(()) => {
+            if let Some(q) = toast_queue {
+                push_toast(q, ToastMessage::new("ui-settings-saved", ToastTone::Success));
+            }
+        }
+        Err(err) => {
+            tracing::warn!(
+                "PluginSettingsSection: save {key}={value_json} failed: {err:?}"
+            );
+            if let Some(q) = toast_queue {
+                push_toast(
+                    q,
+                    ToastMessage::new("ui-settings-save-failed", ToastTone::Error),
+                );
+            }
+        }
     }
 }
 
@@ -528,12 +553,31 @@ fn resolve_backend(
         .ok_or_else(|| ClientError::NotFound(format!("no backend for account {account_id}")))
 }
 
+/// Pure helper for Pack C.3 / P22 toast-mutation tests.
+///
+/// Mirrors the branch in [`save_value`] that pushes a toast onto the queue
+/// after the plugin responds. Kept as a free function operating on the
+/// underlying `Vec<ToastMessage>` so unit tests don't need a Dioxus
+/// `VirtualDom` to construct a `Signal`.
+#[cfg(test)]
+fn push_save_outcome_toast(queue: &mut Vec<ToastMessage>, result: Result<(), ClientError>) {
+    match result {
+        Ok(()) => queue.push(ToastMessage::new("ui-settings-saved", ToastTone::Success)),
+        Err(_) => queue.push(ToastMessage::new(
+            "ui-settings-save-failed",
+            ToastTone::Error,
+        )),
+    }
+}
+
 // ─── Unit tests ──────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-    use super::lookup_optional_desc;
+    use super::{lookup_optional_desc, push_save_outcome_toast};
+    use crate::ui::client_ui::toast::ToastMessage;
+    use poly_client::{ClientError, ToastTone};
 
     /// P23: when the FTL key is missing, lookup_optional_desc returns None.
     #[test]
@@ -548,5 +592,47 @@ mod tests {
         let fake_key = "plugin-test-setting-noop-desc";
         let result = lookup_optional_desc(fake_key);
         assert!(result.is_none());
+    }
+
+    /// Pack C.3 / P22: an Ok save pushes exactly one Success toast with
+    /// the `ui-settings-saved` label key.
+    #[test]
+    fn save_ok_pushes_success_toast() {
+        let mut queue: Vec<ToastMessage> = Vec::new();
+        push_save_outcome_toast(&mut queue, Ok(()));
+        assert_eq!(queue.len(), 1, "Ok save should push exactly one toast");
+        assert_eq!(queue[0].label_key, "ui-settings-saved");
+        assert_eq!(queue[0].tone, ToastTone::Success);
+    }
+
+    /// Pack C.3 / P22: an Err save pushes exactly one Error toast with
+    /// the `ui-settings-save-failed` label key.
+    #[test]
+    fn save_err_pushes_error_toast() {
+        let mut queue: Vec<ToastMessage> = Vec::new();
+        push_save_outcome_toast(
+            &mut queue,
+            Err(ClientError::NotFound("plugin unavailable".into())),
+        );
+        assert_eq!(queue.len(), 1, "Err save should push exactly one toast");
+        assert_eq!(queue[0].label_key, "ui-settings-save-failed");
+        assert_eq!(queue[0].tone, ToastTone::Error);
+    }
+
+    /// Pack C.3 / P22: repeated Ok saves grow the queue monotonically
+    /// (one success toast per save).
+    #[test]
+    fn repeated_saves_grow_queue() {
+        let mut queue: Vec<ToastMessage> = Vec::new();
+        for _ in 0..3 {
+            push_save_outcome_toast(&mut queue, Ok(()));
+        }
+        assert_eq!(queue.len(), 3);
+        assert!(
+            queue
+                .iter()
+                .all(|m| m.label_key == "ui-settings-saved"
+                    && m.tone == ToastTone::Success)
+        );
     }
 }

@@ -897,3 +897,12 @@ menu-view-profile = View profile
 
 # Demo backend
 demo-regenerate-data = Regenerate Demo Data
+
+# Plugin settings save toast (Pack C.3)
+ui-settings-saved = Saved
+ui-settings-save-failed = Failed to save setting
+
+# Channel settings page (Pack C.3)
+channel-settings-title = Channel Settings
+channel-settings-no-plugin-sections = No per-channel settings for this backend.
+

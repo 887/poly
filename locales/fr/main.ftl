@@ -727,3 +727,12 @@ search-load-more = Défilez pour en voir plus…
 menu-copy-text = Copy text
 menu-copy-id = Copy ID
 menu-view-profile = View profile
+
+# Plugin settings save toast (Pack C.3)
+ui-settings-saved = Enregistré
+ui-settings-save-failed = Impossible d'enregistrer le paramètre
+
+# Channel settings page (Pack C.3)
+channel-settings-title = Paramètres du canal
+channel-settings-no-plugin-sections = Aucun paramètre par canal pour ce backend.
+

@@ -68,10 +68,40 @@ fn scroll_to_server_section(slug: &str) {
     scroll_to_settings_section("server-settings-section-", slug);
 }
 
-fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
+/// Install the shared scroll-spy with both host-universal and plugin-declared
+/// section ids. Pack C.3 / P20 extends this to pass plugin section ids so
+/// clicking a sidebar tab highlights the right section when the scroll spy
+/// resolves the active slug.
+///
+/// `plugin_section_keys` is the `section_key` list from plugin-declared
+/// `PerServer` sections. They are rendered in the DOM with
+/// `id="server-settings-section-plugin-{section_key}"`, so we pass the
+/// plugin-section prefix alongside the host-universal section prefix so the
+/// JS runtime can resolve the active slug across both prefixes.
+fn install_server_settings_scroll_spy(
+    _section: Signal<ServerSettingsSection>,
+    _plugin_section_keys: Vec<String>,
+) {
     #[cfg(target_arch = "wasm32")]
     {
         let mut section = _section;
+        let mut section_ids: Vec<String> = [
+            "server-settings-section-overview",
+            "server-settings-section-notifications",
+            "server-settings-section-profile",
+            "server-settings-section-general",
+        ]
+        .into_iter()
+        .map(ToString::to_string)
+        .collect();
+        for key in &_plugin_section_keys {
+            section_ids.push(format!("server-settings-section-plugin-{key}"));
+        }
+        let plugin_section_prefix = if _plugin_section_keys.is_empty() {
+            None
+        } else {
+            Some("server-settings-section-plugin-")
+        };
         let config = SettingsScrollSpyConfig {
             runtime_flag: "__polyServerSettingsScrollSpyInstalled",
             scroll_root_selectors: vec![
@@ -79,18 +109,17 @@ fn install_server_settings_scroll_spy(_section: Signal<ServerSettingsSection>) {
                 ".settings-content",
             ],
             section_prefix: "server-settings-section-",
-            section_ids: [
-                "server-settings-section-overview",
-                "server-settings-section-notifications",
-                "server-settings-section-profile",
-                "server-settings-section-general",
-            ]
-            .into_iter()
-            .map(ToString::to_string)
-            .collect(),
-            plugin_section_prefix: None,
+            section_ids,
+            plugin_section_prefix,
         };
         install_shared_settings_scroll_spy(config, move |slug| {
+            // Plugin-declared sections resolve to slugs prefixed with "plugin-";
+            // they are not part of `ServerSettingsSection`, so ignore them —
+            // the JS runtime still updates `data-settings-slug` highlighting
+            // for nav items that carry the plugin slug.
+            if slug.starts_with("plugin-") {
+                return;
+            }
             let next = ServerSettingsSection::from_slug(&slug);
             if *section.read() != next {
                 section.set(next);
@@ -412,8 +441,42 @@ pub fn ServerSettingsPage(
         }
     });
 
+    // Pack C.3 / P20 — fetch plugin-declared PerServer section keys so the
+    // scroll spy can track clicking a plugin section in the sidebar nav and
+    // highlight the right section when scrolling. Re-runs when `account_id`
+    // changes (different backend → different declared sections).
+    let plugin_section_keys = {
+        let account_id = account_id.clone();
+        use_resource(move || {
+            let account_id = account_id.clone();
+            async move {
+                let client_manager: Signal<ClientManager> = match try_consume_context() {
+                    Some(cm) => cm,
+                    None => return Vec::<String>::new(),
+                };
+                let Some(backend) = client_manager.read().get_backend(&account_id) else {
+                    return Vec::new();
+                };
+                let guard = backend.read().await;
+                guard
+                    .get_settings_sections()
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|s| matches!(s.scope, SettingsScope::PerServer))
+                    .map(|s| s.section_key)
+                    .collect::<Vec<_>>()
+            }
+        })
+    };
+
     use_effect(move || {
-        install_server_settings_scroll_spy(section);
+        let keys = plugin_section_keys
+            .read_unchecked()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        install_server_settings_scroll_spy(section, keys);
     });
 
     // Keep nav.selected_server in sync (needed if arrived via context menu)

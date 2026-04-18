@@ -727,3 +727,12 @@ search-load-more = Scrollen für mehr…
 menu-copy-text = Copy text
 menu-copy-id = Copy ID
 menu-view-profile = View profile
+
+# Plugin settings save toast (Pack C.3)
+ui-settings-saved = Gespeichert
+ui-settings-save-failed = Einstellung konnte nicht gespeichert werden
+
+# Channel settings page (Pack C.3)
+channel-settings-title = Kanal-Einstellungen
+channel-settings-no-plugin-sections = Keine kanalspezifischen Einstellungen für dieses Backend.
+

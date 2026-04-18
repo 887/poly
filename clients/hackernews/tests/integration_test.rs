@@ -422,3 +422,22 @@ async fn test_base_url() {
     let client = HackerNewsClient::with_base_url(hn_base_url(&server));
     assert_eq!(client.backend_type(), "hackernews");
 }
+
+// ---------------------------------------------------------------------------
+// Pack C.2 — settings storage round-trip
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_settings_storage_round_trip() {
+    use poly_client::SettingsScope;
+    let client = HackerNewsClient::new();
+    client
+        .set_setting_value(SettingsScope::AccountGlobal, "", "default-feed", "\"new\"")
+        .await
+        .expect("set_setting_value should succeed");
+    let got = client
+        .get_setting_value(SettingsScope::AccountGlobal, "", "default-feed")
+        .await
+        .expect("get_setting_value should succeed");
+    assert_eq!(got, "\"new\"");
+}

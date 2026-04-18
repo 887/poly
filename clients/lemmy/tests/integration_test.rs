@@ -326,3 +326,22 @@ async fn test_unauthenticated_get_servers_fails() {
     let result = client.get_servers().await;
     assert!(result.is_err(), "unauthenticated get_servers must fail");
 }
+
+// ---------------------------------------------------------------------------
+// Pack C.2 — settings storage round-trip
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_settings_storage_round_trip() {
+    use poly_client::SettingsScope;
+    let client = LemmyClient::new("https://lemmy.example");
+    client
+        .set_setting_value(SettingsScope::PerServer, "comm1", "mute-community", "true")
+        .await
+        .expect("set_setting_value should succeed");
+    let got = client
+        .get_setting_value(SettingsScope::PerServer, "comm1", "mute-community")
+        .await
+        .expect("get_setting_value should succeed");
+    assert_eq!(got, "true");
+}

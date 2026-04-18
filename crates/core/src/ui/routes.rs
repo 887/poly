@@ -50,9 +50,9 @@ use super::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
 };
 use super::account::{
-    AccountSettingsPage, ChatView, ConversationSearchView, ForumView, ForumPostView,
-    FriendsPanel, NewConversationView, NotificationsView, OutgoingDirectCallOverlay, SavedItemsView,
-    ServerSettingsPage, VoiceChannelView,
+    AccountSettingsPage, ChannelSettingsPage, ChatView, ConversationSearchView, ForumView,
+    ForumPostView, FriendsPanel, NewConversationView, NotificationsView, OutgoingDirectCallOverlay,
+    SavedItemsView, ServerSettingsPage, VoiceChannelView,
 };
 use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
@@ -92,6 +92,7 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ForumCommentsRoute { account_id, .. }
         | Route::ServerSettingsRoute { account_id, .. }
         | Route::ServerSettingsSectionRoute { account_id, .. }
+        | Route::ChannelSettingsRoute { account_id, .. }
         | Route::CreateChannelRoute { account_id, .. }
         | Route::FriendsRoute { account_id, .. }
         | Route::NotificationsRoute { account_id, .. }
@@ -362,6 +363,21 @@ pub enum Route {
             account_id: String,
             server_id: String,
             section: String,
+        },
+
+        // ── Account-scoped: Channel settings (Pack C.3 / P19) ───────
+        // Must come after ServerChat's route position *in the router's match
+        // order*; but because the path has a literal "/settings" suffix after
+        // :channel_id, it is strictly more specific than "/:channel_id" and
+        // wins the route match regardless of declaration order.
+        #[connected(linked)]
+        #[route("/:backend/:instance_id/:account_id/channels/:server_id/:channel_id/settings")]
+        ChannelSettingsRoute {
+            backend: String,
+            instance_id: String,
+            account_id: String,
+            server_id: String,
+            channel_id: String,
         },
 
     #[end_layout]
@@ -803,6 +819,23 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.active_account_id = Some(account_id.clone());
             s.nav.selected_server = Some(server_id.clone());
             s.nav.selected_channel = None;
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::ChannelSettingsRoute {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            channel_id,
+        } => {
+            s.nav.view = View::Settings;
+            s.nav.active_backend = Some(BackendType::from_slug(backend));
+            s.nav.active_instance_id = Some(instance_id.clone());
+            s.nav.active_account_id = Some(account_id.clone());
+            s.nav.selected_server = Some(server_id.clone());
+            s.nav.selected_channel = Some(channel_id.clone());
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -1790,6 +1823,33 @@ fn ServerSettingsSectionRoute(
     }
 }
 
+/// Per-channel settings — Pack C.3 / P19.
+///
+/// Delegates to [`ChannelSettingsPage`] which renders the plugin-declared
+/// `PerChannel` settings sections (empty-state message if the backend
+/// declares none).
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn ChannelSettingsRoute(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    server_id: String,
+    channel_id: String,
+) -> Element {
+    rsx! {
+        ChannelSettingsPage {
+            backend,
+            instance_id,
+            account_id,
+            server_id,
+            channel_id,
+        }
+    }
+}
+
 /// Root redirect — desktop memory history starts at "/".
 ///
 /// Uses `use_effect` to navigate away on mount since the `on_update`
@@ -2059,6 +2119,7 @@ fn route_variant_name(route: &Route) -> &'static str {
         Route::CreateServerRoute { .. } => "CreateServerRoute",
         Route::ServerSettingsRoute { .. } => "ServerSettingsRoute",
         Route::ServerSettingsSectionRoute { .. } => "ServerSettingsSectionRoute",
+        Route::ChannelSettingsRoute { .. } => "ChannelSettingsRoute",
         Route::SignupPicker => "SignupPicker",
         Route::ClientSignup { .. } => "ClientSignup",
         Route::ReauthAccount { .. } => "ReauthAccount",

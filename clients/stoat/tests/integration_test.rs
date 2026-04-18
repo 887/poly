@@ -630,3 +630,22 @@ async fn test_get_dms_with_unreads() {
         assert_eq!(dm.backend.as_str(), "stoat");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Pack C.2 — settings storage round-trip
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_settings_storage_round_trip() {
+    use poly_client::{ClientBackend, SettingsScope};
+    let client = poly_stoat::StoatClient::new();
+    client
+        .set_setting_value(SettingsScope::PerServer, "server1", "nickname", "stoat-nick")
+        .await
+        .expect("set_setting_value should succeed");
+    let got = client
+        .get_setting_value(SettingsScope::PerServer, "server1", "nickname")
+        .await
+        .expect("get_setting_value should succeed");
+    assert_eq!(got, "stoat-nick");
+}

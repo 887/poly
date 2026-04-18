@@ -53,6 +53,9 @@ pub fn plugin_translations(locale: &str) -> String {
 #[cfg(feature = "native")]
 pub struct LemmyClient {
     http: LemmyHttpClient,
+    /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
+    /// `host-api.kv_set` once exposed to plugins for true persistence.
+    settings_storage: SettingsStorageCell,
 }
 
 #[cfg(feature = "native")]
@@ -62,6 +65,7 @@ impl LemmyClient {
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
             http: LemmyHttpClient::new(base_url),
+            settings_storage: SettingsStorageCell::new(),
         }
     }
 
@@ -561,11 +565,15 @@ impl ClientBackend for LemmyClient {
 
     async fn get_setting_value(
         &self,
-        _scope: SettingsScope,
-        _scope_id: &str,
+        scope: SettingsScope,
+        scope_id: &str,
         key: &str,
     ) -> ClientResult<String> {
-        // TODO(WP 3): wire to host-api.kv_get once exposed to this plugin.
+        // Pack C P18: in-memory storage stub. TODO: migrate to
+        // host-api.kv_get once exposed to plugins for true persistence.
+        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
+            return Ok(value);
+        }
         for section in self.get_settings_sections().await? {
             for field in section.fields {
                 if field.key == key {
@@ -578,13 +586,14 @@ impl ClientBackend for LemmyClient {
 
     async fn set_setting_value(
         &self,
-        _scope: SettingsScope,
-        _scope_id: &str,
-        _key: &str,
-        _value: &str,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+        value: &str,
     ) -> ClientResult<()> {
-        // TODO(WP 3): wire to host-api.kv_set once exposed to this plugin.
-        Err(ClientError::NotSupported("settings storage not yet wired".into()))
+        // Pack C P18: in-memory storage stub. TODO: migrate to
+        // host-api.kv_set once exposed to plugins for true persistence.
+        self.settings_storage.set(scope, scope_id, key, value)
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {

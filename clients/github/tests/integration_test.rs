@@ -399,3 +399,22 @@ async fn test_logout() {
     let result = client.get_servers().await;
     assert!(result.is_err(), "get_servers after logout must fail");
 }
+
+// ---------------------------------------------------------------------------
+// Pack C.2 — settings storage round-trip
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_settings_storage_round_trip() {
+    use poly_client::SettingsScope;
+    let client = GitHubClient::dotcom();
+    client
+        .set_setting_value(SettingsScope::AccountGlobal, "", "show-private-repos", "false")
+        .await
+        .expect("set_setting_value should succeed");
+    let got = client
+        .get_setting_value(SettingsScope::AccountGlobal, "", "show-private-repos")
+        .await
+        .expect("get_setting_value should succeed");
+    assert_eq!(got, "false");
+}

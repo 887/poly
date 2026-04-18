@@ -253,3 +253,22 @@ async fn test_concurrent_sessions() {
     assert_eq!(sess_w.user.display_name, "Walrus");
     assert_ne!(sess_s.token, sess_w.token);
 }
+
+// ---------------------------------------------------------------------------
+// Pack C.2 — settings storage round-trip
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_settings_storage_round_trip() {
+    use poly_client::{ClientBackend, SettingsScope};
+    let client = poly_teams::TeamsClient::new();
+    client
+        .set_setting_value(SettingsScope::PerServer, "team1", "display-name", "teams-nick")
+        .await
+        .expect("set_setting_value should succeed");
+    let got = client
+        .get_setting_value(SettingsScope::PerServer, "team1", "display-name")
+        .await
+        .expect("get_setting_value should succeed");
+    assert_eq!(got, "teams-nick");
+}
