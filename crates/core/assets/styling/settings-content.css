@@ -190,6 +190,7 @@
     border-left: 3px solid var(--accent-primary);
     padding-left: 12px;
     margin-bottom: 8px;
+    border-radius: 10px;
 }
 
 /* Header row: icon + title + badge */

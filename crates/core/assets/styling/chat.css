@@ -1282,7 +1282,7 @@
     padding: 12px 14px;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-primary);
-    border-radius: var(--radius-md);
+    border-radius: 10px;
     transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
@@ -1566,27 +1566,60 @@
     max-width: 400px;
 }
 
-/* ── Forum refresh button ─────────────────────────────────────── */
+/* ── Forum filter input (P62) ─────────────────────────────────── */
+.forum-filter-input {
+    background: var(--bg-input, var(--bg-secondary, #2a2a2a));
+    color: var(--text-primary, #e8e8e8);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-md, 8px);
+    padding: 8px 12px;
+    font-size: 14px;
+    min-width: 220px;
+    transition: border-color var(--transition-fast, 150ms ease),
+        background var(--transition-fast, 150ms ease);
+}
+
+.forum-filter-input:focus {
+    outline: none;
+    border-color: var(--accent-primary, #5865f2);
+    background: var(--bg-hover, #333);
+}
+
+.forum-filter-input::placeholder {
+    color: var(--text-muted, rgba(255, 255, 255, 0.4));
+}
+
+/* ── Forum sort dropdown (P66) ────────────────────────────────── */
 .forum-sort-select {
     display: inline-block !important; /* override wizard.css `select { display: none }` */
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-primary);
-    border-radius: var(--radius-sm);
-    padding: 4px 8px;
-    font-size: 13px;
+    background-color: var(--bg-secondary, #2a2a2a);
+    color: var(--text-primary, #e8e8e8);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-md, 8px);
+    padding: 8px 32px 8px 12px;
+    font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     outline: none;
-    height: 30px;
-    min-width: 110px;
-    appearance: auto;
+    min-width: 140px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23e4e4e7' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    transition: border-color var(--transition-fast, 150ms ease),
+        background-color var(--transition-fast, 150ms ease);
 }
 .forum-sort-select:hover {
-    background: var(--bg-hover);
+    background-color: var(--bg-hover, #333);
 }
 .forum-sort-select:focus {
-    border-color: var(--accent-primary);
+    outline: none;
+    border-color: var(--accent-primary, #5865f2);
+}
+.forum-sort-select option {
+    background: var(--bg-secondary, #2a2a2a);
+    color: var(--text-primary, #e8e8e8);
 }
 
 /* ── Forum Posts/Comments nav tabs (in sidebar) ──────────────── */
@@ -1617,19 +1650,26 @@
 }
 
 .forum-refresh-btn {
-    background: none;
-    border: 1px solid var(--border-subtle);
-    color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    padding: 4px 8px;
-    font-size: 14px;
+    background: var(--bg-secondary, #2a2a2a);
+    border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+    color: var(--text-primary, #e8e8e8);
+    border-radius: var(--radius-md, 8px);
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
     cursor: pointer;
     margin-left: auto;
-    transition: color 0.15s, border-color 0.15s, transform 0.2s;
+    transition: background var(--transition-fast, 150ms ease),
+        border-color var(--transition-fast, 150ms ease),
+        transform 0.2s;
 }
 .forum-refresh-btn:hover {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
+    background: var(--bg-hover, #333);
+    border-color: var(--border-secondary, rgba(255, 255, 255, 0.16));
 }
 .forum-refresh-btn:active {
     transform: rotate(180deg);
