@@ -51,6 +51,7 @@ Everything below is a binding decision. The rest of this document describes how 
 | D28 | Submenu nesting depth | **Unbounded.** No WIT-level limit. Plugin authors are trusted. Host enforces a soft rendering limit (e.g. 10 levels triggers a scroll hint) but does not reject. |
 | D29 | Multi-account semantics | **Per-instance.** Each connected account runs its own plugin instance and answers `get-context-menu-items` / `get-settings-sections` / etc. independently. Items can differ per account (permissions, bot-vs-user, etc.). Matches existing plugin-instantiation model. |
 | D30 | `action-outcome::refresh-target` | **Refetch just the target object.** For `menu-target-kind::server` → refetch that server. Not its channels, not members. Plugin can emit additional `ClientEvent`s if rippling state changes need to propagate. |
+| D31 | Test coverage policy | **Every new surface ships with tests at five layers.** (a) Unit tests in the implementing file; (b) per-backend integration tests in `clients/<name>/tests/`; (c) e2e tests that run the plugin via the WASM host in `crates/plugin-host-tests/tests/client_e2e/` (extend existing `harness.rs`); (d) cross-backend parity tests in `clients/client/tests/`; (e) UI snapshot tests via Playwright through the poly-web MCP. Plus: lint-gate scanner tests in `crates/lint-gate/src/lib.rs` and trybuild compile-fail fixtures where new lints exist. No WP merges without its full test matrix. |
 
 ---
 
@@ -95,6 +96,7 @@ get-settings-schema: func() -> list<setting-descriptor>;
 7. **No fallbacks. Every backend implements every surface.** Per D9 (compile-time required). If a backend has no items for a surface, it returns an explicit empty list — and that empty list is reviewable evidence.
 8. **Preserve the chat golden path.** The 223 KB `chat_view.rs` stays intact. WP 6 only adds declarative extension points.
 9. **Custom-block is a last resort.** A lint-gate counter tracks `custom-block` usage across plugins; rising numbers signal a missing declarative primitive.
+10. **Tests are part of every surface.** Per D31, every new primitive lands with unit + integration + e2e + cross-backend parity + UI snapshot tests. Every lint ships with passing + failing trybuild fixtures. A WP is not complete until its test matrix is green.
 
 ---
 
@@ -572,17 +574,93 @@ Lives in `crates/core/src/ui/client_ui/custom_block.rs`. Sanitizes via `ammonia`
 
 ---
 
+## 6A. Testing Matrix (per D31)
+
+Existing infrastructure we extend, not duplicate:
+
+| Layer | Where it lives | Current state | Extension |
+|---|---|---|---|
+| Unit tests | inline `#[cfg(test)] mod tests` in each source file | Present across `crates/core`, `clients/*`, `clients/client` | Add `#[cfg(test)]` modules for each new primitive — action-id parser, FTL key lookup, SVG sanitizer, build-route validator, cursor round-trip |
+| Per-backend capability tests | `clients/<name>/tests/capabilities.rs` | Present for demo, discord, github, hackernews, lemmy, matrix, stoat, teams | Each backend also tests: declared menu items well-formed, declared settings sections well-formed, sidebar declaration matches capabilities, view descriptors consistent, composer-buttons valid |
+| Per-backend integration tests | `clients/<name>/tests/integration*.rs` | Present for all backends | Add round-trip assertions: plugin declares action-id → invoke-context-action(that-id) returns expected `action-outcome` |
+| Shared cross-backend parity | `clients/client/tests/{capabilities_matrix,capability_summary,forum_capability_parity,terminology}.rs` | Present | Add `client_ui_surface_parity.rs` — every backend implements every required surface (compile-time enforced by D9, but this test pins runtime shape: e.g., every backend that claims `dms: true` returns non-empty `dm` menu items or explicit empty) |
+| E2E via WASM host | `crates/plugin-host-tests/tests/client_e2e/{harness.rs, demo.rs, discord.rs, matrix.rs, server.rs, stoat.rs, teams.rs}` | Present — gated by `test-demo`, `test-matrix`, `test-discord`, `test-teams`, `test-server`, `test-stoat` features | Extend `harness.rs` with new helpers per §6A.1 below; every backend driver calls them |
+| MCP contract tests | `mcp/chat-mcp/tests/mcp_integration.rs` | Present | Add tests for new MCP tools (`context_menu_<target>`, `invoke_context_action`, `plugin_settings_*`, `sidebar_*`) — WP 8 |
+| Lint-gate scanner tests | `crates/lint-gate/src/lib.rs` `#[cfg(test)] mod tests` | Present (context_menu_coverage, ui_action_coverage, action_enum_coverage) | Add `ftl_label_key_coverage_*` tests + `action_id_naming_*` tests + `custom_block_usage_*` tests |
+| Trybuild compile-fail | `crates/ui-macros/tests/compile-fail/*.rs` + `*.stderr` | Present | Add fixtures: missing FTL key for declared label → build error; non-kebab-case action id → build error; plugin missing required export → compile error |
+| UI snapshots (Playwright) | new `tests/snapshots/` via poly-web MCP | Not present; **create in WP 0** | For every backend: snapshot right-click menu on server/channel/user/message/dm; settings panel; sidebar; forum/feed/issue view. Golden files committed. CI diffs against golden. |
+| Server-side / WIT contract | `crates/plugin-host-tests/tests/integration.rs` | Present | Add assertions: world contract requires all 5 new exports (D9); missing export → compile fail |
+
+### 6A.1 Harness extensions
+
+Extend `crates/plugin-host-tests/tests/client_e2e/harness.rs` with these new modules:
+
+```rust
+// ─── Menus ─────────────────────────────────────────────────────
+pub async fn menu_items_well_formed(backend: &PluginBackend,
+    target: MenuTargetKind, target_id: &str);
+pub async fn menu_items_have_valid_ftl(backend: &PluginBackend, ...);
+pub async fn menu_items_use_kebab_action_ids(backend: &PluginBackend, ...);
+pub async fn invoke_action_unknown_returns_notfound(backend: &PluginBackend, ...);
+pub async fn invoke_action_roundtrip(backend: &PluginBackend, known_id: &str, ...);
+pub async fn menu_pending_action_polls(backend: &PluginBackend, ...);
+
+// ─── Settings ──────────────────────────────────────────────────
+pub async fn settings_sections_well_formed(backend: &PluginBackend);
+pub async fn setting_roundtrip(backend: &PluginBackend,
+    scope: SettingsScope, key: &str, value: serde_json::Value);
+pub async fn setting_persists_across_reload(backend: &PluginBackend, ...);
+
+// ─── Sidebar ───────────────────────────────────────────────────
+pub async fn sidebar_declaration_well_formed(backend: &PluginBackend);
+pub async fn sidebar_layout_matches_capabilities(backend: &PluginBackend);
+pub async fn sidebar_invalidated_event_refetches(backend: &mut PluginBackend);
+pub async fn invoke_sidebar_action_roundtrip(backend: &PluginBackend, ...);
+
+// ─── Views ─────────────────────────────────────────────────────
+pub async fn channel_view_descriptor_well_formed(backend: &PluginBackend, ch_id: &str);
+pub async fn view_rows_paginate(backend: &PluginBackend, ch_id: &str);
+pub async fn view_cursor_is_structured(backend: &PluginBackend, ch_id: &str);
+pub async fn view_detail_returns_custom_block(backend: &PluginBackend, ...);
+
+// ─── Composer ──────────────────────────────────────────────────
+pub async fn composer_buttons_well_formed(backend: &PluginBackend, ch_id: &str);
+pub async fn message_actions_well_formed(backend: &PluginBackend,
+    ch_id: &str, msg_id: &str);
+pub async fn invoke_composer_action_roundtrip(backend: &PluginBackend, ...);
+
+// ─── Custom-block ──────────────────────────────────────────────
+pub async fn custom_block_survives_sanitization(backend: &PluginBackend);
+pub async fn custom_block_scripts_stripped(test: &str);   // unit-style but keeps here
+pub async fn custom_block_javascript_url_stripped(test: &str);
+
+// ─── build-route ───────────────────────────────────────────────
+pub async fn plugin_builds_routes_via_host_api(backend: &PluginBackend);
+pub async fn invalid_route_kind_returns_error(backend: &PluginBackend);
+pub async fn navigate_outcome_routes_are_valid(backend: &PluginBackend);
+```
+
+Every per-backend driver file (`demo.rs`, `discord.rs`, …) calls every harness helper that's applicable to that backend's declared capabilities. Backends that declare empty lists still call the helper — which asserts the empty list is explicit (not a panic, not an error).
+
+---
+
 ## 7. Work Packages
 
 Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 can run in parallel after WP 1. WP 7 (cleanup) is last.
 
-### WP 0 — Baseline + snapshot harness
+### WP 0 — Baseline + snapshot harness + test scaffolding
 
-**Purpose:** measurable before/after. No code change to production yet.
+**Purpose:** measurable before/after. No production code change; new test infra lands.
 
 - Enumerate every `match .. as_str()` on backend slug in `crates/core/src/ui/` — deliverable: `docs/plans/client-ui-surface-defects.csv`.
-- Playwright snapshot tests that right-click a server on each backend and capture the menu DOM. These become regression checks.
 - Inventory every `crates/core/src/ui/account/*/context_menu.rs` and per-backend settings file slated for deletion in WP 7.
+- **UI snapshot golden files.** For every backend (demo, stoat, discord, matrix, teams, poly-native, lemmy, hackernews, github, forgejo): Playwright driven via poly-web MCP to right-click server/channel/user/message/dm, open settings panel, load sidebar, load forum/feed/issue view. Save DOM snapshots to `tests/snapshots/<backend>/<surface>.html`. These are the "did we regress" checks for WPs 2–6.
+- **Skeletons for harness extensions.** Add `mod menus;`, `mod settings;`, `mod sidebar;`, `mod views;`, `mod composer;`, `mod custom_block;`, `mod build_route;` to `crates/plugin-host-tests/tests/client_e2e/harness.rs` with function signatures from §6A.1 and `todo!()` bodies. Locked in interface; filled by each later WP.
+- **Skeleton for `client_ui_surface_parity.rs`** in `clients/client/tests/` — cross-backend parity tests.
+- **Trybuild test module** — create `crates/ui-macros/tests/compile_fail_client_ui.rs` for lint fixtures landed in WP 1.
+- Snapshot CI job: added to existing test matrix; fails if snapshots diverge without golden update.
+
+**Exit:** snapshot baselines committed; harness extension skeletons compile; nothing merged touches production.
 
 ### WP 1 — Foundation: WIT surface + trait migration
 
@@ -604,6 +682,16 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 
 **Exit:** workspace compiles; tests pass; new plugin declarations visible via `MCP: backend.get_context_menu_items(…)` (but unused by UI). Snapshot tests unchanged. `backend-type` enum gone; `get-settings-schema` gone; `build-route` wired.
 
+**Tests (per D31):**
+- **Unit:** `#[cfg(test)] mod tests` for `build-route` validator (happy path + every `route-build-error` variant), `cursor` round-trip serialize/deserialize, kebab-case validator, icon-source variant handling, SVG sanitizer allowlist (accepts `path/g/circle/rect`; rejects `script/foreignObject/onclick`).
+- **Per-backend integration:** `clients/<name>/tests/integration*.rs` gains a `declares_all_required_surfaces()` test that calls each new method and asserts it returns a well-formed (possibly-empty) list.
+- **Per-backend capability:** `clients/<name>/tests/capabilities.rs` extended — declared menu items consistent with declared `backend-capabilities` (e.g., HN declares no dm-target items).
+- **Cross-backend parity:** `clients/client/tests/client_ui_surface_parity.rs` — every backend must implement all 5 new surfaces (enforced by D9 at compile time, but the test pins the runtime shape).
+- **Lint-gate scanners:** unit tests in `crates/lint-gate/src/lib.rs` — `ftl_label_key_coverage_ok`, `ftl_label_key_coverage_fails_on_missing`, `action_id_naming_ok`, `action_id_naming_rejects_snake_case`, etc.
+- **Trybuild:** add fixtures `ui_action_wrong_ftl_key.rs`, `action_id_not_kebab.rs` + matching `.stderr` files.
+- **E2E harness:** fill in `harness::menus::menu_items_well_formed`, `harness::settings::settings_sections_well_formed`, `harness::sidebar::sidebar_declaration_well_formed`, `harness::views::channel_view_descriptor_well_formed`, `harness::composer::composer_buttons_well_formed`. Every backend driver in `client_e2e/<name>.rs` calls them.
+- **MCP/smoke:** `mcp/chat-mcp/tests/mcp_integration.rs` gains `new_surfaces_are_queryable` — confirms each backend responds to the new MCP tools landed pre-wired (even if UI doesn't call them yet).
+
 ### WP 2 — Context menu rollout
 
 **Purpose:** plugins own their menu items; per-backend Rust files deleted.
@@ -620,6 +708,15 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 
 **Exit:** the D7 files are gone. Snapshot tests now show per-backend menu content. The per-backend `BackendType` match in `mod.rs` is deleted.
 
+**Tests (per D31):**
+- **Unit:** `ClientMenu` component tests — renders each `menu-item-variant` correctly (normal/destructive/submenu-header/info-block); groups items by `slot` with separators; dispatches `invoke-context-action` with correct `action-id`. Test `menu-slot` ordering.
+- **Per-backend:** each `clients/<name>/tests/capabilities.rs` asserts the declared menu items for each `menu-target-kind` match the backend's feature set (e.g., Matrix server menu contains Space Settings; Lemmy server menu contains Subscribe/Unsubscribe; HN returns empty). Pin action-id kebab-case and FTL key existence.
+- **Cross-backend parity:** `client_ui_surface_parity::server_menu_never_empty_when_groups_supported`, `user_menu_has_block_action_if_blocking_supported`.
+- **E2E:** fill in `harness::menus::invoke_action_roundtrip` and `invoke_action_unknown_returns_notfound`; every backend driver exercises the known action IDs it declares + one deliberately unknown ID.
+- **UI snapshots:** right-click-menu snapshots diff against WP 0 goldens — each backend now shows its backend-specific content. Update goldens in this WP.
+- **Error-path coverage:** test the "inline error row" UX (D26) by force-returning `ClientError::Internal` from a mock plugin.
+- **Pending-action UX (D16):** test fixture: slow plugin returns `action-outcome::pending`; host shows spinner; `poll-action` called; eventually `completed`. Host component test.
+
 ### WP 3 — Settings sections rollout
 
 **Purpose:** plugins own per-server / per-account / per-channel settings.
@@ -631,6 +728,14 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 
 **Exit:** server-settings panel for Lemmy shows Lemmy-relevant options; for Discord shows Discord-relevant options. No backend-specific Rust settings files remain.
 
+**Tests (per D31):**
+- **Unit:** `PluginSettingsSection` component — renders each `setting-kind` (toggle/text-input/select/slider/info-label); propagates get/set; handles JSON serialization edge cases (numbers, strings, bools, arrays).
+- **Per-backend:** `clients/<name>/tests/capabilities.rs` pins the exact declared sections per scope. Discord: `per-server → profile, notification-rules, privacy`. Lemmy: `per-server → community-mute, block-community`. HN: empty.
+- **E2E:** fill in `harness::settings::setting_roundtrip` and `setting_persists_across_reload` — write value, restart plugin instance, read back.
+- **Cross-backend parity:** `client_ui_surface_parity::settings_sections_respect_scope` — a backend that declares `per-channel` scope must have at least one channel context where that section is meaningful.
+- **Storage integrity (D15):** verify per-plugin KV isolation — plugin A cannot read plugin B's settings.
+- **UI snapshots:** settings panel for each backend + each scope.
+
 ### WP 4 — Sidebar rollout
 
 **Purpose:** backend-shaped navigation.
@@ -641,6 +746,14 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 - `invoke-sidebar-action` routing wired through.
 
 **Exit:** Matrix account shows spaces then rooms. Lemmy account shows subscribed communities. HN shows `Top/New/Best/Ask/Show/Jobs` feed tabs.
+
+**Tests (per D31):**
+- **Unit:** each layout component (`ChannelListLayout`, `SpacesRoomsLayout`, `CommunitiesLayout`, `FeedLayout`, `RepoTreeLayout`, `CustomSidebar`) tested with canned `sidebar-declaration` inputs. Test nesting, badges, collapsible sections, default-collapsed state.
+- **Per-backend:** each `clients/<name>/tests/capabilities.rs` asserts the declared sidebar layout matches the canonical mapping (Discord → channel-list, Matrix → spaces-rooms, etc.) and the section structure matches expected shape.
+- **E2E:** fill in `harness::sidebar::sidebar_declaration_well_formed`, `sidebar_layout_matches_capabilities`, `sidebar_invalidated_event_refetches` — simulate plugin emitting `ClientEvent::SidebarInvalidated`; assert host re-fetches (D19).
+- **Cross-backend parity:** every sidebar-route-kind on a sidebar-item must map to an existing host handler (no dangling kinds).
+- **Event-stream integration:** `crates/plugin-host-tests/tests/integration.rs` gains `sidebar_invalidated_event_delivered` — confirms host observes the new event variant.
+- **UI snapshots:** sidebar for each backend + one post-invalidation snapshot to catch refresh regressions.
 
 ### WP 5 — View rollout (forum + feed + issue-tracker + custom-block)
 
@@ -655,6 +768,16 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 
 **Exit:** GitHub issues render as an issue list. Lemmy renders threaded comments. Custom-block in use for at least one plugin (Lemmy vote-summary or GitHub CI-badge row) to prove the pattern.
 
+**Tests (per D31):**
+- **Unit:** each body engine (`ListBody`, `CardBody`, `TreeBody`, `SplitBody`) rendering tests with canned `view-descriptor` + row batches. Test empty list, single page, multi-page, deep tree, master-detail split.
+- **`CustomBlock` component:** extensive unit tests for sanitization — rejects `<script>`, `javascript:` URLs, `data:` URLs in `<a>`, event handler attributes (`onclick`, `onload`, etc.), `<iframe>`, `<foreignObject>`, inline `<style>` tags (outside the `stylesheet` field). Accepts allowlisted tags + SVG paths (D27). Shadow-root isolation verified.
+- **Per-backend:** each forum/feed/issue backend's `integration*.rs` asserts the view descriptor is well-formed for each kind of channel (HN story list, Lemmy community, GitHub issues+PRs+Discussions).
+- **E2E:** fill in `harness::views::channel_view_descriptor_well_formed`, `view_rows_paginate`, `view_cursor_is_structured` (D23), `view_detail_returns_custom_block`.
+- **Cursor tests:** `cursor { kind: offset }` works for HN; `cursor { kind: timestamp }` works for Lemmy; `cursor { kind: id }` works for Matrix event-id paging; `cursor { kind: opaque }` round-trips without inspection.
+- **Custom-block security audit:** checked-in corpus of known-bad HTML payloads + assertion that `ammonia`-sanitized output contains none of them.
+- **Trybuild:** compile-fail test for `custom-block` with script tag — ensures our lint catches plugin authors putting scripts in at compile time (runtime sanitization is the backstop).
+- **UI snapshots:** Lemmy threaded view, HN story list, GitHub issue split, one custom-block exemplar.
+
 ### WP 6 — Chat composer hooks
 
 **Purpose:** plugin-contributed composer buttons and per-message actions.
@@ -664,6 +787,13 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 - `chat_view.rs` remains untouched otherwise (D8 preservation).
 
 **Exit:** composer toolbar in `chat_view.rs` has plugin-contributed buttons; per-message menu has plugin items. Snapshot tests confirm no regressions on chat rendering.
+
+**Tests (per D31):**
+- **Unit:** `ComposerHooks` component renders buttons in each `composer-slot` (left-of-input, right-of-input, above-input); dispatches `invoke-composer-action` with correct id + channel-id.
+- **Per-backend:** per-backend capabilities tests assert declared composer-buttons match backend features (Discord declares stickers; Matrix declares `/me`; Lemmy declares upvote inline; HN declares no composer buttons).
+- **E2E:** fill in `harness::composer::composer_buttons_well_formed`, `message_actions_well_formed`, `invoke_composer_action_roundtrip`, `invoke_message_action_roundtrip`.
+- **`chat_view.rs` regression coverage:** existing chat-view snapshots must remain unchanged on backends that declare no composer hooks (enforces the "untouched otherwise" promise of D8).
+- **UI snapshots:** composer toolbar per backend + per-message overflow menu per backend.
 
 ### WP 7 — Cleanup + deprecation pass
 
@@ -679,6 +809,12 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 
 **Exit:** repo grep for `bt.as_str()` returns zero UI call sites.
 
+**Tests (per D31):**
+- **Snapshot diffs:** every UI snapshot from WP 0 still passes (or has been intentionally updated in WP 2/3/4/5/6 with golden refresh). No silent regressions.
+- **Coverage assertion:** `client_ui_surface_parity::no_dead_per_backend_files` — `clients/<name>/tests/` no longer references any `crates/core/src/ui/account/<name>/` paths.
+- **Repo-grep test:** `crates/lint-gate/src/lib.rs` gains `forbid_backend_slug_match_in_ui` — fails CI if `match .. as_str() { "discord" => …` appears anywhere under `crates/core/src/ui/`.
+- **Workspace-wide:** `cargo test --workspace --all-features` green; `cargo clippy --workspace --all-targets` green.
+
 ### WP 8 — MCP integration (per D3)
 
 **Purpose:** the AI agent (MCP social-agent) can right-click programmatically.
@@ -691,12 +827,23 @@ Sequenced for agent scheduling. WP N ≥ 1 assumes WP 1 has landed. WPs 2–6 ca
 
 **Exit:** `mcp/chat-mcp/src/tools.rs` no longer has hardcoded Discord-shaped tools. Agent can enumerate right-click-able actions on any backend.
 
+**Tests (per D31):**
+- **`mcp/chat-mcp/tests/mcp_integration.rs`** gains:
+  - `tool_list_filtered_by_capabilities` — HN account does not see `list_friends`; Lemmy does not see `voice_*` tools.
+  - `context_menu_tool_returns_plugin_items` — exposes plugin's declared menu items.
+  - `invoke_context_action_via_mcp_roundtrip` — agent invokes an action via MCP; plugin handles; outcome returned.
+  - `mcp_settings_get_set_roundtrip` — agent reads/writes plugin settings via MCP.
+- **Cross-backend MCP parity:** every backend's MCP tool list matches its declared surfaces.
+- **Pending-action polling:** agent can poll a `pending` action via MCP without blocking the wider tool runner.
+
 ### WP 9 — Documentation + plugin authoring guide
 
 - `docs/plugin-authoring.md` — the client-UI surface, how to declare items, FTL conventions, action-id rules.
-- Example walkthrough: "Adding a 'View on GitHub' menu item in N lines."
+- `docs/plugin-testing.md` — every layer of the test matrix (D31), how to run each, how to add new harness helpers, how to refresh UI snapshot goldens.
+- Example walkthrough: "Adding a 'View on GitHub' menu item in N lines" — with the full test set required to land it.
 - Deprecation notices retired.
 - Architecture diagram updated — `docs/1-architecture/1.0-overview.md`.
+- The testing-matrix table from §6A reproduced in `docs/4-testing/client-ui-test-matrix.md` for discoverability.
 
 ---
 
