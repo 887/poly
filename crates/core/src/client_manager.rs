@@ -468,7 +468,14 @@ impl ClientManager {
     }
 
     /// Register a test account entry from a native plugin.
+    ///
+    /// Idempotent — re-registering the same `(base_url, username)` pair
+    /// replaces the existing entry instead of duplicating it. The App's
+    /// `use_effect` re-runs more than once during boot, so without dedupe
+    /// this list grew to 28 entries on every restart (2× the unique 14).
     pub fn register_test_account(&mut self, entry: TestAccountEntry) {
+        self.test_account_entries
+            .retain(|e| e.base_url != entry.base_url || e.username != entry.username);
         self.test_account_entries.push(entry);
     }
 

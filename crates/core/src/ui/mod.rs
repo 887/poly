@@ -680,6 +680,12 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
 /// Called once at `App` mount via `use_effect`, immediately after
 /// [`register_native_plugin_settings`].
 fn register_native_test_accounts(client_manager: &mut Signal<ClientManager>) {
+    // Per-call dedupe lives in `ClientManager::register_test_account` (retain
+    // by (base_url, username), then push). DO NOT add a `.clear()` here —
+    // an unconditional write inside this use_effect callback causes a
+    // re-render loop (downstream readers subscribe to test_account_entries,
+    // re-render fires the effect, clear writes the signal, repeat). The
+    // boot-hang watchdog catches the loop after 20s.
     #[cfg(feature = "discord")]
     {
         for entry in poly_discord::signup::get_test_accounts() {

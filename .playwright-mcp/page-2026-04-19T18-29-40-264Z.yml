@@ -1,0 +1,36 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e5] [cursor=pointer]:
+    - generic [ref=e6]:
+      - img [ref=e7]
+      - heading [level=3] [ref=e11]: Your app is being rebuilt.
+    - paragraph [ref=e12]: A non-hot-reloadable change occurred and we must rebuild.
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]: Poly boot
+      - heading "Starting Poly" [level=1] [ref=e21]
+      - paragraph [ref=e22]: Restoring shell state, accounts, and local cache...
+    - generic [ref=e24]:
+      - generic [ref=e25]: P
+      - generic [ref=e26]:
+        - generic [ref=e27]: Preparing workspace
+        - generic [ref=e28]: waiting
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e31]: boot log
+        - generic [ref=e32]: live
+      - generic [ref=e33]:
+        - generic [ref=e34]:
+          - generic [ref=e35]: "01"
+          - generic [ref=e36]: "[..] opening local storage and reading persisted state"
+        - generic [ref=e37]:
+          - generic [ref=e38]: "02"
+          - generic [ref=e39]: "[..] awaiting setup wizard state"
+        - generic [ref=e40]:
+          - generic [ref=e41]: "03"
+          - generic [ref=e42]: "[..] layout mode AutoWidth; mirrored menus: false"
+        - generic [ref=e43]:
+          - generic [ref=e44]: "04"
+          - generic [ref=e45]: "[..] no active accounts yet"
+        - generic [ref=e46]:
+          - generic [ref=e47]: "05"
+          - generic [ref=e48]: "[ok] route data stable enough to reveal UI"

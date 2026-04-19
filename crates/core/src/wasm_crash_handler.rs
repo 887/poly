@@ -22,7 +22,9 @@ const CRASH_STATE_KEY: &str = "__polyCrashState";
 
 /// How long (ms) the boot watchdog waits before declaring a hang.
 /// Normal boots complete in well under a second; 20 s is generous.
-const BOOT_HANG_TIMEOUT_MS: u32 = 20_000;
+// Boot can take >20s with many restored accounts + favorited servers; 60s is
+// a more realistic ceiling and still catches genuine boot hangs.
+const BOOT_HANG_TIMEOUT_MS: u32 = 60_000;
 
 /// How long (ms) the main thread may be unresponsive before the interaction
 /// watchdog declares a hang and shows the crash overlay. 5 s is long enough
