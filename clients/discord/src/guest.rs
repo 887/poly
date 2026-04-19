@@ -5,11 +5,42 @@
 
 #![allow(unsafe_code)]
 
+use std::cell::RefCell;
+use std::collections::HashSet;
+
 use crate::wit_bindings::{
     ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, Guest, PluginManifest, PluginMetadataGuest, SidebarDeclaration,
-    SidebarLayoutKind, export, wit,
+    ClientViewsGuest, Guest, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, PendingHandle,
+    PluginManifest, PluginMetadataGuest, SidebarDeclaration, SidebarLayoutKind, export, wit,
 };
+
+// ─── F10 — in-memory state for state-aware context-menu items ─────────────
+
+/// Per-plugin-instance mutable state.  WASM components are single-threaded;
+/// `thread_local! + RefCell` is the canonical pattern (see demo plugin).
+struct DiscordGuestState {
+    muted_channels: HashSet<String>,
+    muted_servers: HashSet<String>,
+    blocked_users: HashSet<String>,
+    friend_ids: HashSet<String>,
+    muted_dms: HashSet<String>,
+}
+
+impl Default for DiscordGuestState {
+    fn default() -> Self {
+        Self {
+            muted_channels: HashSet::new(),
+            muted_servers: HashSet::new(),
+            blocked_users: HashSet::new(),
+            friend_ids: HashSet::new(),
+            muted_dms: HashSet::new(),
+        }
+    }
+}
+
+thread_local! {
+    static STATE: RefCell<DiscordGuestState> = RefCell::new(DiscordGuestState::default());
+}
 
 struct DiscordPlugin;
 
@@ -232,27 +263,325 @@ impl PluginMetadataGuest for DiscordPlugin {
     }
 }
 
+// ─── ClientMenusGuest — F10 state-aware context menus ─────────────────────
+
 impl ClientMenusGuest for DiscordPlugin {
     fn get_context_menu_items(
-        _target: crate::wit_bindings::exports::poly::messenger::client_menus::MenuTargetKind,
-        _target_id: String,
-    ) -> Result<
-        Vec<crate::wit_bindings::exports::poly::messenger::client_menus::MenuItem>,
-        wit::ClientError,
-    > {
-        Ok(Vec::new())
+        target: MenuTargetKind,
+        target_id: String,
+    ) -> Result<Vec<MenuItem>, wit::ClientError> {
+        match target {
+            MenuTargetKind::Server => {
+                let muted = STATE.with(|s| s.borrow().muted_servers.contains(&target_id));
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    MenuItem {
+                        id: "invite-people".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-invite-people-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "privacy-settings".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-privacy-settings-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "edit-per-server-profile".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-edit-per-server-profile-label"
+                            .to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "server-boost".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-server-boost-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    mute_item,
+                    MenuItem {
+                        id: "leave-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-leave-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Channel => {
+                let muted = STATE.with(|s| s.borrow().muted_channels.contains(&target_id));
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-channel".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-channel-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-channel".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-channel-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    mute_item,
+                    MenuItem {
+                        id: "mark-channel-read".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mark-channel-read-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::User => {
+                let blocked = STATE.with(|s| s.borrow().blocked_users.contains(&target_id));
+                let is_friend = STATE.with(|s| s.borrow().friend_ids.contains(&target_id));
+                let block_item = if blocked {
+                    MenuItem {
+                        id: "unblock-user".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-unblock-user-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "block-user".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-block-user-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                let friend_item = if is_friend {
+                    MenuItem {
+                        id: "remove-friend".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-remove-friend-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "add-friend".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-add-friend-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    MenuItem {
+                        id: "open-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-open-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    friend_item,
+                    block_item,
+                ])
+            }
+            MenuTargetKind::Message => Ok(vec![
+                MenuItem {
+                    id: "copy-message-link".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::AfterFavorites,
+                    label_key: "plugin-discord-menu-copy-message-link-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Normal,
+                    shortcut: None,
+                    block: None,
+                },
+                MenuItem {
+                    id: "delete-message".to_string(),
+                    parent_id: None,
+                    slot: MenuSlot::BeforeLeave,
+                    label_key: "plugin-discord-menu-delete-message-label".to_string(),
+                    icon: None,
+                    item_variant: MenuItemVariant::Destructive,
+                    shortcut: None,
+                    block: None,
+                },
+            ]),
+            MenuTargetKind::Dm => {
+                let muted = STATE.with(|s| s.borrow().muted_dms.contains(&target_id));
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    mute_item,
+                    MenuItem {
+                        id: "close-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-close-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Category => Ok(Vec::new()),
+        }
     }
 
     fn invoke_context_action(
         action_id: String,
-        _target: crate::wit_bindings::exports::poly::messenger::client_menus::MenuTargetKind,
-        _target_id: String,
+        _target: MenuTargetKind,
+        target_id: String,
     ) -> Result<ActionOutcome, wit::ClientError> {
-        Err(wit::ClientError::NotFound(action_id))
+        match action_id.as_str() {
+            // Server actions
+            "invite-people" | "privacy-settings" | "edit-per-server-profile"
+            | "server-boost" | "leave-server" => Ok(ActionOutcome::Completed),
+            "mute-server" => {
+                STATE.with(|s| s.borrow_mut().muted_servers.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-server" => {
+                STATE.with(|s| s.borrow_mut().muted_servers.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            // Channel actions
+            "mute-channel" => {
+                STATE.with(|s| s.borrow_mut().muted_channels.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-channel" => {
+                STATE.with(|s| s.borrow_mut().muted_channels.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "mark-channel-read" => Ok(ActionOutcome::Completed),
+            // User actions
+            "open-dm" => Ok(ActionOutcome::Completed),
+            "add-friend" => {
+                STATE.with(|s| s.borrow_mut().friend_ids.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "remove-friend" => {
+                STATE.with(|s| s.borrow_mut().friend_ids.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "block-user" => {
+                STATE.with(|s| s.borrow_mut().blocked_users.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unblock-user" => {
+                STATE.with(|s| s.borrow_mut().blocked_users.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            // Message actions
+            "copy-message-link" | "delete-message" => Ok(ActionOutcome::Completed),
+            // DM actions
+            "mute-dm" => {
+                STATE.with(|s| s.borrow_mut().muted_dms.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-dm" => {
+                STATE.with(|s| s.borrow_mut().muted_dms.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "close-dm" => Ok(ActionOutcome::Completed),
+            _ => Err(wit::ClientError::NotFound(action_id)),
+        }
     }
 
     fn poll_action(
-        _handle: crate::wit_bindings::exports::poly::messenger::client_menus::PendingHandle,
+        _handle: PendingHandle,
     ) -> Result<ActionOutcome, wit::ClientError> {
         Ok(ActionOutcome::Completed)
     }

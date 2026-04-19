@@ -5,6 +5,27 @@ plugin-discord-menu-invite-people-label = Invite People
 plugin-discord-menu-privacy-settings-label = Privacy Settings
 plugin-discord-menu-edit-per-server-profile-label = Edit Server Profile
 plugin-discord-menu-server-boost-label = Server Boost
+# F10 — state-aware server menu items
+plugin-discord-menu-mute-server-label = Mute Server
+plugin-discord-menu-unmute-server-label = Unmute Server
+plugin-discord-menu-leave-server-label = Leave Server
+# F10 — state-aware channel menu items
+plugin-discord-menu-mute-channel-label = Mute Channel
+plugin-discord-menu-unmute-channel-label = Unmute Channel
+plugin-discord-menu-mark-channel-read-label = Mark as Read
+# F10 — state-aware user menu items
+plugin-discord-menu-open-dm-label = Open DM
+plugin-discord-menu-add-friend-label = Add Friend
+plugin-discord-menu-remove-friend-label = Remove Friend
+plugin-discord-menu-block-user-label = Block User
+plugin-discord-menu-unblock-user-label = Unblock User
+# F10 — message menu items
+plugin-discord-menu-copy-message-link-label = Copy Message Link
+plugin-discord-menu-delete-message-label = Delete Message
+# F10 — state-aware DM menu items
+plugin-discord-menu-mute-dm-label = Mute Conversation
+plugin-discord-menu-unmute-dm-label = Unmute Conversation
+plugin-discord-menu-close-dm-label = Close DM
 
 plugin-discord-setting-profile-label = Profile
 plugin-discord-setting-nickname-label = Nickname

@@ -37,3 +37,27 @@ plugin-stoat-setting-allow-dms-from-server-members-desc = When enabled, other me
 plugin-stoat-composer-emoji-label = Emoji
 # Message actions
 plugin-stoat-message-action-report-label = Report
+
+# F10 — state-aware context-menu items
+# Channel
+plugin-stoat-menu-mute-channel-label = Mute Channel
+plugin-stoat-menu-unmute-channel-label = Unmute Channel
+plugin-stoat-menu-mark-channel-read-label = Mark as Read
+# Server
+plugin-stoat-menu-mute-server-label = Mute Server
+plugin-stoat-menu-unmute-server-label = Unmute Server
+plugin-stoat-menu-leave-server-label = Leave Server
+# User
+plugin-stoat-menu-block-user-label = Block
+plugin-stoat-menu-unblock-user-label = Unblock
+plugin-stoat-menu-add-friend-label = Add Friend
+plugin-stoat-menu-remove-friend-label = Remove Friend
+plugin-stoat-menu-open-dm-label = Message
+# Message
+plugin-stoat-menu-react-message-label = Add Reaction
+plugin-stoat-menu-copy-message-link-label = Copy Message Link
+plugin-stoat-menu-delete-message-label = Delete Message
+# DM
+plugin-stoat-menu-close-dm-label = Close DM
+plugin-stoat-menu-mute-dm-label = Mute DM
+plugin-stoat-menu-unmute-dm-label = Unmute DM

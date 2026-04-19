@@ -58,3 +58,39 @@ plugin-stoat-composer-emoji-label = Emoji
 
 # TODO(translate)
 plugin-stoat-message-action-report-label = Report
+
+# F10 — state-aware context-menu items
+# TODO(translate)
+plugin-stoat-menu-mute-channel-label = Mute Channel
+# TODO(translate)
+plugin-stoat-menu-unmute-channel-label = Unmute Channel
+# TODO(translate)
+plugin-stoat-menu-mark-channel-read-label = Mark as Read
+# TODO(translate)
+plugin-stoat-menu-mute-server-label = Mute Server
+# TODO(translate)
+plugin-stoat-menu-unmute-server-label = Unmute Server
+# TODO(translate)
+plugin-stoat-menu-leave-server-label = Leave Server
+# TODO(translate)
+plugin-stoat-menu-block-user-label = Block
+# TODO(translate)
+plugin-stoat-menu-unblock-user-label = Unblock
+# TODO(translate)
+plugin-stoat-menu-add-friend-label = Add Friend
+# TODO(translate)
+plugin-stoat-menu-remove-friend-label = Remove Friend
+# TODO(translate)
+plugin-stoat-menu-open-dm-label = Message
+# TODO(translate)
+plugin-stoat-menu-react-message-label = Add Reaction
+# TODO(translate)
+plugin-stoat-menu-copy-message-link-label = Copy Message Link
+# TODO(translate)
+plugin-stoat-menu-delete-message-label = Delete Message
+# TODO(translate)
+plugin-stoat-menu-close-dm-label = Close DM
+# TODO(translate)
+plugin-stoat-menu-mute-dm-label = Mute DM
+# TODO(translate)
+plugin-stoat-menu-unmute-dm-label = Unmute DM

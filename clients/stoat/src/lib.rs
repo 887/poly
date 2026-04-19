@@ -67,9 +67,11 @@ use poly_client::*;
 #[cfg(feature = "native")]
 use poly_host_bridge::http::{Method, RequestBuilder};
 #[cfg(feature = "native")]
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 #[cfg(feature = "native")]
 use std::pin::Pin;
+#[cfg(feature = "native")]
+use std::sync::Mutex;
 #[cfg(feature = "native")]
 use uuid::Uuid;
 
@@ -87,6 +89,19 @@ pub fn plugin_translations(locale: &str) -> String {
     }
 }
 
+/// In-memory state for context-menu toggle actions (F10).
+/// Persistent storage is F9 — out of scope here.
+#[cfg(feature = "native")]
+#[derive(Debug, Default)]
+struct StoatMenuState {
+    muted_channels: HashSet<String>,
+    muted_servers: HashSet<String>,
+    blocked_users: HashSet<String>,
+    friends: HashSet<String>,
+    closed_dms: HashSet<String>,
+    muted_dms: HashSet<String>,
+}
+
 /// Stoat (Revolt) messenger client.
 #[cfg(feature = "native")]
 pub struct StoatClient {
@@ -94,6 +109,8 @@ pub struct StoatClient {
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
+    /// F10 — in-memory state for context-menu toggle actions.
+    menu_state: Mutex<StoatMenuState>,
 }
 
 #[cfg(feature = "native")]
@@ -115,6 +132,7 @@ impl StoatClient {
         Self {
             http: StoatHttpClient::new(config),
             settings_storage: SettingsStorageCell::new(),
+            menu_state: Mutex::new(StoatMenuState::default()),
         }
     }
 
@@ -999,52 +1017,109 @@ impl ClientBackend for StoatClient {
     async fn get_context_menu_items(
         &self,
         target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
+        fn normal(id: &str, label_key: &str, slot: MenuSlot) -> MenuItem {
+            MenuItem {
+                id: id.to_string(),
+                parent_id: None,
+                slot,
+                label_key: label_key.to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            }
+        }
+
+        fn destructive(id: &str, label_key: &str, slot: MenuSlot) -> MenuItem {
+            MenuItem {
+                id: id.to_string(),
+                parent_id: None,
+                slot,
+                label_key: label_key.to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Destructive,
+                shortcut: None,
+                block: None,
+            }
+        }
+
+        let (is_channel_muted, is_server_muted, is_user_blocked, is_friend, is_dm_muted) =
+            self.menu_state
+                .lock()
+                .map(|state| {
+                    (
+                        state.muted_channels.contains(target_id),
+                        state.muted_servers.contains(target_id),
+                        state.blocked_users.contains(target_id),
+                        state.friends.contains(target_id),
+                        state.muted_dms.contains(target_id),
+                    )
+                })
+                .unwrap_or((false, false, false, false, false));
+
         match target {
-            MenuTargetKind::Server => Ok(vec![
-                MenuItem {
-                    id: "invite-people".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-stoat-menu-invite-people-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "privacy-settings".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-stoat-menu-privacy-settings-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "edit-per-server-profile".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-stoat-menu-edit-per-server-profile-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "manage-bots".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-stoat-menu-manage-bots-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
+            MenuTargetKind::Channel => {
+                let mute_item = if is_channel_muted {
+                    normal("unmute-channel", "plugin-stoat-menu-unmute-channel-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("mute-channel", "plugin-stoat-menu-mute-channel-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    mute_item,
+                    normal("mark-channel-read", "plugin-stoat-menu-mark-channel-read-label", MenuSlot::AfterFavorites),
+                ])
+            }
+            MenuTargetKind::Server => {
+                let mute_item = if is_server_muted {
+                    normal("unmute-server", "plugin-stoat-menu-unmute-server-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("mute-server", "plugin-stoat-menu-mute-server-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    normal("invite-people", "plugin-stoat-menu-invite-people-label", MenuSlot::AfterFavorites),
+                    normal("privacy-settings", "plugin-stoat-menu-privacy-settings-label", MenuSlot::AfterFavorites),
+                    normal("edit-per-server-profile", "plugin-stoat-menu-edit-per-server-profile-label", MenuSlot::AfterFavorites),
+                    normal("manage-bots", "plugin-stoat-menu-manage-bots-label", MenuSlot::AfterFavorites),
+                    mute_item,
+                    destructive("leave-server", "plugin-stoat-menu-leave-server-label", MenuSlot::BeforeLeave),
+                ])
+            }
+            MenuTargetKind::User => {
+                let block_item = if is_user_blocked {
+                    normal("unblock-user", "plugin-stoat-menu-unblock-user-label", MenuSlot::BeforeLeave)
+                } else {
+                    destructive("block-user", "plugin-stoat-menu-block-user-label", MenuSlot::BeforeLeave)
+                };
+                let friend_item = if is_friend {
+                    normal("remove-friend", "plugin-stoat-menu-remove-friend-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("add-friend", "plugin-stoat-menu-add-friend-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    normal("open-dm", "plugin-stoat-menu-open-dm-label", MenuSlot::AfterFavorites),
+                    friend_item,
+                    block_item,
+                ])
+            }
+            MenuTargetKind::Message => Ok(vec![
+                normal("react-message", "plugin-stoat-menu-react-message-label", MenuSlot::Top),
+                normal("copy-message-link", "plugin-stoat-menu-copy-message-link-label", MenuSlot::AfterFavorites),
+                destructive("delete-message", "plugin-stoat-menu-delete-message-label", MenuSlot::BeforeLeave),
             ]),
-            _ => Ok(Vec::new()),
+            MenuTargetKind::Dm => {
+                let mute_item = if is_dm_muted {
+                    normal("unmute-dm", "plugin-stoat-menu-unmute-dm-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("mute-dm", "plugin-stoat-menu-mute-dm-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    destructive("close-dm", "plugin-stoat-menu-close-dm-label", MenuSlot::BeforeLeave),
+                    mute_item,
+                ])
+            }
+            MenuTargetKind::Category => Ok(vec![]),
         }
     }
 
@@ -1052,12 +1127,85 @@ impl ClientBackend for StoatClient {
         &self,
         action_id: &str,
         _target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<ActionOutcome> {
         match action_id {
-            "invite-people" | "privacy-settings" | "edit-per-server-profile"
-            | "manage-bots" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown action: {other}"))),
+            "mute-channel" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_channels.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-channel" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_channels.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "mark-channel-read" => Ok(ActionOutcome::Completed),
+            "mute-server" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_servers.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-server" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_servers.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "invite-people" | "privacy-settings" | "edit-per-server-profile" | "manage-bots" => {
+                Ok(ActionOutcome::Noop)
+            }
+            "leave-server" => Ok(ActionOutcome::Completed),
+            "block-user" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.blocked_users.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unblock-user" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.blocked_users.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "add-friend" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.friends.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "remove-friend" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.friends.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "open-dm" => Ok(ActionOutcome::Noop),
+            "react-message" => Ok(ActionOutcome::Noop),
+            "copy-message-link" => Ok(ActionOutcome::Noop),
+            "delete-message" => Ok(ActionOutcome::Completed),
+            "close-dm" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.closed_dms.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "mute-dm" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_dms.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-dm" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_dms.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            other => Err(ClientError::NotFound(format!("unknown stoat action: {other}"))),
         }
     }
 

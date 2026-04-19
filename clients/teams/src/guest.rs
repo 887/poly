@@ -15,6 +15,7 @@
 #![allow(unsafe_code)]
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 use serde::Deserialize;
 
@@ -31,6 +32,37 @@ const BASE_URL_OVERRIDE_KEY: &str = "teams.base_url";
 
 thread_local! {
     static STATE: RefCell<Option<StoredSession>> = const { RefCell::new(None) };
+}
+
+// ── F10 per-target menu state (in-memory; F9 covers persistence) ──────────
+
+/// Tracks toggled state for state-aware context-menu items.
+struct TeamsMenuState {
+    hidden_channels: HashSet<String>,
+    pinned_channels: HashSet<String>,
+    muted_channels: HashSet<String>,
+    muted_teams: HashSet<String>,
+    saved_messages: HashSet<String>,
+    hidden_dms: HashSet<String>,
+    muted_dms: HashSet<String>,
+}
+
+impl Default for TeamsMenuState {
+    fn default() -> Self {
+        Self {
+            hidden_channels: HashSet::new(),
+            pinned_channels: HashSet::new(),
+            muted_channels: HashSet::new(),
+            muted_teams: HashSet::new(),
+            saved_messages: HashSet::new(),
+            hidden_dms: HashSet::new(),
+            muted_dms: HashSet::new(),
+        }
+    }
+}
+
+thread_local! {
+    static MENU_STATE: RefCell<TeamsMenuState> = RefCell::new(TeamsMenuState::default());
 }
 
 #[derive(Clone)]
@@ -734,22 +766,204 @@ impl PluginMetadataGuest for TeamsPlugin {
 
 // ─── Client Menus ──────────────────────────────────────────────────
 
-use crate::wit_bindings::{ActionOutcome, MenuItem, MenuTargetKind, PendingHandle};
+use crate::wit_bindings::{
+    ActionOutcome, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, PendingHandle,
+};
+
+/// Build a `MenuItem` with common defaults.
+fn menu_item(id: &str, label_key: &str, slot: MenuSlot, variant: MenuItemVariant) -> MenuItem {
+    MenuItem {
+        id: id.to_string(),
+        parent_id: None,
+        slot,
+        label_key: label_key.to_string(),
+        icon: None,
+        item_variant: variant,
+        shortcut: None,
+        block: None,
+    }
+}
 
 impl ClientMenusGuest for TeamsPlugin {
     fn get_context_menu_items(
-        _target: MenuTargetKind,
-        _target_id: String,
+        target: MenuTargetKind,
+        target_id: String,
     ) -> Result<Vec<MenuItem>, wit::ClientError> {
-        Ok(vec![])
+        match target {
+            MenuTargetKind::Channel => {
+                let (hidden, pinned, muted) = MENU_STATE.with(|s| {
+                    let s = s.borrow();
+                    (
+                        s.hidden_channels.contains(&target_id),
+                        s.pinned_channels.contains(&target_id),
+                        s.muted_channels.contains(&target_id),
+                    )
+                });
+                Ok(vec![
+                    menu_item("mark-read", "plugin-teams-menu-mark-read-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    menu_item("mark-unread", "plugin-teams-menu-mark-unread-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    if pinned {
+                        menu_item("unpin-channel", "plugin-teams-menu-unpin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        menu_item("pin-channel", "plugin-teams-menu-pin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if hidden {
+                        menu_item("show-channel", "plugin-teams-menu-show-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        menu_item("hide-channel", "plugin-teams-menu-hide-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if muted {
+                        menu_item("unmute-channel", "plugin-teams-menu-unmute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        menu_item("mute-channel", "plugin-teams-menu-mute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                ])
+            }
+
+            MenuTargetKind::Server => {
+                let muted = MENU_STATE.with(|s| s.borrow().muted_teams.contains(&target_id));
+                Ok(vec![
+                    if muted {
+                        menu_item("unmute-team", "plugin-teams-menu-unmute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        menu_item("mute-team", "plugin-teams-menu-mute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    menu_item("get-team-code", "plugin-teams-menu-get-team-code-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    menu_item("manage-team", "plugin-teams-menu-manage-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    menu_item("team-settings", "plugin-teams-menu-team-settings-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    menu_item("edit-per-team-profile", "plugin-teams-menu-edit-per-team-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    menu_item("leave-team", "plugin-teams-menu-leave-team-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
+                ])
+            }
+
+            MenuTargetKind::User => Ok(vec![
+                menu_item("open-chat", "plugin-teams-menu-open-chat-label", MenuSlot::Top, MenuItemVariant::Normal),
+                menu_item("view-profile", "plugin-teams-menu-view-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                menu_item("schedule-meeting", "plugin-teams-menu-schedule-meeting-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+            ]),
+
+            MenuTargetKind::Message => {
+                let saved = MENU_STATE.with(|s| s.borrow().saved_messages.contains(&target_id));
+                Ok(vec![
+                    menu_item("react", "plugin-teams-menu-react-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    menu_item("reply-in-thread", "plugin-teams-menu-reply-in-thread-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    if saved {
+                        menu_item("unsave-message", "plugin-teams-menu-unsave-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        menu_item("save-message", "plugin-teams-menu-save-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    menu_item("mark-important", "plugin-teams-menu-mark-important-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    menu_item("delete-message", "plugin-teams-menu-delete-message-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
+                ])
+            }
+
+            MenuTargetKind::Dm => {
+                let (muted, hidden) = MENU_STATE.with(|s| {
+                    let s = s.borrow();
+                    (
+                        s.muted_dms.contains(&target_id),
+                        s.hidden_dms.contains(&target_id),
+                    )
+                });
+                Ok(vec![
+                    if muted {
+                        menu_item("unmute-dm", "plugin-teams-menu-unmute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        menu_item("mute-dm", "plugin-teams-menu-mute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if hidden {
+                        menu_item("show-dm", "plugin-teams-menu-show-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        menu_item("hide-dm", "plugin-teams-menu-hide-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                ])
+            }
+
+            MenuTargetKind::Category => Ok(vec![]),
+        }
     }
 
     fn invoke_context_action(
         action_id: String,
         _target: MenuTargetKind,
-        _target_id: String,
+        target_id: String,
     ) -> Result<ActionOutcome, wit::ClientError> {
-        Err(wit::ClientError::NotFound(action_id))
+        match action_id.as_str() {
+            // ── Channel toggles ──────────────────────────────────────────────
+            "pin-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().pinned_channels.insert(target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unpin-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().pinned_channels.remove(&target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "hide-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().hidden_channels.insert(target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "show-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().hidden_channels.remove(&target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "mute-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_channels.insert(target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_channels.remove(&target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "mark-read" | "mark-unread" => Ok(ActionOutcome::Noop),
+
+            // ── Team toggles ─────────────────────────────────────────────────
+            "mute-team" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_teams.insert(target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-team" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_teams.remove(&target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "leave-team" | "get-team-code" | "manage-team" | "team-settings"
+            | "edit-per-team-profile" => Ok(ActionOutcome::Noop),
+
+            // ── User actions ─────────────────────────────────────────────────
+            "open-chat" | "view-profile" | "schedule-meeting" => Ok(ActionOutcome::Noop),
+
+            // ── Message toggles ──────────────────────────────────────────────
+            "save-message" => {
+                MENU_STATE.with(|s| s.borrow_mut().saved_messages.insert(target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unsave-message" => {
+                MENU_STATE.with(|s| s.borrow_mut().saved_messages.remove(&target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "react" | "reply-in-thread" | "mark-important" | "delete-message" => {
+                Ok(ActionOutcome::Noop)
+            }
+
+            // ── DM toggles ───────────────────────────────────────────────────
+            "mute-dm" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_dms.insert(target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-dm" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_dms.remove(&target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "hide-dm" => {
+                MENU_STATE.with(|s| s.borrow_mut().hidden_dms.insert(target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "show-dm" => {
+                MENU_STATE.with(|s| s.borrow_mut().hidden_dms.remove(&target_id));
+                Ok(ActionOutcome::RefreshTarget)
+            }
+
+            _ => Err(wit::ClientError::NotFound(action_id)),
+        }
     }
 
     fn poll_action(_handle: PendingHandle) -> Result<ActionOutcome, wit::ClientError> {

@@ -5240,6 +5240,57 @@ fn MessageContentView(content: MessageContent, edited: bool) -> Element {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Unit tests for the markdown render pipeline (F12 regression)
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod markdown_tests {
+    use super::render_markdown_html;
+
+    /// F12 regression: em-dash (U+2014) must survive the
+    /// pulldown_cmark → ammonia → String pipeline intact.
+    /// Previously `strip_data_href_on_anchors` in the `sanitize_html`
+    /// path cast `bytes[i] as char`, turning 0xE2 into 'â' etc.
+    /// The markdown path never called that function, but we pin the
+    /// invariant here so any future refactor that routes markdown through
+    /// `sanitize_html` will still pass.
+    #[test]
+    fn em_dash_preserved() {
+        // Real em-dash in the input, not the escape sequence
+        let out = render_markdown_html("hello\u{2014}world");
+        assert!(
+            out.contains("\u{2014}"),
+            "em-dash mangled in markdown render; got: {out:?}"
+        );
+        assert!(
+            !out.contains('\u{00E2}'),
+            "mojibake 'â' in markdown render; got: {out:?}"
+        );
+    }
+
+    #[test]
+    fn multibyte_chars_preserved() {
+        // Accented, CJK, em-dash, emoji all in one message
+        let input = "caf\u{00E9}\u{2014}日本語\u{2014}\u{00F1}\u{2014}\u{1F389}";
+        let out = render_markdown_html(input);
+        assert!(out.contains('\u{00E9}'), "é lost; got: {out:?}");
+        assert!(out.contains('\u{2014}'), "em-dash lost; got: {out:?}");
+        assert!(out.contains("日本語"), "CJK lost; got: {out:?}");
+        assert!(out.contains('\u{00F1}'), "ñ lost; got: {out:?}");
+        assert!(out.contains('\u{1F389}'), "🎉 lost; got: {out:?}");
+    }
+
+    #[test]
+    fn em_dash_in_markdown_bold() {
+        // em-dash adjacent to bold formatting (ensures pulldown_cmark
+        // emits it correctly when surrounding markdown is parsed)
+        let out = render_markdown_html("**hello**\u{2014}world");
+        assert!(out.contains('\u{2014}'), "em-dash lost next to bold; got: {out:?}");
+        assert!(out.contains("<strong>"), "bold lost; got: {out:?}");
+    }
+}
+
 /// Render attachments (images inline, non-images as links).
 #[rustfmt::skip]
 #[ui_action(inherit)]

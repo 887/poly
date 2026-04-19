@@ -24,7 +24,6 @@
 
 use poly_ui_macros::{context_menu, ui_action};
 mod accounts;
-mod ai;
 mod backup;
 pub(crate) mod common;
 mod diagnostics;
@@ -73,7 +72,6 @@ use scroll_spy::{
 };
 
 use accounts::AccountsSettings;
-use ai::AiSettings;
 use backup::BackupSettings;
 use diagnostics::DiagnosticsPage;
 use general::{GeneralSettings, LayoutSettings};
@@ -88,9 +86,8 @@ use voice_video::VoiceVideoSettings;
 // plugin_settings is used via the dynamic registry — no compile-time import
 // of specific plugin components into the host.
 
-const NAV_SECTIONS: [(&str, SettingsSection); 13] = [
+const NAV_SECTIONS: [(&str, SettingsSection); 12] = [
     ("settings-accounts", SettingsSection::Accounts),
-    ("settings-mcp", SettingsSection::Ai),
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("settings-backup", SettingsSection::Backup),
     ("settings-identity", SettingsSection::Identity),
@@ -119,11 +116,6 @@ const SETTINGS_NODES: &[(&str, SettingsSection)] = &[
     ("settings-accounts", SettingsSection::Accounts),
     ("settings-add-account", SettingsSection::Accounts),
     ("settings-account-settings", SettingsSection::Accounts),
-    // MCP Server
-    ("settings-mcp", SettingsSection::Ai),
-    ("settings-mcp-enable", SettingsSection::Ai),
-    ("settings-mcp-port", SettingsSection::Ai),
-    ("settings-mcp-config-title", SettingsSection::Ai),
     // Voice & Video
     ("settings-voice-video", SettingsSection::VoiceVideo),
     ("voice-input-device", SettingsSection::VoiceVideo),
@@ -267,7 +259,6 @@ fn install_settings_scroll_spy(
             section_prefix: "settings-section-",
             section_ids: [
                 "settings-section-accounts",
-                "settings-section-ai",
                 "settings-section-voice-video",
                 "settings-section-backup",
                 "settings-section-identity",
@@ -481,9 +472,6 @@ fn SettingsAllSections(search_query: String) -> Element {
                             },
                             SettingsSection::Media => rsx! {
                                 MediaSettings {}
-                            },
-                            SettingsSection::Ai => rsx! {
-                                AiSettings {}
                             },
                             SettingsSection::Translation => rsx! {
                                 TranslationSettings {}

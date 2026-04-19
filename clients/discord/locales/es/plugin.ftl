@@ -64,3 +64,45 @@ plugin-discord-composer-stickers-label = Stickers
 # Message actions
 # TODO(translate)
 plugin-discord-message-action-pin-message-label = Pin Message
+
+# F10 — state-aware server menu items
+# TODO(translate)
+plugin-discord-menu-mute-server-label = Mute Server
+# TODO(translate)
+plugin-discord-menu-unmute-server-label = Unmute Server
+# TODO(translate)
+plugin-discord-menu-leave-server-label = Leave Server
+
+# F10 — state-aware channel menu items
+# TODO(translate)
+plugin-discord-menu-mute-channel-label = Mute Channel
+# TODO(translate)
+plugin-discord-menu-unmute-channel-label = Unmute Channel
+# TODO(translate)
+plugin-discord-menu-mark-channel-read-label = Mark as Read
+
+# F10 — state-aware user menu items
+# TODO(translate)
+plugin-discord-menu-open-dm-label = Open DM
+# TODO(translate)
+plugin-discord-menu-add-friend-label = Add Friend
+# TODO(translate)
+plugin-discord-menu-remove-friend-label = Remove Friend
+# TODO(translate)
+plugin-discord-menu-block-user-label = Block User
+# TODO(translate)
+plugin-discord-menu-unblock-user-label = Unblock User
+
+# F10 — message menu items
+# TODO(translate)
+plugin-discord-menu-copy-message-link-label = Copy Message Link
+# TODO(translate)
+plugin-discord-menu-delete-message-label = Delete Message
+
+# F10 — state-aware DM menu items
+# TODO(translate)
+plugin-discord-menu-mute-dm-label = Mute Conversation
+# TODO(translate)
+plugin-discord-menu-unmute-dm-label = Unmute Conversation
+# TODO(translate)
+plugin-discord-menu-close-dm-label = Close DM

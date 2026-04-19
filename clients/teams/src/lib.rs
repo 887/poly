@@ -42,7 +42,11 @@ use http::TeamsHttpClient;
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
+use std::collections::HashSet;
+#[cfg(feature = "native")]
 use std::pin::Pin;
+#[cfg(feature = "native")]
+use std::sync::Mutex;
 
 /// Microsoft Teams client.
 ///
@@ -54,14 +58,27 @@ use std::pin::Pin;
 /// Graph requires both team_id and channel_id to address messages.
 /// We encode these as `"<team_id>/<channel_id>"` in `Channel.server_id` and
 /// `Channel.id` respectively, and decode on use.
+///
+/// ## Menu state (F10)
+///
+/// State-aware menus branch on these in-memory sets (F9 covers KV persistence).
+/// `Mutex` gives interior mutability behind `&self` — the `ClientBackend` trait
+/// does not take `&mut self`.
 #[cfg(feature = "native")]
 pub struct TeamsClient {
     http: TeamsHttpClient,
     account_id: Option<String>,
     account_display_name: Option<String>,
-    /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
-    /// `host-api.kv_set` once exposed to plugins for true persistence.
+    /// Pack C P18 — in-memory settings storage stub.
     settings_storage: SettingsStorageCell,
+    // ── F10 menu state ──────────────────────────────────────────────────────
+    hidden_channels: Mutex<HashSet<String>>,
+    pinned_channels: Mutex<HashSet<String>>,
+    muted_channels: Mutex<HashSet<String>>,
+    muted_teams: Mutex<HashSet<String>>,
+    saved_messages: Mutex<HashSet<String>>,
+    hidden_dms: Mutex<HashSet<String>>,
+    muted_dms: Mutex<HashSet<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -76,6 +93,13 @@ impl TeamsClient {
             account_id: None,
             account_display_name: None,
             settings_storage: SettingsStorageCell::new(),
+            hidden_channels: Mutex::new(HashSet::new()),
+            pinned_channels: Mutex::new(HashSet::new()),
+            muted_channels: Mutex::new(HashSet::new()),
+            muted_teams: Mutex::new(HashSet::new()),
+            saved_messages: Mutex::new(HashSet::new()),
+            hidden_dms: Mutex::new(HashSet::new()),
+            muted_dms: Mutex::new(HashSet::new()),
         }
     }
 
@@ -494,65 +518,254 @@ impl ClientBackend for TeamsClient {
     async fn get_context_menu_items(
         &self,
         target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        if target != MenuTargetKind::Server {
-            return Ok(Vec::new());
+        // Inline helper: build a MenuItem with common defaults.
+        let item = |id: &str, label_key: &str, slot: MenuSlot, variant: MenuItemVariant| MenuItem {
+            id: id.to_string(),
+            parent_id: None,
+            slot,
+            label_key: label_key.to_string(),
+            icon: None,
+            item_variant: variant,
+            shortcut: None,
+            block: None,
+        };
+
+        match target {
+            MenuTargetKind::Channel => {
+                let hidden = self
+                    .hidden_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains(target_id);
+                let pinned = self
+                    .pinned_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains(target_id);
+                let muted = self
+                    .muted_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains(target_id);
+                Ok(vec![
+                    item("mark-read", "plugin-teams-menu-mark-read-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    item("mark-unread", "plugin-teams-menu-mark-unread-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    if pinned {
+                        item("unpin-channel", "plugin-teams-menu-unpin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("pin-channel", "plugin-teams-menu-pin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if hidden {
+                        item("show-channel", "plugin-teams-menu-show-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("hide-channel", "plugin-teams-menu-hide-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if muted {
+                        item("unmute-channel", "plugin-teams-menu-unmute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("mute-channel", "plugin-teams-menu-mute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                ])
+            }
+
+            MenuTargetKind::Server => {
+                let muted = self
+                    .muted_teams
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains(target_id);
+                Ok(vec![
+                    if muted {
+                        item("unmute-team", "plugin-teams-menu-unmute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("mute-team", "plugin-teams-menu-mute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    item("get-team-code", "plugin-teams-menu-get-team-code-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("manage-team", "plugin-teams-menu-manage-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("team-settings", "plugin-teams-menu-team-settings-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("edit-per-team-profile", "plugin-teams-menu-edit-per-team-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("leave-team", "plugin-teams-menu-leave-team-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
+                ])
+            }
+
+            MenuTargetKind::User => Ok(vec![
+                item("open-chat", "plugin-teams-menu-open-chat-label", MenuSlot::Top, MenuItemVariant::Normal),
+                item("view-profile", "plugin-teams-menu-view-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                item("schedule-meeting", "plugin-teams-menu-schedule-meeting-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+            ]),
+
+            MenuTargetKind::Message => {
+                let saved = self
+                    .saved_messages
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains(target_id);
+                Ok(vec![
+                    item("react", "plugin-teams-menu-react-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    item("reply-in-thread", "plugin-teams-menu-reply-in-thread-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    if saved {
+                        item("unsave-message", "plugin-teams-menu-unsave-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("save-message", "plugin-teams-menu-save-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    item("mark-important", "plugin-teams-menu-mark-important-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("delete-message", "plugin-teams-menu-delete-message-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
+                ])
+            }
+
+            MenuTargetKind::Dm => {
+                let muted = self
+                    .muted_dms
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains(target_id);
+                let hidden = self
+                    .hidden_dms
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains(target_id);
+                Ok(vec![
+                    if muted {
+                        item("unmute-dm", "plugin-teams-menu-unmute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("mute-dm", "plugin-teams-menu-mute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if hidden {
+                        item("show-dm", "plugin-teams-menu-show-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("hide-dm", "plugin-teams-menu-hide-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                ])
+            }
+
+            MenuTargetKind::Category => Ok(Vec::new()),
         }
-        Ok(vec![
-            MenuItem {
-                id: "team-settings".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-teams-menu-team-settings-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-            MenuItem {
-                id: "edit-per-team-profile".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-teams-menu-edit-per-team-profile-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-            MenuItem {
-                id: "schedule-meeting".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-teams-menu-schedule-meeting-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-            MenuItem {
-                id: "manage-files".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-teams-menu-manage-files-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-        ])
     }
 
     async fn invoke_context_action(
         &self,
         action_id: &str,
         _target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<ActionOutcome> {
         match action_id {
-            "team-settings" | "edit-per-team-profile" | "schedule-meeting" | "manage-files" => {
+            // ── Channel toggles ──────────────────────────────────────────────
+            "pin-channel" => {
+                self.pinned_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unpin-channel" => {
+                self.pinned_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "hide-channel" => {
+                self.hidden_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "show-channel" => {
+                self.hidden_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "mute-channel" => {
+                self.muted_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-channel" => {
+                self.muted_channels
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "mark-read" | "mark-unread" => Ok(ActionOutcome::Noop),
+
+            // ── Team toggles ─────────────────────────────────────────────────
+            "mute-team" => {
+                self.muted_teams
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-team" => {
+                self.muted_teams
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "leave-team" | "get-team-code" | "manage-team" | "team-settings"
+            | "edit-per-team-profile" => Ok(ActionOutcome::Noop),
+
+            // ── User actions ─────────────────────────────────────────────────
+            "open-chat" | "view-profile" | "schedule-meeting" => Ok(ActionOutcome::Noop),
+
+            // ── Message toggles ──────────────────────────────────────────────
+            "save-message" => {
+                self.saved_messages
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unsave-message" => {
+                self.saved_messages
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "react" | "reply-in-thread" | "mark-important" | "delete-message" => {
                 Ok(ActionOutcome::Noop)
             }
+
+            // ── DM toggles ───────────────────────────────────────────────────
+            "mute-dm" => {
+                self.muted_dms
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-dm" => {
+                self.muted_dms
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "hide-dm" => {
+                self.hidden_dms
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "show-dm" => {
+                self.hidden_dms
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+
             _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
         }
     }

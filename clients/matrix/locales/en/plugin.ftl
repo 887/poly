@@ -24,6 +24,34 @@ plugin-matrix-menu-edit-per-space-profile-label = Edit Space Profile
 plugin-matrix-menu-e2ee-verification-label = E2EE Verification
 plugin-matrix-menu-explore-rooms-label = Explore Rooms
 
+# F10 — Server / Space
+plugin-matrix-menu-browse-rooms-in-space-label = Browse Rooms in Space
+plugin-matrix-menu-add-room-to-space-label = Add Room to Space
+plugin-matrix-menu-leave-space-label = Leave Space
+
+# F10 — Channel / Room
+plugin-matrix-menu-mark-read-room-label = Mark as Read
+plugin-matrix-menu-mark-unread-room-label = Mark as Unread
+plugin-matrix-menu-mute-room-label = Mute Room
+plugin-matrix-menu-unmute-room-label = Unmute Room
+plugin-matrix-menu-leave-room-label = Leave Room
+
+# F10 — DM
+plugin-matrix-menu-leave-dm-label = Leave Conversation
+
+# F10 — User
+plugin-matrix-menu-open-dm-label = Open Direct Message
+plugin-matrix-menu-view-profile-label = View Profile
+plugin-matrix-menu-verify-user-label = Verify (Cross-signing)
+plugin-matrix-menu-ignore-user-label = Ignore User
+plugin-matrix-menu-unignore-user-label = Unignore User
+
+# F10 — Message
+plugin-matrix-menu-react-message-label = React
+plugin-matrix-menu-reply-in-thread-label = Reply in Thread
+plugin-matrix-menu-copy-permalink-label = Copy Permalink
+plugin-matrix-menu-redact-message-label = Redact Message
+
 plugin-matrix-setting-space-settings-label = Space Settings
 plugin-matrix-setting-display-name-label = Display Name
 plugin-matrix-setting-display-name-desc = The name shown to other members in this Space.

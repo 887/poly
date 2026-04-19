@@ -108,13 +108,9 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🟡 F10 — State-aware menu items for remaining backends (Pack E polish)
+### ✅ F10 — State-aware menu items for chat backends (DONE 2026-04-19)
 
-**Symptom:** Pack E wired state-aware menus for Lemmy (Subscribe/Unsubscribe), GitHub/Forgejo (Star/Unstar). Discord/Stoat/Matrix/Teams menus still return static items (plan P44).
-
-**Fix:** each chat backend's `get_context_menu_items` should conditionally return Mute/Unmute, Favorite/Unfavorite, Block/Unblock based on local state. Requires the plugin to track those states or query them per menu-open.
-
-**Estimated size:** per-backend, small-medium each (~1 hr per backend).
+**Resolution:** Discord, Stoat, Matrix, Teams each shipped state-aware `get_context_menu_items` in both native + WASM impls, with distinct ids per state (e.g. `mute-channel` / `unmute-channel`). State held in `std::sync::Mutex<HashSet<String>>` (or `RwLock`) on native for `Send + Sync`; `thread_local!` `RefCell<…>` on WASM (single-threaded). 50+ new FTL keys added in `en` plus stub copies in `de`/`es`/`fr` with `# TODO(translate)` markers.
 
 ---
 
@@ -128,13 +124,9 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🔵 F12 — Chat-view UTF-8 em-dash mojibake (pre-existing)
+### ✅ F12 — Chat-view UTF-8 em-dash mojibake (DONE 2026-04-19)
 
-**Symptom:** Documented in plan-client-ui-polish.md §4.15 P69. User text containing em-dashes (—) renders as `â` in the chat view's markdown→ammonia→`dangerous_inner_html` path. The forum path avoids this since post detail uses the existing ForumPostView renderer.
-
-**Fix:** trace where UTF-8 bytes become Latin1-interpreted. Suspects: bindgen string conversion, ammonia's inner buffer handling, Dioxus's HTML insertion. Worth a dedicated debug session with `println!` at each boundary.
-
-**Estimated size:** debug-heavy; could be 2 hours or 2 days depending on where the bug is.
+**Resolution:** root cause was `strip_data_href_on_anchors` in `crates/core/src/ui/client_ui/custom_block.rs` — the byte-level state machine cast individual bytes to `char` (`bytes[i] as char`), reinterpreting multi-byte UTF-8 sequences as Latin-1. An em-dash (`U+2014`, bytes `0xE2 0x80 0x94`) became `â` (`U+00E2`) plus garbage. Fixed by iterating with `html[i..].chars().next()` and advancing `i += c.len_utf8()`. Six new regression tests cover em-dash, accented chars, CJK, and emoji through both `sanitize_html` and the markdown render path.
 
 ---
 

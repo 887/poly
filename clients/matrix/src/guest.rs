@@ -6,11 +6,12 @@
 #![allow(unsafe_code)]
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 use crate::wit_bindings::{
-    ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, Guest, PluginMetadataGuest, export,
-    wit,
+    ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest,
+    ClientSidebarGuest, ClientViewsGuest, Guest, MenuItem, MenuItemVariant, MenuSlot,
+    MenuTargetKind, PluginMetadataGuest, export, wit,
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,8 +24,45 @@ struct StoredSession {
     user_id: String,
 }
 
+/// F10 — per-WASM-instance state for context-menu state pairs.
+struct MatrixMenuState {
+    muted_rooms: HashSet<String>,
+    ignored_users: HashSet<String>,
+    marked_read: HashSet<String>,
+}
+
+impl MatrixMenuState {
+    fn new() -> Self {
+        Self {
+            muted_rooms: HashSet::new(),
+            ignored_users: HashSet::new(),
+            marked_read: HashSet::new(),
+        }
+    }
+}
+
 thread_local! {
     static STATE: RefCell<Option<StoredSession>> = const { RefCell::new(None) };
+    static MENU_STATE: RefCell<MatrixMenuState> = RefCell::new(MatrixMenuState::new());
+}
+
+/// Build a simple `MenuItem` without icon, shortcut, or block.
+fn simple_item(
+    id: &str,
+    slot: MenuSlot,
+    label_key: &str,
+    item_variant: MenuItemVariant,
+) -> MenuItem {
+    MenuItem {
+        id: id.to_string(),
+        parent_id: None,
+        slot,
+        label_key: label_key.to_string(),
+        icon: None,
+        item_variant,
+        shortcut: None,
+        block: None,
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -501,24 +539,145 @@ impl PluginMetadataGuest for MatrixPlugin {
 
 impl ClientMenusGuest for MatrixPlugin {
     fn get_context_menu_items(
-        _target: crate::wit_bindings::MenuTargetKind,
-        _target_id: String,
-    ) -> Result<Vec<crate::wit_bindings::MenuItem>, wit::ClientError> {
-        Ok(Vec::new())
+        target: MenuTargetKind,
+        target_id: String,
+    ) -> Result<Vec<MenuItem>, wit::ClientError> {
+        match target {
+            // ── Server / Space ─────────────────────────────────────────────
+            MenuTargetKind::Server => Ok(vec![
+                simple_item("space-settings", MenuSlot::AfterFavorites, "plugin-matrix-menu-space-settings-label", MenuItemVariant::Normal),
+                simple_item("edit-per-space-profile", MenuSlot::AfterFavorites, "plugin-matrix-menu-edit-per-space-profile-label", MenuItemVariant::Normal),
+                simple_item("e2ee-verification", MenuSlot::AfterFavorites, "plugin-matrix-menu-e2ee-verification-label", MenuItemVariant::Normal),
+                simple_item("browse-rooms-in-space", MenuSlot::AfterFavorites, "plugin-matrix-menu-browse-rooms-in-space-label", MenuItemVariant::Normal),
+                simple_item("add-room-to-space", MenuSlot::AfterFavorites, "plugin-matrix-menu-add-room-to-space-label", MenuItemVariant::Normal),
+                simple_item("leave-space", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-space-label", MenuItemVariant::Destructive),
+            ]),
+
+            // ── Channel / Room ─────────────────────────────────────────────
+            MenuTargetKind::Channel => {
+                let is_read = MENU_STATE.with(|s| s.borrow().marked_read.contains(&target_id));
+                let read_item = if is_read {
+                    simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
+                } else {
+                    simple_item("mark-read-room", MenuSlot::Top, "plugin-matrix-menu-mark-read-room-label", MenuItemVariant::Normal)
+                };
+
+                let is_muted = MENU_STATE.with(|s| s.borrow().muted_rooms.contains(&target_id));
+                let mute_item = if is_muted {
+                    simple_item("unmute-room", MenuSlot::AfterFavorites, "plugin-matrix-menu-unmute-room-label", MenuItemVariant::Normal)
+                } else {
+                    simple_item("mute-room", MenuSlot::AfterFavorites, "plugin-matrix-menu-mute-room-label", MenuItemVariant::Normal)
+                };
+
+                Ok(vec![
+                    read_item,
+                    mute_item,
+                    simple_item("leave-room", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-room-label", MenuItemVariant::Destructive),
+                ])
+            }
+
+            // ── DM Channel ─────────────────────────────────────────────────
+            MenuTargetKind::Dm => {
+                let is_read = MENU_STATE.with(|s| s.borrow().marked_read.contains(&target_id));
+                let read_item = if is_read {
+                    simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
+                } else {
+                    simple_item("mark-read-room", MenuSlot::Top, "plugin-matrix-menu-mark-read-room-label", MenuItemVariant::Normal)
+                };
+
+                Ok(vec![
+                    read_item,
+                    simple_item("leave-dm", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-dm-label", MenuItemVariant::Destructive),
+                ])
+            }
+
+            // ── User ───────────────────────────────────────────────────────
+            MenuTargetKind::User => {
+                let is_ignored = MENU_STATE.with(|s| s.borrow().ignored_users.contains(&target_id));
+                let ignore_item = if is_ignored {
+                    simple_item("unignore-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-unignore-user-label", MenuItemVariant::Normal)
+                } else {
+                    simple_item("ignore-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-ignore-user-label", MenuItemVariant::Normal)
+                };
+
+                Ok(vec![
+                    simple_item("open-dm", MenuSlot::Top, "plugin-matrix-menu-open-dm-label", MenuItemVariant::Normal),
+                    simple_item("view-profile", MenuSlot::Top, "plugin-matrix-menu-view-profile-label", MenuItemVariant::Normal),
+                    simple_item("verify-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-verify-user-label", MenuItemVariant::Normal),
+                    ignore_item,
+                ])
+            }
+
+            // ── Message ────────────────────────────────────────────────────
+            MenuTargetKind::Message => Ok(vec![
+                simple_item("react-message", MenuSlot::Top, "plugin-matrix-menu-react-message-label", MenuItemVariant::Normal),
+                simple_item("reply-in-thread", MenuSlot::Top, "plugin-matrix-menu-reply-in-thread-label", MenuItemVariant::Normal),
+                simple_item("copy-permalink", MenuSlot::AfterFavorites, "plugin-matrix-menu-copy-permalink-label", MenuItemVariant::Normal),
+                simple_item("redact-message", MenuSlot::BeforeLeave, "plugin-matrix-menu-redact-message-label", MenuItemVariant::Destructive),
+            ]),
+
+            MenuTargetKind::Category => Ok(Vec::new()),
+        }
     }
 
     fn invoke_context_action(
         action_id: String,
-        _target: crate::wit_bindings::MenuTargetKind,
-        _target_id: String,
-    ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
-        Err(wit::ClientError::NotFound(action_id))
+        _target: MenuTargetKind,
+        target_id: String,
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        match action_id.as_str() {
+            // ── Server / Space ──────────────────────────────────────────────
+            "space-settings"
+            | "edit-per-space-profile"
+            | "e2ee-verification"
+            | "browse-rooms-in-space"
+            | "add-room-to-space"
+            | "leave-space" => Ok(ActionOutcome::Noop),
+
+            // ── Channel / Room — state mutations ────────────────────────────
+            "mark-read-room" => {
+                MENU_STATE.with(|s| s.borrow_mut().marked_read.insert(target_id));
+                Ok(ActionOutcome::Noop)
+            }
+            "mark-unread-room" => {
+                MENU_STATE.with(|s| s.borrow_mut().marked_read.remove(&target_id));
+                Ok(ActionOutcome::Noop)
+            }
+            "mute-room" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_rooms.insert(target_id));
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-room" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_rooms.remove(&target_id));
+                Ok(ActionOutcome::Noop)
+            }
+            "leave-room" | "leave-dm" => Ok(ActionOutcome::Noop),
+
+            // ── User — state mutations ───────────────────────────────────────
+            "open-dm" | "view-profile" | "verify-user" => Ok(ActionOutcome::Noop),
+            "ignore-user" => {
+                MENU_STATE.with(|s| s.borrow_mut().ignored_users.insert(target_id));
+                Ok(ActionOutcome::Noop)
+            }
+            "unignore-user" => {
+                MENU_STATE.with(|s| s.borrow_mut().ignored_users.remove(&target_id));
+                Ok(ActionOutcome::Noop)
+            }
+
+            // ── Message ───────────────────────────────────────────────────────
+            "react-message"
+            | "reply-in-thread"
+            | "copy-permalink"
+            | "redact-message" => Ok(ActionOutcome::Noop),
+
+            _ => Err(wit::ClientError::NotFound(action_id)),
+        }
     }
 
     fn poll_action(
         _handle: crate::wit_bindings::PendingHandle,
-    ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
-        Ok(crate::wit_bindings::ActionOutcome::Completed)
+    ) -> Result<ActionOutcome, wit::ClientError> {
+        Ok(ActionOutcome::Completed)
     }
 }
 

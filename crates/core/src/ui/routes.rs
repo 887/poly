@@ -58,6 +58,7 @@ use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
 use super::main_layout::MainLayout;
 use super::server_overview::ServerOverviewPage;
+use super::agent::AgentPage;
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
@@ -108,6 +109,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         Route::Root
         | Route::SettingsRoute
         | Route::SettingsSectionRoute { .. }
+        | Route::AgentRoute
+        | Route::AgentSectionRoute { .. }
         | Route::SearchRoute
         | Route::SignupPicker
         | Route::ClientSignup { .. }
@@ -321,6 +324,14 @@ pub enum Route {
         #[connected(linked)]
         #[route("/settings/:section")]
         SettingsSectionRoute { section: String },
+
+        #[connected(linked)]
+        #[route("/agent")]
+        AgentRoute,
+
+        #[connected(linked)]
+        #[route("/agent/:section")]
+        AgentSectionRoute { section: String },
 
         #[connected(linked)]
         #[route("/search")]
@@ -716,6 +727,22 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         Route::SettingsSectionRoute { section } => {
             s.nav.view = View::Settings;
             s.settings_section = SettingsSection::from_slug(section);
+            s.nav.active_account_id = None;
+            s.nav.active_instance_id = None;
+            s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::AgentRoute => {
+            s.nav.view = View::Agent;
+            s.nav.active_account_id = None;
+            s.nav.active_instance_id = None;
+            s.nav.active_backend = None;
+            s.nav.selected_server = None;
+            s.nav.selected_channel = None;
+        }
+        Route::AgentSectionRoute { .. } => {
+            s.nav.view = View::Agent;
             s.nav.active_account_id = None;
             s.nav.active_instance_id = None;
             s.nav.active_backend = None;
@@ -1726,6 +1753,29 @@ fn SettingsSectionRoute(section: String) -> Element {
     }
 }
 
+/// Agent page — app-level, not account-scoped.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn AgentRoute() -> Element {
+    rsx! {
+        AgentPage {}
+    }
+}
+
+/// Agent page with a specific section pre-selected via URL.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn AgentSectionRoute(section: String) -> Element {
+    let _ = section; // consumed by router; AgentPage reads section from its own state
+    rsx! {
+        AgentPage {}
+    }
+}
+
 /// Global search page — browse the full node tree of all accounts.
 #[context_menu(None)]
 #[rustfmt::skip]
@@ -2112,6 +2162,8 @@ fn route_variant_name(route: &Route) -> &'static str {
         Route::ServerOverviewRoute { .. } => "ServerOverviewRoute",
         Route::SettingsRoute => "SettingsRoute",
         Route::SettingsSectionRoute { .. } => "SettingsSectionRoute",
+        Route::AgentRoute => "AgentRoute",
+        Route::AgentSectionRoute { .. } => "AgentSectionRoute",
         Route::SearchRoute => "SearchRoute",
         Route::AccountSearchRoute { .. } => "AccountSearchRoute",
         Route::AccountSettingsRoute { .. } => "AccountSettingsRoute",

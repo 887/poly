@@ -21,7 +21,7 @@ pub use exports::poly::messenger::plugin_metadata::Guest as PluginMetadataGuest;
 pub use exports::poly::messenger::plugin_metadata::PluginManifest;
 pub use exports::poly::messenger::client_menus::Guest as ClientMenusGuest;
 pub use exports::poly::messenger::client_menus::{
-    ActionOutcome, MenuItem, MenuTargetKind, PendingHandle,
+    ActionOutcome, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, PendingHandle,
 };
 pub use exports::poly::messenger::client_settings::Guest as ClientSettingsGuest;
 pub use exports::poly::messenger::client_settings::{SettingsScope, SettingsSection};

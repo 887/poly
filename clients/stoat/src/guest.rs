@@ -6,6 +6,7 @@
 #![allow(unsafe_code)]
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 use crate::wit_bindings::{
     ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
@@ -24,8 +25,27 @@ struct StoredSession {
     user_id: String,
 }
 
+/// In-memory state for context-menu toggle actions (F10).
+/// Persistent storage is F9 — out of scope here.
+struct StoatMenuState {
+    muted_channels: HashSet<String>,
+    muted_servers: HashSet<String>,
+    blocked_users: HashSet<String>,
+    friends: HashSet<String>,
+    closed_dms: HashSet<String>,
+    muted_dms: HashSet<String>,
+}
+
 thread_local! {
     static STATE: RefCell<Option<StoredSession>> = const { RefCell::new(None) };
+    static MENU_STATE: RefCell<StoatMenuState> = RefCell::new(StoatMenuState {
+        muted_channels: HashSet::new(),
+        muted_servers: HashSet::new(),
+        blocked_users: HashSet::new(),
+        friends: HashSet::new(),
+        closed_dms: HashSet::new(),
+        muted_dms: HashSet::new(),
+    });
 }
 
 #[derive(Debug, Deserialize)]
@@ -339,10 +359,10 @@ fn open_dm_like_channel(user_id: &str) -> Result<wit::DmChannel, wit::ClientErro
     })
 }
 
-const FTL_EN: &str = "plugin-stoat-title = Stoat\n";
-const FTL_DE: &str = "plugin-stoat-title = Stoat\n";
-const FTL_FR: &str = "plugin-stoat-title = Stoat\n";
-const FTL_ES: &str = "plugin-stoat-title = Stoat\n";
+const FTL_EN: &str = include_str!("../locales/en/plugin.ftl");
+const FTL_DE: &str = include_str!("../locales/de/plugin.ftl");
+const FTL_FR: &str = include_str!("../locales/fr/plugin.ftl");
+const FTL_ES: &str = include_str!("../locales/es/plugin.ftl");
 
 struct StoatPlugin;
 
@@ -631,25 +651,270 @@ impl PluginMetadataGuest for StoatPlugin {
     }
 }
 
+fn guest_menu_item(
+    id: &str,
+    label_key: &str,
+    slot: crate::wit_bindings::exports::poly::messenger::client_menus::MenuSlot,
+) -> MenuItem {
+    MenuItem {
+        id: id.to_string(),
+        parent_id: None,
+        slot,
+        label_key: label_key.to_string(),
+        icon: None,
+        item_variant: crate::wit_bindings::exports::poly::messenger::client_menus::MenuItemVariant::Normal,
+        shortcut: None,
+        block: None,
+    }
+}
+
+fn guest_menu_item_destructive(
+    id: &str,
+    label_key: &str,
+    slot: crate::wit_bindings::exports::poly::messenger::client_menus::MenuSlot,
+) -> MenuItem {
+    MenuItem {
+        id: id.to_string(),
+        parent_id: None,
+        slot,
+        label_key: label_key.to_string(),
+        icon: None,
+        item_variant: crate::wit_bindings::exports::poly::messenger::client_menus::MenuItemVariant::Destructive,
+        shortcut: None,
+        block: None,
+    }
+}
+
 impl ClientMenusGuest for StoatPlugin {
     fn get_context_menu_items(
-        _target: MenuTargetKind,
-        _target_id: String,
+        target: MenuTargetKind,
+        target_id: String,
     ) -> Result<Vec<MenuItem>, wit::ClientError> {
-        Ok(vec![])
+        use crate::wit_bindings::exports::poly::messenger::client_menus::MenuSlot;
+
+        match target {
+            MenuTargetKind::Channel => {
+                let is_muted =
+                    MENU_STATE.with(|s| s.borrow().muted_channels.contains(&target_id));
+                let mute_item = if is_muted {
+                    guest_menu_item(
+                        "unmute-channel",
+                        "plugin-stoat-menu-unmute-channel-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                } else {
+                    guest_menu_item(
+                        "mute-channel",
+                        "plugin-stoat-menu-mute-channel-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                };
+                Ok(vec![
+                    mute_item,
+                    guest_menu_item(
+                        "mark-channel-read",
+                        "plugin-stoat-menu-mark-channel-read-label",
+                        MenuSlot::AfterFavorites,
+                    ),
+                ])
+            }
+            MenuTargetKind::Server => {
+                let is_muted =
+                    MENU_STATE.with(|s| s.borrow().muted_servers.contains(&target_id));
+                let mute_item = if is_muted {
+                    guest_menu_item(
+                        "unmute-server",
+                        "plugin-stoat-menu-unmute-server-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                } else {
+                    guest_menu_item(
+                        "mute-server",
+                        "plugin-stoat-menu-mute-server-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                };
+                Ok(vec![
+                    guest_menu_item(
+                        "invite-people",
+                        "plugin-stoat-menu-invite-people-label",
+                        MenuSlot::AfterFavorites,
+                    ),
+                    guest_menu_item(
+                        "privacy-settings",
+                        "plugin-stoat-menu-privacy-settings-label",
+                        MenuSlot::AfterFavorites,
+                    ),
+                    guest_menu_item(
+                        "edit-per-server-profile",
+                        "plugin-stoat-menu-edit-per-server-profile-label",
+                        MenuSlot::AfterFavorites,
+                    ),
+                    guest_menu_item(
+                        "manage-bots",
+                        "plugin-stoat-menu-manage-bots-label",
+                        MenuSlot::AfterFavorites,
+                    ),
+                    mute_item,
+                    guest_menu_item_destructive(
+                        "leave-server",
+                        "plugin-stoat-menu-leave-server-label",
+                        MenuSlot::BeforeLeave,
+                    ),
+                ])
+            }
+            MenuTargetKind::User => {
+                let is_blocked =
+                    MENU_STATE.with(|s| s.borrow().blocked_users.contains(&target_id));
+                let is_friend = MENU_STATE.with(|s| s.borrow().friends.contains(&target_id));
+                let block_item = if is_blocked {
+                    guest_menu_item(
+                        "unblock-user",
+                        "plugin-stoat-menu-unblock-user-label",
+                        MenuSlot::BeforeLeave,
+                    )
+                } else {
+                    guest_menu_item_destructive(
+                        "block-user",
+                        "plugin-stoat-menu-block-user-label",
+                        MenuSlot::BeforeLeave,
+                    )
+                };
+                let friend_item = if is_friend {
+                    guest_menu_item(
+                        "remove-friend",
+                        "plugin-stoat-menu-remove-friend-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                } else {
+                    guest_menu_item(
+                        "add-friend",
+                        "plugin-stoat-menu-add-friend-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                };
+                Ok(vec![
+                    guest_menu_item(
+                        "open-dm",
+                        "plugin-stoat-menu-open-dm-label",
+                        MenuSlot::AfterFavorites,
+                    ),
+                    friend_item,
+                    block_item,
+                ])
+            }
+            MenuTargetKind::Message => Ok(vec![
+                guest_menu_item(
+                    "react-message",
+                    "plugin-stoat-menu-react-message-label",
+                    MenuSlot::Top,
+                ),
+                guest_menu_item(
+                    "copy-message-link",
+                    "plugin-stoat-menu-copy-message-link-label",
+                    MenuSlot::AfterFavorites,
+                ),
+                guest_menu_item_destructive(
+                    "delete-message",
+                    "plugin-stoat-menu-delete-message-label",
+                    MenuSlot::BeforeLeave,
+                ),
+            ]),
+            MenuTargetKind::Dm => {
+                let is_muted = MENU_STATE.with(|s| s.borrow().muted_dms.contains(&target_id));
+                let mute_item = if is_muted {
+                    guest_menu_item(
+                        "unmute-dm",
+                        "plugin-stoat-menu-unmute-dm-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                } else {
+                    guest_menu_item(
+                        "mute-dm",
+                        "plugin-stoat-menu-mute-dm-label",
+                        MenuSlot::AfterFavorites,
+                    )
+                };
+                Ok(vec![
+                    guest_menu_item_destructive(
+                        "close-dm",
+                        "plugin-stoat-menu-close-dm-label",
+                        MenuSlot::BeforeLeave,
+                    ),
+                    mute_item,
+                ])
+            }
+            MenuTargetKind::Category => Ok(vec![]),
+        }
     }
 
     fn invoke_context_action(
         action_id: String,
         _target: MenuTargetKind,
-        _target_id: String,
+        target_id: String,
     ) -> Result<ActionOutcome, wit::ClientError> {
-        Err(wit::ClientError::NotFound(action_id))
+        match action_id.as_str() {
+            "mute-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_channels.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-channel" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_channels.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "mark-channel-read" => Ok(ActionOutcome::Completed),
+            "mute-server" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_servers.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-server" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_servers.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "invite-people"
+            | "privacy-settings"
+            | "edit-per-server-profile"
+            | "manage-bots" => Ok(ActionOutcome::Noop),
+            "leave-server" => Ok(ActionOutcome::Completed),
+            "block-user" => {
+                MENU_STATE.with(|s| s.borrow_mut().blocked_users.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unblock-user" => {
+                MENU_STATE.with(|s| s.borrow_mut().blocked_users.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "add-friend" => {
+                MENU_STATE.with(|s| s.borrow_mut().friends.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "remove-friend" => {
+                MENU_STATE.with(|s| s.borrow_mut().friends.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "open-dm" => Ok(ActionOutcome::Noop),
+            "react-message" => Ok(ActionOutcome::Noop),
+            "copy-message-link" => Ok(ActionOutcome::Noop),
+            "delete-message" => Ok(ActionOutcome::Completed),
+            "close-dm" => {
+                MENU_STATE.with(|s| s.borrow_mut().closed_dms.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "mute-dm" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_dms.insert(target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-dm" => {
+                MENU_STATE.with(|s| s.borrow_mut().muted_dms.remove(&target_id));
+                Ok(ActionOutcome::Completed)
+            }
+            other => Err(wit::ClientError::NotFound(format!(
+                "unknown stoat action: {other}"
+            ))),
+        }
     }
 
-    fn poll_action(
-        _handle: PendingHandle,
-    ) -> Result<ActionOutcome, wit::ClientError> {
+    fn poll_action(_handle: PendingHandle) -> Result<ActionOutcome, wit::ClientError> {
         Ok(ActionOutcome::Completed)
     }
 }

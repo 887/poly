@@ -49,6 +49,8 @@ use http::{MatrixHttpClient, MatrixSessionState};
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
+use std::collections::HashSet;
+#[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Return Fluent translations for the given locale.
@@ -68,6 +70,12 @@ pub struct MatrixClient {
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
+    /// F10 — in-memory muted room ids. Persistent storage is F9 — out of scope.
+    muted_rooms: std::sync::RwLock<HashSet<String>>,
+    /// F10 — in-memory ignored user ids.
+    ignored_users: std::sync::RwLock<HashSet<String>>,
+    /// F10 — rooms the user has explicitly marked read via the context menu.
+    marked_read: std::sync::RwLock<HashSet<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -78,6 +86,9 @@ impl MatrixClient {
         Self {
             http: MatrixHttpClient::new(MatrixConfig::default_homeserver()),
             settings_storage: SettingsStorageCell::new(),
+            muted_rooms: std::sync::RwLock::new(HashSet::new()),
+            ignored_users: std::sync::RwLock::new(HashSet::new()),
+            marked_read: std::sync::RwLock::new(HashSet::new()),
         }
     }
 
@@ -87,6 +98,9 @@ impl MatrixClient {
         Ok(Self {
             http: MatrixHttpClient::new(config),
             settings_storage: SettingsStorageCell::new(),
+            muted_rooms: std::sync::RwLock::new(HashSet::new()),
+            ignored_users: std::sync::RwLock::new(HashSet::new()),
+            marked_read: std::sync::RwLock::new(HashSet::new()),
         })
     }
 }
@@ -254,6 +268,28 @@ impl MatrixClient {
         match content {
             MessageContent::Text(text) => text.clone(),
             MessageContent::WithAttachments { text, .. } => text.clone(),
+        }
+    }
+}
+
+/// F10 — shared menu-item builder (also used inside the trait impl).
+#[cfg(feature = "native")]
+impl MatrixClient {
+    fn simple_item(
+        id: &str,
+        slot: MenuSlot,
+        label_key: &str,
+        item_variant: MenuItemVariant,
+    ) -> MenuItem {
+        MenuItem {
+            id: id.to_string(),
+            parent_id: None,
+            slot,
+            label_key: label_key.to_string(),
+            icon: None,
+            item_variant,
+            shortcut: None,
+            block: None,
         }
     }
 }
@@ -711,52 +747,98 @@ impl ClientBackend for MatrixClient {
     async fn get_context_menu_items(
         &self,
         target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
         match target {
+            // ── Server / Space ─────────────────────────────────────────────
             MenuTargetKind::Server => Ok(vec![
-                MenuItem {
-                    id: "space-settings".into(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-matrix-menu-space-settings-label".into(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "edit-per-space-profile".into(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-matrix-menu-edit-per-space-profile-label".into(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "e2ee-verification".into(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-matrix-menu-e2ee-verification-label".into(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "explore-rooms".into(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-matrix-menu-explore-rooms-label".into(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
+                Self::simple_item("space-settings", MenuSlot::AfterFavorites, "plugin-matrix-menu-space-settings-label", MenuItemVariant::Normal),
+                Self::simple_item("edit-per-space-profile", MenuSlot::AfterFavorites, "plugin-matrix-menu-edit-per-space-profile-label", MenuItemVariant::Normal),
+                Self::simple_item("e2ee-verification", MenuSlot::AfterFavorites, "plugin-matrix-menu-e2ee-verification-label", MenuItemVariant::Normal),
+                // F10 additions
+                Self::simple_item("browse-rooms-in-space", MenuSlot::AfterFavorites, "plugin-matrix-menu-browse-rooms-in-space-label", MenuItemVariant::Normal),
+                Self::simple_item("add-room-to-space", MenuSlot::AfterFavorites, "plugin-matrix-menu-add-room-to-space-label", MenuItemVariant::Normal),
+                Self::simple_item("leave-space", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-space-label", MenuItemVariant::Destructive),
             ]),
-            _ => Ok(Vec::new()),
+
+            // ── Channel / Room ─────────────────────────────────────────────
+            MenuTargetKind::Channel => {
+                // Distinct id per state: mark-read-room / mark-unread-room
+                // Poisoned lock treated as "not read" — safe default.
+                let is_read = self.marked_read.read()
+                    .map(|g| g.contains(target_id))
+                    .unwrap_or(false);
+                let read_item = if is_read {
+                    Self::simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
+                } else {
+                    Self::simple_item("mark-read-room", MenuSlot::Top, "plugin-matrix-menu-mark-read-room-label", MenuItemVariant::Normal)
+                };
+
+                // Distinct id per state: mute-room / unmute-room
+                let is_muted = self.muted_rooms.read()
+                    .map(|g| g.contains(target_id))
+                    .unwrap_or(false);
+                let mute_item = if is_muted {
+                    Self::simple_item("unmute-room", MenuSlot::AfterFavorites, "plugin-matrix-menu-unmute-room-label", MenuItemVariant::Normal)
+                } else {
+                    Self::simple_item("mute-room", MenuSlot::AfterFavorites, "plugin-matrix-menu-mute-room-label", MenuItemVariant::Normal)
+                };
+
+                Ok(vec![
+                    read_item,
+                    mute_item,
+                    Self::simple_item("leave-room", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-room-label", MenuItemVariant::Destructive),
+                ])
+            }
+
+            // ── DM Channel ─────────────────────────────────────────────────
+            MenuTargetKind::Dm => {
+                let is_read = self.marked_read.read()
+                    .map(|g| g.contains(target_id))
+                    .unwrap_or(false);
+                let read_item = if is_read {
+                    Self::simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
+                } else {
+                    Self::simple_item("mark-read-room", MenuSlot::Top, "plugin-matrix-menu-mark-read-room-label", MenuItemVariant::Normal)
+                };
+
+                Ok(vec![
+                    read_item,
+                    Self::simple_item("leave-dm", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-dm-label", MenuItemVariant::Destructive),
+                ])
+            }
+
+            // ── User ───────────────────────────────────────────────────────
+            MenuTargetKind::User => {
+                // Distinct id per state: ignore-user / unignore-user
+                let is_ignored = self.ignored_users.read()
+                    .map(|g| g.contains(target_id))
+                    .unwrap_or(false);
+                let ignore_item = if is_ignored {
+                    Self::simple_item("unignore-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-unignore-user-label", MenuItemVariant::Normal)
+                } else {
+                    Self::simple_item("ignore-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-ignore-user-label", MenuItemVariant::Normal)
+                };
+
+                Ok(vec![
+                    Self::simple_item("open-dm", MenuSlot::Top, "plugin-matrix-menu-open-dm-label", MenuItemVariant::Normal),
+                    Self::simple_item("view-profile", MenuSlot::Top, "plugin-matrix-menu-view-profile-label", MenuItemVariant::Normal),
+                    // Cross-signing stub
+                    Self::simple_item("verify-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-verify-user-label", MenuItemVariant::Normal),
+                    ignore_item,
+                ])
+            }
+
+            // ── Message ────────────────────────────────────────────────────
+            MenuTargetKind::Message => Ok(vec![
+                Self::simple_item("react-message", MenuSlot::Top, "plugin-matrix-menu-react-message-label", MenuItemVariant::Normal),
+                Self::simple_item("reply-in-thread", MenuSlot::Top, "plugin-matrix-menu-reply-in-thread-label", MenuItemVariant::Normal),
+                Self::simple_item("copy-permalink", MenuSlot::AfterFavorites, "plugin-matrix-menu-copy-permalink-label", MenuItemVariant::Normal),
+                // Destructive — author or admin only
+                Self::simple_item("redact-message", MenuSlot::BeforeLeave, "plugin-matrix-menu-redact-message-label", MenuItemVariant::Destructive),
+            ]),
+
+            MenuTargetKind::Category => Ok(Vec::new()),
         }
     }
 
@@ -764,11 +846,66 @@ impl ClientBackend for MatrixClient {
         &self,
         action_id: &str,
         _target: MenuTargetKind,
-        _target_id: &str,
+        target_id: &str,
     ) -> ClientResult<ActionOutcome> {
         match action_id {
-            "space-settings" | "edit-per-space-profile" | "e2ee-verification"
-            | "explore-rooms" => Ok(ActionOutcome::Noop),
+            // ── Server / Space ──────────────────────────────────────────────
+            "space-settings"
+            | "edit-per-space-profile"
+            | "e2ee-verification"
+            | "browse-rooms-in-space"
+            | "add-room-to-space"
+            | "leave-space" => Ok(ActionOutcome::Noop),
+
+            // ── Channel / Room — state mutations ────────────────────────────
+            // Poisoned lock treated as a no-op write — silent, non-panicking.
+            "mark-read-room" => {
+                if let Ok(mut g) = self.marked_read.write() {
+                    g.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Noop)
+            }
+            "mark-unread-room" => {
+                if let Ok(mut g) = self.marked_read.write() {
+                    g.remove(target_id);
+                }
+                Ok(ActionOutcome::Noop)
+            }
+            "mute-room" => {
+                if let Ok(mut g) = self.muted_rooms.write() {
+                    g.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-room" => {
+                if let Ok(mut g) = self.muted_rooms.write() {
+                    g.remove(target_id);
+                }
+                Ok(ActionOutcome::Noop)
+            }
+            "leave-room" | "leave-dm" => Ok(ActionOutcome::Noop),
+
+            // ── User — state mutations ───────────────────────────────────────
+            "open-dm" | "view-profile" | "verify-user" => Ok(ActionOutcome::Noop),
+            "ignore-user" => {
+                if let Ok(mut g) = self.ignored_users.write() {
+                    g.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Noop)
+            }
+            "unignore-user" => {
+                if let Ok(mut g) = self.ignored_users.write() {
+                    g.remove(target_id);
+                }
+                Ok(ActionOutcome::Noop)
+            }
+
+            // ── Message ───────────────────────────────────────────────────────
+            "react-message"
+            | "reply-in-thread"
+            | "copy-permalink"
+            | "redact-message" => Ok(ActionOutcome::Noop),
+
             _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
         }
     }

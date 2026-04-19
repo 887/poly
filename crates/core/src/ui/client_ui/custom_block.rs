@@ -162,8 +162,20 @@ fn strip_data_href_on_anchors(html: &str) -> String {
                 continue;
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        // SAFETY: `i` is always a valid char boundary. When we enter the
+        // `<a …>` branch we advance `i` by `end_rel + 1` which lands on the
+        // byte after `>` — still a char boundary because `>` is single-byte
+        // ASCII. Outside that branch we advance by `c.len_utf8()`, which is
+        // always the correct next boundary. Using `bytes[i] as char` was the
+        // F12 mojibake bug: it treated every byte as an independent Latin-1
+        // codepoint, corrupting multi-byte UTF-8 sequences (e.g. em-dash
+        // 0xE2 0x80 0x94 → 'â' + two garbage chars).
+        if let Some(c) = html[i..].chars().next() {
+            out.push(c);
+            i += c.len_utf8();
+        } else {
+            break;
+        }
     }
     out
 }
@@ -550,5 +562,62 @@ mod tests {
         assert!(cleaned.contains("color: red"));
         assert!(cleaned.contains("background: #fff"));
         assert!(cleaned.contains("padding: 4px"));
+    }
+
+    // ─── F12 — UTF-8 multibyte preservation through sanitize_html ──────────
+    //
+    // Root cause: `strip_data_href_on_anchors` iterated over bytes and cast
+    // each byte to `char` (`bytes[i] as char`). For multi-byte UTF-8
+    // sequences (em-dash = 0xE2 0x80 0x94, etc.) this misinterpreted each
+    // byte as an independent Latin-1 codepoint, producing mojibake:
+    //   — (U+2014, 3 bytes) → 'â' (U+00E2) + two garbage chars
+    // Fixed by advancing through `html[i..].chars().next()` so we always
+    // consume a full codepoint at a time.
+
+    #[test]
+    fn utf8_em_dash_preserved_through_sanitize() {
+        // em-dash U+2014 — must survive the full sanitize_html pipeline
+        let input = "<p>hello\u{2014}world</p>";
+        let out = sanitize_html(input);
+        assert!(
+            out.contains("\u{2014}"),
+            "em-dash was mangled; got: {out:?}"
+        );
+        assert!(
+            !out.contains('\u{00E2}'),
+            "Latin-1 mojibake 'â' present; got: {out:?}"
+        );
+    }
+
+    #[test]
+    fn utf8_multibyte_chars_preserved_through_sanitize() {
+        // Broad UTF-8 family: accented, CJK, emoji, em-dash in same string
+        let input = "<p>caf\u{00E9}\u{2014}日本語\u{2014}fiesta\u{00F1}ata\u{2014}\u{1F389}</p>";
+        let out = sanitize_html(input);
+        // Each character class must survive intact
+        assert!(out.contains('\u{00E9}'), "é lost; got: {out:?}");
+        assert!(out.contains('\u{2014}'), "em-dash lost; got: {out:?}");
+        assert!(out.contains("日本語"), "CJK lost; got: {out:?}");
+        assert!(out.contains('\u{00F1}'), "ñ lost; got: {out:?}");
+        assert!(out.contains('\u{1F389}'), "🎉 lost; got: {out:?}");
+        // No mojibake bytes
+        assert!(!out.contains('\u{00E2}'), "mojibake 'â' present; got: {out:?}");
+    }
+
+    #[test]
+    fn utf8_preserved_with_anchor_tag_nearby() {
+        // Ensures the non-anchor byte-walk path also handles multibyte when
+        // an `<a>` tag is present (exercises the fallback branch after a
+        // tag match). Use a format! so em-dashes are real UTF-8 bytes, not
+        // Rust escape sequences.
+        let input = format!(
+            "<p>hello{}<a href=\"https://example.com\">link{}end</a>{}tail</p>",
+            "\u{2014}", "\u{2014}", "\u{2014}"
+        );
+        let out = sanitize_html(&input);
+        assert!(
+            out.matches('\u{2014}').count() == 3,
+            "expected 3 em-dashes; got: {out:?}"
+        );
     }
 }

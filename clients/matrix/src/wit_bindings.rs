@@ -20,6 +20,8 @@ pub use exports::poly::messenger::client_composer::Guest as ClientComposerGuest;
 pub use exports::poly::messenger::client_menus::ActionOutcome;
 pub use exports::poly::messenger::client_menus::Guest as ClientMenusGuest;
 pub use exports::poly::messenger::client_menus::MenuItem;
+pub use exports::poly::messenger::client_menus::MenuItemVariant;
+pub use exports::poly::messenger::client_menus::MenuSlot;
 pub use exports::poly::messenger::client_menus::MenuTargetKind;
 pub use exports::poly::messenger::client_menus::PendingHandle;
 pub use exports::poly::messenger::client_settings::Guest as ClientSettingsGuest;

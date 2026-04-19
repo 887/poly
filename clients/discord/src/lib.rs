@@ -43,7 +43,31 @@ use http::DiscordHttpClient;
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
+use std::collections::HashSet;
+#[cfg(feature = "native")]
 use std::pin::Pin;
+#[cfg(feature = "native")]
+use std::sync::Mutex;
+
+/// F10 — in-memory mutable state for context-menu item state-awareness.
+///
+/// Tracks mute/block/friend state per id so that `get_context_menu_items`
+/// can return Mute vs Unmute, Block vs Unblock, etc. Persistent storage is
+/// F9 and is out of scope here; this is intentionally in-memory only.
+#[cfg(feature = "native")]
+#[derive(Default)]
+struct DiscordMenuState {
+    /// Channel IDs the user has locally muted.
+    muted_channels: HashSet<String>,
+    /// Guild (server) IDs the user has locally muted.
+    muted_servers: HashSet<String>,
+    /// User IDs the local user has blocked.
+    blocked_users: HashSet<String>,
+    /// User IDs the local user has added as friends.
+    friend_ids: HashSet<String>,
+    /// DM channel IDs the local user has muted.
+    muted_dms: HashSet<String>,
+}
 
 /// Discord messenger client.
 #[cfg(feature = "native")]
@@ -55,6 +79,11 @@ pub struct DiscordClient {
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
+    /// F10 — in-memory state for state-aware context-menu items.
+    /// Uses Mutex because `get_context_menu_items` takes `&self` but
+    /// actions like mute/unmute must mutate state, and `ClientBackend`
+    /// requires `Send + Sync`.
+    menu_state: Mutex<DiscordMenuState>,
 }
 
 #[cfg(feature = "native")]
@@ -65,6 +94,7 @@ impl DiscordClient {
             account_id: None,
             account_display_name: None,
             settings_storage: SettingsStorageCell::new(),
+            menu_state: Mutex::new(DiscordMenuState::default()),
         }
     }
 
@@ -74,6 +104,7 @@ impl DiscordClient {
             account_id: None,
             account_display_name: None,
             settings_storage: SettingsStorageCell::new(),
+            menu_state: Mutex::new(DiscordMenuState::default()),
         }
     }
 
@@ -324,64 +355,321 @@ impl ClientBackend for DiscordClient {
         BackendCapabilities::FULL_SOCIAL_CHAT
     }
 
-    // ── WP 1 / plan-client-ui-surface stubs ─────────────────────────────────
+    // ── WP 1 / F10 — state-aware context menus ──────────────────────────────
 
     async fn get_context_menu_items(
-        &self, target: MenuTargetKind, _target_id: &str,
+        &self, target: MenuTargetKind, target_id: &str,
     ) -> Result<Vec<MenuItem>, ClientError> {
         match target {
-            MenuTargetKind::Server => Ok(vec![
-                MenuItem {
-                    id: "invite-people".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-discord-menu-invite-people-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "privacy-settings".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-discord-menu-privacy-settings-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "edit-per-server-profile".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-discord-menu-edit-per-server-profile-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-                MenuItem {
-                    id: "server-boost".to_string(),
-                    parent_id: None,
-                    slot: MenuSlot::AfterFavorites,
-                    label_key: "plugin-discord-menu-server-boost-label".to_string(),
-                    icon: None,
-                    item_variant: MenuItemVariant::Normal,
-                    shortcut: None,
-                    block: None,
-                },
-            ]),
-            _ => Ok(Vec::new()),
+            MenuTargetKind::Server => {
+                // State-aware: Mute Server / Unmute Server, plus static items.
+                let muted = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_servers.contains(target_id);
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    MenuItem {
+                        id: "invite-people".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-invite-people-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "privacy-settings".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-privacy-settings-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "edit-per-server-profile".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-edit-per-server-profile-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "server-boost".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-server-boost-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    mute_item,
+                    MenuItem {
+                        id: "leave-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-leave-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Channel => {
+                // State-aware: Mute/Unmute Channel, Mark Read.
+                let muted = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_channels.contains(target_id);
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-channel".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-channel-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-channel".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-channel-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    mute_item,
+                    MenuItem {
+                        id: "mark-channel-read".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mark-channel-read-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::User => {
+                // State-aware: Block/Unblock, Add Friend/Remove Friend, Open DM.
+                let blocked = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).blocked_users.contains(target_id);
+                let is_friend = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).friend_ids.contains(target_id);
+                let block_item = if blocked {
+                    MenuItem {
+                        id: "unblock-user".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-unblock-user-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "block-user".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-block-user-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                let friend_item = if is_friend {
+                    MenuItem {
+                        id: "remove-friend".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-remove-friend-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "add-friend".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-add-friend-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    MenuItem {
+                        id: "open-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-open-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    friend_item,
+                    block_item,
+                ])
+            }
+            MenuTargetKind::Message => {
+                // Copy Link is always available; Delete is destructive.
+                Ok(vec![
+                    MenuItem {
+                        id: "copy-message-link".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-copy-message-link-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "delete-message".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-delete-message-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Dm => {
+                // State-aware: Mute/Unmute DM, Close DM.
+                let muted = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_dms.contains(target_id);
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    mute_item,
+                    MenuItem {
+                        id: "close-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-close-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Category => Ok(Vec::new()),
         }
     }
 
     async fn invoke_context_action(
-        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
+        &self, action_id: &str, _target: MenuTargetKind, target_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
         match action_id {
+            // Server actions
             "invite-people" | "privacy-settings" | "edit-per-server-profile"
-            | "server-boost" => Ok(ActionOutcome::Noop),
+            | "server-boost" | "leave-server" => Ok(ActionOutcome::Noop),
+            "mute-server" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_servers.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-server" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_servers.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            // Channel actions
+            "mute-channel" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_channels.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-channel" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_channels.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            "mark-channel-read" => Ok(ActionOutcome::Noop),
+            // User actions
+            "open-dm" => Ok(ActionOutcome::Noop),
+            "add-friend" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).friend_ids.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "remove-friend" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).friend_ids.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            "block-user" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).blocked_users.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unblock-user" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).blocked_users.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            // Message actions
+            "copy-message-link" | "delete-message" => Ok(ActionOutcome::Noop),
+            // DM actions
+            "mute-dm" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_dms.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-dm" => {
+                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_dms.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            "close-dm" => Ok(ActionOutcome::Noop),
             other => Err(ClientError::NotFound(format!("unknown action: {other}"))),
         }
     }
