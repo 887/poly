@@ -15,7 +15,7 @@ use twilight_model::channel::ChannelType;
 use twilight_model::id::marker::{ChannelMarker, GuildMarker, UserMarker};
 use twilight_model::id::Id;
 
-use crate::state::{Channel, DiscordState, Message};
+use crate::state::{Attachment, Channel, DiscordState, ForumTag, Message, ThreadMetadata};
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -270,6 +270,95 @@ pub async fn get_channel(
 }
 
 // ---------------------------------------------------------------------------
+// Threads — active + archived
+// ---------------------------------------------------------------------------
+
+/// GET /api/v10/guilds/{guild_id}/threads/active
+pub async fn get_guild_active_threads(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(guild_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => {
+            let parsed = guild_id
+                .parse::<u64>()
+                .ok()
+                .and_then(Id::<GuildMarker>::new_checked);
+            if parsed.and_then(|id| state.guilds.get(&id)).is_none() {
+                return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response();
+            }
+            let guild_id_val = match parsed {
+                Some(id) => id,
+                None => {
+                    return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild")
+                        .into_response();
+                }
+            };
+            // Collect active (non-archived) threads belonging to this guild.
+            let threads: Vec<serde_json::Value> = state
+                .channels
+                .iter()
+                .filter(|c| {
+                    c.guild_id == Some(guild_id_val)
+                        && is_thread_type(c.channel_type)
+                        && c.thread_metadata
+                            .as_ref()
+                            .map(|m| !m.archived)
+                            .unwrap_or(false)
+                })
+                .map(|c| channel_to_json(&c))
+                .collect();
+            Json(serde_json::json!({ "threads": threads, "has_more": false })).into_response()
+        }
+    }
+}
+
+/// GET /api/v10/channels/{channel_id}/threads/archived/public
+pub async fn get_channel_archived_threads(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => {
+            let parsed = channel_id
+                .parse::<u64>()
+                .ok()
+                .and_then(Id::<ChannelMarker>::new_checked);
+            let ch_id = match parsed {
+                Some(id) => id,
+                None => {
+                    return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel")
+                        .into_response();
+                }
+            };
+            if state.channels.get(&ch_id).is_none() {
+                return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel")
+                    .into_response();
+            }
+            // Collect archived public threads whose parent is this channel.
+            let threads: Vec<serde_json::Value> = state
+                .channels
+                .iter()
+                .filter(|c| {
+                    c.parent_id == Some(ch_id)
+                        && c.channel_type == ChannelType::PublicThread
+                        && c.thread_metadata
+                            .as_ref()
+                            .map(|m| m.archived)
+                            .unwrap_or(false)
+                })
+                .map(|c| channel_to_json(&c))
+                .collect();
+            Json(serde_json::json!({ "threads": threads, "has_more": false })).into_response()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Messages
 // ---------------------------------------------------------------------------
 
@@ -346,6 +435,8 @@ pub async fn send_message(
                 author_id: user_id,
                 channel_id: ch_id,
                 timestamp: chrono::Utc::now().to_rfc3339(),
+                attachments: vec![],
+                thread_id: None,
             };
             let json = message_to_json(&msg, &state);
             state.messages.entry(ch_id).or_default().push(msg);
@@ -403,6 +494,14 @@ pub async fn open_dm(
                 guild_id: None,
                 channel_type: ChannelType::Private,
                 parent_id: None,
+                available_tags: vec![],
+                default_forum_layout: None,
+                applied_tags: vec![],
+                thread_metadata: None,
+                owner_id: None,
+                message_count: None,
+                member_count: None,
+                thread_message_id: None,
             });
             Json(channel_to_json(&ch)).into_response()
         }
@@ -452,8 +551,41 @@ fn guild_to_json(g: &crate::state::Guild) -> serde_json::Value {
     })
 }
 
-fn channel_to_json(c: &Channel) -> serde_json::Value {
+fn forum_tag_to_json(t: &ForumTag) -> serde_json::Value {
     serde_json::json!({
+        "id": t.id.to_string(),
+        "name": t.name,
+        "moderated": t.moderated,
+        "emoji_id": null,
+        "emoji_name": t.emoji_name,
+    })
+}
+
+fn thread_metadata_to_json(m: &ThreadMetadata) -> serde_json::Value {
+    serde_json::json!({
+        "archived": m.archived,
+        "locked": m.locked,
+        "auto_archive_duration": m.auto_archive_duration,
+        "archive_timestamp": m.archive_timestamp,
+        "create_timestamp": m.create_timestamp,
+    })
+}
+
+fn attachment_to_json(a: &Attachment) -> serde_json::Value {
+    serde_json::json!({
+        "id": a.id.to_string(),
+        "filename": a.filename,
+        "content_type": a.content_type,
+        "size": a.size,
+        "url": a.url,
+        "proxy_url": a.proxy_url,
+        "width": a.width,
+        "height": a.height,
+    })
+}
+
+fn channel_to_json(c: &Channel) -> serde_json::Value {
+    let mut obj = serde_json::json!({
         "id": c.id.to_string(),
         "name": c.name,
         "type": u8::from(c.channel_type),
@@ -461,7 +593,40 @@ fn channel_to_json(c: &Channel) -> serde_json::Value {
         "parent_id": c.parent_id.map(|id| id.to_string()),
         "position": 0,
         "topic": null,
-    })
+    });
+
+    // Forum channel fields
+    if !c.available_tags.is_empty() {
+        let tags: Vec<serde_json::Value> = c.available_tags.iter().map(forum_tag_to_json).collect();
+        obj["available_tags"] = serde_json::Value::Array(tags);
+    } else {
+        obj["available_tags"] = serde_json::json!([]);
+    }
+    if let Some(layout) = c.default_forum_layout {
+        obj["default_forum_layout"] = serde_json::json!(layout);
+    }
+
+    // Thread fields
+    if !c.applied_tags.is_empty() {
+        let tags: Vec<serde_json::Value> = c.applied_tags.iter().map(|id| serde_json::json!(id.to_string())).collect();
+        obj["applied_tags"] = serde_json::Value::Array(tags);
+    } else {
+        obj["applied_tags"] = serde_json::json!([]);
+    }
+    if let Some(ref meta) = c.thread_metadata {
+        obj["thread_metadata"] = thread_metadata_to_json(meta);
+    }
+    if let Some(owner_id) = c.owner_id {
+        obj["owner_id"] = serde_json::json!(owner_id.to_string());
+    }
+    if let Some(mc) = c.message_count {
+        obj["message_count"] = serde_json::json!(mc);
+    }
+    if let Some(mc) = c.member_count {
+        obj["member_count"] = serde_json::json!(mc);
+    }
+
+    obj
 }
 
 fn message_to_json(m: &Message, state: &DiscordState) -> serde_json::Value {
@@ -472,16 +637,41 @@ fn message_to_json(m: &Message, state: &DiscordState) -> serde_json::Value {
             "discriminator": "0000"
         })
     });
-    serde_json::json!({
+
+    let attachments: Vec<serde_json::Value> = m.attachments.iter().map(attachment_to_json).collect();
+
+    let mut obj = serde_json::json!({
         "id": m.id.to_string(),
         "channel_id": m.channel_id.to_string(),
         "content": m.content,
         "author": author,
         "timestamp": m.timestamp,
         "type": 0,
-        "attachments": [],
+        "attachments": attachments,
         "embeds": [],
         "reactions": [],
         "mentions": [],
-    })
+    });
+
+    // Inline thread reference
+    if let Some(thread_id) = m.thread_id {
+        if let Some(thread_ch) = state.channels.get(&thread_id) {
+            obj["thread"] = channel_to_json(&thread_ch);
+        }
+    }
+
+    obj
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn is_thread_type(ct: ChannelType) -> bool {
+    matches!(
+        ct,
+        ChannelType::PublicThread
+            | ChannelType::PrivateThread
+            | ChannelType::AnnouncementThread
+    )
 }

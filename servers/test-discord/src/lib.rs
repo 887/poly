@@ -40,9 +40,9 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         // Channels
         .route("/api/v10/channels/{channel_id}", get(routes::get_channel))
         .route("/api/v10/channels/{channel_id}/messages", get(routes::get_messages).post(routes::send_message))
-        // TODO: re-add forum/thread routes (`/guilds/{id}/threads/active` +
-        // `/channels/{id}/threads/archived/public`) — Phase 6 subagent's
-        // state + handler edits did not land; tests removed pending redo.
+        // Threads
+        .route("/api/v10/guilds/{guild_id}/threads/active", get(routes::get_guild_active_threads))
+        .route("/api/v10/channels/{channel_id}/threads/archived/public", get(routes::get_channel_archived_threads))
         // Lifecycle
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))

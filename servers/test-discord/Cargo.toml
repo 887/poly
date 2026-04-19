@@ -42,5 +42,10 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
 
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+http-body-util = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
 [lints]
 workspace = true
