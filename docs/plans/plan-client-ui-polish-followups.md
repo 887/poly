@@ -84,25 +84,15 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🟡 F7 — Custom-block usage lint scanner
+### ✅ F7 — Custom-block usage lint scanner (DONE 2026-04-19)
 
-**Symptom:** Pack G's plan called for a `custom_block_usage.rs` lint-gate scanner that counts `CustomBlock { ... }` literal constructions per plugin and warns if any plugin exceeds a threshold (plan §4.7 P40). Pack G agent landed shadow-root + sanitizer tests but skipped this scanner.
-
-**Fix:** mirror `action_id_naming.rs` in `crates/lint-gate/build/` — scan `clients/*/src/**.rs` for `CustomBlock {` literal sites, count per plugin, emit warning violation when count > 5.
-
-**Estimated size:** small. ~60 lines of scanner + unit tests.
+**Resolution:** added `crates/lint-gate/build/custom_block_usage.rs` (mirrored as `pub mod custom_block_usage` in `src/lib.rs` for unit tests). Scanner counts `CustomBlock {` literal sites per plugin (substring `MyCustomBlock` and type-position references are excluded by leading-ident-char + immediate-`{` heuristics). Threshold: 5 per plugin. Today's max is 1; the headroom catches a regression where typed surfaces get replaced by HTML blobs without flagging existing usage. Wired into `build.rs` alongside the other 8 rules. 6 unit tests cover the counting + path-extraction helpers.
 
 ---
 
-### 🟡 F8 — Custom-block compile-fail trybuild fixture
+### ✅ F8 — Custom-block compile-fail trybuild fixture (DROPPED + replaced 2026-04-19)
 
-**Symptom:** §1.2 Pack G layer (g) called for a trybuild fixture that rejects `CustomBlock` constructions with `<script>` in `sanitized_html` at compile time. Pack G agent skipped.
-
-**Fix:** add `crates/ui-macros/tests/compile-fail-client-ui/custom_block_with_script.rs` that constructs a CustomBlock literal with `<script>`. The lint needs a proc-macro or build-script check to catch this — Rust's type system alone can't detect HTML content in a string. Either make it a lint-gate check (same as F7 expansion) or drop the trybuild layer for this item and document why.
-
-**Recommended:** drop the trybuild; replace with a runtime assertion in `sanitize_html` that debug-asserts no `<script>` survives. Runtime test already exists (`script_tag_stripped`).
-
-**Estimated size:** trivial (drop + doc) or medium (real compile-time check via proc-macro).
+**Resolution:** trybuild idea is unworkable — Rust's type system can't inspect string contents at compile time. Replaced with a `debug_assert!` in `crates/core/src/ui/client_ui/custom_block.rs::sanitize_html` that fails any debug build whose sanitizer leaks a `<script` tag through. Defence-in-depth on top of the existing `script_tag_stripped` runtime test in the sanitizer's own test suite.
 
 ---
 

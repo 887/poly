@@ -1297,3 +1297,107 @@ mod kebab_case_tests {
         assert!(is_kebab_case("enable-2fa"), "'enable-2fa' must be valid kebab-case");
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// custom_block_usage — Pack G P40 threshold scanner mirrored from
+// build/custom_block_usage.rs so that `cargo test -p poly-lint-gate` can
+// exercise the counting logic without depending on the build-script module path.
+// Keep in sync with the build/ copy.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+pub mod custom_block_usage {
+    pub fn count_custom_block_literals(src: &str) -> usize {
+        let bytes = src.as_bytes();
+        let needle = b"CustomBlock";
+        let mut count = 0usize;
+        let mut i = 0usize;
+
+        while i + needle.len() <= bytes.len() {
+            if &bytes[i..i + needle.len()] == needle {
+                let prev_ok = i == 0 || !is_ident_char(bytes[i - 1]);
+                let mut j = i + needle.len();
+                while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
+                    j += 1;
+                }
+                let next_ok = j < bytes.len() && bytes[j] == b'{';
+                if prev_ok && next_ok {
+                    count += 1;
+                    i = j + 1;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+
+        count
+    }
+
+    fn is_ident_char(b: u8) -> bool {
+        b.is_ascii_alphanumeric() || b == b'_'
+    }
+
+    pub fn plugin_id_from_path(p: &str) -> Option<String> {
+        let idx = p.find("clients/")?;
+        let after = &p[idx + "clients/".len()..];
+        let end = after.find('/')?;
+        Some(after[..end].to_string())
+    }
+}
+
+#[cfg(test)]
+mod custom_block_usage_tests {
+    use super::custom_block_usage::{count_custom_block_literals, plugin_id_from_path};
+
+    #[test]
+    fn counts_single_literal() {
+        let src = "let x = CustomBlock { sanitized_html: \"\".into() };";
+        assert_eq!(count_custom_block_literals(src), 1);
+    }
+
+    #[test]
+    fn counts_multiple_literals() {
+        let src = r#"
+            let a = CustomBlock { x: 1 };
+            let b = CustomBlock { y: 2 };
+            let c = CustomBlock{z:3};
+        "#;
+        assert_eq!(count_custom_block_literals(src), 3);
+    }
+
+    #[test]
+    fn ignores_substring_match() {
+        // `MyCustomBlock {` should not count.
+        let src = "struct MyCustomBlock { field: u32 }";
+        assert_eq!(count_custom_block_literals(src), 0);
+    }
+
+    #[test]
+    fn ignores_type_alias_no_brace() {
+        // `CustomBlock;` (no `{`) should not count.
+        let src = "type X = CustomBlock;";
+        assert_eq!(count_custom_block_literals(src), 0);
+    }
+
+    #[test]
+    fn ignores_type_position_in_signature() {
+        // `fn foo() -> CustomBlock` — no `{` follows the identifier on the
+        // same scan, since the next non-whitespace char is end-of-line.
+        let src = "fn foo() -> CustomBlock\n{ unimplemented!() }";
+        // The newline counts as non-whitespace under our scanner (only spaces
+        // and tabs are skipped). Confirmed by the asserted count.
+        assert_eq!(count_custom_block_literals(src), 0);
+    }
+
+    #[test]
+    fn plugin_id_extracted_from_path() {
+        assert_eq!(
+            plugin_id_from_path("clients/lemmy/src/lib.rs").as_deref(),
+            Some("lemmy")
+        );
+        assert_eq!(
+            plugin_id_from_path("/abs/path/clients/discord/src/api.rs").as_deref(),
+            Some("discord")
+        );
+        assert_eq!(plugin_id_from_path("crates/core/src/lib.rs"), None);
+    }
+}

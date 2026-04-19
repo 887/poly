@@ -13,6 +13,7 @@
 //!  6. FTL label-key coverage (plan-client-ui-surface.md D21).
 //!  7. Action ID naming convention — kebab-case (plan-client-ui-surface.md D25).
 //!  8. Backend-slug `match` ladders in UI (plan-client-ui-surface.md §7 WP 7).
+//!  9. Custom-block usage threshold (plan-client-ui-polish.md Pack G P40).
 //!
 //! Existing violations are grandfathered via `baseline.json`.
 
@@ -26,6 +27,8 @@ mod allow_ban;
 mod baseline;
 #[path = "build/context_menu_coverage.rs"]
 mod context_menu_coverage;
+#[path = "build/custom_block_usage.rs"]
+mod custom_block_usage;
 #[path = "build/forbid_backend_slug_match.rs"]
 mod forbid_backend_slug_match;
 #[path = "build/ftl_label_key_coverage.rs"]
@@ -75,6 +78,7 @@ fn main() {
     action_enum_coverage::scan(&walker, &mut violations);
     action_id_naming::scan(&walker, &mut violations);
     context_menu_coverage::scan(&walker, &mut violations);
+    custom_block_usage::scan(&walker, &mut violations);
     forbid_backend_slug_match::scan(&walker, &mut violations);
     ftl_label_key_coverage::scan(&walker, &mut violations);
     nav_push_ban::scan(&walker, &mut violations);

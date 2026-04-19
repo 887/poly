@@ -119,7 +119,17 @@ fn build_sanitizer() -> ammonia::Builder<'static> {
 /// `<a>`).
 pub fn sanitize_html(input: &str) -> String {
     let cleaned = build_sanitizer().clean(input).to_string();
-    strip_data_href_on_anchors(&cleaned)
+    let out = strip_data_href_on_anchors(&cleaned);
+    // F8 — defence in depth: in debug builds, assert the sanitizer never
+    // leaks a `<script` tag through. The trybuild fixture originally
+    // proposed for this check is unworkable (Rust's type system can't
+    // inspect string contents), so we enforce the invariant at runtime
+    // where the sanitizer actually runs.
+    debug_assert!(
+        !out.to_ascii_lowercase().contains("<script"),
+        "sanitize_html must strip <script> tags; output retained one"
+    );
+    out
 }
 
 /// Remove `href="data:…"` attributes from `<a>` tags. Called as a post-pass
