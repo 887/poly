@@ -998,25 +998,10 @@ fn restore_dm_chat(
             return;
         };
 
-        // Acquire the backend read lock with a 5 s deadline so a stalled
-        // writer cannot hang the UI indefinitely.
-        let guard = match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            backend_arc.read(),
-        )
-        .await
-        {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!(
-                    dm_id = %dm_id,
-                    account_id = %account_id,
-                    "restore_dm_chat: backend lock acquire timed out after 5 s"
-                );
-                chat_data.write().loading = false;
-                return;
-            }
-        };
+        // tokio::time::timeout uses Instant::now() which panics on
+        // wasm32-unknown-unknown ("time not implemented on this platform").
+        // The executor is single-threaded on web so plain .await is fine.
+        let guard = backend_arc.read().await;
         let messages = guard
             .get_messages(&dm_id, initial_message_query(unread_count))
             .await

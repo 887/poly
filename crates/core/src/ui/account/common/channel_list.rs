@@ -246,47 +246,19 @@ fn activate_dm_channel(
     // Snapshot the previous channel before taking any write lock.
     let previous_channel_id = app_state.read().nav.selected_channel.clone();
     if let Some(ref prev_id) = previous_channel_id {
-        tracing::info!(prev_channel_id = %prev_id, "activate_dm_channel: remembering scroll for previous channel");
         remember_message_list_scroll_position(prev_id);
     }
 
-    // Single write guard for app_state — one re-render instead of three.
-    {
-        let mut app = app_state.write();
-        app.nav.selected_server = None;
-        app.nav.selected_channel = Some(dm.id.clone());
-        app.nav.dm_right_sidebar_visible = false;
-    }
-    tracing::info!(dm_id = %dm.id, "activate_dm_channel: app_state nav written");
+    // Pre-mutating app_state.nav and chat_data here was triggering a render
+    // storm when combined with on_update's write of the SAME nav fields after
+    // nav.push. Each pre-mutation re-fired ChatView's many use_effect
+    // subscribers (use_history_state_effect, use_member_list_effect, …) on the
+    // single-threaded WASM scheduler, hanging the page. Just navigate — F5 on
+    // the same URL works because it skips the pre-mutation, and DmChat's own
+    // use_effect (restore_dm_chat) loads the channel + messages from the route
+    // params. Friend-click now walks the same path.
+    let _ = (dm.unread_count, &dm.last_message, &mut app_state, &mut chat_data);
 
-    // Single write guard for chat_data — one re-render instead of three.
-    {
-        let mut chat = chat_data.write();
-        chat.active_group_members = Vec::new();
-        chat.current_channel = Some(Channel {
-            id: dm.id.clone(),
-            name: dm.user.display_name.clone(),
-            channel_type: ChannelType::Text,
-            server_id: String::new(),
-            unread_count: dm.unread_count,
-            mention_count: 0,
-            last_message_id: dm.last_message.as_ref().map(|message| message.id.clone()),
-            forum_tags: None,
-            parent_channel_id: None,
-            thread_metadata: None,
-        });
-        chat.current_server = None;
-    }
-    tracing::info!(dm_id = %dm.id, "activate_dm_channel: chat_data written");
-
-    let channel_id = dm.id.clone();
-    let account_id = dm.account_id.clone();
-    spawn(async move {
-        tracing::info!(channel_id = %channel_id, "activate_dm_channel: spawned load_dm_messages");
-        load_dm_messages(channel_id, account_id, client_manager, chat_data).await;
-    });
-
-    tracing::info!(dm_id = %dm.id, "activate_dm_channel: navigating to DmChat route");
     nav.push(Route::DmChat {
         backend: dm.backend.slug().to_string(),
         instance_id,
@@ -294,7 +266,7 @@ fn activate_dm_channel(
         dm_id: dm.id.clone(),
     });
     close_mobile_drawer();
-    tracing::info!(dm_id = %dm.id, "activate_dm_channel: done");
+    let _ = client_manager;
 }
 
 fn active_account_context(

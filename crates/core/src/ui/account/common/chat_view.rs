@@ -1399,8 +1399,9 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
     use_effect(move || {
         let active_channel_id = app_state.read().nav.selected_channel.clone();
         let Some(active_channel_id) = active_channel_id else {
-            chat_data.write().members = Vec::new();
-            chat_data.write().active_group_members = Vec::new();
+            let mut w = chat_data.write();
+            w.members = Vec::new();
+            w.active_group_members = Vec::new();
             return;
         };
 
@@ -1419,16 +1420,17 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
                 None
             };
             let Some(backend) = backend else {
-                chat_data.write().members = Vec::new();
-                chat_data.write().active_group_members = Vec::new();
+                let mut w = chat_data.write();
+                w.members = Vec::new();
+                w.active_group_members = Vec::new();
                 return;
             };
             let guard = backend.read().await;
             match guard.get_channel_members(&active_channel_id).await {
                 Ok(members) => {
-                    chat_data.write().members = members.clone();
-                    chat_data.write().active_group_members =
-                        if is_group { members } else { Vec::new() };
+                    let mut w = chat_data.write();
+                    w.members = members.clone();
+                    w.active_group_members = if is_group { members } else { Vec::new() };
                 }
                 Err(err) => {
                     tracing::warn!(
@@ -1436,8 +1438,9 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
                         active_channel_id,
                         err
                     );
-                    chat_data.write().members = Vec::new();
-                    chat_data.write().active_group_members = Vec::new();
+                    let mut w = chat_data.write();
+                    w.members = Vec::new();
+                    w.active_group_members = Vec::new();
                 }
             }
         });
