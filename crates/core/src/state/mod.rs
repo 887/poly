@@ -9,8 +9,10 @@
 //! - Setup wizard state
 
 pub mod chat_data;
+pub mod route_synced;
 
 pub use chat_data::{ChatData, DragSource};
+pub use route_synced::RouteSynced;
 
 use poly_client::BackendType;
 use poly_client::User;
@@ -116,29 +118,36 @@ pub enum View {
 }
 
 /// Current navigation state.
+///
+/// **Route-synced fields** — `view`, `active_backend`, `active_instance_id`,
+/// `active_account_id`, `selected_server`, `selected_channel` — are wrapped in
+/// `RouteSynced<T>`. Reads still work via `Deref` (`nav.selected_channel.is_some()`,
+/// `nav.selected_channel.as_deref()`, …). Writes are compile-locked to
+/// `crate::ui::routes::sync_route_to_app_state`. To change one of these from a
+/// click handler, call `nav.push(Route::…)` and let `on_update` write it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NavigationState {
     /// Currently active view.
-    pub view: View,
+    pub view: RouteSynced<View>,
     /// The backend type of the account currently navigated to (e.g. Demo, Stoat).
     ///
     /// Set by the router's `on_update` callback and mirrors the `:backend` URL
     /// segment. `None` on app launch before any navigation occurs.
-    pub active_backend: Option<BackendType>,
+    pub active_backend: RouteSynced<Option<BackendType>>,
     /// The federated instance/homeserver for the active account.
     ///
     /// Mirrors the `:instance_id` URL segment. Examples: `"demo"`, `"matrix.org"`.
     /// `None` for app-level routes (`/notifications`, `/settings`).
-    pub active_instance_id: Option<String>,
+    pub active_instance_id: RouteSynced<Option<String>>,
     /// The account ID currently navigated to.
     ///
     /// Set by the router's `on_update` callback and mirrors the `:account_id`
     /// URL segment. `None` for app-level routes (`/notifications`, `/settings`).
-    pub active_account_id: Option<String>,
+    pub active_account_id: RouteSynced<Option<String>>,
     /// Currently selected server ID (if in Server view).
-    pub selected_server: Option<String>,
+    pub selected_server: RouteSynced<Option<String>>,
     /// Currently selected channel ID.
-    pub selected_channel: Option<String>,
+    pub selected_channel: RouteSynced<Option<String>>,
     /// Whether right sidebar (user list) is visible.
     pub right_sidebar_visible: bool,
     /// Whether the DM/group right member sidebar is visible.
@@ -199,12 +208,12 @@ pub struct PendingDirectCallRequest {
 impl Default for NavigationState {
     fn default() -> Self {
         Self {
-            view: View::DmsFriends,
-            active_backend: None,
-            active_instance_id: None,
-            active_account_id: None,
-            selected_server: None,
-            selected_channel: None,
+            view: RouteSynced::new(View::DmsFriends),
+            active_backend: RouteSynced::new(None),
+            active_instance_id: RouteSynced::new(None),
+            active_account_id: RouteSynced::new(None),
+            selected_server: RouteSynced::new(None),
+            selected_channel: RouteSynced::new(None),
             right_sidebar_visible: true,
             dm_right_sidebar_visible: true,
             mobile_dm_contact_detail_visible: false,

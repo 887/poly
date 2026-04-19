@@ -22,7 +22,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
         return t("app-title");
     }
 
-    match app_state.nav.view {
+    match *app_state.nav.view {
         View::DmsFriends => chat_data
             .current_channel
             .as_ref()

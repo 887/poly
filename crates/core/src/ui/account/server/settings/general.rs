@@ -133,9 +133,6 @@ fn LeaveServerConfirm(
                             .for_each(|v| {
                                 v.retain(|id| id != &sid);
                             });
-                        if app_state.read().nav.selected_server.as_deref() == Some(&sid) {
-                            app_state.write().nav.selected_server = None;
-                        }
                         navigator()
                             .replace(Route::DmsHome {
                                 backend: bslug_nav.clone(),

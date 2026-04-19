@@ -110,11 +110,11 @@ pub fn AccountServerBar() -> Element {
     let chat_data: Signal<ChatData> = use_context();
 
     let nav = app_state.read().nav.clone();
-    let active_account_id = nav.active_account_id.clone();
-    let active_backend = nav.active_backend;
-    let active_instance_id = nav.active_instance_id.clone();
-    let current_view = nav.view;
-    let selected_server = nav.selected_server.clone();
+    let active_account_id = nav.active_account_id.cloned();
+    let active_backend = nav.active_backend.cloned();
+    let active_instance_id = nav.active_instance_id.cloned();
+    let current_view = *nav.view;
+    let selected_server = nav.selected_server.cloned();
 
     // If no account is active, don't render
     let Some(account_id) = active_account_id else {
@@ -326,11 +326,9 @@ fn AccountServerIcon(
     let aid_click = account_id.clone();
     let on_click = move |_: Event<MouseData>| {
         let preserve_drawer_context = mobile_left_drawer_open();
-        if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
+        if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
             remember_message_list_scroll_position(&previous_channel_id);
         }
-        app_state.write().nav.selected_server = Some(sid_click.clone());
-        app_state.write().nav.selected_channel = None;
         // Clear per-server transient data synchronously before the route change so
         // that `ServerHome` never sees stale `current_channel` / `current_server`
         // from a previous server or from demo data.  Without this, the stale channel
@@ -495,7 +493,6 @@ fn AccountBarFriendsButton(
                 if current_view == View::Friends {
                     return;
                 }
-                app_state.write().nav.view = View::Friends;
                 chat_data.write().current_server = None;
                 chat_data.write().current_channel = None;
                 chat_data.write().channels.clear();
@@ -525,19 +522,19 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
         .read()
         .nav
         .active_backend
-        .as_ref()
+        .cloned()
         .map_or_else(|| "demo".to_string(), |backend| backend.slug().to_string());
     let instance_id = app_state
         .read()
         .nav
         .active_instance_id
-        .clone()
+        .cloned()
         .unwrap_or_else(|| "demo".to_string());
     let account_id = app_state
         .read()
         .nav
         .active_account_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
 
     rsx! {
@@ -547,7 +544,6 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                 if current_view == View::Notifications {
                     return;
                 }
-                app_state.write().nav.view = View::Notifications;
                 let mut cd = chat_data.write();
                 cd.current_server = None;
                 cd.current_channel = None;
@@ -584,14 +580,14 @@ fn CreateServerButton(account_id: String) -> Element {
         .read()
         .nav
         .active_backend
-        .as_ref()
+        .cloned()
         .map(|b| b.slug().to_string())
         .unwrap_or_else(|| "poly".to_string());
     let instance_id = app_state
         .read()
         .nav
         .active_instance_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
 
     rsx! {

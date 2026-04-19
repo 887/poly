@@ -982,7 +982,7 @@ async fn init_storage(
                     app_state.write().member_list_grouping = settings.member_list_grouping;
                     app_state.write().member_list_sort_order = settings.member_list_sort_order;
                     app_state.write().member_list_show_offline = settings.member_list_show_offline;
-                    app_state.write().nav.view = View::DmsFriends;
+                    // nav.view is written by sync_route_to_app_state on the next nav.push
                     // Restore favorited servers so Bar 1 repopulates immediately
                     // on launch — before the server list is fetched from the network.
                     if !settings.favorited_server_ids.is_empty() {

@@ -290,12 +290,13 @@ fn AccountBarControls(
     let nav = app_state.read().nav.clone();
     let backend_slug = nav
         .active_backend
+        .cloned()
         .map(|backend| backend.slug().to_string())
         .unwrap_or_else(|| "demo".to_string());
     // Pack F (P61) — hide mic/deafen on backends with no voice support.
     let show_voice = poly_client::capabilities_for_slug(&backend_slug).should_show_voice();
-    let settings_target = nav.active_account_id.clone().map(|account_id| {
-        let instance_id = nav.active_instance_id.unwrap_or_else(|| "demo".to_string());
+    let settings_target = nav.active_account_id.cloned().map(|account_id| {
+        let instance_id = nav.active_instance_id.cloned().unwrap_or_else(|| "demo".to_string());
         Route::AccountSettingsRoute {
             backend: backend_slug.clone(),
             instance_id,

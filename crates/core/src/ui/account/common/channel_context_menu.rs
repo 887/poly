@@ -97,14 +97,14 @@ pub fn ChannelContextMenu() -> Element {
                     .read()
                     .nav
                     .active_backend
-                    .as_ref()
+                    .cloned()
                     .map(|b| b.slug().to_string())
                     .unwrap_or_else(|| "demo".to_string());
                 let instance_id = app_state
                     .read()
                     .nav
                     .active_instance_id
-                    .clone()
+                    .cloned()
                     .unwrap_or_default();
                 let mut close = close;
                 rsx! {

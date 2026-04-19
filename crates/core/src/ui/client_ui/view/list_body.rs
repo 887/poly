@@ -163,15 +163,15 @@ pub fn ListBody(
                 let backend_slug_for_click = snap
                     .nav
                     .active_backend
-                    .as_ref()
+                    .cloned()
                     .map(|b| b.slug().to_string())
                     .unwrap_or_default();
-                let instance_id_for_click = snap.nav.active_instance_id.clone().unwrap_or_default();
-                let server_id_for_click = snap.nav.selected_server.clone().unwrap_or_default();
+                let instance_id_for_click = snap.nav.active_instance_id.cloned().unwrap_or_default();
+                let server_id_for_click = snap.nav.selected_server.cloned().unwrap_or_default();
                 let channel_id_for_click = snap
                     .nav
                     .selected_channel
-                    .clone()
+                    .cloned()
                     .unwrap_or_else(|| channel_id.clone());
                 let account_id_for_click = account_id.clone();
                 drop(snap);

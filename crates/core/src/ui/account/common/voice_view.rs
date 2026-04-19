@@ -172,7 +172,7 @@ async fn join_voice_channel(
         chat_data.write().voice_connection = None;
     }
 
-    let server_id = app_state.read().nav.selected_server.clone();
+    let server_id = app_state.read().nav.selected_server.cloned();
     let Some(server_id) = server_id else { return };
 
     let backend_info = client_manager.read().get_backend_for_server(&server_id);
@@ -251,10 +251,10 @@ async fn join_voice_channel(
         participant_user_ids: Vec::new(),
     });
 
-    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
+    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
         remember_message_list_scroll_position(&previous_channel_id);
     }
-    app_state.write().nav.selected_channel = Some(channel_id);
+    app_state.write().nav.selected_channel._set_from_route_sync_only(Some(channel_id));
 }
 
 // ─── Public component ─────────────────────────────────────────────────────────
@@ -274,7 +274,7 @@ pub fn VoiceChannelView() -> Element {
 
     let current_channel = chat_data.read().current_channel.clone();
     let current_server = chat_data.read().current_server.clone();
-    let channel_id = app_state.read().nav.selected_channel.clone();
+    let channel_id = app_state.read().nav.selected_channel.cloned();
 
     let participants = channel_id
         .as_deref()
@@ -328,7 +328,7 @@ pub fn VoiceChannelView() -> Element {
             // Join button — only when not connected
             if !is_connected {
                 VoiceJoinButton {
-                    channel_id: channel_id.clone(),
+                    channel_id,
                     current_channel: current_channel.clone(),
                     current_server: current_server.clone(),
                     channel_type,

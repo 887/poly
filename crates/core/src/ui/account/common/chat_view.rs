@@ -689,8 +689,8 @@ pub(crate) async fn open_message_hit(
     }
 
     let target_server_id = hit.server_id.clone().or(current_server_id);
-    let active_account_id = app_state.read().nav.active_account_id.clone();
-    let active_instance_id = app_state.read().nav.active_instance_id.clone();
+    let active_account_id = app_state.read().nav.active_account_id.cloned();
+    let active_instance_id = app_state.read().nav.active_instance_id.cloned();
 
     let backend_info = if let Some(ref server_id) = target_server_id {
         client_manager
@@ -705,7 +705,7 @@ pub(crate) async fn open_message_hit(
                 (
                     account_id.clone(),
                     backend,
-                    app_state.read().nav.active_backend.clone(),
+                    app_state.read().nav.active_backend.cloned(),
                 )
             })
     } else {
@@ -747,7 +747,6 @@ pub(crate) async fn open_message_hit(
     chat_data.write().members = target_members;
     chat_data.write().current_channel = target_channel.clone();
     chat_data.write().current_server = target_server.clone();
-    app_state.write().nav.selected_channel = Some(target_channel_id.clone());
 
     Some(build_message_hit_route(
         &mut app_state,
@@ -811,7 +810,6 @@ fn build_message_hit_route(
     });
 
     if let Some(server_id) = target_server_id {
-        app_state.write().nav.selected_server = Some(server_id.clone());
         (
             Route::ServerChat {
                 backend: backend_type.slug().to_string(),
@@ -823,7 +821,6 @@ fn build_message_hit_route(
             target_message_id,
         )
     } else {
-        app_state.write().nav.selected_server = None;
         (
             Route::DmChat {
                 backend: backend_type.slug().to_string(),
@@ -981,7 +978,7 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
     let client_manager = signals.client_manager;
     let chat_data = signals.chat_data;
     let nav = navigator();
-    let channel_id = app_state.read().nav.selected_channel.clone();
+    let channel_id = app_state.read().nav.selected_channel.cloned();
     let messages = chat_data.read().messages.clone();
     let current_channel = chat_data.read().current_channel.clone();
     let current_server = chat_data.read().current_server.clone();
@@ -1128,7 +1125,7 @@ fn current_self_user_id(
     state
         .nav
         .active_account_id
-        .as_ref()
+        .as_deref()
         .and_then(|aid| cm.sessions.get(aid))
         .map(|session| session.user.id.clone())
         .unwrap_or_default()
@@ -1397,7 +1394,7 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
     let mut chat_data = signals.chat_data;
 
     use_effect(move || {
-        let active_channel_id = app_state.read().nav.selected_channel.clone();
+        let active_channel_id = app_state.read().nav.selected_channel.cloned();
         let Some(active_channel_id) = active_channel_id else {
             let mut w = chat_data.write();
             w.members = Vec::new();
@@ -1405,8 +1402,8 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
             return;
         };
 
-        let selected_server = app_state.read().nav.selected_server.clone();
-        let active_account_id = app_state.read().nav.active_account_id.clone();
+        let selected_server = app_state.read().nav.selected_server.cloned();
+        let active_account_id = app_state.read().nav.active_account_id.cloned();
         let is_group = active_channel_id.starts_with("group-");
         spawn(async move {
             let backend = if let Some(server_id) = selected_server {
@@ -1468,7 +1465,7 @@ fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx
             search_hits.set(Vec::new());
             return;
         }
-        let account_id = app_state.read().nav.active_account_id.clone();
+        let account_id = app_state.read().nav.active_account_id.cloned();
         let Some(account_id) = account_id else {
             search_hits.set(Vec::new());
             return;
@@ -1508,12 +1505,12 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
         if *utility_panel.read() != Some(ChatUtilityPanel::Pinned) {
             return;
         }
-        let Some(target_channel_id) = app_state.read().nav.selected_channel.clone() else {
+        let Some(target_channel_id) = app_state.read().nav.selected_channel.cloned() else {
             pinned_messages.set(Vec::new());
             return;
         };
-        let selected_server = app_state.read().nav.selected_server.clone();
-        let active_account_id = app_state.read().nav.active_account_id.clone();
+        let selected_server = app_state.read().nav.selected_server.cloned();
+        let active_account_id = app_state.read().nav.active_account_id.cloned();
         spawn(async move {
             let backend = if let Some(server_id) = selected_server {
                 client_manager
@@ -1549,7 +1546,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
     let mut new_messages_while_scrolled_up = signals.new_messages_while_scrolled_up;
 
     use_effect(move || {
-        let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
+        let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
             history_state.set(ChatHistoryUiState::default());
             return;
         };
@@ -1630,8 +1627,8 @@ fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<Str
             show_command_popup.set(false);
             return;
         };
-        let selected_server = app_state.read().nav.selected_server.clone();
-        let active_account_id = app_state.read().nav.active_account_id.clone();
+        let selected_server = app_state.read().nav.selected_server.cloned();
+        let active_account_id = app_state.read().nav.active_account_id.cloned();
         spawn(async move {
             let backend = if let Some(server_id) = selected_server {
                 client_manager
@@ -3286,7 +3283,7 @@ async fn load_older_messages(
     mut chat_data: Signal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
 ) {
-    let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
+    let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
         history_state.write().loading_before = false;
         return;
     };
@@ -3300,12 +3297,12 @@ async fn load_older_messages(
         history_state.write().has_more_before = false;
         return;
     };
-    let backend = if let Some(server_id) = app_state.read().nav.selected_server.clone() {
+    let backend = if let Some(server_id) = app_state.read().nav.selected_server.cloned() {
         client_manager
             .read()
             .get_backend_for_server(&server_id)
             .map(|(_, handle)| handle)
-    } else if let Some(account_id) = app_state.read().nav.active_account_id.clone() {
+    } else if let Some(account_id) = app_state.read().nav.active_account_id.cloned() {
         client_manager.read().get_backend(&account_id)
     } else {
         None
@@ -3369,7 +3366,7 @@ async fn load_newer_messages(
     mut chat_data: Signal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
 ) {
-    let Some(active_channel_id) = app_state.read().nav.selected_channel.clone() else {
+    let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
         history_state.write().loading_after = false;
         return;
     };
@@ -3383,12 +3380,12 @@ async fn load_newer_messages(
         history_state.write().has_more_after = false;
         return;
     };
-    let backend = if let Some(server_id) = app_state.read().nav.selected_server.clone() {
+    let backend = if let Some(server_id) = app_state.read().nav.selected_server.cloned() {
         client_manager
             .read()
             .get_backend_for_server(&server_id)
             .map(|(_, handle)| handle)
-    } else if let Some(account_id) = app_state.read().nav.active_account_id.clone() {
+    } else if let Some(account_id) = app_state.read().nav.active_account_id.cloned() {
         client_manager.read().get_backend(&account_id)
     } else {
         None
@@ -3810,7 +3807,7 @@ fn render_message_actions(
                     .read()
                     .nav
                     .active_account_id
-                    .clone()
+                    .cloned()
                     .unwrap_or_default();
                 let channel_id = ctx.channel_id.clone().unwrap_or_default();
                 if !account_id.is_empty() && !channel_id.is_empty() {
@@ -3915,7 +3912,7 @@ fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
         .read()
         .nav
         .active_backend
-        .as_ref()
+        .cloned()
         .map(|b| b.slug().to_string())
         .unwrap_or_else(|| "demo".to_string());
     let composer_writable =
@@ -4057,7 +4054,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
         .read()
         .nav
         .active_account_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
     let channel_for_hooks = channel_id.clone().unwrap_or_default();
     let has_channel =
@@ -4394,7 +4391,7 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
         let app_state = app_state_for_emoji;
         spawn(async move {
             let Some(ref cid) = channel_id else { return };
-            let active_account_id = app_state.read().nav.active_account_id.clone();
+            let active_account_id = app_state.read().nav.active_account_id.cloned();
             let backend = if let Some(account_id) = active_account_id {
                 client_manager.read().get_backend(&account_id)
             } else {
@@ -5320,20 +5317,20 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
                                 class: "attachment-image",
                                 onclick: move |_| {
                                     let nav_state = app_state.read().nav.clone();
-                                    let Some(backend) = nav_state.active_backend else {
+                                    let Some(backend) = nav_state.active_backend.cloned() else {
                                         return;
                                     };
-                                    let Some(instance_id) = nav_state.active_instance_id else {
+                                    let Some(instance_id) = nav_state.active_instance_id.cloned() else {
                                         return;
                                     };
-                                    let Some(account_id) = nav_state.active_account_id else {
+                                    let Some(account_id) = nav_state.active_account_id.cloned() else {
                                         return;
                                     };
-                                    let Some(channel_id) = nav_state.selected_channel else {
+                                    let Some(channel_id) = nav_state.selected_channel.cloned() else {
                                         return;
                                     };
 
-                                    if let Some(server_id) = nav_state.selected_server {
+                                    if let Some(server_id) = nav_state.selected_server.cloned() {
                                         nav.push(Route::ServerMediaViewerRoute {
                                             backend: backend.slug().to_string(),
                                             instance_id,
@@ -5520,12 +5517,12 @@ async fn send_message(ctx: SendMessageCtx) {
     // active_account_id so messages still send when no server is selected.
     let backend = {
         let state = app_state.read();
-        if let Some(ref server_id) = state.nav.selected_server {
+        if let Some(ref server_id) = *state.nav.selected_server {
             client_manager
                 .read()
                 .get_backend_for_server(server_id)
                 .map(|(_id, b)| b)
-        } else if let Some(ref account_id) = state.nav.active_account_id {
+        } else if let Some(ref account_id) = *state.nav.active_account_id {
             client_manager.read().get_backend(account_id)
         } else {
             None
@@ -5961,7 +5958,7 @@ fn DmContactListPanel(channel_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
 
-    let active_account_id = app_state.read().nav.active_account_id.clone().unwrap_or_default();
+    let active_account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
 
     // The other person in this 1:1 DM
     let dm: Option<DmChannel> = chat_data

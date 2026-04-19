@@ -60,7 +60,7 @@ pub fn ClientSidebar() -> Element {
     // it may be None — in that case we render the ChannelListLayout which
     // itself delegates to the existing `ChannelList` that handles the
     // DMs-home empty state.
-    let account_id = app_state.read().nav.active_account_id.clone();
+    let account_id = app_state.read().nav.active_account_id.cloned();
 
     let decl_res = {
         let account_id = account_id.clone();

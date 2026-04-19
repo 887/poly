@@ -148,11 +148,11 @@ pub fn ForumView() -> Element {
         .read()
         .nav
         .active_account_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
     let channel_id = {
         let s = app_state.read();
-        if let Some(id) = s.nav.selected_channel.clone() {
+        if let Some(id) = s.nav.selected_channel.cloned() {
             if !id.is_empty() {
                 id
             } else {
@@ -230,9 +230,9 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
         let cid = channel_id_clone.clone();
 
         // Ensure the server+channel context is loaded (handles direct URL navigation).
-        let server_id = app_state.read().nav.selected_server.clone().unwrap_or_default();
+        let server_id = app_state.read().nav.selected_server.cloned().unwrap_or_default();
 
-        let account_id = app_state.read().nav.active_account_id.clone();
+        let account_id = app_state.read().nav.active_account_id.cloned();
         let backend = account_id.as_deref()
             .and_then(|aid| client_manager.read().get_backend(aid));
 

@@ -238,7 +238,7 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                     // write guards on app_state and chat_data; any
                                     // live read guard on the same signal would panic.
                                     {
-                                        let prev = app_state.read().nav.selected_channel.clone();
+                                        let prev = app_state.read().nav.selected_channel.cloned();
                                         if let Some(ref id) = prev {
                                             remember_message_list_scroll_position(id);
                                         }

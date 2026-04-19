@@ -115,7 +115,7 @@ pub fn SavedItemsView() -> Element {
     let mut source_search = use_signal(String::new);
     let mut selected_source = use_signal(|| None::<String>);
 
-    let account_id = app_state.read().nav.active_account_id.clone().unwrap_or_default();
+    let account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
     let active_user_id = chat_data
         .read()
         .account_sessions
@@ -304,8 +304,8 @@ pub fn SavedItemsView() -> Element {
                                         item: item.clone(),
                                         highlight_terms: highlight_terms.clone(),
                                         on_open: move |hit: MessageSearchHit| {
-                                            let current_channel_id = app_state.read().nav.selected_channel.clone();
-                                            let current_server_id = app_state.read().nav.selected_server.clone();
+                                            let current_channel_id = app_state.read().nav.selected_channel.cloned();
+                                            let current_server_id = app_state.read().nav.selected_server.cloned();
                                             spawn(async move {
                                                 if let Some((route, message_id)) = open_message_hit(
                                                     hit,

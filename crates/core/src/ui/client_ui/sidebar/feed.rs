@@ -45,7 +45,7 @@ pub fn FeedLayout() -> Element {
     // `invoke_sidebar_action` → `ActionOutcome::Navigate` path.
     let mut active_feed = use_signal(String::new);
 
-    let account_id = app_state.read().nav.active_account_id.clone();
+    let account_id = app_state.read().nav.active_account_id.cloned();
     let current = active_feed.read().clone();
 
     rsx! {

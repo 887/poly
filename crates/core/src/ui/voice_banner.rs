@@ -142,12 +142,10 @@ fn VoiceBannerChannelLink(
                         });
                     }
                 } else {
-                    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
                     {
                         remember_message_list_scroll_position(&previous_channel_id);
                     }
-                    app_state.write().nav.selected_server = Some(server_id.clone());
-                    app_state.write().nav.selected_channel = Some(channel_id.clone());
                     navigator()
                         .push(Route::ServerChat {
                             backend: backend_slug.clone(),

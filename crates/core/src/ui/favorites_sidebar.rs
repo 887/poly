@@ -114,20 +114,20 @@ pub(crate) fn SidebarTooltip(
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let current_view = app_state.read().nav.view;
+    let current_view = *app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
     let mut chat_data: Signal<ChatData> = use_context();
 
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
-    let active_account = app_state.read().nav.active_account_id.clone();
+    let active_account = app_state.read().nav.active_account_id.cloned();
     let active_backend_slug = app_state
         .read()
         .nav
         .active_backend
-        .as_ref()
+        .cloned()
         .map(|b| b.slug().to_string());
-    let active_instance_id = app_state.read().nav.active_instance_id.clone();
+    let active_instance_id = app_state.read().nav.active_instance_id.cloned();
 
     // Collect distinct active account IDs for account icons, applying the
     // user-saved order from `ChatData.account_order` (hydrated at startup
@@ -873,12 +873,10 @@ fn FavoriteServerIcon(
                         .read()
                         .nav
                         .selected_channel
-                        .clone()
+                        .cloned()
                     {
                         remember_message_list_scroll_position(&previous_channel_id);
                     }
-                    app_state.write().nav.selected_server = Some(sid.clone());
-                    app_state.write().nav.selected_channel = None;
                     if !preserve_drawer_context {
                         let sid2 = sid.clone();
                         spawn(async move {
@@ -1145,7 +1143,7 @@ async fn load_server_data_internal(
     // taps a favorites/account-server icon, we keep them at the server shell
     // so only an explicit channel tap opens content and closes the drawer.
     if auto_select_first_text_channel && let Some(ch) = first_text_channel {
-        app_state.write().nav.selected_channel = Some(ch.id.clone());
+        app_state.write().nav.selected_channel._set_from_route_sync_only(Some(ch.id.clone()));
         chat_data.write().current_channel = Some(ch.clone());
 
         // Load messages for first channel
@@ -1163,7 +1161,7 @@ async fn load_server_data_internal(
         }
     }
     if !auto_select_first_text_channel {
-        app_state.write().nav.selected_channel = None;
+        app_state.write().nav.selected_channel._set_from_route_sync_only(None);
         let mut cd = chat_data.write();
         cd.current_channel = None;
         cd.messages.clear();
@@ -1301,7 +1299,7 @@ pub async fn restore_server_channel(
     chat_data.write().channels = channels;
 
     if let Some(ref ch) = target {
-        app_state.write().nav.selected_channel = Some(ch.id.clone());
+        app_state.write().nav.selected_channel._set_from_route_sync_only(Some(ch.id.clone()));
         chat_data.write().current_channel = Some(ch.clone());
 
         if matches!(

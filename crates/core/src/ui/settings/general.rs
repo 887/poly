@@ -312,7 +312,7 @@ async fn run_reset_flow(
 
     chat_data.set(crate::state::ChatData::default());
     let nav = crate::state::NavigationState {
-        view: crate::state::View::Setup,
+        view: crate::state::RouteSynced::new(crate::state::View::Setup),
         ..Default::default()
     };
     {

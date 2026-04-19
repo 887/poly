@@ -48,13 +48,13 @@ fn active_account_context(
     app_state: Signal<AppState>,
     chat_data: Signal<ChatData>,
 ) -> Option<(String, String)> {
-    let account_id = app_state.read().nav.active_account_id.clone()?;
+    let account_id = app_state.read().nav.active_account_id.cloned()?;
     let instance_id = chat_data
         .read()
         .account_sessions
         .get(&account_id)
         .map(|session| session.instance_id.clone())
-        .or_else(|| app_state.read().nav.active_instance_id.clone())
+        .or_else(|| app_state.read().nav.active_instance_id.cloned())
         .unwrap_or_default();
     Some((account_id, instance_id))
 }

@@ -181,7 +181,7 @@ pub fn ConversationSearchView() -> Element {
     let mut dm_visible: Signal<usize> = use_signal(|| 20_usize);
     let mut grp_visible: Signal<usize> = use_signal(|| 20_usize);
 
-    let active_account_id = app_state.read().nav.active_account_id.clone().unwrap_or_default();
+    let active_account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
     let active_user_id = chat_data
         .read()
         .account_sessions

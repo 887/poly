@@ -83,7 +83,7 @@ async fn load_channel_data(
         .map_or(0, |channel| channel.unread_count);
 
     // Get selected server to find the right backend
-    let server_id = app_state.read().nav.selected_server.clone();
+    let server_id = app_state.read().nav.selected_server.cloned();
     let Some(server_id) = server_id else {
         chat_data.write().loading = false;
         return;
@@ -244,7 +244,7 @@ fn activate_dm_channel(
     );
 
     // Snapshot the previous channel before taking any write lock.
-    let previous_channel_id = app_state.read().nav.selected_channel.clone();
+    let previous_channel_id = app_state.read().nav.selected_channel.cloned();
     if let Some(ref prev_id) = previous_channel_id {
         remember_message_list_scroll_position(prev_id);
     }
@@ -273,13 +273,13 @@ fn active_account_context(
     app_state: Signal<AppState>,
     chat_data: Signal<ChatData>,
 ) -> Option<(String, String)> {
-    let account_id = app_state.read().nav.active_account_id.clone()?;
+    let account_id = app_state.read().nav.active_account_id.cloned()?;
     let instance_id = chat_data
         .read()
         .account_sessions
         .get(&account_id)
         .map(|session| session.instance_id.clone())
-        .or_else(|| app_state.read().nav.active_instance_id.clone())
+        .or_else(|| app_state.read().nav.active_instance_id.cloned())
         .unwrap_or_default();
     Some((account_id, instance_id))
 }
@@ -411,7 +411,7 @@ pub(crate) fn open_direct_message_from_active_account(
 pub fn ChannelList() -> Element {
     let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
-    let current_view = app_state.read().nav.view;
+    let current_view = *app_state.read().nav.view;
     let current_server = chat_data.read().current_server.clone();
     let visible_category_ids = use_signal(Vec::<String>::new);
 
@@ -473,19 +473,19 @@ fn ServerBanner(
         .read()
         .nav
         .active_instance_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
     let account_id = app_state
         .read()
         .nav
         .active_account_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
     let server_id = app_state
         .read()
         .nav
         .selected_server
-        .clone()
+        .cloned()
         .unwrap_or_default();
 
     // Backend slug comes from the Server struct itself (always consistent with
@@ -652,7 +652,7 @@ fn DMFriendsView() -> Element {
     let chat_data: Signal<ChatData> = use_context();
 
     // Only show DMs and groups belonging to the currently active account.
-    let active_account_id = app_state.read().nav.active_account_id.clone();
+    let active_account_id = app_state.read().nav.active_account_id.cloned();
     let active_user_id = active_account_id.as_ref().and_then(|account_id| {
         chat_data
             .read()
@@ -731,9 +731,9 @@ fn DMFriendsView() -> Element {
                 let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
                     match (
-                        nav.active_backend.clone(),
-                        nav.active_instance_id.clone(),
-                        nav.active_account_id.clone(),
+                        nav.active_backend.cloned(),
+                        nav.active_instance_id.cloned(),
+                        nav.active_account_id.cloned(),
                     ) {
                         (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
                         _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
@@ -757,9 +757,9 @@ fn DMFriendsView() -> Element {
                 let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
                     match (
-                        nav.active_backend.clone(),
-                        nav.active_instance_id.clone(),
-                        nav.active_account_id.clone(),
+                        nav.active_backend.cloned(),
+                        nav.active_instance_id.cloned(),
+                        nav.active_account_id.cloned(),
                     ) {
                         (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
                         _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
@@ -822,8 +822,8 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let current_server = chat_data.read().current_server.clone();
 
     // Derive route construction fields for InlineCreateChannel.
-    let instance_id = app_state.read().nav.active_instance_id.clone().unwrap_or_default();
-    let account_id  = app_state.read().nav.active_account_id.clone().unwrap_or_default();
+    let instance_id = app_state.read().nav.active_instance_id.cloned().unwrap_or_default();
+    let account_id  = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
 
     if let Some(ref server) = current_server {
         // Collect all channel IDs that are already assigned to a category.
@@ -903,7 +903,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                             // Use nav.selected_channel (updated synchronously by
                             // sync_route_to_app_state) instead of chat_data.current_channel
                             // which lags behind the route on same-server channel switches.
-                            let nav_selected = app_state.read().nav.selected_channel.clone().unwrap_or_default();
+                            let nav_selected = app_state.read().nav.selected_channel.cloned().unwrap_or_default();
                             let is_active = ch_id == nav_selected;
                             let icon = match ch.channel_type {
                                 ChannelType::Forum => {
@@ -1109,11 +1109,10 @@ fn DMChannelItem(
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
-                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
                 {
                     remember_message_list_scroll_position(&previous_channel_id); // Clear group member list — this is an individual DM.
                 }
-                app_state.write().nav.selected_channel = Some(channel_id.clone());
                 chat_data.write().active_group_members = Vec::new();
                 app_state.write().nav.dm_right_sidebar_visible = false;
                 chat_data.write().current_channel = Some(Channel {
@@ -1200,11 +1199,10 @@ fn GroupChannelItem(
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
             onclick: move |_| {
-                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
                 {
                     remember_message_list_scroll_position(&previous_channel_id); // Populate group members for the DM member sidebar.
                 } // Synthesize a Channel so ChatView can display the group header
-                app_state.write().nav.selected_channel = Some(group_id.clone());
                 chat_data.write().active_group_members = members.clone();
                 chat_data.write().current_channel = Some(Channel {
                     id: group_id.clone(),
@@ -1344,15 +1342,15 @@ fn ChannelItemRow(channel: Channel) -> Element {
     let ch_id_for_menu = ch_id.clone();
     let ch_name_for_menu = ch_name.clone();
     let is_active = selected_channel.as_deref() == Some(&ch_id);
-    let account_id_for_menu = app_state.read().nav.active_account_id.clone().unwrap_or_default();
+    let account_id_for_menu = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
     let backend_slug_for_menu = app_state
         .read()
         .nav
         .active_backend
-        .as_ref()
+        .cloned()
         .map(|b| b.slug().to_string())
         .unwrap_or_else(|| "demo".to_string());
-    let instance_id_for_menu = app_state.read().nav.active_instance_id.clone().unwrap_or_default();
+    let instance_id_for_menu = app_state.read().nav.active_instance_id.cloned().unwrap_or_default();
 
     let type_icon = match ch_type {
         ChannelType::Text | ChannelType::Thread | ChannelType::Announcement => "#",
@@ -1428,11 +1426,10 @@ fn ChannelItemRow(channel: Channel) -> Element {
             ontouchmove: long_press.on_touch_move(),
             ontouchcancel: long_press.on_touch_cancel(),
             onclick: move |_| {
-                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone()
+                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
                 {
                     remember_message_list_scroll_position(&previous_channel_id);
                 }
-                app_state.write().nav.selected_channel = Some(ch_id.clone());
                 chat_data.write().current_channel = Some(channel_for_click.clone());
                 // Persist last visited channel for this server (fire-and-forget).
                 let server_id_for_persist = channel.server_id.clone();
@@ -1448,13 +1445,13 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 spawn(async move {
                     load_channel_data(cid, client_manager, chat_data, app_state).await;
                 });
-                let server_id = app_state.read().nav.selected_server.clone().unwrap_or_default();
+                let server_id = app_state.read().nav.selected_server.cloned().unwrap_or_default();
                 let (backend_slug, instance_id, account_id) = {
                     let nav = &app_state.read().nav;
                     match (
-                        nav.active_backend.clone(),
-                        nav.active_instance_id.clone(),
-                        nav.active_account_id.clone(),
+                        nav.active_backend.cloned(),
+                        nav.active_instance_id.cloned(),
+                        nav.active_account_id.cloned(),
                     ) {
                         (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
                         _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),

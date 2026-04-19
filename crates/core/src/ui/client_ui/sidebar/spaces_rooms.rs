@@ -27,7 +27,7 @@ pub fn SpacesRoomsLayout() -> Element {
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
-    let account_id = app_state.read().nav.active_account_id.clone();
+    let account_id = app_state.read().nav.active_account_id.cloned();
 
     // TODO(matrix-spaces-tree): Matrix models space containment as
     // `m.space.parent` / `m.space.child` state events — spaces can contain

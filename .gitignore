@@ -84,3 +84,4 @@ devtools-screenshots/
 # Local devtools app log created by the devtools launcher
 .devtools-app.log
 .playwright-mcp/
+rust_out

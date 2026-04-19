@@ -68,13 +68,13 @@ impl UiAction for NotificationsViewAction {
                         .state
                         .nav
                         .active_instance_id
-                        .clone()
+                        .cloned()
                         .unwrap_or_default();
                     let backend = cx
                         .state
                         .nav
                         .active_backend
-                        .as_ref()
+                        .cloned()
                         .map(|b| b.slug().to_string())
                         .unwrap_or_default();
                     nav.push(Route::ReauthAccount {

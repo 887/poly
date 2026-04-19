@@ -93,13 +93,13 @@ pub fn DiscordForumView() -> Element {
         .read()
         .nav
         .active_account_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
     let channel_id = {
         let s = app_state.read();
         s.nav
             .selected_channel
-            .clone()
+            .cloned()
             .filter(|id| !id.is_empty())
             .unwrap_or_else(|| {
                 let cd = chat_data.read();
@@ -201,14 +201,14 @@ pub fn DiscordForumView() -> Element {
         .read()
         .nav
         .active_backend
-        .as_ref()
+        .cloned()
         .map(|b| b.slug().to_string())
         .unwrap_or_else(|| "demo".to_string());
     let instance_id = app_state
         .read()
         .nav
         .active_instance_id
-        .clone()
+        .cloned()
         .unwrap_or_default();
     let server_id = chat_data
         .read()

@@ -42,7 +42,7 @@ pub fn RepoTreeLayout() -> Element {
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
-    let account_id = app_state.read().nav.active_account_id.clone();
+    let account_id = app_state.read().nav.active_account_id.cloned();
 
     let repos_res = {
         let account_id = account_id.clone();

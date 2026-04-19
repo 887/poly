@@ -50,8 +50,8 @@ pub fn DmUserSidebar() -> Element {
     } else {
         chat_data.read().members.clone()
     };
-    let group_id = app_state.read().nav.selected_channel.clone();
-    let active_account_id = app_state.read().nav.active_account_id.clone();
+    let group_id = app_state.read().nav.selected_channel.cloned();
+    let active_account_id = app_state.read().nav.active_account_id.cloned();
     let member_count = members.len();
 
     rsx! {

@@ -205,7 +205,6 @@ fn do_create_channel(
                     cd.members = Vec::new();
                     cd.loading = false;
                 }
-                app_state.write().nav.selected_channel = Some(channel_id.clone());
                 creating.set(false);
                 crate::nav!(Route::ServerChat {
                     backend,
