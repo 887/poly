@@ -1254,6 +1254,13 @@ pub(crate) async fn persist_favorites(ids: Vec<String>) {
 ///
 /// Called from the `ServerChat` route component's `use_effect` when
 /// `chat_data` is empty (i.e. the page was hard-refreshed).
+///
+/// Returns the resolved channel id. If the URL `channel_id` doesn't exist on
+/// the server (deleted, never existed, typo'd deep link), returns
+/// `Some(fallback_id)` — the caller is expected to `nav.replace` to that
+/// fallback so the URL matches reality. If the server itself is missing or
+/// has no channels at all, returns `None` and the caller should redirect
+/// somewhere sensible (e.g., ServerHome).
 pub async fn restore_server_channel(
     server_id: String,
     channel_id: String,
@@ -1283,30 +1290,37 @@ pub async fn restore_server_channel(
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
-    // Locate the requested channel; fall back to first text/forum channel if missing.
-    let target = channels
-        .iter()
-        .find(|c| c.id == channel_id)
-        .or_else(|| {
-            channels.iter().find(|c| {
+    // Locate the requested channel.
+    let exact = channels.iter().find(|c| c.id == channel_id).cloned();
+
+    // Fall back to first text/forum channel if URL channel missing — but ONLY
+    // for content rendering, NOT for selected_channel mutation. Pre-mutating
+    // selected_channel here doubled with the caller's nav.replace cascading
+    // through every ChatView use_effect subscriber wedged the WASM scheduler
+    // (same bug class as friend-card hang 2026-04-19). The caller's
+    // nav.replace alone, observed via on_update, is the single source of
+    // truth for the field.
+    let fallback = if exact.is_none() {
+        channels
+            .iter()
+            .find(|c| {
                 c.channel_type == poly_client::ChannelType::Text
                     || c.channel_type == poly_client::ChannelType::Forum
                     || c.channel_type == poly_client::ChannelType::HackerNews
             })
-        })
-        .cloned();
+            .cloned()
+    } else {
+        None
+    };
 
     chat_data.write().channels = channels;
+    let _ = &mut app_state;
 
-    if let Some(ref ch) = target {
-        // Stale-channel fallback: when the URL's channel_id is missing,
-        // `target` is the first text channel (different from the URL).
-        // Without setting selected_channel here, ChatView would render with
-        // the URL's stale id while caller's nav.replace is still scheduling,
-        // and load attempts would target a non-existent channel. The caller
-        // races to nav.replace, but we need state to track the fallback
-        // synchronously so render uses the right channel.
-        app_state.write().nav.selected_channel._set_from_route_sync_only(Some(ch.id.clone()));
+    // Use the exact match for content load if it exists, otherwise the
+    // fallback. The caller still needs the resolved id to nav.replace.
+    let target = exact.as_ref().or(fallback.as_ref());
+
+    if let Some(ch) = target {
         chat_data.write().current_channel = Some(ch.clone());
 
         if matches!(
@@ -1344,7 +1358,7 @@ pub async fn restore_server_channel(
     // Apply any user-defined icon/banner overrides from storage.
     apply_server_icon_overrides(&mut chat_data).await;
 
-    target.as_ref().map(|channel| channel.id.clone())
+    target.map(|channel| channel.id.clone())
 }
 
 #[cfg(test)]

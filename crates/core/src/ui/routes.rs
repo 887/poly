@@ -1594,6 +1594,13 @@ fn ServerChat(
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
     let route_channel_id = channel_id.clone();
+    // Tracks the URL channel id we've already spawned a restore for. Without
+    // this guard, a stale-channel URL (e.g. /channel/deleted-id) infinite-
+    // loops: restore_server_channel writes chat_data 8 times, each write
+    // re-fires this use_effect, the `already_loaded` check fails because the
+    // fallback channel.id never equals the URL cid, and we spawn another
+    // restore — exponential task growth → Chrome OOM (witnessed 2026-04-19).
+    let mut spawned_for: Signal<Option<String>> = use_signal(|| None);
     use_effect(move || {
         let backend_slug = backend.clone();
         let instance = instance_id.clone();
@@ -1615,9 +1622,12 @@ fn ServerChat(
                 .as_ref()
                 .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
             && snapshot.channels.iter().any(|ch| ch.id == cid);
-        if already_loaded {
+        let already_spawned = spawned_for.read().as_deref() == Some(cid.as_str());
+        if already_loaded || already_spawned {
             return;
         }
+        drop(snapshot);
+        spawned_for.set(Some(cid.clone()));
 
         spawn(async move {
             let resolved_channel_id = super::favorites_sidebar::restore_server_channel(
@@ -1629,16 +1639,28 @@ fn ServerChat(
             )
             .await;
 
-            if let Some(resolved_channel_id) = resolved_channel_id
-                && resolved_channel_id != cid
-            {
-                nav.replace(Route::ServerChat {
-                    backend: backend_slug,
-                    instance_id: instance,
-                    account_id: account,
-                    server_id: route_server_id,
-                    channel_id: resolved_channel_id,
-                });
+            match resolved_channel_id {
+                Some(resolved) if resolved != cid => {
+                    nav.replace(Route::ServerChat {
+                        backend: backend_slug,
+                        instance_id: instance,
+                        account_id: account,
+                        server_id: route_server_id,
+                        channel_id: resolved,
+                    });
+                }
+                None => {
+                    // Server has no channels at all (deleted or empty) —
+                    // bounce to ServerHome so the user sees the server shell
+                    // instead of an empty wedged page on a stale deep link.
+                    nav.replace(Route::ServerHome {
+                        backend: backend_slug,
+                        instance_id: instance,
+                        account_id: account,
+                        server_id: route_server_id,
+                    });
+                }
+                Some(_) => {}
             }
         });
     });
