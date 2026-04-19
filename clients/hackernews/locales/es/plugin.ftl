@@ -1,55 +1,37 @@
 # plugin-hackernews — Spanish translations
 
-# TODO(translate)
 plugin-hackernews-signup-name = Hacker News
 
-# TODO(translate)
-plugin-hackernews-signup-desc = Browse anonymously or with your HN username.
+plugin-hackernews-signup-desc = Navega de forma anónima o con tu nombre de usuario de HN.
 
-# TODO(translate)
 plugin-hackernews-title = Hacker News
 
-# TODO(translate)
-plugin-hackernews-signup-title = Add Hacker News
+plugin-hackernews-signup-title = Añadir Hacker News
 
-# TODO(translate)
-plugin-hackernews-signup-tab-anonymous = Anonymous
+plugin-hackernews-signup-tab-anonymous = Anónimo
 
-# TODO(translate)
-plugin-hackernews-signup-tab-account = With Username
+plugin-hackernews-signup-tab-account = Con nombre de usuario
 
-# TODO(translate)
-plugin-hackernews-signup-anonymous-desc = No account needed. Browse top stories, Ask HN, Show HN, and jobs.
+plugin-hackernews-signup-anonymous-desc = No se necesita cuenta. Explora las mejores historias, Ask HN, Show HN y empleos.
 
-# TODO(translate)
-plugin-hackernews-signup-anonymous-btn = Add Hacker News
+plugin-hackernews-signup-anonymous-btn = Añadir Hacker News
 
-# TODO(translate)
-plugin-hackernews-signup-account-desc = Enter your HN username to personalize your session.
+plugin-hackernews-signup-account-desc = Introduce tu nombre de usuario de HN para personalizar tu sesión.
 
-# TODO(translate)
-plugin-hackernews-signup-username-label = HN Username
+plugin-hackernews-signup-username-label = Nombre de usuario de HN
 
-# TODO(translate)
-plugin-hackernews-signup-username-placeholder = your-username
+plugin-hackernews-signup-username-placeholder = tu-nombre-de-usuario
 
-# TODO(translate)
-plugin-hackernews-signup-account-btn = Add Hacker News
+plugin-hackernews-signup-account-btn = Añadir Hacker News
 
-# TODO(translate)
-plugin-hackernews-setting-preferences-label = Preferences
+plugin-hackernews-setting-preferences-label = Preferencias
 
-# TODO(translate)
-plugin-hackernews-setting-default-feed-label = Default Feed
+plugin-hackernews-setting-default-feed-label = Feed predeterminado
 
-# TODO(translate)
-plugin-hackernews-setting-default-feed-desc = The story feed shown when you first open Hacker News (e.g. Top, New, Ask HN).
+plugin-hackernews-setting-default-feed-desc = El feed de historias que se muestra al abrir Hacker News por primera vez (p. ej. Top, Nuevo, Ask HN).
 
-# TODO(translate)
-plugin-hackernews-setting-items-per-page-label = Items Per Page
+plugin-hackernews-setting-items-per-page-label = Elementos por página
 
-# TODO(translate)
-plugin-hackernews-setting-items-per-page-desc = How many stories to load per page. Higher values require more network requests.
+plugin-hackernews-setting-items-per-page-desc = Cuántas historias cargar por página. Los valores más altos requieren más solicitudes de red.
 
-# TODO(translate)
-plugin-hackernews-view-stories-title = Stories
+plugin-hackernews-view-stories-title = Historias

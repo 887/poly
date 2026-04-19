@@ -16,81 +16,50 @@ plugin-stoat-signup-password-placeholder = Introduce tu contraseña
 plugin-stoat-signup-connect-btn = Iniciar sesión
 plugin-stoat-signup-connecting = Iniciando sesión…
 
-# TODO(translate) — keys added by P46/P47
-# TODO(translate)
-plugin-stoat-menu-invite-people-label = Invite People
+# keys added by P46/P47
+plugin-stoat-menu-invite-people-label = Invitar personas
 
-# TODO(translate)
-plugin-stoat-menu-privacy-settings-label = Privacy Settings
+plugin-stoat-menu-privacy-settings-label = Configuración de privacidad
 
-# TODO(translate)
-plugin-stoat-menu-edit-per-server-profile-label = Edit Server Profile
+plugin-stoat-menu-edit-per-server-profile-label = Editar perfil del servidor
 
-# TODO(translate)
-plugin-stoat-menu-manage-bots-label = Manage Bots
+plugin-stoat-menu-manage-bots-label = Gestionar bots
 
-# TODO(translate)
-plugin-stoat-setting-profile-label = Profile
+plugin-stoat-setting-profile-label = Perfil
 
-# TODO(translate)
-plugin-stoat-setting-nickname-label = Nickname
+plugin-stoat-setting-nickname-label = Apodo
 
-# TODO(translate)
-plugin-stoat-setting-nickname-desc = Display this name instead of your account name in this server.
+plugin-stoat-setting-nickname-desc = Mostrar este nombre en lugar de tu nombre de cuenta en este servidor.
 
-# TODO(translate)
-plugin-stoat-setting-avatar-url-label = Avatar URL
+plugin-stoat-setting-avatar-url-label = URL del avatar
 
-# TODO(translate)
-plugin-stoat-setting-avatar-url-desc = URL of the image to use as your avatar in this server. Leave empty to use your account avatar.
+plugin-stoat-setting-avatar-url-desc = URL de la imagen a usar como avatar en este servidor. Deja vacío para usar el avatar de tu cuenta.
 
-# TODO(translate)
-plugin-stoat-setting-privacy-label = Privacy
+plugin-stoat-setting-privacy-label = Privacidad
 
-# TODO(translate)
-plugin-stoat-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-stoat-setting-allow-dms-from-server-members-label = Permitir DMs de miembros
 
-# TODO(translate)
-plugin-stoat-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
+plugin-stoat-setting-allow-dms-from-server-members-desc = Cuando está activado, otros miembros de este servidor pueden enviarte mensajes directos.
 
-# TODO(translate)
 plugin-stoat-composer-emoji-label = Emoji
 
-# TODO(translate)
-plugin-stoat-message-action-report-label = Report
+plugin-stoat-message-action-report-label = Reportar
 
 # F10 — state-aware context-menu items
-# TODO(translate)
-plugin-stoat-menu-mute-channel-label = Mute Channel
-# TODO(translate)
-plugin-stoat-menu-unmute-channel-label = Unmute Channel
-# TODO(translate)
-plugin-stoat-menu-mark-channel-read-label = Mark as Read
-# TODO(translate)
-plugin-stoat-menu-mute-server-label = Mute Server
-# TODO(translate)
-plugin-stoat-menu-unmute-server-label = Unmute Server
-# TODO(translate)
-plugin-stoat-menu-leave-server-label = Leave Server
-# TODO(translate)
-plugin-stoat-menu-block-user-label = Block
-# TODO(translate)
-plugin-stoat-menu-unblock-user-label = Unblock
-# TODO(translate)
-plugin-stoat-menu-add-friend-label = Add Friend
-# TODO(translate)
-plugin-stoat-menu-remove-friend-label = Remove Friend
-# TODO(translate)
-plugin-stoat-menu-open-dm-label = Message
-# TODO(translate)
-plugin-stoat-menu-react-message-label = Add Reaction
-# TODO(translate)
-plugin-stoat-menu-copy-message-link-label = Copy Message Link
-# TODO(translate)
-plugin-stoat-menu-delete-message-label = Delete Message
-# TODO(translate)
-plugin-stoat-menu-close-dm-label = Close DM
-# TODO(translate)
-plugin-stoat-menu-mute-dm-label = Mute DM
-# TODO(translate)
-plugin-stoat-menu-unmute-dm-label = Unmute DM
+plugin-stoat-menu-mute-channel-label = Silenciar canal
+plugin-stoat-menu-unmute-channel-label = Reactivar canal
+plugin-stoat-menu-mark-channel-read-label = Marcar como leído
+plugin-stoat-menu-mute-server-label = Silenciar servidor
+plugin-stoat-menu-unmute-server-label = Reactivar servidor
+plugin-stoat-menu-leave-server-label = Salir del servidor
+plugin-stoat-menu-block-user-label = Bloquear
+plugin-stoat-menu-unblock-user-label = Desbloquear
+plugin-stoat-menu-add-friend-label = Añadir amigo
+plugin-stoat-menu-remove-friend-label = Eliminar amigo
+plugin-stoat-menu-open-dm-label = Mensaje
+plugin-stoat-menu-react-message-label = Añadir reacción
+plugin-stoat-menu-copy-message-link-label = Copiar enlace del mensaje
+plugin-stoat-menu-delete-message-label = Eliminar mensaje
+plugin-stoat-menu-close-dm-label = Cerrar DM
+plugin-stoat-menu-mute-dm-label = Silenciar DM
+plugin-stoat-menu-unmute-dm-label = Reactivar DM

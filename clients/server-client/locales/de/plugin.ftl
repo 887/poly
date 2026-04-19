@@ -58,48 +58,33 @@ plugin-poly-profile-saved = Profil gespeichert!
 plugin-poly-profile-avatar-coming-soon = Avatar-Upload demnächst verfügbar.
 plugin-poly-profile-banner-coming-soon = Banner-Upload demnächst verfügbar.
 
-# TODO(translate) — keys added by P46/P47
-# TODO(translate)
-plugin-poly-menu-invite-people-label = Invite People
+# keys added by P46/P47
+plugin-poly-menu-invite-people-label = Personen einladen
 
-# TODO(translate)
-plugin-poly-menu-privacy-settings-label = Privacy Settings
+plugin-poly-menu-privacy-settings-label = Datenschutzeinstellungen
 
-# TODO(translate)
-plugin-poly-menu-edit-per-server-profile-label = Edit Server Profile
+plugin-poly-menu-edit-per-server-profile-label = Serverprofil bearbeiten
 
-# TODO(translate)
-plugin-poly-menu-federation-settings-label = Federation Settings
+plugin-poly-menu-federation-settings-label = Föderationseinstellungen
 
-# TODO(translate)
-plugin-poly-setting-profile-label = Profile
+plugin-poly-setting-profile-label = Profil
 
-# TODO(translate)
 plugin-poly-setting-nickname-label = Nickname
 
-# TODO(translate)
-plugin-poly-setting-nickname-desc = Display this name instead of your account name in this server.
+plugin-poly-setting-nickname-desc = Dieser Name wird auf diesem Server anstelle deines Kontonamens angezeigt.
 
-# TODO(translate)
-plugin-poly-setting-avatar-url-label = Avatar URL
+plugin-poly-setting-avatar-url-label = Avatar-URL
 
-# TODO(translate)
-plugin-poly-setting-avatar-url-desc = URL of the image to use as your avatar in this server. Leave empty to use your account avatar.
+plugin-poly-setting-avatar-url-desc = URL des Bildes, das als Avatar auf diesem Server verwendet wird. Leer lassen, um den Konto-Avatar zu verwenden.
 
-# TODO(translate)
-plugin-poly-setting-privacy-label = Privacy
+plugin-poly-setting-privacy-label = Datenschutz
 
-# TODO(translate)
-plugin-poly-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-poly-setting-allow-dms-from-server-members-label = DMs von Mitgliedern erlauben
 
-# TODO(translate)
-plugin-poly-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
+plugin-poly-setting-allow-dms-from-server-members-desc = Wenn aktiviert, können andere Mitglieder dieses Servers dir Direktnachrichten senden.
 
-# TODO(translate)
-plugin-poly-setting-federation-label = Federation
+plugin-poly-setting-federation-label = Föderation
 
-# TODO(translate)
-plugin-poly-setting-allow-federation-label = Allow Federation
+plugin-poly-setting-allow-federation-label = Föderation erlauben
 
-# TODO(translate)
-plugin-poly-setting-allow-federation-desc = When enabled, this server can communicate with other federated Poly servers.
+plugin-poly-setting-allow-federation-desc = Wenn aktiviert, kann dieser Server mit anderen föderationskompatiblen Poly-Servern kommunizieren.

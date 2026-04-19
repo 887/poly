@@ -1,79 +1,53 @@
 # plugin-github — German translations
 
-# TODO(translate)
 plugin-github-signup-name = GitHub
 
-# TODO(translate)
-plugin-github-signup-desc = Browse your repos, issues, and PRs through the gh CLI.
+plugin-github-signup-desc = Repositories, Issues und PRs über die gh CLI durchsuchen.
 
-# TODO(translate)
 plugin-github-title = GitHub
 
-# TODO(translate)
-plugin-github-signup-title = Add GitHub
+plugin-github-signup-title = GitHub hinzufügen
 
-# TODO(translate)
 plugin-github-signup-tab-dotcom = github.com
 
-# TODO(translate)
 plugin-github-signup-tab-enterprise = GitHub Enterprise
 
-# TODO(translate)
-plugin-github-signup-dotcom-desc = Uses your local `gh` CLI session. Run `gh auth login` first if you haven't already.
+plugin-github-signup-dotcom-desc = Verwendet Ihre lokale `gh`-CLI-Sitzung. Führen Sie zunächst `gh auth login` aus, falls noch nicht geschehen.
 
-# TODO(translate)
-plugin-github-signup-enterprise-desc = Enter your GHE hostname (e.g. github.example.com). Run `gh auth login --hostname <host>` first.
+plugin-github-signup-enterprise-desc = GHE-Hostnamen eingeben (z. B. github.example.com). Zunächst `gh auth login --hostname <host>` ausführen.
 
-# TODO(translate)
-plugin-github-signup-hostname-label = GHE Hostname
+plugin-github-signup-hostname-label = GHE-Hostname
 
-# TODO(translate)
 plugin-github-signup-hostname-placeholder = github.example.com
 
-# TODO(translate)
-plugin-github-signup-connect-btn = Connect via gh CLI
+plugin-github-signup-connect-btn = Über gh CLI verbinden
 
-# TODO(translate)
-plugin-github-signup-connecting = Checking gh auth…
+plugin-github-signup-connecting = gh-Authentifizierung prüfen…
 
-# TODO(translate)
-plugin-github-menu-open-in-github-label = Open in GitHub
+plugin-github-menu-open-in-github-label = In GitHub öffnen
 
-# TODO(translate)
-plugin-github-menu-star-repo-label = Star Repo
+plugin-github-menu-star-repo-label = Repository mit Stern markieren
 
-# TODO(translate)
-plugin-github-menu-watch-repo-label = Watch Repo
+plugin-github-menu-watch-repo-label = Repository beobachten
 
-# TODO(translate)
-plugin-github-setting-preferences-label = Preferences
+plugin-github-setting-preferences-label = Einstellungen
 
-# TODO(translate)
-plugin-github-setting-show-private-repos-label = Show Private Repositories
+plugin-github-setting-show-private-repos-label = Private Repositories anzeigen
 
-# TODO(translate)
-plugin-github-setting-show-private-repos-desc = Include private repositories in your repo list. Requires your gh CLI session to have the appropriate scopes.
+plugin-github-setting-show-private-repos-desc = Private Repositories in der Repository-Liste anzeigen. Die gh-CLI-Sitzung muss die entsprechenden Berechtigungen haben.
 
-# TODO(translate)
-plugin-github-setting-default-issue-state-label = Default Issue State
+plugin-github-setting-default-issue-state-label = Standard-Issue-Status
 
-# TODO(translate)
-plugin-github-setting-default-issue-state-desc = Which issue state (open or closed) to show by default when browsing a repository.
+plugin-github-setting-default-issue-state-desc = Welcher Issue-Status (offen oder geschlossen) beim Durchsuchen eines Repositorys standardmäßig angezeigt wird.
 
-# TODO(translate)
 plugin-github-view-issues-title = Issues & PRs
 
-# TODO(translate)
-plugin-github-filter-open = Open
+plugin-github-filter-open = Offen
 
-# TODO(translate)
-plugin-github-filter-closed = Closed
+plugin-github-filter-closed = Geschlossen
 
-# TODO(translate)
 plugin-github-tab-issues = Issues
 
-# TODO(translate)
 plugin-github-tab-pulls = Pull Requests
 
-# TODO(translate)
-plugin-github-tab-discussions = Discussions
+plugin-github-tab-discussions = Diskussionen

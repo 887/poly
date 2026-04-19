@@ -1,85 +1,57 @@
 # plugin-forgejo — French translations
 
-# TODO(translate)
 plugin-forgejo-signup-name = Forgejo
 
-# TODO(translate)
-plugin-forgejo-signup-desc = Browse repos, issues, and PRs on any Forgejo or Gitea instance.
+plugin-forgejo-signup-desc = Parcourez les dépôts, issues et PRs sur n'importe quelle instance Forgejo ou Gitea.
 
-# TODO(translate)
 plugin-forgejo-title = Forgejo
 
-# TODO(translate)
-plugin-forgejo-signup-title = Add Forgejo Instance
+plugin-forgejo-signup-title = Ajouter une instance Forgejo
 
-# TODO(translate)
 plugin-forgejo-signup-tab-codeberg = Codeberg
 
-# TODO(translate)
-plugin-forgejo-signup-tab-custom = Custom Instance
+plugin-forgejo-signup-tab-custom = Instance personnalisée
 
-# TODO(translate)
-plugin-forgejo-signup-codeberg-desc = Connect to codeberg.org with a personal access token. Generate one at Settings → Applications.
+plugin-forgejo-signup-codeberg-desc = Connectez-vous à codeberg.org avec un token d'accès personnel. Générez-en un dans Paramètres → Applications.
 
-# TODO(translate)
-plugin-forgejo-signup-custom-desc = Enter your Forgejo/Gitea instance URL and a personal access token.
+plugin-forgejo-signup-custom-desc = Entrez l'URL de votre instance Forgejo/Gitea et un token d'accès personnel.
 
-# TODO(translate)
-plugin-forgejo-signup-instance-label = Instance URL
+plugin-forgejo-signup-instance-label = URL de l'instance
 
-# TODO(translate)
 plugin-forgejo-signup-instance-placeholder = https://codeberg.org
 
-# TODO(translate)
-plugin-forgejo-signup-token-label = Personal Access Token
+plugin-forgejo-signup-token-label = Token d'accès personnel
 
-# TODO(translate)
-plugin-forgejo-signup-token-placeholder = Paste your token here
+plugin-forgejo-signup-token-placeholder = Collez votre token ici
 
-# TODO(translate)
-plugin-forgejo-signup-connect-btn = Connect
+plugin-forgejo-signup-connect-btn = Se connecter
 
-# TODO(translate)
-plugin-forgejo-signup-connecting = Connecting…
+plugin-forgejo-signup-connecting = Connexion…
 
-# TODO(translate)
-plugin-forgejo-menu-open-in-forgejo-label = Open in Forgejo
+plugin-forgejo-menu-open-in-forgejo-label = Ouvrir dans Forgejo
 
-# TODO(translate)
-plugin-forgejo-menu-star-repo-label = Star Repo
+plugin-forgejo-menu-star-repo-label = Mettre le dépôt en favori
 
-# TODO(translate)
-plugin-forgejo-menu-watch-repo-label = Watch Repo
+plugin-forgejo-menu-watch-repo-label = Surveiller le dépôt
 
-# TODO(translate)
-plugin-forgejo-setting-preferences-label = Preferences
+plugin-forgejo-setting-preferences-label = Préférences
 
-# TODO(translate)
-plugin-forgejo-setting-show-private-repos-label = Show Private Repositories
+plugin-forgejo-setting-show-private-repos-label = Afficher les dépôts privés
 
-# TODO(translate)
-plugin-forgejo-setting-show-private-repos-desc = Include private repositories in your repo list. Requires your personal access token to have the appropriate scopes.
+plugin-forgejo-setting-show-private-repos-desc = Inclure les dépôts privés dans votre liste. Votre token d'accès personnel doit avoir les droits appropriés.
 
-# TODO(translate)
-plugin-forgejo-setting-default-issue-state-label = Default Issue State
+plugin-forgejo-setting-default-issue-state-label = État d'issue par défaut
 
-# TODO(translate)
-plugin-forgejo-setting-default-issue-state-desc = Which issue state (open or closed) to show by default when browsing a repository.
+plugin-forgejo-setting-default-issue-state-desc = L'état d'issue (ouverte ou fermée) affiché par défaut lors de la navigation dans un dépôt.
 
-# TODO(translate)
 plugin-forgejo-view-issues-title = Issues & PRs
 
-# TODO(translate)
-plugin-forgejo-filter-open = Open
+plugin-forgejo-filter-open = Ouvertes
 
-# TODO(translate)
-plugin-forgejo-filter-closed = Closed
+plugin-forgejo-filter-closed = Fermées
 
-# TODO(translate)
 plugin-forgejo-tab-issues = Issues
 
-# TODO(translate)
 plugin-forgejo-tab-pulls = Pull Requests
 
-# TODO(translate)
 plugin-forgejo-tab-discussions = Discussions

@@ -1,92 +1,62 @@
 # plugin-lemmy — Spanish translations
 
-# TODO(translate)
 plugin-lemmy-signup-name = Lemmy
 
-# TODO(translate)
-plugin-lemmy-signup-desc = Connect to any Lemmy instance with username and password.
+plugin-lemmy-signup-desc = Conéctate a cualquier instancia de Lemmy con nombre de usuario y contraseña.
 
-# TODO(translate)
 plugin-lemmy-title = Lemmy
 
-# TODO(translate)
-plugin-lemmy-signup-title = Connect to Lemmy
+plugin-lemmy-signup-title = Conectar a Lemmy
 
-# TODO(translate)
-plugin-lemmy-signup-description = Enter your Lemmy instance URL, username, and password.
+plugin-lemmy-signup-description = Introduce la URL de la instancia de Lemmy, el nombre de usuario y la contraseña.
 
-# TODO(translate)
-plugin-lemmy-signup-back = ← Back
+plugin-lemmy-signup-back = ← Volver
 
-# TODO(translate)
-plugin-lemmy-signup-url-label = Instance URL
+plugin-lemmy-signup-url-label = URL de la instancia
 
-# TODO(translate)
 plugin-lemmy-signup-url-placeholder = https://lemmy.ml
 
-# TODO(translate)
-plugin-lemmy-signup-username-label = Username
+plugin-lemmy-signup-username-label = Nombre de usuario
 
-# TODO(translate)
-plugin-lemmy-signup-username-placeholder = your-username
+plugin-lemmy-signup-username-placeholder = tu-nombre-de-usuario
 
-# TODO(translate)
-plugin-lemmy-signup-password-label = Password
+plugin-lemmy-signup-password-label = Contraseña
 
-# TODO(translate)
 plugin-lemmy-signup-password-placeholder = ••••••••
 
-# TODO(translate)
-plugin-lemmy-signup-connecting = Connecting…
+plugin-lemmy-signup-connecting = Conectando…
 
-# TODO(translate)
-plugin-lemmy-signup-connect-btn = Connect
+plugin-lemmy-signup-connect-btn = Conectar
 
-# TODO(translate)
-plugin-lemmy-menu-view-community-label = View Community
+plugin-lemmy-menu-view-community-label = Ver comunidad
 
-# TODO(translate)
-plugin-lemmy-menu-subscribe-community-label = Subscribe
+plugin-lemmy-menu-subscribe-community-label = Suscribirse
 
-# TODO(translate)
-plugin-lemmy-menu-view-modlog-label = View Modlog
+plugin-lemmy-menu-view-modlog-label = Ver registro de moderación
 
-# TODO(translate)
-plugin-lemmy-menu-block-community-label = Block Community
+plugin-lemmy-menu-block-community-label = Bloquear comunidad
 
-# TODO(translate)
-plugin-lemmy-setting-community-label = Community
+plugin-lemmy-setting-community-label = Comunidad
 
-# TODO(translate)
-plugin-lemmy-setting-mute-community-label = Mute Community
+plugin-lemmy-setting-mute-community-label = Silenciar comunidad
 
-# TODO(translate)
-plugin-lemmy-setting-mute-community-desc = Hide posts from this community in your feeds.
+plugin-lemmy-setting-mute-community-desc = Ocultar publicaciones de esta comunidad en tus feeds.
 
-# TODO(translate)
-plugin-lemmy-setting-show-nsfw-label = Show NSFW Content
+plugin-lemmy-setting-show-nsfw-label = Mostrar contenido NSFW
 
-# TODO(translate)
-plugin-lemmy-setting-show-nsfw-desc = When enabled, posts marked as NSFW will appear in your feeds instead of being filtered out.
+plugin-lemmy-setting-show-nsfw-desc = Cuando está activado, las publicaciones marcadas como NSFW aparecerán en tus feeds en lugar de ser filtradas.
 
-# TODO(translate)
-plugin-lemmy-view-posts-title = Posts
+plugin-lemmy-view-posts-title = Publicaciones
 
-# TODO(translate)
-plugin-lemmy-sort-hot = Hot
+plugin-lemmy-sort-hot = Tendencia
 
-# TODO(translate)
-plugin-lemmy-sort-new = New
+plugin-lemmy-sort-new = Nuevo
 
-# TODO(translate)
 plugin-lemmy-sort-top = Top
 
 # Message actions
-# TODO(translate)
-plugin-lemmy-message-action-upvote-label = Upvote
+plugin-lemmy-message-action-upvote-label = Votar a favor
 
-# TODO(translate)
-plugin-lemmy-message-action-downvote-label = Downvote
+plugin-lemmy-message-action-downvote-label = Votar en contra
 
-# TODO(translate)
-plugin-lemmy-message-action-report-label = Report
+plugin-lemmy-message-action-report-label = Reportar

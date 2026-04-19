@@ -12,66 +12,45 @@ plugin-demo-description = Configurer le client de données de démonstration int
 plugin-demo-setting-enabled-label = Activer les données démo
 plugin-demo-setting-enabled-desc = Lorsqu'il est activé, Poly charge des comptes exemples avec des serveurs, des canaux et des conversations pour explorer l'application sans vrai compte.
 
-# TODO(translate) — keys added by P46/P47
-# TODO(translate)
-plugin-demo-menu-regenerate-demo-data-label = Regenerate Demo Data
+# --- keys added by P46/P47
+plugin-demo-menu-regenerate-demo-data-label = Régénérer les données démo
 
-# TODO(translate)
-plugin-demo-setting-preferences-label = Preferences
+plugin-demo-setting-preferences-label = Préférences
 
-# TODO(translate)
-plugin-demo-setting-regenerate-on-start-label = Regenerate on Start
+plugin-demo-setting-regenerate-on-start-label = Régénérer au démarrage
 
-# TODO(translate)
-plugin-demo-setting-regenerate-on-start-desc = Automatically regenerate fresh demo data each time the app starts.
+plugin-demo-setting-regenerate-on-start-desc = Régénère automatiquement de nouvelles données démo à chaque démarrage de l'application.
 
-# TODO(translate)
-plugin-demo-setting-message-count-label = Message Count
+plugin-demo-setting-message-count-label = Nombre de messages
 
-# TODO(translate)
-plugin-demo-setting-message-count-desc = Number of sample messages to generate per demo channel.
+plugin-demo-setting-message-count-desc = Nombre de messages exemples à générer par canal démo.
 
-# TODO(translate)
-plugin-demo-view-posts-title = Posts
+plugin-demo-view-posts-title = Publications
 
-# TODO(translate)
-plugin-demo-sort-hot = Hot
+plugin-demo-sort-hot = Populaire
 
-# TODO(translate)
-plugin-demo-sort-active = Active
+plugin-demo-sort-active = Actif
 
-# TODO(translate)
-plugin-demo-sort-new = New
+plugin-demo-sort-new = Nouveau
 
-# TODO(translate)
-plugin-demo-sort-old = Old
+plugin-demo-sort-old = Ancien
 
-# TODO(translate)
-plugin-demo-sort-most-comments = Most Comments
+plugin-demo-sort-most-comments = Plus de commentaires
 
-# TODO(translate)
-plugin-demo-sort-new-comments = New Comments
+plugin-demo-sort-new-comments = Nouveaux commentaires
 
-# TODO(translate)
-plugin-demo-sort-top-hour = Top Hour
+plugin-demo-sort-top-hour = Top heure
 
-# TODO(translate)
-plugin-demo-sort-top-day = Top Day
+plugin-demo-sort-top-day = Top jour
 
-# TODO(translate)
-plugin-demo-sort-top-week = Top Week
+plugin-demo-sort-top-week = Top semaine
 
-# TODO(translate)
-plugin-demo-sort-top-month = Top Month
+plugin-demo-sort-top-month = Top mois
 
-# TODO(translate)
-plugin-demo-sort-top-year = Top Year
+plugin-demo-sort-top-year = Top année
 
-# TODO(translate)
-plugin-demo-sort-top-all-time = Top All Time
+plugin-demo-sort-top-all-time = Top tous les temps
 
-# TODO(translate)
-plugin-demo-filter-placeholder = Filter posts…
+plugin-demo-filter-placeholder = Filtrer les publications…
 
-# TODO(translate)
-plugin-demo-refresh = Refresh
+plugin-demo-refresh = Actualiser

@@ -1,7 +1,8 @@
 # Plan — Client-UI Polish Follow-Ups
 
 > **Created:** 2026-04-19
-> **Status:** 🟢 IN PROGRESS — F1 ✅ shipped
+> **Status:** ✅ COMPLETE 2026-04-19 — every item shipped or superseded
+> **Notes:** F1, F2, F4, F5, F6, F7, F8, F9, F10, F11, F12 all shipped. F3 (Playwright) dropped — superseded by `docs/plans/plan-blitz-component-tests.md` (deferred design plan for in-process Dioxus Blitz snapshots, since Playwright is too slow for the desired iteration loop).
 > **Parent:** `plan-client-ui-polish.md` (✅ 10 packs shipped but with known gaps)
 > **Why this plan exists:** the parent polish plan was marked ✅ COMPLETE based on `cargo check --workspace` + `cargo test --workspace --lib` — which skips integration & e2e tests. A full `cargo test --workspace` revealed **30 failures** in `poly-plugin-loader-tests`. F1 fixed that. This plan collects every remaining follow-up in one honest list.
 
@@ -82,13 +83,9 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🔵 F11 — Non-English locale real translations
+### ✅ F11 — Non-English locale real translations (DONE 2026-04-19)
 
-**Symptom:** Pack I seeded `locales/{de,es,fr}/plugin.ftl` for every plugin, but every entry is prefixed with a `# TODO(translate)` comment and uses the English value as fallback. ~30 files × ~50 entries each = ~1500 strings awaiting translation.
-
-**Fix:** actual human translation OR machine-translation pass. Deliberately deferred — the stubs are runtime-correct (bundles are valid FTL, English renders), just not localized.
-
-**Estimated size:** out of scope for engineering; a content task.
+**Resolution:** all 33 stub locale files (`{de,es,fr}` × 11 bundles — `locales/<lang>/main.ftl` + `clients/*/locales/<lang>/plugin.ftl`) translated via three parallel sonnet subagents (one per language) with concrete style-guide examples baked into each prompt. ~500+ strings across 3 locales. `# TODO(translate)` markers reduced from 33 files to 0. Brand names (Discord, Matrix, Lemmy, Hacker News, MCP) and HN section names (Ask, Show) kept in English; common UI tech loanwords (Channel/Canal, Pull request) translated where natural per locale convention. `cargo check --workspace --all-targets` clean.
 
 ---
 

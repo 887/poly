@@ -12,66 +12,45 @@ plugin-demo-description = Configura el cliente de datos de demostración integra
 plugin-demo-setting-enabled-label = Activar datos de demostración
 plugin-demo-setting-enabled-desc = Cuando está activado, Poly carga cuentas de muestra con servidores, canales y conversaciones para explorar la aplicación sin una cuenta real.
 
-# TODO(translate) — keys added by P46/P47
-# TODO(translate)
-plugin-demo-menu-regenerate-demo-data-label = Regenerate Demo Data
+# --- keys added by P46/P47
+plugin-demo-menu-regenerate-demo-data-label = Regenerar datos de demostración
 
-# TODO(translate)
-plugin-demo-setting-preferences-label = Preferences
+plugin-demo-setting-preferences-label = Preferencias
 
-# TODO(translate)
-plugin-demo-setting-regenerate-on-start-label = Regenerate on Start
+plugin-demo-setting-regenerate-on-start-label = Regenerar al iniciar
 
-# TODO(translate)
-plugin-demo-setting-regenerate-on-start-desc = Automatically regenerate fresh demo data each time the app starts.
+plugin-demo-setting-regenerate-on-start-desc = Regenera automáticamente datos de demostración nuevos cada vez que se inicia la aplicación.
 
-# TODO(translate)
-plugin-demo-setting-message-count-label = Message Count
+plugin-demo-setting-message-count-label = Cantidad de mensajes
 
-# TODO(translate)
-plugin-demo-setting-message-count-desc = Number of sample messages to generate per demo channel.
+plugin-demo-setting-message-count-desc = Número de mensajes de muestra a generar por canal de demostración.
 
-# TODO(translate)
-plugin-demo-view-posts-title = Posts
+plugin-demo-view-posts-title = Publicaciones
 
-# TODO(translate)
-plugin-demo-sort-hot = Hot
+plugin-demo-sort-hot = Popular
 
-# TODO(translate)
-plugin-demo-sort-active = Active
+plugin-demo-sort-active = Activo
 
-# TODO(translate)
-plugin-demo-sort-new = New
+plugin-demo-sort-new = Nuevo
 
-# TODO(translate)
-plugin-demo-sort-old = Old
+plugin-demo-sort-old = Antiguo
 
-# TODO(translate)
-plugin-demo-sort-most-comments = Most Comments
+plugin-demo-sort-most-comments = Más comentados
 
-# TODO(translate)
-plugin-demo-sort-new-comments = New Comments
+plugin-demo-sort-new-comments = Comentarios nuevos
 
-# TODO(translate)
-plugin-demo-sort-top-hour = Top Hour
+plugin-demo-sort-top-hour = Top hora
 
-# TODO(translate)
-plugin-demo-sort-top-day = Top Day
+plugin-demo-sort-top-day = Top día
 
-# TODO(translate)
-plugin-demo-sort-top-week = Top Week
+plugin-demo-sort-top-week = Top semana
 
-# TODO(translate)
-plugin-demo-sort-top-month = Top Month
+plugin-demo-sort-top-month = Top mes
 
-# TODO(translate)
-plugin-demo-sort-top-year = Top Year
+plugin-demo-sort-top-year = Top año
 
-# TODO(translate)
-plugin-demo-sort-top-all-time = Top All Time
+plugin-demo-sort-top-all-time = Top de todos los tiempos
 
-# TODO(translate)
-plugin-demo-filter-placeholder = Filter posts…
+plugin-demo-filter-placeholder = Filtrar publicaciones…
 
-# TODO(translate)
-plugin-demo-refresh = Refresh
+plugin-demo-refresh = Actualizar

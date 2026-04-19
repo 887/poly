@@ -1,124 +1,85 @@
 # plugin-teams — German translations
 
-# TODO(translate)
 plugin-teams-title = Microsoft Teams
 
-# TODO(translate)
-plugin-teams-description = Enterprise communication platform by Microsoft.
+plugin-teams-description = Unternehmens-Kommunikationsplattform von Microsoft.
 
-# TODO(translate)
 plugin-teams-signup-name = Microsoft Teams
 
-# TODO(translate)
-plugin-teams-signup-desc = Connect a Microsoft Teams account via OAuth device code or an access token.
+plugin-teams-signup-desc = Microsoft-Teams-Konto über OAuth-Gerätecode oder Zugriffstoken verbinden.
 
-# TODO(translate)
-plugin-teams-menu-team-settings-label = Team Settings
+plugin-teams-menu-team-settings-label = Team-Einstellungen
 
-# TODO(translate)
-plugin-teams-menu-edit-per-team-profile-label = Edit Team Profile
+plugin-teams-menu-edit-per-team-profile-label = Team-Profil bearbeiten
 
-# TODO(translate)
-plugin-teams-menu-schedule-meeting-label = Schedule Meeting
+plugin-teams-menu-schedule-meeting-label = Meeting planen
 
-# TODO(translate)
-plugin-teams-menu-manage-files-label = Manage Files
+plugin-teams-menu-manage-files-label = Dateien verwalten
 
-# TODO(translate)
-plugin-teams-setting-team-profile-label = Team Profile
+plugin-teams-setting-team-profile-label = Team-Profil
 
-# TODO(translate)
-plugin-teams-setting-display-name-label = Display Name
+plugin-teams-setting-display-name-label = Anzeigename
 
-# TODO(translate)
-plugin-teams-setting-display-name-desc = The name shown to other members in this Team.
+plugin-teams-setting-display-name-desc = Der Name, der anderen Mitgliedern in diesem Team angezeigt wird.
 
-# TODO(translate)
-plugin-teams-setting-description-label = Description
+plugin-teams-setting-description-label = Beschreibung
 
-# TODO(translate)
-plugin-teams-setting-description-desc = A brief summary of the team's purpose, visible in the team directory.
+plugin-teams-setting-description-desc = Eine kurze Zusammenfassung des Team-Zwecks, sichtbar im Team-Verzeichnis.
 
 # Channel menu items
-# TODO(translate)
-plugin-teams-menu-mark-read-label = Mark as Read
+plugin-teams-menu-mark-read-label = Als gelesen markieren
 
-# TODO(translate)
-plugin-teams-menu-mark-unread-label = Mark as Unread
+plugin-teams-menu-mark-unread-label = Als ungelesen markieren
 
-# TODO(translate)
-plugin-teams-menu-pin-channel-label = Pin Channel
+plugin-teams-menu-pin-channel-label = Channel anpinnen
 
-# TODO(translate)
-plugin-teams-menu-unpin-channel-label = Unpin Channel
+plugin-teams-menu-unpin-channel-label = Channel lösen
 
-# TODO(translate)
-plugin-teams-menu-hide-channel-label = Hide Channel
+plugin-teams-menu-hide-channel-label = Channel ausblenden
 
-# TODO(translate)
-plugin-teams-menu-show-channel-label = Show Channel
+plugin-teams-menu-show-channel-label = Channel einblenden
 
-# TODO(translate)
-plugin-teams-menu-mute-channel-label = Mute Channel
+plugin-teams-menu-mute-channel-label = Channel stummschalten
 
-# TODO(translate)
-plugin-teams-menu-unmute-channel-label = Unmute Channel
+plugin-teams-menu-unmute-channel-label = Channel reaktivieren
 
 # Server/Team menu items
-# TODO(translate)
-plugin-teams-menu-mute-team-label = Mute Team
+plugin-teams-menu-mute-team-label = Team stummschalten
 
-# TODO(translate)
-plugin-teams-menu-unmute-team-label = Unmute Team
+plugin-teams-menu-unmute-team-label = Team reaktivieren
 
-# TODO(translate)
-plugin-teams-menu-get-team-code-label = Get Team Code
+plugin-teams-menu-get-team-code-label = Team-Code abrufen
 
-# TODO(translate)
-plugin-teams-menu-manage-team-label = Manage Team
+plugin-teams-menu-manage-team-label = Team verwalten
 
-# TODO(translate)
-plugin-teams-menu-leave-team-label = Leave Team
+plugin-teams-menu-leave-team-label = Team verlassen
 
 # User menu items
-# TODO(translate)
-plugin-teams-menu-open-chat-label = Open Chat
+plugin-teams-menu-open-chat-label = Chat öffnen
 
-# TODO(translate)
-plugin-teams-menu-view-profile-label = View Profile
+plugin-teams-menu-view-profile-label = Profil anzeigen
 
 # Message menu items
-# TODO(translate)
-plugin-teams-menu-react-label = React
+plugin-teams-menu-react-label = Reagieren
 
-# TODO(translate)
-plugin-teams-menu-reply-in-thread-label = Reply in Thread
+plugin-teams-menu-reply-in-thread-label = Im Thread antworten
 
-# TODO(translate)
-plugin-teams-menu-save-message-label = Save Message
+plugin-teams-menu-save-message-label = Nachricht speichern
 
-# TODO(translate)
-plugin-teams-menu-unsave-message-label = Unsave Message
+plugin-teams-menu-unsave-message-label = Nachricht nicht mehr speichern
 
-# TODO(translate)
-plugin-teams-menu-mark-important-label = Mark as Important
+plugin-teams-menu-mark-important-label = Als wichtig markieren
 
-# TODO(translate)
-plugin-teams-menu-delete-message-label = Delete Message
+plugin-teams-menu-delete-message-label = Nachricht löschen
 
 # DM menu items
-# TODO(translate)
-plugin-teams-menu-mute-dm-label = Mute Conversation
+plugin-teams-menu-mute-dm-label = Unterhaltung stummschalten
 
-# TODO(translate)
-plugin-teams-menu-unmute-dm-label = Unmute Conversation
+plugin-teams-menu-unmute-dm-label = Unterhaltung reaktivieren
 
-# TODO(translate)
-plugin-teams-menu-hide-dm-label = Hide Conversation
+plugin-teams-menu-hide-dm-label = Unterhaltung ausblenden
 
-# TODO(translate)
-plugin-teams-menu-show-dm-label = Show Conversation
+plugin-teams-menu-show-dm-label = Unterhaltung einblenden
 
 # Composer buttons
-# TODO(translate)
-plugin-teams-composer-mention-label = Mention someone
+plugin-teams-composer-mention-label = Jemanden erwähnen

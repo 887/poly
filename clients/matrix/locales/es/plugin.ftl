@@ -16,100 +16,68 @@ plugin-matrix-signup-password-placeholder = Introduce tu contraseña
 plugin-matrix-signup-connect-btn = Iniciar sesión
 plugin-matrix-signup-connecting = Iniciando sesión…
 
-# TODO(translate) — keys added by P46/P47
-# TODO(translate)
-plugin-matrix-menu-space-settings-label = Space Settings
+# keys added by P46/P47
+plugin-matrix-menu-space-settings-label = Ajustes del Space
 
-# TODO(translate)
-plugin-matrix-menu-edit-per-space-profile-label = Edit Space Profile
+plugin-matrix-menu-edit-per-space-profile-label = Editar perfil del Space
 
-# TODO(translate)
-plugin-matrix-menu-e2ee-verification-label = E2EE Verification
+plugin-matrix-menu-e2ee-verification-label = Verificación E2EE
 
-# TODO(translate)
-plugin-matrix-menu-explore-rooms-label = Explore Rooms
+plugin-matrix-menu-explore-rooms-label = Explorar salas
 
-# TODO(translate) — F10 state-aware menu keys
-# TODO(translate)
-plugin-matrix-menu-browse-rooms-in-space-label = Browse Rooms in Space
+# F10 state-aware menu keys
+plugin-matrix-menu-browse-rooms-in-space-label = Explorar salas en el Space
 
-# TODO(translate)
-plugin-matrix-menu-add-room-to-space-label = Add Room to Space
+plugin-matrix-menu-add-room-to-space-label = Añadir sala al Space
 
-# TODO(translate)
-plugin-matrix-menu-leave-space-label = Leave Space
+plugin-matrix-menu-leave-space-label = Salir del Space
 
-# TODO(translate)
-plugin-matrix-menu-mark-read-room-label = Mark as Read
+plugin-matrix-menu-mark-read-room-label = Marcar como leído
 
-# TODO(translate)
-plugin-matrix-menu-mark-unread-room-label = Mark as Unread
+plugin-matrix-menu-mark-unread-room-label = Marcar como no leído
 
-# TODO(translate)
-plugin-matrix-menu-mute-room-label = Mute Room
+plugin-matrix-menu-mute-room-label = Silenciar sala
 
-# TODO(translate)
-plugin-matrix-menu-unmute-room-label = Unmute Room
+plugin-matrix-menu-unmute-room-label = Reactivar sala
 
-# TODO(translate)
-plugin-matrix-menu-leave-room-label = Leave Room
+plugin-matrix-menu-leave-room-label = Salir de la sala
 
-# TODO(translate)
-plugin-matrix-menu-leave-dm-label = Leave Conversation
+plugin-matrix-menu-leave-dm-label = Abandonar conversación
 
-# TODO(translate)
-plugin-matrix-menu-open-dm-label = Open Direct Message
+plugin-matrix-menu-open-dm-label = Abrir mensaje directo
 
-# TODO(translate)
-plugin-matrix-menu-view-profile-label = View Profile
+plugin-matrix-menu-view-profile-label = Ver perfil
 
-# TODO(translate)
-plugin-matrix-menu-verify-user-label = Verify (Cross-signing)
+plugin-matrix-menu-verify-user-label = Verificar (firma cruzada)
 
-# TODO(translate)
-plugin-matrix-menu-ignore-user-label = Ignore User
+plugin-matrix-menu-ignore-user-label = Ignorar usuario
 
-# TODO(translate)
-plugin-matrix-menu-unignore-user-label = Unignore User
+plugin-matrix-menu-unignore-user-label = Dejar de ignorar usuario
 
-# TODO(translate)
-plugin-matrix-menu-react-message-label = React
+plugin-matrix-menu-react-message-label = Reaccionar
 
-# TODO(translate)
-plugin-matrix-menu-reply-in-thread-label = Reply in Thread
+plugin-matrix-menu-reply-in-thread-label = Responder en hilo
 
-# TODO(translate)
-plugin-matrix-menu-copy-permalink-label = Copy Permalink
+plugin-matrix-menu-copy-permalink-label = Copiar enlace permanente
 
-# TODO(translate)
-plugin-matrix-menu-redact-message-label = Redact Message
+plugin-matrix-menu-redact-message-label = Revocar mensaje
 
-# TODO(translate)
-plugin-matrix-setting-space-settings-label = Space Settings
+plugin-matrix-setting-space-settings-label = Ajustes del Space
 
-# TODO(translate)
-plugin-matrix-setting-display-name-label = Display Name
+plugin-matrix-setting-display-name-label = Nombre para mostrar
 
-# TODO(translate)
-plugin-matrix-setting-display-name-desc = The name shown to other members in this Space.
+plugin-matrix-setting-display-name-desc = El nombre que ven otros miembros en este Space.
 
-# TODO(translate)
-plugin-matrix-setting-topic-label = Topic
+plugin-matrix-setting-topic-label = Tema
 
-# TODO(translate)
-plugin-matrix-setting-topic-desc = A short description or topic shown at the top of the Space.
+plugin-matrix-setting-topic-desc = Una breve descripción o tema mostrado en la parte superior del Space.
 
-# TODO(translate)
-plugin-matrix-setting-privacy-label = Privacy
+plugin-matrix-setting-privacy-label = Privacidad
 
-# TODO(translate)
-plugin-matrix-setting-allow-guests-label = Allow Guests
+plugin-matrix-setting-allow-guests-label = Permitir invitados
 
-# TODO(translate)
-plugin-matrix-setting-allow-guests-desc = When enabled, users without a Matrix account can join and read this Space.
+plugin-matrix-setting-allow-guests-desc = Cuando está activado, los usuarios sin cuenta de Matrix pueden unirse y leer este Space.
 
-# TODO(translate)
-plugin-matrix-composer-me-label = /me action
+plugin-matrix-composer-me-label = Acción /me
 
-# TODO(translate)
-plugin-matrix-message-action-verify-sender-label = Verify Sender
+plugin-matrix-message-action-verify-sender-label = Verificar remitente

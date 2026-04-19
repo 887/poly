@@ -7,7 +7,7 @@ plugin-poly-signup-desc = Connectez-vous à un serveur Poly auto-hébergé.
 
 # --- Signup page ---
 plugin-poly-signup-title = Ajouter un compte Poly Server
-plugin-poly-signup-description = Entrez l'URL de votre serveur pour vous connecter. Poly utilisera votre clé d’identité d’appareil pour vous connecter, et les nouveaux comptes Poly Server nécessitent aussi une adresse e-mail.
+plugin-poly-signup-description = Entrez l'URL de votre serveur pour vous connecter. Poly utilisera votre clé d'identité d'appareil pour vous connecter, et les nouveaux comptes Poly Server nécessitent aussi une adresse e-mail.
 plugin-poly-signup-back = ← Choisir le backend
 plugin-poly-signup-url-label = URL du serveur
 plugin-poly-signup-url-placeholder = http://127.0.0.1:7080
@@ -58,48 +58,33 @@ plugin-poly-profile-saved = Profil enregistré !
 plugin-poly-profile-avatar-coming-soon = Téléchargement d'avatar bientôt disponible.
 plugin-poly-profile-banner-coming-soon = Téléchargement de bannière bientôt disponible.
 
-# TODO(translate) — keys added by P46/P47
-# TODO(translate)
-plugin-poly-menu-invite-people-label = Invite People
+# keys added by P46/P47
+plugin-poly-menu-invite-people-label = Inviter des personnes
 
-# TODO(translate)
-plugin-poly-menu-privacy-settings-label = Privacy Settings
+plugin-poly-menu-privacy-settings-label = Paramètres de confidentialité
 
-# TODO(translate)
-plugin-poly-menu-edit-per-server-profile-label = Edit Server Profile
+plugin-poly-menu-edit-per-server-profile-label = Modifier le profil du serveur
 
-# TODO(translate)
-plugin-poly-menu-federation-settings-label = Federation Settings
+plugin-poly-menu-federation-settings-label = Paramètres de fédération
 
-# TODO(translate)
-plugin-poly-setting-profile-label = Profile
+plugin-poly-setting-profile-label = Profil
 
-# TODO(translate)
-plugin-poly-setting-nickname-label = Nickname
+plugin-poly-setting-nickname-label = Pseudo
 
-# TODO(translate)
-plugin-poly-setting-nickname-desc = Display this name instead of your account name in this server.
+plugin-poly-setting-nickname-desc = Afficher ce nom à la place de votre nom de compte sur ce serveur.
 
-# TODO(translate)
-plugin-poly-setting-avatar-url-label = Avatar URL
+plugin-poly-setting-avatar-url-label = URL de l'avatar
 
-# TODO(translate)
-plugin-poly-setting-avatar-url-desc = URL of the image to use as your avatar in this server. Leave empty to use your account avatar.
+plugin-poly-setting-avatar-url-desc = URL de l'image à utiliser comme avatar sur ce serveur. Laissez vide pour utiliser l'avatar de votre compte.
 
-# TODO(translate)
-plugin-poly-setting-privacy-label = Privacy
+plugin-poly-setting-privacy-label = Confidentialité
 
-# TODO(translate)
-plugin-poly-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-poly-setting-allow-dms-from-server-members-label = Autoriser les DMs des membres
 
-# TODO(translate)
-plugin-poly-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
+plugin-poly-setting-allow-dms-from-server-members-desc = Lorsqu'activé, les autres membres de ce serveur peuvent vous envoyer des messages directs.
 
-# TODO(translate)
-plugin-poly-setting-federation-label = Federation
+plugin-poly-setting-federation-label = Fédération
 
-# TODO(translate)
-plugin-poly-setting-allow-federation-label = Allow Federation
+plugin-poly-setting-allow-federation-label = Autoriser la fédération
 
-# TODO(translate)
-plugin-poly-setting-allow-federation-desc = When enabled, this server can communicate with other federated Poly servers.
+plugin-poly-setting-allow-federation-desc = Lorsqu'activé, ce serveur peut communiquer avec d'autres serveurs Poly fédérés.

@@ -1,108 +1,71 @@
 # plugin-discord — Spanish translations
 
-# TODO(translate)
 plugin-discord-title = Discord
 
-# TODO(translate)
-plugin-discord-description = Popular gaming and community chat platform.
+plugin-discord-description = Plataforma popular de chat para comunidades y videojuegos.
 
-# TODO(translate)
-plugin-discord-menu-invite-people-label = Invite People
+plugin-discord-menu-invite-people-label = Invitar personas
 
-# TODO(translate)
-plugin-discord-menu-privacy-settings-label = Privacy Settings
+plugin-discord-menu-privacy-settings-label = Configuración de privacidad
 
-# TODO(translate)
-plugin-discord-menu-edit-per-server-profile-label = Edit Server Profile
+plugin-discord-menu-edit-per-server-profile-label = Editar perfil del servidor
 
-# TODO(translate)
-plugin-discord-menu-server-boost-label = Server Boost
+plugin-discord-menu-server-boost-label = Impulsar servidor
 
-# TODO(translate)
-plugin-discord-setting-profile-label = Profile
+plugin-discord-setting-profile-label = Perfil
 
-# TODO(translate)
-plugin-discord-setting-nickname-label = Nickname
+plugin-discord-setting-nickname-label = Apodo
 
-# TODO(translate)
-plugin-discord-setting-nickname-desc = Display this name instead of your account name in this server.
+plugin-discord-setting-nickname-desc = Mostrar este nombre en lugar de tu nombre de cuenta en este servidor.
 
-# TODO(translate)
-plugin-discord-setting-server-avatar-url-label = Server Avatar URL
+plugin-discord-setting-server-avatar-url-label = URL del avatar del servidor
 
-# TODO(translate)
-plugin-discord-setting-server-avatar-url-desc = Override your global avatar for this server. Leave empty to use your account avatar.
+plugin-discord-setting-server-avatar-url-desc = Reemplaza tu avatar global para este servidor. Déjalo vacío para usar el avatar de tu cuenta.
 
-# TODO(translate)
-plugin-discord-setting-notification-rules-label = Notifications
+plugin-discord-setting-notification-rules-label = Notificaciones
 
-# TODO(translate)
-plugin-discord-setting-mentions-only-label = Only @mentions
+plugin-discord-setting-mentions-only-label = Solo @menciones
 
-# TODO(translate)
-plugin-discord-setting-mentions-only-desc = Suppress all notifications except those that directly @mention you.
+plugin-discord-setting-mentions-only-desc = Suprime todas las notificaciones excepto las que te mencionen directamente con @.
 
-# TODO(translate)
-plugin-discord-setting-mute-category-label = Mute Category
+plugin-discord-setting-mute-category-label = Silenciar categoría
 
-# TODO(translate)
-plugin-discord-setting-mute-category-desc = Silence all channels in this category until you manually unmute it.
+plugin-discord-setting-mute-category-desc = Silencia todos los canales de esta categoría hasta que la reactives manualmente.
 
-# TODO(translate)
-plugin-discord-setting-privacy-label = Privacy
+plugin-discord-setting-privacy-label = Privacidad
 
-# TODO(translate)
-plugin-discord-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-discord-setting-allow-dms-from-server-members-label = Permitir DMs de miembros
 
-# TODO(translate)
-plugin-discord-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
+plugin-discord-setting-allow-dms-from-server-members-desc = Cuando está activado, otros miembros de este servidor pueden enviarte mensajes directos.
 
 # Composer buttons
-# TODO(translate)
 plugin-discord-composer-stickers-label = Stickers
 
 # Message actions
-# TODO(translate)
-plugin-discord-message-action-pin-message-label = Pin Message
+plugin-discord-message-action-pin-message-label = Fijar mensaje
 
 # F10 — state-aware server menu items
-# TODO(translate)
-plugin-discord-menu-mute-server-label = Mute Server
-# TODO(translate)
-plugin-discord-menu-unmute-server-label = Unmute Server
-# TODO(translate)
-plugin-discord-menu-leave-server-label = Leave Server
+plugin-discord-menu-mute-server-label = Silenciar servidor
+plugin-discord-menu-unmute-server-label = Reactivar servidor
+plugin-discord-menu-leave-server-label = Salir del servidor
 
 # F10 — state-aware channel menu items
-# TODO(translate)
-plugin-discord-menu-mute-channel-label = Mute Channel
-# TODO(translate)
-plugin-discord-menu-unmute-channel-label = Unmute Channel
-# TODO(translate)
-plugin-discord-menu-mark-channel-read-label = Mark as Read
+plugin-discord-menu-mute-channel-label = Silenciar canal
+plugin-discord-menu-unmute-channel-label = Reactivar canal
+plugin-discord-menu-mark-channel-read-label = Marcar como leído
 
 # F10 — state-aware user menu items
-# TODO(translate)
-plugin-discord-menu-open-dm-label = Open DM
-# TODO(translate)
-plugin-discord-menu-add-friend-label = Add Friend
-# TODO(translate)
-plugin-discord-menu-remove-friend-label = Remove Friend
-# TODO(translate)
-plugin-discord-menu-block-user-label = Block User
-# TODO(translate)
-plugin-discord-menu-unblock-user-label = Unblock User
+plugin-discord-menu-open-dm-label = Abrir DM
+plugin-discord-menu-add-friend-label = Añadir amigo
+plugin-discord-menu-remove-friend-label = Eliminar amigo
+plugin-discord-menu-block-user-label = Bloquear usuario
+plugin-discord-menu-unblock-user-label = Desbloquear usuario
 
 # F10 — message menu items
-# TODO(translate)
-plugin-discord-menu-copy-message-link-label = Copy Message Link
-# TODO(translate)
-plugin-discord-menu-delete-message-label = Delete Message
+plugin-discord-menu-copy-message-link-label = Copiar enlace del mensaje
+plugin-discord-menu-delete-message-label = Eliminar mensaje
 
 # F10 — state-aware DM menu items
-# TODO(translate)
-plugin-discord-menu-mute-dm-label = Mute Conversation
-# TODO(translate)
-plugin-discord-menu-unmute-dm-label = Unmute Conversation
-# TODO(translate)
-plugin-discord-menu-close-dm-label = Close DM
+plugin-discord-menu-mute-dm-label = Silenciar conversación
+plugin-discord-menu-unmute-dm-label = Reactivar conversación
+plugin-discord-menu-close-dm-label = Cerrar DM

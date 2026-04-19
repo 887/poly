@@ -58,48 +58,33 @@ plugin-poly-profile-saved = ¡Perfil guardado!
 plugin-poly-profile-avatar-coming-soon = Subida de avatar próximamente.
 plugin-poly-profile-banner-coming-soon = Subida de banner próximamente.
 
-# TODO(translate) — keys added by P46/P47
-# TODO(translate)
-plugin-poly-menu-invite-people-label = Invite People
+# keys added by P46/P47
+plugin-poly-menu-invite-people-label = Invitar personas
 
-# TODO(translate)
-plugin-poly-menu-privacy-settings-label = Privacy Settings
+plugin-poly-menu-privacy-settings-label = Configuración de privacidad
 
-# TODO(translate)
-plugin-poly-menu-edit-per-server-profile-label = Edit Server Profile
+plugin-poly-menu-edit-per-server-profile-label = Editar perfil del servidor
 
-# TODO(translate)
-plugin-poly-menu-federation-settings-label = Federation Settings
+plugin-poly-menu-federation-settings-label = Ajustes de federación
 
-# TODO(translate)
-plugin-poly-setting-profile-label = Profile
+plugin-poly-setting-profile-label = Perfil
 
-# TODO(translate)
-plugin-poly-setting-nickname-label = Nickname
+plugin-poly-setting-nickname-label = Apodo
 
-# TODO(translate)
-plugin-poly-setting-nickname-desc = Display this name instead of your account name in this server.
+plugin-poly-setting-nickname-desc = Mostrar este nombre en lugar de tu nombre de cuenta en este servidor.
 
-# TODO(translate)
-plugin-poly-setting-avatar-url-label = Avatar URL
+plugin-poly-setting-avatar-url-label = URL del avatar
 
-# TODO(translate)
-plugin-poly-setting-avatar-url-desc = URL of the image to use as your avatar in this server. Leave empty to use your account avatar.
+plugin-poly-setting-avatar-url-desc = URL de la imagen a usar como avatar en este servidor. Deja vacío para usar el avatar de tu cuenta.
 
-# TODO(translate)
-plugin-poly-setting-privacy-label = Privacy
+plugin-poly-setting-privacy-label = Privacidad
 
-# TODO(translate)
-plugin-poly-setting-allow-dms-from-server-members-label = Allow DMs from Members
+plugin-poly-setting-allow-dms-from-server-members-label = Permitir DMs de miembros
 
-# TODO(translate)
-plugin-poly-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
+plugin-poly-setting-allow-dms-from-server-members-desc = Cuando está activado, otros miembros de este servidor pueden enviarte mensajes directos.
 
-# TODO(translate)
-plugin-poly-setting-federation-label = Federation
+plugin-poly-setting-federation-label = Federación
 
-# TODO(translate)
-plugin-poly-setting-allow-federation-label = Allow Federation
+plugin-poly-setting-allow-federation-label = Permitir federación
 
-# TODO(translate)
-plugin-poly-setting-allow-federation-desc = When enabled, this server can communicate with other federated Poly servers.
+plugin-poly-setting-allow-federation-desc = Cuando está activado, este servidor puede comunicarse con otros servidores Poly federados.
