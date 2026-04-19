@@ -709,6 +709,17 @@ impl Guest for TeamsPlugin {
             "get_archived_threads not implemented".to_string(),
         ))
     }
+
+    fn create_forum_post(
+        _forum_channel_id: String,
+        _title: String,
+        _body: String,
+        _tags: Vec<String>,
+    ) -> Result<wit::ForumPost, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "create_forum_post not implemented".to_string(),
+        ))
+    }
 }
 
 fn test_login(

@@ -112,6 +112,7 @@ reqwest = { version = "0.13.2", default-features = false, features = [
     "system-proxy",
 ] }
 axum = "0.8"
+http-body-util = "0.1"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # Discord — ISC-licensed models shared between poly-discord (client) and

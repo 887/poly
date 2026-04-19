@@ -448,6 +448,27 @@ pub trait ClientBackend: Send + Sync {
         ))
     }
 
+    /// Create a new forum post (thread) in a forum channel.
+    ///
+    /// `title` is the post/thread name, `body` is the starter message text,
+    /// and `tags` is the list of tag IDs to apply.
+    ///
+    /// Returns the newly-created [`ForumPost`] on success.
+    /// Backends that do not support forum post creation return
+    /// [`ClientError::NotSupported`].
+    async fn create_forum_post(
+        &self,
+        forum_channel_id: &str,
+        title: &str,
+        body: &str,
+        tags: Vec<String>,
+    ) -> ClientResult<ForumPost> {
+        let _ = (forum_channel_id, title, body, tags);
+        Err(ClientError::NotSupported(
+            "create_forum_post not implemented".into(),
+        ))
+    }
+
     // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ----
     //
     // Per D9 these methods have **no default implementation** — every

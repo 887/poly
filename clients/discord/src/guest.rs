@@ -430,6 +430,17 @@ impl Guest for DiscordPlugin {
         let resp: WasmArchivedThreadsResponse = parse_json(&body)?;
         Ok(resp.threads.iter().map(wasm_thread_to_info).collect())
     }
+
+    fn create_forum_post(
+        _forum_channel_id: String,
+        _title: String,
+        _body: String,
+        _tags: Vec<String>,
+    ) -> Result<wit::ForumPost, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "create_forum_post not implemented".to_string(),
+        ))
+    }
 }
 
 impl PluginMetadataGuest for DiscordPlugin {

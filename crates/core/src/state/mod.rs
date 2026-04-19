@@ -178,6 +178,13 @@ pub struct NavigationState {
     /// consumes this request and starts the actual temporary call connection.
     #[serde(skip)]
     pub pending_direct_call: Option<PendingDirectCallRequest>,
+    /// Thread panel — the thread ID currently open in the side panel on desktop.
+    ///
+    /// When `Some(thread_id)`, `ThreadPanel` renders alongside the parent channel
+    /// chat. `None` means the panel is closed. Not serialised — always starts
+    /// closed on a cold start so stale thread context never leaks across sessions.
+    #[serde(skip)]
+    pub thread_panel_open: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,6 +212,7 @@ impl Default for NavigationState {
             account_last_dm_routes: std::collections::HashMap::new(),
             profile_modal_user: None,
             pending_direct_call: None,
+            thread_panel_open: None,
         }
     }
 }

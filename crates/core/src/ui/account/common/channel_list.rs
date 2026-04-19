@@ -138,9 +138,14 @@ async fn load_channel_data(
                     request_restore_scroll_position_or_bottom(&channel_id);
                 }
             }
-            if let Ok(members) = guard.get_channel_members(&channel_id).await {
-                chat_data.write().members = members;
+            let members = guard.get_channel_members(&channel_id).await.ok();
+            // Combine the remaining writes under one guard to minimise render cycles.
+            let mut data = chat_data.write();
+            if let Some(mbrs) = members {
+                data.members = mbrs;
             }
+            data.loading = false;
+            return;
         }
     }
 
@@ -154,9 +159,19 @@ async fn load_dm_messages(
     client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
 ) {
-    chat_data.write().loading = true;
-    chat_data.write().messages = Vec::new();
-    chat_data.write().members = Vec::new();
+    tracing::info!(
+        channel_id = %channel_id,
+        account_id = %account_id,
+        "load_dm_messages: start"
+    );
+    // Use a single write guard for the three reset fields so Dioxus only
+    // schedules one re-render instead of three back-to-back render cycles.
+    {
+        let mut w = chat_data.write();
+        w.loading = true;
+        w.messages = Vec::new();
+        w.members = Vec::new();
+    }
 
     let unread_count = chat_data
         .read()
@@ -166,25 +181,51 @@ async fn load_dm_messages(
         .map_or(0, |channel| channel.unread_count);
 
     let Some(backend) = client_manager.read().get_backend(&account_id) else {
+        tracing::warn!(account_id = %account_id, "load_dm_messages: no backend found");
         chat_data.write().loading = false;
         return;
     };
 
+    tracing::info!(channel_id = %channel_id, "load_dm_messages: backend acquired, fetching messages");
     let guard = backend.read().await;
-    if let Ok(messages) = guard
+    let messages = guard
         .get_messages(&channel_id, initial_message_query(unread_count))
         .await
-    {
-        chat_data.write().messages = messages;
+        .ok();
+    let members = guard.get_channel_members(&channel_id).await.ok();
+    drop(guard);
+
+    tracing::info!(
+        channel_id = %channel_id,
+        messages = messages.as_ref().map(|m: &Vec<_>| m.len()),
+        members = members.as_ref().map(|m: &Vec<_>| m.len()),
+        "load_dm_messages: done, writing results"
+    );
+
+    // Single write guard for the final state update so Dioxus only schedules
+    // one re-render after all async data has been collected.
+    let mut w = chat_data.write();
+    if let Some(msgs) = messages {
+        w.messages = msgs;
         request_restore_scroll_position_or_bottom(&channel_id);
     }
-    if let Ok(members) = guard.get_channel_members(&channel_id).await {
-        chat_data.write().members = members;
+    if let Some(mbrs) = members {
+        w.members = mbrs;
     }
-
-    chat_data.write().loading = false;
+    w.loading = false;
 }
 
+/// Activate a DM channel: update navigation state, set the active channel in
+/// `chat_data`, then navigate to the DM chat route and kick off message loading.
+///
+/// # Write-guard discipline
+/// Each `Signal` is written exactly once via a single `write()` guard.  Using
+/// multiple consecutive `.write()` calls on the same signal causes Dioxus to
+/// schedule a new re-render after every individual write, which can create a
+/// rapid succession of render cycles on the single-threaded WASM runtime and
+/// produce an apparent freeze.  All field assignments are batched under one
+/// guard per signal so only two re-renders are triggered (one for `app_state`,
+/// one for `chat_data`).
 fn activate_dm_channel(
     dm: DmChannel,
     instance_id: String,
@@ -193,34 +234,56 @@ fn activate_dm_channel(
     client_manager: Signal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
-    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
-        remember_message_list_scroll_position(&previous_channel_id);
+    tracing::info!(
+        dm_id = %dm.id,
+        account_id = %dm.account_id,
+        "activate_dm_channel: start"
+    );
+
+    // Snapshot the previous channel before taking any write lock.
+    let previous_channel_id = app_state.read().nav.selected_channel.clone();
+    if let Some(ref prev_id) = previous_channel_id {
+        tracing::info!(prev_channel_id = %prev_id, "activate_dm_channel: remembering scroll for previous channel");
+        remember_message_list_scroll_position(prev_id);
     }
 
-    app_state.write().nav.selected_server = None;
-    app_state.write().nav.selected_channel = Some(dm.id.clone());
-    app_state.write().nav.dm_right_sidebar_visible = false;
-    chat_data.write().active_group_members = Vec::new();
-    chat_data.write().current_channel = Some(Channel {
-        id: dm.id.clone(),
-        name: dm.user.display_name.clone(),
-        channel_type: ChannelType::Text,
-        server_id: String::new(),
-        unread_count: dm.unread_count,
-        mention_count: 0,
-        last_message_id: dm.last_message.as_ref().map(|message| message.id.clone()),
-        forum_tags: None,
-        parent_channel_id: None,
-        thread_metadata: None,
-    });
-    chat_data.write().current_server = None;
+    // Single write guard for app_state — one re-render instead of three.
+    {
+        let mut app = app_state.write();
+        app.nav.selected_server = None;
+        app.nav.selected_channel = Some(dm.id.clone());
+        app.nav.dm_right_sidebar_visible = false;
+    }
+    tracing::info!(dm_id = %dm.id, "activate_dm_channel: app_state nav written");
+
+    // Single write guard for chat_data — one re-render instead of three.
+    {
+        let mut chat = chat_data.write();
+        chat.active_group_members = Vec::new();
+        chat.current_channel = Some(Channel {
+            id: dm.id.clone(),
+            name: dm.user.display_name.clone(),
+            channel_type: ChannelType::Text,
+            server_id: String::new(),
+            unread_count: dm.unread_count,
+            mention_count: 0,
+            last_message_id: dm.last_message.as_ref().map(|message| message.id.clone()),
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
+        });
+        chat.current_server = None;
+    }
+    tracing::info!(dm_id = %dm.id, "activate_dm_channel: chat_data written");
 
     let channel_id = dm.id.clone();
     let account_id = dm.account_id.clone();
     spawn(async move {
+        tracing::info!(channel_id = %channel_id, "activate_dm_channel: spawned load_dm_messages");
         load_dm_messages(channel_id, account_id, client_manager, chat_data).await;
     });
 
+    tracing::info!(dm_id = %dm.id, "activate_dm_channel: navigating to DmChat route");
     nav.push(Route::DmChat {
         backend: dm.backend.slug().to_string(),
         instance_id,
@@ -228,6 +291,7 @@ fn activate_dm_channel(
         dm_id: dm.id.clone(),
     });
     close_mobile_drawer();
+    tracing::info!(dm_id = %dm.id, "activate_dm_channel: done");
 }
 
 fn active_account_context(
@@ -254,11 +318,22 @@ pub(crate) fn open_direct_message_from_active_account(
     client_manager: Signal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
+    tracing::info!(user_id = %user_id, "open_direct_message_from_active_account: start");
+
     let Some((account_id, instance_id)) = active_account_context(app_state, chat_data) else {
         tracing::warn!("open_direct_message_from_active_account: no active account");
         return;
     };
 
+    tracing::info!(
+        user_id = %user_id,
+        account_id = %account_id,
+        "open_direct_message_from_active_account: active account resolved"
+    );
+
+    // Read `dm_channels` under a scoped borrow that is dropped before any write.
+    // Holding this read guard into `activate_dm_channel` (which calls `.write()`)
+    // would panic in Dioxus's borrow checker.
     let existing_dm = {
         let chat_data_read = chat_data.read();
         chat_data_read
@@ -269,6 +344,10 @@ pub(crate) fn open_direct_message_from_active_account(
     };
 
     if let Some(existing_dm) = existing_dm {
+        tracing::info!(
+            dm_id = %existing_dm.id,
+            "open_direct_message_from_active_account: existing DM found, activating"
+        );
         activate_dm_channel(
             existing_dm,
             instance_id,
@@ -280,6 +359,12 @@ pub(crate) fn open_direct_message_from_active_account(
         return;
     }
 
+    tracing::info!(
+        user_id = %user_id,
+        account_id = %account_id,
+        "open_direct_message_from_active_account: no existing DM, requesting backend"
+    );
+
     let Some(backend) = client_manager.read().get_backend(&account_id) else {
         tracing::warn!(
             "open_direct_message_from_active_account: no backend found for account {}",
@@ -289,6 +374,11 @@ pub(crate) fn open_direct_message_from_active_account(
     };
 
     spawn(async move {
+        tracing::info!(
+            user_id = %user_id,
+            account_id = %account_id,
+            "open_direct_message_from_active_account: spawned, awaiting open_direct_message_channel"
+        );
         let opened_dm = {
             let guard = backend.read().await;
             match guard.open_direct_message_channel(&user_id).await {
@@ -305,6 +395,12 @@ pub(crate) fn open_direct_message_from_active_account(
             }
         };
 
+        tracing::info!(
+            dm_id = %opened_dm.id,
+            "open_direct_message_from_active_account: DM channel opened, updating dm_channels list"
+        );
+
+        // Single write guard: dedup + push under one lock so one re-render fires.
         let mut chat_data_write = chat_data.write();
         chat_data_write.dm_channels.retain(|dm| {
             !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == user_id))
@@ -312,6 +408,10 @@ pub(crate) fn open_direct_message_from_active_account(
         chat_data_write.dm_channels.push(opened_dm.clone());
         drop(chat_data_write);
 
+        tracing::info!(
+            dm_id = %opened_dm.id,
+            "open_direct_message_from_active_account: activating new DM channel"
+        );
         activate_dm_channel(
             opened_dm,
             instance_id,

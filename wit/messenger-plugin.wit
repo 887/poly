@@ -1449,6 +1449,18 @@ interface messenger-client {
         parent-channel-id: string,
         limit: option<u32>,
     ) -> result<list<thread-info>, client-error>;
+
+    /// Create a new forum post (thread) in a forum channel.
+    ///
+    /// `title` is the post/thread name, `body` is the starter message text,
+    /// and `tags` is the list of tag IDs to apply.  Backends that do not
+    /// support post creation must return `not-supported`.
+    create-forum-post: func(
+        forum-channel-id: string,
+        title: string,
+        body: string,
+        tags: list<string>,
+    ) -> result<forum-post, client-error>;
 }
 
 // ─── Plugin Metadata (optional exports — host uses if present) ─────

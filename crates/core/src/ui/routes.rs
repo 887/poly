@@ -50,9 +50,9 @@ use super::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
 };
 use super::account::{
-    AccountSettingsPage, ChannelSettingsPage, ChatView, ConversationSearchView, ForumView,
-    ForumPostView, FriendsPanel, NewConversationView, NotificationsView, OutgoingDirectCallOverlay,
-    SavedItemsView, ServerSettingsPage, VoiceChannelView,
+    AccountSettingsPage, ChannelSettingsPage, ChatView, ConversationSearchView, DiscordForumView,
+    ForumView, ForumPostView, FriendsPanel, NewConversationView, NotificationsView,
+    OutgoingDirectCallOverlay, SavedItemsView, ServerSettingsPage, VoiceChannelView,
 };
 use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
@@ -1644,7 +1644,12 @@ fn ServerChat(
     let is_forum_backend = chat_data.read().current_server.as_ref()
         .is_some_and(|s| s.backend.uses_forum_layout());
     let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
-    let is_forum = is_forum_backend || matches!(channel_type, Some(ChannelType::Forum));
+    let is_forum_channel = matches!(channel_type, Some(ChannelType::Forum));
+    // Forum-layout backends (Lemmy, demo_forum) use the Lemmy-style ForumView.
+    // Non-forum-layout backends (Discord, generic) that carry individual Forum
+    // channels use DiscordForumView, which calls get_forum_posts directly.
+    let is_discord_forum = is_forum_channel && !is_forum_backend;
+    let is_lemmy_forum = is_forum_backend;
     let is_code = matches!(channel_type, Some(ChannelType::Code));
 
     rsx! {
@@ -1652,7 +1657,9 @@ fn ServerChat(
             VoiceChannelView {}
         } else if is_code {
             super::code_explorer::CodeExplorerView { route_channel_id: route_channel_id.clone() }
-        } else if is_forum {
+        } else if is_discord_forum {
+            DiscordForumView {}
+        } else if is_lemmy_forum {
             ForumView {}
         } else {
             ChatView {}

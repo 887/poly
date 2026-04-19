@@ -1208,4 +1208,25 @@ impl ClientBackend for PluginBackend {
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }
     }
+
+    async fn create_forum_post(
+        &self,
+        forum_channel_id: &str,
+        title: &str,
+        body: &str,
+        tags: Vec<String>,
+    ) -> ClientResult<ForumPost> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_create_forum_post(&mut *store, forum_channel_id, title, body, &tags)
+            .await;
+        match result {
+            Ok(Ok(post)) => Ok(bridge::from_wit_forum_post(post)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
 }

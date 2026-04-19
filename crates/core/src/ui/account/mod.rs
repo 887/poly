@@ -99,6 +99,7 @@ pub use common::ChatView;
 pub use common::ConversationSearchView;
 pub use common::DmUserSidebar;
 pub use common::EmojiPicker;
+pub use common::DiscordForumView;
 pub use common::{ForumPostView, ForumView};
 pub use common::FriendsPanel;
 pub use common::NewConversationView;

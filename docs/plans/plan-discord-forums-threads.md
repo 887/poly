@@ -1,7 +1,7 @@
 # Plan — Discord Forum Channels & Thread Support
 
 > **Created:** 2026-04-05
-> **Status:** Phase 1 + Phase 2 Done (2026-04-19)
+> **Status:** Phase 1 + Phase 2 Done (2026-04-19); Phase 4 + Phase 5 UI Done (2026-04-19)
 > **Crate:** `poly-discord` (`clients/discord/`)
 > **Depends on:** Phase 3.3 (Discord client base implementation)
 > **Goal:** Support Discord forum channels and threads in the Poly unified chat UI.
@@ -376,21 +376,21 @@ names. Clicking a thread opens it in panel mode.
 
 ### 4. UI — Forum Channel
 
-- [ ] **4.1** Forum icon in sidebar channel list
-- [ ] **4.2** Forum post list view (list layout)
-- [ ] **4.3** Forum post list view (gallery layout for media channels)
-- [ ] **4.4** Tag filter bar with clickable tag pills
-- [ ] **4.5** Sort order toggle (Latest Activity / Creation Date)
-- [ ] **4.6** New Post compose dialog (title + tags + body)
+- [x] **4.1** Forum icon in sidebar channel list
+- [x] **4.2** Forum post list view (list layout)
+- [x] **4.3** Forum post list view (gallery layout for media channels)
+- [x] **4.4** Tag filter bar with clickable tag pills
+- [x] **4.5** Sort order toggle (Latest Activity / Creation Date)
+- [x] **4.6** New Post compose dialog (title + tags + body)
 
 ### 5. UI — Threads
 
-- [ ] **5.1** "View Thread" button on messages that have spawned threads
-- [ ] **5.2** Thread panel (right-side, panel mode)
-- [ ] **5.3** Thread full-page view (mobile / narrow viewport)
-- [ ] **5.4** Active threads bar at top of text channels
-- [ ] **5.5** Thread header with name, member count, archived/pinned badges
-- [ ] **5.6** Thread close button (returns to parent channel)
+- [x] **5.1** "View Thread" button on messages that have spawned threads
+- [x] **5.2** Thread panel (right-side, panel mode)
+- [x] **5.3** Thread full-page view (mobile / narrow viewport)
+- [x] **5.4** Active threads bar at top of text channels
+- [x] **5.5** Thread header with name, member count, archived/pinned badges
+- [x] **5.6** Thread close button (returns to parent channel)
 
 ### 6. Test Server
 
