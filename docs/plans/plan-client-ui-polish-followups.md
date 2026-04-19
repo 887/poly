@@ -34,19 +34,9 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🟠 F3 — UI snapshot goldens infrastructure
+### ⏸ F3 — UI snapshot goldens infrastructure (DROPPED — superseded 2026-04-19)
 
-**Symptom:** Per §1.2 layer (h), every pack was supposed to ship Playwright-driven snapshot diffs. Zero goldens were committed. Visual-polish packs (A, D, G, J) are unverified against regressions.
-
-**Fix:** Dedicated "snapshot-infra" pack:
-1. Install Playwright test runner.
-2. Wire a `tests/snapshots/<backend>/<surface>.html` directory structure.
-3. For each existing pack's demo-friendly backend (demo_forum, demo, discord-mock via plugin): record initial DOM snapshots.
-4. CI job diffs on every PR; golden refresh is an explicit commit action.
-
-**Blockers:** non-demo backends (stoat/matrix/teams/server-client) need credentials or test servers. demo + demo_forum are the achievable baseline; defer others.
-
-**Estimated size:** large. Playwright integration + per-backend surface enumeration + CI wiring is ~2-3 days of setup work.
+**Resolution:** Playwright dropped — too slow for the iteration loop the user wants. Replaced by a deferred plan for **Dioxus Blitz–based component testing** (WGPU-native, in-process Dioxus rendering — already wired in `apps/desktop-blitz` as a shipping renderer). New plan file: `docs/plans/plan-blitz-component-tests.md`. Snapshot/regression coverage of visual-polish packs lives in that plan now; this followup is closed out without action here.
 
 ---
 
