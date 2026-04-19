@@ -93,7 +93,7 @@ impl UiAction for ReauthAccountPageAction {
 /// account into the app state (Signal writes, server cache, navigation).
 ///
 /// Used by both the normal per-backend signup flow and the quick test-account panel.
-fn build_on_complete(
+pub(crate) fn build_on_complete(
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
 ) -> Callback<SignupCompleted> {

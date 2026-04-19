@@ -46,6 +46,8 @@ twilight-model = { workspace = true, optional = true }
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]
 wit-bindgen = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 poly-test-discord = { path = "../../servers/test-discord" }

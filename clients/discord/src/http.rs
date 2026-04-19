@@ -5,7 +5,10 @@ use std::sync::Mutex;
 use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
 
-use crate::api::{DiscordChannel, DiscordGuild, DiscordMessage, DiscordUser};
+use crate::api::{
+    DiscordActiveThreadsResponse, DiscordArchivedThreadsResponse, DiscordChannel, DiscordGuild,
+    DiscordMessage, DiscordUser,
+};
 
 pub struct DiscordHttpClient {
     base_url: String,
@@ -155,5 +158,46 @@ impl DiscordHttpClient {
 
     pub async fn get_user(&self, user_id: &str) -> Result<DiscordUser, ClientError> {
         self.get(&format!("/api/v10/users/{user_id}")).await
+    }
+
+    /// `GET /guilds/{guild_id}/threads/active` — all active (non-archived) threads
+    /// in the guild. May return `has_more = true` if there are over 100 threads;
+    /// for now we fetch one page (Discord doesn't paginate this endpoint, but
+    /// `has_more` signals a cap was applied).
+    pub async fn get_active_threads(
+        &self,
+        guild_id: &str,
+    ) -> Result<DiscordActiveThreadsResponse, ClientError> {
+        self.get(&format!("/api/v10/guilds/{guild_id}/threads/active")).await
+    }
+
+    /// `GET /channels/{channel_id}/threads/archived/public` — archived public threads
+    /// for a parent channel (text or forum).
+    pub async fn get_archived_threads_public(
+        &self,
+        channel_id: &str,
+        limit: Option<u32>,
+    ) -> Result<DiscordArchivedThreadsResponse, ClientError> {
+        let limit = limit.unwrap_or(50).min(100);
+        self.get(&format!(
+            "/api/v10/channels/{channel_id}/threads/archived/public?limit={limit}"
+        ))
+        .await
+    }
+
+    /// Fetch messages from a thread channel. Uses the same messages endpoint —
+    /// Discord thread IDs are valid channel IDs.
+    pub async fn get_thread_messages(
+        &self,
+        thread_id: &str,
+        limit: Option<u32>,
+        after: Option<&str>,
+    ) -> Result<Vec<DiscordMessage>, ClientError> {
+        let limit = limit.unwrap_or(1).min(100);
+        let mut path = format!("/api/v10/channels/{thread_id}/messages?limit={limit}");
+        if let Some(a) = after {
+            path.push_str(&format!("&after={a}"));
+        }
+        self.get(&path).await
     }
 }

@@ -69,6 +69,59 @@ struct DiscordMenuState {
     muted_dms: HashSet<String>,
 }
 
+/// Test helpers for `tests/` integration tests.
+///
+/// Provides access to internal mapping functions.
+/// Hidden from docs; always compiled with the `native` feature so that
+/// integration tests (which are compiled as separate crates) can import them.
+#[cfg(feature = "native")]
+#[doc(hidden)]
+pub mod test_helpers {
+    use super::*;
+    use twilight_model::channel::ChannelType as DC;
+
+    /// Map a raw Discord channel type integer to `poly_client::ChannelType`.
+    pub fn map_discord_channel_type(raw: u8) -> ChannelType {
+        let dc = match raw {
+            0 => DC::GuildText,
+            1 => DC::Private,
+            2 => DC::GuildVoice,
+            4 => DC::GuildCategory,
+            5 => DC::GuildAnnouncement,
+            10 => DC::AnnouncementThread,
+            11 => DC::PublicThread,
+            12 => DC::PrivateThread,
+            13 => DC::GuildStageVoice,
+            14 => DC::GuildDirectory,
+            15 => DC::GuildForum,
+            16 => DC::GuildMedia,
+            _ => DC::GuildText,
+        };
+        DiscordClient::map_channel_type(dc)
+    }
+
+    /// Deserialize a JSON string as a `DiscordChannel` and map it to a `poly_client::Channel`.
+    ///
+    /// `fallback_server_id` is used when `guild_id` is absent from the JSON.
+    /// Returns `Err` on JSON parse failure.
+    pub fn channel_from_json(
+        json: &str,
+        fallback_server_id: &str,
+    ) -> Result<Channel, serde_json::Error> {
+        let dc: api::DiscordChannel = serde_json::from_str(json)?;
+        let client = DiscordClient::new();
+        Ok(client.discord_channel_to_poly(dc, fallback_server_id))
+    }
+
+    /// Deserialize a JSON string as a `DiscordMessage` and map it to a `poly_client::Message`.
+    /// Returns `Err` on JSON parse failure.
+    pub fn message_from_json(json: &str) -> Result<Message, serde_json::Error> {
+        let dm: api::DiscordMessage = serde_json::from_str(json)?;
+        let client = DiscordClient::new();
+        Ok(client.discord_message_to_poly(dm))
+    }
+}
+
 /// Discord messenger client.
 #[cfg(feature = "native")]
 pub struct DiscordClient {
@@ -131,6 +184,7 @@ impl DiscordClient {
         let timestamp = chrono::DateTime::parse_from_rfc3339(&m.timestamp)
             .map(|dt| dt.with_timezone(&chrono::Utc))
             .unwrap_or_else(|_| chrono::Utc::now());
+        let thread = m.thread.map(|t| Self::discord_thread_to_thread_info(&t));
         Message {
             id: m.id.to_string(),
             author,
@@ -140,7 +194,91 @@ impl DiscordClient {
             reactions: vec![],
             reply_to: None,
             edited: m.edited_timestamp.is_some(),
-            thread: None,
+            thread,
+        }
+    }
+
+    /// Map a Discord `ChannelType` (twilight-model) to `poly_client::ChannelType`.
+    fn map_channel_type(dc: twilight_model::channel::ChannelType) -> ChannelType {
+        use twilight_model::channel::ChannelType as DC;
+        match dc {
+            DC::GuildText => ChannelType::Text,
+            DC::GuildVoice | DC::GuildStageVoice => ChannelType::Voice,
+            DC::GuildCategory => ChannelType::Text, // categories are not exposed as channels
+            DC::GuildAnnouncement => ChannelType::Announcement,
+            DC::AnnouncementThread | DC::PublicThread | DC::PrivateThread => ChannelType::Thread,
+            DC::GuildForum | DC::GuildMedia => ChannelType::Forum,
+            _ => ChannelType::Text,
+        }
+    }
+
+    /// Parse `thread_metadata` from a Discord channel object into `poly_client::ThreadMetadata`.
+    fn discord_thread_metadata(m: &api::DiscordThreadMetadata) -> ThreadMetadata {
+        let archived_at = m.archive_timestamp.as_deref().and_then(|ts| {
+            chrono::DateTime::parse_from_rfc3339(ts)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+        });
+        let created_at = m
+            .create_timestamp
+            .as_deref()
+            .and_then(|ts| {
+                chrono::DateTime::parse_from_rfc3339(ts)
+                    .ok()
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+            })
+            .unwrap_or_else(chrono::Utc::now);
+        ThreadMetadata {
+            archived: m.archived,
+            auto_archive_minutes: m.auto_archive_duration,
+            archived_at,
+            locked: m.locked,
+            created_at,
+        }
+    }
+
+    /// Build a `ThreadInfo` from a Discord thread channel object.
+    fn discord_thread_to_thread_info(ch: &api::DiscordChannel) -> ThreadInfo {
+        ThreadInfo {
+            thread_id: ch.id.to_string(),
+            parent_channel_id: ch.parent_id.map(|id| id.to_string()).unwrap_or_default(),
+            message_count: ch.message_count.unwrap_or(0),
+            member_count: ch.member_count.unwrap_or(0),
+        }
+    }
+
+    /// Convert a Discord channel object to a `poly_client::Channel`.
+    ///
+    /// Handles both regular channels and thread/forum channels — sets
+    /// `thread_metadata`, `parent_channel_id`, and `forum_tags` as appropriate.
+    fn discord_channel_to_poly(&self, ch: api::DiscordChannel, server_id: &str) -> Channel {
+        let channel_type = Self::map_channel_type(ch.channel_type);
+        let thread_metadata = ch
+            .thread_metadata
+            .as_ref()
+            .map(Self::discord_thread_metadata);
+        let parent_channel_id = ch.parent_id.map(|id| id.to_string());
+        let forum_tags = ch.available_tags.map(|tags| {
+            tags.into_iter()
+                .map(|t| ForumTag {
+                    id: t.id.to_string(),
+                    name: t.name,
+                    emoji: t.emoji_name.or_else(|| t.emoji_id.map(|id| id.to_string())),
+                    moderated: t.moderated,
+                })
+                .collect::<Vec<_>>()
+        });
+        Channel {
+            id: ch.id.to_string(),
+            name: ch.name,
+            channel_type,
+            server_id: ch.guild_id.map(|id| id.to_string()).unwrap_or_else(|| server_id.to_string()),
+            unread_count: 0,
+            mention_count: 0,
+            last_message_id: None,
+            forum_tags,
+            parent_channel_id,
+            thread_metadata,
         }
     }
 }
@@ -245,36 +383,111 @@ impl ClientBackend for DiscordClient {
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
         use twilight_model::channel::ChannelType as DcChType;
         Ok(self.http.get_guild_channels(server_id).await?.into_iter()
-            .filter(|c| matches!(c.channel_type, DcChType::GuildText | DcChType::GuildAnnouncement))
-            .map(|c| Channel {
-                id: c.id.to_string(),
-                name: c.name,
-                channel_type: ChannelType::Text,
-                server_id: server_id.to_string(),
-                unread_count: 0,
-                mention_count: 0,
-                last_message_id: None,
-                forum_tags: None,
-                parent_channel_id: None,
-                thread_metadata: None,
-            })
+            .filter(|c| matches!(
+                c.channel_type,
+                DcChType::GuildText
+                    | DcChType::GuildAnnouncement
+                    | DcChType::GuildForum
+                    | DcChType::GuildMedia
+            ))
+            .map(|c| self.discord_channel_to_poly(c, server_id))
             .collect())
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
         let ch = self.http.get_channel(id).await?;
-        Ok(Channel {
-            id: ch.id.to_string(),
-            name: ch.name,
-            channel_type: ChannelType::Text,
-            server_id: ch.guild_id.map(|id| id.to_string()).unwrap_or_default(),
-            unread_count: 0,
-            mention_count: 0,
-            last_message_id: None,
-            forum_tags: None,
-            parent_channel_id: None,
-            thread_metadata: None,
-        })
+        let server_id = ch.guild_id.map(|gid| gid.to_string()).unwrap_or_default();
+        Ok(self.discord_channel_to_poly(ch, &server_id))
+    }
+
+    async fn get_forum_posts(
+        &self,
+        forum_channel_id: &str,
+        sort: ForumSortOrder,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ForumPost>> {
+        // Fetch the forum channel to get the guild ID.
+        let forum_ch = self.http.get_channel(forum_channel_id).await?;
+        let guild_id = forum_ch
+            .guild_id
+            .map(|id| id.to_string())
+            .ok_or_else(|| ClientError::Internal("forum channel missing guild_id".into()))?;
+
+        let cap = limit.unwrap_or(50).min(100) as usize;
+
+        // Fetch all active threads in the guild, filter to this forum.
+        let active = self.http.get_active_threads(&guild_id).await?;
+        let mut threads: Vec<api::DiscordChannel> = active
+            .threads
+            .into_iter()
+            .filter(|t| {
+                t.parent_id
+                    .map(|pid| pid.to_string() == forum_channel_id)
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        // Sort per the requested order.
+        match sort {
+            ForumSortOrder::LatestActivity => {
+                // last_message_id is a snowflake — lexicographic sort is chronological.
+                // Since we don't have last_message_id on the thread object yet, we fall
+                // back to insertion order (Discord returns newest-activity first anyway).
+            }
+            ForumSortOrder::CreationDate => {
+                // Sort by thread creation timestamp, newest first.
+                threads.sort_by(|a, b| {
+                    let ts_a = a.thread_metadata.as_ref().and_then(|m| m.create_timestamp.as_deref())
+                        .unwrap_or("");
+                    let ts_b = b.thread_metadata.as_ref().and_then(|m| m.create_timestamp.as_deref())
+                        .unwrap_or("");
+                    ts_b.cmp(ts_a) // descending
+                });
+            }
+        }
+
+        threads.truncate(cap);
+
+        let mut posts = Vec::with_capacity(threads.len());
+        for t in threads {
+            let thread_id = t.id.to_string();
+            // Fetch the starter message (oldest message) for each thread.
+            // Discord returns messages in reverse-chronological order; `after=0`
+            // returns the first message ever posted (after snowflake 0).
+            let starter_message_id = self
+                .http
+                .get_thread_messages(&thread_id, Some(1), Some("0"))
+                .await
+                .ok()
+                .and_then(|msgs| msgs.into_iter().next())
+                .map(|m| m.id.to_string());
+            let applied_tags = t
+                .applied_tags
+                .as_ref()
+                .map(|tags| tags.iter().map(|id| id.to_string()).collect())
+                .unwrap_or_default();
+            posts.push(ForumPost {
+                thread: Self::discord_thread_to_thread_info(&t),
+                applied_tags,
+                starter_message_id,
+            });
+        }
+
+        Ok(posts)
+    }
+
+    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
+        let resp = self.http.get_active_threads(server_id).await?;
+        Ok(resp.threads.into_iter().map(|t| Self::discord_thread_to_thread_info(&t)).collect())
+    }
+
+    async fn get_archived_threads(
+        &self,
+        parent_channel_id: &str,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ThreadInfo>> {
+        let resp = self.http.get_archived_threads_public(parent_channel_id, limit).await?;
+        Ok(resp.threads.into_iter().map(|t| Self::discord_thread_to_thread_info(&t)).collect())
     }
 
     async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
@@ -347,6 +560,13 @@ impl ClientBackend for DiscordClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
+        // TODO(3.3.5): Connect to Discord Gateway WebSocket and parse events.
+        // Thread gateway events to emit when the WS connection is live:
+        //   THREAD_CREATE  → ClientEvent::ChannelUpdated(thread_as_channel)
+        //   THREAD_UPDATE  → ClientEvent::ChannelUpdated(thread_as_channel)
+        //   THREAD_DELETE  → ClientEvent::ChannelUpdated(parent_channel)
+        //     (ClientEvent has no ChannelDeleted variant — emit parent update instead)
+        //   THREAD_LIST_SYNC → ClientEvent::ChannelUpdated for each thread in the payload
         Box::pin(stream::pending())
     }
 

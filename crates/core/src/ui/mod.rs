@@ -673,6 +673,61 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
         });
 }
 
+/// Register test accounts from each compiled-in native plugin into `ClientManager`.
+///
+/// Gated per-plugin feature so production builds without `discord`/`teams`/etc.
+/// compile out the entire block and ship zero test credentials.
+/// Called once at `App` mount via `use_effect`, immediately after
+/// [`register_native_plugin_settings`].
+fn register_native_test_accounts(client_manager: &mut Signal<ClientManager>) {
+    #[cfg(feature = "discord")]
+    {
+        for entry in poly_discord::signup::get_test_accounts() {
+            client_manager.write().register_test_account(*entry);
+        }
+    }
+    #[cfg(feature = "teams")]
+    {
+        for entry in poly_teams::signup::get_test_accounts() {
+            client_manager.write().register_test_account(*entry);
+        }
+    }
+    #[cfg(feature = "matrix")]
+    {
+        for entry in poly_matrix::signup::get_test_accounts() {
+            client_manager.write().register_test_account(*entry);
+        }
+    }
+    #[cfg(feature = "stoat")]
+    {
+        for entry in poly_stoat::signup::get_test_accounts() {
+            client_manager.write().register_test_account(*entry);
+        }
+    }
+    #[cfg(feature = "lemmy")]
+    {
+        for entry in poly_lemmy::signup::get_test_accounts() {
+            client_manager.write().register_test_account(*entry);
+        }
+    }
+    #[cfg(feature = "github")]
+    {
+        for entry in poly_github::signup::get_test_accounts() {
+            client_manager.write().register_test_account(*entry);
+        }
+    }
+    #[cfg(feature = "forgejo")]
+    {
+        for entry in poly_forgejo::signup::get_test_accounts() {
+            client_manager.write().register_test_account(*entry);
+        }
+    }
+    let n = client_manager.read().test_account_entries.len();
+    if n > 0 {
+        tracing::info!("registered {n} test accounts");
+    }
+}
+
 // ── App — async helpers ──────────────────────────────────────────────────────
 
 /// Restore all persisted poly-server accounts from the token store.
@@ -1238,6 +1293,11 @@ pub fn App() -> Element {
     let mut client_manager: Signal<ClientManager> = use_signal(ClientManager::new);
     provide_context(client_manager);
 
+    // ChatData is declared here (before the startup use_effect) so that the
+    // auto-connect helper can capture it by copy in the same effect.
+    let chat_data: Signal<ChatData> = use_signal(ChatData::default);
+    provide_context(chat_data);
+
     // Register all native backend signup entries.  This mirrors the WIT
     // plugin-metadata pattern: the host has no compile-time knowledge of
     // which backends exist — each plugin registers itself once at startup.
@@ -1247,13 +1307,21 @@ pub fn App() -> Element {
     // Plugin settings pages are also registered here unconditionally so the
     // Demo Settings and Poly Server settings pages are always reachable in
     // the Plugin Settings nav, even before the user has activated the plugin.
+    //
+    // Under dev-plugins (discord + teams features), test accounts are also
+    // registered and auto-connected so the app boots pre-authenticated.
     use_effect(move || {
         register_native_signup_entries(&mut client_manager);
         register_native_plugin_settings(&mut client_manager);
+        register_native_test_accounts(&mut client_manager);
+        // NOTE: auto-auth of registered test accounts is intentionally NOT
+        // done here. Early experiments raced with first-paint Signal reads
+        // (FriendsPanel etc.) and crashed the client with an `unreachable`
+        // WASM trap. Test accounts are still registered so they appear in
+        // /signup/test as one-click "Add Account" buttons — that preserves
+        // the dev ergonomics without the crash.
+        let _ = chat_data;
     });
-
-    let chat_data: Signal<ChatData> = use_signal(ChatData::default);
-    provide_context(chat_data);
 
     // Provide app_state as context so child components subscribe independently
     // via use_context() instead of receiving it as a prop (which enables Dioxus

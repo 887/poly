@@ -1,6 +1,7 @@
 //! WASM Component Model guest implementation for the Discord messenger plugin.
 //!
-//! Stub implementation — all methods return "not yet implemented" errors.
+//! Partial real implementation — forum/thread methods route through the host
+//! HTTP bridge; auth remains a stub until 3.3.5 (gateway WebSocket).
 //! DECISION(D21): WASM Plugin Backends.
 
 #![allow(unsafe_code)]
@@ -8,12 +9,25 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 
+use serde::Deserialize;
+
 use crate::wit_bindings::{
     ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
     ClientViewsGuest, Guest, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, PendingHandle,
     PluginManifest, PluginMetadataGuest, SettingsScope, SidebarDeclaration, SidebarLayoutKind,
     export, poly::messenger::host_api, wit,
 };
+
+// ─── Authenticated session state ──────────────────────────────────────────
+
+/// Minimal session data needed to make Discord REST calls.
+#[derive(Clone)]
+struct DiscordSession {
+    /// Bot-prefixed Authorization header value: `"Bot <token>"`.
+    auth_header: String,
+    /// Base URL of the Discord API (default: `https://discord.com`).
+    base_url: String,
+}
 
 // ─── F10 — in-memory state for state-aware context-menu items ─────────────
 
@@ -25,6 +39,8 @@ struct DiscordGuestState {
     blocked_users: HashSet<String>,
     friend_ids: HashSet<String>,
     muted_dms: HashSet<String>,
+    /// Authenticated session, set after `authenticate()` succeeds.
+    session: Option<DiscordSession>,
 }
 
 impl Default for DiscordGuestState {
@@ -35,12 +51,95 @@ impl Default for DiscordGuestState {
             blocked_users: HashSet::new(),
             friend_ids: HashSet::new(),
             muted_dms: HashSet::new(),
+            session: None,
         }
     }
 }
 
 thread_local! {
     static STATE: RefCell<DiscordGuestState> = RefCell::new(DiscordGuestState::default());
+}
+
+// ─── HTTP helpers ──────────────────────────────────────────────────────────
+
+/// Make a GET request through the host HTTP bridge.
+fn host_get(
+    url: &str,
+    auth_header: &str,
+) -> Result<Vec<u8>, wit::ClientError> {
+    let headers = vec![
+        ("Authorization".to_string(), auth_header.to_string()),
+        ("Content-Type".to_string(), "application/json".to_string()),
+    ];
+    let resp = host_api::http_request("GET", url, &headers, None)
+        .map_err(wit::ClientError::Internal)?;
+    if resp.status < 200 || resp.status >= 300 {
+        return Err(wit::ClientError::Network(format!("HTTP {}", resp.status)));
+    }
+    Ok(resp.body)
+}
+
+fn parse_json<T: for<'de> Deserialize<'de>>(body: &[u8]) -> Result<T, wit::ClientError> {
+    serde_json::from_slice(body)
+        .map_err(|e| wit::ClientError::Internal(format!("JSON parse error: {e}")))
+}
+
+/// Retrieve the current session or return `AuthFailed`.
+fn current_session() -> Result<DiscordSession, wit::ClientError> {
+    STATE.with(|s| {
+        s.borrow()
+            .session
+            .clone()
+            .ok_or_else(|| wit::ClientError::AuthFailed("not authenticated".into()))
+    })
+}
+
+// ─── Discord wire types (WASM-side, minimal) ──────────────────────────────
+
+/// Minimal Discord channel object for WASM deserialization.
+#[derive(Debug, Deserialize)]
+struct WasmDiscordChannel {
+    pub id: String,
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub guild_id: Option<String>,
+    #[serde(default)]
+    pub message_count: Option<u32>,
+    #[serde(default)]
+    pub member_count: Option<u32>,
+    #[serde(default)]
+    pub applied_tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub thread_metadata: Option<WasmThreadMetadata>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WasmThreadMetadata {
+    /// ISO 8601 timestamp of when the thread was created (used for sort-by-creation-date).
+    #[serde(default)]
+    pub create_timestamp: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WasmActiveThreadsResponse {
+    pub threads: Vec<WasmDiscordChannel>,
+    // `has_more` from Discord is intentionally not captured here —
+    // pagination of active threads is a future enhancement.
+}
+
+#[derive(Debug, Deserialize)]
+struct WasmArchivedThreadsResponse {
+    pub threads: Vec<WasmDiscordChannel>,
+}
+
+fn wasm_thread_to_info(t: &WasmDiscordChannel) -> wit::ThreadInfo {
+    wit::ThreadInfo {
+        thread_id: t.id.clone(),
+        parent_channel_id: t.parent_id.clone().unwrap_or_default(),
+        message_count: t.message_count.unwrap_or(0),
+        member_count: t.member_count.unwrap_or(0),
+    }
 }
 
 struct DiscordPlugin;
@@ -195,7 +294,12 @@ impl Guest for DiscordPlugin {
     }
 
     fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
-        // TODO(3.3.5): Parse Discord Gateway WebSocket events, call emit-event
+        // TODO(3.3.5): Parse Discord Gateway WebSocket events, call emit-event.
+        // Thread gateway events to handle when gateway is connected:
+        //   THREAD_CREATE  → emit ChannelUpdated(thread) so host channel list refreshes.
+        //   THREAD_UPDATE  → emit ChannelUpdated(thread) for metadata/archived-state changes.
+        //   THREAD_DELETE  → emit ChannelUpdated(parent) — no ChannelDeleted event in WIT.
+        //   THREAD_LIST_SYNC → emit ChannelUpdated for each thread in the bulk payload.
     }
 
     fn get_backend_type() -> String {
@@ -235,30 +339,96 @@ impl Guest for DiscordPlugin {
     }
 
     fn get_forum_posts(
-        _forum_channel_id: String,
-        _sort: wit::ForumSortOrder,
-        _limit: Option<u32>,
+        forum_channel_id: String,
+        sort: wit::ForumSortOrder,
+        limit: Option<u32>,
     ) -> Result<Vec<wit::ForumPost>, wit::ClientError> {
-        Err(wit::ClientError::NotSupported(
-            "get_forum_posts not implemented".to_string(),
-        ))
+        let sess = current_session()?;
+
+        // Fetch the forum channel to get its guild_id.
+        let ch_body = host_get(
+            &format!("{}/api/v10/channels/{forum_channel_id}", sess.base_url),
+            &sess.auth_header,
+        )?;
+        let forum_ch: WasmDiscordChannel = parse_json(&ch_body)?;
+        let guild_id = forum_ch
+            .guild_id
+            .ok_or_else(|| wit::ClientError::Internal("forum channel missing guild_id".into()))?;
+
+        let cap = limit.unwrap_or(50).min(100) as usize;
+
+        // Fetch all active threads in the guild.
+        let body = host_get(
+            &format!("{}/api/v10/guilds/{guild_id}/threads/active", sess.base_url),
+            &sess.auth_header,
+        )?;
+        let active: WasmActiveThreadsResponse = parse_json(&body)?;
+
+        let mut threads: Vec<WasmDiscordChannel> = active
+            .threads
+            .into_iter()
+            .filter(|t| {
+                t.parent_id.as_deref() == Some(&forum_channel_id)
+            })
+            .collect();
+
+        match sort {
+            wit::ForumSortOrder::LatestActivity => {
+                // Discord returns newest-activity first by default; keep order.
+            }
+            wit::ForumSortOrder::CreationDate => {
+                threads.sort_by(|a, b| {
+                    let ts_a = a.thread_metadata.as_ref().and_then(|m| m.create_timestamp.as_deref()).unwrap_or("");
+                    let ts_b = b.thread_metadata.as_ref().and_then(|m| m.create_timestamp.as_deref()).unwrap_or("");
+                    ts_b.cmp(ts_a)
+                });
+            }
+        }
+
+        threads.truncate(cap);
+
+        let posts = threads
+            .into_iter()
+            .map(|t| {
+                let applied_tags = t.applied_tags.clone().unwrap_or_default();
+                wit::ForumPost {
+                    thread: wasm_thread_to_info(&t),
+                    applied_tags,
+                    starter_message_id: None,
+                }
+            })
+            .collect();
+
+        Ok(posts)
     }
 
     fn get_active_threads(
-        _server_id: String,
+        server_id: String,
     ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
-        Err(wit::ClientError::NotSupported(
-            "get_active_threads not implemented".to_string(),
-        ))
+        let sess = current_session()?;
+        let body = host_get(
+            &format!("{}/api/v10/guilds/{server_id}/threads/active", sess.base_url),
+            &sess.auth_header,
+        )?;
+        let resp: WasmActiveThreadsResponse = parse_json(&body)?;
+        Ok(resp.threads.iter().map(wasm_thread_to_info).collect())
     }
 
     fn get_archived_threads(
-        _parent_channel_id: String,
-        _limit: Option<u32>,
+        parent_channel_id: String,
+        limit: Option<u32>,
     ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
-        Err(wit::ClientError::NotSupported(
-            "get_archived_threads not implemented".to_string(),
-        ))
+        let sess = current_session()?;
+        let cap = limit.unwrap_or(50).min(100);
+        let body = host_get(
+            &format!(
+                "{}/api/v10/channels/{parent_channel_id}/threads/archived/public?limit={cap}",
+                sess.base_url
+            ),
+            &sess.auth_header,
+        )?;
+        let resp: WasmArchivedThreadsResponse = parse_json(&body)?;
+        Ok(resp.threads.iter().map(wasm_thread_to_info).collect())
     }
 }
 
