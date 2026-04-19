@@ -1299,6 +1299,13 @@ pub async fn restore_server_channel(
     chat_data.write().channels = channels;
 
     if let Some(ref ch) = target {
+        // Stale-channel fallback: when the URL's channel_id is missing,
+        // `target` is the first text channel (different from the URL).
+        // Without setting selected_channel here, ChatView would render with
+        // the URL's stale id while caller's nav.replace is still scheduling,
+        // and load attempts would target a non-existent channel. The caller
+        // races to nav.replace, but we need state to track the fallback
+        // synchronously so render uses the right channel.
         app_state.write().nav.selected_channel._set_from_route_sync_only(Some(ch.id.clone()));
         chat_data.write().current_channel = Some(ch.clone());
 
