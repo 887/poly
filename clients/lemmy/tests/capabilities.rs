@@ -16,13 +16,6 @@ fn lemmy_declares_messaging_no_social_with_inbox() {
     assert_eq!(caps.friends, FriendModel::None);
     assert_eq!(caps.notifications, NotificationSupport::Inbox);
     assert!(matches!(caps.voice, VoiceSupport::None));
-    assert!(caps.attachments);
-    assert!(caps.search_messages);
-    assert!(caps.reactions);
-    assert!(!caps.create_server);
-    assert!(!caps.create_channel);
-    assert!(!caps.presence);
-    assert!(!caps.typing_indicators);
 }
 
 /// WP-10 — plugin-vs-slug parity.

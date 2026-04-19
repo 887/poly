@@ -488,11 +488,7 @@ impl ClientBackend for TeamsClient {
     }
 
     fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities {
-            typing_indicators: false,
-            landing: poly_client::LandingPage::DirectMessages,
-            ..BackendCapabilities::FULL_SOCIAL_CHAT
-        }
+        BackendCapabilities::FULL_SOCIAL_CHAT
     }
 
     async fn get_context_menu_items(

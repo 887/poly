@@ -326,7 +326,6 @@ impl ClientBackend for ForgejoClient {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            search_messages: true,
             landing: poly_client::LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         }

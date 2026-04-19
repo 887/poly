@@ -16,10 +16,6 @@ fn teams_declares_full_social_chat_without_typing() {
     assert_eq!(caps.friends, FriendModel::Full);
     assert_eq!(caps.notifications, NotificationSupport::Activity);
     assert!(matches!(caps.voice, VoiceSupport::Full));
-    assert!(caps.presence);
-    assert!(!caps.typing_indicators, "Teams should disable typing indicators");
-    assert!(caps.reactions);
-    assert!(caps.attachments);
 }
 
 /// WP-10 — plugin-vs-slug parity.

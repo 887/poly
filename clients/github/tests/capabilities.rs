@@ -16,13 +16,6 @@ fn github_declares_read_only_feed_with_activity_inbox() {
     assert_eq!(caps.friends, FriendModel::None);
     assert_eq!(caps.notifications, NotificationSupport::Activity);
     assert!(matches!(caps.voice, VoiceSupport::None));
-    assert!(caps.search_messages);
-    assert!(!caps.presence);
-    assert!(!caps.typing_indicators);
-    assert!(!caps.reactions);
-    assert!(!caps.attachments);
-    assert!(!caps.create_server);
-    assert!(!caps.create_channel);
 }
 
 /// WP-10 — plugin-vs-slug parity.

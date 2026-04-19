@@ -1953,8 +1953,7 @@ fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -
     // Backends that don't support creating a server (Matrix, Lemmy, HN…)
     // render an unsupported-feature placeholder instead of redirecting —
     // redirect chains from use_effect caused main-thread deadlocks.
-    let caps = poly_client::capabilities_for_slug(&backend);
-    if !caps.create_server {
+    if !poly_client::slug_supports_creating_server(&backend) {
         return rsx! {
             FeatureUnsupportedPlaceholder {
                 backend_slug: backend.clone(),

@@ -17,8 +17,6 @@ fn discord_declares_full_social_chat() {
     assert_eq!(caps.friends, FriendModel::Full);
     assert_eq!(caps.notifications, NotificationSupport::Activity);
     assert!(matches!(caps.voice, VoiceSupport::Full));
-    assert!(caps.presence);
-    assert!(caps.typing_indicators);
 }
 
 /// WP-10 — plugin-vs-slug parity. If someone tweaks Discord's declaration

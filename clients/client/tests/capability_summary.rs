@@ -1,10 +1,9 @@
-//! Regression test for `BackendCapabilities::shape_rows()` and
-//! `feature_flags()` — the two helpers that drive the Settings > Plugins
-//! capability details panel.
+//! Regression test for `BackendCapabilities::shape_rows()` — the helper that
+//! drives the Settings > Plugins capability details panel.
 //!
-//! These helpers return FTL key pairs so the UI can render a human-readable
+//! This helper returns FTL key pairs so the UI can render a human-readable
 //! summary without duplicating the match-on-enum logic in a dozen places.
-//! Pinning them here prevents silent drift where a variant is added to
+//! Pinning the rows here prevents silent drift where a variant is added to
 //! `MessagingModel` / `NotificationSupport` / etc. but the summary rows
 //! silently fall through to a wrong label.
 
@@ -64,46 +63,3 @@ fn matrix_has_no_voice_even_though_social_chat() {
     assert_eq!(rows[4].value_key, "cap-value-voice-none");
 }
 
-#[test]
-fn feature_flags_order_is_stable_for_ui_rendering() {
-    let flags = BackendCapabilities::FULL_SOCIAL_CHAT.feature_flags();
-    let keys: Vec<&'static str> = flags.iter().map(|(k, _)| *k).collect();
-    assert_eq!(
-        keys,
-        vec![
-            "cap-flag-presence",
-            "cap-flag-typing",
-            "cap-flag-reactions",
-            "cap-flag-search",
-            "cap-flag-attachments",
-            "cap-flag-create-server",
-            "cap-flag-create-channel",
-        ]
-    );
-}
-
-#[test]
-fn feature_flags_reflect_hackernews_everything_off() {
-    let flags = capabilities_for_slug("hackernews").feature_flags();
-    for (key, supported) in &flags {
-        assert!(!supported, "hackernews should not advertise {key}");
-    }
-}
-
-#[test]
-fn feature_flags_reflect_discord_all_on() {
-    let flags = capabilities_for_slug("discord").feature_flags();
-    for (key, supported) in &flags {
-        assert!(supported, "discord should advertise {key}");
-    }
-}
-
-#[test]
-fn feature_flags_reflect_teams_typing_disabled() {
-    let flags = capabilities_for_slug("teams").feature_flags();
-    let typing = flags
-        .iter()
-        .find(|(k, _)| *k == "cap-flag-typing")
-        .expect("typing flag present");
-    assert!(!typing.1, "teams has no typing indicators");
-}

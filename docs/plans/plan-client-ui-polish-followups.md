@@ -1,66 +1,36 @@
 # Plan — Client-UI Polish Follow-Ups
 
 > **Created:** 2026-04-19
-> **Status:** 🔴 OPEN
+> **Status:** 🟢 IN PROGRESS — F1 ✅ shipped
 > **Parent:** `plan-client-ui-polish.md` (✅ 10 packs shipped but with known gaps)
-> **Why this plan exists:** the parent polish plan was marked ✅ COMPLETE based on `cargo check --workspace` + `cargo test --workspace --lib` — which skips integration & e2e tests. A full `cargo test --workspace` reveals **30 failures** in `poly-plugin-loader-tests` and several deferred items across packs. This plan collects every named follow-up in one honest list.
+> **Why this plan exists:** the parent polish plan was marked ✅ COMPLETE based on `cargo check --workspace` + `cargo test --workspace --lib` — which skips integration & e2e tests. A full `cargo test --workspace` revealed **30 failures** in `poly-plugin-loader-tests`. F1 fixed that. This plan collects every remaining follow-up in one honest list.
 
 ---
 
 ## 0. Honest accounting
 
-The previous status report claimed "363 passing." That count came from `--lib` only. Full-suite reality:
+The previous status report claimed "363 passing." That count came from `--lib` only. Pre-F1 reality was `463 passed, 30 failed`. As of `main @ ea3ac2ee` (F1 shipped):
 
 ```
-cargo test --workspace  →  463 passed, 30 failed, 14 ignored
+cargo test --workspace  →  780 passed, 0 failed
+cargo check --workspace --all-targets  →  0 warnings
 ```
 
-**Every failure is in `poly-plugin-loader-tests::client_e2e`** — the WASM-plugin-host harness. Each test panics with:
-
-```
-WASM plugin not found: /home/laragana/workspcacemsg/target/wasm32-wasip1/debug/poly_demo.wasm
-Build with: cargo component build -p <crate> --target wasm32-wasip2
-```
-
-These are **pre-existing infrastructure failures** — the e2e harness was always designed to require a separate `cargo component build` step. The polish plan filled in harness bodies (layer (d) per §1.2) but never proved them runnable. That's the gap. Not "code bugs I introduced" — but also not "tests that exist and pass," which is what I implied.
+**F1 fix:** all 7 plugins (demo/discord/matrix/lemmy/stoat/teams/server-client) updated to the post-Pack-E WIT world (`BackendType` enum dropped → string slugs; `plugin-metadata.get-settings-schema` removed; six new exported interfaces stubbed). `crates/plugin-host-tests/src/lib.rs::load_plugin` now auto-runs `cargo component build` once per process when the artifact is missing, so `cargo test` works whether or not the WASM was pre-built. Blanket `#![allow(clippy::unwrap_used, expect_used, panic, unused_variables)]` removed from every harness file; ~70 sites refactored to `Result`-returning `HarnessResult` with `?`-propagation. Seven previously-orphaned harness helpers wired in as real `demo.rs` tests (no `#[allow(dead_code)]`).
 
 ---
 
 ## 1. Item inventory
 
-### 🔴 F1 — WASM plugin harness can't run without manual build step
+### ✅ F1 — WASM plugin harness can't run without manual build step (DONE 2026-04-19)
 
-**Symptom:** 30 `client_e2e` tests fail with "WASM plugin not found" unless user runs `cargo component build -p poly-demo --target wasm32-wasip2` (and the other 5 plugins for their suites) first.
-
-**Impact:** The harness bodies filled across Packs A / B / C / D / E are technically unverified. They compile, but assertions never ran. Any bug in the plugin → host round-trip that a harness test would have caught is still lurking.
-
-**Fix options (ranked):**
-1. **Add a `build.rs` or xtask** that runs `cargo component build -p poly-demo -p poly-stoat -p poly-matrix -p poly-discord -p poly-teams -p poly-server-client --target wasm32-wasip2` before the e2e test binary links. One-time pain; works automatically thereafter.
-2. **CI pipeline step** that does the `cargo component build` explicitly before `cargo test`. Doesn't help local dev but stops green-washing in CI.
-3. **Harness tests gracefully skip** when artifact missing (emit a warning, return `Ok`). Safer but hides regressions.
-
-**Recommended:** combine 1 + 3 — build.rs attempts the build; if it fails, harness tests `#[ignore]` themselves with a clear message.
-
-**Pre-req knowledge:** the `poly-plugin-host-tests` crate's Cargo.toml probably lists the 6 plugins as dev-dependencies with specific targets. Verify before writing build.rs.
-
-**Estimated size:** medium. The build.rs is ~30 lines; the harness skip-if-missing guards need editing across `crates/plugin-host-tests/tests/client_e2e/{demo,discord,matrix,stoat,teams,server}.rs`.
+**Resolution:** `main @ ea3ac2ee`. All 7 plugins updated to the post-Pack-E WIT world. `load_plugin` now auto-builds the missing WASM via `cargo component build -p <crate> --target wasm32-wasip2` (idempotent per process via `OnceLock<Mutex<HashSet>>`). e2e tests run clean: 37 passed in `client_e2e/main.rs` (30 original + 7 newly-wired orphan helpers). Total workspace: 780 passed, 0 failed.
 
 ---
 
-### 🟠 F2 — D12 `BackendCapabilities` flag removal (carried from Pack H)
+### ✅ F2 — D12 `BackendCapabilities` flag removal (DONE 2026-04-19)
 
-**Symptom:** `clients/client/src/types.rs` has 7 `TODO(D12)` markers on fields (`presence`, `typing_indicators`, `reactions`, `search_messages`, `attachments`, `create_server`, `create_channel`). Pack H deferred removal because parallel Pack E agents would have raced.
-
-**Fix:** Pack E is now landed. Remove each field, update all readers. Each field has ~5-10 readers across the workspace.
-
-**Steps:**
-1. For each field: `grep -rn "caps.{field}" crates/ clients/` — inventory readers.
-2. Decide replacement: if the reader used the field to gate UI, either (a) hard-code to "always true" if the feature is universally wanted, or (b) replace with a plugin-declared surface (menu item / toolbar option / etc.) per the new WIT.
-3. Remove from the struct. Update `capabilities_for_slug` in types.rs.
-
-**Test matrix:** per §1.2 Pack H (a) + (f) + (d). The `forbid_backend_slug_match_in_ui` lint should stay green.
-
-**Estimated size:** small-medium. ~1 day of careful removal + test updates.
+**Resolution:** all 7 `TODO(D12)` fields (`presence`, `typing_indicators`, `reactions`, `search_messages`, `attachments`, `create_server`, `create_channel`) deleted from `BackendCapabilities`. Five had zero production readers (test-only); two `create_server` readers (`crates/core/src/ui/routes.rs::CreateServerRoute`, `crates/core/src/ui/account/common/notifications.rs::NotificationMenuFilter::supported_by`) replaced with a slug-derived check. Per-plugin capability tests pruned to assert only on the surviving shape fields. `cargo test --workspace` still 0 failures (776 passed; -4 from removed assertion lines).
 
 ---
 

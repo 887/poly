@@ -37,8 +37,7 @@ impl BackendId {
     /// should prefer the plugin-provided string. This method stays as a
     /// fallback for call sites that only have a `BackendType` (slug) in
     /// hand, and simply returns the slug itself — never a hardcoded brand
-    /// name. TODO(D12): migrate remaining callers to the plugin-provided
-    /// `backend_name()` and delete this method.
+    /// name.
     pub fn display_name(&self) -> &str {
         self.0.as_str()
     }
@@ -78,30 +77,30 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
         "hackernews" => BackendCapabilities::READ_ONLY_FEED,
         "github" | "forgejo" => BackendCapabilities {
             notifications: NotificationSupport::Activity,
-            search_messages: true,
             landing: LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         },
-        "lemmy" | "demo_forum" => BackendCapabilities {
-            reactions: true,
-            ..BackendCapabilities::MESSAGING_NO_SOCIAL
-        },
+        "lemmy" | "demo_forum" => BackendCapabilities::MESSAGING_NO_SOCIAL,
         "matrix" => BackendCapabilities {
             voice: VoiceSupport::None,
-            create_server: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "stoat" => BackendCapabilities {
             voice: VoiceSupport::None,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
-        "teams" => BackendCapabilities {
-            typing_indicators: false,
-            ..BackendCapabilities::FULL_SOCIAL_CHAT
-        },
+        "teams" => BackendCapabilities::FULL_SOCIAL_CHAT,
         "discord" | "demo" | "poly" => BackendCapabilities::FULL_SOCIAL_CHAT,
         _ => BackendCapabilities::READ_ONLY_FEED,
     }
+}
+
+/// Returns `true` for backends that allow creating a server/workspace in the
+/// host UI (Discord, Demo, Poly). All other backends show the unsupported
+/// placeholder instead of the create-server form.
+#[must_use]
+pub fn slug_supports_creating_server(slug: &str) -> bool {
+    matches!(slug, "discord" | "demo" | "poly")
 }
 
 /// WP-6 — Per-plugin terminology.
@@ -555,20 +554,9 @@ pub enum VoiceSupport {
 ///
 /// See `docs/plans/phase-2.20-plugin-capabilities-plan.md` for rationale.
 ///
-/// # WP 7 inventory — D12 minimal flag set
-///
-/// Per D12 of `docs/plans/plan-client-ui-surface.md`, the source of truth
-/// for "does this backend expose X?" is now the plugin's declared items
-/// (menus/settings/sidebar/composer). `BackendCapabilities` is kept as a
-/// *minimal* shape summary — messaging model, DMs, friends, notifications,
-/// voice, landing page — plus a few feature flags used by host-owned
-/// affordances that have not yet been moved behind a plugin declaration.
-///
-/// The fields below are candidates for deletion once their call sites
-/// migrate to reading plugin-declared items directly. Each TODO(D12) tag
-/// marks a field that is *potentially* deletable but still has live
-/// readers elsewhere in the workspace — do not remove without following
-/// the reader graph.
+/// This struct is the minimal messaging-shape summary used by the host.
+/// It covers messaging model, DMs, friends, notifications, voice, and
+/// landing page — the dimensions that drive host-owned UI affordances.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackendCapabilities {
     pub messaging: MessagingModel,
@@ -577,26 +565,6 @@ pub struct BackendCapabilities {
     pub notifications: NotificationSupport,
     pub voice: VoiceSupport,
     pub landing: LandingPage,
-    // TODO(D12): presence — gate behind plugin-declared sidebar/account-bar
-    // items; delete once no host code reads this flag directly.
-    pub presence: bool,
-    // TODO(D12): typing_indicators — gate behind plugin-declared composer
-    // hooks (WP 6); delete once no host composer reads this flag directly.
-    pub typing_indicators: bool,
-    // TODO(D12): reactions — move to plugin-declared per-message action
-    // items (WP 6 extension); delete once migration completes.
-    pub reactions: bool,
-    // TODO(D12): search_messages — move to plugin-declared search surface;
-    // delete once search UI stops reading this flag.
-    pub search_messages: bool,
-    // TODO(D12): attachments — move to plugin-declared composer hooks
-    // (WP 6); delete once composer stops reading this flag directly.
-    pub attachments: bool,
-    // TODO(D12): create_server / create_channel — replaced by plugin-
-    // declared sidebar action items (WP 4). Delete once sidebar code
-    // no longer checks these flags.
-    pub create_server: bool,
-    pub create_channel: bool,
 }
 
 impl BackendCapabilities {
@@ -608,13 +576,6 @@ impl BackendCapabilities {
         notifications: NotificationSupport::None,
         voice: VoiceSupport::None,
         landing: LandingPage::FirstServer,
-        presence: false,
-        typing_indicators: false,
-        reactions: false,
-        search_messages: false,
-        attachments: false,
-        create_server: false,
-        create_channel: false,
     };
 
     /// Forum-style messaging with an inbox but no friends / DMs / voice (Lemmy).
@@ -625,13 +586,6 @@ impl BackendCapabilities {
         notifications: NotificationSupport::Inbox,
         voice: VoiceSupport::None,
         landing: LandingPage::FirstServer,
-        presence: false,
-        typing_indicators: false,
-        reactions: false,
-        search_messages: true,
-        attachments: true,
-        create_server: false,
-        create_channel: false,
     };
 
     /// `true` if this backend should render with the forum-style UI layout:
@@ -690,13 +644,6 @@ impl BackendCapabilities {
         notifications: NotificationSupport::Activity,
         voice: VoiceSupport::Full,
         landing: LandingPage::DirectMessages,
-        presence: true,
-        typing_indicators: true,
-        reactions: true,
-        search_messages: true,
-        attachments: true,
-        create_server: true,
-        create_channel: true,
     };
 }
 
@@ -761,20 +708,6 @@ impl BackendCapabilities {
         ]
     }
 
-    /// Return the boolean feature flags as `(label_key, supported)` pairs.
-    /// Pair order is stable so tests and UI can rely on it.
-    #[must_use]
-    pub fn feature_flags(&self) -> Vec<(&'static str, bool)> {
-        vec![
-            ("cap-flag-presence", self.presence),
-            ("cap-flag-typing", self.typing_indicators),
-            ("cap-flag-reactions", self.reactions),
-            ("cap-flag-search", self.search_messages),
-            ("cap-flag-attachments", self.attachments),
-            ("cap-flag-create-server", self.create_server),
-            ("cap-flag-create-channel", self.create_channel),
-        ]
-    }
 }
 
 /// A plugin's self-declared manifest.

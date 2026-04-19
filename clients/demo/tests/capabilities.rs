@@ -26,7 +26,6 @@ fn demo_forum_is_messaging_no_social() {
     assert_eq!(caps.messaging, MessagingModel::Full);
     assert_eq!(caps.dms, DmSupport::None);
     assert_eq!(caps.notifications, NotificationSupport::Inbox);
-    assert!(caps.reactions);
 }
 
 /// WP-10 — plugin-vs-slug parity for all three demo variants.

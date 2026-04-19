@@ -22,27 +22,19 @@ fn expected(slug: &str) -> BackendCapabilities {
         "hackernews" => BackendCapabilities::READ_ONLY_FEED,
         "github" => BackendCapabilities {
             notifications: NotificationSupport::Activity,
-            search_messages: true,
             landing: LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         },
-        "lemmy" | "demo_forum" => BackendCapabilities {
-            reactions: true,
-            ..BackendCapabilities::MESSAGING_NO_SOCIAL
-        },
+        "lemmy" | "demo_forum" => BackendCapabilities::MESSAGING_NO_SOCIAL,
         "matrix" => BackendCapabilities {
             voice: VoiceSupport::None,
-            create_server: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "stoat" => BackendCapabilities {
             voice: VoiceSupport::None,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
-        "teams" => BackendCapabilities {
-            typing_indicators: false,
-            ..BackendCapabilities::FULL_SOCIAL_CHAT
-        },
+        "teams" => BackendCapabilities::FULL_SOCIAL_CHAT,
         "discord" | "demo" | "poly" => BackendCapabilities::FULL_SOCIAL_CHAT,
         _ => BackendCapabilities::READ_ONLY_FEED,
     }
@@ -130,9 +122,4 @@ fn full_social_chat_has_all_social_features() {
     assert!(matches!(caps.friends, FriendModel::Full));
     assert!(!matches!(caps.notifications, NotificationSupport::None));
     assert!(matches!(caps.voice, VoiceSupport::Full));
-    assert!(caps.presence);
-    assert!(caps.typing_indicators);
-    assert!(caps.reactions);
-    assert!(caps.create_server);
-    assert!(caps.create_channel);
 }

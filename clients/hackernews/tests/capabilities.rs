@@ -17,12 +17,6 @@ fn hackernews_declares_read_only_feed() {
     assert_eq!(caps.friends, FriendModel::None);
     assert_eq!(caps.notifications, NotificationSupport::None);
     assert!(matches!(caps.voice, VoiceSupport::None));
-    assert!(!caps.presence);
-    assert!(!caps.typing_indicators);
-    assert!(!caps.reactions);
-    assert!(!caps.attachments);
-    assert!(!caps.create_server);
-    assert!(!caps.create_channel);
 }
 
 /// WP-10 — plugin-vs-slug parity.

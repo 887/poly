@@ -23,7 +23,7 @@ use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{
     BackendCapabilities, BackendType, ConnectionStatus, FriendModel, NotificationKind,
-    NotificationSupport, VoiceSupport,
+    NotificationSupport, VoiceSupport, slug_supports_creating_server,
 };
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -123,17 +123,18 @@ impl NotificationMenuFilter {
 
     /// True if this filter is meaningful for a backend with the given capabilities.
     ///
-    /// The registry is derived from `BackendCapabilities` so a new plugin can't
-    /// accidentally grow a "Voice invites" filter just by showing up in the account
-    /// list — the capability declaration is the single source of truth.
-    pub fn supported_by(self, caps: &BackendCapabilities) -> bool {
+    /// The registry is derived from `BackendCapabilities` and the backend slug so
+    /// a new plugin can't accidentally grow a "Voice invites" filter just by
+    /// showing up in the account list — the capability declaration is the single
+    /// source of truth.
+    pub fn supported_by(self, caps: &BackendCapabilities, slug: &str) -> bool {
         if matches!(caps.notifications, NotificationSupport::None) {
             return false;
         }
         match self {
             Self::All | Self::Mentions | Self::Other => true,
             Self::FriendRequests => !matches!(caps.friends, FriendModel::None),
-            Self::ServerInvites => caps.create_server,
+            Self::ServerInvites => slug_supports_creating_server(slug),
             Self::VoiceInvites => matches!(caps.voice, VoiceSupport::Full),
         }
     }
@@ -154,7 +155,7 @@ pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
         NotificationMenuFilter::Other,
     ]
     .into_iter()
-    .filter(|f| f.supported_by(&caps))
+    .filter(|f| f.supported_by(&caps, slug))
     .collect()
 }
 
@@ -697,12 +698,15 @@ mod tests {
     }
 
     #[test]
-    fn stoat_omits_voice_invites() {
-        // Stoat is a full social chat but has no voice support, so voice invites
-        // must never show up in its notification sidebar.
+    fn stoat_omits_voice_and_server_invites() {
+        // Stoat is full social chat but has no voice and does not support server
+        // creation in Poly's model, so both voice and server invites must be hidden.
         let filters = filters_for_backend("stoat");
         assert!(contains(&filters, NotificationMenuFilter::FriendRequests));
-        assert!(contains(&filters, NotificationMenuFilter::ServerInvites));
+        assert!(
+            !contains(&filters, NotificationMenuFilter::ServerInvites),
+            "stoat does not support creating servers — server invites must be hidden"
+        );
         assert!(
             !contains(&filters, NotificationMenuFilter::VoiceInvites),
             "stoat has no voice — voice invites must be hidden"

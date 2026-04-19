@@ -16,9 +16,6 @@ fn stoat_declares_full_social_chat_without_voice() {
     assert_eq!(caps.friends, FriendModel::Full);
     assert_eq!(caps.notifications, NotificationSupport::Activity);
     assert!(matches!(caps.voice, VoiceSupport::None));
-    assert!(caps.presence);
-    assert!(caps.typing_indicators);
-    assert!(caps.reactions);
 }
 
 /// WP-10 — plugin-vs-slug parity.
