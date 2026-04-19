@@ -65,6 +65,12 @@ tokio = { version = "1", default-features = false, features = [
 futures = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 
+# HTTP — works on both native and wasm32-unknown-unknown (uses fetch on web).
+reqwest = { workspace = true, features = [
+    "json",
+    "multipart",
+], optional = true }
+
 # Utilities
 chrono = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
@@ -74,14 +80,9 @@ tracing = { workspace = true, optional = true }
 [target.'cfg(target_os = "wasi")'.dependencies]
 wit-bindgen = { workspace = true }
 
-# Native-only dependencies: reqwest uses native-tls (OpenSSL on Linux) and
-# tokio-tungstenite pulls in native-tls → openssl-sys. Gate them out of
-# any wasm build so openssl-sys is never a dependency on wasm32-wasip2.
+# tokio-tungstenite pulls in native-tls → openssl-sys, which fails on any
+# wasm target. Gate it out of all wasm builds (web + WASI plugin).
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-reqwest = { workspace = true, features = [
-    "json",
-    "multipart",
-], optional = true }
 tokio-tungstenite = { workspace = true, features = [
     "native-tls",
 ], optional = true }
