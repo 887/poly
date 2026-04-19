@@ -315,24 +315,8 @@ pub fn FavoritesBar() -> Element {
                 div { class: "sidebar-spacer" }
             }
 
-            // Footer: agent + search + settings buttons float at bottom
+            // Footer: search + agent + settings buttons float at bottom
             div { class: "sidebar-footer",
-                // Agent button — navigates to the Agent page (integrations + profile)
-                {
-                    let is_agent = current_view == View::Agent;
-                    rsx! {
-                        div {
-                            class: if is_agent { "server-icon active" } else { "server-icon" },
-                            onclick: move |_| {
-                                close_mobile_drawer();
-                                crate::nav!(Route::AgentRoute);
-                            },
-                            title: "{t(\"nav-agent\")}",
-                            div { class: "icon-agent", "🤖" }
-                        }
-                    }
-                }
-
                 // Global Search button — context-aware: when coming from an account page,
                 // navigates to account-scoped search (pre-filtered to that account).
                 // When on a non-account page (settings, root, etc.), navigates to global search.
@@ -361,6 +345,22 @@ pub fn FavoritesBar() -> Element {
                             },
                             title: "{t(\"nav-search\")}",
                             div { class: "icon-search", "🔍" }
+                        }
+                    }
+                }
+
+                // Agent button — navigates to the Agent page (integrations + profile)
+                {
+                    let is_agent = current_view == View::Agent;
+                    rsx! {
+                        div {
+                            class: if is_agent { "server-icon active" } else { "server-icon" },
+                            onclick: move |_| {
+                                close_mobile_drawer();
+                                crate::nav!(Route::AgentRoute);
+                            },
+                            title: "{t(\"nav-agent\")}",
+                            div { class: "icon-agent", "🤖" }
                         }
                     }
                 }

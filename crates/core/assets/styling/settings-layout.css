@@ -420,3 +420,10 @@
     font-size: 14px;
     margin-bottom: 16px;
 }
+
+/* Two-line label+description body inside an integration feature row */
+.agent-feature-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}

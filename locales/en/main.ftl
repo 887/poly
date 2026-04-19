@@ -947,3 +947,28 @@ ui-sidebar-repo-issues = Issues
 ui-sidebar-repo-pulls = Pull Requests
 ui-sidebar-repo-discussions = Discussions
 
+
+# /agent page
+nav-agent = Agent
+agent-page-title = Agent
+agent-search-placeholder = Search agent settings…
+agent-section-integrations = Integrations
+agent-section-integrations-desc = Hand off Poly's tools to your AI assistant via MCP. No API key needed — Poly runs as an MCP server you add to the Claude app (or any MCP-compatible client).
+agent-section-profile = Agent Profile
+agent-section-profile-desc = Your shareable handshake card. Other Poly users' agents can ask yours for a quick intro before reaching out — saves the small-talk and gets to the point faster.
+agent-profile-textarea-label = Profile
+agent-profile-textarea-placeholder = e.g. "Hi, I'm Alex — backend engineer at Aareon, into Rust + WASM, kayaking, and indie horror games. Always up for a chat about plugin architectures."
+agent-profile-save = Save profile
+agent-profile-visibility-note = Visible to other Poly users your accounts share a chat with. Won't be shared with backends or third parties.
+agent-integration-responses = Suggested responses
+agent-integration-responses-desc = Let your assistant draft replies you can review before sending.
+agent-integration-summaries = Conversation summaries
+agent-integration-summaries-desc = Catch up on long threads with on-demand recaps.
+agent-integration-translate = Live translation
+agent-integration-translate-desc = Translate incoming messages on the fly.
+agent-integration-memory = Memory
+agent-integration-memory-desc = Per-contact context the assistant carries between conversations.
+agent-integration-outreach = Scheduled outreach
+agent-integration-outreach-desc = Plan and send "ping every N days" check-ins from your assistant.
+agent-integration-image-gen = Image generation
+agent-integration-image-gen-desc = Have your assistant generate and attach images on request.
