@@ -28,12 +28,17 @@ pub fn router(state: Arc<TeamsState>) -> Router {
         // Test-only easy-signin
         .route("/test/auth/token", post(routes::test_auth_token))
         .route("/test/auth/login", post(routes::login))
-        // Current user
+        // Current user + user lookup
         .route("/v1.0/me", get(routes::get_me))
+        .route("/v1.0/users/{user_id}", get(routes::get_user))
         // Teams
         .route("/v1.0/me/joinedTeams", get(routes::get_joined_teams))
         .route("/v1.0/teams/{team_id}", get(routes::get_team))
         .route("/v1.0/teams/{team_id}/channels", get(routes::get_channels))
+        .route(
+            "/v1.0/teams/{team_id}/channels/{channel_id}",
+            get(routes::get_channel),
+        )
         .route(
             "/v1.0/teams/{team_id}/channels/{channel_id}/messages",
             get(routes::get_channel_messages).post(routes::send_channel_message),

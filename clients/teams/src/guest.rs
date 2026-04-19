@@ -226,6 +226,7 @@ fn graph_message_to_wit(m: GraphMessage) -> wit::Message {
         reactions: vec![],
         reply_to: None,
         edited: m.last_modified.is_some(),
+        thread: None,
     }
 }
 
@@ -392,6 +393,9 @@ impl Guest for TeamsPlugin {
                 unread_count: 0,
                 mention_count: 0,
                 last_message_id: None,
+                forum_tags: None,
+                parent_channel_id: None,
+                thread_metadata: None,
             })
             .collect())
     }
@@ -417,6 +421,9 @@ impl Guest for TeamsPlugin {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         })
     }
 
@@ -673,6 +680,33 @@ impl Guest for TeamsPlugin {
     ) -> Result<wit::FileContent, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
             "teams has no code channels".to_string(),
+        ))
+    }
+
+    fn get_forum_posts(
+        _forum_channel_id: String,
+        _sort: wit::ForumSortOrder,
+        _limit: Option<u32>,
+    ) -> Result<Vec<wit::ForumPost>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_forum_posts not implemented".to_string(),
+        ))
+    }
+
+    fn get_active_threads(
+        _server_id: String,
+    ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_active_threads not implemented".to_string(),
+        ))
+    }
+
+    fn get_archived_threads(
+        _parent_channel_id: String,
+        _limit: Option<u32>,
+    ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_archived_threads not implemented".to_string(),
         ))
     }
 }

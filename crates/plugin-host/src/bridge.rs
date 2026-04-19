@@ -59,6 +59,54 @@ pub fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
         wit::ChannelType::Forum => pc::ChannelType::Forum,
         wit::ChannelType::HackerNews => pc::ChannelType::HackerNews,
         wit::ChannelType::Code => pc::ChannelType::Code,
+        wit::ChannelType::Thread => pc::ChannelType::Thread,
+        wit::ChannelType::Announcement => pc::ChannelType::Announcement,
+    }
+}
+
+/// Convert WIT `ForumTag` → poly-client `ForumTag`.
+pub fn from_wit_forum_tag(t: wit::ForumTag) -> pc::ForumTag {
+    pc::ForumTag {
+        id: t.id,
+        name: t.name,
+        emoji: t.emoji,
+        moderated: t.moderated,
+    }
+}
+
+/// Convert WIT `ThreadMetadata` → poly-client `ThreadMetadata`.
+pub fn from_wit_thread_metadata(m: wit::ThreadMetadata) -> pc::ThreadMetadata {
+    pc::ThreadMetadata {
+        archived: m.archived,
+        auto_archive_minutes: m.auto_archive_minutes,
+        archived_at: m.archived_at.and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(&s)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+        }),
+        locked: m.locked,
+        created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at)
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .unwrap_or_else(|_| chrono::Utc::now()),
+    }
+}
+
+/// Convert WIT `ThreadInfo` → poly-client `ThreadInfo`.
+pub fn from_wit_thread_info(t: wit::ThreadInfo) -> pc::ThreadInfo {
+    pc::ThreadInfo {
+        thread_id: t.thread_id,
+        parent_channel_id: t.parent_channel_id,
+        message_count: t.message_count,
+        member_count: t.member_count,
+    }
+}
+
+/// Convert WIT `ForumPost` → poly-client `ForumPost`.
+pub fn from_wit_forum_post(p: wit::ForumPost) -> pc::ForumPost {
+    pc::ForumPost {
+        thread: from_wit_thread_info(p.thread),
+        applied_tags: p.applied_tags,
+        starter_message_id: p.starter_message_id,
     }
 }
 
@@ -204,6 +252,11 @@ pub fn from_wit_channel(c: wit::Channel) -> pc::Channel {
         unread_count: c.unread_count,
         mention_count: c.mention_count,
         last_message_id: c.last_message_id,
+        forum_tags: c
+            .forum_tags
+            .map(|tags| tags.into_iter().map(from_wit_forum_tag).collect()),
+        parent_channel_id: c.parent_channel_id,
+        thread_metadata: c.thread_metadata.map(from_wit_thread_metadata),
     }
 }
 
@@ -317,6 +370,7 @@ pub fn from_wit_message(m: wit::Message) -> pc::Message {
         reactions: m.reactions.into_iter().map(from_wit_reaction).collect(),
         reply_to: m.reply_to.map(from_wit_message_reply_preview),
         edited: m.edited,
+        thread: m.thread.map(from_wit_thread_info),
     }
 }
 
@@ -1049,4 +1103,14 @@ pub fn from_wit_composer_action_outcome(o: wit_menus::ActionOutcome) -> pc::Acti
 /// `client-sidebar::invoke-sidebar-action` — same re-use pattern.
 pub fn from_wit_sidebar_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome {
     from_wit_action_outcome(o)
+}
+
+// ─── ForumSortOrder ────────────────────────────────────────────────
+
+/// Convert poly-client `ForumSortOrder` → WIT `ForumSortOrder`.
+pub fn to_wit_forum_sort_order(s: pc::ForumSortOrder) -> wit::ForumSortOrder {
+    match s {
+        pc::ForumSortOrder::LatestActivity => wit::ForumSortOrder::LatestActivity,
+        pc::ForumSortOrder::CreationDate => wit::ForumSortOrder::CreationDate,
+    }
 }

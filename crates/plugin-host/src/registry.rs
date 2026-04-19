@@ -25,11 +25,11 @@ use wasmtime::{Engine, Store};
 
 use poly_client::{
     ActionOutcome, AuthCredentials, BackendType, Channel, ClientBackend, ClientError, ClientEvent,
-    ClientResult, ComposerButton, Cursor, CustomEmoji, DmChannel, Group, MenuItem, MenuTargetKind,
-    Message, MessageContent, MessageQuery, MessageSearchHit, MessageSearchQuery, Notification,
-    PendingHandle, PresenceStatus, Server, Session, SettingsScope, SettingsSection,
-    SidebarDeclaration, StickerItem, User, ViewDescriptor, ViewDetail, ViewRowsPage,
-    VoiceParticipant,
+    ClientResult, ComposerButton, Cursor, CustomEmoji, DmChannel, ForumPost, ForumSortOrder, Group,
+    MenuItem, MenuTargetKind, Message, MessageContent, MessageQuery, MessageSearchHit,
+    MessageSearchQuery, Notification, PendingHandle, PresenceStatus, Server, Session, SettingsScope,
+    SettingsSection, SidebarDeclaration, StickerItem, ThreadInfo, User, ViewDescriptor, ViewDetail,
+    ViewRowsPage, VoiceParticipant,
 };
 
 use super::bridge;
@@ -1145,6 +1145,65 @@ impl ClientBackend for PluginBackend {
             .await;
         match result {
             Ok(Ok(outcome)) => Ok(bridge::from_wit_composer_action_outcome(outcome)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_forum_posts(
+        &self,
+        forum_channel_id: &str,
+        sort: ForumSortOrder,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ForumPost>> {
+        refuel(&self.store).await;
+        let wit_sort = bridge::to_wit_forum_sort_order(sort);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_forum_posts(&mut *store, forum_channel_id, wit_sort, limit)
+            .await;
+        match result {
+            Ok(Ok(posts)) => Ok(posts.into_iter().map(bridge::from_wit_forum_post).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_active_threads(&mut *store, server_id)
+            .await;
+        match result {
+            Ok(Ok(threads)) => {
+                Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect())
+            }
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_archived_threads(
+        &self,
+        parent_channel_id: &str,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ThreadInfo>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_archived_threads(&mut *store, parent_channel_id, limit)
+            .await;
+        match result {
+            Ok(Ok(threads)) => {
+                Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect())
+            }
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }

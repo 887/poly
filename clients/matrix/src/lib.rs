@@ -201,6 +201,7 @@ impl MatrixClient {
             attachments: vec![],
             reactions: vec![],
             reply_to: None,
+            thread: None,
         })
     }
 
@@ -261,6 +262,7 @@ impl MatrixClient {
             attachments: vec![],
             reactions: vec![],
             reply_to: None,
+            thread: None,
         })
     }
 
@@ -588,6 +590,9 @@ impl ClientBackend for MatrixClient {
                 unread_count: 0,
                 mention_count: 0,
                 last_message_id: None,
+                forum_tags: None,
+                parent_channel_id: None,
+                thread_metadata: None,
             })
             .collect();
 
@@ -605,6 +610,9 @@ impl ClientBackend for MatrixClient {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         })
     }
 

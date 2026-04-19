@@ -403,6 +403,51 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("read_file".to_string()))
     }
 
+    // --- Forum channels and threads ---
+
+    /// Get forum posts (threads) in a forum channel.
+    ///
+    /// Posts are sorted according to `sort`. `limit` caps the number returned;
+    /// `None` uses the backend default.
+    ///
+    /// Backends that do not support forum channels return `NotSupported`.
+    async fn get_forum_posts(
+        &self,
+        forum_channel_id: &str,
+        sort: ForumSortOrder,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ForumPost>> {
+        let _ = (forum_channel_id, sort, limit);
+        Err(ClientError::NotSupported(
+            "get_forum_posts not implemented".into(),
+        ))
+    }
+
+    /// Get all active (non-archived) threads in a server.
+    ///
+    /// Backends that do not support threads return `NotSupported`.
+    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
+        let _ = server_id;
+        Err(ClientError::NotSupported(
+            "get_active_threads not implemented".into(),
+        ))
+    }
+
+    /// Get archived threads for a parent channel (text or forum).
+    ///
+    /// `limit` caps the number returned; `None` uses the backend default.
+    /// Backends that do not support threads return `NotSupported`.
+    async fn get_archived_threads(
+        &self,
+        parent_channel_id: &str,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ThreadInfo>> {
+        let _ = (parent_channel_id, limit);
+        Err(ClientError::NotSupported(
+            "get_archived_threads not implemented".into(),
+        ))
+    }
+
     // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ----
     //
     // Per D9 these methods have **no default implementation** — every

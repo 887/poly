@@ -1,7 +1,7 @@
 # Plan — Discord Forum Channels & Thread Support
 
 > **Created:** 2026-04-05
-> **Status:** Not Started
+> **Status:** Phase 1 + Phase 2 Done (2026-04-19)
 > **Crate:** `poly-discord` (`clients/discord/`)
 > **Depends on:** Phase 3.3 (Discord client base implementation)
 > **Goal:** Support Discord forum channels and threads in the Poly unified chat UI.
@@ -348,18 +348,18 @@ names. Clicking a thread opens it in panel mode.
 
 ### 1. Data Model
 
-- [ ] **1.1** Add `Forum`, `Thread`, `Announcement` to `ChannelType` enum
-- [ ] **1.2** Add `ForumTag`, `ForumPost`, `ThreadInfo`, `ThreadMetadata` structs to `types.rs`
-- [ ] **1.3** Add optional `forum_tags`, `parent_channel_id`, `thread_metadata` fields to `Channel`
-- [ ] **1.4** Add optional `thread: Option<ThreadInfo>` field to `Message`
-- [ ] **1.5** Add `ForumSortOrder` enum (`LatestActivity`, `CreationDate`)
+- [x] **1.1** Add `Forum`, `Thread`, `Announcement` to `ChannelType` enum
+- [x] **1.2** Add `ForumTag`, `ForumPost`, `ThreadInfo`, `ThreadMetadata` structs to `types.rs`
+- [x] **1.3** Add optional `forum_tags`, `parent_channel_id`, `thread_metadata` fields to `Channel`
+- [x] **1.4** Add optional `thread: Option<ThreadInfo>` field to `Message`
+- [x] **1.5** Add `ForumSortOrder` enum (`LatestActivity`, `CreationDate`)
 
 ### 2. ClientBackend Trait
 
-- [ ] **2.1** Add `get_forum_posts()` with default `NotSupported`
-- [ ] **2.2** Add `get_active_threads()` with default `NotSupported`
-- [ ] **2.3** Add `get_archived_threads()` with default `NotSupported`
-- [ ] **2.4** Verify all existing backends still compile (default impls, no breakage)
+- [x] **2.1** Add `get_forum_posts()` with default `NotSupported`
+- [x] **2.2** Add `get_active_threads()` with default `NotSupported`
+- [x] **2.3** Add `get_archived_threads()` with default `NotSupported`
+- [x] **2.4** Verify all existing backends still compile (default impls, no breakage)
 
 ### 3. Discord Client
 

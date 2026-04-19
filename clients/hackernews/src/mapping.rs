@@ -73,6 +73,9 @@ pub fn build_channels() -> Vec<Channel> {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         })
         .collect()
 }
@@ -275,6 +278,7 @@ pub fn hn_item_to_message(item: &HnItem) -> Message {
         reactions,
         reply_to: None,
         edited: false,
+        thread: None,
     }
 }
 
@@ -319,6 +323,7 @@ pub fn hn_comment_to_message(item: &HnItem, parent_id: Option<u64>, story_id: u6
         reactions: Vec::new(),
         reply_to,
         edited: false,
+        thread: None,
     }
 }
 

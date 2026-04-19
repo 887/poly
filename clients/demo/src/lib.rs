@@ -373,6 +373,7 @@ impl ClientBackend for DemoClient {
                                     reactions: vec![],
                                     reply_to: None,
                                     edited: false,
+                                    thread: None,
                                 },
                             }
                         }
@@ -405,6 +406,7 @@ impl ClientBackend for DemoClient {
                                     reactions: vec![],
                                     reply_to: None,
                                     edited: false,
+                                    thread: None,
                                 },
                             }
                         }
@@ -787,6 +789,7 @@ impl ClientBackend for DemoClient2 {
                 reactions: vec![],
                 reply_to: None,
                 edited: false,
+                thread: None,
             }),
             unread_count: 1,
             backend: BackendType::from("demo"),

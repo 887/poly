@@ -423,7 +423,8 @@ pub enum ChannelType {
     /// Forum channel (Lemmy/Reddit-style: posts with threaded comments).
     ///
     /// Each post is a top-level message; replies form a thread.
-    /// Used by Lemmy, Reddit, and Discord Forums.
+    /// Used by Lemmy, Reddit, and Discord Forums (GUILD_FORUM type 15,
+    /// GUILD_MEDIA type 16).
     Forum,
     /// Hacker News–style feed channel (title + URL + score + comment count).
     ///
@@ -435,6 +436,76 @@ pub enum ChannelType {
     /// Rendered as a two-pane explorer instead of a message log.
     /// Used by GitHub / GitHub Enterprise repo channels.
     Code,
+    /// A thread within a text or forum channel.
+    ///
+    /// Covers Discord PUBLIC_THREAD (11), PRIVATE_THREAD (12), and
+    /// ANNOUNCEMENT_THREAD (10). Treated as text-like for message fetch.
+    Thread,
+    /// Announcement / news channel (Discord GUILD_ANNOUNCEMENT, type 5).
+    ///
+    /// Treated as text-like for message fetch.
+    Announcement,
+}
+
+/// A tag available in a forum channel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForumTag {
+    /// Backend-specific tag ID.
+    pub id: String,
+    /// Display name of the tag.
+    pub name: String,
+    /// Unicode emoji or custom emoji ID for the tag.
+    pub emoji: Option<String>,
+    /// When `true`, only moderators can apply this tag.
+    pub moderated: bool,
+}
+
+/// Lightweight thread info carried on a message or as a thread channel summary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadInfo {
+    /// Backend-specific thread channel ID.
+    pub thread_id: String,
+    /// ID of the parent text or forum channel.
+    pub parent_channel_id: String,
+    /// Number of messages in the thread.
+    pub message_count: u32,
+    /// Number of members who have joined the thread.
+    pub member_count: u32,
+}
+
+/// Metadata for a thread channel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadMetadata {
+    /// Whether the thread has been archived.
+    pub archived: bool,
+    /// Number of minutes of inactivity before the thread auto-archives.
+    pub auto_archive_minutes: u32,
+    /// When the thread was archived (absent when not archived).
+    pub archived_at: Option<DateTime<Utc>>,
+    /// Whether the thread is locked (no new messages allowed).
+    pub locked: bool,
+    /// When the thread was created.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Sort order for forum channel posts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ForumSortOrder {
+    /// Sort by most recent activity (default).
+    LatestActivity,
+    /// Sort by creation date.
+    CreationDate,
+}
+
+/// A forum post (thread within a forum channel).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForumPost {
+    /// Thread info for the backing thread channel.
+    pub thread: ThreadInfo,
+    /// Tag IDs applied to this post.
+    pub applied_tags: Vec<String>,
+    /// ID of the starter message (first post in the thread).
+    pub starter_message_id: Option<String>,
 }
 
 /// Kind of a file system entry returned by [`ClientBackend::list_files`].
@@ -752,6 +823,15 @@ pub struct Channel {
     pub mention_count: u32,
     /// ID of the last message (for ordering).
     pub last_message_id: Option<String>,
+    /// For `Forum` channels: available tags. `None` for non-forum channels.
+    #[serde(default)]
+    pub forum_tags: Option<Vec<ForumTag>>,
+    /// For `Thread` channels: ID of the parent text or forum channel.
+    #[serde(default)]
+    pub parent_channel_id: Option<String>,
+    /// For `Thread` channels: thread metadata (archived, locked, auto-archive).
+    #[serde(default)]
+    pub thread_metadata: Option<ThreadMetadata>,
 }
 
 /// Content that can be sent in a message.
@@ -847,6 +927,9 @@ pub struct Message {
     pub reply_to: Option<MessageReplyPreview>,
     /// Whether the message has been edited.
     pub edited: bool,
+    /// If this message has spawned a thread, lightweight info about it.
+    #[serde(default)]
+    pub thread: Option<ThreadInfo>,
 }
 
 /// A reaction on a message.

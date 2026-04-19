@@ -397,7 +397,9 @@ fn ServerNode(
                                 || name_matches;
                             if ch_matches {
                                 let icon = match ch.channel_type {
-                                    poly_client::ChannelType::Text => "#".to_string(),
+                                    poly_client::ChannelType::Text
+                                    | poly_client::ChannelType::Thread
+                                    | poly_client::ChannelType::Announcement => "#".to_string(),
                                     poly_client::ChannelType::Voice => "🔊".to_string(),
                                     poly_client::ChannelType::Video => "📹".to_string(),
                                     poly_client::ChannelType::Forum

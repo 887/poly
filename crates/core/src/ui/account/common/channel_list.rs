@@ -209,6 +209,9 @@ fn activate_dm_channel(
         unread_count: dm.unread_count,
         mention_count: 0,
         last_message_id: dm.last_message.as_ref().map(|message| message.id.clone()),
+        forum_tags: None,
+        parent_channel_id: None,
+        thread_metadata: None,
     });
     chat_data.write().current_server = None;
 
@@ -1041,6 +1044,9 @@ fn DMChannelItem(
                     unread_count: unread,
                     mention_count: 0,
                     last_message_id: None,
+                    forum_tags: None,
+                    parent_channel_id: None,
+                    thread_metadata: None,
                 });
                 chat_data.write().current_server = None;
                 let cid = channel_id.clone();
@@ -1128,6 +1134,9 @@ fn GroupChannelItem(
                     unread_count: 0,
                     mention_count: 0,
                     last_message_id: None,
+                    forum_tags: None,
+                    parent_channel_id: None,
+                    thread_metadata: None,
                 });
                 chat_data.write().current_server = None;
                 let cid = group_id.clone();
@@ -1266,7 +1275,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
     let instance_id_for_menu = app_state.read().nav.active_instance_id.clone().unwrap_or_default();
 
     let type_icon = match ch_type {
-        ChannelType::Text => "#",
+        ChannelType::Text | ChannelType::Thread | ChannelType::Announcement => "#",
         ChannelType::Voice => "🔊",
         ChannelType::Video => "📹",
         ChannelType::Forum | ChannelType::HackerNews => "📋",

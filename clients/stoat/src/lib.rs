@@ -1392,6 +1392,7 @@ fn parse_bonfire_event(json: serde_json::Value) -> Option<ClientEvent> {
                 reactions: vec![],
                 reply_to: None,
                 edited: false,
+                thread: None,
             };
             Some(ClientEvent::MessageReceived { channel_id, message })
         }

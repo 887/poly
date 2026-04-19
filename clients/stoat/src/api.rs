@@ -435,6 +435,9 @@ impl StoatChannel {
             unread_count,
             mention_count,
             last_message_id: self.last_message_id,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         })
     }
 }
@@ -670,6 +673,7 @@ impl StoatMessage {
                 .collect(),
             reply_to: None,
             edited: self.edited.is_some(),
+            thread: None,
         }
     }
 

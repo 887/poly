@@ -234,6 +234,9 @@ pub fn community_to_channel(community: &LemmyCommunity) -> Channel {
         unread_count: 0,
         mention_count: 0,
         last_message_id: None,
+        forum_tags: None,
+        parent_channel_id: None,
+        thread_metadata: None,
     }
 }
 
@@ -285,6 +288,7 @@ pub fn map_post_to_message(view: &PostView) -> Message {
         reactions,
         reply_to: None,
         edited: post.updated.is_some(),
+        thread: None,
     }
 }
 
@@ -383,6 +387,7 @@ pub fn map_comment_to_message(view: &CommentView) -> Message {
         reactions,
         reply_to: None,
         edited: comment.updated.is_some(),
+        thread: None,
     }
 }
 
@@ -431,6 +436,7 @@ pub fn map_pm_to_message(view: &PrivateMessageView, my_user_id: i64) -> Message 
         reactions: vec![],
         reply_to: None,
         edited: false,
+        thread: None,
     }
 }
 

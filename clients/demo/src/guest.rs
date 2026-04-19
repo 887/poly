@@ -52,6 +52,8 @@ fn to_wit_channel_type(ct: pc::ChannelType) -> wit::ChannelType {
         pc::ChannelType::Forum => wit::ChannelType::Forum,
         pc::ChannelType::HackerNews => wit::ChannelType::HackerNews,
         pc::ChannelType::Code => wit::ChannelType::Code,
+        pc::ChannelType::Thread => wit::ChannelType::Thread,
+        pc::ChannelType::Announcement => wit::ChannelType::Announcement,
     }
 }
 
@@ -88,6 +90,34 @@ fn to_wit_server(s: pc::Server) -> wit::Server {
     }
 }
 
+fn to_wit_forum_tag(t: pc::ForumTag) -> wit::ForumTag {
+    wit::ForumTag {
+        id: t.id,
+        name: t.name,
+        emoji: t.emoji,
+        moderated: t.moderated,
+    }
+}
+
+fn to_wit_thread_info(t: pc::ThreadInfo) -> wit::ThreadInfo {
+    wit::ThreadInfo {
+        thread_id: t.thread_id,
+        parent_channel_id: t.parent_channel_id,
+        message_count: t.message_count,
+        member_count: t.member_count,
+    }
+}
+
+fn to_wit_thread_metadata(m: pc::ThreadMetadata) -> wit::ThreadMetadata {
+    wit::ThreadMetadata {
+        archived: m.archived,
+        auto_archive_minutes: m.auto_archive_minutes,
+        archived_at: m.archived_at.map(|dt| dt.to_rfc3339()),
+        locked: m.locked,
+        created_at: m.created_at.to_rfc3339(),
+    }
+}
+
 fn to_wit_channel(c: pc::Channel) -> wit::Channel {
     wit::Channel {
         id: c.id,
@@ -97,6 +127,11 @@ fn to_wit_channel(c: pc::Channel) -> wit::Channel {
         unread_count: c.unread_count,
         mention_count: c.mention_count,
         last_message_id: c.last_message_id,
+        forum_tags: c
+            .forum_tags
+            .map(|tags| tags.into_iter().map(to_wit_forum_tag).collect()),
+        parent_channel_id: c.parent_channel_id,
+        thread_metadata: c.thread_metadata.map(to_wit_thread_metadata),
     }
 }
 
@@ -175,6 +210,7 @@ fn to_wit_message(m: pc::Message) -> wit::Message {
         reactions: m.reactions.iter().map(to_wit_reaction).collect(),
         reply_to: m.reply_to.as_ref().map(to_wit_message_reply_preview),
         edited: m.edited,
+        thread: m.thread.map(to_wit_thread_info),
     }
 }
 
@@ -607,6 +643,33 @@ impl MessengerClientGuest for DemoPlugin {
     fn read_file(_channel_id: String, _path: String) -> Result<wit::FileContent, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
             "demo plugin has no code channels".to_string(),
+        ))
+    }
+
+    fn get_forum_posts(
+        _forum_channel_id: String,
+        _sort: wit::ForumSortOrder,
+        _limit: Option<u32>,
+    ) -> Result<Vec<wit::ForumPost>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_forum_posts not implemented".to_string(),
+        ))
+    }
+
+    fn get_active_threads(
+        _server_id: String,
+    ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_active_threads not implemented".to_string(),
+        ))
+    }
+
+    fn get_archived_threads(
+        _parent_channel_id: String,
+        _limit: Option<u32>,
+    ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_archived_threads not implemented".to_string(),
         ))
     }
 }

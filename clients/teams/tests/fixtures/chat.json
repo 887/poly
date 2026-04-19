@@ -1,0 +1,17 @@
+{
+  "id": "CHAT001",
+  "chatType": "oneOnOne",
+  "topic": null,
+  "members": [
+    {
+      "id": "member-U001",
+      "displayName": "Sheep",
+      "userId": "U001"
+    },
+    {
+      "id": "member-U002",
+      "displayName": "Walrus",
+      "userId": "U002"
+    }
+  ]
+}

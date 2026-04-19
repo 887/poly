@@ -1,0 +1,32 @@
+{
+  "value": [
+    {
+      "id": "MSG002",
+      "body": {
+        "content": "Morning! Ready for the standup?",
+        "contentType": "text"
+      },
+      "from": {
+        "user": {
+          "id": "U002",
+          "displayName": "Walrus"
+        }
+      },
+      "createdDateTime": "2026-04-05T09:01:00Z"
+    },
+    {
+      "id": "MSG001",
+      "body": {
+        "content": "Good morning team!",
+        "contentType": "text"
+      },
+      "from": {
+        "user": {
+          "id": "U001",
+          "displayName": "Sheep"
+        }
+      },
+      "createdDateTime": "2026-04-05T09:00:00Z"
+    }
+  ]
+}

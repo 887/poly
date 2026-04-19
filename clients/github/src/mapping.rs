@@ -125,6 +125,9 @@ pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         },
         Channel {
             id: pulls_channel_id(&owner, &name),
@@ -134,6 +137,9 @@ pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         },
         Channel {
             id: code_channel_id(&owner, &name),
@@ -143,6 +149,9 @@ pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         },
     ]
 }
@@ -272,6 +281,7 @@ pub fn issue_to_message(issue: &GhIssue) -> Message {
         reactions: Vec::new(),
         reply_to: None,
         edited: false,
+        thread: None,
     }
 }
 
@@ -287,6 +297,7 @@ pub fn comment_to_message(c: &GhIssueComment) -> Message {
         reactions: Vec::new(),
         reply_to: None,
         edited: false,
+        thread: None,
     }
 }
 

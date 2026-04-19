@@ -303,7 +303,7 @@ pub fn VoiceChannelView() -> Element {
     let type_icon = match channel_type {
         ChannelType::Voice => "🔊",
         ChannelType::Video => "📹",
-        ChannelType::Text => "#",
+        ChannelType::Text | ChannelType::Thread | ChannelType::Announcement => "#",
         ChannelType::Forum | ChannelType::HackerNews => "📋",
         ChannelType::Code => "📁",
     };

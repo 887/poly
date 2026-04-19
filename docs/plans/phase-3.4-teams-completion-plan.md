@@ -1,7 +1,7 @@
 # Phase 3.4 — Microsoft Teams Client Completion Plan
 
 > **Created:** 2026-04-15
-> **Status:** 🟢 γ — Graph auth + OAuth device-code signup UI complete; 3.4.6.4 harness fixture + 3.4.1.6 type-level unit tests are the only remaining bullets and are explicitly follow-up work.
+> **Status:** ✅ DONE — 3.4.1.6 type-level fixture tests (14 tests, 8 fixture files) and 3.4.6.4 authenticated WASM e2e harness landed; all Teams tests pass, zero new warnings.
 > **Crate:** `poly-teams`
 > **Supersedes:** `docs/archive/phases/phase-3.4-teams-plan.md` (that plan assumed greenfield; this one picks up from where the α implementation actually stands)
 > **Goal:** Bring Teams to Discord-level parity — typed API layer, EmailPassword test flow, signup-picker entry, WIT guest on par with native.
@@ -36,7 +36,7 @@ Lift `clients/teams/src/api.rs` into a proper `types/` module so message / team 
 - [x] **3.4.1.3** Add `ODataResponse<T> { value: Vec<T>, @odata.nextLink: Option<String> }` for list pagination — every Graph list endpoint wraps in this
 - [x] **3.4.1.4** Add `GraphError { error: { code, message } }` shape and a `From<GraphError> for ClientError` mapper
 - [x] **3.4.1.5** Port `http.rs` to parse into typed structs, not `serde_json::Value`
-- [ ] **3.4.1.6** Unit tests per type against captured sample JSON (mirror what Discord does with twilight-model fixtures)
+- [x] **3.4.1.6** Unit tests per type against captured sample JSON (mirror what Discord does with twilight-model fixtures)
 
 ## 3.4.2 Wire Teams into signup picker — **N/A, matches Discord**
 
@@ -78,7 +78,7 @@ Discord is NOT registered in `register_native_signup_entries()` either — both 
 - [x] **3.4.6.1** Auth via guest — `authenticate()` accepts `Token(…)` / `OAuth(…)` / `EmailPassword(…)`; the email-password leg POSTs `/test/auth/login`, everything else validates the token with `GET /v1.0/me` and stores the resulting `StoredSession`.
 - [x] **3.4.6.2** Read/write ported — `get_servers` / `get_server` / `get_channels` / `get_channel` / `get_messages` / `send_message` / `get_user` / `set_presence` all go through `host_api::http_request`. Unauthenticated callers get the old stub behavior (empty lists / `Ok(())` for `set_presence`) so existing harness tests keep passing. `send_reply_message` and `set_message_pinned` stay `NotSupported` — neither is wired on the native side either.
 - [x] **3.4.6.3** `handle_ws_data()` — parses the long-poll JSON array and dispatches `MessageCreated` / `MessageUpdated` / `MessageDeleted` to `host_api::emit_event`.
-- [ ] **3.4.6.4** Update `crates/plugin-host-tests/tests/client_e2e/teams.rs` — the existing asserts still pass because the real guest preserves stub shape when unauthenticated; flipping them to exercise real behavior is a follow-up that wants a mock-server fixture inside the harness (the harness currently doesn't spin one up for Teams).
+- [x] **3.4.6.4** Update `crates/plugin-host-tests/tests/client_e2e/teams.rs` — spins up `poly_test_teams` on a random port, pre-seeds `teams.base_url` via `InMemoryPluginStorage`, exercises authenticate/get_servers/get_channels/get_messages/send_message/set_presence/get_user through real WASM guest path.
 
 ## 3.4.7 Real Microsoft Graph auth (in scope for this phase)
 

@@ -23,6 +23,11 @@ interface types {
     }
 
     /// The type of a channel.
+    ///
+    /// `text`, `voice`, `video`, `forum`, `hacker-news`, and `code` are the
+    /// original variants. `thread` covers Discord threads (public, private,
+    /// and announcement threads). `announcement` covers Discord announcement /
+    /// news channels (GUILD_ANNOUNCEMENT, type 5).
     enum channel-type {
         text,
         voice,
@@ -33,6 +38,11 @@ interface types {
         hacker-news,
         /// Code repository explorer (file tree + file content view).
         code,
+        /// Thread within a text or forum channel (Discord PUBLIC_THREAD,
+        /// PRIVATE_THREAD, ANNOUNCEMENT_THREAD — types 10/11/12).
+        thread,
+        /// Announcement / news channel (Discord GUILD_ANNOUNCEMENT, type 5).
+        announcement,
     }
 
     /// Kind of a file system entry returned by `list-files`.
@@ -159,6 +169,52 @@ interface types {
         account-display-name: string,
     }
 
+    /// A tag available in a forum channel.
+    record forum-tag {
+        id: string,
+        name: string,
+        /// Unicode emoji or custom emoji ID.
+        emoji: option<string>,
+        /// Only moderators can apply this tag when true.
+        moderated: bool,
+    }
+
+    /// Thread metadata for a thread channel or a message that has a thread.
+    record thread-metadata {
+        archived: bool,
+        auto-archive-minutes: u32,
+        /// RFC3339 timestamp when the thread was archived; absent if not archived.
+        archived-at: option<string>,
+        locked: bool,
+        /// RFC3339 creation timestamp.
+        created-at: string,
+    }
+
+    /// Lightweight thread info carried on a message or as a thread channel summary.
+    record thread-info {
+        thread-id: string,
+        parent-channel-id: string,
+        message-count: u32,
+        member-count: u32,
+    }
+
+    /// Sort order for forum channel posts.
+    enum forum-sort-order {
+        /// Sort by most recent activity.
+        latest-activity,
+        /// Sort by creation date.
+        creation-date,
+    }
+
+    /// A forum post (thread within a forum channel).
+    record forum-post {
+        thread: thread-info,
+        /// Tag IDs applied to this post.
+        applied-tags: list<string>,
+        /// ID of the starter message (first post in the thread).
+        starter-message-id: option<string>,
+    }
+
     /// A channel within a server.
     record channel {
         id: string,
@@ -170,6 +226,12 @@ interface types {
         /// Distinct from unread-count: only counts direct @mentions by @username, @here, @all.
         mention-count: u32,
         last-message-id: option<string>,
+        /// For forum channels: available tags. Empty list for non-forum channels.
+        forum-tags: option<list<forum-tag>>,
+        /// For thread channels: ID of the parent text or forum channel.
+        parent-channel-id: option<string>,
+        /// For thread channels: thread metadata.
+        thread-metadata: option<thread-metadata>,
     }
 
     /// A file attachment in a message.
@@ -243,6 +305,8 @@ interface types {
         reactions: list<reaction>,
         reply-to: option<message-reply-preview>,
         edited: bool,
+        /// If this message spawned a thread, lightweight info about it.
+        thread: option<thread-info>,
     }
 
     /// Query options for fetching messages.
@@ -1246,6 +1310,9 @@ interface messenger-client {
         backend-capabilities,
         file-entry,
         file-content,
+        forum-post,
+        forum-sort-order,
+        thread-info,
     };
 
     /// Authenticate with the backend.
@@ -1362,6 +1429,26 @@ interface messenger-client {
 
     /// Read the raw bytes of a file in a code-type channel.
     read-file: func(channel-id: string, path: string) -> result<file-content, client-error>;
+
+    /// Get forum posts (threads) in a forum channel, sorted by `sort`.
+    /// `limit` caps the number returned; `none` uses the backend default.
+    get-forum-posts: func(
+        forum-channel-id: string,
+        sort: forum-sort-order,
+        limit: option<u32>,
+    ) -> result<list<forum-post>, client-error>;
+
+    /// Get all active (non-archived) threads in a server.
+    get-active-threads: func(
+        server-id: string,
+    ) -> result<list<thread-info>, client-error>;
+
+    /// Get archived threads for a parent channel (text or forum).
+    /// `limit` caps the number returned; `none` uses the backend default.
+    get-archived-threads: func(
+        parent-channel-id: string,
+        limit: option<u32>,
+    ) -> result<list<thread-info>, client-error>;
 }
 
 // ─── Plugin Metadata (optional exports — host uses if present) ─────

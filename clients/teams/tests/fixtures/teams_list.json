@@ -1,0 +1,14 @@
+{
+  "value": [
+    {
+      "id": "T001",
+      "displayName": "Contoso Corp",
+      "description": "Main company team"
+    },
+    {
+      "id": "T002",
+      "displayName": "Project Alpha",
+      "description": "Project Alpha team"
+    }
+  ]
+}

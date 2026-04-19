@@ -936,6 +936,9 @@ fn restore_dm_chat(
                 unread_count: dm.unread_count,
                 mention_count: 0,
                 last_message_id: None,
+                forum_tags: None,
+                parent_channel_id: None,
+                thread_metadata: None,
             })
             .or_else(|| {
                 data.groups
@@ -957,6 +960,9 @@ fn restore_dm_chat(
                             unread_count: 0,
                             mention_count: 0,
                             last_message_id: None,
+                            forum_tags: None,
+                            parent_channel_id: None,
+                            thread_metadata: None,
                         }
                     })
             })

@@ -6820,8 +6820,11 @@ dependencies = [
 name = "poly-plugin-loader-tests"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "poly-client",
  "poly-plugin-host",
+ "poly-test-teams",
+ "reqwest 0.13.2",
  "serde_json",
  "tokio",
 ]

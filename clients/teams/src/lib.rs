@@ -139,6 +139,7 @@ impl TeamsClient {
             reactions: vec![],
             reply_to: None,
             edited: false,
+            thread: None,
         }
     }
 
@@ -268,6 +269,7 @@ fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
         reactions: vec![],
         reply_to: None,
         edited,
+        thread: None,
     })
 }
 
@@ -374,6 +376,9 @@ impl ClientBackend for TeamsClient {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         }).collect())
     }
 
@@ -394,6 +399,9 @@ impl ClientBackend for TeamsClient {
                 unread_count: 0,
                 mention_count: 0,
                 last_message_id: None,
+                forum_tags: None,
+                parent_channel_id: None,
+                thread_metadata: None,
             })
             .ok_or_else(|| ClientError::NotFound(format!("Channel {id}")))
     }

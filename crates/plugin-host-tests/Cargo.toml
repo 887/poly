@@ -29,8 +29,11 @@ poly-plugin-host = { workspace = true }
 poly-client = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 serde_json = { workspace = true }
+axum = { workspace = true }
+reqwest = { workspace = true }
+poly-test-teams = { path = "../../servers/test-teams" }
 
 [lints]
 workspace = true

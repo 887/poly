@@ -1,0 +1,14 @@
+{
+  "value": [
+    {
+      "id": "CH001",
+      "displayName": "General",
+      "membershipType": "standard"
+    },
+    {
+      "id": "CH002",
+      "displayName": "Engineering",
+      "membershipType": "standard"
+    }
+  ]
+}

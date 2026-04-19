@@ -140,6 +140,7 @@ impl DiscordClient {
             reactions: vec![],
             reply_to: None,
             edited: m.edited_timestamp.is_some(),
+            thread: None,
         }
     }
 }
@@ -253,6 +254,9 @@ impl ClientBackend for DiscordClient {
                 unread_count: 0,
                 mention_count: 0,
                 last_message_id: None,
+                forum_tags: None,
+                parent_channel_id: None,
+                thread_metadata: None,
             })
             .collect())
     }
@@ -267,6 +271,9 @@ impl ClientBackend for DiscordClient {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         })
     }
 

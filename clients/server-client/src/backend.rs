@@ -145,6 +145,9 @@ impl PolyServerBackend {
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
         }
     }
 
@@ -181,6 +184,7 @@ impl PolyServerBackend {
             reactions: Vec::new(),
             reply_to: None,
             edited: msg.edited_at.is_some(),
+            thread: None,
         }
     }
 }
@@ -621,7 +625,7 @@ impl ClientBackend for PolyServerBackend {
         channel_type: ChannelType,
     ) -> ClientResult<Channel> {
         let kind_str = match channel_type {
-            ChannelType::Text => "text",
+            ChannelType::Text | ChannelType::Thread | ChannelType::Announcement => "text",
             ChannelType::Voice | ChannelType::Video => "voice",
             ChannelType::Forum | ChannelType::HackerNews => "forum",
             ChannelType::Code => "code",
@@ -933,6 +937,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 reactions: Vec::new(),
                 reply_to: None,
                 edited: payload.edited_at.is_some(),
+                thread: None,
             },
         }),
         srv::ServerEvent::MessageEdited(payload) => Some(ClientEvent::MessageEdited {
@@ -952,6 +957,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 reactions: Vec::new(),
                 reply_to: None,
                 edited: true,
+                thread: None,
             },
         }),
         srv::ServerEvent::MessageDeleted {

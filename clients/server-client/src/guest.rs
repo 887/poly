@@ -214,6 +214,33 @@ impl MessengerClientGuest for PolyServerPlugin {
             "poly-server has no code channels".to_string(),
         ))
     }
+
+    fn get_forum_posts(
+        _forum_channel_id: String,
+        _sort: wit::ForumSortOrder,
+        _limit: Option<u32>,
+    ) -> Result<Vec<wit::ForumPost>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_forum_posts not implemented".to_string(),
+        ))
+    }
+
+    fn get_active_threads(
+        _server_id: String,
+    ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_active_threads not implemented".to_string(),
+        ))
+    }
+
+    fn get_archived_threads(
+        _parent_channel_id: String,
+        _limit: Option<u32>,
+    ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "get_archived_threads not implemented".to_string(),
+        ))
+    }
 }
 
 // ─── client-menus ─────────────────────────────────────────────────

@@ -168,6 +168,38 @@ pub async fn get_channels(
     }
 }
 
+/// GET /v1.0/teams/:team_id/channels/:channel_id
+pub async fn get_channel(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((_team_id, channel_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => match state.channels.get(&channel_id) {
+            Some(c) => Json(channel_to_json(&c)).into_response(),
+            None => graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Channel not found")
+                .into_response(),
+        },
+    }
+}
+
+/// GET /v1.0/users/:user_id
+pub async fn get_user(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path(user_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => match state.users.get(&user_id) {
+            Some(u) => Json(user_to_json(&u)).into_response(),
+            None => graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "User not found")
+                .into_response(),
+        },
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Messages
 // ---------------------------------------------------------------------------
