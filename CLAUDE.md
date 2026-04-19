@@ -293,3 +293,59 @@ auto-saved.)
 Run multiple worktree-isolated agents in parallel only when their target files
 don't overlap. Each subagent prompt should explicitly list "DO NOT touch X"
 for any file another parallel agent might be editing.
+
+## Debugging hard WASM hangs in poly-web
+
+When poly-web freezes hard — Chrome tab unresponsive, devtools console
+itself stops draining — `mcp__poly-web__list_console_messages` and
+`click_at` time out. The poly-web MCP relies on CDP, which relies on the
+page's main thread being able to service messages. A WASM tight loop
+or infinite recursion eats the main thread → CDP becomes useless on
+that page.
+
+The Playwright MCP (`mcp__plugin_playwright_playwright__*`) drives a
+**separate** Chrome instance. Even after poly-web's CDP-driven Chrome
+is wedged, Playwright's browser may still respond — until the same
+freeze hits it too. Even when Playwright also hangs, the messages it
+queued before the wedge are recoverable on the next session.
+
+### Bisect recipe
+
+1. **Make the freeze observable.** Add `tracing::warn!(target: "BISECT", "step N: <what>")` lines around every Signal read/write, every `spawn`, every `await`, every `nav.push`. The closure that hangs the page is reached *before* the actual hang line; the highest-numbered warn that appears in the console pinpoints the bug.
+
+2. **Drive the click with Playwright not poly-web's CDP** when the page is borderline. Sequence:
+   - `mcp__plugin_playwright_playwright__browser_navigate` to the route.
+   - `browser_snapshot` (or `browser_evaluate` with `getBoundingClientRect`) to find the target ref/coords.
+   - `browser_click` (by ref) or call `.click()` via `browser_evaluate`.
+   - `browser_console_messages level="warn"` immediately after.
+   - If `browser_console_messages` times out → the WASM tight loop has now starved Playwright's main thread too. The bisect warn that fired LAST before the timeout is the answer.
+
+3. **Gut the suspected handler to a single warn first** — confirms whether the freeze is in the handler body at all (some "freezes" are upstream in Dioxus event dispatch or render-loop, not in your closure). If the gutted handler still freezes the page, the cause is BEFORE the closure runs.
+
+4. **Restore the body in N numbered tracing steps** — wrap each statement in a `tracing::warn!("step N")` envelope, ideally with one statement per step. Whichever N is the LAST log before the freeze is the offending line.
+
+5. **Beware: the freeze persists across page reloads** because it's a tight CPU loop the Chrome scheduler can't preempt. Hard-kill Chrome (`mcp__poly-web__hard_kill`) and `launch_app` between attempts; reload-from-overlay rarely clears the wedge.
+
+6. **The boot-hang watchdog** (`crates/core/src/wasm_crash_handler.rs`,
+   `BOOT_HANG_TIMEOUT_MS`) shows an "App not responding" overlay if the
+   startup overlay doesn't dismiss in time. False positives are common
+   when boot involves many restored accounts/servers; if the friends
+   grid renders BEHIND the overlay the page is healthy, just slow.
+   Bump the timeout instead of treating it as a real hang.
+
+### Common WASM-hang causes (ranked by frequency in this codebase)
+
+1. **`Signal::write()` chains in a click handler.** Every `.write()` guard drop schedules a Dioxus reactive re-render. 7 consecutive writes → 7 cascades on the WASM single-thread → scheduler starves. Batch into one `let mut x = sig.write(); x.field1 = …; x.field2 = …;` block.
+
+2. **Live `Signal::read()` guard across a `.write()` of the same signal.** WASM panics → no panic_hook unwinding → tight loop / unreachable. Wrap reads in tightly-scoped `{ … }` so the guard drops before any write.
+
+3. **`.write()` inside a `use_effect` whose body is also a subscriber to that signal.** Causes infinite re-render loop. The boot-hang watchdog catches it after the timeout. Move the write to a `use_future` or guard with a "did this already" flag.
+
+4. **`tokio::sync::RwLock::read().await` on a backend that has a perpetual writer.** Single-threaded WASM scheduler can starve readers. Wrap with `tokio::time::timeout(Duration::from_secs(5), backend.read())` and bail with a warning on timeout.
+
+5. **A spawned async task that writes Signals while the spawning closure still holds a guard.** Same root cause as #2 but indirect. Drop the guard before `spawn(async move { … })`.
+
+When the bug doesn't match any of the above, the freeze is likely in
+generated code (Dioxus interpreter, `wit_bindgen` bridge) and you'll
+need a real DevTools session — `chrome-devtools-mcp` if it's loaded,
+or ask the user to paste a stack trace from the Sources panel.

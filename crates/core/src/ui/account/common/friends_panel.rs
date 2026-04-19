@@ -232,17 +232,15 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                             button {
                                 class: "friend-card",
                                 onclick: move |_| {
-                                    // Drop the read guard in a tightly-scoped block
-                                    // before open_direct_message_from_active_account
-                                    // runs.  activate_dm_channel (called inside) takes
-                                    // write guards on app_state and chat_data; any
-                                    // live read guard on the same signal would panic.
+                                    tracing::warn!(target: "friends_panel", "BISECT step 1: enter");
                                     {
                                         let prev = app_state.read().nav.selected_channel.clone();
+                                        tracing::warn!(target: "friends_panel", "BISECT step 2: app_state.read OK, prev={prev:?}");
                                         if let Some(ref id) = prev {
                                             remember_message_list_scroll_position(id);
                                         }
                                     }
+                                    tracing::warn!(target: "friends_panel", "BISECT step 3: read guard dropped");
                                     open_direct_message_from_active_account(
                                         friend_id.clone(),
                                         app_state,
@@ -250,6 +248,7 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                                         client_manager,
                                         nav,
                                     );
+                                    tracing::warn!(target: "friends_panel", "BISECT step 4: open_dm returned");
                                 },
                                 div { class: "friend-info",
                                     div { class: "friend-avatar-wrap",
