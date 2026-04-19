@@ -794,3 +794,7 @@ agent-integration-outreach = Geplante Kontaktaufnahme
 agent-integration-outreach-desc = „Alle N Tage pingen"-Erinnerungen planen und vom Assistenten senden lassen.
 agent-integration-image-gen = Bildgenerierung
 agent-integration-image-gen-desc = Den Assistenten auf Anfrage Bilder generieren und anhängen lassen.
+
+# Leerer Zustand in ServerHome, wenn der Server noch keine Kanäle hat.
+server-empty-title = Noch keine Kanäle
+server-empty-body = Dieser Server hat noch keine Kanäle. Bitte eine Moderation, einen Kanal anzulegen, oder erstelle selbst den ersten, wenn du die Berechtigung hast.

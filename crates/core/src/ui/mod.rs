@@ -926,6 +926,7 @@ async fn restore_poly_accounts(
                         mention_count: 0,
                         account_id: r.account_id,
                         account_display_name: r.account_display_name,
+                        default_channel_id: None,
                     })
                     .collect();
                 if !account_servers.is_empty() {

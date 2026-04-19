@@ -49,6 +49,7 @@ pub fn build_server(account_id: &str) -> Server {
         mention_count: 0,
         account_id: account_id.to_string(),
         account_display_name: "Hacker News".to_string(),
+        default_channel_id: None,
     }
 }
 

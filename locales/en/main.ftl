@@ -972,3 +972,7 @@ agent-integration-outreach = Scheduled outreach
 agent-integration-outreach-desc = Plan and send "ping every N days" check-ins from your assistant.
 agent-integration-image-gen = Image generation
 agent-integration-image-gen-desc = Have your assistant generate and attach images on request.
+
+# Empty state shown in ServerHome when the server has no channels yet.
+server-empty-title = No channels yet
+server-empty-body = This server doesn't have any channels. Ask a moderator to create one, or create the first channel yourself if you have permission.

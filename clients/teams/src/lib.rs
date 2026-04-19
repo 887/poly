@@ -346,6 +346,7 @@ impl ClientBackend for TeamsClient {
             mention_count: 0,
             account_id: account_id.clone(),
             account_display_name: account_name.clone(),
+            default_channel_id: None,
         }).collect())
     }
 
@@ -364,6 +365,7 @@ impl ClientBackend for TeamsClient {
             mention_count: 0,
             account_id,
             account_display_name: account_name,
+            default_channel_id: None,
         })
     }
 

@@ -33,6 +33,10 @@ pub struct DiscordGuild {
     pub name: String,
     #[serde(default)]
     pub icon: Option<String>,
+    /// Discord's designated system / welcome channel for the guild.
+    /// Maps to `system_channel_id` in the Discord API (snake_case on the wire).
+    #[serde(default)]
+    pub system_channel_id: Option<String>,
 }
 
 /// A tag available in a Discord forum channel.

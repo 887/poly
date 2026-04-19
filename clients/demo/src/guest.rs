@@ -87,6 +87,7 @@ fn to_wit_server(s: pc::Server) -> wit::Server {
         mention_count: s.mention_count,
         account_id: s.account_id,
         account_display_name: s.account_display_name,
+        default_channel_id: s.default_channel_id,
     }
 }
 

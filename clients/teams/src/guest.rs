@@ -340,6 +340,7 @@ impl Guest for TeamsPlugin {
                 mention_count: 0,
                 account_id: session.user_id.clone(),
                 account_display_name: session.display_name.clone(),
+                default_channel_id: None,
             })
             .collect())
     }
@@ -367,6 +368,7 @@ impl Guest for TeamsPlugin {
             mention_count: 0,
             account_id: session.user_id,
             account_display_name: session.display_name,
+            default_channel_id: None,
         })
     }
 

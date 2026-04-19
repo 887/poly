@@ -167,6 +167,12 @@ interface types {
         mention-count: u32,
         account-id: string,
         account-display-name: string,
+        /// Backend-designated welcome / default channel (Discord
+        /// system-channel-id, Matrix m.room.tombstone alternative, etc).
+        /// When set, the host prefers this for "no channel selected" deep
+        /// links and stale-URL fallbacks before falling back to the first
+        /// text channel. `None` means no opinion — host picks first text.
+        default-channel-id: option<string>,
     }
 
     /// A tag available in a forum channel.

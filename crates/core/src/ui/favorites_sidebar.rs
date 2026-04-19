@@ -1126,15 +1126,28 @@ async fn load_server_data_internal(
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
-    // Find first text, forum, or HN channel
-    let first_text_channel = channels
-        .iter()
-        .find(|c| {
-            c.channel_type == poly_client::ChannelType::Text
-                || c.channel_type == poly_client::ChannelType::Forum
-                || c.channel_type == poly_client::ChannelType::HackerNews
-        })
-        .cloned();
+    // Find the best channel to auto-select:
+    // 1. Backend-designated default channel (Discord system_channel_id, etc.)
+    // 2. First text/forum/HN channel
+    let default_id = {
+        let guard = chat_data.read();
+        guard
+            .current_server
+            .as_ref()
+            .and_then(|s| s.default_channel_id.clone())
+    };
+    let first_text_channel = default_id
+        .and_then(|id| channels.iter().find(|c| c.id == id).cloned())
+        .or_else(|| {
+            channels
+                .iter()
+                .find(|c| {
+                    c.channel_type == poly_client::ChannelType::Text
+                        || c.channel_type == poly_client::ChannelType::Forum
+                        || c.channel_type == poly_client::ChannelType::HackerNews
+                })
+                .cloned()
+        });
 
     chat_data.write().channels = channels;
 
@@ -1301,14 +1314,29 @@ pub async fn restore_server_channel(
     // nav.replace alone, observed via on_update, is the single source of
     // truth for the field.
     let fallback = if exact.is_none() {
-        channels
-            .iter()
-            .find(|c| {
-                c.channel_type == poly_client::ChannelType::Text
-                    || c.channel_type == poly_client::ChannelType::Forum
-                    || c.channel_type == poly_client::ChannelType::HackerNews
-            })
-            .cloned()
+        // 1. Backend-designated default channel (Discord system_channel_id, etc.)
+        let default_id = {
+            let guard = chat_data.read();
+            guard
+                .current_server
+                .as_ref()
+                .and_then(|s| s.default_channel_id.clone())
+        };
+        let by_default = default_id.and_then(|id| channels.iter().find(|c| c.id == id).cloned());
+        // 2. First text/forum/hackernews channel
+        by_default.or_else(|| {
+            channels
+                .iter()
+                .find(|c| {
+                    matches!(
+                        c.channel_type,
+                        poly_client::ChannelType::Text
+                            | poly_client::ChannelType::Forum
+                            | poly_client::ChannelType::HackerNews
+                    )
+                })
+                .cloned()
+        })
     } else {
         None
     };

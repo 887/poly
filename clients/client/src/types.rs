@@ -398,6 +398,13 @@ pub struct Server {
     pub account_id: String,
     /// Display name of the account that owns this server.
     pub account_display_name: String,
+    /// Backend-designated welcome / default channel (Discord
+    /// `system_channel_id`; equivalents on other backends if any).
+    /// When set, the host prefers this id when the user navigates to a
+    /// stale or absent channel id rather than falling back to the first
+    /// text channel. Always `None` for backends without the concept.
+    #[serde(default)]
+    pub default_channel_id: Option<String>,
 }
 
 /// A category/folder that groups channels within a server.

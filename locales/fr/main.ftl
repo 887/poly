@@ -794,3 +794,7 @@ agent-integration-outreach = Prise de contact planifiée
 agent-integration-outreach-desc = Planifiez et envoyez des rappels « toutes les N jours » via votre assistant.
 agent-integration-image-gen = Génération d'images
 agent-integration-image-gen-desc = Demandez à votre assistant de générer et joindre des images sur demande.
+
+# État vide affiché dans ServerHome lorsque le serveur n'a pas encore de canaux.
+server-empty-title = Aucun canal pour l'instant
+server-empty-body = Ce serveur n'a aucun canal. Demande à un modérateur d'en créer un, ou crée le premier toi-même si tu en as la permission.

@@ -237,6 +237,7 @@ pub fn from_wit_server(s: wit::Server) -> pc::Server {
         mention_count: s.mention_count,
         account_id: s.account_id,
         account_display_name: s.account_display_name,
+        default_channel_id: s.default_channel_id,
     }
 }
 

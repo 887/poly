@@ -1551,18 +1551,29 @@ fn ServerHome(
     // `VoiceChannelView` to render immediately — before `load_server_data`
     // runs — which triggers `getUserMedia` / audio-device access and can
     // hard-crash Chromium on Linux.
-    let (is_voice_channel, is_forum_server) = {
+    let (is_voice_channel, is_forum_server, is_empty_server) = {
         let cd = chat_data.read();
         let server_matches = cd.current_server.as_ref().is_some_and(|s| s.id == server_id);
         let is_voice = server_matches
             && cd.current_channel.as_ref().is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
         let is_forum = server_matches
             && cd.current_server.as_ref().is_some_and(|s| s.backend.uses_forum_layout());
-        (is_voice, is_forum)
+        // Empty server: server loaded but channels list is empty AND we're
+        // not still in the initial loading window. Without this branch,
+        // ChatView renders blank, which on a stale-deep-link redirect to
+        // ServerHome (see ServerChat use_effect) leaves the user staring at
+        // an empty pane with no explanation.
+        let is_empty = server_matches && cd.channels.is_empty() && !cd.loading;
+        (is_voice, is_forum, is_empty)
     };
 
     rsx! {
-        if is_voice_channel {
+        if is_empty_server {
+            div { class: "empty-state special-page-empty-state",
+                h3 { "{t(\"server-empty-title\")}" }
+                p { "{t(\"server-empty-body\")}" }
+            }
+        } else if is_voice_channel {
             VoiceChannelView {}
         } else if is_forum_server {
             ForumView {}

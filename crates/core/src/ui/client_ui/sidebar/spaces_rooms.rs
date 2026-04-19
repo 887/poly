@@ -150,6 +150,7 @@ mod tests {
             mention_count: 0,
             account_id: "acct-test".into(),
             account_display_name: "Test".into(),
+            default_channel_id: None,
         }
     }
 

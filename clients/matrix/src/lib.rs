@@ -550,6 +550,7 @@ impl ClientBackend for MatrixClient {
                     backend: BackendType::from("matrix"),
                     account_id: account_id.clone(),
                     account_display_name: display_name.clone(),
+                    default_channel_id: None,
                 });
             }
         }
@@ -572,6 +573,7 @@ impl ClientBackend for MatrixClient {
             categories: vec![],
             backend: BackendType::from("matrix"),
             account_id: account_id.clone(),
+            default_channel_id: None,
             account_display_name: display_name,
         })
     }

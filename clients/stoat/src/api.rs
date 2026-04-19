@@ -315,6 +315,7 @@ impl StoatServer {
             mention_count,
             account_id,
             account_display_name,
+            default_channel_id: None,
         }
     }
 }

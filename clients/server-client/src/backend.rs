@@ -127,6 +127,7 @@ impl PolyServerBackend {
             mention_count: 0,
             account_id: account_id.to_string(),
             account_display_name: account_display_name.to_string(),
+            default_channel_id: None,
         }
     }
 
