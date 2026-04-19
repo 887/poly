@@ -256,21 +256,40 @@ browser MCP for a poly MCP — they have different tools (`launch_app`, `rebuild
 If the poly MCPs are not loaded in the current session, say so — do not fall back
 to chrome-devtools as a replacement.
 
-## Workspace Copies (Parallel Agent Work)
+## Parallel Agent Work — `.claude/worktrees/` pattern
 
-This repo (`workspcacemsg`) has btrfs reflink copies for parallel agent work:
+When you spawn an Agent with `isolation: "worktree"`, the runtime creates a git
+worktree under `.claude/worktrees/agent-<id>/` that the subagent edits. The
+`PreToolUse` hook in `.claude/settings.json` symlinks `target/` inside each
+worktree to `/media/games/workspacemsg-worktree-targets/agent-<id>/` so build
+artifacts live on a separate disk and don't fill `/`. The `Stop` hook cleans
+worktrees older than a day.
 
-```
-~/workspcacemsg   — primary (has target/, node_modules/, .jj/, .git/)
-~/workspcacemsg2  — parallel agent work (reflinked)
-~/workspcacemsg3  — parallel agent work (reflinked)
-~/workspcacemsg4  — parallel agent work (reflinked)
-~/workspcacemsg5  — parallel agent work (reflinked)
-~/workspcacemsg6  — parallel agent work (reflinked)
-~/workspcacemsg7  — parallel agent work (reflinked)
-~/workspcacemsg8  — parallel agent work (reflinked)
-```
+### MANDATORY before the subagent exits — `jj describe` the work
 
-All copies share blocks on disk until files diverge. Agents work in copies 2-8 on
-separate tasks. When done, diff the copy against the primary and apply changes back.
-The primary is the integration point — all finished work merges here.
+Worktree directories get cleaned up. The git/jj branch (`worktree-agent-<id>`)
+persists, so committed work survives. **Uncommitted edits do not.**
+
+Tell every parallel-work subagent in its prompt:
+
+> Before reporting done, run `jj describe -m "<one-line summary>"` so your
+> changes land on the worktree branch. Otherwise the orchestrator may not be
+> able to recover them after the worktree is cleaned.
+
+Then in the orchestrator:
+1. Wait for the completion notification.
+2. `jj log` to see the worktree branch's commit (named `worktree-agent-<id>`).
+3. Pull it into main with `jj rebase -s <worktree-commit-id> -d main` (or copy
+   the file diff via `rsync` from the worktree path while it still exists).
+
+If the agent reports "done" but no `worktree-agent-<id>` branch exists in
+`jj log`, the work is **lost** — re-spawn the task. (This bit us on Phase 6 of
+`plan-discord-forums-threads.md`: the agent reported done, the worktree path
+was cleaned, no jj commit, all edits gone except one stray file the LSP had
+auto-saved.)
+
+### Disjoint files = parallel-safe
+
+Run multiple worktree-isolated agents in parallel only when their target files
+don't overlap. Each subagent prompt should explicitly list "DO NOT touch X"
+for any file another parallel agent might be editing.
