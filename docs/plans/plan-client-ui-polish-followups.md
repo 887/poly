@@ -74,13 +74,9 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🟡 F6 — HN discussions / comments beyond depth-1 (Pack E.2)
+### ✅ F6 — HN recursive comments (DONE 2026-04-19)
 
-**Symptom:** `get_view_detail` for HackerNews returns only top-level comments (depth-1). Real HN threads go deep.
-
-**Fix:** recursive comment fetch in `get_view_detail`. HN's Firebase API provides `kids: [id, id, ...]` per item; need to fetch each recursively. Be careful of request volume — cache + limit depth.
-
-**Estimated size:** small-medium.
+**Resolution:** the recursive BFS fetcher (`get_comment_thread` in `clients/hackernews/src/lib.rs`) was already in place but two limits gated it: `get_view_detail` declared `max_depth: 1` (host's tree-body uses that as a row-cap multiplier) and used `take(50)` on the top-level kids; `get_messages` used the feed's `query.limit.unwrap_or(20)` for comment channels. Bumped to `TreeSpec { root_page_size: 30, max_depth: 8 }` (≤ 240 rows ceiling), comment-channel default to 300, BFS clamp to 1000. Real HN threads now render fully.
 
 ---
 

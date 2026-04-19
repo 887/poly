@@ -202,9 +202,13 @@ impl ClientBackend for HackerNewsClient {
     ) -> ClientResult<Vec<Message>> {
         let limit = query.limit.unwrap_or(20) as usize;
 
-        // Check if this is a post's comment thread channel (hn-post-{id})
+        // Check if this is a post's comment thread channel (hn-post-{id}).
+        // F6 — bump the comment-thread default from 20 (the feed-page default)
+        // to 300 so the recursive BFS fetches enough rows to populate a real
+        // discussion. Host can still pass an explicit query.limit to override.
         if let Some(post_id) = post_id_from_channel(channel_id) {
-            return self.get_comment_thread(post_id, limit).await;
+            let comment_limit = query.limit.map_or(300, |l| l as usize);
+            return self.get_comment_thread(post_id, comment_limit).await;
         }
 
         // Otherwise it's a story feed channel
@@ -512,21 +516,15 @@ impl ClientBackend for HackerNewsClient {
             format!("<p>{title}</p>")
         };
 
-        // Fetch top-level comments (depth 1 for Pack E).
-        let top_kids: Vec<u64> = story.kids.clone().unwrap_or_default()
-            .into_iter()
-            .take(50)
-            .collect();
-        let _comments = if !top_kids.is_empty() {
-            self.api.get_items_batch(&top_kids).await.unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
-        let comments_section = if !top_kids.is_empty() {
+        // F6 — declare the comment tree shape. The host calls get_messages
+        // for the post's channel separately; that path runs the recursive
+        // BFS fetcher in get_comment_thread (parent_ids preserved). Just
+        // tell the host how deep / wide we expect the tree.
+        let has_comments = story.kids.as_ref().is_some_and(|k| !k.is_empty());
+        let comments_section = if has_comments {
             Some(poly_client::TreeSpec {
-                root_page_size: top_kids.len() as u32,
-                max_depth: 1,
+                root_page_size: 30,
+                max_depth: 8,
             })
         } else {
             None
@@ -601,9 +599,12 @@ impl HackerNewsClient {
             .map(|id| (id, story_id))
             .collect();
 
-        // Collected (item, parent_id) pairs.
+        // Collected (item, parent_id) pairs. F6 — raise BFS ceiling from 300
+        // to 1000 so deep HN threads (which routinely run 500+ items) render
+        // fully instead of truncating mid-conversation. Caller's `limit` still
+        // wins when it's smaller (host supplies query.limit per page).
         let mut collected: Vec<(types::HnItem, u64)> = Vec::new();
-        let max = limit.clamp(1, 300);
+        let max = limit.clamp(1, 1000);
 
         while !queue.is_empty() && collected.len() < max {
             let remaining = max - collected.len();
