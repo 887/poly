@@ -11,7 +11,8 @@ use std::collections::HashSet;
 use crate::wit_bindings::{
     ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest,
     ClientSidebarGuest, ClientViewsGuest, Guest, MenuItem, MenuItemVariant, MenuSlot,
-    MenuTargetKind, PluginMetadataGuest, export, wit,
+    MenuTargetKind, PluginMetadataGuest, SidebarIconSource, SidebarItem, SidebarRouteKind,
+    SidebarSection, export, wit,
 };
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,223 @@ struct StoredSession {
     access_token: String,
     device_id: String,
     user_id: String,
+}
+
+// ─── F4: Space tree helpers (WASM guest) ──────────────────────────────────
+
+/// Minimal joined-rooms response shape for WASM deserialization.
+#[derive(Debug, Deserialize)]
+struct WasmJoinedRoomsResponse {
+    #[serde(default)]
+    joined_rooms: Vec<String>,
+}
+
+/// Minimal room-state event shape for WASM deserialization.
+#[derive(Debug, Deserialize)]
+struct WasmRoomStateEvent {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(default)]
+    content: serde_json::Value,
+}
+
+/// Minimal space-hierarchy room shape for WASM deserialization.
+#[derive(Debug, Deserialize)]
+struct WasmSpaceHierarchyRoom {
+    room_id: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    room_type: Option<String>,
+}
+
+/// Minimal space-hierarchy response shape for WASM deserialization.
+#[derive(Debug, Default, Deserialize)]
+struct WasmSpaceHierarchyResponse {
+    #[serde(default)]
+    rooms: Vec<WasmSpaceHierarchyRoom>,
+}
+
+/// F4 — one entry in the flattened space/room tree (WASM variant).
+#[derive(Debug, Clone)]
+struct WasmSpaceTreeEntry {
+    id: String,
+    name: String,
+    is_space: bool,
+    parent_id: Option<String>,
+}
+
+/// F4 — convert flat `Vec<WasmSpaceTreeEntry>` into `Vec<SidebarItem>` (WASM).
+///
+/// FTL label note: same as the native version — `label_key` is the room's
+/// display name.  The host's `t()` fallback renders it as-is when no FTL
+/// match exists.
+fn build_sidebar_items_wasm(entries: Vec<WasmSpaceTreeEntry>) -> Vec<SidebarItem> {
+    let known_ids: std::collections::HashSet<String> =
+        entries.iter().map(|e| e.id.clone()).collect();
+
+    entries
+        .into_iter()
+        .map(|entry| {
+            let parent_id = entry.parent_id.filter(|pid| known_ids.contains(pid.as_str()));
+            let icon = if entry.is_space {
+                Some(SidebarIconSource::Emoji("\u{1f30c}".to_string()))
+            } else {
+                Some(SidebarIconSource::Emoji("\u{1f4ac}".to_string()))
+            };
+            let route_kind = if entry.is_space {
+                SidebarRouteKind::CustomView
+            } else {
+                SidebarRouteKind::Channel
+            };
+            SidebarItem {
+                id: entry.id,
+                parent_id,
+                label_key: entry.name,
+                icon,
+                badge: None,
+                route_kind,
+            }
+        })
+        .collect()
+}
+
+/// F4 — fetch the space tree via host HTTP requests (WASM guest).
+///
+/// Returns a flat list of `WasmSpaceTreeEntry` items; errors on any step
+/// produce an empty result for that step rather than propagating (best-effort
+/// tree construction).
+fn fetch_space_tree_wasm(
+    homeserver: &str,
+    token: &str,
+) -> Result<Vec<WasmSpaceTreeEntry>, wit::ClientError> {
+    use std::collections::HashSet;
+
+    let headers = vec![("authorization".to_string(), format!("Bearer {token}"))];
+
+    // 1. Fetch joined rooms.
+    let resp = host_http_request(
+        "GET",
+        &format!("{homeserver}/_matrix/client/v3/joined_rooms"),
+        headers.clone(),
+        None,
+    )?;
+    if !matches!(resp.status, 200..=299) {
+        return Err(wit::ClientError::Network(format!(
+            "joined_rooms returned HTTP {}",
+            resp.status
+        )));
+    }
+    let joined: WasmJoinedRoomsResponse = parse_json(&resp)?;
+
+    // 2. For each joined room, fetch its state to determine type and name.
+    let mut room_names: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut room_is_space: std::collections::HashMap<String, bool> =
+        std::collections::HashMap::new();
+    let mut space_ids: Vec<String> = Vec::new();
+
+    for room_id in &joined.joined_rooms {
+        let state_resp = host_http_request(
+            "GET",
+            &format!("{homeserver}/_matrix/client/v3/rooms/{room_id}/state"),
+            headers.clone(),
+            None,
+        );
+        let state_events: Vec<WasmRoomStateEvent> = match state_resp {
+            Ok(r) if matches!(r.status, 200..=299) => {
+                parse_json(&r).unwrap_or_default()
+            }
+            _ => vec![],
+        };
+
+        let is_space = state_events.iter().any(|ev| {
+            ev.event_type == "m.room.create"
+                && ev.content.get("type").and_then(|v| v.as_str()) == Some("m.space")
+        });
+        let name = state_events
+            .iter()
+            .find(|ev| ev.event_type == "m.room.name")
+            .and_then(|ev| ev.content.get("name"))
+            .and_then(|v| v.as_str())
+            .unwrap_or(room_id)
+            .to_string();
+
+        room_names.insert(room_id.clone(), name);
+        room_is_space.insert(room_id.clone(), is_space);
+        if is_space {
+            space_ids.push(room_id.clone());
+        }
+    }
+
+    // 3. For each space, fetch hierarchy and collect child entries.
+    let mut entries: Vec<WasmSpaceTreeEntry> = Vec::new();
+    let mut child_ids: HashSet<String> = HashSet::new();
+    let mut visited_spaces: HashSet<String> = HashSet::new();
+
+    for space_id in &space_ids {
+        if !visited_spaces.insert(space_id.clone()) {
+            continue;
+        }
+        let hier_resp = host_http_request(
+            "GET",
+            &format!("{homeserver}/_matrix/client/v1/rooms/{space_id}/hierarchy"),
+            headers.clone(),
+            None,
+        );
+        let hierarchy: WasmSpaceHierarchyResponse = match hier_resp {
+            Ok(r) if matches!(r.status, 200..=299) => parse_json(&r).unwrap_or_default(),
+            _ => WasmSpaceHierarchyResponse { rooms: vec![] },
+        };
+
+        for room in &hierarchy.rooms {
+            if room.room_id == *space_id {
+                continue;
+            }
+            let is_space = room.room_type.as_deref() == Some("m.space");
+            let name = room.name.clone().unwrap_or_else(|| room.room_id.clone());
+            child_ids.insert(room.room_id.clone());
+            entries.push(WasmSpaceTreeEntry {
+                id: room.room_id.clone(),
+                name,
+                is_space,
+                parent_id: Some(space_id.clone()),
+            });
+            if is_space {
+                visited_spaces.insert(room.room_id.clone());
+            }
+        }
+    }
+
+    // 4. Top-level spaces (parent_id == None).
+    let mut result: Vec<WasmSpaceTreeEntry> = space_ids
+        .iter()
+        .map(|id| WasmSpaceTreeEntry {
+            id: id.clone(),
+            name: room_names.get(id).cloned().unwrap_or_else(|| id.clone()),
+            is_space: true,
+            parent_id: None,
+        })
+        .collect();
+
+    // 5. Orphan rooms — neither a space nor already a child.
+    let orphans: Vec<WasmSpaceTreeEntry> = joined
+        .joined_rooms
+        .iter()
+        .filter(|id| {
+            !room_is_space.get(*id).copied().unwrap_or(false) && !child_ids.contains(*id)
+        })
+        .map(|id| WasmSpaceTreeEntry {
+            id: id.clone(),
+            name: room_names.get(id).cloned().unwrap_or_else(|| id.clone()),
+            is_space: false,
+            parent_id: None,
+        })
+        .collect();
+
+    result.extend(entries);
+    result.extend(orphans);
+    Ok(result)
 }
 
 /// F10 — per-WASM-instance state for context-menu state pairs.
@@ -733,9 +951,25 @@ impl ClientSettingsGuest for MatrixPlugin {
 impl ClientSidebarGuest for MatrixPlugin {
     fn get_sidebar_declaration(
     ) -> Result<crate::wit_bindings::SidebarDeclaration, wit::ClientError> {
+        // F4: Build the space tree using host-mediated HTTP requests.
+        let session = STATE.with(|s| s.borrow().clone());
+        let items = match session {
+            None => vec![],
+            Some(sess) => {
+                let entries =
+                    fetch_space_tree_wasm(DEFAULT_HOMESERVER, &sess.access_token)
+                        .unwrap_or_default();
+                build_sidebar_items_wasm(entries)
+            }
+        };
         Ok(crate::wit_bindings::SidebarDeclaration {
-            layout: crate::wit_bindings::SidebarLayoutKind::SpacesRooms,
-            sections: vec![],
+            layout: crate::wit_bindings::SidebarLayoutKind::Custom,
+            sections: vec![SidebarSection {
+                header_key: Some("plugin-matrix-sidebar-spaces-section".to_string()),
+                collapsible: false,
+                default_collapsed: false,
+                items,
+            }],
             header_block: None,
         })
     }

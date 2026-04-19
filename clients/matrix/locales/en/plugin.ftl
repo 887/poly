@@ -19,6 +19,9 @@ plugin-matrix-signup-password-placeholder = Enter your password
 plugin-matrix-signup-connect-btn = Sign In
 plugin-matrix-signup-connecting = Signing in…
 
+# F4 — sidebar section header
+plugin-matrix-sidebar-spaces-section = Spaces & Rooms
+
 plugin-matrix-menu-space-settings-label = Space Settings
 plugin-matrix-menu-edit-per-space-profile-label = Edit Space Profile
 plugin-matrix-menu-e2ee-verification-label = E2EE Verification

@@ -50,27 +50,15 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🟠 F4 — Matrix `m.space.parent`/`m.space.child` tree nesting
+### ✅ F4 — Matrix `m.space.parent`/`child` tree nesting (DONE 2026-04-19)
 
-**Symptom:** `SpacesRoomsLayout` (Pack D) renders spaces-and-rooms with depth=1 only. Real Matrix spaces can nest N deep via `m.space.parent` and `m.space.child` state events.
-
-**Fix:** requires the Matrix backend (`clients/matrix/src/lib.rs`) to expose `get_space_children(space_id)` → `Vec<Space>` OR extend `get_servers()` to return a hierarchical structure. Then SpacesRoomsLayout recursively descends.
-
-**Blocker:** WIT interface change (`client-sidebar` would need to express nested spaces) OR a Matrix-specific extension. Might also be expressible as `SidebarLayoutKind::Custom` + declared `sidebar-sections` with `parent_id` hooks (already in the WIT).
-
-**Recommended:** use the existing Custom layout pattern. Matrix plugin declares its space tree via `sidebar-declaration.sections` with parent_id links; no WIT change needed. `CustomSidebar` host component already reconstructs trees from flat+parent_id.
-
-**Estimated size:** medium. Matrix plugin needs to fetch + return the tree; `CustomSidebar` rendering already works.
+**Resolution:** Matrix's `get_sidebar_declaration` (both native + WASM) switched from the stock `SpacesRoomsLayout` (depth-1 cap) to `SidebarLayoutKind::Custom` with a single `SidebarSection` containing a flat `Vec<SidebarItem>` carrying `parent_id` pointers reflecting the user's `m.space.child` graph. The host's existing `CustomSidebar` reconstructs the tree. Async `fetch_space_tree` walks `GET /_matrix/client/v3/joined_rooms` → `GET .../rooms/{id}/state` (to detect `m.room.create.type == "m.space"` and pull room name) → `GET .../rooms/{id}/hierarchy` per space, with cycle detection via a `visited_spaces` set. Pure helper `build_sidebar_items` extracted for unit testing; 5 new tests cover preserved/dropped parent_ids, space-vs-room route kinds, label resolution, and FTL regression.
 
 ---
 
-### 🟡 F5 — GitHub discussions tab (Pack E.3)
+### ✅ F5 — GitHub discussions tab (DONE 2026-04-19)
 
-**Symptom:** `get_view_rows(..., tab_id=Some("discussions"))` returns empty for GitHub. GitHub discussions use GraphQL, not REST.
-
-**Fix:** implement a GraphQL client in `clients/github/src/api.rs` OR use the REST `issues` endpoint with `filter=discussions` if GitHub adds it (they haven't as of writing).
-
-**Estimated size:** medium (new GraphQL client) or defer indefinitely. Current empty placeholder is acceptable.
+**Resolution:** added `GitHubHttpClient::graphql_query<T: DeserializeOwned>(query, variables)` (POSTs to `https://api.github.com/graphql` with the existing bearer auth) plus a `list_discussions(owner, repo, first, after) -> (Vec<GhDiscussion>, Option<String>)` helper using a fixed query that pulls number/title/body/url/timestamps/upvote_count/comments_count/author/category/answer_chosen_at/closed. New `GhDiscussion` + supporting wire-format types in `types.rs`. New `mapping::map_discussion_to_viewrow` exposes title as `primary_text`, category name as `secondary_text`, "👍 N · 💬 N" as `meta_text`, and "answered"/"closed" badges. `lib.rs::get_view_rows` discussions branch now calls `list_discussions` instead of returning the empty placeholder; cursor wired as `CursorKind::Opaque`. Edge cases handled: null `nodes` entries flatten away, deleted-account `author == null`, GraphQL `errors[]` joined into a single `GhError::Exit`. 5 unit tests on the mapping. Native build also routes through `gh api graphql` for parity with the REST helpers.
 
 ---
 

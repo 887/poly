@@ -656,12 +656,27 @@ impl ClientBackend for GitHubClient {
         filter_id: Option<&str>,
         tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        // Discussions tab — GitHub Discussions require GraphQL; skip for Pack E.
-        if tab_id == Some("discussions") {
-            return Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None });
-        }
-
         let (owner, repo) = parse_forum_channel(channel_id)?;
+
+        // Discussions tab uses GraphQL — separate from the REST issues path.
+        if tab_id == Some("discussions") {
+            let (discussions, next_cursor) = self
+                .cli
+                .list_discussions(&owner, &repo, 50, None)
+                .await
+                .map_err(Self::convert_err)?;
+            let rows = discussions
+                .iter()
+                .map(mapping::map_discussion_to_viewrow)
+                .collect();
+            return Ok(ViewRowsPage {
+                rows,
+                next_cursor: next_cursor.map(|v| Cursor {
+                    kind: CursorKind::Opaque,
+                    value: v,
+                }),
+            });
+        }
         let state = filter_id.unwrap_or("open");
 
         // Determine which kind of items to return based on tab_id or channel prefix.

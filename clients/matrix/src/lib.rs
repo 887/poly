@@ -272,6 +272,193 @@ impl MatrixClient {
     }
 }
 
+// ─── F4: Space tree ────────────────────────────────────────────────────────
+
+/// F4 — one entry in the flattened space/room tree used to build sidebar items.
+///
+/// Extracted so the pure [`build_sidebar_items`] function can be unit-tested
+/// without any network calls.
+#[cfg(feature = "native")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpaceTreeEntry {
+    /// Matrix room ID (e.g. `!abc:example.org`).
+    pub id: String,
+    /// Human-readable name.
+    pub name: String,
+    /// `true` if this room is a Matrix Space (`m.space`).
+    pub is_space: bool,
+    /// Parent space room ID, if this room lives inside a space.
+    pub parent_id: Option<String>,
+}
+
+/// F4 — convert a flat `Vec<SpaceTreeEntry>` into `Vec<SidebarItem>`.
+///
+/// This is a pure function with no I/O — all async fetching is done by the
+/// caller.  Cycle detection: a room whose `parent_id` refers back to its own
+/// ancestor is handled by the host's tree-reconstruction step (items that
+/// point at non-existent parents are silently dropped).  Within this function
+/// we only validate that items with a `parent_id` reference a known `id`.
+///
+/// FTL label note: `label_key` is set to the room's display name directly.
+/// The host's `t()` function falls back to `title_case_fallback(key)` when no
+/// FTL match is found; for room names that are plain words or short phrases
+/// this produces an acceptable label.  Hyphens in room names will be replaced
+/// by spaces in the rendered label — a known limitation documented here.
+#[cfg(feature = "native")]
+pub fn build_sidebar_items(entries: Vec<SpaceTreeEntry>) -> Vec<SidebarItem> {
+    let known_ids: std::collections::HashSet<String> =
+        entries.iter().map(|e| e.id.clone()).collect();
+
+    entries
+        .into_iter()
+        .map(|entry| {
+            let parent_id = entry.parent_id.filter(|pid| known_ids.contains(pid.as_str()));
+            let icon = if entry.is_space {
+                Some(IconSource::Emoji("\u{1f30c}".to_string())) // 🌌
+            } else {
+                Some(IconSource::Emoji("\u{1f4ac}".to_string())) // 💬
+            };
+            let route_kind = if entry.is_space {
+                SidebarRouteKind::CustomView
+            } else {
+                SidebarRouteKind::Channel
+            };
+            SidebarItem {
+                id: entry.id,
+                parent_id,
+                label_key: entry.name,
+                icon,
+                badge: None,
+                route_kind,
+            }
+        })
+        .collect()
+}
+
+/// F4 — fetch the full space/room tree for the authenticated user.
+///
+/// Algorithm:
+/// 1. Fetch all joined room IDs via `/joined_rooms`.
+/// 2. For each joined room, fetch its state and detect spaces.
+/// 3. For each space, call the hierarchy endpoint and collect all child entries.
+/// 4. Non-space rooms that are not already listed as space children appear as
+///    orphans (parent_id == None).
+///
+/// Cycle detection: a space that appears as its own child is skipped via the
+/// `visited` set.
+#[cfg(feature = "native")]
+impl MatrixClient {
+    async fn fetch_space_tree(&self) -> ClientResult<Vec<SpaceTreeEntry>> {
+        use std::collections::HashSet;
+
+        let joined = self.http.fetch_joined_rooms().await?;
+        let mut entries: Vec<SpaceTreeEntry> = Vec::new();
+        let mut child_ids: HashSet<String> = HashSet::new();
+        let mut visited_spaces: HashSet<String> = HashSet::new();
+
+        // First pass: identify which joined rooms are spaces.
+        let mut space_ids: Vec<String> = Vec::new();
+        let mut room_names: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        let mut room_is_space: std::collections::HashMap<String, bool> =
+            std::collections::HashMap::new();
+
+        for room_id in &joined.joined_rooms {
+            let state = self
+                .http
+                .fetch_room_state(room_id)
+                .await
+                .unwrap_or_default();
+            let is_space = Self::is_space_room(&state);
+            let name = Self::extract_room_name(&state, room_id);
+            room_names.insert(room_id.clone(), name);
+            room_is_space.insert(room_id.clone(), is_space);
+            if is_space {
+                space_ids.push(room_id.clone());
+            }
+        }
+
+        // Second pass: for each top-level space, walk the hierarchy.
+        for space_id in &space_ids {
+            if !visited_spaces.insert(space_id.clone()) {
+                continue;
+            }
+            let hierarchy = self
+                .http
+                .fetch_space_hierarchy(space_id)
+                .await
+                .unwrap_or(api::SpaceHierarchyResponse { rooms: vec![] });
+
+            for room in &hierarchy.rooms {
+                // The hierarchy root (the space itself) is already tracked as a joined room.
+                if room.room_id == *space_id {
+                    continue;
+                }
+
+                let is_space = room.room_type.as_deref() == Some("m.space");
+                let name = room.name.clone().unwrap_or_else(|| room.room_id.clone());
+
+                // Track that this room is a child (may be claimed by multiple parents;
+                // first claim wins via insertion order).
+                child_ids.insert(room.room_id.clone());
+
+                entries.push(SpaceTreeEntry {
+                    id: room.room_id.clone(),
+                    name,
+                    is_space,
+                    parent_id: Some(space_id.clone()),
+                });
+
+                // If this child is itself a space, mark it visited so we don't
+                // recurse into it again if it appears in another parent's hierarchy.
+                if is_space {
+                    visited_spaces.insert(room.room_id.clone());
+                }
+            }
+        }
+
+        // Third pass: emit top-level entries for all joined spaces.
+        let mut top_level: Vec<SpaceTreeEntry> = space_ids
+            .iter()
+            .map(|id| {
+                let name = room_names
+                    .get(id)
+                    .cloned()
+                    .unwrap_or_else(|| id.clone());
+                SpaceTreeEntry {
+                    id: id.clone(),
+                    name,
+                    is_space: true,
+                    parent_id: None,
+                }
+            })
+            .collect();
+
+        // Fourth pass: orphan rooms — joined rooms that are neither spaces nor
+        // already claimed as a child of a space.
+        let orphan_rooms: Vec<SpaceTreeEntry> = joined
+            .joined_rooms
+            .iter()
+            .filter(|id| {
+                !room_is_space.get(*id).copied().unwrap_or(false) && !child_ids.contains(*id)
+            })
+            .map(|id| {
+                let name = room_names.get(id).cloned().unwrap_or_else(|| id.clone());
+                SpaceTreeEntry {
+                    id: id.clone(),
+                    name,
+                    is_space: false,
+                    parent_id: None,
+                }
+            })
+            .collect();
+
+        top_level.extend(entries);
+        top_level.extend(orphan_rooms);
+        Ok(top_level)
+    }
+}
+
 /// F10 — shared menu-item builder (also used inside the trait impl).
 #[cfg(feature = "native")]
 impl MatrixClient {
@@ -985,9 +1172,17 @@ impl ClientBackend for MatrixClient {
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        // F4: Switch to Custom layout so the host renders our full space tree.
+        let entries = self.fetch_space_tree().await.unwrap_or_default();
+        let items = build_sidebar_items(entries);
         Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::SpacesRooms,
-            sections: Vec::new(),
+            layout: SidebarLayoutKind::Custom,
+            sections: vec![SidebarSection {
+                header_key: Some("plugin-matrix-sidebar-spaces-section".to_string()),
+                collapsible: false,
+                default_collapsed: false,
+                items,
+            }],
             header_block: None,
         })
     }
@@ -1090,5 +1285,150 @@ mod tests {
     fn translations_return_nonempty_for_en() {
         let t = plugin_translations("en");
         assert!(t.contains("plugin-matrix-title"));
+    }
+
+    // ─── F4: build_sidebar_items unit tests ───────────────────────────────────
+
+    /// Fixture: two top-level spaces, one nested space, and three rooms.
+    ///
+    /// Layout:
+    /// - `!parent:s`  (space, top-level)
+    ///   - `!nested:s` (space, child of parent)
+    ///     - `!room-nested:s` (room, child of nested)
+    ///   - `!room-parent:s` (room, child of parent)
+    /// - `!orphan:s`  (room, no space parent)
+    fn fixture_entries() -> Vec<SpaceTreeEntry> {
+        vec![
+            SpaceTreeEntry {
+                id: "!parent:s".to_string(),
+                name: "Parent Space".to_string(),
+                is_space: true,
+                parent_id: None,
+            },
+            SpaceTreeEntry {
+                id: "!nested:s".to_string(),
+                name: "Nested Space".to_string(),
+                is_space: true,
+                parent_id: Some("!parent:s".to_string()),
+            },
+            SpaceTreeEntry {
+                id: "!room-nested:s".to_string(),
+                name: "Nested Room".to_string(),
+                is_space: false,
+                parent_id: Some("!nested:s".to_string()),
+            },
+            SpaceTreeEntry {
+                id: "!room-parent:s".to_string(),
+                name: "Parent Room".to_string(),
+                is_space: false,
+                parent_id: Some("!parent:s".to_string()),
+            },
+            SpaceTreeEntry {
+                id: "!orphan:s".to_string(),
+                name: "Orphan Room".to_string(),
+                is_space: false,
+                parent_id: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn build_sidebar_items_preserves_parent_id_graph() {
+        let entries = fixture_entries();
+        let items = build_sidebar_items(entries);
+
+        // Helper: find item by id.
+        let find = |id: &str| -> &SidebarItem {
+            items.iter().find(|i| i.id == id).expect("item not found")
+        };
+
+        // Parent space has no parent.
+        assert!(find("!parent:s").parent_id.is_none(), "parent space must be root");
+
+        // Nested space is child of parent.
+        assert_eq!(
+            find("!nested:s").parent_id.as_deref(),
+            Some("!parent:s"),
+            "nested space parent_id"
+        );
+
+        // Room inside nested space has nested space as parent.
+        assert_eq!(
+            find("!room-nested:s").parent_id.as_deref(),
+            Some("!nested:s"),
+            "nested room parent_id"
+        );
+
+        // Room inside parent space has parent space as parent.
+        assert_eq!(
+            find("!room-parent:s").parent_id.as_deref(),
+            Some("!parent:s"),
+            "parent room parent_id"
+        );
+
+        // Orphan room has no parent.
+        assert!(find("!orphan:s").parent_id.is_none(), "orphan room must be root");
+    }
+
+    #[test]
+    fn build_sidebar_items_drops_unknown_parent_ids() {
+        // A room that references a parent not present in the list.
+        let entries = vec![
+            SpaceTreeEntry {
+                id: "!room:s".to_string(),
+                name: "Room".to_string(),
+                is_space: false,
+                parent_id: Some("!nonexistent:s".to_string()),
+            },
+        ];
+        let items = build_sidebar_items(entries);
+        assert_eq!(items.len(), 1, "one item");
+        // parent_id must be None because the referenced parent is unknown.
+        assert!(
+            items[0].parent_id.is_none(),
+            "unknown parent_id must be dropped"
+        );
+    }
+
+    #[test]
+    fn build_sidebar_items_spaces_use_customview_route() {
+        let entries = fixture_entries();
+        let items = build_sidebar_items(entries);
+        for item in &items {
+            let expected_is_space = matches!(item.id.as_str(), "!parent:s" | "!nested:s");
+            if expected_is_space {
+                assert_eq!(
+                    item.route_kind,
+                    SidebarRouteKind::CustomView,
+                    "space {} must use CustomView route",
+                    item.id
+                );
+            } else {
+                assert_eq!(
+                    item.route_kind,
+                    SidebarRouteKind::Channel,
+                    "room {} must use Channel route",
+                    item.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn build_sidebar_items_label_key_is_room_name() {
+        let entries = fixture_entries();
+        let items = build_sidebar_items(entries);
+        let find = |id: &str| items.iter().find(|i| i.id == id).expect("item not found");
+        assert_eq!(find("!parent:s").label_key, "Parent Space");
+        assert_eq!(find("!orphan:s").label_key, "Orphan Room");
+    }
+
+    #[test]
+    fn ftl_contains_sidebar_section_key() {
+        let ftl = plugin_translations("en");
+        assert!(
+            ftl.contains("plugin-matrix-sidebar-spaces-section"),
+            "FTL must contain the sidebar section header key"
+        );
     }
 }

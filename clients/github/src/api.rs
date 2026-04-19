@@ -25,7 +25,10 @@
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-use crate::types::{GhContents, GhIssue, GhIssueComment, GhRepo, GhUser};
+use crate::types::{
+    GhContents, GhDiscussion, GhDiscussionsData, GhIssue, GhIssueComment, GhRepo, GhUser,
+    GraphQlResponse,
+};
 
 /// All errors the gh CLI wrapper can return.
 #[derive(Debug, Error)]
@@ -321,5 +324,189 @@ impl GhCli {
             format!("/repos/{owner}/{repo}/contents/{path}")
         };
         self.api_get(&endpoint, &[]).await
+    }
+
+    /// Execute a GraphQL query against `POST /graphql` (github.com or GHE).
+    ///
+    /// Body: `{ "query": query, "variables": variables }`.
+    /// Response shape: `{ "data": T, "errors": [...] }`.
+    ///
+    /// If the response contains one or more `errors`, the first message is
+    /// returned as [`GhError::Exit`] (code = 0 to distinguish from HTTP errors).
+    /// If `data` is absent and there are no errors, an internal parse error is
+    /// returned.
+    pub async fn graphql_query<T: DeserializeOwned>(
+        &self,
+        query: &str,
+        variables: serde_json::Value,
+    ) -> Result<T, GhError> {
+        let body = serde_json::json!({ "query": query, "variables": variables });
+        let bytes = self.graphql_raw(&body).await?;
+        let envelope: GraphQlResponse<T> =
+            serde_json::from_slice(&bytes).map_err(|e| GhError::Parse(e.to_string()))?;
+        if !envelope.errors.is_empty() {
+            let msg = envelope
+                .errors
+                .iter()
+                .map(|e| e.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(GhError::Exit {
+                code: 0,
+                stderr: format!("GraphQL errors: {msg}"),
+            });
+        }
+        envelope.data.ok_or_else(|| {
+            GhError::Parse("GraphQL response missing 'data' field".to_string())
+        })
+    }
+
+    /// Native: run `gh api graphql --method POST --input -` with the JSON body
+    /// piped to stdin, or use direct HTTP when `http_base_url` is set.
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn graphql_raw(&self, body: &serde_json::Value) -> Result<Vec<u8>, GhError> {
+        if let Some(base_url) = &self.http_base_url {
+            return self.graphql_raw_http(base_url, body).await;
+        }
+
+        use std::process::Stdio;
+        use tokio::io::AsyncWriteExt as _;
+        use tokio::process::Command;
+
+        let body_bytes =
+            serde_json::to_vec(body).map_err(|e| GhError::Parse(e.to_string()))?;
+
+        let mut cmd = Command::new("gh");
+        cmd.arg("api").arg("graphql").arg("--method").arg("POST").arg("--input").arg("-");
+        if let Some(host) = &self.hostname {
+            cmd.args(["--hostname", host]);
+        }
+        cmd.stdin(Stdio::piped());
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| GhError::Spawn(e.to_string()))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(&body_bytes)
+                .await
+                .map_err(|e| GhError::Spawn(format!("failed to write stdin: {e}")))?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .await
+            .map_err(|e| GhError::Spawn(e.to_string()))?;
+
+        if !output.status.success() {
+            return Err(GhError::Exit {
+                code: output.status.code().unwrap_or(-1),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            });
+        }
+
+        Ok(output.stdout)
+    }
+
+    /// WASM: route the GraphQL call via the host bridge HTTP transport.
+    #[cfg(target_arch = "wasm32")]
+    async fn graphql_raw(&self, body: &serde_json::Value) -> Result<Vec<u8>, GhError> {
+        let base_url = self.http_base_url.as_deref().unwrap_or("https://api.github.com");
+        self.graphql_raw_http(base_url, body).await
+    }
+
+    /// Shared HTTP POST path for GraphQL (test mode on native, default on WASM).
+    async fn graphql_raw_http(
+        &self,
+        base_url: &str,
+        body: &serde_json::Value,
+    ) -> Result<Vec<u8>, GhError> {
+        use poly_host_bridge::http::HttpClient;
+
+        let url = format!("{}/graphql", base_url.trim_end_matches('/'));
+        let http = HttpClient::new();
+        let mut req = http
+            .post(&url)
+            .header("Accept", "application/vnd.github+json")
+            .json(body);
+        if let Some(token) = &self.http_token {
+            req = req.header("Authorization", format!("Bearer {token}"));
+        }
+        let response = req
+            .send()
+            .await
+            .map_err(|e| GhError::Spawn(format!("HTTP request failed: {e}")))?;
+
+        let status = response.status();
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| GhError::Parse(format!("failed to read response body: {e}")))?;
+
+        if !status.is_success() {
+            return Err(GhError::Exit {
+                code: status.as_u16() as i32,
+                stderr: String::from_utf8_lossy(&bytes).into_owned(),
+            });
+        }
+
+        Ok(bytes.to_vec())
+    }
+
+    /// List GitHub Discussions for a repo, ordered by last-updated descending.
+    ///
+    /// `first` controls page size (max 100 per GitHub's GraphQL limits).
+    /// `after` is the pagination cursor from the previous page's `pageInfo.endCursor`.
+    ///
+    /// Returns `(discussions, next_cursor)` where `next_cursor` is `Some` when
+    /// `pageInfo.hasNextPage` is true.
+    pub async fn list_discussions(
+        &self,
+        owner: &str,
+        repo: &str,
+        first: u32,
+        after: Option<&str>,
+    ) -> Result<(Vec<GhDiscussion>, Option<String>), GhError> {
+        const QUERY: &str = r#"
+query($owner: String!, $name: String!, $first: Int!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    discussions(first: $first, after: $after, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      pageInfo { endCursor hasNextPage }
+      nodes {
+        number
+        title
+        bodyText
+        url
+        createdAt
+        updatedAt
+        upvoteCount
+        comments(first: 0) { totalCount }
+        author { login avatarUrl }
+        category { id name emoji }
+        answerChosenAt
+        closed
+      }
+    }
+  }
+}
+"#;
+        let variables = serde_json::json!({
+            "owner": owner,
+            "name": repo,
+            "first": first,
+            "after": after,
+        });
+        let data: GhDiscussionsData = self.graphql_query(QUERY, variables).await?;
+        let conn = data.repository.discussions;
+        let next_cursor = if conn.page_info.has_next_page {
+            conn.page_info.end_cursor
+        } else {
+            None
+        };
+        let discussions = conn.nodes.into_iter().flatten().collect();
+        Ok((discussions, next_cursor))
     }
 }

@@ -130,3 +130,102 @@ pub enum GhContents {
     Dir(Vec<GhContentEntry>),
     File(GhContentEntry),
 }
+
+// ---------------------------------------------------------------------------
+// GraphQL — GitHub Discussions
+// ---------------------------------------------------------------------------
+
+/// Author subobject returned in GraphQL discussion nodes.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhActor {
+    pub login: String,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+}
+
+/// Discussion category returned by GraphQL.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhDiscussionCategory {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub emoji: Option<String>,
+}
+
+/// `comments { totalCount }` sub-object in a discussion node.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhDiscussionComments {
+    pub total_count: u32,
+}
+
+/// One GitHub Discussion node as returned by the `discussions(...)` GraphQL
+/// connection. Only the fields the mapping layer reads are kept.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhDiscussion {
+    pub number: u64,
+    pub title: String,
+    #[serde(default)]
+    pub body_text: Option<String>,
+    pub url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub upvote_count: u32,
+    pub comments: GhDiscussionComments,
+    /// The author can be `null` if the account was deleted.
+    #[serde(default)]
+    pub author: Option<GhActor>,
+    pub category: GhDiscussionCategory,
+    /// Non-null when a comment has been marked as the answer.
+    #[serde(default)]
+    pub answer_chosen_at: Option<String>,
+    pub closed: bool,
+}
+
+/// `pageInfo` sub-object from a GraphQL connection.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhPageInfo {
+    pub end_cursor: Option<String>,
+    pub has_next_page: bool,
+}
+
+/// `discussions` connection shape inside a `repository` response.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhDiscussionsConnection {
+    pub page_info: GhPageInfo,
+    /// `nodes` can contain `null` entries when a node is inaccessible.
+    pub nodes: Vec<Option<GhDiscussion>>,
+}
+
+/// `repository { discussions { ... } }` wrapper.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhDiscussionsRepository {
+    pub discussions: GhDiscussionsConnection,
+}
+
+/// Top-level `data` object for the list-discussions query.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GhDiscussionsData {
+    pub repository: GhDiscussionsRepository,
+}
+
+/// GraphQL response envelope: `{ "data": T, "errors": [...] }`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GraphQlResponse<T> {
+    pub data: Option<T>,
+    #[serde(default)]
+    pub errors: Vec<GraphQlError>,
+}
+
+/// One error object from a GraphQL response.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GraphQlError {
+    pub message: String,
+}

@@ -18,7 +18,7 @@ use poly_client::{
     PresenceStatus, Server, User, ViewDetail, ViewRow, BackendType,
 };
 
-use crate::types::{GhIssue, GhIssueComment, GhRepo, GhUser};
+use crate::types::{GhDiscussion, GhIssue, GhIssueComment, GhRepo, GhUser};
 
 /// Backend slug used in `BackendType` and routes.
 pub const BACKEND_SLUG: &str = "github";
@@ -172,6 +172,33 @@ pub fn map_issue_to_viewrow(issue: &GhIssue) -> ViewRow {
     }
 }
 
+/// Map a [`GhDiscussion`] into a [`ViewRow`] for the discussions list pane.
+///
+/// Pure function — suitable for unit testing without a running client.
+#[must_use]
+pub fn map_discussion_to_viewrow(d: &GhDiscussion) -> ViewRow {
+    let badge = if d.answer_chosen_at.is_some() {
+        Some("answered".to_string())
+    } else if d.closed {
+        Some("closed".to_string())
+    } else {
+        None
+    };
+
+    ViewRow {
+        id: d.number.to_string(),
+        primary_text: d.title.clone(),
+        secondary_text: Some(d.category.name.clone()),
+        meta_text: Some(format!(
+            "👍 {} · 💬 {}",
+            d.upvote_count, d.comments.total_count
+        )),
+        icon: d.category.emoji.clone(),
+        badge,
+        context_menu_target_kind: MenuTargetKind::Channel,
+    }
+}
+
 /// Build a [`ViewDetail`] for a single issue: body as `CustomBlock` plus
 /// a comments section describing the thread shape.
 #[must_use]
@@ -279,7 +306,9 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::*;
-    use crate::types::{GhReactions, GhUser};
+    use crate::types::{
+        GhActor, GhDiscussion, GhDiscussionCategory, GhDiscussionComments, GhReactions, GhUser,
+    };
 
     fn make_issue(number: u64, title: &str, is_pr: bool) -> crate::types::GhIssue {
         crate::types::GhIssue {
@@ -383,6 +412,90 @@ mod tests {
             detail.body_block.sanitized_html.contains("&lt;script&gt;"),
             "must contain HTML-escaped form"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // GhDiscussion → ViewRow tests
+    // -----------------------------------------------------------------------
+
+    fn make_discussion(
+        number: u64,
+        title: &str,
+        answered: bool,
+        closed: bool,
+        upvotes: u32,
+        comment_count: u32,
+    ) -> GhDiscussion {
+        GhDiscussion {
+            number,
+            title: title.to_string(),
+            body_text: Some("some body".to_string()),
+            url: format!("https://github.com/owner/repo/discussions/{number}"),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-02T00:00:00Z".to_string(),
+            upvote_count: upvotes,
+            comments: GhDiscussionComments { total_count: comment_count },
+            author: Some(GhActor {
+                login: "alice".to_string(),
+                avatar_url: Some("https://github.com/alice.png".to_string()),
+            }),
+            category: GhDiscussionCategory {
+                id: "cat-1".to_string(),
+                name: "General".to_string(),
+                emoji: Some("💬".to_string()),
+            },
+            answer_chosen_at: if answered {
+                Some("2026-01-03T00:00:00Z".to_string())
+            } else {
+                None
+            },
+            closed,
+        }
+    }
+
+    #[test]
+    fn test_map_discussion_basic_fields() {
+        let d = make_discussion(99, "Best practice for X?", false, false, 12, 5);
+        let row = map_discussion_to_viewrow(&d);
+
+        assert_eq!(row.id, "99");
+        assert_eq!(row.primary_text, "Best practice for X?");
+        assert_eq!(row.secondary_text.as_deref(), Some("General"));
+        let meta = row.meta_text.unwrap();
+        assert!(meta.contains("12"), "meta should contain upvote count");
+        assert!(meta.contains('5'.to_string().as_str()), "meta should contain comment count");
+        assert_eq!(row.icon.as_deref(), Some("💬"));
+        assert!(row.badge.is_none(), "open unanswered should have no badge");
+    }
+
+    #[test]
+    fn test_map_discussion_answered_badge() {
+        let d = make_discussion(10, "How to do Y?", true, false, 3, 2);
+        let row = map_discussion_to_viewrow(&d);
+        assert_eq!(row.badge.as_deref(), Some("answered"));
+    }
+
+    #[test]
+    fn test_map_discussion_closed_badge() {
+        let d = make_discussion(11, "Old topic", false, true, 0, 0);
+        let row = map_discussion_to_viewrow(&d);
+        assert_eq!(row.badge.as_deref(), Some("closed"));
+    }
+
+    #[test]
+    fn test_map_discussion_answered_takes_precedence_over_closed() {
+        // answered + closed → badge should be "answered"
+        let d = make_discussion(12, "Resolved and closed", true, true, 1, 1);
+        let row = map_discussion_to_viewrow(&d);
+        assert_eq!(row.badge.as_deref(), Some("answered"));
+    }
+
+    #[test]
+    fn test_map_discussion_no_emoji() {
+        let mut d = make_discussion(20, "No emoji cat", false, false, 0, 0);
+        d.category.emoji = None;
+        let row = map_discussion_to_viewrow(&d);
+        assert!(row.icon.is_none());
     }
 }
 

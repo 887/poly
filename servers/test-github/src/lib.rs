@@ -56,6 +56,7 @@ pub fn router_with_state(state: Arc<GitHubState>) -> Router {
             "/repos/{owner}/{repo}/contents/{*path}",
             get(routes::get_contents),
         )
+        .route("/graphql", post(routes::graphql))
         .route("/test/auth/token", post(routes::test_auth_token))
         .with_state(state)
         .layer(CorsLayer::very_permissive())

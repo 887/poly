@@ -14,10 +14,12 @@ use crate::state::GitHubState;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Extract token from `Authorization: token {value}` header.
+/// Extract token from `Authorization: token {value}` or `Authorization: Bearer {value}` header.
 fn token_user_id(state: &GitHubState, headers: &HeaderMap) -> Option<String> {
     let auth = headers.get("authorization").and_then(|v| v.to_str().ok())?;
-    let token = auth.strip_prefix("token ")?;
+    let token = auth
+        .strip_prefix("token ")
+        .or_else(|| auth.strip_prefix("Bearer "))?;
     state.auth.validate(token)
 }
 
@@ -312,6 +314,33 @@ pub async fn check_starred(
     } else {
         (StatusCode::NOT_FOUND, Json(json!({ "message": "Not Found" }))).into_response()
     }
+}
+
+// ---------------------------------------------------------------------------
+// POST /graphql — minimal GraphQL stub (returns empty discussions)
+// ---------------------------------------------------------------------------
+
+pub async fn graphql(
+    State(state): State<Arc<GitHubState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if token_user_id(&state, &headers).is_none() {
+        // GraphQL returns 200 with an errors array even for auth failures,
+        // but for simplicity we mirror the REST behaviour here.
+        return auth_error().into_response();
+    }
+    // Return a well-formed empty discussions page for any query.
+    Json(json!({
+        "data": {
+            "repository": {
+                "discussions": {
+                    "pageInfo": { "endCursor": null, "hasNextPage": false },
+                    "nodes": []
+                }
+            }
+        }
+    }))
+    .into_response()
 }
 
 // ---------------------------------------------------------------------------
