@@ -232,8 +232,16 @@ fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
                             button {
                                 class: "friend-card",
                                 onclick: move |_| {
-                                    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.clone() {
-                                        remember_message_list_scroll_position(&previous_channel_id);
+                                    // Drop the read guard in a tightly-scoped block
+                                    // before open_direct_message_from_active_account
+                                    // runs.  activate_dm_channel (called inside) takes
+                                    // write guards on app_state and chat_data; any
+                                    // live read guard on the same signal would panic.
+                                    {
+                                        let prev = app_state.read().nav.selected_channel.clone();
+                                        if let Some(ref id) = prev {
+                                            remember_message_list_scroll_position(id);
+                                        }
                                     }
                                     open_direct_message_from_active_account(
                                         friend_id.clone(),

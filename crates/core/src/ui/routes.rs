@@ -969,14 +969,21 @@ fn restore_dm_chat(
     };
 
     if let Some(ch) = channel {
-        chat_data.write().current_channel = Some(ch);
-        chat_data.write().current_server = None;
+        // Single write guard — batching current_channel + current_server into
+        // one guard so Dioxus schedules one re-render, not two.
+        let mut w = chat_data.write();
+        w.current_channel = Some(ch);
+        w.current_server = None;
     }
 
     spawn(async move {
-        chat_data.write().loading = true;
-        chat_data.write().messages = Vec::new();
-        chat_data.write().members = Vec::new();
+        // Single write guard for the three reset fields — one re-render.
+        {
+            let mut w = chat_data.write();
+            w.loading = true;
+            w.messages = Vec::new();
+            w.members = Vec::new();
+        }
 
         let unread_count = chat_data
             .read()
@@ -991,18 +998,42 @@ fn restore_dm_chat(
             return;
         };
 
-        let guard = backend_arc.read().await;
-        if let Ok(messages) = guard
+        // Acquire the backend read lock with a 5 s deadline so a stalled
+        // writer cannot hang the UI indefinitely.
+        let guard = match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            backend_arc.read(),
+        )
+        .await
+        {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!(
+                    dm_id = %dm_id,
+                    account_id = %account_id,
+                    "restore_dm_chat: backend lock acquire timed out after 5 s"
+                );
+                chat_data.write().loading = false;
+                return;
+            }
+        };
+        let messages = guard
             .get_messages(&dm_id, initial_message_query(unread_count))
             .await
-        {
-            chat_data.write().messages = messages;
+            .ok();
+        let members = guard.get_channel_members(&dm_id).await.ok();
+        drop(guard);
+
+        // Single write guard for the final state update.
+        let mut w = chat_data.write();
+        if let Some(msgs) = messages {
+            w.messages = msgs;
             request_restore_scroll_position_or_bottom(&dm_id);
         }
-        if let Ok(members) = guard.get_channel_members(&dm_id).await {
-            chat_data.write().members = members;
+        if let Some(mbrs) = members {
+            w.members = mbrs;
         }
-        chat_data.write().loading = false;
+        w.loading = false;
     });
 }
 

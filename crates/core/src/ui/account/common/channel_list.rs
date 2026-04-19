@@ -187,7 +187,25 @@ async fn load_dm_messages(
     };
 
     tracing::info!(channel_id = %channel_id, "load_dm_messages: backend acquired, fetching messages");
-    let guard = backend.read().await;
+    // Guard acquisition: use a 5 s timeout so a stalled writer on a non-demo
+    // backend (e.g. a slow poly-server sync task) cannot block the UI forever.
+    let guard = match tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        backend.read(),
+    )
+    .await
+    {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!(
+                channel_id = %channel_id,
+                account_id = %account_id,
+                "load_dm_messages: backend lock acquire timed out after 5 s, aborting"
+            );
+            chat_data.write().loading = false;
+            return;
+        }
+    };
     let messages = guard
         .get_messages(&channel_id, initial_message_query(unread_count))
         .await
@@ -379,8 +397,26 @@ pub(crate) fn open_direct_message_from_active_account(
             account_id = %account_id,
             "open_direct_message_from_active_account: spawned, awaiting open_direct_message_channel"
         );
+        // Acquire the backend read lock with a 5 s deadline.  On a single-threaded
+        // WASM runtime, a writer that never releases the lock would block this task
+        // forever; the timeout makes that failure mode observable and recoverable.
         let opened_dm = {
-            let guard = backend.read().await;
+            let guard = match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                backend.read(),
+            )
+            .await
+            {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!(
+                        user_id = %user_id,
+                        account_id = %account_id,
+                        "open_direct_message_from_active_account: backend lock acquire timed out after 5 s"
+                    );
+                    return;
+                }
+            };
             match guard.open_direct_message_channel(&user_id).await {
                 Ok(dm) => dm,
                 Err(err) => {
