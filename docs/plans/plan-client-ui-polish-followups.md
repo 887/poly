@@ -92,15 +92,9 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ---
 
-### 🟡 F9 — Host-api KV for plugin settings (Pack C polish)
+### ✅ F9 — Host-api KV for plugin settings (DONE 2026-04-19)
 
-**Symptom:** Pack C wired `SettingsStorageCell` as an in-memory `HashMap<String, String>`. Settings round-trip within a session but don't persist across process restart. The polish plan called for `host-api.kv_get` / `kv_set` — real persistent storage.
-
-**Fix:** each plugin's `SettingsStorageCell` calls `host_api::kv_get(key)` / `kv_set(key, value)` instead of the in-memory HashMap. Backing file is the app's SurrealKV store.
-
-**Blocker for WASM guests:** plugins compiled as WASM cdylibs don't have direct access to host_api imports from `SettingsStorageCell` (which lives in poly-client, which is used natively AND as a WASM dep). The cleanest path is a WIT-surface extension or a host-side settings service that the plugin calls via an existing WIT import.
-
-**Estimated size:** medium-large. Requires design discussion.
+**Resolution:** all 7 plugin WASM guests (demo / discord / lemmy / matrix / stoat / teams / server-client) now route `ClientSettingsGuest::get_setting_value` / `set_setting_value` through `crate::wit_bindings::poly::messenger::host_api::storage_get` / `storage_set` instead of returning the previous `Ok("null")` / `Ok(())` stubs. Composite key format: `"settings:{scope-label}:{scope-id}:{user-key}"` where `scope-label` is one of `account-global` / `per-server` / `per-channel` / `per-user`. The host backs the KV with SQLite at `$XDG_DATA_HOME/poly/storage.sqlite3` (production) or in-memory (tests). Native ClientBackend impls retain the in-process `SettingsStorageCell` since they're test-only scaffolding — production paths always go through WASM + WIT.
 
 ---
 

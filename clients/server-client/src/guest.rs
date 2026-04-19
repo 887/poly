@@ -10,7 +10,8 @@
 
 use crate::wit_bindings::{
     ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, MessengerClientGuest, PluginManifest, PluginMetadataGuest, export, wit,
+    ClientViewsGuest, MessengerClientGuest, PluginManifest, PluginMetadataGuest, SettingsScope,
+    export, poly::messenger::host_api, wit,
 };
 
 // ─── Plugin struct ─────────────────────────────────────────────────
@@ -248,6 +249,19 @@ impl ClientMenusGuest for PolyServerPlugin {
 
 use crate::wit_bindings::exports::poly::messenger::client_settings as settings;
 
+fn scope_label(scope: SettingsScope) -> &'static str {
+    match scope {
+        SettingsScope::AccountGlobal => "account-global",
+        SettingsScope::PerServer => "per-server",
+        SettingsScope::PerChannel => "per-channel",
+        SettingsScope::PerUser => "per-user",
+    }
+}
+
+fn composite_key(scope: SettingsScope, scope_id: &str, key: &str) -> String {
+    format!("settings:{}:{}:{}", scope_label(scope), scope_id, key)
+}
+
 impl ClientSettingsGuest for PolyServerPlugin {
     fn get_settings_sections(
     ) -> Result<Vec<settings::SettingsSection>, settings::ClientError> {
@@ -255,22 +269,25 @@ impl ClientSettingsGuest for PolyServerPlugin {
     }
 
     fn get_setting_value(
-        _scope: settings::SettingsScope,
-        _scope_id: String,
+        scope: settings::SettingsScope,
+        scope_id: String,
         key: String,
-    ) -> Result<String, settings::ClientError> {
-        Err(settings::ClientError::NotFound(key))
+    ) -> Result<String, wit::ClientError> {
+        let storage_key = composite_key(scope, &scope_id, &key);
+        Ok(host_api::storage_get(&storage_key)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| "null".to_string()))
     }
 
     fn set_setting_value(
-        _scope: settings::SettingsScope,
-        _scope_id: String,
-        _key: String,
-        _value: String,
-    ) -> Result<(), settings::ClientError> {
-        Err(settings::ClientError::NotSupported(
-            "settings not yet implemented".to_string(),
-        ))
+        scope: settings::SettingsScope,
+        scope_id: String,
+        key: String,
+        value: String,
+    ) -> Result<(), wit::ClientError> {
+        let storage_key = composite_key(scope, &scope_id, &key);
+        host_api::storage_set(&storage_key, value.as_bytes())
+            .map_err(wit::ClientError::Internal)
     }
 }
 

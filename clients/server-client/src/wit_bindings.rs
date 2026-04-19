@@ -18,7 +18,7 @@ wit_bindgen::generate!({
 
 pub use exports::poly::messenger::client_composer::Guest as ClientComposerGuest;
 pub use exports::poly::messenger::client_menus::Guest as ClientMenusGuest;
-pub use exports::poly::messenger::client_settings::Guest as ClientSettingsGuest;
+pub use exports::poly::messenger::client_settings::{Guest as ClientSettingsGuest, SettingsScope};
 pub use exports::poly::messenger::client_sidebar::Guest as ClientSidebarGuest;
 pub use exports::poly::messenger::client_views::Guest as ClientViewsGuest;
 pub use exports::poly::messenger::messenger_client::Guest as MessengerClientGuest;

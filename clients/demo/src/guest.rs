@@ -660,6 +660,22 @@ use crate::wit_bindings::exports::poly::messenger::client_settings as settings_e
 use crate::wit_bindings::exports::poly::messenger::client_sidebar as sidebar_exp;
 use crate::wit_bindings::exports::poly::messenger::client_views as views_exp;
 use crate::wit_bindings::exports::poly::messenger::client_composer as composer_exp;
+use crate::wit_bindings::poly::messenger::host_api;
+
+// ─── Settings KV helpers ───────────────────────────────────────────
+
+fn scope_label(scope: settings_exp::SettingsScope) -> &'static str {
+    match scope {
+        settings_exp::SettingsScope::AccountGlobal => "account-global",
+        settings_exp::SettingsScope::PerServer => "per-server",
+        settings_exp::SettingsScope::PerChannel => "per-channel",
+        settings_exp::SettingsScope::PerUser => "per-user",
+    }
+}
+
+fn composite_key(scope: settings_exp::SettingsScope, scope_id: &str, key: &str) -> String {
+    format!("settings:{}:{}:{}", scope_label(scope), scope_id, key)
+}
 
 impl ClientMenusGuest for DemoPlugin {
     fn get_context_menu_items(
@@ -691,20 +707,26 @@ impl ClientSettingsGuest for DemoPlugin {
     }
 
     fn get_setting_value(
-        _scope: settings_exp::SettingsScope,
-        _scope_id: String,
-        _key: String,
+        scope: settings_exp::SettingsScope,
+        scope_id: String,
+        key: String,
     ) -> Result<String, settings_exp::ClientError> {
-        Ok("null".to_string())
+        let storage_key = composite_key(scope, &scope_id, &key);
+        match host_api::storage_get(&storage_key) {
+            Some(bytes) => Ok(String::from_utf8(bytes).unwrap_or_else(|_| "null".to_string())),
+            None => Ok("null".to_string()),
+        }
     }
 
     fn set_setting_value(
-        _scope: settings_exp::SettingsScope,
-        _scope_id: String,
-        _key: String,
-        _value: String,
+        scope: settings_exp::SettingsScope,
+        scope_id: String,
+        key: String,
+        value: String,
     ) -> Result<(), settings_exp::ClientError> {
-        Ok(())
+        let storage_key = composite_key(scope, &scope_id, &key);
+        host_api::storage_set(&storage_key, value.as_bytes())
+            .map_err(settings_exp::ClientError::Internal)
     }
 }
 

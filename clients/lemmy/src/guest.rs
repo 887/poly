@@ -8,7 +8,9 @@
 
 use crate::wit_bindings::{
     ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, MessengerClientGuest, PluginManifest, PluginMetadataGuest, export, wit,
+    ClientViewsGuest, MessengerClientGuest, PluginManifest, PluginMetadataGuest, export,
+    poly::messenger::host_api,
+    wit,
 };
 
 use exports::poly::messenger::{
@@ -296,6 +298,21 @@ impl ClientMenusGuest for LemmyPlugin {
     }
 }
 
+// ─── Settings helpers ─────────────────────────────────────────────
+
+fn scope_label(scope: SettingsScope) -> &'static str {
+    match scope {
+        SettingsScope::AccountGlobal => "account-global",
+        SettingsScope::PerServer => "per-server",
+        SettingsScope::PerChannel => "per-channel",
+        SettingsScope::PerUser => "per-user",
+    }
+}
+
+fn composite_key(scope: SettingsScope, scope_id: &str, key: &str) -> String {
+    format!("settings:{}:{}:{}", scope_label(scope), scope_id, key)
+}
+
 // ─── ClientSettingsGuest ──────────────────────────────────────────
 
 impl ClientSettingsGuest for LemmyPlugin {
@@ -323,20 +340,25 @@ impl ClientSettingsGuest for LemmyPlugin {
     }
 
     fn get_setting_value(
-        _scope: SettingsScope,
-        _scope_id: String,
-        _key: String,
+        scope: SettingsScope,
+        scope_id: String,
+        key: String,
     ) -> Result<String, wit::ClientError> {
-        Ok("null".to_string())
+        let storage_key = composite_key(scope, &scope_id, &key);
+        Ok(host_api::storage_get(&storage_key)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| "null".to_string()))
     }
 
     fn set_setting_value(
-        _scope: SettingsScope,
-        _scope_id: String,
-        _key: String,
-        _value: String,
+        scope: SettingsScope,
+        scope_id: String,
+        key: String,
+        value: String,
     ) -> Result<(), wit::ClientError> {
-        Ok(())
+        let storage_key = composite_key(scope, &scope_id, &key);
+        host_api::storage_set(&storage_key, value.as_bytes())
+            .map_err(wit::ClientError::Internal)
     }
 }
 

@@ -975,26 +975,44 @@ impl ClientMenusGuest for TeamsPlugin {
 
 use crate::wit_bindings::{SettingsScope, SettingsSection};
 
+fn scope_label(scope: SettingsScope) -> &'static str {
+    match scope {
+        SettingsScope::AccountGlobal => "account-global",
+        SettingsScope::PerServer => "per-server",
+        SettingsScope::PerChannel => "per-channel",
+        SettingsScope::PerUser => "per-user",
+    }
+}
+
+fn composite_key(scope: SettingsScope, scope_id: &str, key: &str) -> String {
+    format!("settings:{}:{}:{}", scope_label(scope), scope_id, key)
+}
+
 impl ClientSettingsGuest for TeamsPlugin {
     fn get_settings_sections() -> Result<Vec<SettingsSection>, wit::ClientError> {
         Ok(vec![])
     }
 
     fn get_setting_value(
-        _scope: SettingsScope,
-        _scope_id: String,
-        _key: String,
+        scope: SettingsScope,
+        scope_id: String,
+        key: String,
     ) -> Result<String, wit::ClientError> {
-        Ok("null".to_string())
+        let k = composite_key(scope, &scope_id, &key);
+        Ok(host_api::storage_get(&k)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| "null".to_string()))
     }
 
     fn set_setting_value(
-        _scope: SettingsScope,
-        _scope_id: String,
-        _key: String,
-        _value: String,
+        scope: SettingsScope,
+        scope_id: String,
+        key: String,
+        value: String,
     ) -> Result<(), wit::ClientError> {
-        Ok(())
+        let k = composite_key(scope, &scope_id, &key);
+        host_api::storage_set(&k, value.as_bytes())
+            .map_err(wit::ClientError::Internal)
     }
 }
 

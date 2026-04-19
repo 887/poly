@@ -681,6 +681,24 @@ impl ClientMenusGuest for MatrixPlugin {
     }
 }
 
+fn scope_label(scope: crate::wit_bindings::SettingsScope) -> &'static str {
+    use crate::wit_bindings::SettingsScope;
+    match scope {
+        SettingsScope::AccountGlobal => "account-global",
+        SettingsScope::PerServer => "per-server",
+        SettingsScope::PerChannel => "per-channel",
+        SettingsScope::PerUser => "per-user",
+    }
+}
+
+fn composite_key(
+    scope: crate::wit_bindings::SettingsScope,
+    scope_id: &str,
+    key: &str,
+) -> String {
+    format!("settings:{}:{}:{}", scope_label(scope), scope_id, key)
+}
+
 impl ClientSettingsGuest for MatrixPlugin {
     fn get_settings_sections(
     ) -> Result<Vec<crate::wit_bindings::SettingsSection>, wit::ClientError> {
@@ -688,20 +706,27 @@ impl ClientSettingsGuest for MatrixPlugin {
     }
 
     fn get_setting_value(
-        _scope: crate::wit_bindings::SettingsScope,
-        _scope_id: String,
-        _key: String,
+        scope: crate::wit_bindings::SettingsScope,
+        scope_id: String,
+        key: String,
     ) -> Result<String, wit::ClientError> {
-        Ok("null".to_string())
+        let k = composite_key(scope, &scope_id, &key);
+        Ok(
+            crate::wit_bindings::poly::messenger::host_api::storage_get(&k)
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .unwrap_or_else(|| "null".to_string()),
+        )
     }
 
     fn set_setting_value(
-        _scope: crate::wit_bindings::SettingsScope,
-        _scope_id: String,
-        _key: String,
-        _value: String,
+        scope: crate::wit_bindings::SettingsScope,
+        scope_id: String,
+        key: String,
+        value: String,
     ) -> Result<(), wit::ClientError> {
-        Ok(())
+        let k = composite_key(scope, &scope_id, &key);
+        crate::wit_bindings::poly::messenger::host_api::storage_set(&k, value.as_bytes())
+            .map_err(wit::ClientError::Internal)
     }
 }
 

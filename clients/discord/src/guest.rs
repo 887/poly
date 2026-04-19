@@ -11,7 +11,8 @@ use std::collections::HashSet;
 use crate::wit_bindings::{
     ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
     ClientViewsGuest, Guest, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, PendingHandle,
-    PluginManifest, PluginMetadataGuest, SidebarDeclaration, SidebarLayoutKind, export, wit,
+    PluginManifest, PluginMetadataGuest, SettingsScope, SidebarDeclaration, SidebarLayoutKind,
+    export, poly::messenger::host_api, wit,
 };
 
 // ─── F10 — in-memory state for state-aware context-menu items ─────────────
@@ -587,29 +588,48 @@ impl ClientMenusGuest for DiscordPlugin {
     }
 }
 
+// ─── Settings helpers ──────────────────────────────────────────────────────
+
+fn scope_label(scope: SettingsScope) -> &'static str {
+    match scope {
+        SettingsScope::AccountGlobal => "account-global",
+        SettingsScope::PerServer => "per-server",
+        SettingsScope::PerChannel => "per-channel",
+        SettingsScope::PerUser => "per-user",
+    }
+}
+
+fn composite_key(scope: SettingsScope, scope_id: &str, key: &str) -> String {
+    format!("settings:{}:{}:{}", scope_label(scope), scope_id, key)
+}
+
 impl ClientSettingsGuest for DiscordPlugin {
-    fn get_settings_sections() -> Result<
-        Vec<crate::wit_bindings::exports::poly::messenger::client_settings::SettingsSection>,
-        wit::ClientError,
-    > {
+    fn get_settings_sections() -> Result<Vec<crate::wit_bindings::SettingsSection>, wit::ClientError> {
         Ok(Vec::new())
     }
 
     fn get_setting_value(
-        _scope: crate::wit_bindings::exports::poly::messenger::client_settings::SettingsScope,
-        _scope_id: String,
-        _key: String,
+        scope: SettingsScope,
+        scope_id: String,
+        key: String,
     ) -> Result<String, wit::ClientError> {
-        Ok("null".to_string())
+        let storage_key = composite_key(scope, &scope_id, &key);
+        match host_api::storage_get(&storage_key) {
+            Some(bytes) => String::from_utf8(bytes)
+                .map_err(|e| wit::ClientError::Internal(format!("settings decode error: {e}"))),
+            None => Ok("null".to_string()),
+        }
     }
 
     fn set_setting_value(
-        _scope: crate::wit_bindings::exports::poly::messenger::client_settings::SettingsScope,
-        _scope_id: String,
-        _key: String,
-        _value: String,
+        scope: SettingsScope,
+        scope_id: String,
+        key: String,
+        value: String,
     ) -> Result<(), wit::ClientError> {
-        Ok(())
+        let storage_key = composite_key(scope, &scope_id, &key);
+        host_api::storage_set(&storage_key, value.as_bytes())
+            .map_err(wit::ClientError::Internal)
     }
 }
 
