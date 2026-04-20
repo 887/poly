@@ -338,14 +338,22 @@ pub fn register_plugin_ftl(plugin_id: &str, locale: &str, ftl_source: String) {
     }
 }
 
+// Locale FTL strings baked by `crates/core/build.rs` from
+// `workspace/locales/<locale>/main.ftl`. The build script regenerates this
+// module on every FTL edit, dirtying the i18n module so cargo recompiles.
+// Replaces a previous `include_str!` chain that was flaky under `dx serve`'s
+// incremental — pure-FTL edits sometimes left the i18n module's incremental
+// cache warm, baking yesterday's strings into today's WASM.
+mod baked_locales;
+
 /// Get embedded FTL source for a locale.
 fn get_embedded_ftl(locale: &str) -> String {
     match locale {
-        "en" => include_str!("../../../../locales/en/main.ftl").to_string(),
-        "de" => include_str!("../../../../locales/de/main.ftl").to_string(),
-        "fr" => include_str!("../../../../locales/fr/main.ftl").to_string(),
-        "es" => include_str!("../../../../locales/es/main.ftl").to_string(),
-        _ => include_str!("../../../../locales/en/main.ftl").to_string(),
+        "en" => baked_locales::FTL_EN.to_string(),
+        "de" => baked_locales::FTL_DE.to_string(),
+        "fr" => baked_locales::FTL_FR.to_string(),
+        "es" => baked_locales::FTL_ES.to_string(),
+        _ => baked_locales::FTL_EN.to_string(),
     }
 }
 
