@@ -1,13 +1,19 @@
 //! Backend pool — manages authenticated `ClientBackend` instances.
 
 use crate::events::{SharedEventStore, new_event_store, spawn_fan_out};
+use crate::typing_simulation::{SharedSimRegistry, new_shared_registry};
 use poly_client::{AuthCredentials, BackendType, ClientBackend, Session};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 /// An authenticated backend connection.
+///
+/// `backend` is an `Arc` (not a `Box`) so Phase D's typing-simulation worker
+/// tasks can clone the handle and hold it for the lifetime of the pulse
+/// loop without blocking the main dispatch path.
 pub struct BackendEntry {
-    pub backend: Box<dyn ClientBackend + Send + Sync>,
+    pub backend: Arc<dyn ClientBackend + Send + Sync>,
     pub session: Session,
 }
 
@@ -18,6 +24,8 @@ pub struct BackendPool {
     pub events: SharedEventStore,
     /// Per-account fan-out task handles + shutdown senders.
     fan_out_tasks: HashMap<String, (JoinHandle<()>, tokio::sync::oneshot::Sender<()>)>,
+    /// Phase D typing-simulation registry — one entry per in-flight simulation.
+    pub sim_registry: SharedSimRegistry,
 }
 
 impl BackendPool {
@@ -26,6 +34,7 @@ impl BackendPool {
             backends: HashMap::new(),
             events: new_event_store(),
             fan_out_tasks: HashMap::new(),
+            sim_registry: new_shared_registry(),
         }
     }
 
@@ -39,6 +48,9 @@ impl BackendPool {
     /// its real-time events flow into the shared `EventStore`.
     pub fn insert(&mut self, session: Session, backend: Box<dyn ClientBackend + Send + Sync>) {
         let key = Self::key(session.backend.clone(), &session.user.id);
+
+        // Box → Arc so Phase D workers can clone-and-hold the backend.
+        let backend: Arc<dyn ClientBackend + Send + Sync> = Arc::from(backend);
 
         // Start event fan-out for this backend.
         let stream = backend.event_stream();

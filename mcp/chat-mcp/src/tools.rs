@@ -1118,20 +1118,9 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "subscribe_events" => handle_subscribe_events(args, pool).await,
         "unsubscribe_events" => handle_unsubscribe_events(args, pool).await,
 
-        // Phase D — typing simulation. Library lives in
-        // `crate::typing_simulation`; full runtime wiring requires
-        // refactoring `BackendEntry::backend` from `Box<dyn …>` to
-        // `Arc<dyn …>` so workers can share it. Until then these tools
-        // return a clear "not yet wired" so Claude Desktop sees them in
-        // tool discovery and gets an actionable error if invoked.
-        "start_typing_simulation" => err_result(
-            "start_typing_simulation: library is shipped (crate::typing_simulation) \
-             but the BackendPool runtime wiring is pending — needs Arc<backend>. \
-             For now, call send_typing on a 5-8s loop from the host as a workaround."
-        ),
-        "stop_typing_simulation" => err_result(
-            "stop_typing_simulation: see start_typing_simulation — runtime wiring pending."
-        ),
+        // Phase D — typing simulation, fully wired.
+        "start_typing_simulation" => handle_start_typing_simulation(args, pool).await,
+        "stop_typing_simulation" => handle_stop_typing_simulation(args, pool).await,
 
         // Phase F — get_unread_summary bundles unread messages across all
         // chats for an account so Claude Desktop can compose a digest.
@@ -2334,6 +2323,86 @@ async fn handle_poll_events(args: &Value, pool: &BackendPool) -> Value {
         "count": events.len(),
         "next_since_ms": next_since_ms,
     })).unwrap_or_default())
+}
+
+/// Phase D — Start a typing-simulation worker. Clones the backend Arc,
+/// spawns the rhythm loop, and registers the sim in the pool's registry.
+async fn handle_start_typing_simulation(args: &Value, pool: &BackendPool) -> Value {
+    let account_id = match str_arg(args, "account_id") {
+        Some(v) => v,
+        None => return err_result("missing 'account_id'"),
+    };
+    let chat_id = match str_arg(args, "chat_id") {
+        Some(v) => v,
+        None => return err_result("missing 'chat_id'"),
+    };
+
+    // Find the backend for this account. Cloning the Arc gives the worker
+    // an independent handle for the lifetime of the simulation.
+    let entry = match pool.find_by_account(account_id) {
+        Some(e) => e,
+        None => return err_result(format!("no backend for account '{account_id}'")),
+    };
+    if !entry.backend.backend_capabilities().supports_typing_indicators {
+        return err_result("backend does not support typing indicators");
+    }
+    let backend_arc = entry.backend.clone();
+
+    let params = crate::typing_simulation::SimParams::clamped(
+        args.get("total_duration_ms").and_then(Value::as_u64).unwrap_or(8_000) as u32,
+        args.get("avg_wpm").and_then(Value::as_u64).unwrap_or(60) as u16,
+        args.get("false_start_probability").and_then(Value::as_f64).unwrap_or(0.05) as f32,
+        args.get("pause_probability").and_then(Value::as_f64).unwrap_or(0.10) as f32,
+        args.get("stop_on_other_typing").and_then(Value::as_bool).unwrap_or(false),
+    );
+
+    // Seed the RNG from the current system clock so simulations feel fresh
+    // between invocations. Unit tests use fixed seeds via
+    // `next_tick_decision` directly, not this path.
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0xCAFEu64);
+
+    let (abort_tx, abort_rx) = tokio::sync::oneshot::channel();
+    let handle = crate::typing_simulation::spawn_worker(
+        backend_arc,
+        chat_id.to_string(),
+        params,
+        seed,
+        abort_rx,
+    );
+
+    let mut registry = pool.sim_registry.lock().await;
+    match registry.start(account_id, chat_id, handle, abort_tx) {
+        Ok(sim_id) => ok_result(
+            serde_json::to_string_pretty(&json!({
+                "simulation_id": sim_id,
+                "account_id": account_id,
+                "chat_id": chat_id,
+            }))
+            .unwrap_or_default(),
+        ),
+        Err(e) => err_result(e),
+    }
+}
+
+/// Phase D — Stop an in-flight simulation. Returns `found: true` if the
+/// id matched; `false` if the simulation had already expired naturally.
+async fn handle_stop_typing_simulation(args: &Value, pool: &BackendPool) -> Value {
+    let sim_id = match str_arg(args, "simulation_id") {
+        Some(v) => v,
+        None => return err_result("missing 'simulation_id'"),
+    };
+    let mut registry = pool.sim_registry.lock().await;
+    let found = registry.stop(sim_id);
+    ok_result(
+        serde_json::to_string_pretty(&json!({
+            "simulation_id": sim_id,
+            "found": found,
+        }))
+        .unwrap_or_default(),
+    )
 }
 
 /// Phase F — Bundle recent activity across every chat for an account, ordered
