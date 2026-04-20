@@ -1,7 +1,7 @@
 # Plan — Claude-Desktop-Driven Social Agent
 
 > **Created:** 2026-04-20
-> **Status:** Phase A.1/A.2/A.3/A.6/A.7 complete — A.4/A.5 (UI) deferred to UI agent
+> **Status:** ✅ DONE 2026-04-21 — every phase (A–F) + UI panel shipped end-to-end. `start_typing_simulation` runtime wiring + Phase D ↔ Phase C `stop_on_other_typing` bridge landed in `6ce5f7e4`. Plan chain: 9364d71e → afc617ed → 340f3f5f → 343b0ee1 → 05c9d21a → 3f6130d0 → c7e67657 → c6588714 → 0f3e5122 → 6ce5f7e4.
 > **Depends on:** `poly-chat-mcp` (shipped), `/agent` page KV persistence (shipped 7920bdb7), `send_typing` trait + MCP tool (shipped 6a587e66)
 > **Supersedes:** the LLM-provider-in-Poly approach drafted in `docs/6-ai-agent/6.0-social-agent-vision.md` — **not** taking that path.
 
