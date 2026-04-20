@@ -85,7 +85,20 @@ impl MemoryDb {
                 window_end_msg_id   TEXT NOT NULL DEFAULT '',
                 updated_at          TEXT NOT NULL,
                 PRIMARY KEY(account_id, chat_id)
-            );"
+            );
+
+            CREATE TABLE IF NOT EXISTS drafts (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id   TEXT NOT NULL,
+                chat_id      TEXT NOT NULL,
+                body         TEXT NOT NULL,
+                suggested_by TEXT NOT NULL,
+                created_at   TEXT NOT NULL,
+                auto_send_at TEXT,
+                status       TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_drafts_chat
+                ON drafts(account_id, chat_id, status);"
         ).map_err(|e| MemoryError::Sqlite(e.to_string()))
     }
 
@@ -315,6 +328,139 @@ impl MemoryDb {
             Ok(None)
         }
     }
+
+    // ─── drafts ───────────────────────────────────────────────────────────────
+
+    /// Insert a new draft and return its generated `id`.
+    ///
+    /// `auto_send_at` is an ISO-8601 UTC timestamp or `None`.
+    /// `status` is typically `"pending"`.
+    pub fn draft_insert(
+        &self,
+        account_id: &str,
+        chat_id: &str,
+        body: &str,
+        suggested_by: &str,
+        auto_send_at: Option<&str>,
+    ) -> Result<i64, MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "INSERT INTO drafts(account_id,chat_id,body,suggested_by,created_at,auto_send_at,status)
+             VALUES(?1,?2,?3,?4,?5,?6,'pending')"
+        )?;
+        stmt.bind((1, account_id))?;
+        stmt.bind((2, chat_id))?;
+        stmt.bind((3, body))?;
+        stmt.bind((4, suggested_by))?;
+        stmt.bind((5, now.as_str()))?;
+        match auto_send_at {
+            Some(ts) => stmt.bind((6, ts))?,
+            None     => stmt.bind((6, sqlite::Value::Null))?,
+        }
+        drain(&mut stmt)?;
+
+        let mut id_stmt = db.prepare("SELECT last_insert_rowid()")?;
+        if id_stmt.next()? == State::Row {
+            Ok(id_stmt.read::<i64, _>(0)?)
+        } else {
+            Err(MemoryError::Sqlite("last_insert_rowid returned no row".to_string()))
+        }
+    }
+
+    /// List drafts, optionally filtered by `account_id`, `chat_id`, and/or `status`.
+    pub fn draft_list(
+        &self,
+        account_id: Option<&str>,
+        chat_id:    Option<&str>,
+        status:     Option<&str>,
+    ) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        // Build query dynamically based on which filters are present.
+        let mut conditions: Vec<&str> = Vec::new();
+        if account_id.is_some() { conditions.push("account_id=?1"); }
+        if chat_id.is_some()    { conditions.push("chat_id=?2");    }
+        if status.is_some()     { conditions.push("status=?3");     }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+        let sql = format!(
+            "SELECT id,account_id,chat_id,body,suggested_by,created_at,auto_send_at,status
+             FROM drafts {where_clause} ORDER BY id"
+        );
+        let mut stmt = db.prepare(&sql)?;
+        if account_id.is_some() { stmt.bind((1, account_id.unwrap_or("")))?; }
+        if chat_id.is_some()    { stmt.bind((2, chat_id.unwrap_or("")))?;    }
+        if status.is_some()     { stmt.bind((3, status.unwrap_or("")))?;     }
+        collect_drafts(&mut stmt)
+    }
+
+    /// Look up a single draft by primary key.
+    pub fn draft_get(&self, draft_id: i64) -> Result<Option<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT id,account_id,chat_id,body,suggested_by,created_at,auto_send_at,status
+             FROM drafts WHERE id=?1"
+        )?;
+        stmt.bind((1, draft_id))?;
+        let mut rows = collect_drafts(&mut stmt)?;
+        Ok(rows.pop())
+    }
+
+    /// Update a draft's body. Only allowed while `status = 'pending'`.
+    /// Returns `true` if the row was found and updated, `false` if not found or wrong status.
+    pub fn draft_edit(&self, draft_id: i64, new_body: &str) -> Result<bool, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "UPDATE drafts SET body=?1 WHERE id=?2 AND status='pending'"
+        )?;
+        stmt.bind((1, new_body))?;
+        stmt.bind((2, draft_id))?;
+        drain(&mut stmt)?;
+
+        let mut chk = db.prepare("SELECT changes()")?;
+        if chk.next()? == State::Row {
+            Ok(chk.read::<i64, _>(0)? > 0)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Transition a draft's status to `new_status`.
+    pub fn draft_set_status(&self, draft_id: i64, new_status: &str) -> Result<(), MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare("UPDATE drafts SET status=?1 WHERE id=?2")?;
+        stmt.bind((1, new_status))?;
+        stmt.bind((2, draft_id))?;
+        drain(&mut stmt)
+    }
+
+    /// Clear `auto_send_at` for a draft (cancel auto-send).
+    pub fn draft_clear_autosend(&self, draft_id: i64) -> Result<(), MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "UPDATE drafts SET auto_send_at=NULL WHERE id=?1 AND status='pending'"
+        )?;
+        stmt.bind((1, draft_id))?;
+        drain(&mut stmt)
+    }
+
+    /// Return all pending drafts whose `auto_send_at <= now`.
+    pub fn draft_pending_autosend(&self) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT id,account_id,chat_id,body,suggested_by,created_at,auto_send_at,status
+             FROM drafts
+             WHERE status='pending' AND auto_send_at IS NOT NULL AND auto_send_at <= ?1
+             ORDER BY id"
+        )?;
+        stmt.bind((1, now.as_str()))?;
+        collect_drafts(&mut stmt)
+    }
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
@@ -389,6 +535,30 @@ fn collect_notes(
             "note_text":   stmt.read::<String, _>(3)?,
             "created_at":  stmt.read::<String, _>(4)?,
             "updated_at":  stmt.read::<String, _>(5)?,
+        }));
+    }
+    Ok(out)
+}
+
+fn collect_drafts(
+    stmt: &mut sqlite::Statement<'_>,
+) -> Result<Vec<serde_json::Value>, MemoryError> {
+    let mut out = Vec::new();
+    while stmt.next()? == State::Row {
+        // auto_send_at may be NULL — read as Option<String>.
+        let auto_send_at: Option<String> = match stmt.read::<sqlite::Value, _>(6)? {
+            sqlite::Value::String(s) => Some(s),
+            _ => None,
+        };
+        out.push(serde_json::json!({
+            "id":           stmt.read::<i64, _>(0)?,
+            "account_id":   stmt.read::<String, _>(1)?,
+            "chat_id":      stmt.read::<String, _>(2)?,
+            "body":         stmt.read::<String, _>(3)?,
+            "suggested_by": stmt.read::<String, _>(4)?,
+            "created_at":   stmt.read::<String, _>(5)?,
+            "auto_send_at": auto_send_at,
+            "status":       stmt.read::<String, _>(7)?,
         }));
     }
     Ok(out)
@@ -574,6 +744,102 @@ mod tests {
         assert_eq!(db.get_chat_summary("acc1", "chat1").unwrap().unwrap()["summary"], "summary A");
         assert_eq!(db.get_chat_summary("acc2", "chat1").unwrap().unwrap()["summary"], "summary B");
         assert_eq!(db.get_chat_summary("acc1", "chat2").unwrap().unwrap()["summary"], "summary C");
+    }
+
+    // ── drafts ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn draft_insert_and_list() {
+        let db = fresh_db();
+        let id = db.draft_insert("acc1", "chat1", "Hello!", "test-agent", None).unwrap();
+        assert!(id > 0);
+
+        let drafts = db.draft_list(Some("acc1"), Some("chat1"), Some("pending")).unwrap();
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0]["body"], "Hello!");
+        assert_eq!(drafts[0]["status"], "pending");
+        assert_eq!(drafts[0]["suggested_by"], "test-agent");
+        assert!(drafts[0]["auto_send_at"].is_null());
+    }
+
+    #[test]
+    fn draft_insert_with_autosend() {
+        let db = fresh_db();
+        let id = db.draft_insert("acc1", "chat1", "Scheduled!", "test-agent", Some("2030-01-01T00:00:00Z")).unwrap();
+        assert!(id > 0);
+
+        let drafts = db.draft_list(Some("acc1"), Some("chat1"), None).unwrap();
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0]["auto_send_at"], "2030-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn draft_edit_pending() {
+        let db = fresh_db();
+        let id = db.draft_insert("acc1", "chat1", "Original", "bot", None).unwrap();
+        let changed = db.draft_edit(id, "Updated body").unwrap();
+        assert!(changed);
+
+        let d = db.draft_get(id).unwrap().unwrap();
+        assert_eq!(d["body"], "Updated body");
+    }
+
+    #[test]
+    fn draft_edit_non_pending_fails() {
+        let db = fresh_db();
+        let id = db.draft_insert("acc1", "chat1", "body", "bot", None).unwrap();
+        db.draft_set_status(id, "sent").unwrap();
+
+        let changed = db.draft_edit(id, "attempt").unwrap();
+        assert!(!changed, "edit of sent draft should return false");
+    }
+
+    #[test]
+    fn draft_discard() {
+        let db = fresh_db();
+        let id = db.draft_insert("acc1", "chat1", "body", "bot", None).unwrap();
+        db.draft_set_status(id, "discarded").unwrap();
+
+        let d = db.draft_get(id).unwrap().unwrap();
+        assert_eq!(d["status"], "discarded");
+
+        let pending = db.draft_list(Some("acc1"), Some("chat1"), Some("pending")).unwrap();
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn draft_clear_autosend() {
+        let db = fresh_db();
+        let id = db.draft_insert("acc1", "chat1", "body", "bot", Some("2030-01-01T00:00:00Z")).unwrap();
+        db.draft_clear_autosend(id).unwrap();
+
+        let d = db.draft_get(id).unwrap().unwrap();
+        assert!(d["auto_send_at"].is_null());
+    }
+
+    #[test]
+    fn draft_list_no_filters() {
+        let db = fresh_db();
+        db.draft_insert("acc1", "chat1", "a", "bot", None).unwrap();
+        db.draft_insert("acc2", "chat2", "b", "bot", None).unwrap();
+
+        let all = db.draft_list(None, None, None).unwrap();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn draft_pending_autosend_returns_overdue() {
+        let db = fresh_db();
+        // Past timestamp — should be returned.
+        db.draft_insert("acc1", "chat1", "overdue", "bot", Some("2020-01-01T00:00:00Z")).unwrap();
+        // Future timestamp — should NOT be returned.
+        db.draft_insert("acc1", "chat1", "future", "bot", Some("2090-01-01T00:00:00Z")).unwrap();
+        // No auto_send — should NOT be returned.
+        db.draft_insert("acc1", "chat1", "manual", "bot", None).unwrap();
+
+        let due = db.draft_pending_autosend().unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0]["body"], "overdue");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

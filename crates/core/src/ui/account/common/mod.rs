@@ -47,6 +47,7 @@ pub mod direct_call;
 pub mod direct_call_overlay;
 pub mod discord_forum_view;
 pub mod dm_user_sidebar;
+pub mod draft_banner;
 pub mod emoji_picker;
 pub mod forum_view;
 pub mod friends_panel;
@@ -65,6 +66,7 @@ pub mod voice_view;
 
 pub use agent_panel::AgentPanel;
 pub use account_bar::AccountBar;
+pub use draft_banner::{DraftBanner, DraftsSidebar};
 pub use account_server_bar::AccountServerBar;
 pub use account_switcher::AccountSwitcher;
 pub use channel_context_menu::ChannelContextMenu;

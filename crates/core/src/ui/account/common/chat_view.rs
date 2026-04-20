@@ -23,6 +23,7 @@ use super::agent_panel::AgentPanel;
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
 use super::media_picker::MediaPickerPopup;
+use super::draft_banner::{DraftBanner, DraftsSidebar};
 use super::thread_view::{ActiveThreadsBar, ThreadPanel, ViewThreadButton};
 use super::user_profile_modal::open_user_profile;
 use super::user_sidebar::UserSidebar;
@@ -196,6 +197,8 @@ enum ChatUtilityPanel {
     Pinned,
     Threads,
     Settings,
+    /// B.5 — pending agent drafts across all chats for the active account.
+    Drafts,
 }
 
 #[derive(Clone, Copy)]
@@ -2599,6 +2602,7 @@ fn ChatHeaderActions(
     let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
     let settings_active = *utility_panel.read() == Some(ChatUtilityPanel::Settings);
     let search_active = *utility_panel.read() == Some(ChatUtilityPanel::Search);
+    let drafts_active = *utility_panel.read() == Some(ChatUtilityPanel::Drafts);
     rsx! {
         div { class: "chat-header-actions-wrap",
             div { class: if *header_actions_overflow.read() { "chat-header-actions chat-header-actions-primary is-measuring" } else { "chat-header-actions chat-header-actions-primary" },
@@ -2882,6 +2886,29 @@ fn ChatHeaderActions(
                                         None
                                     } else {
                                         Some(ChatUtilityPanel::Settings)
+                                    };
+                                    utility_panel.set(next);
+                                    if next.is_some() {
+                                        if is_dm_channel || is_group_channel {
+                                            app_state.write().nav.dm_right_sidebar_visible = false;
+                                        } else {
+                                            app_state.write().nav.right_sidebar_visible = false;
+                                        }
+                                    }
+                                },
+                            }
+                            // B.5 — Drafts sidebar in overflow menu
+                            HeaderOverflowItem {
+                                icon: "✨".to_string(),
+                                label: t("agent-drafts-sidebar-title"),
+                                active: drafts_active,
+                                onclick: move |_| {
+                                    header_actions_menu_open.set(false);
+                                    show_search_filters.set(false);
+                                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Drafts) {
+                                        None
+                                    } else {
+                                        Some(ChatUtilityPanel::Drafts)
                                     };
                                     utility_panel.set(next);
                                     if next.is_some() {
@@ -4019,7 +4046,24 @@ fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 fn render_message_input_enabled(ctx: ChatViewMarkupCtx) -> Element {
+    // B.4 — DraftBanner: read the active account + channel from app_state/nav.
+    let (active_account_id, active_chat_id) = {
+        let account_id = ctx.app_state.read().nav.active_account_id
+            .as_deref()
+            .unwrap_or("")
+            .to_string();
+        let chat_id = ctx.channel_id.clone().unwrap_or_default();
+        (account_id, chat_id)
+    };
+
     rsx! {
+        // B.4 — Show pending agent drafts above the reply bar and composer.
+        if !active_account_id.is_empty() && !active_chat_id.is_empty() {
+            DraftBanner {
+                account_id: active_account_id,
+                chat_id: active_chat_id,
+            }
+        }
         if let Some(reply) = ctx.reply_target.read().clone() {
             ReplyComposerBar {
                 reply,
@@ -4557,6 +4601,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     let threads_active = *utility_panel.read() == Some(ChatUtilityPanel::Threads);
     let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
     let settings_active = *utility_panel.read() == Some(ChatUtilityPanel::Settings);
+    let drafts_active = *utility_panel.read() == Some(ChatUtilityPanel::Drafts);
 
     rsx! {
         div { class: "chat-tools-panel",
@@ -4629,6 +4674,22 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                             app_state.write().nav.right_sidebar_visible = false;
                         },
                         "📌"
+                    }
+                    // B.5 — Drafts panel toggle
+                    button {
+                        class: if drafts_active { "header-btn active chat-header-btn-drafts" } else { "header-btn chat-header-btn-drafts" },
+                        title: t("agent-drafts-sidebar-title"),
+                        onclick: move |_| {
+                            show_search_filters.set(false);
+                            let next = if *utility_panel.read() == Some(ChatUtilityPanel::Drafts) {
+                                None
+                            } else {
+                                Some(ChatUtilityPanel::Drafts)
+                            };
+                            utility_panel.set(next);
+                            app_state.write().nav.right_sidebar_visible = false;
+                        },
+                        "✨"
                     }
                     {
                         render_search_tab_button(
@@ -4947,6 +5008,23 @@ fn ChatUtilityRail(
                 }
             } else if panel == ChatUtilityPanel::Settings {
                 ChatSettingsPanel { notifications_muted }
+            } else if panel == ChatUtilityPanel::Drafts {
+                // B.5 — Pending drafts across all chats for the active account.
+                {
+                    let rail_app_state: Signal<AppState> = use_context();
+                    let active_account_id = rail_app_state.read().nav.active_account_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_string();
+                    rsx! {
+                        DraftsSidebar {
+                            account_id: active_account_id,
+                            on_open_chat: move |(_account_id, _chat_id): (String, String)| {
+                                // TODO: wire navigation when B.5 route is established.
+                            },
+                        }
+                    }
+                }
             } else {
                 div { class: "chat-utility-body",
                     div { class: "utility-empty-state",

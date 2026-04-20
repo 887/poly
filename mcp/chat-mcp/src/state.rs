@@ -43,6 +43,13 @@ impl BackendPool {
             .find(|e| e.session.backend == backend_type)
     }
 
+    /// Find the first backend whose session account_id matches (backend-agnostic).
+    pub fn find_by_account(&self, account_id: &str) -> Option<&BackendEntry> {
+        self.backends
+            .values()
+            .find(|e| e.session.user.id == account_id)
+    }
+
     /// Remove a backend from the pool.
     pub fn remove(&mut self, backend_type: BackendType, account_id: &str) -> Option<BackendEntry> {
         let key = Self::key(backend_type, account_id);

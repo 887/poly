@@ -86,14 +86,14 @@ No global timer — multi-account usage means each chat needs its own independen
 
 **Goal:** Claude proposes, user approves. Autonomy is per-reply, not per-chat. Kills the "agent went rogue" risk class.
 
-- [ ] **B.1** SQLite migration — `drafts(id, account_id, chat_id, body, suggested_by, created_at, auto_send_at, status)` where `status ∈ { pending, approved, sent, discarded, expired }` and `auto_send_at` is null unless per-chat auto-approve is on.
-- [ ] **B.2** MCP tools: `draft_create(account_id, chat_id, body, auto_send_in_secs?)` → draft_id, `draft_list(account_id?, chat_id?, status?)`, `draft_approve(draft_id)` (calls send_message), `draft_edit(draft_id, new_body)`, `draft_discard(draft_id)`, `draft_cancel_autosend(draft_id)`.
-- [ ] **B.3** Auto-send countdown — per-chat setting (default off); when `auto_send_in_secs` passed, Poly's draft engine auto-approves after the timer, giving the user a cancel window. Cancel becomes a no-op after status transitions to `sent`.
-- [ ] **B.4** `DraftBanner` component in `ChatView` — renders above composer when drafts exist for current channel: "✨ Claude suggests: [preview text] [Send] [Edit] [Discard]" plus countdown if auto_send_at is set.
-- [ ] **B.5** `DraftsSidebar` global panel (behind a per-account toggle) listing pending drafts across every chat so the user can triage without opening each channel.
-- [ ] **B.6** Per-chat auto-approve toggle on `/agent/chat/:id` settings — opt-in, off by default.
-- [ ] **B.7** FTL keys: `agent-draft-claude-suggests`, `agent-draft-send`, `agent-draft-edit`, `agent-draft-discard`, `agent-draft-autosend-in`, `agent-draft-cancel-autosend`, `agent-drafts-sidebar-title`, `agent-drafts-sidebar-empty`.
-- [ ] **B.8** Integration test: draft_create → DraftBanner appears → draft_approve → send_message fires → banner clears.
+- [x] **B.1** SQLite migration — `drafts(id, account_id, chat_id, body, suggested_by, created_at, auto_send_at, status)` where `status ∈ { pending, approved, sent, discarded, expired }` and `auto_send_at` is null unless per-chat auto-approve is on.
+- [x] **B.2** MCP tools: `draft_create(account_id, chat_id, body, auto_send_in_secs?)` → draft_id, `draft_list(account_id?, chat_id?, status?)`, `draft_approve(draft_id)` (calls send_message), `draft_edit(draft_id, new_body)`, `draft_discard(draft_id)`, `draft_cancel_autosend(draft_id)`.
+- [x] **B.3** Auto-send countdown — per-chat setting (default off); when `auto_send_in_secs` passed, Poly's draft engine auto-approves after the timer, giving the user a cancel window. Cancel becomes a no-op after status transitions to `sent`.
+- [x] **B.4** `DraftBanner` component in `ChatView` — renders above composer when drafts exist for current channel: "✨ Claude suggests: [preview text] [Send] [Edit] [Discard]" plus countdown if auto_send_at is set.
+- [x] **B.5** `DraftsSidebar` global panel (behind a per-account toggle) listing pending drafts across every chat so the user can triage without opening each channel.
+- [x] **B.6** Per-chat auto-approve toggle on `/agent/chat/:id` settings — opt-in, off by default (gated via `agent.chat.{chat_id}.auto_approve` KV key read in auto-send engine).
+- [x] **B.7** FTL keys: `agent-draft-claude-suggests`, `agent-draft-send`, `agent-draft-edit`, `agent-draft-discard`, `agent-draft-autosend-in`, `agent-draft-cancel-autosend`, `agent-drafts-sidebar-title`, `agent-drafts-sidebar-empty`.
+- [x] **B.8** Integration test: draft_create → DraftBanner appears → draft_approve → send_message fires → banner clears.
 
 **Effort:** ~2 sessions. UI is the main cost; tool dispatch is straightforward.
 

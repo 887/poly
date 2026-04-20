@@ -1155,3 +1155,137 @@ async fn mcp_tools_new_surfaces_are_queryable() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Phase B — Draft queue integration tests (B.8)
+// ---------------------------------------------------------------------------
+
+/// Helper: open an in-memory MemoryDb for draft tests.
+fn draft_mem() -> MemoryDb {
+    MemoryDb::open(":memory:").expect("in-memory MemoryDb for drafts")
+}
+
+#[tokio::test]
+async fn draft_create_then_list_returns_pending() {
+    let mut pool = BackendPool::new();
+    let mem = draft_mem();
+
+    // Create a draft (no backend needed — draft_create only needs account_id, chat_id, body, suggested_by).
+    let result = tools::dispatch(
+        "draft_create",
+        &json!({
+            "account_id":   "test-account",
+            "chat_id":      "test-chat",
+            "body":         "Hello from test-agent",
+            "suggested_by": "test-agent"
+        }),
+        &mut pool,
+        &mem,
+    ).await;
+    assert_ok(&result);
+    let text = text_of(&result);
+    let json: Value = serde_json::from_str(&text).expect("draft_create should return JSON");
+    let draft_id = json["draft_id"].as_i64().expect("draft_id should be i64");
+    assert!(draft_id > 0);
+
+    // draft_list should return 1 pending draft.
+    let list_result = tools::dispatch(
+        "draft_list",
+        &json!({
+            "account_id": "test-account",
+            "chat_id":    "test-chat",
+            "status":     "pending"
+        }),
+        &mut pool,
+        &mem,
+    ).await;
+    assert_ok(&list_result);
+    let drafts: Vec<Value> = parse_text(&list_result);
+    assert_eq!(drafts.len(), 1, "expected 1 pending draft");
+    assert_eq!(drafts[0]["body"], "Hello from test-agent");
+    assert_eq!(drafts[0]["suggested_by"], "test-agent");
+    assert_eq!(drafts[0]["status"], "pending");
+}
+
+#[tokio::test]
+async fn draft_edit_updates_body() {
+    let mut pool = BackendPool::new();
+    let mem = draft_mem();
+
+    let create = tools::dispatch("draft_create", &json!({
+        "account_id": "acc1", "chat_id": "chat1",
+        "body": "Original body", "suggested_by": "bot"
+    }), &mut pool, &mem).await;
+    assert_ok(&create);
+    let draft_id: i64 = serde_json::from_str::<Value>(&text_of(&create)).unwrap()["draft_id"].as_i64().unwrap();
+
+    let edit = tools::dispatch("draft_edit", &json!({
+        "draft_id": draft_id,
+        "new_body": "Updated body"
+    }), &mut pool, &mem).await;
+    assert_ok(&edit);
+    assert!(text_of(&edit).contains("updated"), "expected 'updated' in response");
+
+    // Verify via draft_list.
+    let list = tools::dispatch("draft_list", &json!({
+        "account_id": "acc1", "chat_id": "chat1"
+    }), &mut pool, &mem).await;
+    let drafts: Vec<Value> = parse_text(&list);
+    assert_eq!(drafts[0]["body"], "Updated body");
+}
+
+#[tokio::test]
+async fn draft_discard_removes_from_pending() {
+    let mut pool = BackendPool::new();
+    let mem = draft_mem();
+
+    let create = tools::dispatch("draft_create", &json!({
+        "account_id": "acc1", "chat_id": "chat1",
+        "body": "to discard", "suggested_by": "bot"
+    }), &mut pool, &mem).await;
+    let draft_id: i64 = serde_json::from_str::<Value>(&text_of(&create)).unwrap()["draft_id"].as_i64().unwrap();
+
+    let discard = tools::dispatch("draft_discard", &json!({ "draft_id": draft_id }), &mut pool, &mem).await;
+    assert_ok(&discard);
+
+    let list = tools::dispatch("draft_list", &json!({
+        "account_id": "acc1", "chat_id": "chat1", "status": "pending"
+    }), &mut pool, &mem).await;
+    let pending: Vec<Value> = parse_text(&list);
+    assert!(pending.is_empty(), "discarded draft should not appear in pending list");
+}
+
+#[tokio::test]
+async fn draft_cancel_autosend_clears_timer() {
+    let mut pool = BackendPool::new();
+    let mem = draft_mem();
+
+    // Manually insert a draft with auto_send_at via the MemoryDb API.
+    let draft_id = mem.draft_insert(
+        "acc1", "chat1", "body", "bot",
+        Some("2090-01-01T00:00:00Z")
+    ).expect("insert draft");
+
+    let cancel = tools::dispatch(
+        "draft_cancel_autosend",
+        &json!({ "draft_id": draft_id }),
+        &mut pool,
+        &mem,
+    ).await;
+    assert_ok(&cancel);
+
+    let draft = mem.draft_get(draft_id).expect("get").expect("found");
+    assert!(draft["auto_send_at"].is_null(), "auto_send_at should be null after cancel");
+}
+
+#[tokio::test]
+async fn draft_create_empty_body_returns_error() {
+    let mut pool = BackendPool::new();
+    let mem = draft_mem();
+
+    let result = tools::dispatch("draft_create", &json!({
+        "account_id": "acc1", "chat_id": "chat1",
+        "body": "   ", "suggested_by": "bot"
+    }), &mut pool, &mem).await;
+    assert_err(&result);
+}

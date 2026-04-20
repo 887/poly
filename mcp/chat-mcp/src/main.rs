@@ -31,6 +31,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Json;
 use clap::Parser;
+use poly_client::MessageContent;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
@@ -79,6 +80,15 @@ async fn main() -> anyhow::Result<()> {
 async fn run_http(port: u16) -> anyhow::Result<()> {
     let pool: SharedPool = Arc::new(Mutex::new(state::BackendPool::new()));
     let mem = Arc::new(open_memory_db()?);
+
+    // B.3 — Auto-send engine: poll every 2 seconds for overdue drafts.
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    tokio::spawn(run_autosend_engine(
+        Arc::clone(&pool),
+        Arc::clone(&mem),
+        shutdown_rx,
+    ));
+
     let state = AppState { pool, mem };
 
     let app = axum::Router::new()
@@ -94,6 +104,8 @@ async fn run_http(port: u16) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
+    // Shutdown the auto-send engine when the HTTP server exits.
+    let _ = shutdown_tx.send(());
     Ok(())
 }
 
@@ -134,6 +146,102 @@ async fn handle_mcp_http(
     };
 
     (StatusCode::OK, Json(result))
+}
+
+// ─── Auto-send engine (B.3) ──────────────────────────────────────────────────
+
+/// Background task that polls the `drafts` table every 2 seconds and sends
+/// any pending drafts whose `auto_send_at` has passed.
+///
+/// Shuts down cleanly when `shutdown` fires or is dropped.
+async fn run_autosend_engine(
+    pool: SharedPool,
+    mem:  Arc<MemoryDb>,
+    mut shutdown: tokio::sync::oneshot::Receiver<()>,
+) {
+    loop {
+        // Wait 2s or until shutdown.
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {}
+            _ = &mut shutdown => {
+                tracing::debug!("auto-send engine: shutdown signal received");
+                return;
+            }
+        }
+
+        let due = match mem.draft_pending_autosend() {
+            Ok(d)  => d,
+            Err(e) => {
+                tracing::warn!("auto-send engine: draft_pending_autosend failed: {e}");
+                continue;
+            }
+        };
+
+        for draft in due {
+            let draft_id = match draft["id"].as_i64() {
+                Some(id) => id,
+                None     => continue,
+            };
+            let account_id = match draft["account_id"].as_str() {
+                Some(a) => a.to_string(),
+                None    => continue,
+            };
+            let chat_id = match draft["chat_id"].as_str() {
+                Some(c) => c.to_string(),
+                None    => continue,
+            };
+            let body = match draft["body"].as_str() {
+                Some(b) => b.to_string(),
+                None    => continue,
+            };
+
+            // Look up backend and attempt send.
+            let send_result = {
+                let locked = pool.lock().await;
+                if locked.find_by_account(&account_id).is_some() {
+                    // We need to call async send_message. The lock prevents us from
+                    // holding it across an await, so extract what we need first.
+                    // Since `ClientBackend` is `Send + Sync` we can clone the channel/body.
+                    drop(locked);
+                    // Re-acquire after drop to call async method.
+                    let pool2 = Arc::clone(&pool);
+                    let account_id2 = account_id.clone();
+                    let chat_id2 = chat_id.clone();
+                    let body2 = body.clone();
+                    let result = async move {
+                        let locked = pool2.lock().await;
+                        if let Some(e) = locked.find_by_account(&account_id2) {
+                            e.backend.send_message(&chat_id2, MessageContent::Text(body2)).await
+                        } else {
+                            Err(poly_client::ClientError::NotSupported(
+                                "no backend for account".to_string()
+                            ))
+                        }
+                    }.await;
+                    result
+                } else {
+                    drop(locked);
+                    Err(poly_client::ClientError::NotSupported(
+                        "no backend for account".to_string()
+                    ))
+                }
+            };
+
+            match send_result {
+                Ok(_) => {
+                    if let Err(e) = mem.draft_set_status(draft_id, "sent") {
+                        tracing::warn!("auto-send engine: sent draft {draft_id} but status update failed: {e}");
+                    } else {
+                        tracing::info!("auto-send engine: draft {draft_id} auto-sent to {chat_id}");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("auto-send engine: draft {draft_id} send failed: {e}; marking expired");
+                    let _ = mem.draft_set_status(draft_id, "expired");
+                }
+            }
+        }
+    }
 }
 
 // ─── stdio mode ──────────────────────────────────────────────────────────────

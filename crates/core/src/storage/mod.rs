@@ -53,6 +53,8 @@ const fn default_gif_provider() -> GifProviderKind {
     GifProviderKind::Klippy
 }
 
+pub mod drafts;
+
 // ── Platform backends ─────────────────────────────────────────────────────────
 
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "storage-surreal")))]
@@ -98,7 +100,7 @@ impl From<serde_json::Error> for StorageError {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn poly_data_dir() -> std::path::PathBuf {
+pub(crate) fn poly_data_dir() -> std::path::PathBuf {
     #[cfg(target_os = "linux")]
     {
         let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME")
