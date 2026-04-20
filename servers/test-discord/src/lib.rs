@@ -43,6 +43,10 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         // Threads
         .route("/api/v10/guilds/{guild_id}/threads/active", get(routes::get_guild_active_threads))
         .route("/api/v10/channels/{channel_id}/threads/archived/public", get(routes::get_channel_archived_threads))
+        // Gateway WebSocket (Phase 6.5)
+        .route("/gateway/ws", get(routes::gateway_ws))
+        // Test-only: inject gateway events
+        .route("/testhook/emit_thread_event", post(routes::emit_thread_event))
         // Lifecycle
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))

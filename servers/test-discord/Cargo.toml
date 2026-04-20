@@ -21,6 +21,7 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "net",
     "signal",
+    "sync",
 ] }
 
 # Web framework
@@ -45,7 +46,9 @@ anyhow = { workspace = true }
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "net"] }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
 
 [lints]
 workspace = true

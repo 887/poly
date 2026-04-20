@@ -1,7 +1,7 @@
 # Plan — Discord Forum Channels & Thread Support
 
 > **Created:** 2026-04-05
-> **Status:** Phase 1–5 Done (2026-04-19); Phase 6 Done (2026-04-19) except 6.5 (gateway events — Phase 7 follow-up)
+> **Status:** Phase 1–6 Done (2026-04-19); Phase 6.5 Done (2026-04-19)
 > **Crate:** `poly-discord` (`clients/discord/`)
 > **Depends on:** Phase 3.3 (Discord client base implementation)
 > **Goal:** Support Discord forum channels and threads in the Poly unified chat UI.
@@ -410,11 +410,14 @@ names. Clicking a thread opens it in panel mode.
   - `routes::get_channel_archived_threads` — filters archived public threads by parent_id
   - Returns `{ threads: [...], has_more: false }`
   - Note: `/private` endpoint not added (no seeded private threads; Discord API rarely used)
-- [ ] **6.5** Mock `THREAD_CREATE` / `THREAD_UPDATE` / `THREAD_DELETE` gateway events
-  - **PUNTED**: The mock server has no WebSocket gateway layer (gateway URL returns `ws://localhost:9102` stub).
-  - The client's `parse_gateway_event()` is fully unit-tested standalone in `clients/discord/tests/mapping.rs`.
-  - Emitting gateway events would require implementing a WS server in `test-discord` — Phase 7 scope.
-  - The `DiscordEvent` enum already has `GuildCreate`/`MessageCreate` variants; adding thread variants is a small follow-up once the WS layer is built.
+- [x] **6.5** Mock `THREAD_CREATE` / `THREAD_UPDATE` / `THREAD_DELETE` / `THREAD_LIST_SYNC` gateway events
+  - `GET /gateway/ws` — axum `WebSocketUpgrade` handler; on connect sends READY (op 0), responds to HEARTBEAT (op 1) with HEARTBEAT_ACK (op 11), forwards `DiscordEvent` variants via `EventBus<DiscordEvent>` subscription.
+  - `POST /testhook/emit_thread_event` — injects `ThreadCreate` / `ThreadUpdate` / `ThreadDelete` / `ThreadListSync` events to all connected WS clients.
+  - `DiscordEvent` extended with four thread-lifecycle variants.
+  - `GET /api/v10/gateway` now returns `state.gateway_url` (dynamic, set from tests) instead of hardcoded stub.
+  - `DiscordClient::with_base_url_and_gateway(base_url, gateway_ws_url)` — new constructor wiring `event_stream()` to a `tokio-tungstenite` connection.
+  - `event_stream()` connects, sends IDENTIFY, reads dispatched frames (op 0), calls `parse_gateway_event`, forwards `ClientEvent`s via `UnboundedReceiverStream`.
+  - 5 new WS tests in `servers/test-discord/tests/gateway.rs`; `test_gateway_thread_create_flow` in `clients/discord/tests/integration.rs` exercises full end-to-end flow in 2s.
 
 ---
 
@@ -445,4 +448,6 @@ names. Clicking a thread opens it in panel mode.
 - [x] Mock test server covers forum + thread flows
   — 13 unit tests in `servers/test-discord/tests/forum_threads.rs` all pass
   — 9 integration tests in `clients/discord/tests/integration.rs` cover forum/thread flows (6.3–6.4 endpoints, forum posts, archived threads, message thread field, active threads)
-  — **Gateway events (6.5) not exercised at server level** — WS gateway layer not implemented in mock server (Phase 7 follow-up)
+- [x] Gateway thread events flow end-to-end from mock WS to `ClientEvent::ChannelUpdated`
+  — `test_gateway_thread_create_flow` in `clients/discord/tests/integration.rs` passes (24/24 integration tests green)
+  — 5 WS-specific tests in `servers/test-discord/tests/gateway.rs` all pass

@@ -5,17 +5,19 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use twilight_model::channel::ChannelType;
 use twilight_model::id::marker::{ChannelMarker, GuildMarker, UserMarker};
 use twilight_model::id::Id;
 
-use crate::state::{Attachment, Channel, DiscordState, ForumTag, Message, ThreadMetadata};
+use crate::state::{Attachment, Channel, DiscordEvent, DiscordState, ForumTag, Message, ThreadMetadata};
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -98,8 +100,12 @@ pub async fn login(
 }
 
 /// GET /api/v10/gateway — returns the WebSocket gateway URL.
-pub async fn get_gateway(State(_): State<Arc<DiscordState>>) -> impl IntoResponse {
-    Json(serde_json::json!({ "url": "ws://localhost:9102" }))
+///
+/// The URL is dynamically set on the state so that in-process tests can
+/// point clients at the correct random port.
+pub async fn get_gateway(State(state): State<Arc<DiscordState>>) -> impl IntoResponse {
+    let url = state.gateway_url.read().await.clone();
+    Json(serde_json::json!({ "url": url }))
 }
 
 // ---------------------------------------------------------------------------
@@ -525,6 +531,200 @@ pub async fn reset(State(state): State<Arc<DiscordState>>) -> impl IntoResponse 
 pub async fn reseed(State(state): State<Arc<DiscordState>>) -> impl IntoResponse {
     state.reseed();
     Json(serde_json::json!({ "ok": true }))
+}
+
+// ---------------------------------------------------------------------------
+// Gateway WebSocket — GET /gateway/ws
+// ---------------------------------------------------------------------------
+
+/// GET /gateway/ws — upgrade to WebSocket, speak a minimal Discord gateway protocol.
+///
+/// Protocol decisions (Phase 6.5 minimum viable gateway):
+/// - Skip Hello (op 10) / Heartbeat / Resume / sharding — not needed for tests.
+/// - On connection: immediately send `READY` (op 0, t "READY").
+/// - IDENTIFY frames from the client are accepted but ignored (no auth check).
+/// - HEARTBEAT frames (op 1) from the client receive a HEARTBEAT_ACK (op 11).
+/// - Thread lifecycle events arrive via the `EventBus<DiscordEvent>` subscription.
+pub async fn gateway_ws(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<DiscordState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_gateway_socket(socket, state))
+}
+
+async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) {
+    // Subscribe to events before sending READY so no events are missed.
+    let mut rx: broadcast::Receiver<DiscordEvent> = state.events.subscribe();
+
+    // Send a minimal READY event so the client knows we accepted the session.
+    let ready = serde_json::json!({
+        "op": 0,
+        "t": "READY",
+        "s": 1,
+        "d": {
+            "v": 10,
+            "user": { "id": "0", "username": "test-gateway", "discriminator": "0000" },
+            "guilds": [],
+            "session_id": "mock-session",
+            "resume_gateway_url": ""
+        }
+    });
+    if socket
+        .send(WsMessage::Text(ready.to_string().into()))
+        .await
+        .is_err()
+    {
+        return;
+    }
+
+    loop {
+        tokio::select! {
+            // Forward broadcast events to this WS client.
+            event_result = rx.recv() => {
+                match event_result {
+                    Ok(event) => {
+                        let frame = discord_event_to_ws_frame(&event);
+                        if let Some(text) = frame {
+                            if socket.send(WsMessage::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(target: "poly_test_discord::gateway", "ws client lagged by {n} events");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            // Handle incoming frames from the client.
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(WsMessage::Text(txt))) => {
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
+                            let op = v.get("op").and_then(|o| o.as_u64()).unwrap_or(0);
+                            // op 1 = HEARTBEAT → reply with HEARTBEAT_ACK (op 11)
+                            if op == 1 {
+                                let ack = serde_json::json!({ "op": 11 });
+                                if socket.send(WsMessage::Text(ack.to_string().into())).await.is_err() {
+                                    break;
+                                }
+                            }
+                            // op 2 = IDENTIFY → accepted silently
+                        }
+                    }
+                    Some(Ok(WsMessage::Close(_))) | None => break,
+                    Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+/// Convert a `DiscordEvent` into a Discord gateway JSON frame string.
+/// Returns `None` for events that don't have a gateway representation yet.
+fn discord_event_to_ws_frame(event: &DiscordEvent) -> Option<String> {
+    let (event_name, data) = match event {
+        DiscordEvent::ThreadCreate { thread } => (
+            "THREAD_CREATE",
+            thread.clone(),
+        ),
+        DiscordEvent::ThreadUpdate { thread } => (
+            "THREAD_UPDATE",
+            thread.clone(),
+        ),
+        DiscordEvent::ThreadDelete { thread_id, guild_id, parent_id } => (
+            "THREAD_DELETE",
+            serde_json::json!({
+                "id": thread_id,
+                "guild_id": guild_id,
+                "parent_id": parent_id,
+                "type": 11
+            }),
+        ),
+        DiscordEvent::ThreadListSync { guild_id, threads } => (
+            "THREAD_LIST_SYNC",
+            serde_json::json!({
+                "guild_id": guild_id,
+                "threads": threads,
+                "members": []
+            }),
+        ),
+        DiscordEvent::MessageCreate { message, .. } => ("MESSAGE_CREATE", message.clone()),
+        _ => return None,
+    };
+
+    let frame = serde_json::json!({
+        "op": 0,
+        "t": event_name,
+        "s": null,
+        "d": data
+    });
+    Some(frame.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Testhook — POST /testhook/emit_thread_event
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct EmitThreadEventBody {
+    /// One of: THREAD_CREATE, THREAD_UPDATE, THREAD_DELETE, THREAD_LIST_SYNC
+    pub event_type: String,
+    /// Full thread channel JSON (required for THREAD_CREATE / THREAD_UPDATE / THREAD_LIST_SYNC threads)
+    pub thread: Option<serde_json::Value>,
+    /// Required for THREAD_DELETE
+    pub thread_id: Option<String>,
+    pub guild_id: Option<String>,
+    pub parent_id: Option<String>,
+    /// Required for THREAD_LIST_SYNC
+    pub threads: Option<Vec<serde_json::Value>>,
+}
+
+/// POST /testhook/emit_thread_event — inject a gateway thread event to all connected WS clients.
+pub async fn emit_thread_event(
+    State(state): State<Arc<DiscordState>>,
+    Json(body): Json<EmitThreadEventBody>,
+) -> impl IntoResponse {
+    let event = match body.event_type.as_str() {
+        "THREAD_CREATE" => {
+            let thread = match body.thread {
+                Some(t) => t,
+                None => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "thread required" }))).into_response(),
+            };
+            DiscordEvent::ThreadCreate { thread }
+        }
+        "THREAD_UPDATE" => {
+            let thread = match body.thread {
+                Some(t) => t,
+                None => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "thread required" }))).into_response(),
+            };
+            DiscordEvent::ThreadUpdate { thread }
+        }
+        "THREAD_DELETE" => {
+            let thread_id = body.thread_id.unwrap_or_default();
+            let guild_id = body.guild_id.unwrap_or_default();
+            let parent_id = body.parent_id.unwrap_or_default();
+            if thread_id.is_empty() {
+                return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "thread_id required" }))).into_response();
+            }
+            DiscordEvent::ThreadDelete { thread_id, guild_id, parent_id }
+        }
+        "THREAD_LIST_SYNC" => {
+            let guild_id = body.guild_id.unwrap_or_default();
+            let threads = body.threads.unwrap_or_default();
+            DiscordEvent::ThreadListSync { guild_id, threads }
+        }
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": format!("unknown event_type: {other}") })),
+            ).into_response();
+        }
+    };
+
+    let receivers = state.events.publish(event);
+    Json(serde_json::json!({ "ok": true, "receivers": receivers })).into_response()
 }
 
 // ---------------------------------------------------------------------------

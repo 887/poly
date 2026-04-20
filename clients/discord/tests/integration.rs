@@ -4,13 +4,13 @@
 //! demo data, authenticates via `/test/auth/token`, then exercises the full
 //! `ClientBackend` API surface.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, dead_code)]
 
 use std::sync::Arc;
 
 use poly_client::{
-    AuthCredentials, BackendType, ChannelType, ClientBackend, ForumSortOrder, MessageContent,
-    MessageQuery, PresenceStatus,
+    AuthCredentials, BackendType, ChannelType, ClientBackend, ClientEvent, ForumSortOrder,
+    MessageContent, MessageQuery, PresenceStatus,
 };
 use poly_discord::DiscordClient;
 use poly_test_discord::{DiscordState, router};
@@ -22,6 +22,10 @@ use tokio::net::TcpListener;
 
 struct TestServer {
     base_url: String,
+    /// WebSocket URL for the mock gateway (`ws://…/gateway/ws`).
+    ws_url: String,
+    /// Shared state — tests can publish events directly via `state.events`.
+    state: Arc<DiscordState>,
     _shutdown: tokio::sync::oneshot::Sender<()>,
 }
 
@@ -30,19 +34,25 @@ impl TestServer {
         let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
         let port = listener.local_addr().expect("local addr").port();
         let base_url = format!("http://127.0.0.1:{port}");
+        let ws_url = format!("ws://127.0.0.1:{port}/gateway/ws");
 
         let state = Arc::new(DiscordState::new());
         state.seed();
 
+        // Tell the state its own WS URL so GET /api/v10/gateway returns it.
+        *state.gateway_url.write().await = ws_url.clone();
+
         let app = router(Arc::clone(&state));
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let state_clone = Arc::clone(&state);
         tokio::spawn(async move {
             axum::serve(listener, app)
                 .with_graceful_shutdown(async { rx.await.ok(); })
                 .await
                 .ok();
+            drop(state_clone);
         });
-        Self { base_url, _shutdown: tx }
+        Self { base_url, ws_url, state, _shutdown: tx }
     }
 
     /// Obtain a user token via the test-only easy-signin endpoint.
@@ -63,6 +73,20 @@ impl TestServer {
     async fn authenticated_client(&self, username: &str) -> DiscordClient {
         let token = self.token_for(username).await;
         let mut client = DiscordClient::with_base_url(self.base_url.clone());
+        client
+            .authenticate(AuthCredentials::Token(token))
+            .await
+            .expect("authenticate");
+        client
+    }
+
+    /// Build a `DiscordClient` with gateway connected, and authenticate.
+    async fn authenticated_client_with_gateway(&self, username: &str) -> DiscordClient {
+        let token = self.token_for(username).await;
+        let mut client = DiscordClient::with_base_url_and_gateway(
+            self.base_url.clone(),
+            self.ws_url.clone(),
+        );
         client
             .authenticate(AuthCredentials::Token(token))
             .await
@@ -388,4 +412,73 @@ async fn test_message_thread_field() {
     let thread_info = msg520.thread.as_ref().expect("Message.thread should be Some for msg 520");
     assert_eq!(thread_info.thread_id, "511");
     assert_eq!(thread_info.parent_channel_id, "510");
+}
+
+// ─── Phase 6.5 — Gateway WebSocket thread events ──────────────────────────
+
+/// End-to-end gateway flow: connect WS, emit THREAD_CREATE via testhook,
+/// assert a `ClientEvent::ChannelUpdated` arrives on the stream within 2s.
+#[tokio::test]
+async fn test_gateway_thread_create_flow() {
+    use futures::StreamExt;
+    use tokio::time::{Duration, timeout};
+
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client_with_gateway("koala").await;
+
+    // Open the event stream — this spawns the WS connection task.
+    let mut stream = client.event_stream();
+
+    // Give the WS connection a brief moment to establish and receive READY.
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Inject a THREAD_CREATE event via the testhook.
+    let thread_payload = serde_json::json!({
+        "id": "9001",
+        "name": "New gateway thread",
+        "type": 11,
+        "guild_id": "100",
+        "parent_id": "500",
+        "thread_metadata": {
+            "archived": false,
+            "locked": false,
+            "auto_archive_duration": 1440,
+            "archive_timestamp": null,
+            "create_timestamp": "2026-04-19T00:00:00.000Z"
+        },
+        "owner_id": "1",
+        "message_count": 0,
+        "member_count": 1,
+        "applied_tags": []
+    });
+
+    let resp: serde_json::Value = reqwest::Client::new()
+        .post(format!("{}/testhook/emit_thread_event", srv.base_url))
+        .json(&serde_json::json!({
+            "event_type": "THREAD_CREATE",
+            "thread": thread_payload
+        }))
+        .send()
+        .await
+        .expect("testhook POST")
+        .json()
+        .await
+        .expect("parse testhook response");
+    assert_eq!(resp["ok"], serde_json::Value::Bool(true), "testhook should return ok:true");
+
+    // Wait up to 2s for the ChannelUpdated event to appear on the stream.
+    let event = timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("timed out waiting for gateway event")
+        .expect("stream ended unexpectedly");
+
+    match event {
+        ClientEvent::ChannelUpdated(ch) => {
+            assert_eq!(ch.id, "9001", "channel id should match thread_payload id");
+            assert_eq!(ch.channel_type, ChannelType::Thread);
+            assert_eq!(ch.server_id, "100");
+            assert_eq!(ch.parent_channel_id.as_deref(), Some("500"));
+        }
+        other => panic!("expected ChannelUpdated, got {:?}", other),
+    }
 }

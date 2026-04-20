@@ -48,6 +48,10 @@ use std::collections::HashSet;
 use std::pin::Pin;
 #[cfg(feature = "native")]
 use std::sync::Mutex;
+#[cfg(feature = "native")]
+use tokio::sync::mpsc::UnboundedSender;
+#[cfg(feature = "native")]
+use tokio_tungstenite::tungstenite::Message as TungsteniteMsg;
 
 /// F10 — in-memory mutable state for context-menu item state-awareness.
 ///
@@ -150,6 +154,10 @@ pub struct DiscordClient {
     /// actions like mute/unmute must mutate state, and `ClientBackend`
     /// requires `Send + Sync`.
     menu_state: Mutex<DiscordMenuState>,
+    /// Optional WebSocket gateway URL.  When `Some`, `event_stream()` connects
+    /// to this URL and forwards parsed gateway events.  When `None`, the stream
+    /// is `stream::pending()` (no events).
+    gateway_url: Option<String>,
 }
 
 #[cfg(feature = "native")]
@@ -161,6 +169,7 @@ impl DiscordClient {
             account_display_name: None,
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(DiscordMenuState::default()),
+            gateway_url: None,
         }
     }
 
@@ -171,6 +180,22 @@ impl DiscordClient {
             account_display_name: None,
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(DiscordMenuState::default()),
+            gateway_url: None,
+        }
+    }
+
+    /// Create a client with a REST base URL and a WS gateway URL.
+    ///
+    /// `gateway_ws_url` is the WebSocket URL the client will connect to in
+    /// `event_stream()`.  Example: `"ws://127.0.0.1:9999/gateway/ws"`.
+    pub fn with_base_url_and_gateway(base_url: String, gateway_ws_url: String) -> Self {
+        Self {
+            http: DiscordHttpClient::new(base_url),
+            account_id: None,
+            account_display_name: None,
+            settings_storage: SettingsStorageCell::new(),
+            menu_state: Mutex::new(DiscordMenuState::default()),
+            gateway_url: Some(gateway_ws_url),
         }
     }
 
@@ -420,6 +445,98 @@ impl DiscordClient {
 
             _ => vec![],
         }
+    }
+}
+
+/// Gateway WebSocket connection loop.
+///
+/// Connects to `gateway_url`, reads JSON frames, calls `parse_gateway_event`
+/// on each dispatched event (op 0), and sends the resulting `ClientEvent`s on
+/// `tx`.  Exits when the WS closes or `tx` is dropped.
+///
+/// Protocol decisions (Phase 6.5):
+/// - Sends a minimal IDENTIFY on connect so servers can log the connection.
+/// - Responds to HEARTBEAT_ACK (op 11) silently.
+/// - Does NOT implement reconnect logic — stream simply ends on disconnect.
+#[cfg(feature = "native")]
+async fn gateway_connect_loop(
+    gateway_url: String,
+    tx: UnboundedSender<ClientEvent>,
+) {
+    use futures::StreamExt;
+    use tokio_tungstenite::connect_async;
+
+    let ws_stream = match connect_async(gateway_url.as_str()).await {
+        Ok((ws, _)) => ws,
+        Err(e) => {
+            tracing::warn!(target: "poly_discord::gateway", url = %gateway_url, error = %e, "gateway connect failed");
+            return;
+        }
+    };
+
+    let (mut write, mut read) = futures::StreamExt::split(ws_stream);
+
+    // Send a minimal IDENTIFY frame so the server knows we connected.
+    let identify = serde_json::json!({
+        "op": 2,
+        "d": {
+            "token": "",
+            "intents": 513,
+            "properties": { "os": "linux", "browser": "poly", "device": "poly" }
+        }
+    });
+    use futures::SinkExt;
+    if let Err(e) = write.send(TungsteniteMsg::Text(identify.to_string().into())).await {
+        tracing::warn!(target: "poly_discord::gateway", error = %e, "failed to send IDENTIFY");
+        return;
+    }
+
+    // The client that owns this stream has `&self` access; use a stub for parsing.
+    let parser = DiscordClient::new();
+
+    while let Some(msg_result) = read.next().await {
+        let msg = match msg_result {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::warn!(target: "poly_discord::gateway", error = %e, "gateway WS error");
+                break;
+            }
+        };
+
+        let text = match msg {
+            TungsteniteMsg::Text(t) => t.to_string(),
+            TungsteniteMsg::Close(_) => break,
+            _ => continue,
+        };
+
+        let frame: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let op = frame.get("op").and_then(|v| v.as_u64()).unwrap_or(0);
+
+        // op 0 = DISPATCH — parse and forward.
+        if op == 0 {
+            let event_name = frame
+                .get("t")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let data = frame.get("d").cloned().unwrap_or(serde_json::Value::Null);
+            let guild_id = data
+                .get("guild_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let events = parser.parse_gateway_event(event_name, &data, &guild_id);
+            for ev in events {
+                if tx.send(ev).is_err() {
+                    // Receiver dropped — stream is done.
+                    return;
+                }
+            }
+        }
+        // op 11 = HEARTBEAT_ACK — no action needed.
     }
 }
 
@@ -702,13 +819,15 @@ impl ClientBackend for DiscordClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        // TODO(3.3.5): Connect to Discord Gateway WebSocket and parse events.
-        // Use `self.parse_gateway_event(event_name, &data, &guild_id)` to
-        // convert raw Gateway JSON frames into `ClientEvent`s. The parsing
-        // logic for THREAD_CREATE / THREAD_UPDATE / THREAD_DELETE /
-        // THREAD_LIST_SYNC is already implemented and tested — see
-        // `DiscordClient::parse_gateway_event`.
-        Box::pin(stream::pending())
+        let gateway_url = match &self.gateway_url {
+            Some(url) => url.clone(),
+            None => return Box::pin(stream::pending()),
+        };
+
+        // Spawn a task that connects to the gateway WS and streams events.
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ClientEvent>();
+        tokio::spawn(gateway_connect_loop(gateway_url, tx));
+        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
     }
 
     fn backend_type(&self) -> BackendType {

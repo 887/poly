@@ -6,6 +6,8 @@
 
 use dashmap::DashMap;
 use poly_test_common::{AuthState, EventBus};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use twilight_model::channel::ChannelType;
 use twilight_model::id::marker::{ChannelMarker, GuildMarker, MessageMarker, UserMarker};
 use twilight_model::id::Id;
@@ -36,6 +38,11 @@ pub enum DiscordEvent {
     GuildCreate {
         guild: serde_json::Value,
     },
+    /// Gateway thread lifecycle events (Phase 6.5).
+    ThreadCreate { thread: serde_json::Value },
+    ThreadUpdate { thread: serde_json::Value },
+    ThreadDelete { thread_id: String, guild_id: String, parent_id: String },
+    ThreadListSync { guild_id: String, threads: Vec<serde_json::Value> },
 }
 
 /// A tag available in a forum channel.
@@ -79,6 +86,9 @@ pub struct DiscordState {
     pub channels: DashMap<Id<ChannelMarker>, Channel>,
     pub messages: DashMap<Id<ChannelMarker>, Vec<Message>>,
     pub events: EventBus<DiscordEvent>,
+    /// Gateway WebSocket URL returned by `GET /api/v10/gateway`.
+    /// Set after the server binds so tests can use the actual port.
+    pub gateway_url: Arc<RwLock<String>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -152,6 +162,7 @@ impl DiscordState {
             channels: DashMap::new(),
             messages: DashMap::new(),
             events: EventBus::new(),
+            gateway_url: Arc::new(RwLock::new("ws://localhost:9102".to_string())),
         }
     }
 
