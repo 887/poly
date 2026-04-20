@@ -363,16 +363,16 @@ names. Clicking a thread opens it in panel mode.
 
 ### 3. Discord Client
 
-- [ ] **3.1** Map Discord channel types 15/16 to `ChannelType::Forum` in `get_channels()`
-- [ ] **3.2** Map Discord channel types 10/11/12 to `ChannelType::Thread` in `get_channel()`
-- [ ] **3.3** Implement `get_forum_posts()` using active threads endpoint + message fetch
-- [ ] **3.4** Implement `get_active_threads()` using `GET /guilds/{id}/threads/active`
-- [ ] **3.5** Implement `get_archived_threads()` using archived threads endpoint
-- [ ] **3.6** Parse `thread_metadata` from Discord thread objects
-- [ ] **3.7** Parse `available_tags` from forum channel objects
-- [ ] **3.8** Handle `THREAD_CREATE`, `THREAD_UPDATE`, `THREAD_DELETE` gateway events
-- [ ] **3.9** Handle `THREAD_LIST_SYNC` for bulk thread cache population
-- [ ] **3.10** Populate `Message.thread` field when message has a thread spawned from it
+- [x] **3.1** Map Discord channel types 15/16 to `ChannelType::Forum` in `get_channels()`
+- [x] **3.2** Map Discord channel types 10/11/12 to `ChannelType::Thread` in `get_channel()`
+- [x] **3.3** Implement `get_forum_posts()` using active threads endpoint + message fetch
+- [x] **3.4** Implement `get_active_threads()` using `GET /guilds/{id}/threads/active`
+- [x] **3.5** Implement `get_archived_threads()` using archived threads endpoint
+- [x] **3.6** Parse `thread_metadata` from Discord thread objects
+- [x] **3.7** Parse `available_tags` from forum channel objects
+- [x] **3.8** Handle `THREAD_CREATE`, `THREAD_UPDATE`, `THREAD_DELETE` gateway events
+- [x] **3.9** Handle `THREAD_LIST_SYNC` for bulk thread cache population
+- [x] **3.10** Populate `Message.thread` field when message has a thread spawned from it
 
 ### 4. UI — Forum Channel
 

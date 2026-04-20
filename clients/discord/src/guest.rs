@@ -295,11 +295,15 @@ impl Guest for DiscordPlugin {
 
     fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
         // TODO(3.3.5): Parse Discord Gateway WebSocket events, call emit-event.
-        // Thread gateway events to handle when gateway is connected:
-        //   THREAD_CREATE  → emit ChannelUpdated(thread) so host channel list refreshes.
-        //   THREAD_UPDATE  → emit ChannelUpdated(thread) for metadata/archived-state changes.
-        //   THREAD_DELETE  → emit ChannelUpdated(parent) — no ChannelDeleted event in WIT.
-        //   THREAD_LIST_SYNC → emit ChannelUpdated for each thread in the bulk payload.
+        //
+        // Mapping (mirrors native DiscordClient::parse_gateway_event):
+        //   THREAD_CREATE     → emit ChannelUpdated(thread_channel)
+        //   THREAD_UPDATE     → emit ChannelUpdated(thread_channel) for metadata/archived-state changes
+        //   THREAD_DELETE     → emit ChannelUpdated(tombstone_channel) — no separate ChannelDeleted in WIT
+        //   THREAD_LIST_SYNC  → emit ChannelUpdated for each thread in the bulk payload
+        //
+        // Decision (matches native impl): re-use ChannelUpdated for all thread lifecycle events
+        // rather than adding new WIT variants. The WIT schema does not need to change.
     }
 
     fn get_backend_type() -> String {

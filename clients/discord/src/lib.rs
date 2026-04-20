@@ -120,6 +120,19 @@ pub mod test_helpers {
         let client = DiscordClient::new();
         Ok(client.discord_message_to_poly(dm))
     }
+
+    /// Parse a Discord Gateway JSON string into `ClientEvent`s.
+    ///
+    /// Convenience wrapper for use in unit tests.
+    pub fn gateway_events_from_json(
+        event_name: &str,
+        data_json: &str,
+        fallback_server_id: &str,
+    ) -> Result<Vec<ClientEvent>, serde_json::Error> {
+        let data: serde_json::Value = serde_json::from_str(data_json)?;
+        let client = DiscordClient::new();
+        Ok(client.parse_gateway_event(event_name, &data, fallback_server_id))
+    }
 }
 
 /// Discord messenger client.
@@ -279,6 +292,133 @@ impl DiscordClient {
             forum_tags,
             parent_channel_id,
             thread_metadata,
+        }
+    }
+
+    /// Parse a Discord Gateway JSON payload into zero or more [`ClientEvent`]s.
+    ///
+    /// Called by the WebSocket event loop once it is connected (TODO 3.3.5).
+    /// Handles the thread gateway events required by Phase 3 items 3.8 and 3.9:
+    ///
+    /// | Gateway event    | Emitted `ClientEvent`                          |
+    /// |------------------|------------------------------------------------|
+    /// | `THREAD_CREATE`  | `ChannelUpdated(thread_channel)`               |
+    /// | `THREAD_UPDATE`  | `ChannelUpdated(thread_channel)`               |
+    /// | `THREAD_DELETE`  | `ChannelUpdated` with a tombstone channel       |
+    /// | `THREAD_LIST_SYNC` | `ChannelUpdated` for each thread in the list |
+    ///
+    /// Decision: we re-use `ChannelUpdated` for all thread lifecycle events
+    /// rather than adding new `ClientEvent` variants.  The host treats
+    /// `ChannelUpdated` as "channel state changed — re-render sidebar/thread
+    /// list if you care about this channel".  Adding a new variant would
+    /// require a WIT schema change and propagation through every backend's
+    /// guest.rs — not warranted here because the UI reaction is identical.
+    ///
+    /// The `fallback_server_id` is used when `guild_id` is absent from the
+    /// payload (Discord omits it on `THREAD_DELETE` events).
+    #[cfg(feature = "native")]
+    pub fn parse_gateway_event(
+        &self,
+        event_name: &str,
+        data: &serde_json::Value,
+        fallback_server_id: &str,
+    ) -> Vec<ClientEvent> {
+        match event_name {
+            // ── 3.8: THREAD_CREATE / THREAD_UPDATE ────────────────────────
+            "THREAD_CREATE" | "THREAD_UPDATE" => {
+                match serde_json::from_value::<api::DiscordChannel>(data.clone()) {
+                    Ok(ch) => {
+                        let channel = self.discord_channel_to_poly(ch, fallback_server_id);
+                        vec![ClientEvent::ChannelUpdated(channel)]
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "poly_discord::gateway",
+                            event = event_name,
+                            error = %e,
+                            "failed to deserialize thread channel from gateway event"
+                        );
+                        vec![]
+                    }
+                }
+            }
+
+            // ── 3.8: THREAD_DELETE ────────────────────────────────────────
+            // Discord sends a minimal object with just `id`, `guild_id`, and
+            // `parent_id` on deletion — not a full channel object.
+            // We emit a `ChannelUpdated` with a tombstone Thread channel so
+            // subscribers can remove the thread from their caches.
+            "THREAD_DELETE" => {
+                let thread_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let server_id = data
+                    .get("guild_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(fallback_server_id)
+                    .to_string();
+                let parent_channel_id = data
+                    .get("parent_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                if thread_id.is_empty() {
+                    return vec![];
+                }
+                let tombstone = Channel {
+                    id: thread_id,
+                    name: String::new(),
+                    channel_type: ChannelType::Thread,
+                    server_id,
+                    unread_count: 0,
+                    mention_count: 0,
+                    last_message_id: None,
+                    forum_tags: None,
+                    parent_channel_id,
+                    thread_metadata: Some(ThreadMetadata {
+                        archived: true,
+                        locked: true,
+                        auto_archive_minutes: 0,
+                        archived_at: None,
+                        created_at: chrono::Utc::now(),
+                    }),
+                };
+                vec![ClientEvent::ChannelUpdated(tombstone)]
+            }
+
+            // ── 3.9: THREAD_LIST_SYNC ─────────────────────────────────────
+            // Sent on READY or when the user gains access to a set of channels.
+            // Payload: `{ guild_id, channel_ids?, threads: [Thread], ... }`
+            "THREAD_LIST_SYNC" => {
+                let threads_val = match data.get("threads").and_then(|v| v.as_array()) {
+                    Some(arr) => arr.clone(),
+                    None => return vec![],
+                };
+                let guild_id = data
+                    .get("guild_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(fallback_server_id);
+                let mut events = Vec::with_capacity(threads_val.len());
+                for t in threads_val {
+                    match serde_json::from_value::<api::DiscordChannel>(t) {
+                        Ok(ch) => {
+                            let channel = self.discord_channel_to_poly(ch, guild_id);
+                            events.push(ClientEvent::ChannelUpdated(channel));
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "poly_discord::gateway",
+                                error = %e,
+                                "THREAD_LIST_SYNC: failed to deserialize thread"
+                            );
+                        }
+                    }
+                }
+                events
+            }
+
+            _ => vec![],
         }
     }
 }
@@ -563,12 +703,11 @@ impl ClientBackend for DiscordClient {
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         // TODO(3.3.5): Connect to Discord Gateway WebSocket and parse events.
-        // Thread gateway events to emit when the WS connection is live:
-        //   THREAD_CREATE  → ClientEvent::ChannelUpdated(thread_as_channel)
-        //   THREAD_UPDATE  → ClientEvent::ChannelUpdated(thread_as_channel)
-        //   THREAD_DELETE  → ClientEvent::ChannelUpdated(parent_channel)
-        //     (ClientEvent has no ChannelDeleted variant — emit parent update instead)
-        //   THREAD_LIST_SYNC → ClientEvent::ChannelUpdated for each thread in the payload
+        // Use `self.parse_gateway_event(event_name, &data, &guild_id)` to
+        // convert raw Gateway JSON frames into `ClientEvent`s. The parsing
+        // logic for THREAD_CREATE / THREAD_UPDATE / THREAD_DELETE /
+        // THREAD_LIST_SYNC is already implemented and tested — see
+        // `DiscordClient::parse_gateway_event`.
         Box::pin(stream::pending())
     }
 

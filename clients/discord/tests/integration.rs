@@ -8,7 +8,10 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, BackendType, ChannelType, ClientBackend, MessageContent, MessageQuery, PresenceStatus};
+use poly_client::{
+    AuthCredentials, BackendType, ChannelType, ClientBackend, ForumSortOrder, MessageContent,
+    MessageQuery, PresenceStatus,
+};
 use poly_discord::DiscordClient;
 use poly_test_discord::{DiscordState, router};
 use tokio::net::TcpListener;
@@ -141,7 +144,18 @@ async fn test_get_channels() {
     assert!(names.contains(&"general"), "general channel expected");
     assert!(names.contains(&"random"), "random channel expected");
     for ch in &channels {
-        assert_eq!(ch.channel_type, ChannelType::Text);
+        // Guild 100 contains text channels, a forum channel, and a wildlife-news
+        // text channel. All channel types returned by get_channels are valid
+        // text-like types — no voice/thread-only types should appear.
+        assert!(
+            matches!(
+                ch.channel_type,
+                ChannelType::Text | ChannelType::Forum | ChannelType::Announcement
+            ),
+            "unexpected channel type {:?} for channel {}",
+            ch.channel_type,
+            ch.name,
+        );
         assert_eq!(ch.server_id, "100");
     }
 }
@@ -253,4 +267,125 @@ async fn test_concurrent_sessions_isolated() {
     assert_eq!(sess_k.user.display_name, "koala");
     assert_eq!(sess_r.user.display_name, "kangaroo");
     assert_ne!(sess_k.token, sess_r.token);
+}
+
+// ─── Phase 3 — Forum channels + threads ──────────────────────────────────
+
+/// get_channels for guild 100 includes the forum channel (id=500, type=Forum).
+#[tokio::test]
+async fn test_get_channels_includes_forum() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let channels = client.get_channels("100").await.expect("get_channels");
+    let forum = channels.iter().find(|c| c.id == "500");
+    assert!(forum.is_some(), "forum channel 500 should be returned by get_channels");
+    let forum = forum.unwrap();
+    assert_eq!(forum.channel_type, ChannelType::Forum);
+    let tags = forum.forum_tags.as_ref().expect("forum_tags should be populated");
+    assert_eq!(tags.len(), 3);
+    let names: Vec<&str> = tags.iter().map(|t| t.name.as_str()).collect();
+    assert!(names.contains(&"question"));
+    assert!(names.contains(&"show-and-tell"));
+    assert!(names.contains(&"announcement"));
+}
+
+/// get_channels for guild 101 includes the media channel (id=600, type=Forum).
+#[tokio::test]
+async fn test_get_channels_includes_media_as_forum() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let channels = client.get_channels("101").await.expect("get_channels guild 101");
+    let media = channels.iter().find(|c| c.id == "600");
+    assert!(media.is_some(), "media channel 600 should be returned");
+    assert_eq!(media.unwrap().channel_type, ChannelType::Forum);
+}
+
+/// get_channel for a thread ID returns ChannelType::Thread with parent_channel_id set.
+#[tokio::test]
+async fn test_get_channel_thread_type() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let ch = client.get_channel("501").await.expect("get_channel 501");
+    assert_eq!(ch.channel_type, ChannelType::Thread);
+    assert_eq!(ch.parent_channel_id.as_deref(), Some("500"));
+    let meta = ch.thread_metadata.expect("thread_metadata should be populated");
+    assert!(!meta.archived);
+    assert!(!meta.locked);
+    assert_eq!(meta.auto_archive_minutes, 1440);
+}
+
+/// get_active_threads returns non-archived threads for guild 100.
+#[tokio::test]
+async fn test_get_active_threads() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let threads = client.get_active_threads("100").await.expect("get_active_threads");
+    // Seeded: 501, 502, 511 are active; 503 is archived.
+    let ids: Vec<&str> = threads.iter().map(|t| t.thread_id.as_str()).collect();
+    assert!(ids.contains(&"501"), "thread 501 should be active");
+    assert!(ids.contains(&"502"), "thread 502 should be active");
+    assert!(ids.contains(&"511"), "thread 511 should be active");
+    assert!(!ids.contains(&"503"), "archived thread 503 should not appear");
+}
+
+/// get_archived_threads returns archived threads for forum channel 500.
+#[tokio::test]
+async fn test_get_archived_threads() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let threads = client.get_archived_threads("500", None).await.expect("get_archived_threads");
+    assert_eq!(threads.len(), 1, "exactly 1 archived thread under channel 500");
+    assert_eq!(threads[0].thread_id, "503");
+    let meta = threads[0].message_count;
+    // We can't directly access thread_metadata through ThreadInfo, but the thread
+    // should be the archived one (503).
+    assert_eq!(meta, 1);
+}
+
+/// get_forum_posts for channel 500 returns active posts sorted by latest activity.
+#[tokio::test]
+async fn test_get_forum_posts_latest_activity() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let posts = client
+        .get_forum_posts("500", ForumSortOrder::LatestActivity, Some(10))
+        .await
+        .expect("get_forum_posts");
+    // Active posts: 501, 502 (503 is archived → excluded by active threads filter).
+    let ids: Vec<&str> = posts.iter().map(|p| p.thread.thread_id.as_str()).collect();
+    assert!(ids.contains(&"501"), "post 501 missing");
+    assert!(ids.contains(&"502"), "post 502 missing");
+    assert!(!ids.contains(&"503"), "archived post 503 should not appear");
+}
+
+/// get_forum_posts sorted by creation date returns newer post first.
+#[tokio::test]
+async fn test_get_forum_posts_creation_date_order() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let posts = client
+        .get_forum_posts("500", ForumSortOrder::CreationDate, Some(10))
+        .await
+        .expect("get_forum_posts CreationDate");
+    // 501 created 2026-04-10, 502 created 2026-04-11. Descending → 502 first.
+    let ids: Vec<&str> = posts.iter().map(|p| p.thread.thread_id.as_str()).collect();
+    if ids.len() >= 2 {
+        assert_eq!(ids[0], "502", "502 (newer) should sort first by creation date");
+        assert_eq!(ids[1], "501");
+    }
+}
+
+/// Messages in wildlife-news (510) carry inline thread info for spawned threads.
+#[tokio::test]
+async fn test_message_thread_field() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+    let msgs = client
+        .get_messages("510", MessageQuery { limit: Some(10), before: None, after: None, around: None })
+        .await
+        .expect("get_messages 510");
+    let msg520 = msgs.iter().find(|m| m.id == "520").expect("message 520 not found");
+    let thread_info = msg520.thread.as_ref().expect("Message.thread should be Some for msg 520");
+    assert_eq!(thread_info.thread_id, "511");
+    assert_eq!(thread_info.parent_channel_id, "510");
 }
