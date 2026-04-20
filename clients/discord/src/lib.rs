@@ -749,6 +749,10 @@ impl ClientBackend for DiscordClient {
         Ok(resp.threads.into_iter().map(|t| Self::discord_thread_to_thread_info(&t)).collect())
     }
 
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        self.http.trigger_typing(channel_id).await
+    }
+
     async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
         let text = match content {
             MessageContent::Text(t) => t,

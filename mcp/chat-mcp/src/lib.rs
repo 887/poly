@@ -3,3 +3,4 @@
 pub mod memory;
 pub mod state;
 pub mod tools;
+pub mod typing_simulation;

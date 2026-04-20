@@ -185,6 +185,25 @@ impl DiscordHttpClient {
         .await
     }
 
+    /// POST /api/v10/channels/{channel_id}/typing — trigger typing indicator.
+    /// Discord returns 204 No Content on success.
+    pub async fn trigger_typing(&self, channel_id: &str) -> Result<(), ClientError> {
+        let path = format!("/api/v10/channels/{channel_id}/typing");
+        let resp = self
+            .http
+            .post(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        if status == 204 || resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(ClientError::Network(format!("trigger_typing returned HTTP {status}")))
+        }
+    }
+
     /// Fetch messages from a thread channel. Uses the same messages endpoint —
     /// Discord thread IDs are valid channel IDs.
     pub async fn get_thread_messages(
