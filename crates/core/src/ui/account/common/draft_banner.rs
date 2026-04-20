@@ -47,11 +47,22 @@ fn secs_until(ts: &str) -> Option<i64> {
     let epoch_days = jdn.saturating_sub(unix_epoch_jdn);
     let target_secs = epoch_days * 86400 + h * 3600 + m * 60 + s;
 
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now_secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    // SystemTime::now() panics on wasm32-unknown-unknown — use Date.now()
+    // there. On native, std SystemTime works fine.
+    let now_secs: u64 = {
+        #[cfg(target_arch = "wasm32")]
+        {
+            (js_sys::Date::now() / 1000.0) as u64
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        }
+    };
 
     Some((target_secs as i64).saturating_sub(now_secs as i64))
 }
@@ -154,7 +165,17 @@ pub fn DraftBanner(props: DraftBannerProps) -> Element {
             async move {
                 loop {
                     // Small sleep before each read so we don't hammer SQLite.
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    // tokio::time::sleep uses Instant::now() which panics on
+                    // wasm32-unknown-unknown; use document::eval setTimeout on
+                    // web, tokio::time::sleep on native.
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        let _ = dioxus::document::eval("setTimeout(() => dioxus.send(true), 2000);").recv::<bool>().await;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
                     let loaded = if let Some(store) = DraftStore::try_open() {
                         store.pending_for_chat(&account_id_f, &chat_id_f)
                     } else {
@@ -383,7 +404,14 @@ pub fn DraftsSidebar(props: DraftsSidebarProps) -> Element {
                         Vec::new()
                     };
                     drafts.set(loaded);
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        let _ = dioxus::document::eval("setTimeout(() => dioxus.send(true), 2000);").recv::<bool>().await;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
                 }
             }
         });
