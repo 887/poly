@@ -265,28 +265,82 @@ worktree to `/media/games/workspacemsg-worktree-targets/agent-<id>/` so build
 artifacts live on a separate disk and don't fill `/`. The `Stop` hook cleans
 worktrees older than a day.
 
-### MANDATORY before the subagent exits — `jj describe` the work
+### MANDATORY before the subagent exits — `jj describe` AND verify the commit landed
 
 Worktree directories get cleaned up. The git/jj branch (`worktree-agent-<id>`)
-persists, so committed work survives. **Uncommitted edits do not.**
+persists, so committed work survives. **Uncommitted edits do not.** And
+`jj describe` by itself is **not** sufficient proof — concurrent worktree
+operations or a background squash can rewrite the working copy out from under
+the subagent, leaving no commit on the branch even though `jj describe`
+returned zero exit code.
 
-Tell every parallel-work subagent in its prompt:
+#### Agent-side prompt requirement — the subagent MUST prove the commit landed
 
-> Before reporting done, run `jj describe -m "<one-line summary>"` so your
-> changes land on the worktree branch. Otherwise the orchestrator may not be
-> able to recover them after the worktree is cleaned.
+Every parallel-work subagent prompt **must** include this verification block
+verbatim (adapt the commit message):
 
-Then in the orchestrator:
-1. Wait for the completion notification.
-2. `jj log` to see the worktree branch's commit (named `worktree-agent-<id>`).
-3. Pull it into main with `jj rebase -s <worktree-commit-id> -d main` (or copy
-   the file diff via `rsync` from the worktree path while it still exists).
+> Before reporting done:
+> 1. Run `jj describe -m "<one-line summary>"`.
+> 2. Then run `jj log -r 'worktree-agent-<your-id> & description(<summary>)'
+>    --no-graph -T 'commit_id.short()'` and paste the output in your final
+>    message.
+> 3. If that `jj log` returns an empty result, DO NOT report done — your
+>    commit did not land. Retry `jj describe` (check for a `jj squash` or
+>    `jj abandon` that ran concurrently) and re-verify until the commit
+>    appears on the branch.
 
-If the agent reports "done" but no `worktree-agent-<id>` branch exists in
-`jj log`, the work is **lost** — re-spawn the task. (This bit us on Phase 6 of
-`plan-discord-forums-threads.md`: the agent reported done, the worktree path
-was cleaned, no jj commit, all edits gone except one stray file the LSP had
-auto-saved.)
+The commit-id echo in the subagent's final message is the load-bearing signal —
+it proves the commit is real, not just that `describe` exited 0.
+
+#### Orchestrator-side verification — don't trust the "done" message alone
+
+After the subagent returns, before moving on:
+
+1. **Verify the commit exists on the worktree branch:**
+   ```
+   jj log -r 'worktree-agent-<id>' --no-graph -T 'commit_id.short() ++ " | " ++ description.first_line()'
+   ```
+   If this is empty or shows the pre-agent parent commit, the commit did not
+   land. Go to rescue step.
+
+2. **Diff the worktree directory against main as a sanity check:**
+   ```
+   diff -rq --exclude=target --exclude=.jj --exclude=.git \
+     .claude/worktrees/agent-<id>/ /home/laragana/workspcacemsg/
+   ```
+   If this lists changed files but step 1 showed no commit, the work exists
+   only as uncommitted edits in the worktree directory and is about to be
+   cleaned up. **Rescue immediately.**
+
+3. **Rescue path when the subagent lied:**
+   ```
+   # copy uncommitted files out of the worktree back into main
+   for f in <list-from-diff-rq>; do
+     cp -f ".claude/worktrees/agent-<id>/$f" "$f"
+   done
+   # then commit from main normally
+   jj describe -m "<summary>" && jj bookmark set main -r @ && jj git push --bookmark main
+   ```
+
+4. **Normal path when the commit is real:**
+   ```
+   jj rebase -s <commit-id> -d main
+   jj bookmark set main -r @
+   jj git push --bookmark main
+   ```
+
+If the rescue path fires, note in the orchestrator commit message: "Recovered
+from worktree <id> after subagent reported done without a landed commit" so
+the pattern is searchable in history.
+
+**Two real incidents before this rule existed:**
+- Phase 6 of `plan-discord-forums-threads.md`: subagent reported done,
+  worktree path was cleaned, no jj commit, all edits lost except one stray
+  file the LSP had auto-saved.
+- `send_typing` MCP tool sonnet agent: reported "done" with a plausible
+  summary, but `jj log -r 'worktree-agent-<id>'` showed the unchanged
+  parent commit. Recovered by rsync-diff against the worktree dir before
+  the Stop hook cleaned it up.
 
 ### Disjoint files = parallel-safe
 
