@@ -2364,6 +2364,7 @@ async fn handle_start_typing_simulation(args: &Value, pool: &BackendPool) -> Val
         .map(|d| d.as_nanos() as u64)
         .unwrap_or(0xCAFEu64);
 
+    let stop_on_other_typing = params.stop_on_other_typing;
     let (abort_tx, abort_rx) = tokio::sync::oneshot::channel();
     let handle = crate::typing_simulation::spawn_worker(
         backend_arc,
@@ -2374,17 +2375,45 @@ async fn handle_start_typing_simulation(args: &Value, pool: &BackendPool) -> Val
     );
 
     let mut registry = pool.sim_registry.lock().await;
-    match registry.start(account_id, chat_id, handle, abort_tx) {
-        Ok(sim_id) => ok_result(
-            serde_json::to_string_pretty(&json!({
-                "simulation_id": sim_id,
-                "account_id": account_id,
-                "chat_id": chat_id,
-            }))
-            .unwrap_or_default(),
-        ),
-        Err(e) => err_result(e),
+    let sim_id = match registry.start(account_id, chat_id, handle, abort_tx) {
+        Ok(id) => id,
+        Err(e) => return err_result(e),
+    };
+    drop(registry);
+
+    // Phase D ↔ Phase C bridge — when stop_on_other_typing is true, watch the
+    // event broadcast for a TypingStarted on this channel and abort the
+    // simulation by removing it from the registry (which drops abort_tx +
+    // aborts the JoinHandle).
+    if stop_on_other_typing {
+        let registry = pool.sim_registry.clone();
+        let mut events_rx = pool.events.lock().await.subscribe_broadcast();
+        let watch_chat_id = chat_id.to_string();
+        let watch_sim_id = sim_id.clone();
+        tokio::spawn(async move {
+            use crate::events::EventKind;
+            while let Ok(event) = events_rx.recv().await {
+                if event.kind != EventKind::TypingStarted {
+                    continue;
+                }
+                if event.channel_id.as_deref() != Some(watch_chat_id.as_str()) {
+                    continue;
+                }
+                let mut reg = registry.lock().await;
+                reg.stop(&watch_sim_id);
+                break;
+            }
+        });
     }
+
+    ok_result(
+        serde_json::to_string_pretty(&json!({
+            "simulation_id": sim_id,
+            "account_id": account_id,
+            "chat_id": chat_id,
+        }))
+        .unwrap_or_default(),
+    )
 }
 
 /// Phase D — Stop an in-flight simulation. Returns `found: true` if the

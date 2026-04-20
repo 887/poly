@@ -276,14 +276,20 @@ impl GlobalSimRegistry {
 /// dictated by [`next_tick_decision`]. It holds the backend `Arc` and
 /// drops it when the task completes or is cancelled — no dangling refs.
 ///
-/// ## Phase C wiring — stop_on_other_typing
+/// ## Aborting
 ///
-/// TODO(phase-c): subscribe to Phase C's broadcast channel to receive
-/// `TypingStarted` events and abort when `params.stop_on_other_typing`
-/// is true AND the event is from a contact in `chat_id`. Until Phase C's
-/// event channel is available, the `abort_rx` parameter below acts as a
-/// test stand-in: callers can send `()` to abort the simulation
-/// programmatically (used in unit tests for D.4).
+/// `abort_rx` is the canonical abort channel — sending `()` (or dropping
+/// the paired `Sender`) ends the simulation early. Two callers feed it:
+///
+/// - `GlobalSimRegistry::stop` invoked via the `stop_typing_simulation`
+///   MCP tool, when the user / agent explicitly cancels.
+/// - The Phase D ↔ Phase C bridge in `crate::tools::handle_start_typing_simulation`
+///   when `params.stop_on_other_typing == true` AND a `TypingStarted`
+///   event arrives on the watched channel from anyone other than the
+///   simulating account itself.
+///
+/// Unit tests for D.4 use `abort_rx` directly with a hand-driven
+/// `Sender` to exercise abort logic without spinning up the bridge.
 pub fn spawn_worker(
     backend: Arc<dyn ClientBackend + Send + Sync>,
     chat_id: String,
