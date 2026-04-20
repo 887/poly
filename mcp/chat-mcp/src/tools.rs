@@ -104,6 +104,9 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         // Legacy write tool gated on messaging model.
         "send_message" => matches!(caps.messaging, MessagingModel::Full),
 
+        // Typing indicator — gated on backend capability.
+        "send_typing" => caps.supports_typing_indicators,
+
         // New client-ui surface — always exposed; plugins return empty
         // lists for unsupported surfaces per D9.
         "context_menu_server"
@@ -300,6 +303,24 @@ pub fn tool_list() -> Vec<Value> {
                     "account_id": { "type": "string", "description": "Account ID (optional)" }
                 },
                 "required": ["backend", "user_id"]
+            }
+        }),
+
+        // Typing indicator
+        json!({
+            "name": "send_typing",
+            "description": "Broadcast a typing indicator for a channel. Fire-and-forget — \
+                            call this before send_message to make the AI's presence visible. \
+                            Only available for backends that support typing indicators \
+                            (discord, matrix, stoat, poly, demo).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend": { "type": "string", "description": "Backend type" },
+                    "account_id": { "type": "string", "description": "Account ID (optional)" },
+                    "channel_id": { "type": "string", "description": "Channel/Room ID" }
+                },
+                "required": ["backend", "channel_id"]
             }
         }),
 
@@ -633,6 +654,7 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool) -> Value
         "list_friends" => handle_list_friends(args, pool).await,
         "get_user" => handle_get_user(args, pool).await,
         "send_message" => handle_send_message(args, pool).await,
+        "send_typing" => handle_send_typing(args, pool).await,
 
         "test_signin" => handle_test_signin(args, pool).await,
         "test_health" => handle_test_lifecycle(args, "health").await,
@@ -873,6 +895,30 @@ async fn handle_send_message(args: &Value, pool: &BackendPool) -> Value {
     }
 }
 
+async fn handle_send_typing(args: &Value, pool: &BackendPool) -> Value {
+    // Capability guard: only expose to backends that advertise typing indicators.
+    if let Some(slug) = str_arg(args, "backend") {
+        let caps = poly_client::capabilities_for_slug(slug);
+        if !caps.supports_typing_indicators {
+            return err_result(format!(
+                "send_typing not supported: backend '{slug}' does not advertise typing indicators"
+            ));
+        }
+    }
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    let channel_id = match str_arg(args, "channel_id") {
+        Some(c) => c,
+        None => return err_result("missing 'channel_id'"),
+    };
+    match entry.backend.send_typing(channel_id).await {
+        Ok(()) => ok_result("typing indicator sent"),
+        Err(e) => err_result(format!("send_typing failed: {e}")),
+    }
+}
+
 /// Compute the subset of MCP tool names that are honest for a backend slug.
 ///
 /// Read-only backends drop `send_message`. Backends with no DMs drop
@@ -894,6 +940,9 @@ fn handle_list_plugin_tools(args: &Value) -> Value {
     ];
     if matches!(caps.messaging, MessagingModel::Full) {
         tools.push("send_message");
+    }
+    if caps.supports_typing_indicators {
+        tools.push("send_typing");
     }
     if !matches!(caps.dms, DmSupport::None) {
         tools.push("list_dms");
@@ -1455,6 +1504,26 @@ mod tests {
         assert!(!should_expose_tool("", &caps));
     }
 
+    #[test]
+    fn send_typing_gated_on_supports_typing_indicators() {
+        // Backends with typing support should expose the tool.
+        for slug in ["discord", "matrix", "stoat", "poly", "demo"] {
+            let caps = poly_client::capabilities_for_slug(slug);
+            assert!(
+                should_expose_tool("send_typing", &caps),
+                "send_typing should be exposed on backend '{slug}'"
+            );
+        }
+        // Backends without typing support must not expose the tool.
+        for slug in ["hackernews", "lemmy", "teams", "github"] {
+            let caps = poly_client::capabilities_for_slug(slug);
+            assert!(
+                !should_expose_tool("send_typing", &caps),
+                "send_typing must NOT be exposed on backend '{slug}'"
+            );
+        }
+    }
+
     fn tool_names(list: &[Value]) -> std::collections::HashSet<String> {
         list.iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
@@ -1479,7 +1548,7 @@ mod tests {
         // `tools/list` RPCs keep every tool name callable.
         let list = tool_list();
         let names = tool_names(&list);
-        for t in ["send_message", "list_friends", "list_dms"] {
+        for t in ["send_message", "list_friends", "list_dms", "send_typing"] {
             assert!(names.contains(t), "'{t}' dropped from tool_list()");
         }
     }

@@ -645,6 +645,14 @@ impl ClientBackend for StoatClient {
             .await
     }
 
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        // Stub: Stoat has a typing-indicator WebSocket event but the HTTP
+        // wiring is not yet plumbed through StoatClient.
+        // TODO: wire real endpoint in http.rs.
+        tracing::warn!("send_typing stub for stoat (channel_id={channel_id})");
+        Ok(())
+    }
+
     async fn get_messages(
         &self,
         channel_id: &str,

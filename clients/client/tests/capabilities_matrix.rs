@@ -34,7 +34,10 @@ fn expected(slug: &str) -> BackendCapabilities {
             voice: VoiceSupport::None,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
-        "teams" => BackendCapabilities::FULL_SOCIAL_CHAT,
+        "teams" => BackendCapabilities {
+            supports_typing_indicators: false,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
         "discord" | "demo" | "poly" => BackendCapabilities::FULL_SOCIAL_CHAT,
         _ => BackendCapabilities::READ_ONLY_FEED,
     }

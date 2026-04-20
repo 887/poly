@@ -671,6 +671,14 @@ impl ClientBackend for MatrixClient {
         self.build_message_from_send(result.event_id, body)
     }
 
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        // Stub: Matrix supports PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}
+        // but the HTTP wiring is not yet plumbed through MatrixHttpClient.
+        // TODO: wire real endpoint in http.rs.
+        tracing::warn!("send_typing stub for matrix (channel_id={channel_id})");
+        Ok(())
+    }
+
     async fn get_messages(
         &self,
         channel_id: &str,

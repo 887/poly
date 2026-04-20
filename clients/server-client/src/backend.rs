@@ -411,6 +411,21 @@ impl ClientBackend for PolyServerBackend {
         Ok(Self::map_message(&msg, &self.base_url))
     }
 
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        #[cfg(feature = "native")]
+        {
+            self.ws
+                .send_typing(channel_id)
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = channel_id;
+            Ok(())
+        }
+    }
+
     async fn send_reply_message(
         &self,
         channel_id: &str,

@@ -89,7 +89,10 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
             voice: VoiceSupport::None,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
-        "teams" => BackendCapabilities::FULL_SOCIAL_CHAT,
+        "teams" => BackendCapabilities {
+            supports_typing_indicators: false,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
         "discord" | "demo" | "poly" => BackendCapabilities::FULL_SOCIAL_CHAT,
         _ => BackendCapabilities::READ_ONLY_FEED,
     }
@@ -643,6 +646,11 @@ pub struct BackendCapabilities {
     pub notifications: NotificationSupport,
     pub voice: VoiceSupport,
     pub landing: LandingPage,
+    /// Whether the backend supports sending typing indicators.
+    ///
+    /// When `true`, the `send_typing` MCP tool is advertised and callable.
+    /// Read-only feeds and backends without real-time presence always set this to `false`.
+    pub supports_typing_indicators: bool,
 }
 
 impl BackendCapabilities {
@@ -654,6 +662,7 @@ impl BackendCapabilities {
         notifications: NotificationSupport::None,
         voice: VoiceSupport::None,
         landing: LandingPage::FirstServer,
+        supports_typing_indicators: false,
     };
 
     /// Forum-style messaging with an inbox but no friends / DMs / voice (Lemmy).
@@ -664,6 +673,7 @@ impl BackendCapabilities {
         notifications: NotificationSupport::Inbox,
         voice: VoiceSupport::None,
         landing: LandingPage::FirstServer,
+        supports_typing_indicators: false,
     };
 
     /// `true` if this backend should render with the forum-style UI layout:
@@ -722,6 +732,7 @@ impl BackendCapabilities {
         notifications: NotificationSupport::Activity,
         voice: VoiceSupport::Full,
         landing: LandingPage::DirectMessages,
+        supports_typing_indicators: true,
     };
 }
 

@@ -522,7 +522,10 @@ impl ClientBackend for TeamsClient {
     }
 
     fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::FULL_SOCIAL_CHAT
+        BackendCapabilities {
+            supports_typing_indicators: false,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        }
     }
 
     async fn get_context_menu_items(

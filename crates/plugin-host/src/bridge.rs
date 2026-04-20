@@ -172,6 +172,7 @@ pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::Backend
             wit::LandingPage::FirstServer => pc::LandingPage::FirstServer,
             wit::LandingPage::ServerOverview => pc::LandingPage::ServerOverview,
         },
+        supports_typing_indicators: c.supports_typing_indicators,
     }
 }
 

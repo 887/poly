@@ -172,6 +172,10 @@ impl ClientBackend for DemoClient {
         ))
     }
 
+    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
+        Ok(()) // Demo silently accepts typing indicators.
+    }
+
     async fn get_messages(
         &self,
         channel_id: &str,
@@ -691,6 +695,10 @@ impl ClientBackend for DemoClient2 {
         ))
     }
 
+    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
+        Ok(()) // Demo silently accepts typing indicators.
+    }
+
     async fn get_messages(
         &self,
         channel_id: &str,
@@ -1103,6 +1111,10 @@ impl ClientBackend for DemoClient3 {
             reply_to_message_id,
             content,
         ))
+    }
+
+    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
+        Ok(()) // Demo silently accepts typing indicators.
     }
 
     async fn get_messages(

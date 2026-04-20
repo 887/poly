@@ -103,6 +103,15 @@ pub trait ClientBackend: Send + Sync {
         content: MessageContent,
     ) -> ClientResult<Message>;
 
+    /// Broadcast a typing indicator for the given channel.
+    ///
+    /// Fire-and-forget — callers should not block on the result. Backends that
+    /// do not support typing indicators return [`ClientError::NotSupported`].
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        let _ = channel_id;
+        Err(ClientError::NotSupported("send_typing".to_string()))
+    }
+
     /// Send a reply to an existing message.
     ///
     /// Default implementation falls back to [`ClientBackend::send_message`]
