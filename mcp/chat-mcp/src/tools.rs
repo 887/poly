@@ -1,9 +1,9 @@
 //! MCP tool definitions and dispatch.
 
-use serde_json::{Value, json};
-
+use crate::events::{Subscription, new_subscription_id, parse_opt_event_kinds, parse_opt_string_vec};
 use crate::memory::MemoryDb;
 use crate::state::BackendPool;
+use serde_json::{Value, json};
 use poly_client::{
     AuthCredentials, BackendCapabilities, BackendType, ClientBackend, Cursor, CursorKind,
     DmSupport, FriendModel, MenuTargetKind, MessageContent, MessageQuery, MessagingModel,
@@ -156,6 +156,9 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         | "get_chat_style"
         | "list_chat_styles"
         | "forget_chat_style" => true,
+
+        // Phase C — event subscription / poll (always exposed; backend-agnostic).
+        "poll_events" | "subscribe_events" | "unsubscribe_events" => true,
 
         // Unknown tool names are excluded by default — this prevents a
         // future-added handler from being silently exposed before it has
@@ -927,6 +930,94 @@ pub fn tool_list() -> Vec<Value> {
                 "required": ["account_id", "chat_id"]
             }
         }),
+
+        // ─── Phase C — event subscription / poll ─────────────────────────────
+        // Added concurrently with Phase A agent; rebase-safe insertion at end.
+        json!({
+            "name": "poll_events",
+            "description": "Poll real-time events from connected accounts since a given timestamp. \
+                            This is the primary event-delivery path — call it on a timer (e.g. \
+                            every 2–5 seconds) to receive new messages, typing indicators, and \
+                            presence changes without polling individual channels. \
+                            Pass since_ms=0 on first call to get events from the last 5 minutes. \
+                            Use the max seq_ms from the returned events as since_ms on the next call.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "since_ms": {
+                        "type": "integer",
+                        "description": "Unix timestamp in milliseconds. Only events with seq_ms > since_ms are returned. \
+                                        Use 0 to get all buffered events (up to 5 min old)."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of events to return (default 100, max 500)."
+                    },
+                    "account_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of account ID substrings to filter by (e.g. [\"koala\"]). \
+                                        Matched against the internal account key."
+                    },
+                    "chat_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of channel/chat IDs to filter by."
+                    },
+                    "event_types": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of event kind slugs: message_received, message_edited, \
+                                        message_deleted, typing_started, presence_changed, friend_request, reaction_added."
+                    },
+                    "subscription_id": {
+                        "type": "string",
+                        "description": "Optional: use a pre-registered subscription filter (from subscribe_events)."
+                    }
+                },
+                "required": []
+            }
+        }),
+        json!({
+            "name": "subscribe_events",
+            "description": "Register a named event subscription with optional filters. Returns a \
+                            subscription_id to pass to poll_events. Useful when you want to track \
+                            a specific set of chats or event types without repeating filter args \
+                            on every poll call. Subscriptions persist until unsubscribe_events is \
+                            called or the MCP server restarts.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Account ID substrings to filter by (optional)."
+                    },
+                    "chat_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Channel/chat IDs to filter by (optional)."
+                    },
+                    "event_types": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Event kind slugs to filter by (optional)."
+                    }
+                },
+                "required": []
+            }
+        }),
+        json!({
+            "name": "unsubscribe_events",
+            "description": "Remove a previously registered event subscription.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "subscription_id": { "type": "string", "description": "ID from subscribe_events." }
+                },
+                "required": ["subscription_id"]
+            }
+        }),
     ]
 }
 
@@ -998,6 +1089,11 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "get_chat_style"    => handle_get_chat_style(args, mem),
         "list_chat_styles"  => handle_list_chat_styles(args, mem),
         "forget_chat_style" => handle_forget_chat_style(args, mem),
+
+        // Phase C — added concurrently, rebase-safe insertion
+        "poll_events" => handle_poll_events(args, pool).await,
+        "subscribe_events" => handle_subscribe_events(args, pool).await,
+        "unsubscribe_events" => handle_unsubscribe_events(args, pool).await,
 
         _ => err_result(format!("unknown tool: {tool}")),
     }
@@ -2119,6 +2215,83 @@ fn handle_forget_chat_style(args: &Value, mem: &MemoryDb) -> Value {
         Ok(()) => ok_result("style deleted"),
         Err(e) => err_result(format!("forget_chat_style failed: {e}")),
     }
+}
+
+// ─── Phase C — event subscription / poll handlers ────────────────────────────
+
+async fn handle_subscribe_events(args: &Value, pool: &BackendPool) -> Value {
+    let account_ids = parse_opt_string_vec(args, "account_ids");
+    let chat_ids = parse_opt_string_vec(args, "chat_ids");
+    let event_types = parse_opt_event_kinds(args, "event_types");
+
+    let id = new_subscription_id();
+    let sub = Subscription {
+        id: id.clone(),
+        account_ids,
+        chat_ids,
+        event_types,
+    };
+
+    pool.events.lock().await.add_subscription(sub);
+
+    ok_result(serde_json::to_string_pretty(&json!({
+        "subscription_id": id,
+        "note": "Use poll_events with this subscription_id to retrieve matching events."
+    })).unwrap_or_default())
+}
+
+async fn handle_unsubscribe_events(args: &Value, pool: &BackendPool) -> Value {
+    let sub_id = match args.get("subscription_id").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => return err_result("missing 'subscription_id'"),
+    };
+    pool.events.lock().await.remove_subscription(sub_id);
+    ok_result(format!("subscription {sub_id} removed"))
+}
+
+/// Maximum events returned per poll call.
+const MAX_POLL_LIMIT: usize = 500;
+const DEFAULT_POLL_LIMIT: usize = 100;
+
+async fn handle_poll_events(args: &Value, pool: &BackendPool) -> Value {
+    let since_ms = args
+        .get("since_ms")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let limit = args
+        .get("limit")
+        .and_then(|v| v.as_u64())
+        .map(|n| n as usize)
+        .unwrap_or(DEFAULT_POLL_LIMIT)
+        .min(MAX_POLL_LIMIT);
+
+    let store = pool.events.lock().await;
+
+    let events = if let Some(sub_id) = args.get("subscription_id").and_then(|v| v.as_str()) {
+        match store.poll(sub_id, since_ms, limit) {
+            Ok(evs) => evs,
+            Err(e) => return err_result(e),
+        }
+    } else {
+        let account_ids = parse_opt_string_vec(args, "account_ids");
+        let chat_ids = parse_opt_string_vec(args, "chat_ids");
+        let event_types = parse_opt_event_kinds(args, "event_types");
+        store.poll_adhoc(
+            account_ids.as_deref(),
+            chat_ids.as_deref(),
+            event_types.as_deref(),
+            since_ms,
+            limit,
+        )
+    };
+
+    let next_since_ms = events.iter().map(|e| e.seq_ms).max().unwrap_or(since_ms);
+
+    ok_result(serde_json::to_string_pretty(&json!({
+        "events": events,
+        "count": events.len(),
+        "next_since_ms": next_since_ms,
+    })).unwrap_or_default())
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

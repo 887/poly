@@ -17,7 +17,7 @@ path = "src/lib.rs"
 poly-client = { workspace = true }
 poly-stoat = { workspace = true, features = ["native"] }
 poly-matrix = { workspace = true, features = ["native"] }
-poly-discord = { workspace = true, features = ["native"] }
+poly-discord = { workspace = true, features = ["native", "gateway"] }
 poly-teams = { workspace = true, features = ["native"] }
 poly-lemmy = { workspace = true, features = ["native"] }
 poly-hackernews = { workspace = true, features = ["native"] }
@@ -28,7 +28,12 @@ tokio = { workspace = true, features = [
     "fs",
     "io-std",
     "net",
+    "sync",
+    "time",
 ] }
+chrono = { workspace = true }
+futures-core = "0.3"
+futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
@@ -50,8 +55,11 @@ poly-test-lemmy = { path = "../../servers/test-lemmy" }
 poly-test-hackernews = { path = "../../servers/test-hackernews" }
 poly-test-stoat = { path = "../../servers/test-stoat" }
 poly-test-matrix = { path = "../../servers/test-matrix" }
+# Phase C — C.6 test uses the discord client directly with gateway feature
+poly-discord = { workspace = true, features = ["native", "gateway"] }
 axum = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]

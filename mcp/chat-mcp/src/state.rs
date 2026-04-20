@@ -1,7 +1,9 @@
 //! Backend pool — manages authenticated `ClientBackend` instances.
 
+use crate::events::{SharedEventStore, new_event_store, spawn_fan_out};
 use poly_client::{AuthCredentials, BackendType, ClientBackend, Session};
 use std::collections::HashMap;
+use tokio::task::JoinHandle;
 
 /// An authenticated backend connection.
 pub struct BackendEntry {
@@ -10,14 +12,21 @@ pub struct BackendEntry {
 }
 
 /// Pool of authenticated backends, keyed by "backend_type:account_id".
-#[derive(Default)]
 pub struct BackendPool {
     backends: HashMap<String, BackendEntry>,
+    /// Shared event store for Phase C event subscription / poll_events.
+    pub events: SharedEventStore,
+    /// Per-account fan-out task handles + shutdown senders.
+    fan_out_tasks: HashMap<String, (JoinHandle<()>, tokio::sync::oneshot::Sender<()>)>,
 }
 
 impl BackendPool {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            backends: HashMap::new(),
+            events: new_event_store(),
+            fan_out_tasks: HashMap::new(),
+        }
     }
 
     fn key(backend_type: BackendType, account_id: &str) -> String {
@@ -25,8 +34,22 @@ impl BackendPool {
     }
 
     /// Add an authenticated backend to the pool.
+    ///
+    /// After inserting, a Phase-C fan-out task is spawned for this backend so
+    /// its real-time events flow into the shared `EventStore`.
     pub fn insert(&mut self, session: Session, backend: Box<dyn ClientBackend + Send + Sync>) {
         let key = Self::key(session.backend.clone(), &session.user.id);
+
+        // Start event fan-out for this backend.
+        let stream = backend.event_stream();
+        let (handle, shutdown) = spawn_fan_out(key.clone(), stream, self.events.clone());
+        // If there was already a fan-out for this key (re-login), shut the old one down.
+        if let Some((old_handle, old_shutdown)) = self.fan_out_tasks.remove(&key) {
+            let _ = old_shutdown.send(());
+            old_handle.abort();
+        }
+        self.fan_out_tasks.insert(key.clone(), (handle, shutdown));
+
         self.backends.insert(key, BackendEntry { backend, session });
     }
 
@@ -51,8 +74,15 @@ impl BackendPool {
     }
 
     /// Remove a backend from the pool.
+    ///
+    /// Also stops the Phase-C fan-out task for this account.
     pub fn remove(&mut self, backend_type: BackendType, account_id: &str) -> Option<BackendEntry> {
         let key = Self::key(backend_type, account_id);
+        // Stop fan-out task.
+        if let Some((handle, shutdown)) = self.fan_out_tasks.remove(&key) {
+            let _ = shutdown.send(());
+            handle.abort();
+        }
         self.backends.remove(&key)
     }
 

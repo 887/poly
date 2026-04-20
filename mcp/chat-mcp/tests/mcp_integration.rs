@@ -1148,10 +1148,14 @@ async fn mcp_tools_new_surfaces_are_queryable() {
         "message_actions",
         "invoke_composer_action",
         "invoke_message_action",
+        // Phase C tools
+        "poll_events",
+        "subscribe_events",
+        "unsubscribe_events",
     ] {
         assert!(
             names.contains(expected),
-            "new WP-8 tool '{expected}' missing from tool_list(); have: {names:?}"
+            "tool '{expected}' missing from tool_list(); have: {names:?}"
         );
     }
 }
@@ -1288,4 +1292,199 @@ async fn draft_create_empty_body_returns_error() {
         "body": "   ", "suggested_by": "bot"
     }), &mut pool, &mem).await;
     assert_err(&result);
+}
+
+// ---------------------------------------------------------------------------
+// Phase C — event subscription and poll_events integration tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn phase_c_poll_events_empty_on_fresh_pool() {
+    let mut pool = BackendPool::new();
+
+    let result = call(&mut pool, "poll_events", json!({
+        "since_ms": 0,
+        "limit": 100
+    })).await;
+    assert_ok(&result);
+
+    let text = text_of(&result);
+    let parsed: serde_json::Value = serde_json::from_str(
+        &text[text.find('{').unwrap_or(0)..]
+    ).expect("poll_events response is JSON");
+
+    assert_eq!(
+        parsed["count"].as_u64().unwrap_or(1),
+        0,
+        "fresh pool should have no events"
+    );
+}
+
+#[tokio::test]
+async fn phase_c_subscribe_and_unsubscribe() {
+    let mut pool = BackendPool::new();
+
+    // subscribe
+    let sub_result = call(&mut pool, "subscribe_events", json!({
+        "event_types": ["message_received", "typing_started"]
+    })).await;
+    assert_ok(&sub_result);
+
+    let text = text_of(&sub_result);
+    let parsed: serde_json::Value = serde_json::from_str(
+        &text[text.find('{').unwrap_or(0)..]
+    ).expect("subscribe_events returns JSON");
+
+    let sub_id = parsed["subscription_id"].as_str().expect("has subscription_id").to_string();
+    assert!(!sub_id.is_empty());
+
+    // poll with the subscription id — should return no events yet
+    let poll_result = call(&mut pool, "poll_events", json!({
+        "since_ms": 0,
+        "subscription_id": sub_id
+    })).await;
+    assert_ok(&poll_result);
+
+    // unsubscribe
+    let unsub_result = call(&mut pool, "unsubscribe_events", json!({
+        "subscription_id": sub_id
+    })).await;
+    assert_ok(&unsub_result);
+
+    // poll after unsubscribe should error (unknown subscription)
+    let poll_after = call(&mut pool, "poll_events", json!({
+        "since_ms": 0,
+        "subscription_id": sub_id
+    })).await;
+    assert_err(&poll_after);
+}
+
+/// C.6 Integration test — subscribe → push a message via testhook → poll_events sees it within 2s.
+///
+/// Uses `BackendPool::insert()` directly (bypassing `test_signin`) so the
+/// discord client is constructed with `with_base_url_and_gateway`, which
+/// activates the WebSocket gateway event stream. The test server broadcasts
+/// a `MESSAGE_CREATE` gateway frame when `POST /api/v10/channels/{id}/messages`
+/// is called. The Phase C fan-out task picks it up and stores it in EventStore.
+#[tokio::test]
+async fn phase_c_discord_message_received_via_poll_events() {
+    use std::sync::Arc;
+    use tokio::net::TcpListener;
+    use poly_test_discord::{DiscordState, router as discord_router};
+    use poly_discord::DiscordClient;
+    use poly_client::{ClientBackend, AuthCredentials};
+
+    // Spin up the test discord server (gateway WebSocket included).
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let port = listener.local_addr().unwrap().port();
+    let state = Arc::new(DiscordState::new());
+    state.seed();
+    // Tell the test server which WS URL to advertise as the gateway.
+    {
+        let mut gw = state.gateway_url.write().await;
+        *gw = format!("ws://127.0.0.1:{port}/gateway/ws");
+    }
+    let app = discord_router(state.clone());
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    tokio::spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async { shutdown_rx.await.ok(); })
+            .await
+            .ok();
+    });
+
+    let base_url = format!("http://127.0.0.1:{port}");
+    let ws_url = format!("ws://127.0.0.1:{port}/gateway/ws");
+
+    // Get an auth token from the test server.
+    let http_client = reqwest::Client::new();
+    let token_resp = http_client
+        .post(format!("{base_url}/test/auth/token"))
+        .json(&serde_json::json!({ "username": "koala" }))
+        .send()
+        .await
+        .expect("token request");
+    let token_body: serde_json::Value = token_resp.json().await.expect("token body");
+    let token = token_body["token"].as_str().expect("token field").to_string();
+
+    // Build the discord client with gateway support.
+    let mut discord = DiscordClient::with_base_url_and_gateway(base_url.clone(), ws_url);
+    let session = discord
+        .authenticate(AuthCredentials::Token(token.clone()))
+        .await
+        .expect("authenticate");
+
+    // Insert into pool — this starts the fan-out task.
+    let mut pool = BackendPool::new();
+    pool.insert(session, Box::new(discord));
+
+    // Give the WebSocket connection a moment to complete the IDENTIFY handshake.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    // Register a subscription for message_received events.
+    let sub_resp = call(&mut pool, "subscribe_events", json!({
+        "event_types": ["message_received"]
+    })).await;
+    assert_ok(&sub_resp);
+    let sub_text = text_of(&sub_resp);
+    let sub_json: serde_json::Value = serde_json::from_str(
+        &sub_text[sub_text.find('{').unwrap_or(0)..]
+    ).unwrap();
+    let sub_id = sub_json["subscription_id"].as_str().unwrap().to_string();
+
+    // Record cursor before sending.
+    let before_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        - 1;
+
+    // Push a message into channel 200 via HTTP. The test server now broadcasts
+    // a MESSAGE_CREATE gateway event to connected WS clients on this call.
+    let send_resp = http_client
+        .post(format!("{base_url}/api/v10/channels/200/messages"))
+        .header("authorization", &token)
+        .json(&serde_json::json!({ "content": "hello from phase C test!" }))
+        .send()
+        .await
+        .expect("send message request");
+    assert!(send_resp.status().is_success(), "send_message should succeed");
+
+    // Allow up to 2 seconds for the fan-out task to receive the gateway event.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut found = false;
+    while tokio::time::Instant::now() < deadline {
+        let poll = call(&mut pool, "poll_events", json!({
+            "since_ms": before_ms,
+            "subscription_id": sub_id
+        })).await;
+        assert_ok(&poll);
+
+        let poll_text = text_of(&poll);
+        let poll_json: serde_json::Value = serde_json::from_str(
+            &poll_text[poll_text.find('{').unwrap_or(0)..]
+        ).unwrap();
+
+        if poll_json["count"].as_u64().unwrap_or(0) > 0 {
+            found = true;
+            let events = poll_json["events"].as_array().unwrap();
+            assert!(
+                events.iter().any(|e| {
+                    let kind = e["kind"].as_str().unwrap_or("");
+                    kind == "message_received" || kind.contains("MessageReceived")
+                }),
+                "expected message_received event, got: {poll_json}"
+            );
+            break;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    assert!(
+        found,
+        "poll_events should have received a message_received event within 2s after sending"
+    );
+
+    let _ = shutdown_tx.send(());
 }

@@ -443,6 +443,90 @@ impl DiscordClient {
                 events
             }
 
+            // ── MESSAGE_CREATE / MESSAGE_UPDATE ──────────────────────────
+            "MESSAGE_CREATE" => {
+                match serde_json::from_value::<api::DiscordMessage>(data.clone()) {
+                    Ok(m) => {
+                        let channel_id = m.channel_id.to_string();
+                        let message = self.discord_message_to_poly(m);
+                        vec![ClientEvent::MessageReceived { channel_id, message }]
+                    }
+                    Err(_) => vec![],
+                }
+            }
+            "MESSAGE_UPDATE" => {
+                match serde_json::from_value::<api::DiscordMessage>(data.clone()) {
+                    Ok(m) => {
+                        let channel_id = m.channel_id.to_string();
+                        let message = self.discord_message_to_poly(m);
+                        vec![ClientEvent::MessageEdited { channel_id, message }]
+                    }
+                    Err(_) => vec![],
+                }
+            }
+            "MESSAGE_DELETE" => {
+                let channel_id = data
+                    .get("channel_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let message_id = data
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                if channel_id.is_empty() || message_id.is_empty() {
+                    vec![]
+                } else {
+                    vec![ClientEvent::MessageDeleted { channel_id, message_id }]
+                }
+            }
+            "TYPING_START" => {
+                let channel_id = data
+                    .get("channel_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let user_id = data
+                    .get("user_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                if channel_id.is_empty() || user_id.is_empty() {
+                    vec![]
+                } else {
+                    vec![ClientEvent::TypingStarted {
+                        channel_id,
+                        user_id,
+                        timestamp: chrono::Utc::now(),
+                    }]
+                }
+            }
+            "PRESENCE_UPDATE" => {
+                let user_id = data
+                    .get("user")
+                    .and_then(|u| u.get("id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let status_str = data
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("offline");
+                use poly_client::PresenceStatus;
+                let status = match status_str {
+                    "online" => PresenceStatus::Online,
+                    "idle" => PresenceStatus::Idle,
+                    "dnd" => PresenceStatus::DoNotDisturb,
+                    _ => PresenceStatus::Offline,
+                };
+                if user_id.is_empty() {
+                    vec![]
+                } else {
+                    vec![ClientEvent::PresenceChanged { user_id, status }]
+                }
+            }
+
             _ => vec![],
         }
     }

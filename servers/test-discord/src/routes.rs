@@ -446,6 +446,11 @@ pub async fn send_message(
             };
             let json = message_to_json(&msg, &state);
             state.messages.entry(ch_id).or_default().push(msg);
+            // Broadcast a MESSAGE_CREATE gateway event to any connected WS clients.
+            state.events.publish(crate::state::DiscordEvent::MessageCreate {
+                channel_id: ch_id,
+                message: json.clone(),
+            });
             (StatusCode::OK, Json(json)).into_response()
         }
     }

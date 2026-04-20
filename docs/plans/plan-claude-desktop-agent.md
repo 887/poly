@@ -103,13 +103,21 @@ No global timer — multi-account usage means each chat needs its own independen
 
 **Goal:** stop polling. Claude Desktop subscribes once, Poly pushes events. Biggest latency + token-cost win because it lets the LLM react only when something actually happened.
 
-- [ ] **C.1** Research — confirm the current state of MCP notifications / streaming support in Claude Desktop specifically (the spec allows it; support status has drifted). Document findings in this plan.
-- [ ] **C.2** `subscribe_events(filters)` tool in `poly-chat-mcp` — filters: `account_ids: Option<Vec<String>>, chat_ids: Option<Vec<String>>, event_types: Option<Vec<EventKind>>` where `EventKind ∈ { MessageReceived, MessageEdited, MessageDeleted, FriendRequest, TypingStarted, PresenceChanged, ReactionAdded }`.
-- [ ] **C.3** `tokio::sync::broadcast` channel inside the MCP server that fans out every `ClientBackend::event_stream()` tick to all live subscribers.
-- [ ] **C.4** SSE transport — MCP supports server-to-client notifications via the transport layer; implement them on the HTTP transport. Verify against the real Claude Desktop build in use today.
-- [ ] **C.5** **Fallback** — if SSE isn't reliable in the target Claude build, ship `poll_events(since_timestamp) → [Event]` as a second-best MCP tool. Claude Desktop polls every N seconds; still cheaper than `get_messages` polling every channel.
-- [ ] **C.6** Integration test with `poly-test-discord` — subscribe, push a message via testhook, observe on the event stream within 2s.
-- [ ] **C.7** Document the subscription pattern in `docs/6-ai-agent/6.1-mcp-server.md` with a worked example Claude Desktop can copy.
+- [x] **C.1** Research — confirm the current state of MCP notifications / streaming support in Claude Desktop specifically (the spec allows it; support status has drifted). Document findings in this plan.
+
+  **Findings (2026-04-19):** Both transports (HTTP `POST /mcp` and stdio) are request/response only. HTTP has no persistent connection; stdio line-protocol allows unsolicited notification frames in the MCP spec (`2024-11-05`), but Claude Desktop as of today is a strict request-initiator and silently discards server-originated frames. **Conclusion: SSE push (C.4) is deferred; `poll_events` (C.5) is the primary delivery path.**
+
+- [x] **C.2** `subscribe_events(filters)` tool — returns `subscription_id`; filters: `account_ids?, chat_ids?, event_types?`. `unsubscribe_events(subscription_id)` removes it.
+- [x] **C.3** `tokio::sync::broadcast` channel inside `mcp/chat-mcp/src/events.rs` (`EventStore`). Per-account fan-out task spawned in `BackendPool::insert()`, cancelled in `BackendPool::remove()`. Ring buffer capped at 2000 events / 5-minute TTL.
+- [ ] **C.4** SSE transport — **deferred.** Current Claude Desktop does not consume server-initiated frames. Open when a future Claude Desktop version advertises `notifications` capability in the handshake.
+- [x] **C.5** `poll_events(since_ms, limit?, account_ids?, chat_ids?, event_types?, subscription_id?)` — primary delivery tool. Bounded at 500 events/call. `next_since_ms` in response lets Claude advance the cursor cheaply.
+- [x] **C.6** Integration test `phase_c_discord_message_received_via_poll_events` — subscribe → send message via REST (broadcasts `MESSAGE_CREATE` gateway event) → poll within 2s → asserts `message_received` event present. Additional: `phase_c_poll_events_empty_on_fresh_pool`, `phase_c_subscribe_and_unsubscribe`.
+- [ ] **C.7** Document the subscription pattern in `docs/6-ai-agent/6.1-mcp-server.md` — deferred (doc stub open).
+
+**Additional work landed in Phase C:**
+- `clients/discord/src/lib.rs`: `parse_gateway_event` now handles `MESSAGE_CREATE`, `MESSAGE_UPDATE`, `MESSAGE_DELETE`, `TYPING_START`, `PRESENCE_UPDATE`.
+- `servers/test-discord/src/routes.rs`: `send_message` REST handler now broadcasts `DiscordEvent::MessageCreate` to the gateway bus.
+- `mcp/chat-mcp/Cargo.toml`: enabled `gateway` feature on `poly-discord`; added `chrono`, `futures-core`, `futures-util`, `tokio/sync+time`.
 
 **Effort:** 1-2 sessions, variable with C.1 findings.
 
