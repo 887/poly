@@ -140,7 +140,13 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         | "forget_chat_note"
         | "store_chat_summary"
         | "get_chat_summary"
-        | "get_reply_context" => true,
+        | "get_reply_context"
+        // Phase D typing-simulation tools — library always present, runtime
+        // wiring is a TODO but the tools should advertise.
+        | "start_typing_simulation"
+        | "stop_typing_simulation"
+        // Phase F catch-me-up bundler.
+        | "get_unread_summary" => true,
 
         // Phase B draft tools — always exposed; draft queue is Poly's own concern.
         "draft_create"
@@ -1018,7 +1024,24 @@ pub fn tool_list() -> Vec<Value> {
                 "required": ["subscription_id"]
             }
         }),
+        json!({
+            "name": "get_unread_summary",
+            "description": "Phase F — Return every unread channel and DM for the account bundled with \
+                their most recent N messages. Zero-LLM bundler; Claude Desktop composes the digest. \
+                Use this to power a 'catch me up' flow: one MCP call, one prompt to the LLM.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string", "description": "Account ID (must be logged in)." },
+                    "message_limit": { "type": "integer", "description": "Messages per chat (default 10).", "default": 10 }
+                },
+                "required": ["account_id"]
+            }
+        }),
     ]
+        .into_iter()
+        .chain(crate::typing_simulation::tool_definitions())
+        .collect()
 }
 
 // ─── Dispatch ────────────────────────────────────────────────────────────────
@@ -1094,6 +1117,25 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "poll_events" => handle_poll_events(args, pool).await,
         "subscribe_events" => handle_subscribe_events(args, pool).await,
         "unsubscribe_events" => handle_unsubscribe_events(args, pool).await,
+
+        // Phase D — typing simulation. Library lives in
+        // `crate::typing_simulation`; full runtime wiring requires
+        // refactoring `BackendEntry::backend` from `Box<dyn …>` to
+        // `Arc<dyn …>` so workers can share it. Until then these tools
+        // return a clear "not yet wired" so Claude Desktop sees them in
+        // tool discovery and gets an actionable error if invoked.
+        "start_typing_simulation" => err_result(
+            "start_typing_simulation: library is shipped (crate::typing_simulation) \
+             but the BackendPool runtime wiring is pending — needs Arc<backend>. \
+             For now, call send_typing on a 5-8s loop from the host as a workaround."
+        ),
+        "stop_typing_simulation" => err_result(
+            "stop_typing_simulation: see start_typing_simulation — runtime wiring pending."
+        ),
+
+        // Phase F — get_unread_summary bundles unread messages across all
+        // chats for an account so Claude Desktop can compose a digest.
+        "get_unread_summary" => handle_get_unread_summary(args, pool).await,
 
         _ => err_result(format!("unknown tool: {tool}")),
     }
@@ -2294,6 +2336,98 @@ async fn handle_poll_events(args: &Value, pool: &BackendPool) -> Value {
     })).unwrap_or_default())
 }
 
+/// Phase F — Bundle recent activity across every chat for an account, ordered
+/// by most-recent-first, so Claude Desktop can compose a "catch me up" digest
+/// in one MCP round-trip. Stays LLM-free — the bundler just returns structured
+/// context; the summary generation happens Claude-side.
+async fn handle_get_unread_summary(args: &Value, pool: &BackendPool) -> Value {
+    let account_id = match str_arg(args, "account_id") {
+        Some(v) => v,
+        None => return err_result("missing 'account_id'"),
+    };
+    let message_limit = args
+        .get("message_limit")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(10) as u32;
+
+    let entry = match pool.find_by_account(account_id) {
+        Some(e) => e,
+        None => return err_result(format!("no backend for account '{account_id}'")),
+    };
+
+    // Gather servers + channels, pull recent messages from each channel with
+    // unread_count > 0. Best-effort; skip channels that error.
+    let servers = entry.backend.get_servers().await.unwrap_or_default();
+    let mut per_chat_bundles: Vec<Value> = Vec::new();
+
+    for server in &servers {
+        let channels = entry
+            .backend
+            .get_channels(&server.id)
+            .await
+            .unwrap_or_default();
+        for channel in channels {
+            if channel.unread_count == 0 {
+                continue;
+            }
+            let messages = entry
+                .backend
+                .get_messages(
+                    &channel.id,
+                    poly_client::MessageQuery {
+                        limit: Some(message_limit),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .ok()
+                .unwrap_or_default();
+            per_chat_bundles.push(json!({
+                "kind": "channel",
+                "server": { "id": server.id, "name": server.name },
+                "channel": { "id": channel.id, "name": channel.name, "unread_count": channel.unread_count },
+                "recent_messages": messages,
+            }));
+        }
+    }
+
+    // DMs with unread messages.
+    let dms = entry.backend.get_dm_channels().await.unwrap_or_default();
+    for dm in dms {
+        if dm.unread_count == 0 {
+            continue;
+        }
+        let messages = entry
+            .backend
+            .get_messages(
+                &dm.id,
+                poly_client::MessageQuery {
+                    limit: Some(message_limit),
+                    ..Default::default()
+                },
+            )
+            .await
+            .ok()
+            .unwrap_or_default();
+        per_chat_bundles.push(json!({
+            "kind": "dm",
+            "contact": { "id": dm.user.id, "name": dm.user.display_name },
+            "dm_channel_id": dm.id,
+            "unread_count": dm.unread_count,
+            "recent_messages": messages,
+        }));
+    }
+
+    ok_result(
+        serde_json::to_string_pretty(&json!({
+            "account_id": account_id,
+            "unread_chat_count": per_chat_bundles.len(),
+            "chats": per_chat_bundles,
+        }))
+        .unwrap_or_default(),
+    )
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2334,6 +2468,10 @@ mod tests {
         "draft_edit", "draft_discard", "draft_cancel_autosend",
         // Phase E per-chat style tools — always exposed.
         "set_chat_style", "get_chat_style", "list_chat_styles", "forget_chat_style",
+        // Phase D typing-simulation tool stubs (always exposed).
+        "start_typing_simulation", "stop_typing_simulation",
+        // Phase F catch-me-up.
+        "get_unread_summary",
     ];
 
     #[test]
