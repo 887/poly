@@ -2222,7 +2222,8 @@ fn render_drag_overlay(is_drag_over: bool) -> Element {
 fn render_chat_layout_shell(ctx: ChatViewMarkupCtx) -> Element {
     let show_side_column = ctx.utility_panel.read().is_some()
         || ctx.member_list_visible
-        || mobile_server_right_wing_active(&ctx);
+        || mobile_server_right_wing_active(&ctx)
+        || ctx.app_state.read().nav.agent_panel_visible;
     let mobile_layout = runtime_mobile_ui_active();
 
     rsx! {
@@ -3228,7 +3229,9 @@ fn render_search_clear_button(
 }
 
 fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
-    let show_side_column = ctx.utility_panel.read().is_some() || ctx.member_list_visible;
+    let show_side_column = ctx.utility_panel.read().is_some()
+        || ctx.member_list_visible
+        || ctx.app_state.read().nav.agent_panel_visible;
     let mobile_layout = runtime_mobile_ui_active();
     // 5.2 — Thread panel is visible when a thread_id is stored in nav state
     // and we are not in mobile layout (mobile uses the full-page ThreadView route).
