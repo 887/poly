@@ -103,18 +103,18 @@ pub fn ViewThreadButton(
                     let backend = s
                         .nav
                         .active_backend
-                        .as_ref()
+                        .cloned()
                         .map(|b| b.slug().to_string())
                         .unwrap_or_default();
                     let instance_id = s
                         .nav
                         .active_instance_id
-                        .clone()
+                        .cloned()
                         .unwrap_or_default();
                     let account_id = s
                         .nav
                         .active_account_id
-                        .clone()
+                        .cloned()
                         .unwrap_or_default();
                     drop(s);
                     nav.push(Route::ThreadView {
@@ -156,8 +156,8 @@ pub fn ActiveThreadsBar() -> Element {
         .current_server
         .as_ref()
         .map(|s| s.id.clone());
-    let channel_id = app_state.read().nav.selected_channel.clone();
-    let account_id = app_state.read().nav.active_account_id.clone();
+    let channel_id = app_state.read().nav.selected_channel.cloned();
+    let account_id = app_state.read().nav.active_account_id.cloned();
 
     let threads = use_resource(move || {
         let server_id = server_id.clone();
@@ -216,11 +216,11 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
                     let backend = s
                         .nav
                         .active_backend
-                        .as_ref()
+                        .cloned()
                         .map(|b| b.slug().to_string())
                         .unwrap_or_default();
-                    let instance_id = s.nav.active_instance_id.clone().unwrap_or_default();
-                    let account_id = s.nav.active_account_id.clone().unwrap_or_default();
+                    let instance_id = s.nav.active_instance_id.cloned().unwrap_or_default();
+                    let account_id = s.nav.active_account_id.cloned().unwrap_or_default();
                     drop(s);
                     nav.push(Route::ThreadView {
                         backend,
@@ -258,7 +258,7 @@ pub fn ThreadPanel() -> Element {
     let Some(thread_id) = thread_id else {
         return rsx! {};
     };
-    let account_id = app_state.read().nav.active_account_id.clone();
+    let account_id = app_state.read().nav.active_account_id.cloned();
 
     // Resolve the thread Channel object (name + metadata).
     let thread_channel = use_resource(move || {
@@ -279,7 +279,7 @@ pub fn ThreadPanel() -> Element {
     use_effect(move || {
         let tid = thread_id_for_msgs.clone();
         let Some(tid) = tid else { return };
-        let aid = app_state.read().nav.active_account_id.clone();
+        let aid = app_state.read().nav.active_account_id.cloned();
         let Some(aid) = aid else { return };
         spawn(async move {
             let backend_arc = client_manager.read().get_backend(&aid);
@@ -426,7 +426,7 @@ pub fn ThreadFullView(thread_id: String) -> Element {
     // Resolve channel metadata.
     let thread_channel = {
         let tid = thread_id.clone();
-        let aid = app_state.read().nav.active_account_id.clone();
+        let aid = app_state.read().nav.active_account_id.cloned();
         use_resource(move || {
             let tid = tid.clone();
             let aid = aid.clone();
@@ -445,7 +445,7 @@ pub fn ThreadFullView(thread_id: String) -> Element {
     let thread_id_for_msgs = thread_id.clone();
     use_effect(move || {
         let tid = thread_id_for_msgs.clone();
-        let aid = app_state.read().nav.active_account_id.clone();
+        let aid = app_state.read().nav.active_account_id.cloned();
         let Some(aid) = aid else { return };
         spawn(async move {
             let backend_arc = client_manager.read().get_backend(&aid);

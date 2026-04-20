@@ -46,13 +46,35 @@
 // DECISION(DX-ROUTER-2): Multi-account routing replaces Discord-style single-account URLs.
 // DECISION(DX-ROUTER-3): Added instance_id segment for federated multi-homeserver support.
 
+// Privileged write-access trait for `RouteSynced<T>`. Defined inline here so
+// `pub(in crate::ui::routes)` satisfies Rust's ancestor-rule — the trait's
+// defining module (this one) IS `crate::ui::routes`, which is its own
+// ancestor trivially. A `use` of this trait outside `crate::ui::routes::*`
+// does not compile, so the `.set(...)` path is compiler-enforced to live
+// only here. See `crate::state::route_synced` for the full rationale (it
+// prevents the friend-card WASM-scheduler-hang bug class).
+mod internal {
+    use crate::state::RouteSynced;
+    pub(in crate::ui::routes) trait RouteSyncedWrite<T> {
+        fn set(&mut self, value: T);
+    }
+    impl<T> RouteSyncedWrite<T> for RouteSynced<T> {
+        #[inline]
+        fn set(&mut self, value: T) {
+            self.0 = value;
+        }
+    }
+}
+use internal::RouteSyncedWrite as _;
+
 use super::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
 };
 use super::account::{
     AccountSettingsPage, ChannelSettingsPage, ChatView, ConversationSearchView, DiscordForumView,
     ForumView, ForumPostView, FriendsPanel, NewConversationView, NotificationsView,
-    OutgoingDirectCallOverlay, SavedItemsView, ServerSettingsPage, VoiceChannelView,
+    OutgoingDirectCallOverlay, SavedItemsView, ServerSettingsPage, ThreadFullView,
+    ThreadPanel, VoiceChannelView,
 };
 use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
@@ -101,7 +123,8 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::AccountSettingsRoute { account_id, .. }
         | Route::CreateServerRoute { account_id, .. }
         | Route::AccountSearchRoute { account_id, .. }
-        | Route::ServerOverviewRoute { account_id, .. } => Some(account_id.as_str()),
+        | Route::ServerOverviewRoute { account_id, .. }
+        | Route::ThreadView { account_id, .. } => Some(account_id.as_str()),
         // Reauth intentionally returns None so route_targets_unknown_account
         // never treats a reauth URL as pointing at a missing account — the
         // point of reauth is to fix an account whose backend may be gone.
@@ -347,6 +370,16 @@ pub enum Route {
         #[route("/:backend/:instance_id/:account_id/settings")]
         AccountSettingsRoute { backend: String, instance_id: String, account_id: String },
 
+        // ── Account-scoped: Thread full-page view (mobile) ───────────
+        #[connected(linked, programmatic<ThreadViewRouteProducer>)]
+        #[route("/:backend/:instance_id/:account_id/threads/:thread_id")]
+        ThreadView {
+            backend: String,
+            instance_id: String,
+            account_id: String,
+            thread_id: String,
+        },
+
         // ── Account-scoped: Create server (full-page form) ───────────
         #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/create-server")]
@@ -441,12 +474,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::DmsFriends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -457,12 +490,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
             dm_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(Some(dm_id.clone()));
+            s.nav.view.set(View::DmsFriends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(Some(dm_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -494,12 +527,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
             dm_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(Some(dm_id.clone()));
+            s.nav.view.set(View::DmsFriends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(Some(dm_id.clone()));
             let dm_route = format!(
                 "{}",
                 Route::DmChat {
@@ -523,12 +556,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             dm_id,
             ..
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(Some(dm_id.clone()));
+            s.nav.view.set(View::DmsFriends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(Some(dm_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -541,12 +574,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             channel_id,
             ..
         } => {
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(Some(channel_id.clone()));
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(Some(channel_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -556,24 +589,24 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::DmsFriends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::ConversationSearchRoute {
             backend,
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::DmsFriends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::ServerHome {
             backend,
@@ -581,12 +614,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
             server_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -598,12 +631,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
             channel_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(Some(channel_id.clone()));
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(Some(channel_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -617,12 +650,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             post_id: _,
         } => {
             // Keep selected_channel = parent forum channel so sidebar stays highlighted.
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(Some(channel_id.clone()));
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(Some(channel_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -634,12 +667,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
             channel_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(Some(channel_id.clone()));
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(Some(channel_id.clone()));
             // Do NOT record in account_last_routes — create-post is transient
         }
         Route::ForumSearchRoute {
@@ -649,12 +682,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
             channel_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(Some(channel_id.clone()));
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(Some(channel_id.clone()));
             // Do NOT record in account_last_routes — search is transient
         }
         Route::ForumCommentsRoute {
@@ -664,12 +697,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
             channel_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(Some(channel_id.clone()));
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(Some(channel_id.clone()));
             s.nav.account_last_routes.insert(account_id.clone(), route_url);
         }
         Route::FriendsRoute {
@@ -677,10 +710,10 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Friends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
+            s.nav.view.set(View::Friends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -690,12 +723,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Notifications);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Notifications);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -705,58 +738,58 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::DmsFriends);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
         }
         Route::SettingsRoute => {
-            s.nav.view._set_from_route_sync_only(View::Settings);
+            s.nav.view.set(View::Settings);
             // App-level — clear account context so Bar 2 hides and no server stays "open"
-            s.nav.active_account_id._set_from_route_sync_only(None);
-            s.nav.active_instance_id._set_from_route_sync_only(None);
-            s.nav.active_backend._set_from_route_sync_only(None);
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.active_account_id.set(None);
+            s.nav.active_instance_id.set(None);
+            s.nav.active_backend.set(None);
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::SettingsSectionRoute { section } => {
-            s.nav.view._set_from_route_sync_only(View::Settings);
+            s.nav.view.set(View::Settings);
             s.settings_section = SettingsSection::from_slug(section);
-            s.nav.active_account_id._set_from_route_sync_only(None);
-            s.nav.active_instance_id._set_from_route_sync_only(None);
-            s.nav.active_backend._set_from_route_sync_only(None);
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.active_account_id.set(None);
+            s.nav.active_instance_id.set(None);
+            s.nav.active_backend.set(None);
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::AgentRoute => {
-            s.nav.view._set_from_route_sync_only(View::Agent);
-            s.nav.active_account_id._set_from_route_sync_only(None);
-            s.nav.active_instance_id._set_from_route_sync_only(None);
-            s.nav.active_backend._set_from_route_sync_only(None);
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Agent);
+            s.nav.active_account_id.set(None);
+            s.nav.active_instance_id.set(None);
+            s.nav.active_backend.set(None);
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::AgentSectionRoute { .. } => {
-            s.nav.view._set_from_route_sync_only(View::Agent);
-            s.nav.active_account_id._set_from_route_sync_only(None);
-            s.nav.active_instance_id._set_from_route_sync_only(None);
-            s.nav.active_backend._set_from_route_sync_only(None);
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Agent);
+            s.nav.active_account_id.set(None);
+            s.nav.active_instance_id.set(None);
+            s.nav.active_backend.set(None);
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::SearchRoute => {
-            s.nav.view._set_from_route_sync_only(View::Search);
+            s.nav.view.set(View::Search);
             // App-level — clear account context so Bar 2 hides
-            s.nav.active_account_id._set_from_route_sync_only(None);
-            s.nav.active_instance_id._set_from_route_sync_only(None);
-            s.nav.active_backend._set_from_route_sync_only(None);
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.active_account_id.set(None);
+            s.nav.active_instance_id.set(None);
+            s.nav.active_backend.set(None);
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::AccountSearchRoute {
             backend,
@@ -765,24 +798,24 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         } => {
             // Account-scoped search — keep account context so Bar 2 stays visible
             // and `SearchPage` can pre-filter to this account.
-            s.nav.view._set_from_route_sync_only(View::Search);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Search);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::AccountSettingsRoute {
             backend,
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Settings);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Settings);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -792,12 +825,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Settings); // Reuse Settings view — hides channel list
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Settings); // Reuse Settings view — hides channel list
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
             // Do NOT record in account_last_routes — create-server is transient
         }
         Route::CreateChannelRoute {
@@ -809,12 +842,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             // Keep the ServerLayout visible (selected_server stays set so
             // ChannelList renders) but clear any selected channel so the
             // Outlet renders CreateChannelPage instead of a chat view.
-            s.nav.view._set_from_route_sync_only(View::Server);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Server);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(None);
             // Do NOT record in account_last_routes — create-channel is transient
         }
         Route::ServerSettingsRoute {
@@ -823,12 +856,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             account_id,
             server_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Settings);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Settings);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -840,12 +873,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
             ..
         } => {
-            s.nav.view._set_from_route_sync_only(View::Settings);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Settings);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -857,12 +890,12 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             server_id,
             channel_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::Settings);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(Some(server_id.clone()));
-            s.nav.selected_channel._set_from_route_sync_only(Some(channel_id.clone()));
+            s.nav.view.set(View::Settings);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(Some(server_id.clone()));
+            s.nav.selected_channel.set(Some(channel_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -872,12 +905,22 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             instance_id,
             account_id,
         } => {
-            s.nav.view._set_from_route_sync_only(View::DmsFriends); // reuse the top-level view
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::DmsFriends); // reuse the top-level view
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::ThreadView { backend, instance_id, account_id, .. } => {
+            // Thread full-page view (mobile). Keep account/server context intact;
+            // the thread_id is carried by nav.thread_panel_open (or just the URL).
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -887,23 +930,23 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
         }
         Route::SignupPicker | Route::ClientSignup { .. } => {
             // Signup routes are outside MainLayout — clear account context.
-            s.nav.view._set_from_route_sync_only(View::Signup);
-            s.nav.active_account_id._set_from_route_sync_only(None);
-            s.nav.active_instance_id._set_from_route_sync_only(None);
-            s.nav.active_backend._set_from_route_sync_only(None);
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Signup);
+            s.nav.active_account_id.set(None);
+            s.nav.active_instance_id.set(None);
+            s.nav.active_backend.set(None);
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
         Route::ReauthAccount { backend, instance_id, account_id } => {
             // Reauth is a full-page form like signup, but scoped to an
             // existing account — keep the account context so the page can
             // look it up in ClientManager / ChatData.
-            s.nav.view._set_from_route_sync_only(View::Signup);
-            s.nav.active_backend._set_from_route_sync_only(Some(BackendType::from_slug(backend)));
-            s.nav.active_instance_id._set_from_route_sync_only(Some(instance_id.clone()));
-            s.nav.active_account_id._set_from_route_sync_only(Some(account_id.clone()));
-            s.nav.selected_server._set_from_route_sync_only(None);
-            s.nav.selected_channel._set_from_route_sync_only(None);
+            s.nav.view.set(View::Signup);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
         }
     }
 }
@@ -2053,6 +2096,27 @@ fn PageNotFound(segments: Vec<String>) -> Element {
     rsx! { div { class: "storage-loading" } }
 }
 
+/// Thread full-page view — `/:backend/:instance_id/:account_id/threads/:thread_id`.
+///
+/// Mobile / narrow viewport: replaces the main content area with a full-page
+/// thread view. On desktop the thread panel (side-panel alongside the channel)
+/// is used instead, so users only land here from mobile navigation.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn ThreadView(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    thread_id: String,
+) -> Element {
+    let _ = (backend, instance_id, account_id);
+    rsx! {
+        ThreadFullView { thread_id }
+    }
+}
+
 /// Create Server — `/:backend/:instance_id/:account_id/create-server`.
 ///
 /// Full-page form inside MainLayout (both FavoritesBar + AccountServerBar remain
@@ -2229,6 +2293,7 @@ fn route_variant_name(route: &Route) -> &'static str {
         Route::SearchRoute => "SearchRoute",
         Route::AccountSearchRoute { .. } => "AccountSearchRoute",
         Route::AccountSettingsRoute { .. } => "AccountSettingsRoute",
+        Route::ThreadView { .. } => "ThreadView",
         Route::CreateServerRoute { .. } => "CreateServerRoute",
         Route::ServerSettingsRoute { .. } => "ServerSettingsRoute",
         Route::ServerSettingsSectionRoute { .. } => "ServerSettingsSectionRoute",

@@ -106,6 +106,7 @@ pub use common::NewConversationView;
 pub use common::NotificationsView;
 pub use common::OutgoingDirectCallOverlay;
 pub use common::SavedItemsView;
+pub use common::{ActiveThreadsBar, ThreadFullView, ThreadPanel, ViewThreadButton};
 pub use common::UserSidebar;
 pub use common::VoiceBar;
 pub use common::VoiceChannelView;

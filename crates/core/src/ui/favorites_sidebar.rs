@@ -1156,7 +1156,13 @@ async fn load_server_data_internal(
     // taps a favorites/account-server icon, we keep them at the server shell
     // so only an explicit channel tap opens content and closes the drawer.
     if auto_select_first_text_channel && let Some(ch) = first_text_channel {
-        app_state.write().nav.selected_channel._set_from_route_sync_only(Some(ch.id.clone()));
+        app_state.write().nav.selected_channel.unsafe_presync_override(
+            Some(ch.id.clone()),
+            "favorites_sidebar::load_server_data_internal: auto-select first \
+             text channel when landing on /channels/{server}; the URL stays at \
+             ServerHome so no nav.push follows — we need current_channel set \
+             synchronously or ChatView renders blank between click and effect",
+        );
         chat_data.write().current_channel = Some(ch.clone());
 
         // Load messages for first channel
@@ -1174,7 +1180,12 @@ async fn load_server_data_internal(
         }
     }
     if !auto_select_first_text_channel {
-        app_state.write().nav.selected_channel._set_from_route_sync_only(None);
+        app_state.write().nav.selected_channel.unsafe_presync_override(
+            None,
+            "favorites_sidebar::load_server_data_internal: clear selected_channel \
+             when loading server shell only (mobile drawer context) — must be \
+             synchronous so ChatView doesn't briefly render a stale channel",
+        );
         let mut cd = chat_data.write();
         cd.current_channel = None;
         cd.messages.clear();

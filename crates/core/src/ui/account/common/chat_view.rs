@@ -22,6 +22,7 @@ use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
 use super::media_picker::MediaPickerPopup;
+use super::thread_view::{ActiveThreadsBar, ThreadPanel, ViewThreadButton};
 use super::user_profile_modal::open_user_profile;
 use super::user_sidebar::UserSidebar;
 use crate::client_manager::ClientManager;
@@ -3132,10 +3133,16 @@ fn render_search_clear_button(
 fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
     let show_side_column = ctx.utility_panel.read().is_some() || ctx.member_list_visible;
     let mobile_layout = runtime_mobile_ui_active();
+    // 5.2 — Thread panel is visible when a thread_id is stored in nav state
+    // and we are not in mobile layout (mobile uses the full-page ThreadView route).
+    let thread_panel_open = ctx.app_state.read().nav.thread_panel_open.is_some();
 
     rsx! {
         div { class: "chat-body-shell",
             {render_chat_content_column(ctx.clone())}
+            if !mobile_layout && thread_panel_open {
+                ThreadPanel {}
+            }
             if !mobile_layout && show_side_column {
                 {render_chat_side_column(ctx)}
             }
@@ -3146,6 +3153,9 @@ fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
 fn render_chat_content_column(ctx: ChatViewMarkupCtx) -> Element {
     rsx! {
         div { class: "chat-content-column",
+            // 5.4 — Active threads bar above the message list for text channels
+            // that have active threads. Renders nothing if no threads exist.
+            ActiveThreadsBar {}
             {render_message_list(ctx.clone())}
             {render_jump_to_present(ctx.clone())}
             TypingIndicator {}
@@ -3899,6 +3909,10 @@ fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing
         }
         if !msg.reactions.is_empty() {
             ReactionsView { reactions: msg.reactions.clone(), message_id: msg.id.clone() }
+        }
+        // 5.1 — "View Thread" button for messages that spawned a thread.
+        if let Some(thread_info) = msg.thread.clone() {
+            ViewThreadButton { thread: thread_info }
         }
     }
 }

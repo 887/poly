@@ -1,7 +1,7 @@
 # Plan — Discord Forum Channels & Thread Support
 
 > **Created:** 2026-04-05
-> **Status:** Phase 1 + Phase 2 Done (2026-04-19); Phase 4 + Phase 5 UI Done (2026-04-19)
+> **Status:** Phase 1–5 Done (2026-04-19); Phase 6 Done (2026-04-19) except 6.5 (gateway events — Phase 7 follow-up)
 > **Crate:** `poly-discord` (`clients/discord/`)
 > **Depends on:** Phase 3.3 (Discord client base implementation)
 > **Goal:** Support Discord forum channels and threads in the Poly unified chat UI.
@@ -394,22 +394,55 @@ names. Clicking a thread opens it in panel mode.
 
 ### 6. Test Server
 
-- [ ] **6.1** Add forum channel to mock Discord test server seed data
-- [ ] **6.2** Add threads (forum posts + text channel threads) to seed data
-- [ ] **6.3** Mock `GET /guilds/{id}/threads/active` endpoint
-- [ ] **6.4** Mock archived threads endpoints
+- [x] **6.1** Add forum channel to mock Discord test server seed data
+  - Forum channel 500 (`general-discussion`, GUILD_FORUM type 15) in `servers/test-discord/src/state.rs`
+  - 3 tags: question, show-and-tell, announcement; `default_forum_layout=1`
+  - Media channel 600 (`media-gallery`, GUILD_MEDIA type 16) in guild 101; `default_forum_layout=2`
+- [x] **6.2** Add threads (forum posts + text channel threads) to seed data
+  - Forum posts 501 (active/question), 502 (active/show-and-tell), 503 (archived+locked/announcement)
+  - Inline text thread 511 (parent=510, spawned from msg 520)
+  - Media thread 601 (parent=600, tag=photos, has attachment)
+  - Full message sets in channels 501/502/503/511/601 with proper timestamps
+- [x] **6.3** Mock `GET /guilds/{id}/threads/active` endpoint
+  - `routes::get_guild_active_threads` — filters non-archived threads by guild_id
+  - Returns `{ threads: [...], has_more: false }`
+- [x] **6.4** Mock archived threads endpoints
+  - `routes::get_channel_archived_threads` — filters archived public threads by parent_id
+  - Returns `{ threads: [...], has_more: false }`
+  - Note: `/private` endpoint not added (no seeded private threads; Discord API rarely used)
 - [ ] **6.5** Mock `THREAD_CREATE` / `THREAD_UPDATE` / `THREAD_DELETE` gateway events
+  - **PUNTED**: The mock server has no WebSocket gateway layer (gateway URL returns `ws://localhost:9102` stub).
+  - The client's `parse_gateway_event()` is fully unit-tested standalone in `clients/discord/tests/mapping.rs`.
+  - Emitting gateway events would require implementing a WS server in `test-discord` — Phase 7 scope.
+  - The `DiscordEvent` enum already has `GuildCreate`/`MessageCreate` variants; adding thread variants is a small follow-up once the WS layer is built.
 
 ---
 
 ## Completion Criteria
 
-- [ ] Forum channels appear in the sidebar with distinct icon
-- [ ] Clicking a forum channel shows the post list with tags and sort
-- [ ] Clicking a forum post opens the thread message view
-- [ ] Text channel messages with threads show "View Thread" indicator
-- [ ] Thread panel opens alongside parent channel on desktop
-- [ ] Thread full view works on mobile viewport
-- [ ] Active threads bar shows at top of channels with threads
-- [ ] All other backends compile unchanged (default trait impls)
-- [ ] Mock test server covers forum + thread flows
+- [x] Forum channels appear in the sidebar with distinct icon
+  — `crates/core/src/ui/account/common/channel_list.rs:1359`: `ChannelType::Forum => "📋"` (distinct from `#` text channels)
+- [x] Clicking a forum channel shows the post list with tags and sort
+  — `crates/core/src/ui/routes.rs:1721–1731`: `is_discord_forum` flag dispatches to `DiscordForumView {}`
+  — `crates/core/src/ui/account/common/discord_forum_view.rs:86`: `DiscordForumView` renders `ForumHeader` (sort toggle + New Post) + `ForumTagBar` + `ForumPostList`/`ForumPostGallery`
+- [x] Clicking a forum post opens the thread message view
+  — `crates/core/src/ui/account/common/discord_forum_view.rs`: `ForumPostRow` links to `Route::ServerChat { channel_id: thread_id }` — thread IDs are valid channel IDs in Discord's API, so `ChatView` renders the thread's messages
+- [x] Text channel messages with threads show "View Thread" indicator
+  — `crates/core/src/ui/account/common/chat_view.rs:3900–3903`: `if let Some(thread_info) = msg.thread.clone() { ViewThreadButton { thread: thread_info } }`
+  — `crates/core/src/ui/account/common/thread_view.rs:80`: `ViewThreadButton` renders "💬 N replies" button
+- [x] Thread panel opens alongside parent channel on desktop
+  — `crates/core/src/ui/account/common/chat_view.rs`: `render_chat_body_shell` renders `ThreadPanel {}` when `nav.thread_panel_open.is_some()` and not mobile
+  — `ViewThreadButton` on desktop sets `nav.thread_panel_open = Some(thread_id)` to open the panel
+- [x] Thread full view works on mobile viewport
+  — `crates/core/src/ui/routes.rs:372–383`: `Route::ThreadView { ..thread_id }` renders `ThreadFullView { thread_id }`
+  — `crates/core/src/ui/account/common/thread_view.rs:421`: `ThreadFullView` shows back button + header + message list
+  — On mobile `ViewThreadButton` navigates to `Route::ThreadView` instead of setting panel state
+- [x] Active threads bar shows at top of channels with threads
+  — `crates/core/src/ui/account/common/chat_view.rs:3147–3155`: `render_chat_content_column` adds `ActiveThreadsBar {}` above message list
+  — `crates/core/src/ui/account/common/thread_view.rs:149`: `ActiveThreadsBar` calls `get_active_threads` and shows chip bar when threads exist
+- [x] All other backends compile unchanged (default trait impls)
+  — `cargo check --workspace` passes with zero errors; all backends use default `NotSupported` impls for forum/thread methods
+- [x] Mock test server covers forum + thread flows
+  — 13 unit tests in `servers/test-discord/tests/forum_threads.rs` all pass
+  — 9 integration tests in `clients/discord/tests/integration.rs` cover forum/thread flows (6.3–6.4 endpoints, forum posts, archived threads, message thread field, active threads)
+  — **Gateway events (6.5) not exercised at server level** — WS gateway layer not implemented in mock server (Phase 7 follow-up)

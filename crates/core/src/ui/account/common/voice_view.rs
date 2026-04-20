@@ -254,7 +254,12 @@ async fn join_voice_channel(
     if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
         remember_message_list_scroll_position(&previous_channel_id);
     }
-    app_state.write().nav.selected_channel._set_from_route_sync_only(Some(channel_id));
+    app_state.write().nav.selected_channel.unsafe_presync_override(
+        Some(channel_id),
+        "voice_view: pre-set selected_channel inside join_voice_channel so ChatView \
+         renders against the new voice channel synchronously rather than the outgoing \
+         text channel — no nav.push follows because voice joins don't change the URL",
+    );
 }
 
 // ─── Public component ─────────────────────────────────────────────────────────
