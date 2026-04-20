@@ -973,6 +973,23 @@ agent-integration-outreach-desc = Plan and send "ping every N days" check-ins fr
 agent-integration-image-gen = Image generation
 agent-integration-image-gen-desc = Have your assistant generate and attach images on request.
 
+# /agent — per-chat reply style (Phase E)
+agent-style-title = Reply style
+agent-style-tone = Tone
+agent-style-tone-casual = Casual
+agent-style-tone-professional = Professional
+agent-style-tone-snarky = Snarky
+agent-style-tone-warm = Warm
+agent-style-tone-direct = Direct
+agent-style-formality = Formality
+agent-style-formality-tu = Informal (tu / du)
+agent-style-formality-vous = Formal (vous / Sie)
+agent-style-formality-neutral = Neutral
+agent-style-emoji = Emoji allowed
+agent-style-signature = Signature
+agent-style-extra-notes = Extra notes
+agent-style-save = Save
+
 # Empty state shown in ServerHome when the server has no channels yet.
 server-empty-title = No channels yet
 server-empty-body = This server doesn't have any channels. Ask a moderator to create one, or create the first channel yourself if you have permission.

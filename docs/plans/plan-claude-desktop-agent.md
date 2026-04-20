@@ -158,11 +158,11 @@ No global timer — multi-account usage means each chat needs its own independen
 
 **Goal:** small, structured layer over memory — formality/tone/signature that Claude honors on every reply. Optional, user-driven.
 
-- [ ] **E.1** SQLite migration — `chat_style(account_id, chat_id, tone, formality, emoji_allowed, signature, extra_notes)` where `tone ∈ { casual, professional, snarky, warm, direct }` (free-form if none match), `formality ∈ { tu, vous, neutral }` (covers `Du/Sie`, `tu/vous`, `tu/usted`, English neutral).
-- [ ] **E.2** MCP tools: `set_chat_style(...)`, `get_chat_style(account_id, chat_id)`, `list_chat_styles(account_id?)`.
-- [ ] **E.3** Include the style block in the Phase A `get_reply_context` response.
-- [ ] **E.4** `/agent/chat/:id` UI — style editor (dropdowns + textarea). Tiny page.
-- [ ] **E.5** FTL keys for the five tone options + three formality options.
+- [x] **E.1** SQLite migration — `chat_style(account_id, chat_id, tone, formality, emoji_allowed, signature, extra_notes)` where `tone ∈ { casual, professional, snarky, warm, direct }` (free-form if none match), `formality ∈ { tu, vous, neutral }` (covers `Du/Sie`, `tu/vous`, `tu/usted`, English neutral).
+- [x] **E.2** MCP tools: `set_chat_style(...)`, `get_chat_style(account_id, chat_id)`, `list_chat_styles(account_id?)`, `forget_chat_style(account_id, chat_id)`.
+- [x] **E.3** Include the style block in the Phase A `get_reply_context` response (`"style": ChatStyle | null`).
+- [x] **E.4** Standalone `ChatStyleEditor` component in `crates/core/src/ui/agent/chat_style_editor.rs`; `ChatStyle::tone_options()` / `formality_options()` helpers in `mcp/chat-mcp/src/memory.rs`; exported from `crates/core/src/ui/agent/mod.rs`.
+- [x] **E.5** FTL keys for the five tone options + three formality options added to `locales/{en,de,es,fr}/main.ftl`.
 
 **Effort:** ~0.5 session.
 

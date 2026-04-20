@@ -795,6 +795,23 @@ agent-integration-outreach-desc = Planifiez et envoyez des rappels « toutes les
 agent-integration-image-gen = Génération d'images
 agent-integration-image-gen-desc = Demandez à votre assistant de générer et joindre des images sur demande.
 
+# /agent — style de réponse par chat (Phase E)
+agent-style-title = Style de réponse
+agent-style-tone = Ton
+agent-style-tone-casual = Décontracté
+agent-style-tone-professional = Professionnel
+agent-style-tone-snarky = Sarcastique
+agent-style-tone-warm = Chaleureux
+agent-style-tone-direct = Direct
+agent-style-formality = Formalité
+agent-style-formality-tu = Informel (tu / du)
+agent-style-formality-vous = Formel (vous / Sie)
+agent-style-formality-neutral = Neutre
+agent-style-emoji = Emoji autorisés
+agent-style-signature = Signature
+agent-style-extra-notes = Notes supplémentaires
+agent-style-save = Enregistrer
+
 # État vide affiché dans ServerHome lorsque le serveur n'a pas encore de canaux.
 server-empty-title = Aucun canal pour l'instant
 server-empty-body = Ce serveur n'a aucun canal. Demande à un modérateur d'en créer un, ou crée le premier toi-même si tu en as la permission.

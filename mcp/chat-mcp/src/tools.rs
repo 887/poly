@@ -150,6 +150,13 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         | "draft_discard"
         | "draft_cancel_autosend" => true,
 
+        // Phase E per-chat style tools — always exposed; style is
+        // Poly's own concern, not per-backend (mirrors A.7 rationale).
+        "set_chat_style"
+        | "get_chat_style"
+        | "list_chat_styles"
+        | "forget_chat_style" => true,
+
         // Unknown tool names are excluded by default — this prevents a
         // future-added handler from being silently exposed before it has
         // a capability entry here.
@@ -867,6 +874,59 @@ pub fn tool_list() -> Vec<Value> {
                 "required": ["draft_id"]
             }
         }),
+
+        // Phase E — per-chat style tools
+        json!({
+            "name": "set_chat_style",
+            "description": "Set or update the reply style for a specific chat. All style fields are optional — omitted fields retain their current value.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id":    { "type": "string" },
+                    "chat_id":       { "type": "string" },
+                    "tone":          { "type": "string", "description": "Free-form tone label, e.g. 'casual', 'professional', 'snarky', 'warm', 'direct'" },
+                    "formality":     { "type": "string", "description": "'tu', 'vous', or 'neutral'" },
+                    "emoji_allowed": { "type": "boolean", "description": "Whether emoji are appropriate in this chat (default true)" },
+                    "signature":     { "type": "string", "description": "Optional sign-off appended to replies" },
+                    "extra_notes":   { "type": "string", "description": "Free-form style notes the AI should honor" }
+                },
+                "required": ["account_id", "chat_id"]
+            }
+        }),
+        json!({
+            "name": "get_chat_style",
+            "description": "Return the reply style configured for a chat, or null if none is set.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string" },
+                    "chat_id":    { "type": "string" }
+                },
+                "required": ["account_id", "chat_id"]
+            }
+        }),
+        json!({
+            "name": "list_chat_styles",
+            "description": "Return all per-chat style records, optionally filtered to one account.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string", "description": "Optional: restrict to this account" }
+                }
+            }
+        }),
+        json!({
+            "name": "forget_chat_style",
+            "description": "Delete the style record for a specific chat. No-op if not present.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string" },
+                    "chat_id":    { "type": "string" }
+                },
+                "required": ["account_id", "chat_id"]
+            }
+        }),
     ]
 }
 
@@ -932,6 +992,12 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "draft_edit"          => handle_draft_edit(args, mem),
         "draft_discard"       => handle_draft_discard(args, mem),
         "draft_cancel_autosend" => handle_draft_cancel_autosend(args, mem),
+
+        // Phase E — per-chat style tools.
+        "set_chat_style"    => handle_set_chat_style(args, mem),
+        "get_chat_style"    => handle_get_chat_style(args, mem),
+        "list_chat_styles"  => handle_list_chat_styles(args, mem),
+        "forget_chat_style" => handle_forget_chat_style(args, mem),
 
         _ => err_result(format!("unknown tool: {tool}")),
     }
@@ -1823,6 +1889,13 @@ async fn handle_get_reply_context(args: &Value, pool: &BackendPool, mem: &Memory
         .flatten()
         .unwrap_or(json!(null));
 
+    // Section: per-chat style (Phase E).
+    let chat_style: Value = mem
+        .get_chat_style(account_id, chat_id)
+        .ok()
+        .flatten()
+        .unwrap_or(json!(null));
+
     let bundle = json!({
         "account":         account_section,
         "chat":            { "id": chat_id },
@@ -1830,6 +1903,7 @@ async fn handle_get_reply_context(args: &Value, pool: &BackendPool, mem: &Memory
         "contact":         contact_section,
         "chat_notes":      chat_notes,
         "chat_summary":    chat_summary,
+        "style":           chat_style,
     });
 
     ok_result(serde_json::to_string_pretty(&bundle).unwrap_or_default())
@@ -2005,6 +2079,48 @@ fn handle_draft_cancel_autosend(args: &Value, mem: &MemoryDb) -> Value {
     }
 }
 
+// ─── Phase E — Chat style handlers ───────────────────────────────────────────
+
+fn handle_set_chat_style(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    let tone          = str_arg(args, "tone");
+    let formality     = str_arg(args, "formality");
+    let emoji_allowed = args.get("emoji_allowed").and_then(|v| v.as_bool());
+    let signature     = str_arg(args, "signature");
+    let extra_notes   = str_arg(args, "extra_notes");
+    match mem.set_chat_style(account_id, chat_id, tone, formality, emoji_allowed, signature, extra_notes) {
+        Ok(()) => ok_result("style saved"),
+        Err(e) => err_result(format!("set_chat_style failed: {e}")),
+    }
+}
+
+fn handle_get_chat_style(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    match mem.get_chat_style(account_id, chat_id) {
+        Ok(maybe) => ok_result(serde_json::to_string_pretty(&maybe).unwrap_or_default()),
+        Err(e) => err_result(format!("get_chat_style failed: {e}")),
+    }
+}
+
+fn handle_list_chat_styles(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = str_arg(args, "account_id");
+    match mem.list_chat_styles(account_id) {
+        Ok(list) => ok_result(serde_json::to_string_pretty(&list).unwrap_or_default()),
+        Err(e) => err_result(format!("list_chat_styles failed: {e}")),
+    }
+}
+
+fn handle_forget_chat_style(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    match mem.forget_chat_style(account_id, chat_id) {
+        Ok(()) => ok_result("style deleted"),
+        Err(e) => err_result(format!("forget_chat_style failed: {e}")),
+    }
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2043,6 +2159,8 @@ mod tests {
         // Phase B draft queue tools — always exposed
         "draft_create", "draft_list", "draft_approve",
         "draft_edit", "draft_discard", "draft_cancel_autosend",
+        // Phase E per-chat style tools — always exposed.
+        "set_chat_style", "get_chat_style", "list_chat_styles", "forget_chat_style",
     ];
 
     #[test]
@@ -2194,6 +2312,28 @@ mod tests {
                 assert!(
                     should_expose_tool(t, &caps),
                     "'{t}' should be exposed on backend '{slug}'"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn style_tools_in_tool_list() {
+        let list = tool_list();
+        let names = tool_names(&list);
+        for t in ["set_chat_style", "get_chat_style", "list_chat_styles", "forget_chat_style"] {
+            assert!(names.contains(t), "'{t}' missing from tool_list()");
+        }
+    }
+
+    #[test]
+    fn style_tools_exposed_on_every_backend() {
+        for slug in KNOWN_SLUGS {
+            let caps = poly_client::capabilities_for_slug(slug);
+            for t in ["set_chat_style", "get_chat_style", "list_chat_styles", "forget_chat_style"] {
+                assert!(
+                    should_expose_tool(t, &caps),
+                    "'{t}' not exposed for slug '{slug}'"
                 );
             }
         }

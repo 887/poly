@@ -795,6 +795,23 @@ agent-integration-outreach-desc = „Alle N Tage pingen"-Erinnerungen planen und
 agent-integration-image-gen = Bildgenerierung
 agent-integration-image-gen-desc = Den Assistenten auf Anfrage Bilder generieren und anhängen lassen.
 
+# /agent — Antwort-Stil pro Chat (Phase E)
+agent-style-title = Antwort-Stil
+agent-style-tone = Ton
+agent-style-tone-casual = Locker
+agent-style-tone-professional = Professionell
+agent-style-tone-snarky = Ironisch
+agent-style-tone-warm = Herzlich
+agent-style-tone-direct = Direkt
+agent-style-formality = Anredeform
+agent-style-formality-tu = Informal (tu / du)
+agent-style-formality-vous = Formal (vous / Sie)
+agent-style-formality-neutral = Neutral
+agent-style-emoji = Emoji erlaubt
+agent-style-signature = Signatur
+agent-style-extra-notes = Weitere Hinweise
+agent-style-save = Speichern
+
 # Leerer Zustand in ServerHome, wenn der Server noch keine Kanäle hat.
 server-empty-title = Noch keine Kanäle
 server-empty-body = Dieser Server hat noch keine Kanäle. Bitte eine Moderation, einen Kanal anzulegen, oder erstelle selbst den ersten, wenn du die Berechtigung hast.

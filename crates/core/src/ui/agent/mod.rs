@@ -8,8 +8,11 @@
 //! Every `#[component]` fn body MUST stay under **150 lines** of RSX + logic.
 //! Extract sub-components rather than growing any file.
 
+mod chat_style_editor;
 mod integrations;
 mod profile;
+
+pub use chat_style_editor::ChatStyleEditor;
 
 use crate::i18n::t;
 use crate::ui::routes::Route;
