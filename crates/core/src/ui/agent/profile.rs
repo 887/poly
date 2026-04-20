@@ -16,9 +16,14 @@ pub enum AgentProfileAction {
 impl UiAction for AgentProfileAction {
     fn apply(self, _cx: ActionCx<'_>) {
         match self {
-            Self::Save(_text) => {
-                // TODO: persist via host KV bridge (key: agent.profile.text) in Phase 5.
-                // Signal already holds the value for local state.
+            Self::Save(text) => {
+                spawn(async move {
+                    if let Some(storage) = crate::STORAGE.get() {
+                        if let Err(e) = storage.set(KV_KEY, serde_json::json!(text)).await {
+                            tracing::warn!("Failed to persist agent.profile.text: {e}");
+                        }
+                    }
+                });
             }
         }
     }
@@ -32,14 +37,25 @@ pub(super) fn AgentProfile() -> Element {
     let mut profile_text = use_signal(String::new);
     let mut saved = use_signal(|| false);
 
-    // Load from KV on mount (no-op until host bridge is wired in Phase 5).
-    use_effect(move || {
-        let _ = KV_KEY; // placeholder: will call poly_host kv_get in phase 5
+    // Load persisted profile text from KV on mount.
+    use_future(move || async move {
+        let Some(storage) = crate::STORAGE.get() else { return };
+        if let Ok(Some(v)) = storage.get(KV_KEY).await {
+            if let Some(s) = v.as_str() {
+                profile_text.set(s.to_string());
+            }
+        }
     });
 
     let on_save = move |_| {
-        // TODO: write profile_text to host KV in Phase 5.
-        let _ = profile_text.read().clone();
+        let text = profile_text.read().clone();
+        spawn(async move {
+            if let Some(storage) = crate::STORAGE.get() {
+                if let Err(e) = storage.set(KV_KEY, serde_json::json!(text)).await {
+                    tracing::warn!("Failed to persist agent.profile.text: {e}");
+                }
+            }
+        });
         saved.set(true);
     };
 

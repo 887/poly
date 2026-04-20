@@ -48,9 +48,9 @@ use std::collections::HashSet;
 use std::pin::Pin;
 #[cfg(feature = "native")]
 use std::sync::Mutex;
-#[cfg(feature = "native")]
+#[cfg(feature = "gateway")]
 use tokio::sync::mpsc::UnboundedSender;
-#[cfg(feature = "native")]
+#[cfg(feature = "gateway")]
 use tokio_tungstenite::tungstenite::Message as TungsteniteMsg;
 
 /// F10 — in-memory mutable state for context-menu item state-awareness.
@@ -458,7 +458,7 @@ impl DiscordClient {
 /// - Sends a minimal IDENTIFY on connect so servers can log the connection.
 /// - Responds to HEARTBEAT_ACK (op 11) silently.
 /// - Does NOT implement reconnect logic — stream simply ends on disconnect.
-#[cfg(feature = "native")]
+#[cfg(feature = "gateway")]
 async fn gateway_connect_loop(
     gateway_url: String,
     tx: UnboundedSender<ClientEvent>,
@@ -819,15 +819,21 @@ impl ClientBackend for DiscordClient {
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        let gateway_url = match &self.gateway_url {
-            Some(url) => url.clone(),
-            None => return Box::pin(stream::pending()),
-        };
-
-        // Spawn a task that connects to the gateway WS and streams events.
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ClientEvent>();
-        tokio::spawn(gateway_connect_loop(gateway_url, tx));
-        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
+        #[cfg(feature = "gateway")]
+        {
+            if let Some(url) = &self.gateway_url {
+                let url = url.clone();
+                // Spawn a task that connects to the gateway WS and streams events.
+                let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ClientEvent>();
+                tokio::spawn(gateway_connect_loop(url, tx));
+                return Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx));
+            }
+        }
+        // When the `gateway` feature is disabled (WASM plugin target, plain
+        // native core consumer), we can't open a WebSocket — return a pending
+        // stream. Events arrive via other paths (WIT plugin host, REST poll).
+        let _ = &self.gateway_url;
+        Box::pin(stream::pending())
     }
 
     fn backend_type(&self) -> BackendType {

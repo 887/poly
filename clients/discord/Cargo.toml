@@ -23,9 +23,14 @@ native = [
     "dep:thiserror",
     "dep:tracing",
     "dep:twilight-model",
-    "dep:tokio-tungstenite",
-    "dep:tokio-stream",
 ]
+# Opt-in gateway (WebSocket) support — requires `tokio/net` which pulls in
+# `mio`, which doesn't compile for `wasm32-unknown-unknown`. Anyone who
+# builds poly-discord for WASM must NOT enable this feature. poly-core's
+# `discord` feature deliberately stops at `native` so the unified app
+# bundle stays WASM-clean; the gateway path is only relevant on native /
+# test targets where `poly-chat-mcp` or integration tests live.
+gateway = ["native", "dep:tokio-tungstenite", "dep:tokio-stream"]
 
 [dependencies]
 poly-ui-macros = { workspace = true }

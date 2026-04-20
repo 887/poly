@@ -1,8 +1,8 @@
 //! Integrations section — MCP server controls and AI feature toggles.
 //!
 //! Poly runs as an MCP server so any AI client can connect to all your chat
-//! backends without needing API keys. The toggle and port here are local
-//! Signal state for now; persist via host KV bridge in Phase 5.
+//! backends without needing API keys. The toggle and port are persisted via
+//! the host KV bridge under the `agent.mcp.*` key namespace.
 
 use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -10,6 +10,8 @@ use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
 const DEFAULT_MCP_PORT: u16 = 3010;
+const KV_MCP_ENABLED: &str = "agent.mcp.enabled";
+const KV_MCP_PORT: &str = "agent.mcp.port";
 
 /// Actions for the Integrations section.
 pub enum IntegrationsAction {
@@ -22,11 +24,23 @@ pub enum IntegrationsAction {
 impl UiAction for IntegrationsAction {
     fn apply(self, _cx: ActionCx<'_>) {
         match self {
-            Self::ToggleMcp(_enabled) => {
-                // TODO: persist via KV (key: agent.mcp.enabled) in Phase 5.
+            Self::ToggleMcp(enabled) => {
+                spawn(async move {
+                    if let Some(storage) = crate::STORAGE.get() {
+                        if let Err(e) = storage.set(KV_MCP_ENABLED, serde_json::json!(enabled)).await {
+                            tracing::warn!("Failed to persist agent.mcp.enabled: {e}");
+                        }
+                    }
+                });
             }
-            Self::SetMcpPort(_port) => {
-                // TODO: persist via KV (key: agent.mcp.port) in Phase 5.
+            Self::SetMcpPort(port) => {
+                spawn(async move {
+                    if let Some(storage) = crate::STORAGE.get() {
+                        if let Err(e) = storage.set(KV_MCP_PORT, serde_json::json!(port)).await {
+                            tracing::warn!("Failed to persist agent.mcp.port: {e}");
+                        }
+                    }
+                });
             }
         }
     }
@@ -68,8 +82,15 @@ fn McpToggleRow(mcp_enabled: Signal<bool>, mcp_port: Signal<u16>) -> Element {
                     r#type: "checkbox",
                     checked: *mcp_enabled.read(),
                     onchange: move |e| {
-                        mcp_enabled.set(e.checked());
-                        // TODO: persist via KV in Phase 5
+                        let val = e.checked();
+                        mcp_enabled.set(val);
+                        spawn(async move {
+                            if let Some(storage) = crate::STORAGE.get() {
+                                if let Err(err) = storage.set(KV_MCP_ENABLED, serde_json::json!(val)).await {
+                                    tracing::warn!("Failed to persist agent.mcp.enabled: {err}");
+                                }
+                            }
+                        });
                     },
                 }
                 span { class: "toggle-slider" }
@@ -89,7 +110,13 @@ fn McpToggleRow(mcp_enabled: Signal<bool>, mcp_port: Signal<u16>) -> Element {
                     if let Ok(p) = e.value().parse::<u16>() {
                         if p >= 1024 {
                             mcp_port.set(p);
-                            // TODO: persist via KV in Phase 5
+                            spawn(async move {
+                                if let Some(storage) = crate::STORAGE.get() {
+                                    if let Err(err) = storage.set(KV_MCP_PORT, serde_json::json!(p)).await {
+                                        tracing::warn!("Failed to persist agent.mcp.port: {err}");
+                                    }
+                                }
+                            });
                         }
                     }
                 },
@@ -147,8 +174,25 @@ fn McpConfigBlock(mcp_port: Signal<u16>) -> Element {
 #[ui_action(IntegrationsAction)]
 #[component]
 pub(super) fn Integrations() -> Element {
-    let mcp_enabled = use_signal(|| true);
-    let mcp_port = use_signal(|| DEFAULT_MCP_PORT);
+    let mut mcp_enabled = use_signal(|| true);
+    let mut mcp_port = use_signal(|| DEFAULT_MCP_PORT);
+
+    // Load persisted values from KV on mount.
+    use_future(move || async move {
+        let Some(storage) = crate::STORAGE.get() else { return };
+        if let Ok(Some(v)) = storage.get(KV_MCP_ENABLED).await {
+            if let Some(b) = v.as_bool() {
+                mcp_enabled.set(b);
+            }
+        }
+        if let Ok(Some(v)) = storage.get(KV_MCP_PORT).await {
+            if let Some(p) = v.as_u64().and_then(|n| u16::try_from(n).ok()) {
+                if p >= 1024 {
+                    mcp_port.set(p);
+                }
+            }
+        }
+    });
 
     rsx! {
         div { class: "settings-section",
