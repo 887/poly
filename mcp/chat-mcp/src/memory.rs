@@ -1,0 +1,590 @@
+//! Phase A memory store — `contact_facts`, `chat_notes`, `chat_summaries`.
+//!
+//! All three tables live in Poly's main `storage.sqlite3` (or an in-memory DB
+//! for tests). This module owns the schema migration and every CRUD operation
+//! the MCP tools need.
+
+use std::sync::{Arc, Mutex};
+
+use sqlite::{Connection, ConnectionThreadSafe, State};
+
+// ─── Error ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, thiserror::Error)]
+pub enum MemoryError {
+    #[error("sqlite error: {0}")]
+    Sqlite(String),
+}
+
+impl From<sqlite::Error> for MemoryError {
+    fn from(e: sqlite::Error) -> Self {
+        Self::Sqlite(e.to_string())
+    }
+}
+
+// ─── Handle ───────────────────────────────────────────────────────────────────
+
+/// Thread-safe handle to the memory tables.
+///
+/// Cheap to clone — backed by `Arc<Mutex<…>>`.
+#[derive(Clone)]
+pub struct MemoryDb {
+    db: Arc<Mutex<ConnectionThreadSafe>>,
+}
+
+impl MemoryDb {
+    /// Open the memory tables in the same `storage.sqlite3` that the rest of
+    /// Poly uses.
+    ///
+    /// Pass `":memory:"` for tests.
+    pub fn open(path: &str) -> Result<Self, MemoryError> {
+        let mut db = if path == ":memory:" {
+            Connection::open_thread_safe(":memory:")
+        } else {
+            Connection::open_thread_safe(path)
+        }
+        .map_err(|e| MemoryError::Sqlite(e.to_string()))?;
+
+        db.set_busy_timeout(5_000)
+            .map_err(|e| MemoryError::Sqlite(e.to_string()))?;
+
+        Self::run_migrations(&db)?;
+        Ok(Self { db: Arc::new(Mutex::new(db)) })
+    }
+
+    fn run_migrations(db: &ConnectionThreadSafe) -> Result<(), MemoryError> {
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS contact_facts (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id  TEXT    NOT NULL,
+                contact_id  TEXT    NOT NULL,
+                category    TEXT    NOT NULL DEFAULT '',
+                fact_text   TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL,
+                updated_at  TEXT    NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_contact_facts_contact
+                ON contact_facts(account_id, contact_id);
+
+            CREATE TABLE IF NOT EXISTS chat_notes (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id  TEXT    NOT NULL,
+                chat_id     TEXT    NOT NULL,
+                note_text   TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL,
+                updated_at  TEXT    NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_notes_chat
+                ON chat_notes(account_id, chat_id);
+
+            CREATE TABLE IF NOT EXISTS chat_summaries (
+                account_id          TEXT NOT NULL,
+                chat_id             TEXT NOT NULL,
+                summary_text        TEXT NOT NULL,
+                window_start_msg_id TEXT NOT NULL DEFAULT '',
+                window_end_msg_id   TEXT NOT NULL DEFAULT '',
+                updated_at          TEXT NOT NULL,
+                PRIMARY KEY(account_id, chat_id)
+            );"
+        ).map_err(|e| MemoryError::Sqlite(e.to_string()))
+    }
+
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, ConnectionThreadSafe>, MemoryError> {
+        self.db
+            .lock()
+            .map_err(|_| MemoryError::Sqlite("mutex poisoned".to_string()))
+    }
+
+    // ─── contact_facts ────────────────────────────────────────────────────────
+
+    /// Insert a new fact and return its generated `id`.
+    pub fn remember_fact(
+        &self,
+        account_id: &str,
+        contact_id: &str,
+        category: &str,
+        fact_text: &str,
+    ) -> Result<i64, MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "INSERT INTO contact_facts(account_id,contact_id,category,fact_text,created_at,updated_at)
+             VALUES(?1,?2,?3,?4,?5,?6)"
+        )?;
+        stmt.bind((1, account_id))?;
+        stmt.bind((2, contact_id))?;
+        stmt.bind((3, category))?;
+        stmt.bind((4, fact_text))?;
+        stmt.bind((5, now.as_str()))?;
+        stmt.bind((6, now.as_str()))?;
+        drain(&mut stmt)?;
+
+        let mut id_stmt = db.prepare("SELECT last_insert_rowid()")?;
+        if id_stmt.next()? == State::Row {
+            Ok(id_stmt.read::<i64, _>(0)?)
+        } else {
+            Err(MemoryError::Sqlite("last_insert_rowid returned no row".to_string()))
+        }
+    }
+
+    /// Return all facts for a contact, optionally filtered by category.
+    pub fn recall_facts(
+        &self,
+        account_id: &str,
+        contact_id: &str,
+        category: Option<&str>,
+    ) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let (sql, cat_bind) = if category.is_some() {
+            (
+                "SELECT id,account_id,contact_id,category,fact_text,created_at,updated_at
+                 FROM contact_facts
+                 WHERE account_id=?1 AND contact_id=?2 AND category=?3
+                 ORDER BY id",
+                true,
+            )
+        } else {
+            (
+                "SELECT id,account_id,contact_id,category,fact_text,created_at,updated_at
+                 FROM contact_facts
+                 WHERE account_id=?1 AND contact_id=?2
+                 ORDER BY id",
+                false,
+            )
+        };
+        let mut stmt = db.prepare(sql)?;
+        stmt.bind((1, account_id))?;
+        stmt.bind((2, contact_id))?;
+        if cat_bind {
+            stmt.bind((3, category.unwrap_or("")))?;
+        }
+        collect_facts(&mut stmt)
+    }
+
+    /// Delete a fact by primary key.
+    pub fn forget_fact(&self, fact_id: i64) -> Result<(), MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare("DELETE FROM contact_facts WHERE id=?1")?;
+        stmt.bind((1, fact_id))?;
+        drain(&mut stmt)
+    }
+
+    /// Full-text LIKE search over `fact_text`, optionally scoped to one account.
+    pub fn search_facts(
+        &self,
+        query: &str,
+        account_id: Option<&str>,
+    ) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let pattern = format!("%{query}%");
+        let (sql, account_bind) = if account_id.is_some() {
+            (
+                "SELECT id,account_id,contact_id,category,fact_text,created_at,updated_at
+                 FROM contact_facts
+                 WHERE fact_text LIKE ?1 AND account_id=?2
+                 ORDER BY id",
+                true,
+            )
+        } else {
+            (
+                "SELECT id,account_id,contact_id,category,fact_text,created_at,updated_at
+                 FROM contact_facts
+                 WHERE fact_text LIKE ?1
+                 ORDER BY id",
+                false,
+            )
+        };
+        let mut stmt = db.prepare(sql)?;
+        stmt.bind((1, pattern.as_str()))?;
+        if account_bind {
+            stmt.bind((2, account_id.unwrap_or("")))?;
+        }
+        collect_facts(&mut stmt)
+    }
+
+    // ─── chat_notes ───────────────────────────────────────────────────────────
+
+    /// Insert a new note and return its `id`.
+    pub fn store_chat_note(
+        &self,
+        account_id: &str,
+        chat_id: &str,
+        note_text: &str,
+    ) -> Result<i64, MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "INSERT INTO chat_notes(account_id,chat_id,note_text,created_at,updated_at)
+             VALUES(?1,?2,?3,?4,?5)"
+        )?;
+        stmt.bind((1, account_id))?;
+        stmt.bind((2, chat_id))?;
+        stmt.bind((3, note_text))?;
+        stmt.bind((4, now.as_str()))?;
+        stmt.bind((5, now.as_str()))?;
+        drain(&mut stmt)?;
+
+        let mut id_stmt = db.prepare("SELECT last_insert_rowid()")?;
+        if id_stmt.next()? == State::Row {
+            Ok(id_stmt.read::<i64, _>(0)?)
+        } else {
+            Err(MemoryError::Sqlite("last_insert_rowid returned no row".to_string()))
+        }
+    }
+
+    /// Return all notes for a chat.
+    pub fn get_chat_notes(
+        &self,
+        account_id: &str,
+        chat_id: &str,
+    ) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT id,account_id,chat_id,note_text,created_at,updated_at
+             FROM chat_notes
+             WHERE account_id=?1 AND chat_id=?2
+             ORDER BY id"
+        )?;
+        stmt.bind((1, account_id))?;
+        stmt.bind((2, chat_id))?;
+        collect_notes(&mut stmt)
+    }
+
+    /// Delete a note by primary key.
+    pub fn forget_chat_note(&self, note_id: i64) -> Result<(), MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare("DELETE FROM chat_notes WHERE id=?1")?;
+        stmt.bind((1, note_id))?;
+        drain(&mut stmt)
+    }
+
+    // ─── chat_summaries ───────────────────────────────────────────────────────
+
+    /// Upsert the rolling summary for a chat.
+    pub fn store_chat_summary(
+        &self,
+        account_id: &str,
+        chat_id: &str,
+        summary_text: &str,
+        window_start_msg_id: &str,
+        window_end_msg_id: &str,
+    ) -> Result<(), MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "INSERT INTO chat_summaries
+                (account_id,chat_id,summary_text,window_start_msg_id,window_end_msg_id,updated_at)
+             VALUES(?1,?2,?3,?4,?5,?6)
+             ON CONFLICT(account_id,chat_id) DO UPDATE SET
+                summary_text        = excluded.summary_text,
+                window_start_msg_id = excluded.window_start_msg_id,
+                window_end_msg_id   = excluded.window_end_msg_id,
+                updated_at          = excluded.updated_at"
+        )?;
+        stmt.bind((1, account_id))?;
+        stmt.bind((2, chat_id))?;
+        stmt.bind((3, summary_text))?;
+        stmt.bind((4, window_start_msg_id))?;
+        stmt.bind((5, window_end_msg_id))?;
+        stmt.bind((6, now.as_str()))?;
+        drain(&mut stmt)
+    }
+
+    /// Fetch the summary for a chat, or `None` if not yet stored.
+    pub fn get_chat_summary(
+        &self,
+        account_id: &str,
+        chat_id: &str,
+    ) -> Result<Option<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT summary_text,window_start_msg_id,window_end_msg_id,updated_at
+             FROM chat_summaries
+             WHERE account_id=?1 AND chat_id=?2"
+        )?;
+        stmt.bind((1, account_id))?;
+        stmt.bind((2, chat_id))?;
+        if stmt.next()? == State::Row {
+            Ok(Some(serde_json::json!({
+                "summary":      stmt.read::<String, _>(0)?,
+                "window_start": stmt.read::<String, _>(1)?,
+                "window_end":   stmt.read::<String, _>(2)?,
+                "updated_at":   stmt.read::<String, _>(3)?,
+            })))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
+
+fn now_iso8601() -> String {
+    // std-only, no chrono dep: use UNIX_EPOCH seconds formatted manually.
+    // RFC 3339 / ISO 8601 UTC: "YYYY-MM-DDTHH:MM:SSZ"
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Julian day arithmetic — simple integer math.
+    let s = secs % 60;
+    let m = (secs / 60) % 60;
+    let h = (secs / 3600) % 24;
+    let days = secs / 86400; // days since 1970-01-01
+    // Gregorian calendar conversion.
+    let (y, mo, d) = days_to_ymd(days);
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+}
+
+/// Convert days since Unix epoch (1970-01-01) to (year, month, day).
+fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+    // Algorithm from https://www.researchgate.net/publication/316558298
+    let z = days + 719_468;
+    let era = z / 146_097;
+    let doe = z % 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if mo <= 2 { y + 1 } else { y };
+    (y, mo, d)
+}
+
+/// Step a statement to completion (for INSERT/UPDATE/DELETE).
+fn drain(stmt: &mut sqlite::Statement<'_>) -> Result<(), MemoryError> {
+    while stmt.next()? != State::Done {}
+    Ok(())
+}
+
+fn collect_facts(
+    stmt: &mut sqlite::Statement<'_>,
+) -> Result<Vec<serde_json::Value>, MemoryError> {
+    let mut out = Vec::new();
+    while stmt.next()? == State::Row {
+        out.push(serde_json::json!({
+            "id":          stmt.read::<i64, _>(0)?,
+            "account_id":  stmt.read::<String, _>(1)?,
+            "contact_id":  stmt.read::<String, _>(2)?,
+            "category":    stmt.read::<String, _>(3)?,
+            "fact_text":   stmt.read::<String, _>(4)?,
+            "created_at":  stmt.read::<String, _>(5)?,
+            "updated_at":  stmt.read::<String, _>(6)?,
+        }));
+    }
+    Ok(out)
+}
+
+fn collect_notes(
+    stmt: &mut sqlite::Statement<'_>,
+) -> Result<Vec<serde_json::Value>, MemoryError> {
+    let mut out = Vec::new();
+    while stmt.next()? == State::Row {
+        out.push(serde_json::json!({
+            "id":          stmt.read::<i64, _>(0)?,
+            "account_id":  stmt.read::<String, _>(1)?,
+            "chat_id":     stmt.read::<String, _>(2)?,
+            "note_text":   stmt.read::<String, _>(3)?,
+            "created_at":  stmt.read::<String, _>(4)?,
+            "updated_at":  stmt.read::<String, _>(5)?,
+        }));
+    }
+    Ok(out)
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+mod tests {
+    use super::*;
+
+    fn fresh_db() -> MemoryDb {
+        MemoryDb::open(":memory:").expect("open in-memory db")
+    }
+
+    // ── contact_facts ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn remember_and_recall_fact() {
+        let db = fresh_db();
+        let id = db.remember_fact("acc1", "contact1", "preference", "likes coffee").unwrap();
+        assert!(id > 0);
+
+        let facts = db.recall_facts("acc1", "contact1", None).unwrap();
+        assert_eq!(facts.len(), 1);
+        assert_eq!(facts[0]["fact_text"], "likes coffee");
+        assert_eq!(facts[0]["category"], "preference");
+        assert_eq!(facts[0]["id"], id);
+    }
+
+    #[test]
+    fn recall_facts_with_category_filter() {
+        let db = fresh_db();
+        db.remember_fact("acc1", "c1", "preference", "likes coffee").unwrap();
+        db.remember_fact("acc1", "c1", "schedule", "free Friday").unwrap();
+        db.remember_fact("acc1", "c1", "preference", "hates Mondays").unwrap();
+
+        let prefs = db.recall_facts("acc1", "c1", Some("preference")).unwrap();
+        assert_eq!(prefs.len(), 2);
+
+        let sched = db.recall_facts("acc1", "c1", Some("schedule")).unwrap();
+        assert_eq!(sched.len(), 1);
+        assert_eq!(sched[0]["fact_text"], "free Friday");
+    }
+
+    #[test]
+    fn recall_facts_account_scoped() {
+        let db = fresh_db();
+        db.remember_fact("acc1", "c1", "", "fact A").unwrap();
+        db.remember_fact("acc2", "c1", "", "fact B").unwrap();
+
+        let a = db.recall_facts("acc1", "c1", None).unwrap();
+        assert_eq!(a.len(), 1);
+        assert_eq!(a[0]["fact_text"], "fact A");
+
+        let b = db.recall_facts("acc2", "c1", None).unwrap();
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0]["fact_text"], "fact B");
+    }
+
+    #[test]
+    fn forget_fact() {
+        let db = fresh_db();
+        let id = db.remember_fact("acc1", "c1", "", "to forget").unwrap();
+        db.forget_fact(id).unwrap();
+
+        let facts = db.recall_facts("acc1", "c1", None).unwrap();
+        assert!(facts.is_empty());
+    }
+
+    #[test]
+    fn forget_nonexistent_fact_is_noop() {
+        let db = fresh_db();
+        db.forget_fact(9999).unwrap(); // must not error
+    }
+
+    #[test]
+    fn search_facts_like() {
+        let db = fresh_db();
+        db.remember_fact("acc1", "c1", "", "loves hiking in the mountains").unwrap();
+        db.remember_fact("acc1", "c2", "", "prefers staying indoors").unwrap();
+        db.remember_fact("acc2", "c1", "", "hiking enthusiast").unwrap();
+
+        let results = db.search_facts("hiking", None).unwrap();
+        assert_eq!(results.len(), 2);
+
+        let scoped = db.search_facts("hiking", Some("acc1")).unwrap();
+        assert_eq!(scoped.len(), 1);
+        assert_eq!(scoped[0]["account_id"], "acc1");
+    }
+
+    #[test]
+    fn search_facts_no_match() {
+        let db = fresh_db();
+        db.remember_fact("acc1", "c1", "", "likes tea").unwrap();
+        let results = db.search_facts("coffee", None).unwrap();
+        assert!(results.is_empty());
+    }
+
+    // ── chat_notes ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn store_and_get_chat_note() {
+        let db = fresh_db();
+        let id = db.store_chat_note("acc1", "chat1", "remember: bring umbrella").unwrap();
+        assert!(id > 0);
+
+        let notes = db.get_chat_notes("acc1", "chat1").unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0]["note_text"], "remember: bring umbrella");
+        assert_eq!(notes[0]["id"], id);
+    }
+
+    #[test]
+    fn multiple_notes_ordered_by_id() {
+        let db = fresh_db();
+        let id1 = db.store_chat_note("acc1", "chat1", "note one").unwrap();
+        let id2 = db.store_chat_note("acc1", "chat1", "note two").unwrap();
+        let notes = db.get_chat_notes("acc1", "chat1").unwrap();
+        assert_eq!(notes.len(), 2);
+        assert!(notes[0]["id"].as_i64().unwrap() < notes[1]["id"].as_i64().unwrap());
+        let _ = (id1, id2);
+    }
+
+    #[test]
+    fn forget_chat_note() {
+        let db = fresh_db();
+        let id = db.store_chat_note("acc1", "chat1", "to forget").unwrap();
+        db.forget_chat_note(id).unwrap();
+
+        let notes = db.get_chat_notes("acc1", "chat1").unwrap();
+        assert!(notes.is_empty());
+    }
+
+    #[test]
+    fn get_chat_notes_empty_for_unknown_chat() {
+        let db = fresh_db();
+        let notes = db.get_chat_notes("acc1", "unknown-chat").unwrap();
+        assert!(notes.is_empty());
+    }
+
+    // ── chat_summaries ────────────────────────────────────────────────────────
+
+    #[test]
+    fn store_and_get_chat_summary() {
+        let db = fresh_db();
+        db.store_chat_summary("acc1", "chat1", "Alice and Bob discussed the project", "msg1", "msg20").unwrap();
+
+        let s = db.get_chat_summary("acc1", "chat1").unwrap();
+        assert!(s.is_some());
+        let s = s.unwrap();
+        assert_eq!(s["summary"], "Alice and Bob discussed the project");
+        assert_eq!(s["window_start"], "msg1");
+        assert_eq!(s["window_end"], "msg20");
+    }
+
+    #[test]
+    fn chat_summary_upsert() {
+        let db = fresh_db();
+        db.store_chat_summary("acc1", "chat1", "old summary", "msg1", "msg10").unwrap();
+        db.store_chat_summary("acc1", "chat1", "new summary", "msg11", "msg20").unwrap();
+
+        let s = db.get_chat_summary("acc1", "chat1").unwrap().unwrap();
+        assert_eq!(s["summary"], "new summary");
+        assert_eq!(s["window_start"], "msg11");
+    }
+
+    #[test]
+    fn get_chat_summary_returns_none_when_missing() {
+        let db = fresh_db();
+        let s = db.get_chat_summary("acc1", "no-chat").unwrap();
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn summaries_are_per_account_and_chat() {
+        let db = fresh_db();
+        db.store_chat_summary("acc1", "chat1", "summary A", "", "").unwrap();
+        db.store_chat_summary("acc2", "chat1", "summary B", "", "").unwrap();
+        db.store_chat_summary("acc1", "chat2", "summary C", "", "").unwrap();
+
+        assert_eq!(db.get_chat_summary("acc1", "chat1").unwrap().unwrap()["summary"], "summary A");
+        assert_eq!(db.get_chat_summary("acc2", "chat1").unwrap().unwrap()["summary"], "summary B");
+        assert_eq!(db.get_chat_summary("acc1", "chat2").unwrap().unwrap()["summary"], "summary C");
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn now_iso8601_looks_plausible() {
+        let s = now_iso8601();
+        // "2026-04-19T12:34:56Z" — length 20, has 'T' and 'Z'
+        assert_eq!(s.len(), 20, "unexpected length: {s}");
+        assert!(s.contains('T'));
+        assert!(s.ends_with('Z'));
+        assert!(s.starts_with("20")); // year 2xxx
+    }
+}

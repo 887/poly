@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use poly_chat_mcp::memory::MemoryDb;
 use poly_chat_mcp::state::BackendPool;
 use poly_chat_mcp::tools;
 use poly_test_discord::{DiscordState, router as discord_router};
@@ -131,8 +132,13 @@ impl TestSrv {
 // Helper — call dispatch and assert not error
 // ---------------------------------------------------------------------------
 
+fn test_mem() -> MemoryDb {
+    MemoryDb::open(":memory:").expect("in-memory MemoryDb")
+}
+
 async fn call(pool: &mut BackendPool, tool: &str, args: Value) -> Value {
-    tools::dispatch(tool, &args, pool).await
+    let mem = test_mem();
+    tools::dispatch(tool, &args, pool, &mem).await
 }
 
 fn assert_ok(result: &Value) {

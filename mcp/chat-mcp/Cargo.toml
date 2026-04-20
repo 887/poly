@@ -39,8 +39,11 @@ rand = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
 clap = { version = "4", features = ["derive"] }
+sqlite = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 poly-test-discord = { path = "../../servers/test-discord" }
 poly-test-teams = { path = "../../servers/test-teams" }
 poly-test-lemmy = { path = "../../servers/test-lemmy" }

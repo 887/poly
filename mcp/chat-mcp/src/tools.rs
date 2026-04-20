@@ -2,6 +2,7 @@
 
 use serde_json::{Value, json};
 
+use crate::memory::MemoryDb;
 use crate::state::BackendPool;
 use poly_client::{
     AuthCredentials, BackendCapabilities, BackendType, ClientBackend, Cursor, CursorKind,
@@ -127,6 +128,19 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         | "message_actions"
         | "invoke_composer_action"
         | "invoke_message_action" => true,
+
+        // Phase A memory tools — always exposed; memory is Poly's own concern,
+        // independent of which backend a chat uses (A.7).
+        "remember_fact"
+        | "recall_facts"
+        | "forget_fact"
+        | "search_facts"
+        | "store_chat_note"
+        | "get_chat_notes"
+        | "forget_chat_note"
+        | "store_chat_summary"
+        | "get_chat_summary"
+        | "get_reply_context" => true,
 
         // Unknown tool names are excluded by default — this prevents a
         // future-added handler from being silently exposed before it has
@@ -634,12 +648,145 @@ pub fn tool_list() -> Vec<Value> {
                 "required": ["backend", "action_id", "channel_id", "message_id"]
             }
         }),
+
+        // ─── Phase A — Memory tools ──────────────────────────────────────────
+        json!({
+            "name": "forget_chat_note",
+            "description": "Delete a per-chat note by its id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "note_id": { "type": "integer", "description": "Note ID returned by store_chat_note" }
+                },
+                "required": ["note_id"]
+            }
+        }),
+        json!({
+            "name": "forget_fact",
+            "description": "Delete a contact fact by its id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "fact_id": { "type": "integer", "description": "Fact ID returned by remember_fact" }
+                },
+                "required": ["fact_id"]
+            }
+        }),
+        json!({
+            "name": "get_chat_notes",
+            "description": "Return all running notes for a chat thread.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string" },
+                    "chat_id":    { "type": "string" }
+                },
+                "required": ["account_id", "chat_id"]
+            }
+        }),
+        json!({
+            "name": "get_chat_summary",
+            "description": "Return the rolling summary for a chat, or null if none stored.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string" },
+                    "chat_id":    { "type": "string" }
+                },
+                "required": ["account_id", "chat_id"]
+            }
+        }),
+        json!({
+            "name": "get_reply_context",
+            "description": "Bundle everything needed to draft a reply: recent messages, \
+                            contact info + facts, per-chat notes, rolling summary. \
+                            Returns a single JSON object. Gracefully omits sections for \
+                            which no data is available (no contact found is not an error).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend":       { "type": "string" },
+                    "account_id":    { "type": "string" },
+                    "chat_id":       { "type": "string", "description": "Channel / DM / room ID" },
+                    "contact_id":    { "type": "string", "description": "User ID of the primary contact (for DMs). Omit for group chats." },
+                    "message_limit": { "type": "integer", "description": "How many recent messages to include (default 20)" }
+                },
+                "required": ["backend", "account_id", "chat_id"]
+            }
+        }),
+        json!({
+            "name": "recall_facts",
+            "description": "Return stored facts about a contact. Optionally filter by category.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string" },
+                    "contact_id": { "type": "string" },
+                    "category":   { "type": "string", "description": "Optional category filter" }
+                },
+                "required": ["account_id", "contact_id"]
+            }
+        }),
+        json!({
+            "name": "remember_fact",
+            "description": "Store a free-form fact about a contact (e.g. preference, schedule, relationship context). Returns fact_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string" },
+                    "contact_id": { "type": "string" },
+                    "category":   { "type": "string", "description": "Organisational label, e.g. 'preference', 'schedule', 'relationship'" },
+                    "fact":       { "type": "string", "description": "The fact to remember" }
+                },
+                "required": ["account_id", "contact_id", "category", "fact"]
+            }
+        }),
+        json!({
+            "name": "search_facts",
+            "description": "Search all stored facts using SQL LIKE over fact_text. Optionally scope to one account.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query":      { "type": "string", "description": "Search term (case-insensitive LIKE)" },
+                    "account_id": { "type": "string", "description": "Optional: restrict to this account" }
+                },
+                "required": ["query"]
+            }
+        }),
+        json!({
+            "name": "store_chat_note",
+            "description": "Append a running note for a chat thread. Returns note_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": { "type": "string" },
+                    "chat_id":    { "type": "string" },
+                    "note":       { "type": "string" }
+                },
+                "required": ["account_id", "chat_id", "note"]
+            }
+        }),
+        json!({
+            "name": "store_chat_summary",
+            "description": "Upsert a rolling summary of older chat history (one record per account+chat).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id":          { "type": "string" },
+                    "chat_id":             { "type": "string" },
+                    "summary":             { "type": "string" },
+                    "window_start_msg_id": { "type": "string", "description": "ID of the oldest message included in this summary" },
+                    "window_end_msg_id":   { "type": "string", "description": "ID of the newest message included in this summary" }
+                },
+                "required": ["account_id", "chat_id", "summary", "window_start_msg_id", "window_end_msg_id"]
+            }
+        }),
     ]
 }
 
 // ─── Dispatch ────────────────────────────────────────────────────────────────
 
-pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool) -> Value {
+pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &MemoryDb) -> Value {
     match tool {
         "login" => handle_login(args, pool).await,
         "logout" => handle_logout(args, pool),
@@ -679,6 +826,18 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool) -> Value
         "message_actions" => handle_message_actions(args, pool).await,
         "invoke_composer_action" => handle_invoke_composer_action(args, pool).await,
         "invoke_message_action" => handle_invoke_message_action(args, pool).await,
+
+        // Phase A — memory tools (A.7: always exposed, backend-agnostic).
+        "forget_chat_note"  => handle_forget_chat_note(args, mem),
+        "forget_fact"       => handle_forget_fact(args, mem),
+        "get_chat_notes"    => handle_get_chat_notes(args, mem),
+        "get_chat_summary"  => handle_get_chat_summary(args, mem),
+        "get_reply_context" => handle_get_reply_context(args, pool, mem).await,
+        "recall_facts"      => handle_recall_facts(args, mem),
+        "remember_fact"     => handle_remember_fact(args, mem),
+        "search_facts"      => handle_search_facts(args, mem),
+        "store_chat_note"   => handle_store_chat_note(args, mem),
+        "store_chat_summary" => handle_store_chat_summary(args, mem),
 
         _ => err_result(format!("unknown tool: {tool}")),
     }
@@ -1403,6 +1562,185 @@ async fn handle_invoke_message_action(args: &Value, pool: &BackendPool) -> Value
     }
 }
 
+// ─── Phase A — Memory tool handlers ─────────────────────────────────────────
+
+fn handle_remember_fact(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let contact_id = match str_arg(args, "contact_id") { Some(v) => v, None => return err_result("missing 'contact_id'") };
+    let category   = str_arg(args, "category").unwrap_or("");
+    let fact       = match str_arg(args, "fact") { Some(v) => v, None => return err_result("missing 'fact'") };
+    match mem.remember_fact(account_id, contact_id, category, fact) {
+        Ok(id) => ok_result(json!({ "fact_id": id }).to_string()),
+        Err(e) => err_result(format!("remember_fact failed: {e}")),
+    }
+}
+
+fn handle_recall_facts(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let contact_id = match str_arg(args, "contact_id") { Some(v) => v, None => return err_result("missing 'contact_id'") };
+    let category   = str_arg(args, "category");
+    match mem.recall_facts(account_id, contact_id, category) {
+        Ok(facts) => ok_result(serde_json::to_string_pretty(&facts).unwrap_or_default()),
+        Err(e) => err_result(format!("recall_facts failed: {e}")),
+    }
+}
+
+fn handle_forget_fact(args: &Value, mem: &MemoryDb) -> Value {
+    let fact_id = match args.get("fact_id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return err_result("missing or invalid 'fact_id' (must be integer)"),
+    };
+    match mem.forget_fact(fact_id) {
+        Ok(()) => ok_result("fact deleted"),
+        Err(e) => err_result(format!("forget_fact failed: {e}")),
+    }
+}
+
+fn handle_search_facts(args: &Value, mem: &MemoryDb) -> Value {
+    let query      = match str_arg(args, "query") { Some(v) => v, None => return err_result("missing 'query'") };
+    let account_id = str_arg(args, "account_id");
+    match mem.search_facts(query, account_id) {
+        Ok(facts) => ok_result(serde_json::to_string_pretty(&facts).unwrap_or_default()),
+        Err(e) => err_result(format!("search_facts failed: {e}")),
+    }
+}
+
+fn handle_store_chat_note(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    let note       = match str_arg(args, "note")       { Some(v) => v, None => return err_result("missing 'note'") };
+    match mem.store_chat_note(account_id, chat_id, note) {
+        Ok(id) => ok_result(json!({ "note_id": id }).to_string()),
+        Err(e) => err_result(format!("store_chat_note failed: {e}")),
+    }
+}
+
+fn handle_get_chat_notes(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    match mem.get_chat_notes(account_id, chat_id) {
+        Ok(notes) => ok_result(serde_json::to_string_pretty(&notes).unwrap_or_default()),
+        Err(e) => err_result(format!("get_chat_notes failed: {e}")),
+    }
+}
+
+fn handle_forget_chat_note(args: &Value, mem: &MemoryDb) -> Value {
+    let note_id = match args.get("note_id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return err_result("missing or invalid 'note_id' (must be integer)"),
+    };
+    match mem.forget_chat_note(note_id) {
+        Ok(()) => ok_result("note deleted"),
+        Err(e) => err_result(format!("forget_chat_note failed: {e}")),
+    }
+}
+
+fn handle_store_chat_summary(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    let summary    = match str_arg(args, "summary")    { Some(v) => v, None => return err_result("missing 'summary'") };
+    let window_start = str_arg(args, "window_start_msg_id").unwrap_or("");
+    let window_end   = str_arg(args, "window_end_msg_id").unwrap_or("");
+    match mem.store_chat_summary(account_id, chat_id, summary, window_start, window_end) {
+        Ok(()) => ok_result("summary stored"),
+        Err(e) => err_result(format!("store_chat_summary failed: {e}")),
+    }
+}
+
+fn handle_get_chat_summary(args: &Value, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    match mem.get_chat_summary(account_id, chat_id) {
+        Ok(Some(s)) => ok_result(serde_json::to_string_pretty(&s).unwrap_or_default()),
+        Ok(None)    => ok_result("null"),
+        Err(e)      => err_result(format!("get_chat_summary failed: {e}")),
+    }
+}
+
+// ─── Phase A.3 — Context bundler ─────────────────────────────────────────────
+
+/// Build the fat reply-context bundle that gives Claude Desktop everything it
+/// needs to draft a contextually-aware reply in a single MCP call.
+async fn handle_get_reply_context(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    let message_limit = args.get("message_limit").and_then(|v| v.as_u64()).unwrap_or(20) as u32;
+    let contact_id = str_arg(args, "contact_id");
+
+    // Find the backend for this account.
+    let entry = match find_backend(args, pool) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+
+    // Section: account info.
+    let account_section = json!({
+        "id":           entry.session.user.id,
+        "backend":      format!("{:?}", entry.session.backend),
+        "display_name": entry.session.user.display_name,
+    });
+
+    // Section: recent messages (best-effort; null on error).
+    let recent_messages: Value = match entry
+        .backend
+        .get_messages(
+            chat_id,
+            poly_client::MessageQuery {
+                limit: Some(message_limit),
+                ..Default::default()
+            },
+        )
+        .await
+    {
+        Ok(msgs) => serde_json::to_value(&msgs).unwrap_or(json!([])),
+        Err(_) => json!([]),
+    };
+
+    // Section: contact info + facts (null if no contact_id supplied or lookup fails).
+    let contact_section: Value = if let Some(cid) = contact_id {
+        let user_info: Option<Value> = match entry.backend.get_user(cid).await {
+            Ok(u) => serde_json::to_value(&u).ok(),
+            Err(_) => None,
+        };
+        let facts = mem.recall_facts(account_id, cid, None).unwrap_or_default();
+        let mut obj = serde_json::Map::new();
+        obj.insert("id".to_string(), json!(cid));
+        if let Some(u) = user_info {
+            obj.insert("display_name".to_string(), u.get("display_name").cloned().unwrap_or(json!(null)));
+            obj.insert("presence".to_string(), u.get("presence").cloned().unwrap_or(json!(null)));
+            obj.insert("last_seen".to_string(), u.get("last_seen").cloned().unwrap_or(json!(null)));
+        }
+        obj.insert("facts".to_string(), json!(facts));
+        json!(obj)
+    } else {
+        json!(null)
+    };
+
+    // Section: chat notes.
+    let chat_notes: Value = mem
+        .get_chat_notes(account_id, chat_id)
+        .map(|n| json!(n))
+        .unwrap_or(json!([]));
+
+    // Section: chat summary.
+    let chat_summary: Value = mem
+        .get_chat_summary(account_id, chat_id)
+        .ok()
+        .flatten()
+        .unwrap_or(json!(null));
+
+    let bundle = json!({
+        "account":         account_section,
+        "chat":            { "id": chat_id },
+        "recent_messages": recent_messages,
+        "contact":         contact_section,
+        "chat_notes":      chat_notes,
+        "chat_summary":    chat_summary,
+    });
+
+    ok_result(serde_json::to_string_pretty(&bundle).unwrap_or_default())
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1433,6 +1771,11 @@ mod tests {
         "sidebar_declaration", "invoke_sidebar_action",
         "channel_view", "view_rows", "composer_buttons", "message_actions",
         "invoke_composer_action", "invoke_message_action",
+        // Phase A memory tools — always exposed (A.7)
+        "remember_fact", "recall_facts", "forget_fact", "search_facts",
+        "store_chat_note", "get_chat_notes", "forget_chat_note",
+        "store_chat_summary", "get_chat_summary",
+        "get_reply_context",
     ];
 
     #[test]
@@ -1550,6 +1893,19 @@ mod tests {
         let names = tool_names(&list);
         for t in ["send_message", "list_friends", "list_dms", "send_typing"] {
             assert!(names.contains(t), "'{t}' dropped from tool_list()");
+        }
+    }
+
+    #[test]
+    fn memory_tools_in_tool_list() {
+        let list = tool_list();
+        let names = tool_names(&list);
+        for t in [
+            "remember_fact", "recall_facts", "forget_fact", "search_facts",
+            "store_chat_note", "get_chat_notes", "forget_chat_note",
+            "store_chat_summary", "get_chat_summary", "get_reply_context",
+        ] {
+            assert!(names.contains(t), "'{t}' missing from tool_list()");
         }
     }
 }

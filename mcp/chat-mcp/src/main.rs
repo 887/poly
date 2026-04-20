@@ -21,7 +21,7 @@
 //! poly-chat-mcp --stdio
 //! ```
 
-use poly_chat_mcp::{state, tools};
+use poly_chat_mcp::{memory::MemoryDb, state, tools};
 
 use std::sync::Arc;
 
@@ -48,6 +48,13 @@ struct Args {
 
 type SharedPool = Arc<Mutex<state::BackendPool>>;
 
+/// Shared state threaded through Axum handlers.
+#[derive(Clone)]
+struct AppState {
+    pool: SharedPool,
+    mem:  Arc<MemoryDb>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -71,11 +78,13 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_http(port: u16) -> anyhow::Result<()> {
     let pool: SharedPool = Arc::new(Mutex::new(state::BackendPool::new()));
+    let mem = Arc::new(open_memory_db()?);
+    let state = AppState { pool, mem };
 
     let app = axum::Router::new()
         .route("/mcp", post(handle_mcp_http))
         .route("/health", get(handle_health))
-        .with_state(pool);
+        .with_state(state);
 
     let addr = format!("127.0.0.1:{port}");
     tracing::info!("poly-chat-mcp listening on http://{addr}");
@@ -93,7 +102,7 @@ async fn handle_health() -> impl IntoResponse {
 }
 
 async fn handle_mcp_http(
-    AxumState(pool): AxumState<SharedPool>,
+    AxumState(state): AxumState<AppState>,
     Json(req): Json<Value>,
 ) -> impl IntoResponse {
     let method = req.get("method").and_then(|m| m.as_str()).unwrap_or("");
@@ -117,8 +126,8 @@ async fn handle_mcp_http(
         "tools/call" => {
             let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or(json!({}));
-            let mut pool = pool.lock().await;
-            let result = tools::dispatch(tool_name, &args, &mut pool).await;
+            let mut pool = state.pool.lock().await;
+            let result = tools::dispatch(tool_name, &args, &mut pool, &state.mem).await;
             mcp_response(id, result)
         }
         _ => mcp_error(id, -32601, &format!("Method not found: {method}")),
@@ -136,6 +145,7 @@ async fn run_stdio() -> anyhow::Result<()> {
     tracing::info!("poly-chat-mcp running in stdio mode");
 
     let mut pool = state::BackendPool::new();
+    let mem = open_memory_db()?;
     let stdin = tokio::io::BufReader::new(tokio::io::stdin());
     let mut stdout = tokio::io::stdout();
     let mut lines = stdin.lines();
@@ -179,7 +189,7 @@ async fn run_stdio() -> anyhow::Result<()> {
             "tools/call" => {
                 let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
                 let args = params.get("arguments").cloned().unwrap_or(json!({}));
-                let result = tools::dispatch(tool_name, &args, &mut pool).await;
+                let result = tools::dispatch(tool_name, &args, &mut pool, &mem).await;
                 mcp_response(id, result)
             }
             _ => mcp_error(id, -32601, &format!("Method not found: {method}")),
@@ -192,6 +202,50 @@ async fn run_stdio() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+// ─── Memory DB initialisation ────────────────────────────────────────────────
+
+/// Open the memory DB in the same `storage.sqlite3` as the rest of Poly.
+///
+/// The data directory is resolved via `POLY_DATA_DIR` env var (override) or
+/// the platform-default path (`~/.local/share/poly/` on Linux, etc.).
+fn open_memory_db() -> anyhow::Result<MemoryDb> {
+    let data_dir: std::path::PathBuf = if let Ok(d) = std::env::var("POLY_DATA_DIR") {
+        std::path::PathBuf::from(d)
+    } else {
+        #[cfg(target_os = "linux")]
+        {
+            let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| {
+                    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                    std::path::PathBuf::from(home).join(".local").join("share")
+                });
+            base.join("poly")
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            std::path::Path::new(&home)
+                .join("Library")
+                .join("Application Support")
+                .join("poly")
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+            std::path::Path::new(&appdata).join("poly")
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            std::path::PathBuf::from(".poly")
+        }
+    };
+    std::fs::create_dir_all(&data_dir)?;
+    let db_path = data_dir.join("storage.sqlite3");
+    MemoryDb::open(db_path.to_str().unwrap_or(":memory:"))
+        .map_err(|e| anyhow::anyhow!("failed to open memory DB: {e}"))
 }
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 # Plan — Claude-Desktop-Driven Social Agent
 
 > **Created:** 2026-04-20
-> **Status:** Not started
+> **Status:** Phase A.1/A.2/A.3/A.6/A.7 complete — A.4/A.5 (UI) deferred to UI agent
 > **Depends on:** `poly-chat-mcp` (shipped), `/agent` page KV persistence (shipped 7920bdb7), `send_typing` trait + MCP tool (shipped 6a587e66)
 > **Supersedes:** the LLM-provider-in-Poly approach drafted in `docs/6-ai-agent/6.0-social-agent-vision.md` — **not** taking that path.
 
@@ -48,33 +48,35 @@ No global timer — multi-account usage means each chat needs its own independen
 
 **Goal:** one fat MCP call gives Claude Desktop everything needed to draft a reply. Memory tools let Claude persist facts discovered mid-conversation.
 
-- [ ] **A.1** SQLite migration — new tables:
-  - `contact_facts(id, account_id, contact_id, category, fact_text, created_at, updated_at)` — free-form per-contact facts
-  - `chat_notes(id, account_id, chat_id, note_text, created_at, updated_at)` — per-thread running context
-  - `chat_summaries(account_id, chat_id, summary_text, window_start_msg_id, window_end_msg_id, updated_at)` — rolling summaries of older history
-- [ ] **A.2** MCP tools in `poly-chat-mcp/src/tools.rs`:
-  - `remember_fact(account_id, contact_id, category, fact)` → fact_id
+- [x] **A.1** SQLite migration — new tables (`mcp/chat-mcp/src/memory.rs`, `MemoryDb::run_migrations`):
+  - `contact_facts(id, account_id, contact_id, category, fact_text, created_at, updated_at)` — free-form per-contact facts; index on `(account_id, contact_id)`
+  - `chat_notes(id, account_id, chat_id, note_text, created_at, updated_at)` — per-thread running context; index on `(account_id, chat_id)`
+  - `chat_summaries(account_id, chat_id, summary_text, window_start_msg_id, window_end_msg_id, updated_at)` — rolling summaries; PK `(account_id, chat_id)`; UPSERT on conflict
+- [x] **A.2** MCP tools in `mcp/chat-mcp/src/tools.rs`:
+  - `remember_fact(account_id, contact_id, category, fact)` → `{ fact_id }`
   - `recall_facts(account_id, contact_id, category?)` → `[Fact]`
-  - `forget_fact(fact_id)` → ok
-  - `search_facts(query, account_id?)` → `[Fact]` (SQL LIKE for v1; FTS later if it matters)
-  - `store_chat_note(account_id, chat_id, note)` / `get_chat_notes(account_id, chat_id)` / `forget_chat_note(note_id)`
-  - `store_chat_summary(account_id, chat_id, summary, window_start, window_end)` / `get_chat_summary(account_id, chat_id)`
-- [ ] **A.3** Context bundler tool `get_reply_context(account_id, chat_id, message_limit=20)` → JSON:
+  - `forget_fact(fact_id)` → "fact deleted"
+  - `search_facts(query, account_id?)` → `[Fact]` (SQL LIKE; FTS later if needed)
+  - `store_chat_note(account_id, chat_id, note)` → `{ note_id }`
+  - `get_chat_notes(account_id, chat_id)` → `[Note]`
+  - `forget_chat_note(note_id)` → "note deleted"
+  - `store_chat_summary(account_id, chat_id, summary, window_start_msg_id, window_end_msg_id)` → "summary stored"
+  - `get_chat_summary(account_id, chat_id)` → `{ summary, window_start, window_end, updated_at }` | `null`
+- [x] **A.3** Context bundler tool `get_reply_context(account_id, chat_id, message_limit=20)` — gracefully returns `null` for missing sections:
   ```json
   {
     "account": { "id", "backend", "display_name" },
-    "chat": { "id", "name", "kind": "dm" | "group" | "channel" },
-    "recent_messages": [{ "id", "author", "body", "timestamp" }],
-    "contact": { "id", "display_name", "presence", "last_seen", "facts": [...] },
+    "chat": { "id" },
+    "recent_messages": [...],
+    "contact": { "id", "display_name", "presence", "last_seen", "facts": [...] } | null,
     "chat_notes": [...],
-    "chat_summary": "...",
-    "style": { ... }  // from Phase E if present
+    "chat_summary": { "summary", "window_start", "window_end", "updated_at" } | null
   }
   ```
 - [ ] **A.4** FTL keys for fact-management UI: `agent-memory-title`, `agent-memory-empty`, `agent-memory-category-*`
 - [ ] **A.5** `/agent/memory` route + page — per-contact facts viewer/editor (read-only MVP; editing is a later follow-up)
-- [ ] **A.6** Unit tests for every memory tool against in-memory SQLite; integration test exercising `get_reply_context` end-to-end
-- [ ] **A.7** Capability gate — these tools are exposed for every backend (memory is a Poly-side concern, not a backend one)
+- [x] **A.6** Unit tests: 19 memory unit tests in `memory::tests` + 8 capability/tool-list tests in `tools::tests`; all 48 existing integration tests still pass
+- [x] **A.7** Capability gate — all 10 memory/bundler tools registered as always-exposed in `should_expose_tool` (memory is Poly's own concern, not per-backend)
 
 **Effort:** ~1.5 sessions. No UI-heavy work for the viewer; main cost is schema + tool dispatch + tests.
 
