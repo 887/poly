@@ -502,3 +502,132 @@
     padding: 32px 0;
     font-size: 14px;
 }
+/* ── Agent panel ─────────────────────────────────────────── */
+.agent-panel-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.agent-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-primary);
+    flex-shrink: 0;
+}
+
+.agent-panel-header-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-panel-robot-icon {
+    font-size: 18px;
+}
+
+.agent-panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agent-panel-close-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.agent-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.agent-panel-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.agent-panel-section:last-child {
+    border-bottom: none;
+}
+
+.agent-panel-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.agent-panel-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.agent-panel-access-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.agent-panel-empty-state {
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 8px 0;
+}
+
+.agent-panel-disabled-state {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.agent-panel-fact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.agent-panel-fact-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.agent-panel-fact-content {
+    flex: 1;
+    line-height: 1.4;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.agent-panel-forget-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.agent-panel-forget-btn:hover {
+    background: var(--error-bg, #ff444422);
+    color: var(--error-fg, #ff4444);
+    border-color: var(--error-fg, #ff4444);
+}

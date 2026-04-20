@@ -798,3 +798,20 @@ agent-integration-image-gen-desc = Pide a tu asistente que genere y adjunte imá
 # Estado vacío mostrado en ServerHome cuando el servidor aún no tiene canales.
 server-empty-title = Aún no hay canales
 server-empty-body = Este servidor todavía no tiene canales. Pide a un moderador que cree uno, o crea el primer canal tú mismo si tienes permiso.
+
+# Panel del agente
+agent-panel-toggle = Panel del agente
+agent-panel-title = Agente para { $target }
+agent-panel-access-label = Permitir que Claude acceda a este chat
+agent-panel-access-description = Cuando está activo, herramientas como get_reply_context y draft_create pueden ver y actuar en este chat.
+agent-panel-disabled-state = El agente está desactivado para este chat
+agent-panel-memory-title = Memoria
+agent-panel-memory-empty = Aún no hay hechos almacenados.
+agent-panel-memory-forget = Olvidar
+agent-panel-drafts-title = Borradores pendientes
+agent-panel-drafts-empty = No hay borradores pendientes.
+agent-panel-style-title = Estilo de respuesta
+agent-panel-activity-title = Actividad reciente
+agent-panel-activity-empty = Aún no hay actividad del agente.
+agent-panel-activity-draft-sent = Borrador enviado a las { $time }
+agent-panel-activity-fact-remembered = Hecho recordado a las { $time }

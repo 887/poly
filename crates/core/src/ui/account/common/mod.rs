@@ -34,6 +34,7 @@
 //! | `voice_bar` | Persistent voice connection status bar |
 //! | `voice_view` | Voice/video participant tile view |
 
+pub mod agent_panel;
 pub mod account_bar;
 pub mod account_server_bar;
 pub mod account_switcher;
@@ -62,6 +63,7 @@ pub mod voice_account_footer;
 pub mod voice_bar;
 pub mod voice_view;
 
+pub use agent_panel::AgentPanel;
 pub use account_bar::AccountBar;
 pub use account_server_bar::AccountServerBar;
 pub use account_switcher::AccountSwitcher;

@@ -194,6 +194,13 @@ pub struct NavigationState {
     /// closed on a cold start so stale thread context never leaks across sessions.
     #[serde(skip)]
     pub thread_panel_open: Option<String>,
+    /// Whether the agent panel (🤖) is visible in the chat right sidebar.
+    ///
+    /// Free field — NOT RouteSynced. Mutually exclusive with `right_sidebar_visible`
+    /// and `dm_right_sidebar_visible`: opening one closes the others.
+    /// Not serialised — starts closed on every cold start.
+    #[serde(skip)]
+    pub agent_panel_visible: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +229,7 @@ impl Default for NavigationState {
             profile_modal_user: None,
             pending_direct_call: None,
             thread_panel_open: None,
+            agent_panel_visible: false,
         }
     }
 }

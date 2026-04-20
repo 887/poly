@@ -976,3 +976,20 @@ agent-integration-image-gen-desc = Have your assistant generate and attach image
 # Empty state shown in ServerHome when the server has no channels yet.
 server-empty-title = No channels yet
 server-empty-body = This server doesn't have any channels. Ask a moderator to create one, or create the first channel yourself if you have permission.
+
+# Agent panel (🤖 button in chat header)
+agent-panel-toggle = Agent panel
+agent-panel-title = Agent for { $target }
+agent-panel-access-label = Let Claude access this chat
+agent-panel-access-description = When on, tools like get_reply_context and draft_create can see and act on this chat.
+agent-panel-disabled-state = Agent is disabled for this chat
+agent-panel-memory-title = Memory
+agent-panel-memory-empty = No facts stored yet.
+agent-panel-memory-forget = Forget
+agent-panel-drafts-title = Pending drafts
+agent-panel-drafts-empty = No pending drafts.
+agent-panel-style-title = Reply style
+agent-panel-activity-title = Recent activity
+agent-panel-activity-empty = No agent activity yet.
+agent-panel-activity-draft-sent = Sent draft at { $time }
+agent-panel-activity-fact-remembered = Remembered fact at { $time }

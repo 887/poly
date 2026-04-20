@@ -244,8 +244,16 @@
     order: 40;
 }
 
+.chat-header-btn-agent {
+    order: 45;
+}
+
 .chat-header-btn-members {
     order: 50;
+}
+
+.poly-app.poly-menu-mirrored .chat-header-btn-agent {
+    order: 9;
 }
 
 .poly-app.poly-menu-mirrored .chat-header-btn-members {

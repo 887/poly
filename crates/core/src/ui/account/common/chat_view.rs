@@ -19,6 +19,7 @@ use super::chat_history::{
     request_scroll_to_bottom, request_scroll_to_bottom_deferred, unread_marker_message_id,
 };
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
+use super::agent_panel::AgentPanel;
 use super::dm_user_sidebar::DmUserSidebar;
 use super::emoji_picker::EmojiPicker;
 use super::media_picker::MediaPickerPopup;
@@ -1363,7 +1364,8 @@ fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkup
         } else {
             app_state.read().nav.right_sidebar_visible
         };
-        let right_wing_open = member_list_open || utility_panel.read().is_some();
+        let agent_panel_open = app_state.read().nav.agent_panel_visible;
+        let right_wing_open = member_list_open || utility_panel.read().is_some() || agent_panel_open;
         sync_mobile_side_column_open(right_wing_open);
     });
 }
@@ -2362,6 +2364,12 @@ fn close_chat_side_column_state(
         return;
     }
 
+    // Close agent panel first if open
+    if app_state.read().nav.agent_panel_visible {
+        app_state.write().nav.agent_panel_visible = false;
+        return;
+    }
+
     if is_group_channel || is_dm_channel {
         app_state.write().nav.dm_right_sidebar_visible = false;
         app_state.write().nav.mobile_dm_contact_detail_visible = false;
@@ -2374,7 +2382,8 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let mut app_state = ctx.app_state;
     let mut utility_panel = ctx.utility_panel;
     let mut show_search_filters = ctx.show_search_filters;
-    let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some();
+    let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some()
+        || ctx.app_state.read().nav.agent_panel_visible;
     let current_server = ctx.current_server.clone();
     let current_channel = ctx.current_channel.clone();
     let dm_user = ctx.dm_user.clone();
@@ -2635,6 +2644,7 @@ fn ChatHeaderActions(
                         }
                     }
                 }
+                {render_agent_toggle_button(app_state, utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
                 {
                     render_member_toggle_button(
                         app_state,
@@ -2767,6 +2777,26 @@ fn ChatHeaderActions(
                                 }
                             }
                             HeaderOverflowItem {
+                                icon: "🤖".to_string(),
+                                label: t("agent-panel-toggle"),
+                                active: app_state.read().nav.agent_panel_visible,
+                                onclick: move |_| {
+                                    header_actions_menu_open.set(false);
+                                    let current = app_state.read().nav.agent_panel_visible;
+                                    {
+                                        let mut w = app_state.write();
+                                        w.nav.agent_panel_visible = !current;
+                                        if !current {
+                                            // opening agent panel: close members
+                                            w.nav.dm_right_sidebar_visible = false;
+                                            w.nav.right_sidebar_visible = false;
+                                        }
+                                    }
+                                    utility_panel.set(None);
+                                    show_search_filters.set(false);
+                                },
+                            }
+                            HeaderOverflowItem {
                                 icon: if is_dm_channel { "👤".to_string() } else { "👥".to_string() },
                                 label: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
                                 active: member_sidebar_active,
@@ -2783,6 +2813,8 @@ fn ChatHeaderActions(
                                     } else {
                                         app_state.write().nav.right_sidebar_visible = !current;
                                     }
+                                    // Opening members: close agent panel
+                                    app_state.write().nav.agent_panel_visible = false;
                                     utility_panel.set(None);
                                     show_search_filters.set(false);
                                 },
@@ -2907,6 +2939,38 @@ fn render_search_tab_button(
     }
 }
 
+fn render_agent_toggle_button(
+    mut app_state: Signal<AppState>,
+    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
+    mut show_search_filters: Signal<bool>,
+    is_dm_channel: bool,
+    is_group_channel: bool,
+) -> Element {
+    let agent_active = app_state.read().nav.agent_panel_visible;
+    rsx! {
+        button {
+            class: if agent_active { "header-btn soft-active chat-header-btn-agent" } else { "header-btn chat-header-btn-agent" },
+            title: t("agent-panel-toggle"),
+            onclick: move |_| {
+                let current = app_state.read().nav.agent_panel_visible;
+                {
+                    let mut w = app_state.write();
+                    w.nav.agent_panel_visible = !current;
+                    if !current {
+                        // Opening agent panel: close members sidebar
+                        w.nav.dm_right_sidebar_visible = false;
+                        w.nav.right_sidebar_visible = false;
+                    }
+                }
+                utility_panel.set(None);
+                show_search_filters.set(false);
+                let _ = (is_dm_channel, is_group_channel); // consume for borrow
+            },
+            "🤖"
+        }
+    }
+}
+
 fn render_member_toggle_button(
     mut app_state: Signal<AppState>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
@@ -2922,6 +2986,8 @@ fn render_member_toggle_button(
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
                     app_state.write().nav.dm_right_sidebar_visible = !current;
+                    // Opening members: close agent panel
+                    app_state.write().nav.agent_panel_visible = false;
                     utility_panel.set(None);
                     show_search_filters.set(false);
                 },
@@ -2938,6 +3004,8 @@ fn render_member_toggle_button(
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
                     app_state.write().nav.dm_right_sidebar_visible = !current;
+                    // Opening contact panel: close agent panel
+                    app_state.write().nav.agent_panel_visible = false;
                     utility_panel.set(None);
                     show_search_filters.set(false);
                 },
@@ -2953,6 +3021,8 @@ fn render_member_toggle_button(
             onclick: move |_| {
                 let current = app_state.read().nav.right_sidebar_visible;
                 app_state.write().nav.right_sidebar_visible = !current;
+                // Opening members: close agent panel
+                app_state.write().nav.agent_panel_visible = false;
                 utility_panel.set(None);
                 show_search_filters.set(false);
             },
@@ -4445,6 +4515,9 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
         .unwrap_or_default();
     let panel = *ctx.utility_panel.read();
     let mobile_tools = runtime_mobile_ui_active();
+    let agent_panel_visible = ctx.app_state.read().nav.agent_panel_visible;
+    let account_id = ctx.app_state.read().nav.active_account_id.cloned().unwrap_or_default();
+    let chat_id = ctx.channel_id.clone().unwrap_or_default();
 
     rsx! {
         RightWingShell {
@@ -4453,7 +4526,13 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
                 if mobile_tools {
                     {render_chat_tools_panel(ctx.clone())}
                 }
-                if let Some(panel) = panel {
+                if agent_panel_visible && !mobile_tools {
+                    AgentPanel {
+                        account_id,
+                        chat_id,
+                        chat_name: current_channel_name,
+                    }
+                } else if let Some(panel) = panel {
                     {render_chat_utility_rail(ctx, panel, current_channel_name)}
                 } else if ctx.is_dm_channel {
                     DmContactListPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
@@ -4561,12 +4640,15 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                             app_state,
                         )
                     }
+                    {render_agent_toggle_button(app_state, utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
                     button {
                         class: if member_sidebar_active && utility_panel.read().is_none() { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
                         title: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
                         onclick: move |_| {
                             utility_panel.set(None);
                             show_search_filters.set(false);
+                            // Opening members: close agent panel
+                            app_state.write().nav.agent_panel_visible = false;
                             if is_dm_channel || is_group_channel {
                                 app_state.write().nav.dm_right_sidebar_visible = true;
                                 app_state.write().nav.mobile_dm_contact_detail_visible = false;
