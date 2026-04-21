@@ -1374,15 +1374,15 @@ pub fn App() -> Element {
     //
     // Under dev-plugins (discord + teams features), test accounts are also
     // registered and auto-connected so the app boots pre-authenticated.
-    use_effect(move || {
+    // One-shot registration: `use_hook` runs once per mount and does NOT
+    // subscribe to the signals it writes to. `use_effect` would re-fire every
+    // time the async auto-signin wrote a new session, spawning a fresh loop
+    // per successful sign-in and producing N² "session already exists"
+    // warnings in the log.
+    use_hook(|| {
         register_native_signup_entries(&mut client_manager);
         register_native_plugin_settings(&mut client_manager);
         register_native_test_accounts(&mut client_manager);
-        // Debug-only auto-signin of registered test accounts. The earlier
-        // first-paint race (FriendsPanel `unreachable` trap) was rooted in
-        // the pre-mutation cascade — that bug class is now compile-locked
-        // out by the RouteSyncedWrite refactor, so the auto-signin path is
-        // safe to re-enable. Sequential to keep render bursts bounded.
         #[cfg(debug_assertions)]
         {
             auto_signin_test_accounts(client_manager, chat_data);
