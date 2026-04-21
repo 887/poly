@@ -94,8 +94,28 @@ impl UiAction for ReauthAccountPageAction {
 ///
 /// Used by both the normal per-backend signup flow and the quick test-account panel.
 pub(crate) fn build_on_complete(
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+) -> Callback<SignupCompleted> {
+    build_on_complete_inner(client_manager, chat_data, true)
+}
+
+/// Variant that skips the terminal `navigator().push(landing)`. Needed by
+/// the debug-mode auto-signin path in `crate::ui::mod`, which runs from a
+/// `use_effect` above the Router — no navigator in scope → panic → WASM
+/// `unreachable`. Auto-signin doesn't need a route change anyway; the user
+/// is already on whatever route they restored to at startup.
+pub(crate) fn build_on_complete_no_nav(
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+) -> Callback<SignupCompleted> {
+    build_on_complete_inner(client_manager, chat_data, false)
+}
+
+fn build_on_complete_inner(
     mut client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
+    nav_on_complete: bool,
 ) -> Callback<SignupCompleted> {
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
@@ -251,7 +271,11 @@ pub(crate) fn build_on_complete(
                     account_id,
                 },
             };
-            navigator().push(landing);
+            if nav_on_complete {
+                navigator().push(landing);
+            } else {
+                let _ = landing; // keep computed but don't nav
+            }
         });
     })
 }

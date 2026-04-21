@@ -753,7 +753,7 @@ fn auto_signin_test_accounts(
     if entries.is_empty() {
         return;
     }
-    let on_complete = crate::ui::signup::build_on_complete(client_manager, chat_data);
+    let on_complete = crate::ui::signup::build_on_complete_no_nav(client_manager, chat_data);
     spawn(async move {
         for entry in entries {
             let auth_fn = entry.authenticate;
