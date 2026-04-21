@@ -832,7 +832,6 @@ agent-panel-activity-title = Actividad reciente
 agent-panel-activity-empty = Aún no hay actividad del agente.
 agent-panel-activity-draft-sent = Borrador enviado a las { $time }
 agent-panel-activity-fact-remembered = Hecho recordado a las { $time }
-+
 # Fase B — Cola de borradores (borradores de mensajes sugeridos por el agente)
 agent-draft-claude-suggests = ✨ { $suggested_by } sugiere:
 agent-draft-send = Enviar

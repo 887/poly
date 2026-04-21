@@ -832,7 +832,6 @@ agent-panel-activity-title = Activité récente
 agent-panel-activity-empty = Aucune activité de l'agent pour l'instant.
 agent-panel-activity-draft-sent = Brouillon envoyé à { $time }
 agent-panel-activity-fact-remembered = Fait mémorisé à { $time }
-+
 # Phase B — File d'attente de brouillons (brouillons de messages suggérés par l'agent)
 agent-draft-claude-suggests = ✨ { $suggested_by } suggère :
 agent-draft-send = Envoyer

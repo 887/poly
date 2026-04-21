@@ -1010,7 +1010,6 @@ agent-panel-activity-title = Recent activity
 agent-panel-activity-empty = No agent activity yet.
 agent-panel-activity-draft-sent = Sent draft at { $time }
 agent-panel-activity-fact-remembered = Remembered fact at { $time }
-+
 # Phase B — Draft queue (agent-suggested message drafts)
 agent-draft-claude-suggests = ✨ { $suggested_by } suggests:
 agent-draft-send = Send

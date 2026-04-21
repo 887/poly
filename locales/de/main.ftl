@@ -832,7 +832,6 @@ agent-panel-activity-title = Letzte Aktivitäten
 agent-panel-activity-empty = Noch keine Agentenaktivität.
 agent-panel-activity-draft-sent = Entwurf gesendet um { $time }
 agent-panel-activity-fact-remembered = Fakt gespeichert um { $time }
-+
 # Phase B — Entwurfswarteschlange (von Agenten vorgeschlagene Nachrichtenentwürfe)
 agent-draft-claude-suggests = ✨ { $suggested_by } schlägt vor:
 agent-draft-send = Senden
