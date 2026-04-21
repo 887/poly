@@ -221,6 +221,20 @@ async fn get_user(Path(username): Path<String>) -> impl IntoResponse {
     }
 }
 
+async fn get_item_json(Path(id_json): Path<String>) -> impl IntoResponse {
+    let id_str = id_json.trim_end_matches(".json");
+    let id: u64 = match id_str.parse() {
+        Ok(n) => n,
+        Err(_) => return Json(Value::Null).into_response(),
+    };
+    get_item(Path(id)).await.into_response()
+}
+
+async fn get_user_json(Path(id_json): Path<String>) -> impl IntoResponse {
+    let username = id_json.trim_end_matches(".json").to_string();
+    get_user(Path(username)).await.into_response()
+}
+
 async fn get_updates() -> impl IntoResponse {
     Json(json!({
         "items": [1, 2],
@@ -240,8 +254,8 @@ fn router() -> Router {
         .route("/v0/askstories.json", get(get_askstories))
         .route("/v0/showstories.json", get(get_showstories))
         .route("/v0/jobstories.json", get(get_jobstories))
-        .route("/v0/item/:id.json", get(get_item))
-        .route("/v0/user/:id.json", get(get_user))
+        .route("/v0/item/{id_json}", get(get_item_json))
+        .route("/v0/user/{id_json}", get(get_user_json))
         .route("/v0/updates.json", get(get_updates))
         .layer(CorsLayer::very_permissive())
 }
