@@ -734,6 +734,63 @@ fn register_native_test_accounts(client_manager: &mut Signal<ClientManager>) {
     }
 }
 
+/// Debug-only — sign in every registered test account sequentially after the
+/// test servers have started. Uses the same auth + on-complete pipeline as
+/// the `/signup/test` quick-add buttons; just drives them programmatically.
+///
+/// Sequential not parallel — each account's session write triggers a
+/// reactive cascade through the favorites bar / channel list / chat data,
+/// and bunching ten of them into one tick used to overwhelm the WASM
+/// scheduler before the RouteSyncedWrite gate landed. A 100 ms gap between
+/// sign-ins gives Dioxus's render loop time to drain.
+#[cfg(debug_assertions)]
+fn auto_signin_test_accounts(
+    client_manager: Signal<ClientManager>,
+    chat_data: Signal<ChatData>,
+) {
+    let entries: Vec<poly_client::TestAccountEntry> =
+        client_manager.read().test_account_entries.to_vec();
+    if entries.is_empty() {
+        return;
+    }
+    let on_complete = crate::ui::signup::build_on_complete(client_manager, chat_data);
+    spawn(async move {
+        for entry in entries {
+            let auth_fn = entry.authenticate;
+            let label = entry.label.to_string();
+            match (auth_fn)(
+                entry.base_url.to_string(),
+                entry.username.to_string(),
+                entry.password.to_string(),
+            )
+            .await
+            {
+                Ok(completed) => {
+                    tracing::info!("auto-signed in test account: {label}");
+                    on_complete.call(completed);
+                }
+                Err(e) => {
+                    tracing::warn!("auto-signin failed for {label}: {e}");
+                }
+            }
+            // Brief gap between sign-ins so the per-session reactive
+            // cascade settles before the next one fires.
+            #[cfg(target_arch = "wasm32")]
+            {
+                let _ = dioxus::document::eval(
+                    "setTimeout(() => dioxus.send(true), 100);",
+                )
+                .recv::<bool>()
+                .await;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        }
+    });
+}
+
 // ── App — async helpers ──────────────────────────────────────────────────────
 
 /// Restore all persisted poly-server accounts from the token store.
@@ -1321,12 +1378,15 @@ pub fn App() -> Element {
         register_native_signup_entries(&mut client_manager);
         register_native_plugin_settings(&mut client_manager);
         register_native_test_accounts(&mut client_manager);
-        // NOTE: auto-auth of registered test accounts is intentionally NOT
-        // done here. Early experiments raced with first-paint Signal reads
-        // (FriendsPanel etc.) and crashed the client with an `unreachable`
-        // WASM trap. Test accounts are still registered so they appear in
-        // /signup/test as one-click "Add Account" buttons — that preserves
-        // the dev ergonomics without the crash.
+        // Debug-only auto-signin of registered test accounts. The earlier
+        // first-paint race (FriendsPanel `unreachable` trap) was rooted in
+        // the pre-mutation cascade — that bug class is now compile-locked
+        // out by the RouteSyncedWrite refactor, so the auto-signin path is
+        // safe to re-enable. Sequential to keep render bursts bounded.
+        #[cfg(debug_assertions)]
+        {
+            auto_signin_test_accounts(client_manager, chat_data);
+        }
         let _ = chat_data;
     });
 
