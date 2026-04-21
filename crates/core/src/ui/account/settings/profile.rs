@@ -44,7 +44,7 @@ impl crate::ui::actions::UiAction for PolyProfileSettingsAction {
 /// Shows: avatar display, display name, status picker, banner placeholder.
 #[rustfmt::skip]
 #[ui_action(PolyProfileSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();

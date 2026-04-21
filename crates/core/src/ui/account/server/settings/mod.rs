@@ -144,7 +144,7 @@ impl UiAction for ServerSettingsSearchBarAction {
 
 #[ui_action(ServerSettingsSearchBarAction)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
@@ -175,7 +175,7 @@ fn ServerSettingsSearchBar(search_text: Signal<String>) -> Element {
 
 #[ui_action(None)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String) -> Element {
     rsx! {
@@ -188,7 +188,7 @@ fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String)
 
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn ServerSettingsNavigation(
     active_section: ServerSettingsSection,
@@ -225,7 +225,7 @@ fn ServerSettingsNavigation(
 
 #[ui_action(None)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn ServerSettingsContent(
     search_text: Signal<String>,
@@ -381,7 +381,7 @@ impl ServerSettingsSection {
 /// and `SettingsPage`. Server name shown in the content header.
 #[ui_action(None)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn ServerSettingsPage(
     backend: String,
@@ -523,7 +523,7 @@ pub fn ServerSettingsPage(
 /// Navigation item for the server settings sidebar.
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn ServerSettingsNavItem(
     label: String,

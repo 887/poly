@@ -25,7 +25,7 @@ impl UiAction for ServerProfileSettingsAction {
 /// Per-server profile settings panel.
 #[ui_action(ServerProfileSettingsAction)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn ServerProfileSettings(server_id: String, server_name: String) -> Element {
     let mut nickname = use_signal(String::new);

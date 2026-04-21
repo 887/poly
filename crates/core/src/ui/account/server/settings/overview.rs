@@ -36,7 +36,7 @@ impl UiAction for IconPanelAction {
 /// Used by [`ServerOverviewSettings`] for both full and local-only modes.
 #[ui_action(IconPanelAction)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn IconPanel(
     server_id: String,
@@ -150,7 +150,7 @@ impl UiAction for BannerPanelAction {
 /// Shown only for backends that support banner images (Demo, Stoat, Discord, Poly).
 #[ui_action(BannerPanelAction)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
@@ -250,7 +250,7 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
 /// add `ClientBackend::update_server_icon` / `update_server_banner` for
 /// backends that support programmatic server-asset writes.
 #[ui_action(None)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn ServerOverviewSettings(
     server_id: String,

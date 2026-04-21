@@ -35,7 +35,7 @@ use poly_ui_macros::{context_menu, ui_action};
 /// Renders a label + `<select>` for a [`SensitiveContentLevel`].
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn SensitiveMediaRow(
     label: String,
@@ -66,7 +66,7 @@ fn SensitiveMediaRow(
 /// A labeled checkbox toggle row.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Element {
     rsx! {
@@ -103,7 +103,7 @@ impl UiAction for SensitiveMediaSectionAction {
 /// Sensitive Media section — three select rows.
 #[rustfmt::skip]
 #[ui_action(SensitiveMediaSectionAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -153,7 +153,7 @@ impl UiAction for SpamFilterSectionAction {
 /// DM Spam Filter section — three radio options.
 #[rustfmt::skip]
 #[ui_action(SpamFilterSectionAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
     let current = chat_data.read().content_policy.dm_spam_filter;
@@ -208,7 +208,7 @@ impl UiAction for AgeRestrictedSectionAction {
 /// Age-Restricted Content section — age access toggles.
 #[rustfmt::skip]
 #[ui_action(AgeRestrictedSectionAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -250,7 +250,7 @@ impl UiAction for SocialPermissionsSectionAction {
 /// Social Permissions section — DM and message request controls.
 #[rustfmt::skip]
 #[ui_action(SocialPermissionsSectionAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -297,7 +297,7 @@ impl UiAction for FriendRequestsSectionAction {
 /// Friend Requests section — three permission checkboxes.
 #[rustfmt::skip]
 #[ui_action(FriendRequestsSectionAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
@@ -354,7 +354,7 @@ impl UiAction for ContentSocialSettingsAction {
 /// "content-social" section is active.
 #[rustfmt::skip]
 #[ui_action(ContentSocialSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn ContentSocialSettings(_account_id: String) -> Element {
     let chat_data = use_context::<Signal<ChatData>>();

@@ -433,7 +433,7 @@ fn ResetSection() -> Element {
 /// Contains shell layout and mirroring preferences.
 #[rustfmt::skip]
 #[ui_action(LayoutSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn LayoutSettings() -> Element {
     rsx! {
@@ -453,7 +453,7 @@ pub(super) fn LayoutSettings() -> Element {
 // TODO(phase-2.7.9.10): Notification preferences, startup behavior
 #[rustfmt::skip]
 #[ui_action(GeneralSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn GeneralSettings() -> Element {
     rsx! {

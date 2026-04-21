@@ -211,7 +211,7 @@ fn scroll_to_section_anchor(slug: &str) {
     scroll_to_settings_section("settings-section-", slug);
 }
 
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
@@ -296,7 +296,7 @@ fn install_settings_scroll_spy(
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
@@ -314,7 +314,7 @@ fn SettingsContentHeader(search_text: Signal<String>) -> Element {
 /// All items are always visible. Non-matching nav items are dimmed when search
 /// is active. Clicking an item scrolls the content area to that section and
 /// pushes the corresponding deep-link URL.
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
@@ -417,7 +417,7 @@ fn SettingsNavigation(
 /// Each section is wrapped in a div with id `settings-section-{slug}` so the
 /// scroll helper can jump to it. Sections with no nodes matching the current
 /// search query are visually dimmed but still visible.
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]

@@ -86,7 +86,7 @@ fn backend_emoji(_slug: &str) -> &'static str { "📡" }
 /// A single row in the accounts list showing account icon, name, backend, and settings gear.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn AccountRow(
     account_id: String,
@@ -133,7 +133,7 @@ fn AccountRow(
 /// flow at `/signup`.
 #[rustfmt::skip]
 #[ui_action(AccountsSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn AccountsSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

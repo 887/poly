@@ -98,7 +98,7 @@ fn load_account_notif_settings(account_id: String, mut signals: NotifSignals) {
 /// Loads saved settings on mount and persists any toggle change immediately.
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`].
 #[ui_action(NotificationsSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn NotificationsSettings(account_id: String) -> Element {
     let notif_streams = use_signal(|| true);
@@ -133,7 +133,7 @@ pub fn NotificationsSettings(account_id: String) -> Element {
 
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Element {
     let make_settings = move || current_notif_settings(signals);
@@ -205,7 +205,7 @@ fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Elem
 ///
 /// Split out so `NotificationsSettings` stays under the 150-line limit.
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn AccountNotifSectionInner(
     account_id: String,
@@ -274,7 +274,7 @@ fn AccountNotifSectionInner(
 
 /// Generic notification toggle row.
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn NotifToggleRow(label: String, checked: bool, on_toggle: EventHandler<bool>) -> Element {
     rsx! {

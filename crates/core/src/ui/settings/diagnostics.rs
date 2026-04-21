@@ -68,7 +68,7 @@ pub fn DiagnosticsPage() -> Element {
 }
 
 /// A single row in the diagnostics account table.
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]

@@ -19,7 +19,7 @@ pub(crate) struct SelectOption {
 /// renders entirely in the webview so it respects the active theme.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(crate) fn PolySelect(
     options: Vec<SelectOption>,

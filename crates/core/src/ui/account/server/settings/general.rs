@@ -29,7 +29,7 @@ impl UiAction for ServerGeneralSettingsAction {
 /// Shows server info and a leave-server action with an inline confirm.
 #[ui_action(ServerGeneralSettingsAction)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn ServerGeneralSettings(
     server_id: String,
@@ -84,7 +84,7 @@ pub fn ServerGeneralSettings(
 /// Does NOT use `window.confirm()`. The confirm dialog is rendered in-DOM.
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn LeaveServerConfirm(
     server_name: String,

@@ -41,7 +41,7 @@ impl UiAction for ServerNotificationsSettingsAction {
 /// persistence yet — that is planned for Phase 2.11).
 #[ui_action(ServerNotificationsSettingsAction)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn ServerNotificationsSettings(server_id: String, server_name: String) -> Element {
     let mut notif_level = use_signal(|| NotifLevel::Mentions);
@@ -109,7 +109,7 @@ pub fn ServerNotificationsSettings(server_id: String, server_name: String) -> El
 /// Notification level option (radio-button style).
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn NotifLevelOption(label: String, selected: bool, onclick: EventHandler<MouseEvent>) -> Element {
     rsx! {
@@ -125,7 +125,7 @@ fn NotifLevelOption(label: String, selected: bool, onclick: EventHandler<MouseEv
 /// Toggle row for a notification suppression option.
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn NotifToggleRow(label: String, checked: bool, onchange: EventHandler<bool>) -> Element {
     rsx! {

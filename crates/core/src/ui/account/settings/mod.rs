@@ -177,7 +177,7 @@ fn install_account_settings_scroll_spy(_active_section: Signal<String>, _show_pr
 
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
     let current = search_text.read().clone();
@@ -208,7 +208,7 @@ fn AccountSettingsSearchBar(search_text: Signal<String>) -> Element {
 
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>) -> Element {
     let account_id_upper = account_id.to_uppercase();
@@ -233,7 +233,7 @@ fn AccountSettingsContentHeader(account_id: String, search_text: Signal<String>)
 /// by the app-level `SettingsPage`.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
     // Subscribe to locale so labels re-render on language change.
