@@ -2606,7 +2606,6 @@ fn ChatHeaderActions(
     let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
     let settings_active = *utility_panel.read() == Some(ChatUtilityPanel::Settings);
     let search_active = *utility_panel.read() == Some(ChatUtilityPanel::Search);
-    let drafts_active = *utility_panel.read() == Some(ChatUtilityPanel::Drafts);
     rsx! {
         div { class: "chat-header-actions-wrap",
             div { class: if *header_actions_overflow.read() { "chat-header-actions chat-header-actions-primary is-measuring" } else { "chat-header-actions chat-header-actions-primary" },
@@ -2899,29 +2898,9 @@ fn ChatHeaderActions(
                                     }
                                 },
                             }
-                            // B.5 — Drafts sidebar in overflow menu
-                            HeaderOverflowItem {
-                                icon: "✨".to_string(),
-                                label: t("agent-drafts-sidebar-title"),
-                                active: drafts_active,
-                                onclick: move |_| {
-                                    header_actions_menu_open.set(false);
-                                    show_search_filters.set(false);
-                                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Drafts) {
-                                        None
-                                    } else {
-                                        Some(ChatUtilityPanel::Drafts)
-                                    };
-                                    utility_panel.set(next);
-                                    if next.is_some() {
-                                        if is_dm_channel || is_group_channel {
-                                            app_state.write().nav.dm_right_sidebar_visible = false;
-                                        } else {
-                                            app_state.write().nav.right_sidebar_visible = false;
-                                        }
-                                    }
-                                },
-                            }
+                            // B.5 drafts overflow item dropped — pending
+                            // drafts now live inside the agent panel
+                            // (per-chat) instead of a standalone tab.
                         }
                     }
                 }
@@ -4592,8 +4571,6 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     let threads_active = *utility_panel.read() == Some(ChatUtilityPanel::Threads);
     let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
     let settings_active = *utility_panel.read() == Some(ChatUtilityPanel::Settings);
-    let drafts_active = *utility_panel.read() == Some(ChatUtilityPanel::Drafts);
-
     rsx! {
         div { class: "chat-tools-panel",
             div { class: "chat-tools-topbar",
@@ -4666,22 +4643,8 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                         },
                         "📌"
                     }
-                    // B.5 — Drafts panel toggle
-                    button {
-                        class: if drafts_active { "header-btn active chat-header-btn-drafts" } else { "header-btn chat-header-btn-drafts" },
-                        title: t("agent-drafts-sidebar-title"),
-                        onclick: move |_| {
-                            show_search_filters.set(false);
-                            let next = if *utility_panel.read() == Some(ChatUtilityPanel::Drafts) {
-                                None
-                            } else {
-                                Some(ChatUtilityPanel::Drafts)
-                            };
-                            utility_panel.set(next);
-                            app_state.write().nav.right_sidebar_visible = false;
-                        },
-                        "✨"
-                    }
+                    // B.5 drafts toggle dropped — pending drafts now live
+                    // inside the agent panel (per-chat).
                     {
                         render_search_tab_button(
                             utility_panel,
