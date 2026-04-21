@@ -199,6 +199,10 @@ enum ChatUtilityPanel {
     Settings,
     /// B.5 — pending agent drafts across all chats for the active account.
     Drafts,
+    /// Per-chat agent panel — memory + drafts + style + access toggle.
+    /// Lives in the same right wing as Search/Pinned/Threads so the user
+    /// can switch between tabs without losing the agent context.
+    Agent,
 }
 
 #[derive(Clone, Copy)]
@@ -1367,7 +1371,7 @@ fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkup
         } else {
             app_state.read().nav.right_sidebar_visible
         };
-        let agent_panel_open = app_state.read().nav.agent_panel_visible;
+        let agent_panel_open = false;
         let right_wing_open = member_list_open || utility_panel.read().is_some() || agent_panel_open;
         sync_mobile_side_column_open(right_wing_open);
     });
@@ -2223,7 +2227,7 @@ fn render_chat_layout_shell(ctx: ChatViewMarkupCtx) -> Element {
     let show_side_column = ctx.utility_panel.read().is_some()
         || ctx.member_list_visible
         || mobile_server_right_wing_active(&ctx)
-        || ctx.app_state.read().nav.agent_panel_visible;
+        || false;
     let mobile_layout = runtime_mobile_ui_active();
 
     rsx! {
@@ -2369,8 +2373,7 @@ fn close_chat_side_column_state(
     }
 
     // Close agent panel first if open
-    if app_state.read().nav.agent_panel_visible {
-        app_state.write().nav.agent_panel_visible = false;
+    if false {
         return;
     }
 
@@ -2387,7 +2390,7 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let mut utility_panel = ctx.utility_panel;
     let mut show_search_filters = ctx.show_search_filters;
     let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some()
-        || ctx.app_state.read().nav.agent_panel_visible;
+        || false;
     let current_server = ctx.current_server.clone();
     let current_channel = ctx.current_channel.clone();
     let dm_user = ctx.dm_user.clone();
@@ -2784,13 +2787,12 @@ fn ChatHeaderActions(
                             HeaderOverflowItem {
                                 icon: "🤖".to_string(),
                                 label: t("agent-panel-toggle"),
-                                active: app_state.read().nav.agent_panel_visible,
+                                active: false,
                                 onclick: move |_| {
                                     header_actions_menu_open.set(false);
-                                    let current = app_state.read().nav.agent_panel_visible;
+                                    let current = false;
                                     {
                                         let mut w = app_state.write();
-                                        w.nav.agent_panel_visible = !current;
                                         if !current {
                                             // opening agent panel: close members
                                             w.nav.dm_right_sidebar_visible = false;
@@ -2819,7 +2821,6 @@ fn ChatHeaderActions(
                                         app_state.write().nav.right_sidebar_visible = !current;
                                     }
                                     // Opening members: close agent panel
-                                    app_state.write().nav.agent_panel_visible = false;
                                     utility_panel.set(None);
                                     show_search_filters.set(false);
                                 },
@@ -2968,31 +2969,30 @@ fn render_search_tab_button(
 }
 
 fn render_agent_toggle_button(
-    mut app_state: Signal<AppState>,
+    _app_state: Signal<AppState>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
     mut show_search_filters: Signal<bool>,
     is_dm_channel: bool,
     is_group_channel: bool,
 ) -> Element {
-    let agent_active = app_state.read().nav.agent_panel_visible;
+    let agent_active = *utility_panel.read() == Some(ChatUtilityPanel::Agent);
     rsx! {
         button {
             class: if agent_active { "header-btn soft-active chat-header-btn-agent" } else { "header-btn chat-header-btn-agent" },
             title: t("agent-panel-toggle"),
             onclick: move |_| {
-                let current = app_state.read().nav.agent_panel_visible;
-                {
-                    let mut w = app_state.write();
-                    w.nav.agent_panel_visible = !current;
-                    if !current {
-                        // Opening agent panel: close members sidebar
-                        w.nav.dm_right_sidebar_visible = false;
-                        w.nav.right_sidebar_visible = false;
-                    }
-                }
-                utility_panel.set(None);
+                // Toggle the Agent utility-rail tab. The right wing also
+                // hosts Search/Members/Threads/Pinned/Settings/Drafts, so
+                // sharing the rail keeps all those reachable from a single
+                // toggle group instead of stacking a takeover panel on top.
+                let next = if *utility_panel.read() == Some(ChatUtilityPanel::Agent) {
+                    None
+                } else {
+                    Some(ChatUtilityPanel::Agent)
+                };
+                utility_panel.set(next);
                 show_search_filters.set(false);
-                let _ = (is_dm_channel, is_group_channel); // consume for borrow
+                let _ = (is_dm_channel, is_group_channel);
             },
             "🤖"
         }
@@ -3015,7 +3015,6 @@ fn render_member_toggle_button(
                     let current = app_state.read().nav.dm_right_sidebar_visible;
                     app_state.write().nav.dm_right_sidebar_visible = !current;
                     // Opening members: close agent panel
-                    app_state.write().nav.agent_panel_visible = false;
                     utility_panel.set(None);
                     show_search_filters.set(false);
                 },
@@ -3033,7 +3032,6 @@ fn render_member_toggle_button(
                     let current = app_state.read().nav.dm_right_sidebar_visible;
                     app_state.write().nav.dm_right_sidebar_visible = !current;
                     // Opening contact panel: close agent panel
-                    app_state.write().nav.agent_panel_visible = false;
                     utility_panel.set(None);
                     show_search_filters.set(false);
                 },
@@ -3050,7 +3048,6 @@ fn render_member_toggle_button(
                 let current = app_state.read().nav.right_sidebar_visible;
                 app_state.write().nav.right_sidebar_visible = !current;
                 // Opening members: close agent panel
-                app_state.write().nav.agent_panel_visible = false;
                 utility_panel.set(None);
                 show_search_filters.set(false);
             },
@@ -3231,7 +3228,7 @@ fn render_search_clear_button(
 fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
     let show_side_column = ctx.utility_panel.read().is_some()
         || ctx.member_list_visible
-        || ctx.app_state.read().nav.agent_panel_visible;
+        || false;
     let mobile_layout = runtime_mobile_ui_active();
     // 5.2 — Thread panel is visible when a thread_id is stored in nav state
     // and we are not in mobile layout (mobile uses the full-page ThreadView route).
@@ -4562,9 +4559,6 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
         .unwrap_or_default();
     let panel = *ctx.utility_panel.read();
     let mobile_tools = runtime_mobile_ui_active();
-    let agent_panel_visible = ctx.app_state.read().nav.agent_panel_visible;
-    let account_id = ctx.app_state.read().nav.active_account_id.cloned().unwrap_or_default();
-    let chat_id = ctx.channel_id.clone().unwrap_or_default();
 
     rsx! {
         RightWingShell {
@@ -4573,13 +4567,7 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
                 if mobile_tools {
                     {render_chat_tools_panel(ctx.clone())}
                 }
-                if agent_panel_visible && !mobile_tools {
-                    AgentPanel {
-                        account_id,
-                        chat_id,
-                        chat_name: current_channel_name,
-                    }
-                } else if let Some(panel) = panel {
+                if let Some(panel) = panel {
                     {render_chat_utility_rail(ctx, panel, current_channel_name)}
                 } else if ctx.is_dm_channel {
                     DmContactListPanel { channel_id: ctx.channel_id.clone().unwrap_or_default() }
@@ -4712,7 +4700,6 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                             utility_panel.set(None);
                             show_search_filters.set(false);
                             // Opening members: close agent panel
-                            app_state.write().nav.agent_panel_visible = false;
                             if is_dm_channel || is_group_channel {
                                 app_state.write().nav.dm_right_sidebar_visible = true;
                                 app_state.write().nav.mobile_dm_contact_detail_visible = false;
@@ -5025,6 +5012,28 @@ fn ChatUtilityRail(
                             on_open_chat: move |(_account_id, _chat_id): (String, String)| {
                                 // TODO: wire navigation when B.5 route is established.
                             },
+                        }
+                    }
+                }
+            } else if panel == ChatUtilityPanel::Agent {
+                // Per-chat agent panel — same component as the standalone
+                // wing-takeover used to mount, just rendered inside the
+                // utility-rail tab so Search/Members/etc remain accessible.
+                {
+                    let rail_app_state: Signal<AppState> = use_context();
+                    let active_account_id = rail_app_state.read().nav.active_account_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_string();
+                    let active_chat_id = rail_app_state.read().nav.selected_channel
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_string();
+                    rsx! {
+                        AgentPanel {
+                            account_id: active_account_id,
+                            chat_id: active_chat_id,
+                            chat_name: current_channel_name.clone(),
                         }
                     }
                 }

@@ -818,7 +818,7 @@ server-empty-body = Dieser Server hat noch keine Kanäle. Bitte eine Moderation,
 
 # Agenten-Panel
 agent-panel-toggle = Agenten-Panel
-agent-panel-title = Agent für { $target }
+agent-panel-title = Agent
 agent-panel-access-label = Claude Zugriff auf diesen Chat erlauben
 agent-panel-access-description = Wenn aktiv, können Tools wie get_reply_context und draft_create diesen Chat sehen und darin handeln.
 agent-panel-disabled-state = Agent ist für diesen Chat deaktiviert

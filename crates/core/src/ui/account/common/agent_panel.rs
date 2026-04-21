@@ -243,24 +243,14 @@ pub fn AgentPanel(
     // For now the list starts empty; we'll show the empty state.
     let facts: Signal<Vec<AgentFact>> = use_signal(Vec::new);
 
-    let header_title = t_args("agent-panel-title", &[("target", &chat_name)]);
+    // Header dropped — the agent panel now lives inside the utility-rail
+    // tab system, which renders its own consistent header. Re-clicking the
+    // 🤖 button in the chat header closes the tab. Old `chat_name` arg
+    // kept on the prop signature so callers don't need to change.
+    let _ = (&chat_name, &mut app_state);
 
     rsx! {
         aside { class: "user-sidebar agent-panel-sidebar",
-            div { class: "agent-panel-header chat-utility-header",
-                div { class: "agent-panel-header-inner",
-                    span { class: "agent-panel-robot-icon", "🤖" }
-                    h3 { class: "agent-panel-title chat-utility-title", "{header_title}" }
-                }
-                button {
-                    class: "header-btn agent-panel-close-btn",
-                    title: t("action-close"),
-                    onclick: move |_| {
-                        app_state.write().nav.agent_panel_visible = false;
-                    },
-                    "✕"
-                }
-            }
 
             div { class: "agent-panel-body",
                 AgentAccessToggle {

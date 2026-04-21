@@ -996,9 +996,9 @@ server-empty-body = This server doesn't have any channels. Ask a moderator to cr
 
 # Agent panel (🤖 button in chat header)
 agent-panel-toggle = Agent panel
-agent-panel-title = Agent for { $target }
-agent-panel-access-label = Let Claude access this chat
-agent-panel-access-description = When on, tools like get_reply_context and draft_create can see and act on this chat.
+agent-panel-title = Agent
+agent-panel-access-label = Let agent access this chat
+agent-panel-access-description = When on, the connected agent (Claude Desktop or any MCP host) can read context and propose drafts for this chat.
 agent-panel-disabled-state = Agent is disabled for this chat
 agent-panel-memory-title = Memory
 agent-panel-memory-empty = No facts stored yet.

@@ -818,7 +818,7 @@ server-empty-body = Ce serveur n'a aucun canal. Demande à un modérateur d'en c
 
 # Panneau agent
 agent-panel-toggle = Panneau agent
-agent-panel-title = Agent pour { $target }
+agent-panel-title = Agent
 agent-panel-access-label = Autoriser Claude à accéder à ce chat
 agent-panel-access-description = Lorsqu'activé, des outils comme get_reply_context et draft_create peuvent voir et agir dans ce chat.
 agent-panel-disabled-state = L'agent est désactivé pour ce chat
