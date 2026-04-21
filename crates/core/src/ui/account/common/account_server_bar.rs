@@ -28,6 +28,7 @@ use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
+use crate::ui::favorites_sidebar::SidebarTooltip;
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
@@ -367,7 +368,6 @@ fn AccountServerIcon(
         div {
             class: "{item_class}",
             draggable: "true",
-            title: "{server_name}",
             oncontextmenu: on_context_menu,
             ondragstart: on_drag_start,
             ondragover: on_drag_over,
@@ -382,6 +382,11 @@ fn AccountServerIcon(
                 server_id: server_id.clone(),
                 unread,
                 mention,
+            }
+            SidebarTooltip {
+                line1: server_name.clone(),
+                line2: Some(backend_slug.clone()),
+                line3: None,
             }
         }
     }
@@ -466,8 +471,12 @@ fn AccountBarDmsButton(
                         account_id: account_id.clone(),
                     });
             },
-            title: "{t(\"nav-dms\")}",
             div { class: "icon-dms", "💬" }
+            SidebarTooltip {
+                line1: t("nav-dms"),
+                line2: None,
+                line3: None,
+            }
         }
     }
 }
@@ -504,8 +513,12 @@ fn AccountBarFriendsButton(
                     account_id: account_id.clone(),
                 });
             },
-            title: "{t(\"nav-friends\")}",
             div { class: "icon-dms", "👥" }
+            SidebarTooltip {
+                line1: t("nav-friends"),
+                line2: None,
+                line3: None,
+            }
         }
     }
 }
@@ -556,10 +569,14 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                     account_id: account_id.clone(),
                 });
             },
-            title: "{t(\"nav-notifications\")}",
             div { class: "icon-notifications", "🔔" }
             if notif_count > 0 {
                 span { class: "badge", "{notif_count}" }
+            }
+            SidebarTooltip {
+                line1: t("nav-notifications"),
+                line2: None,
+                line3: None,
             }
         }
     }
