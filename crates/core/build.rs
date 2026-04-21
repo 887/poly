@@ -69,11 +69,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Also re-run if css.rs is deleted (e.g., after a git clean).
     println!("cargo:rerun-if-changed=src/ui/css.rs");
 
-    // Bake locale FTL into a generated Rust file so include_str!'s flaky
-    // dep-tracking under `dx serve` can't strand stale strings. The
-    // generated `src/i18n/baked_locales.rs` writes with each FTL change
-    // (verified by hashing the concatenated content into a const string),
-    // which forces the i18n module to recompile and pick up new keys.
+    // Bake locale FTL content DIRECTLY into the generated file (not via
+    // an indirect include_str!). The previous generation emitted 4 static
+    // `include_str!` lines whose text never changed regardless of FTL
+    // content, defeating the write-triggers-recompile mechanism. By
+    // embedding the literal FTL content here, every FTL edit produces a
+    // new baked_locales.rs body, forcing the i18n module to recompile.
     let workspace_root = crate_root.join("..").join("..");
     let locales_dir = workspace_root.join("locales");
     let baked_path = crate_root.join("src").join("i18n").join("baked_locales.rs");
@@ -86,14 +87,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let canonical = std::fs::canonicalize(&path)
             .map_err(|e| format!("build.rs: locales/{locale}/main.ftl: {e}"))?;
         println!("cargo:rerun-if-changed={}", canonical.display());
+        let content = std::fs::read_to_string(&canonical)
+            .map_err(|e| format!("build.rs: read {}: {e}", canonical.display()))?;
+        // Use a raw string literal with enough # to defeat any embedded
+        // `"#` sequences in the FTL source.
+        let mut pound_fence = String::from("#");
+        while content.contains(&format!("\"{pound_fence}")) {
+            pound_fence.push('#');
+        }
         baked.push_str(&format!(
-            "pub(super) const FTL_{}: &str = include_str!(\"{}\");\n",
+            "pub(super) const FTL_{}: &str = r{pound_fence}\"{content}\"{pound_fence};\n\n",
             locale.to_uppercase(),
-            canonical.display(),
         ));
     }
-    // Only write the file if its content actually changed — avoids touching
-    // mtimes on every build and triggering unnecessary downstream rebuilds.
+    // Only write when the body actually changed — avoids churning mtimes
+    // when nothing relevant moved.
     let prev = std::fs::read_to_string(&baked_path).unwrap_or_default();
     if prev != baked {
         std::fs::write(&baked_path, baked)
