@@ -743,6 +743,38 @@ fn register_native_test_accounts(client_manager: &mut Signal<ClientManager>) {
 /// and bunching ten of them into one tick used to overwhelm the WASM
 /// scheduler before the RouteSyncedWrite gate landed. A 100 ms gap between
 /// sign-ins gives Dioxus's render loop time to drain.
+/// Synthesize an offline `Session` from a `TestAccountEntry` so that
+/// accounts whose server is unreachable still appear in the sidebar as
+/// disconnected entries (clickable to reauth). The `instance_id` is
+/// derived from `base_url` with the scheme stripped so the account lands
+/// under the right `:instance_id` URL segment.
+#[cfg(debug_assertions)]
+fn offline_session_from_entry(entry: &poly_client::TestAccountEntry) -> poly_client::Session {
+    use poly_client::{BackendType, PresenceStatus, Session, User};
+    let backend = BackendType::from(entry.backend_slug);
+    let instance_id = entry
+        .base_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .to_string();
+    let user_id = format!("{}:{}", entry.backend_slug, entry.username);
+    Session {
+        id: user_id.clone(),
+        user: User {
+            id: user_id,
+            display_name: entry.label.to_string(),
+            avatar_url: None,
+            presence: PresenceStatus::Offline,
+            backend: backend.clone(),
+        },
+        token: String::new(),
+        backend,
+        icon_emoji: Some(entry.icon.to_string()),
+        instance_id,
+        backend_url: Some(entry.base_url.to_string()),
+    }
+}
+
 #[cfg(debug_assertions)]
 fn auto_signin_test_accounts(
     client_manager: Signal<ClientManager>,
@@ -753,6 +785,7 @@ fn auto_signin_test_accounts(
     if entries.is_empty() {
         return;
     }
+    let mut client_manager_w = client_manager;
     let on_complete = crate::ui::signup::build_on_complete_no_nav(client_manager, chat_data);
     spawn(async move {
         for entry in entries {
@@ -771,6 +804,15 @@ fn auto_signin_test_accounts(
                 }
                 Err(e) => {
                     tracing::warn!("auto-signin failed for {label}: {e}");
+                    // Still register an offline Session so the account shows up
+                    // in the sidebar as a disconnected entry the user can click
+                    // through to reauth / retry. Without this the server-offline
+                    // accounts vanish from Bar 1 entirely.
+                    let session = offline_session_from_entry(&entry);
+                    let account_id = session.id.clone();
+                    client_manager_w
+                        .write()
+                        .register_offline_session(account_id, session);
                 }
             }
             // Brief gap between sign-ins so the per-session reactive

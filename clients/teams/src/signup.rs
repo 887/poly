@@ -90,6 +90,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9103",
             username: "sheep@contoso.com",
             password: "testpass123",
+            backend_slug: "teams",
             authenticate: sheep_auth,
         },
         TestAccountEntry {
@@ -99,6 +100,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9103",
             username: "walrus@contoso.com",
             password: "testpass123",
+            backend_slug: "teams",
             authenticate: walrus_auth,
         },
     ];

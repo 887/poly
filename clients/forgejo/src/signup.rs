@@ -80,6 +80,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9106",
             username: "otter",
             password: "testpass123",
+            backend_slug: "forgejo",
             authenticate: otter_auth,
         },
         TestAccountEntry {
@@ -89,6 +90,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9106",
             username: "flamingo",
             password: "testpass123",
+            backend_slug: "forgejo",
             authenticate: flamingo_auth,
         },
     ];

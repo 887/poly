@@ -64,7 +64,8 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9102",
             username: "koala",
             password: "testpass123",
-            authenticate: koala_auth,
+            backend_slug: "discord",
+            authenticate:koala_auth,
         },
         TestAccountEntry {
             icon: "🦘",
@@ -73,7 +74,8 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9102",
             username: "kangaroo",
             password: "testpass123",
-            authenticate: kangaroo_auth,
+            backend_slug: "discord",
+            authenticate:kangaroo_auth,
         },
     ];
     ACCOUNTS

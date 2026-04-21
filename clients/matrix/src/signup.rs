@@ -51,6 +51,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9100",
             username: "owl",
             password: "testpass123",
+            backend_slug: "matrix",
             authenticate: owl_auth,
         },
         TestAccountEntry {
@@ -60,6 +61,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9100",
             username: "axolotl",
             password: "testpass123",
+            backend_slug: "matrix",
             authenticate: axolotl_auth,
         },
     ];

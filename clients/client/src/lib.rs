@@ -710,6 +710,11 @@ pub struct TestAccountEntry {
     pub username: &'static str,
     /// Password or empty string for token-only backends.
     pub password: &'static str,
+    /// Backend slug (e.g. "discord", "matrix") — matches the plugin's
+    /// `BACKEND_SLUG`. Used to synthesize an offline `Session` when
+    /// auto-signin fails (server unreachable), so the account still
+    /// appears in the sidebar.
+    pub backend_slug: &'static str,
     /// Async auth function — wraps the plugin's actual auth, returns `SignupCompleted`.
     pub authenticate: TestAuthFn,
 }

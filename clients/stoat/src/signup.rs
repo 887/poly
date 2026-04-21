@@ -54,6 +54,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9101",
             username: "stoat",
             password: "testpass123",
+            backend_slug: "stoat",
             authenticate: stoat_auth,
         },
         TestAccountEntry {
@@ -63,6 +64,7 @@ pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
             base_url: "http://localhost:9101",
             username: "raccoon",
             password: "testpass123",
+            backend_slug: "stoat",
             authenticate: raccoon_auth,
         },
     ];
