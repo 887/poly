@@ -303,6 +303,10 @@ pub fn MainLayout() -> Element {
                     app_state.write().channel_context_menu = None;
                 }
             },
+            // Belt-and-suspenders: suppress native browser context menu app-wide.
+            // Per-component `allow_default` surfaces opt back in via stop_propagation.
+            // Without this, every #[context_menu(None)] annotation has zero runtime effect.
+            oncontextmenu: |evt| evt.prevent_default(),
             // Floating server right-click context menu (position: fixed, above sidebars)
             ServerContextMenu {}
             // Floating channel right-click / long-press context menu
