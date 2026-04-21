@@ -4873,6 +4873,10 @@ fn ChatUtilityRail(
         t("pinned-messages")
     } else if panel == ChatUtilityPanel::Settings {
         t("chat-settings")
+    } else if panel == ChatUtilityPanel::Drafts {
+        t("agent-drafts-sidebar-title")
+    } else if panel == ChatUtilityPanel::Agent {
+        t("agent-panel-title")
     } else {
         t("threads")
     };
