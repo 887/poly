@@ -101,7 +101,7 @@ fn HighlightedName(name: String, query: String) -> Element {
 /// A collapsible filter (🔍 icon → text input) lets users search by name.
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(UserRowContextMenu)]
 #[component]
 pub fn UserSidebar() -> Element {
     let chat_data: Signal<ChatData> = use_context();

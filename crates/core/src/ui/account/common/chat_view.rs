@@ -6153,7 +6153,7 @@ fn DmContactListPanel(channel_id: String) -> Element {
 /// is never clipped by `overflow: hidden` on `.user-avatar`.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(UserRowContextMenu)]
 #[component]
 fn DmContactRow(user: User, app_state: Signal<AppState>) -> Element {
     let color = user_color(&user.id);

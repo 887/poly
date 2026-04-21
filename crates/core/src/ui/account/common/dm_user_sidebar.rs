@@ -91,7 +91,7 @@ pub fn DmUserSidebar() -> Element {
 /// A single member row in the DM group member sidebar.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(UserRowContextMenu)]
 #[component]
 fn DmMemberRow(
     member: User,
