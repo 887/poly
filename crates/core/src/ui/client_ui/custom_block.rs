@@ -302,7 +302,10 @@ pub fn sanitize_stylesheet(css: &str) -> String {
 }
 
 #[ui_action(None)]
-#[context_menu(inherit)]
+// allow_default so `<a>` and `<img>` rendered by plugin HTML inside
+// `.custom-block-content` get the OS "Open link / Save link as" / "Save image"
+// native context menu (see audit-native-rclick-leakage.md §3.5).
+#[context_menu(allow_default)]
 #[component]
 pub fn CustomBlock(block: CustomBlockData) -> Element {
     let scope_id = use_hook(next_scope_id);

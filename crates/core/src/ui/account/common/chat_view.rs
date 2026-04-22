@@ -5362,9 +5362,11 @@ fn render_markdown_html(text: &str) -> String {
     builder.clean(&html_output).to_string()
 }
 /// Render message text content, handling multi-line and edited indicator.
+/// allow_default so rendered `<a>` anchors inside `.message-markdown` get the
+/// OS "Open link / Copy link / Save link as" native context menu.
 #[rustfmt::skip]
 #[ui_action(None)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 fn MessageContentView(content: MessageContent, edited: bool) -> Element {
     let text = match &content {
