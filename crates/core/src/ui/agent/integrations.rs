@@ -67,7 +67,7 @@ fn IntegrationItem(icon: &'static str, label_key: &'static str, desc_key: &'stat
 }
 
 /// MCP enable toggle + port input.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]

@@ -396,7 +396,7 @@ pub(super) fn WizardAuthStatusBox(status: WizardAuthStatus) -> Element {
 /// Manages its own passphrase input and error state. Closes on success or cancel.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 pub(super) fn ReauthForm(
     url: String,
@@ -546,7 +546,7 @@ pub(super) fn ServerCard(
 /// Step 1 of the add-server wizard: URL entry and server probe.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 pub(super) fn WizardStep1(
     wizard_url: Signal<String>,
@@ -641,7 +641,7 @@ pub(super) fn WizardStep1(
 /// Step 2 of the add-server wizard: name, optional passphrase, and authenticate.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 pub(super) fn WizardStep2(
     wizard_step: Signal<u8>,

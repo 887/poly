@@ -375,7 +375,7 @@ fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Eleme
 
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 fn CssEditorArea(
     css_enabled: bool,

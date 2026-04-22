@@ -30,7 +30,7 @@ fn kv_key(account_id: &str, chat_id: &str, field: &str) -> String {
 /// Props:
 /// - `account_id` — Poly account ID this chat belongs to.
 /// - `chat_id`    — The channel / DM / room ID.
-#[context_menu(None)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]

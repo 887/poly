@@ -46,7 +46,7 @@ impl UiAction for ClientViewToolbarAction {
 }
 
 #[ui_action(ClientViewToolbarAction)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 pub fn ViewToolbar(
     toolbar: ViewToolbarData,

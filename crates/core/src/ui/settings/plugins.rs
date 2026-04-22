@@ -254,7 +254,7 @@ fn WasmPluginRow(
 /// Display name is inferred from the URL hostname or file name — no manual entry needed.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
     let mut url = use_signal(String::new);

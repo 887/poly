@@ -351,7 +351,7 @@ pub fn UserProfileModal() -> Element {
 /// Editable note text area with a live character counter.
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 fn NoteEditor() -> Element {
     let mut note = use_signal(String::new);

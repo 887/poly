@@ -171,7 +171,7 @@ impl ScopeKeyExt for SettingsSection {
 /// Split out so each field can own its own `use_resource` for the current
 /// value, and so widget dispatch stays local to the row.
 #[ui_action(PluginSettingFieldAction)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 fn PluginSettingField(
     field: SettingDescriptor,

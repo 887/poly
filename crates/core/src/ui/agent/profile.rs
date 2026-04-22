@@ -29,7 +29,7 @@ impl UiAction for AgentProfileAction {
     }
 }
 
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[ui_action(AgentProfileAction)]
 #[component]

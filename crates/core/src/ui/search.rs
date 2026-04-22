@@ -109,7 +109,7 @@ fn group_last_incoming_timestamp(
 // ── UI Components ─────────────────────────────────────────────────────────────
 
 /// Search input bar for the global search page.
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]

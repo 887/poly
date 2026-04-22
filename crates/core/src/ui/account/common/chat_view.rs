@@ -5730,7 +5730,7 @@ fn apply_edit(chat_data: &mut Signal<ChatData>, message_id: &str, new_text: Stri
 /// and a Save button. Enter (without Shift) saves; Escape cancels.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(allow_default)]
 #[component]
 fn MessageInlineEdit(
     message_id: String,

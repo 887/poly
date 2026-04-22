@@ -211,7 +211,7 @@ fn scroll_to_section_anchor(slug: &str) {
     scroll_to_settings_section("settings-section-", slug);
 }
 
-#[context_menu(none)]
+#[context_menu(allow_default)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
