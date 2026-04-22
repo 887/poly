@@ -1,7 +1,8 @@
 # Plan — UI Polish Round 2
 
 > **Created:** 2026-04-21
-> **Status:** 🟥 PLANNED — pending implementation kickoff
+> **Last updated:** 2026-04-23
+> **Status:** 🟧 IN PROGRESS — Phases A (¾), B (full), C (1/3), E7, and D2's `AttachmentContextMenu` shipped. Remaining: A4 (Teams freeze), C2/C3, D1, D2 (3 of 4 menus), E1–E6, all of F.
 > **Audit data:** `docs/plans/ui-polish-round-2/`
 > **Predecessor:** `docs/plans/plan-client-ui-polish.md` (Round 1, ✅ shipped 2026-04-18)
 > **Trigger:** post-merge of test-account auto-signin + offline-account sidebar work, the user opened every animal account in the dev app and reported broken account-bar layout, native right-click menus everywhere, and a Teams crash. This plan covers the audit findings and the resulting fixes.
@@ -58,27 +59,27 @@ Phases are ordered by **blast radius / dependency**: phase A unblocks the most p
 
 The four highest-leverage one-line/few-line fixes. Land these first; they make the rest easier.
 
-- [ ] **A1. Restore `.channel-list-wrapper` height resolution.** In `crates/core/assets/styling/account-shell.css` (~line 235), replace `height: 100%;` with `align-self: stretch;`. Fixes F1 (account-bar / voice-bar layout collapse) on every non-demo backend.
-- [ ] **A2. Add the missing global `oncontextmenu` guard.** In `crates/core/src/ui/main_layout.rs` (~line 295, on the `.main-layout` root `<div>`), add `oncontextmenu: |evt| evt.prevent_default()`. This was the §4.5.1 of `plan-context-menu-quality-control.md` claimed-shipped at `f627d9fc` but absent today. Re-landing it suppresses the native browser menu on every surface in one diff. Fixes F2 user-visible symptom.
-- [ ] **A3. Wire `UserRowContextMenu` to the three call sites that need it.** Per [`audit-context-menu-inherit.md` §2](ui-polish-round-2/audit-context-menu-inherit.md): `DmMemberRow`, `DmContactRow`, `UserSidebar` member list. The menu definition exists in `ui/context_menu/menus.rs`; the work is one annotation per site. Fixes F3.
+- [x] **A1. Restore `.channel-list-wrapper` height resolution.** In `crates/core/assets/styling/account-shell.css` (~line 235), replace `height: 100%;` with `align-self: stretch;`. Fixes F1 (account-bar / voice-bar layout collapse) on every non-demo backend. — **shipped `ef48a6ab`**
+- [x] **A2. Add the missing global `oncontextmenu` guard.** In `crates/core/src/ui/main_layout.rs` (~line 295, on the `.main-layout` root `<div>`), add `oncontextmenu: |evt| evt.prevent_default()`. This was the §4.5.1 of `plan-context-menu-quality-control.md` claimed-shipped at `f627d9fc` but absent today. Re-landing it suppresses the native browser menu on every surface in one diff. Fixes F2 user-visible symptom. — **shipped `aea0558a`**
+- [x] **A3. Wire `UserRowContextMenu` to the three call sites that need it.** Per [`audit-context-menu-inherit.md` §2](ui-polish-round-2/audit-context-menu-inherit.md): `DmMemberRow`, `DmContactRow`, `UserSidebar` member list. The menu definition exists in `ui/context_menu/menus.rs`; the work is one annotation per site. Fixes F3. — **shipped `b7df3aee`**
 - [ ] **A4. Diagnose & fix the Teams WASM freeze.** Per [`visual-teams.md`](ui-polish-round-2/visual-teams.md) and `CLAUDE.md` "Debugging hard WASM hangs" recipe: bisect-warn the Teams plugin's account-activation closure; the first warn that doesn't appear is the offending Signal-write chain or `use_effect`-on-self-write. Likely site: `clients/teams/src/lib.rs` `authenticate()` callback or the Teams equivalent of `commit_to_client_manager`. Fixes F4.
 
 ### Phase B — Macro upgrade (Phase B of `plan-context-menu-quality-control.md`)
 
-- [ ] **B1. Make the `#[context_menu(...)]` macro inject DOM handlers.** Currently it's a pure validator (`crates/ui-macros/src/context_menu.rs`, 152 lines, no `oncontextmenu` injection). Implement:
+- [x] **B1. Make the `#[context_menu(...)]` macro inject DOM handlers.** — **shipped `422308261ca1`** (Approach W: `display: contents` wrapper; `none`/`inherit` stay no-ops because A2's global guard covers them; `allow_default` injects `stop_propagation`; typed-menu variants inject `prevent_default` with TODO stub for `open_menu::<T>` until Phase D wires it). Currently it's a pure validator (`crates/ui-macros/src/context_menu.rs`, 152 lines, no `oncontextmenu` injection). Implement:
   - `#[context_menu(none)]` → injects `oncontextmenu: |evt| evt.prevent_default()` on the root element.
   - `#[context_menu(allow_default)]` → injects `oncontextmenu: |evt| evt.stop_propagation()` so the global guard from A2 doesn't fire.
   - `#[context_menu(SomeMenuEnum)]` → injects `oncontextmenu` that calls `evt.prevent_default()` + `open_menu::<SomeMenuEnum>(evt, props_as_menu_ctx)`.
   - `#[context_menu(inherit)]` → no injection (current behaviour, correct).
   Once this lands, the global guard from A2 becomes belt-and-suspenders rather than the only working layer, and `allow_default` actually works for text inputs / markdown anchors.
-- [ ] **B2. Re-flip 14 `inherit` sites to `allow_default`** for text-edit surfaces that need the OS spellcheck / cut-copy-paste menu. List in [`audit-native-rclick-leakage.md` §3.2](ui-polish-round-2/audit-native-rclick-leakage.md): `MessageInlineEdit`, `NoteEditor`, `CssEditorArea`, `ChatStyleEditor` textareas, the compose `<textarea>`, password / text `<input>` fields.
-- [ ] **B3. Re-flip `MessageContentView` markdown wrapper and `custom-block-content` to `allow_default`** so the OS "Open link / Save link" menu works on rendered markdown anchors.
+- [x] **B2. Re-flip 14 `inherit` sites to `allow_default`** for text-edit surfaces that need the OS spellcheck / cut-copy-paste menu. List in [`audit-native-rclick-leakage.md` §3.2](ui-polish-round-2/audit-native-rclick-leakage.md): `MessageInlineEdit`, `NoteEditor`, `CssEditorArea`, `ChatStyleEditor` textareas, the compose `<textarea>`, password / text `<input>` fields. — **shipped `1d06e3c286a1`**
+- [x] **B3. Re-flip `MessageContentView` markdown wrapper and `custom-block-content` to `allow_default`** so the OS "Open link / Save link" menu works on rendered markdown anchors. — **shipped `4f81a851fbdc`**
 
 ### Phase C — `inherit` → `none` mass migration
 
 Per [`audit-context-menu-inherit.md` §1](ui-polish-round-2/audit-context-menu-inherit.md), 72 sites use `inherit` where `none` is the correct semantic. ~55 are a single batch in the settings subtree. After A2 they're already runtime-correct via the global guard; this phase is about *being explicit* so a future macro change doesn't silently regress them.
 
-- [ ] **C1. Settings-tree mass-flip (~55 sites).** Single commit, single sed-style edit across `crates/core/src/ui/settings/`, `crates/core/src/ui/account/settings/`, `crates/core/src/ui/account/server/settings/`. Full list in [`audit-context-menu-inherit.md` §1.1–§1.4](ui-polish-round-2/audit-context-menu-inherit.md).
+- [x] **C1. Settings-tree mass-flip (~55 sites).** Single commit, single sed-style edit across `crates/core/src/ui/settings/`, `crates/core/src/ui/account/settings/`, `crates/core/src/ui/account/server/settings/`. Full list in [`audit-context-menu-inherit.md` §1.1–§1.4](ui-polish-round-2/audit-context-menu-inherit.md). — **shipped `bbe6701c`** (48 sites; audit had 49 named, recount reconciled to 48)
 - [ ] **C2. Modal / overlay / toast / wing host mass-flip (~10 sites).** [§1.5–§1.6](ui-polish-round-2/audit-context-menu-inherit.md): `LayoutToggleSwitch`, `WingShell`, `WingTabBar`, agent-panel sections, etc.
 - [ ] **C3. The remaining ~7 misc sites.** [§1.7](ui-polish-round-2/audit-context-menu-inherit.md): tutorial overlays, splash, error overlays.
 
@@ -88,10 +89,10 @@ Per [`audit-context-menu-inherit.md` §2](ui-polish-round-2/audit-context-menu-i
 
 - [ ] **D1. Wire existing menus to obvious sites:** `MessageContextMenu` to `MessageContentView`'s body wrapper (currently only the row container has it), `ChannelContextMenu` to `ChannelListItem` in forum-style channel lists, `ServerContextMenu` to all three server-icon variants (`AccountServerIcon`, `ServerIconDisplay`, `FavoriteServerIcon` already has it via raw handler — normalize via macro after B1).
 - [ ] **D2. Author 4 new typed menus** for surfaces with no current menu but real expected actions:
-  - **`AttachmentContextMenu`** — for in-chat image / video / file attachments (Open / Save as / Copy URL).
-  - **`ReactionContextMenu`** — for the reaction chips on messages (Show who reacted / Remove my reaction).
-  - **`AvatarContextMenu`** — for user avatars in message rows / member list (View profile / Send DM / Mention).
-  - **`ForumPostContextMenu`** — partially defined for `ForumComment` but missing for `ForumPostCard` and the `HnFeedView` post rows. Finish wiring per [`audit-native-rclick-leakage.md` §4.4](ui-polish-round-2/audit-native-rclick-leakage.md).
+  - [x] **`AttachmentContextMenu`** — for in-chat image / video / file attachments (Open / Save as / Copy URL). — **shipped `66778ac0`** (initial), `a3660685` (z-index above media viewer), `d99bece5` (inline-image right-click now appends to message menu instead of standalone; standalone still used by full-screen viewer).
+  - [ ] **`ReactionContextMenu`** — for the reaction chips on messages (Show who reacted / Remove my reaction).
+  - [ ] **`AvatarContextMenu`** — for user avatars in message rows / member list (View profile / Send DM / Mention).
+  - [ ] **`ForumPostContextMenu`** — partially defined for `ForumComment` but missing for `ForumPostCard` and the `HnFeedView` post rows. Finish wiring per [`audit-native-rclick-leakage.md` §4.4](ui-polish-round-2/audit-native-rclick-leakage.md).
 
 ### Phase E — Cross-backend functional bugs (R1, R2, R3, +)
 
@@ -101,7 +102,7 @@ Per [`audit-context-menu-inherit.md` §2](ui-polish-round-2/audit-context-menu-i
 - [ ] **E4. Issue / PR detail fails to load on click (Forgejo: "Failed to load detail", GitHub: stays on "Select an item").** [`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md), [`visual-github.md`](ui-polish-round-2/visual-github.md). Likely a `get_view_detail` plugin call returning the wrong shape; or the `detail.fetch_url` is constructed wrong for those backends.
 - [ ] **E5. Boot hang watchdog fires too eagerly on Dog (demo) account switch.** [`visual-demo.md`](ui-polish-round-2/visual-demo.md). The "App not responding" overlay appears ~18s after the avatar click and the Reload button doesn't clear it without a manual `page_reload`. Either bump `BOOT_HANG_TIMEOUT_MS` in `crates/core/src/wasm_crash_handler.rs` for demo accounts with many DMs, or fix the underlying slow account-switch path so it actually finishes in time.
 - [ ] **E6. Plugin sidebar fails to load intermittently on Discord first activation.** [`visual-discord.md`](ui-polish-round-2/visual-discord.md). "Plugin sidebar failed to load — showing channels" message appears in the channel list panel; transient (clears after navigating). Race between plugin init and first channel-list render.
-- [ ] **E7. Hackernews test server fails to start.** Discovered while starting the test runner: `poly-test-hackernews` panics at `servers/test-hackernews/src/main.rs:243` with *"Path segments must not start with `:`. For capture groups, use `{capture}`."* — an axum 0.7 → 0.8 router-syntax regression that needs the `:id` → `{id}` migration applied to that file. Blocks any HN test data.
+- [x] **E7. Hackernews test server fails to start.** Discovered while starting the test runner: `poly-test-hackernews` panics at `servers/test-hackernews/src/main.rs:243` with *"Path segments must not start with `:`. For capture groups, use `{capture}`."* — an axum 0.7 → 0.8 router-syntax regression that needs the `:id` → `{id}` migration applied to that file. Blocks any HN test data. — **shipped `5a692166`** (also added wrapper handlers because axum 0.8 disallows mixed literal+capture in `{id}.json`)
 
 ### Phase F — Per-backend feature gaps (each requires backend-specific work)
 
