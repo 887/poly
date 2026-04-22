@@ -45,6 +45,10 @@ pub fn AttachmentContextMenu() -> Element {
     rsx! {
         div {
             class: "context-menu-backdrop",
+            // Sit above the media viewer overlay (.poly-media-viewer-overlay
+            // is z-index 2100). Without this override the menu renders behind
+            // the viewer and the user sees no menu at all.
+            style: "z-index: 2199;",
             onclick: move |_| {
                 app_state.write().attachment_context_menu = None;
             },
@@ -53,7 +57,7 @@ pub fn AttachmentContextMenu() -> Element {
 
         div {
             class: "context-menu",
-            style: "left: {x}px; top: {y}px;",
+            style: "left: {x}px; top: {y}px; z-index: 2200;",
             onclick: move |evt| evt.stop_propagation(),
 
             // Copy Image — fetch the bytes and put them on the clipboard as a blob.
