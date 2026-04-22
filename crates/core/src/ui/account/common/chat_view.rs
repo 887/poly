@@ -84,6 +84,11 @@ struct MsgContextMenu {
     message_id: String,
     message_text: String,
     is_own: bool,
+    /// Set when the right-click landed on a specific image attachment.
+    /// `(url, filename)`. The MsgContextMenuOverlay appends the four
+    /// Discord-parity image actions (Copy / Save / Copy Link / Open Link)
+    /// for this attachment when present.
+    image_attachment: Option<(String, String)>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -3799,6 +3804,7 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
                                 message_id: mid.clone(),
                                 message_text: txt.clone(),
                                 is_own,
+                                image_attachment: None,
                             }),
                         );
                 }
@@ -3981,6 +3987,9 @@ fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing
             AttachmentsView {
                 attachments: msg.attachments.clone(),
                 message_id: msg.id.clone(),
+                msg_context_menu: ctx.msg_context_menu,
+                message_text: message_plain_text(&msg.content),
+                is_own: msg.author.id == ctx.self_user_id,
             }
         }
         if !msg.reactions.is_empty() {
@@ -5451,8 +5460,14 @@ mod markdown_tests {
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+fn AttachmentsView(
+    attachments: Vec<poly_client::Attachment>,
+    message_id: String,
+    msg_context_menu: Signal<Option<MsgContextMenu>>,
+    message_text: String,
+    is_own: bool,
+) -> Element {
+    let app_state: Signal<AppState> = use_context();
     let nav = navigator();
 
     rsx! {
@@ -5469,20 +5484,28 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
                     if is_image {
                         let cm_url = url.clone();
                         let cm_filename = filename.clone();
+                        let cm_msg_id = msg_id.clone();
+                        let cm_text = message_text.clone();
+                        let mut msg_context_menu = msg_context_menu;
                         rsx! {
                             div {
                                 class: "attachment-image",
-                                oncontextmenu: move |evt| {
+                                // Right-click on an image opens the regular message context menu
+                                // (reactions, reply, forward, copy text, …) AND appends the four
+                                // image actions (Copy / Save / Copy Link / Open Link) keyed to
+                                // THIS specific attachment via `image_attachment`.
+                                oncontextmenu: move |evt: MouseEvent| {
                                     evt.prevent_default();
                                     evt.stop_propagation();
                                     let coords = evt.client_coordinates();
-                                    app_state.write().attachment_context_menu =
-                                        Some(crate::state::AttachmentContextMenuState {
-                                            x: coords.x,
-                                            y: coords.y,
-                                            url: cm_url.clone(),
-                                            filename: cm_filename.clone(),
-                                        });
+                                    msg_context_menu.set(Some(MsgContextMenu {
+                                        x: coords.x,
+                                        y: coords.y,
+                                        message_id: cm_msg_id.clone(),
+                                        message_text: cm_text.clone(),
+                                        is_own,
+                                        image_attachment: Some((cm_url.clone(), cm_filename.clone())),
+                                    }));
                                 },
                                 onclick: move |_| {
                                     let nav_state = app_state.read().nav.clone();
@@ -5828,6 +5851,7 @@ fn MsgContextMenuOverlay(
     let mid_delete = menu.message_id.clone();
     let mid_copy_id = menu.message_id.clone();
     let txt_copy = menu.message_text.clone();
+    let image_att = menu.image_attachment.clone();
 
     rsx! {
         div {
@@ -5857,6 +5881,9 @@ fn MsgContextMenuOverlay(
 
             {render_context_menu_stub_items(msg_context_menu)}
             {render_context_menu_copy_text_item(msg_context_menu, txt_copy)}
+
+            {render_context_menu_image_items(msg_context_menu, image_att)}
+
             div { class: "context-menu-separator" }
 
             {render_context_menu_danger_item(is_own, msg_context_menu, chat_data, mid_delete)}
@@ -5966,6 +5993,70 @@ fn render_context_menu_danger_item(
             danger: true,
             onclick: move |_| {
                 chat_data.write().messages.retain(|message| message.id != mid_delete);
+                msg_context_menu.set(None);
+            },
+        }
+    }
+}
+
+/// Append the four Discord-parity image actions when the right-click landed
+/// on an image attachment. Renders nothing for text-only messages.
+fn render_context_menu_image_items(
+    mut msg_context_menu: Signal<Option<MsgContextMenu>>,
+    image_att: Option<(String, String)>,
+) -> Element {
+    let Some((url, filename)) = image_att else {
+        return rsx! {};
+    };
+    let url_for_copy = url.clone();
+    let url_for_save = url.clone();
+    let url_for_link_copy = url.clone();
+    let url_for_link_open = url.clone();
+    let name_for_save = filename.clone();
+    rsx! {
+        div { class: "context-menu-separator" }
+        ContextMenuItemSimple {
+            label: t("attachment-menu-copy-image"),
+            onclick: move |_| {
+                let js = format!(
+                    "(async () => {{ try {{ const r = await fetch({u}); const b = await r.blob(); await navigator.clipboard.write([new ClipboardItem({{[b.type]: b}})]); }} catch (e) {{ console.warn('copy image failed:', e); }} }})();",
+                    u = serde_json::to_string(&url_for_copy).unwrap_or_default(),
+                );
+                document::eval(&js);
+                msg_context_menu.set(None);
+            },
+        }
+        ContextMenuItemSimple {
+            label: t("attachment-menu-save-image"),
+            onclick: move |_| {
+                let js = format!(
+                    "(() => {{ const a = document.createElement('a'); a.href = {u}; a.download = {n}; a.target = '_blank'; a.rel = 'noopener noreferrer'; document.body.appendChild(a); a.click(); a.remove(); }})();",
+                    u = serde_json::to_string(&url_for_save).unwrap_or_default(),
+                    n = serde_json::to_string(&name_for_save).unwrap_or_default(),
+                );
+                document::eval(&js);
+                msg_context_menu.set(None);
+            },
+        }
+        ContextMenuItemSimple {
+            label: t("attachment-menu-copy-link"),
+            onclick: move |_| {
+                let js = format!(
+                    "navigator.clipboard.writeText({u}).catch((e) => console.warn('copy link failed:', e));",
+                    u = serde_json::to_string(&url_for_link_copy).unwrap_or_default(),
+                );
+                document::eval(&js);
+                msg_context_menu.set(None);
+            },
+        }
+        ContextMenuItemSimple {
+            label: t("attachment-menu-open-link"),
+            onclick: move |_| {
+                let js = format!(
+                    "window.open({u}, '_blank', 'noopener,noreferrer');",
+                    u = serde_json::to_string(&url_for_link_open).unwrap_or_default(),
+                );
+                document::eval(&js);
                 msg_context_menu.set(None);
             },
         }
