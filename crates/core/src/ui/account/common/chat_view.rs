@@ -5452,7 +5452,7 @@ mod markdown_tests {
 #[context_menu(inherit)]
 #[component]
 fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let mut app_state: Signal<AppState> = use_context();
     let nav = navigator();
 
     rsx! {
@@ -5467,9 +5467,23 @@ fn AttachmentsView(attachments: Vec<poly_client::Attachment>, message_id: String
                     let idx = attachment_index;
 
                     if is_image {
+                        let cm_url = url.clone();
+                        let cm_filename = filename.clone();
                         rsx! {
                             div {
                                 class: "attachment-image",
+                                oncontextmenu: move |evt| {
+                                    evt.prevent_default();
+                                    evt.stop_propagation();
+                                    let coords = evt.client_coordinates();
+                                    app_state.write().attachment_context_menu =
+                                        Some(crate::state::AttachmentContextMenuState {
+                                            x: coords.x,
+                                            y: coords.y,
+                                            url: cm_url.clone(),
+                                            filename: cm_filename.clone(),
+                                        });
+                                },
                                 onclick: move |_| {
                                     let nav_state = app_state.read().nav.clone();
                                     let Some(backend) = nav_state.active_backend.cloned() else {

@@ -372,6 +372,19 @@ pub struct ActiveContextMenu {
     pub dismiss_on_outside: bool,
 }
 
+/// State for the active right-click attachment (image) context menu.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentContextMenuState {
+    /// Fixed X position (from `page_coordinates()`).
+    pub x: f64,
+    /// Fixed Y position (from `page_coordinates()`).
+    pub y: f64,
+    /// URL of the attachment.
+    pub url: String,
+    /// Filename of the attachment (used for Save Image).
+    pub filename: String,
+}
+
 /// State for the active right-click channel context menu.
 #[derive(Debug, Clone)]
 pub struct ChannelContextMenuState {
@@ -426,6 +439,8 @@ pub struct AppState {
     pub context_menu: Option<ContextMenuState>,
     /// Active right-click channel context menu, if any.
     pub channel_context_menu: Option<ChannelContextMenuState>,
+    /// Active right-click attachment (image) context menu, if any.
+    pub attachment_context_menu: Option<AttachmentContextMenuState>,
     /// Stack of context menus for the new Phase A runtime (plan §4.1).
     ///
     /// Empty = no overlay. Pushing opens a submenu; popping closes it.
@@ -456,6 +471,7 @@ impl Default for AppState {
             search_type_seed: None,
             context_menu: None,
             channel_context_menu: None,
+            attachment_context_menu: None,
             context_menu_stack: Vec::new(),
             sidebar_invalidated_tick: 0,
         }

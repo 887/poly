@@ -813,6 +813,12 @@ channel-menu-unmute = Unmute Channel
 channel-menu-copy-link = Copy Link
 channel-menu-copy-id = Copy Channel ID
 
+# Attachment (image) right-click context menu
+attachment-menu-copy-image = Copy Image
+attachment-menu-save-image = Save Image
+attachment-menu-copy-link = Copy Media Link
+attachment-menu-open-link = Open Media Link
+
 # Remove from favorites inline confirm
 remove-favorites-title = Remove "{ $name }" from Favorites?
 remove-favorites-body = You can add it back anytime by dragging it to the favorites bar or using this menu.

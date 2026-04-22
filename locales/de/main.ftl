@@ -628,6 +628,12 @@ server-menu-copy-id = Server-ID kopieren
 server-menu-add-favorites = Zu Favoriten hinzufügen
 server-menu-remove-favorites = Aus Favoriten entfernen
 
+# Attachment (image) right-click context menu
+attachment-menu-copy-image = Bild kopieren
+attachment-menu-save-image = Bild speichern
+attachment-menu-copy-link = Medien-Link kopieren
+attachment-menu-open-link = Medien-Link öffnen
+
 # Remove from favorites inline confirm
 remove-favorites-title = "{ $name }" aus Favoriten entfernen?
 remove-favorites-body = Sie können es jederzeit erneut hinzufügen, indem Sie es in die Favoritenleiste ziehen oder diese Menü verwenden.

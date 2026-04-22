@@ -6,7 +6,7 @@
 //! pinch-to-zoom (touch), and mouse drag to pan.
 
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::{AppState, AttachmentContextMenuState, ChatData};
 use dioxus::prelude::*;
 use poly_client::Attachment;
 use poly_ui_macros::{context_menu, ui_action};
@@ -24,6 +24,7 @@ pub struct MessageMediaViewerOverlayProps {
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
     let chat_data: Signal<ChatData> = use_context();
+    let mut app_state: Signal<AppState> = use_context();
     let nav = navigator();
     let mut zoom = use_signal(|| 1.0_f32);
     let mut pan_x = use_signal(|| 0.0_f32);
@@ -257,6 +258,21 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                     src: "{attachment.url}",
                     alt: "{attachment.filename}",
                     onclick: move |e| e.stop_propagation(),
+                    oncontextmenu: {
+                        let ctx_url = url.clone();
+                        let ctx_name = filename.clone();
+                        move |evt: Event<MouseData>| {
+                            evt.prevent_default();
+                            evt.stop_propagation();
+                            let coords = evt.client_coordinates();
+                            app_state.write().attachment_context_menu = Some(AttachmentContextMenuState {
+                                x: coords.x,
+                                y: coords.y,
+                                url: ctx_url.clone(),
+                                filename: ctx_name.clone(),
+                            });
+                        }
+                    },
                 }
             }
 
