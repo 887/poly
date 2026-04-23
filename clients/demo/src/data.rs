@@ -204,6 +204,10 @@ pub fn demo3_servers() -> Vec<Server> {
             account_id: DEMO3_ACCOUNT_ID.to_string(),
             account_display_name: DEMO3_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
         Server {
             id: "comm-linux".to_string(),
@@ -225,6 +229,10 @@ pub fn demo3_servers() -> Vec<Server> {
             account_id: DEMO3_ACCOUNT_ID.to_string(),
             account_display_name: DEMO3_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
         Server {
             id: "comm-programming".to_string(),
@@ -245,6 +253,10 @@ pub fn demo3_servers() -> Vec<Server> {
             account_id: DEMO3_ACCOUNT_ID.to_string(),
             account_display_name: DEMO3_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
     ]
 }
@@ -1227,6 +1239,10 @@ pub fn demo_servers() -> Vec<Server> {
             account_id: DEMO_ACCOUNT_ID.to_string(),
             account_display_name: DEMO_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
         Server {
             id: "server-gaming".to_string(),
@@ -1248,6 +1264,10 @@ pub fn demo_servers() -> Vec<Server> {
             account_id: DEMO_ACCOUNT_ID.to_string(),
             account_display_name: DEMO_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
         Server {
             id: "server-music".to_string(),
@@ -1268,6 +1288,10 @@ pub fn demo_servers() -> Vec<Server> {
             account_id: DEMO_ACCOUNT_ID.to_string(),
             account_display_name: DEMO_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
     ]
 }
@@ -1306,6 +1330,10 @@ pub fn demo2_servers() -> Vec<Server> {
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
         Server {
             id: "server-bookclub".to_string(),
@@ -1327,6 +1355,10 @@ pub fn demo2_servers() -> Vec<Server> {
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
         Server {
             id: "server-cooking".to_string(),
@@ -1348,6 +1380,10 @@ pub fn demo2_servers() -> Vec<Server> {
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
         Server {
             id: "server-fitness".to_string(),
@@ -1369,6 +1405,10 @@ pub fn demo2_servers() -> Vec<Server> {
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             account_display_name: DEMO2_ACCOUNT_NAME.to_string(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         },
     ]
 }

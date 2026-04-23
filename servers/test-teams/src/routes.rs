@@ -477,7 +477,7 @@ pub async fn get_chats(
         Ok(user_id) => {
             let chats: Vec<serde_json::Value> = state.chats.iter()
                 .filter(|c| c.members.contains(&user_id))
-                .map(|c| chat_to_json(&c))
+                .map(|c| chat_to_json_with_state(&c, &state))
                 .collect();
             Json(serde_json::json!({ "value": chats })).into_response()
         }
@@ -601,10 +601,21 @@ fn channel_to_json(c: &crate::state::Channel) -> serde_json::Value {
     })
 }
 
-fn chat_to_json(c: &crate::state::Chat) -> serde_json::Value {
+fn chat_to_json_with_state(c: &crate::state::Chat, state: &TeamsState) -> serde_json::Value {
+    let members: Vec<serde_json::Value> = c.members.iter().map(|uid| {
+        let display_name = state.users.get(uid)
+            .map(|u| u.display_name.clone())
+            .unwrap_or_else(|| uid.clone());
+        serde_json::json!({
+            "id": format!("member-{uid}"),
+            "userId": uid,
+            "displayName": display_name,
+        })
+    }).collect();
     serde_json::json!({
         "id": c.id,
         "chatType": c.chat_type,
+        "members": members,
     })
 }
 

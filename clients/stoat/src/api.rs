@@ -316,6 +316,10 @@ impl StoatServer {
             account_id,
             account_display_name,
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         }
     }
 }

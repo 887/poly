@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-21
 > **Last updated:** 2026-04-23
-> **Status:** 🟧 IN PROGRESS — Phases A, B, C, D, E complete. F-cluster shipped: E7, F-LE-2, F-DC-1, F-FJ-1, F-GH-2, F-MX-1, plus F-MX-2 and F-DC-icon-side closed by E2. Plus side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed. Remaining: F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 (settings ⚙ routing) / F-FJ-2 / F-GH-1 / F-ST-1 / F-DM-1.
+> **Status:** 🟧 IN PROGRESS — Phases A, B, C, D, E complete. F-cluster shipped: E7, F-LE-2, F-DC-1, F-FJ-1, F-GH-2, F-MX-1, F-DM-1, plus F-MX-2 and F-DC-icon-side closed by E2. Plus side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed. Remaining: F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 (settings ⚙ routing) / F-FJ-2 / F-GH-1 / F-ST-1.
 > **Audit data:** `docs/plans/ui-polish-round-2/`
 > **Predecessor:** `docs/plans/plan-client-ui-polish.md` (Round 1, ✅ shipped 2026-04-18)
 > **Trigger:** post-merge of test-account auto-signin + offline-account sidebar work, the user opened every animal account in the dev app and reported broken account-bar layout, native right-click menus everywhere, and a Teams crash. This plan covers the audit findings and the resulting fixes.
@@ -137,7 +137,7 @@ These are real backend gaps surfaced by the visual audit, not styling. Each is i
 - [x] **F-ST-1.** Stoat server icons render as letter-circles. (Subset of E2.) ([`visual-stoat.md`](ui-polish-round-2/visual-stoat.md) #2)
 
 #### F-Demo
-- [ ] **F-DM-1.** Friends panel shows "No friends found" with no add-friend affordance for demo accounts. (Demo can't add friends to itself, so an empty state explaining that is fine.) ([`visual-demo.md`](ui-polish-round-2/visual-demo.md) #3)
+- [x] **F-DM-1.** Friends panel shows "No friends found" with no add-friend affordance for demo accounts. (Demo can't add friends to itself, so an empty state explaining that is fine.) ([`visual-demo.md`](ui-polish-round-2/visual-demo.md) #3) — **shipped `49a4ac34c4a5`**. `FriendsPanel` now takes `backend_slug`; demo accounts show "This is the demo account — friends appear when you connect real accounts" + "Add Account" button navigating to `SignupPicker`; real backends show "No friends found" + "Add Friend" button (info toast "coming soon"). Four FTL keys added in en/de/es/fr.
 
 ---
 

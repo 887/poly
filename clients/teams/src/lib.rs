@@ -358,6 +358,10 @@ impl ClientBackend for TeamsClient {
             account_id: account_id.clone(),
             account_display_name: account_name.clone(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         }).collect())
     }
 
@@ -377,6 +381,10 @@ impl ClientBackend for TeamsClient {
             account_id,
             account_display_name: account_name,
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         })
     }
 
@@ -460,13 +468,30 @@ impl ClientBackend for TeamsClient {
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
         let account_id = self.account_id();
-        Ok(self.http.get_chats().await?.into_iter().map(|chat| DmChannel {
-            id: chat.id,
-            user: self.unknown_user(),
-            last_message: None,
-            unread_count: 0,
-            backend: BackendType::from("teams"),
-            account_id: account_id.clone(),
+        Ok(self.http.get_chats().await?.into_iter().map(|chat| {
+            // Resolve the contact user from the inline member list.
+            // For 1:1 chats, pick the member whose userId != our own account_id.
+            // For group chats, fall back to the topic or a generated label.
+            let contact = chat.members.iter()
+                .find(|m| m.user_id.as_deref() != Some(account_id.as_str()))
+                .and_then(|m| {
+                    m.display_name.as_ref().map(|name| User {
+                        id: m.user_id.clone().unwrap_or_default(),
+                        display_name: name.clone(),
+                        avatar_url: None,
+                        presence: PresenceStatus::Offline,
+                        backend: BackendType::from("teams"),
+                    })
+                })
+                .unwrap_or_else(|| self.unknown_user());
+            DmChannel {
+                id: chat.id,
+                user: contact,
+                last_message: None,
+                unread_count: 0,
+                backend: BackendType::from("teams"),
+                account_id: account_id.clone(),
+            }
         }).collect())
     }
 

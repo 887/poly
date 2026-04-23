@@ -34,6 +34,12 @@ pub struct GhRepo {
     pub default_branch: Option<String>,
     /// Web URL of the repo (used for the external code-search link).
     pub html_url: String,
+    /// Star count (GitHub calls this `stargazers_count`).
+    #[serde(default)]
+    pub stargazers_count: u64,
+    /// Primary programming language detected by GitHub.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 /// A GitHub user / org as embedded inside a repo or issue.

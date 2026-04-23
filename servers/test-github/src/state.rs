@@ -43,6 +43,10 @@ pub struct Repo {
     pub pushed_at: Option<String>,
     pub default_branch: Option<String>,
     pub html_url: String,
+    #[serde(default)]
+    pub stargazers_count: u64,
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -135,6 +139,8 @@ impl GitHubState {
             pushed_at: Some("2026-04-01T00:00:00Z".to_string()),
             default_branch: Some("main".to_string()),
             html_url: "https://github.com/penguin/iceberg-os".to_string(),
+            stargazers_count: 42,
+            language: Some("Rust".to_string()),
         };
         let fish_tracker = Repo {
             id: 102,
@@ -149,6 +155,8 @@ impl GitHubState {
             pushed_at: Some("2026-04-01T00:00:00Z".to_string()),
             default_branch: Some("main".to_string()),
             html_url: "https://github.com/penguin/fish-tracker".to_string(),
+            stargazers_count: 7,
+            language: Some("Python".to_string()),
         };
 
         // --- Repos (owned by chameleon) ---
@@ -165,6 +173,8 @@ impl GitHubState {
             pushed_at: Some("2026-04-01T00:00:00Z".to_string()),
             default_branch: Some("main".to_string()),
             html_url: "https://github.com/chameleon/color-shift".to_string(),
+            stargazers_count: 128,
+            language: Some("TypeScript".to_string()),
         };
 
         self.repos

@@ -3,6 +3,7 @@
 //! Shows a searchable grid of all repos (servers) belonging to the active
 //! account, with open issue/PR counts and quick-nav to each repo's channels.
 
+use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 
 use crate::state::ChatData;
@@ -117,6 +118,24 @@ pub fn ServerOverviewPage(
     }
 }
 
+/// Return a human-readable age string from an RFC 3339 timestamp.
+///
+/// Examples: "just now", "5m ago", "3h ago", "2d ago", "4mo ago", "1y ago"
+fn humanize_age(ts: &str) -> String {
+    let Ok(dt) = DateTime::parse_from_rfc3339(ts) else {
+        return String::new();
+    };
+    let secs = (Utc::now() - dt.with_timezone(&Utc)).num_seconds().max(0);
+    match secs {
+        s if s < 60 => "just now".to_string(),
+        s if s < 3600 => format!("{}m ago", s / 60),
+        s if s < 86400 => format!("{}h ago", s / 3600),
+        s if s < 86400 * 30 => format!("{}d ago", s / 86400),
+        s if s < 86400 * 365 => format!("{}mo ago", s / (86400 * 30)),
+        s => format!("{}y ago", s / (86400 * 365)),
+    }
+}
+
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 /// A single repo card in the overview grid.
@@ -168,7 +187,26 @@ fn RepoCard(
             // Info
             div { class: "repo-card-info",
                 div { class: "repo-card-name", "{server.name}" }
+                if let Some(desc) = &server.description {
+                    if !desc.is_empty() {
+                        div { class: "repo-card-description", "{desc}" }
+                    }
+                }
                 div { class: "repo-card-meta",
+                    if let Some(lang) = &server.language {
+                        span { class: "repo-card-lang", "{lang}" }
+                    }
+                    if let Some(stars) = server.star_count {
+                        span { class: "repo-card-stars",
+                            span { class: "repo-card-star-icon", "★" }
+                            "{stars}"
+                        }
+                    }
+                    if let Some(ts) = &server.updated_at {
+                        span { class: "repo-card-updated",
+                            "Updated {humanize_age(ts)}"
+                        }
+                    }
                     if server.unread_count > 0 {
                         span { class: "repo-card-badge unread",
                             "{server.unread_count} updates"

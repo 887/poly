@@ -661,6 +661,65 @@ async fn test_context_menu_unstarred_shows_star() {
 }
 
 // ---------------------------------------------------------------------------
+// F-GH-1 — repo card metadata fields
+// ---------------------------------------------------------------------------
+
+/// `get_servers` populates description / star_count / language / updated_at
+/// so the UI can render rich repo cards.
+#[tokio::test]
+async fn test_get_servers_repo_card_fields() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+
+    let servers = client.get_servers().await.expect("get_servers should succeed");
+
+    let iceberg = servers
+        .iter()
+        .find(|s| s.name == "penguin/iceberg-os")
+        .expect("iceberg-os must be present");
+
+    // description
+    assert_eq!(
+        iceberg.description.as_deref(),
+        Some("An operating system designed for extremely cold environments"),
+        "description should be populated from repo"
+    );
+
+    // star_count (iceberg-os is seeded with 42 stars)
+    assert_eq!(
+        iceberg.star_count,
+        Some(42),
+        "star_count should be 42 for iceberg-os"
+    );
+
+    // language
+    assert_eq!(
+        iceberg.language.as_deref(),
+        Some("Rust"),
+        "language should be Rust for iceberg-os"
+    );
+
+    // updated_at (from pushed_at)
+    assert!(
+        iceberg.updated_at.is_some(),
+        "updated_at should be populated"
+    );
+
+    // fish-tracker has different language/stars
+    let fish = servers
+        .iter()
+        .find(|s| s.name == "penguin/fish-tracker")
+        .expect("fish-tracker must be present");
+    assert_eq!(fish.language.as_deref(), Some("Python"));
+    assert_eq!(fish.star_count, Some(7));
+}
+
+// ---------------------------------------------------------------------------
 // Pack C.2 — settings storage round-trip
 // ---------------------------------------------------------------------------
 

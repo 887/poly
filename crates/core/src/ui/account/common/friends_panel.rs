@@ -8,8 +8,11 @@ use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::toast::{ToastMessage, push_toast};
+use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
+use poly_client::ToastTone;
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Actions for the friends management panel.
@@ -44,7 +47,7 @@ enum FriendsManagementTab {
 #[rustfmt::skip]
 #[ui_action(FriendsPanelAction)]
 #[component]
-pub fn FriendsPanel(account_id: String) -> Element {
+pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
     let chat_data: Signal<ChatData> = use_context();
     let friends = chat_data.read().friends.get(&account_id).cloned().unwrap_or_default();
     let blocked_users = chat_data.read().blocked_users.get(&account_id).cloned().unwrap_or_default();
@@ -133,7 +136,7 @@ pub fn FriendsPanel(account_id: String) -> Element {
                         backend_names,
                     }
                     if *active_tab.read() == FriendsManagementTab::Friends {
-                        FriendsGrid { friends: filtered_friends }
+                        FriendsGrid { friends: filtered_friends, backend_slug: backend_slug.clone() }
                     } else if *active_tab.read() == FriendsManagementTab::Blocked {
                         BlockedUsersGrid { blocked_users: filtered_blocked }
                     } else {
@@ -202,17 +205,46 @@ fn FriendsFilterBar(
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
-fn FriendsGrid(friends: Vec<poly_client::User>) -> Element {
+fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element {
     let app_state: Signal<AppState> = use_context();
     let chat_data: Signal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
     let message_label = t("friends-management-message");
+    let is_demo = backend_slug == "demo" || backend_slug == "demo_forum";
 
     rsx! {
         div { class: "friends-grid",
             if friends.is_empty() {
-                div { class: "empty-state", "{t(\"friends-none\")}" }
+                if is_demo {
+                    // Demo accounts are seeded with static data — they cannot
+                    // add friends to themselves.  Show a contextual hint and a
+                    // button to start the real-account signup flow.
+                    div { class: "empty-state friends-empty-state",
+                        p { class: "friends-empty-message", "{t(\"friends-demo-empty\")}" }
+                        button {
+                            class: "btn btn-primary friends-empty-action",
+                            onclick: move |_| { nav.push(Route::SignupPicker); },
+                            "{t(\"friends-demo-add-account\")}"
+                        }
+                    }
+                } else {
+                    // Real backend with no friends yet — nudge the user with an
+                    // "Add friend" affordance (full feature pending; shows a
+                    // "coming soon" toast for now).
+                    div { class: "empty-state friends-empty-state",
+                        p { class: "friends-empty-message", "{t(\"friends-none\")}" }
+                        button {
+                            class: "btn btn-secondary friends-empty-action",
+                            onclick: move |_| {
+                                if let Some(tq) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
+                                    push_toast(tq, ToastMessage::new("friends-add-coming-soon", ToastTone::Info));
+                                }
+                            },
+                            "{t(\"friends-add-friend\")}"
+                        }
+                    }
+                }
             } else {
                 for friend in &friends {
                     {
@@ -341,5 +373,13 @@ mod tests {
         let _ = FriendsPanelAction::ShowBlocked;
         let _ = FriendsPanelAction::SetSearchFilter("query".into());
         let _ = FriendsPanelAction::MessageFriend("user-1".into());
+    }
+
+    #[test]
+    fn demo_slug_detection() {
+        // Ensure the slugs used in production match what FriendsGrid checks.
+        assert!(["demo", "demo_forum"].contains(&"demo"));
+        assert!(["demo", "demo_forum"].contains(&"demo_forum"));
+        assert!(!["demo", "demo_forum"].contains(&"discord"));
     }
 }

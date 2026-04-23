@@ -314,7 +314,9 @@ impl TeamsHttpClient {
     }
 
     pub async fn get_chats(&self) -> Result<Vec<GraphChat>, ClientError> {
-        let col: GraphCollection<GraphChat> = self.get("/v1.0/me/chats").await?;
+        // $expand=members fetches member list (with displayName) inline so
+        // get_dm_channels can resolve contact display names without extra round-trips.
+        let col: GraphCollection<GraphChat> = self.get("/v1.0/me/chats?$expand=members").await?;
         Ok(col.value)
     }
 

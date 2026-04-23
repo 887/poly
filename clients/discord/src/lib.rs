@@ -707,6 +707,10 @@ impl ClientBackend for DiscordClient {
                 account_id: account_id.clone(),
                 account_display_name: account_name.clone(),
                 default_channel_id: g.system_channel_id,
+                description: None,
+                star_count: None,
+                language: None,
+                updated_at: None,
             }
         }).collect())
     }
@@ -732,6 +736,10 @@ impl ClientBackend for DiscordClient {
             account_id,
             account_display_name: account_name,
             default_channel_id: g.system_channel_id,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         })
     }
 

@@ -204,9 +204,18 @@ async fn test_get_dm_channels() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("Sheep").await;
     let dms = client.get_dm_channels().await.expect("get_dm_channels");
-    // Sheep is a member of CHAT001
+    // Sheep is a member of CHAT001 (oneOnOne with Walrus)
     assert!(!dms.is_empty(), "Sheep should have at least one chat");
     assert_eq!(dms[0].backend, BackendType::from("teams"));
+    // F-TE-1: contact display name must be resolved from members, not "Unknown"
+    assert_ne!(
+        dms[0].user.display_name, "Unknown",
+        "DM contact should resolve to a real display name, not 'Unknown'"
+    );
+    assert_eq!(
+        dms[0].user.display_name, "Walrus",
+        "Sheep's 1:1 DM contact should be Walrus"
+    );
 }
 
 #[tokio::test]

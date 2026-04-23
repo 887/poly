@@ -50,6 +50,10 @@ pub fn build_server(account_id: &str) -> Server {
         account_id: account_id.to_string(),
         account_display_name: "Hacker News".to_string(),
         default_channel_id: None,
+        description: None,
+        star_count: None,
+        language: None,
+        updated_at: None,
     }
 }
 

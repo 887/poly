@@ -222,6 +222,10 @@ pub fn map_community_to_server(view: &CommunityView, account_id: &str, account_d
         account_id: account_id.to_string(),
         account_display_name: account_display_name.to_string(),
         default_channel_id: None,
+        description: None,
+        star_count: None,
+        language: None,
+        updated_at: None,
     }
 }
 

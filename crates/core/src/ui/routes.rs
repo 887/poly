@@ -1786,9 +1786,9 @@ fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Ele
             }
         };
     }
-    let _ = (backend, instance_id);
+    let _ = instance_id;
     rsx! {
-        FriendsPanel { account_id }
+        FriendsPanel { account_id, backend_slug: backend }
     }
 }
 

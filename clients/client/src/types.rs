@@ -408,6 +408,23 @@ pub struct Server {
     /// text channel. Always `None` for backends without the concept.
     #[serde(default)]
     pub default_channel_id: Option<String>,
+    /// Optional short description for the server/repository/space.
+    /// Used by forum and repo backends (GitHub, Forgejo, Lemmy).
+    /// Always `None` for chat-only backends (Discord, Teams, Matrix, Stoat).
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Star/fave count, used by repo backends (GitHub, Forgejo, HN).
+    /// Always `None` for chat backends.
+    #[serde(default)]
+    pub star_count: Option<u64>,
+    /// Primary programming language, used by repo backends (GitHub, Forgejo).
+    /// Always `None` for non-repo backends.
+    #[serde(default)]
+    pub language: Option<String>,
+    /// Last-updated timestamp (RFC 3339), used by repo backends (GitHub, Forgejo).
+    /// Always `None` for non-repo backends.
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 /// A category/folder that groups channels within a server.

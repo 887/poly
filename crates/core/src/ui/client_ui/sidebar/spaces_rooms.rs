@@ -151,6 +151,10 @@ mod tests {
             account_id: "acct-test".into(),
             account_display_name: "Test".into(),
             default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            updated_at: None,
         }
     }
 

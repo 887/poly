@@ -109,6 +109,10 @@ pub fn server_from_repo(repo: &GhRepo, account_id: &str, account_display_name: &
         account_id: account_id.to_string(),
         account_display_name: account_display_name.to_string(),
         default_channel_id: None,
+        description: repo.description.clone(),
+        star_count: Some(repo.stargazers_count),
+        language: repo.language.clone(),
+        updated_at: repo.pushed_at.clone(),
     }
 }
 
