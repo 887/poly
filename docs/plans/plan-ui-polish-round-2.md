@@ -96,11 +96,11 @@ Per [`audit-context-menu-inherit.md` §2](ui-polish-round-2/audit-context-menu-i
 
 ### Phase E — Cross-backend functional bugs (R1, R2, R3, +)
 
-- [ ] **E1. Direct URL navigation redirects to Settings on every non-demo backend (R1).** Investigate: the dx-fullstack server's catch-all may be falling through to `/settings` rather than serving `index.html` for unknown paths, OR the Dioxus router is missing a default-route hydration step on first paint. Repro via `curl http://localhost:3000/teams/localhost:9103/U001/dms` and checking the response. Fix at the router level, not per-backend.
-- [ ] **E2. Server / repo / space icon images don't load (R2).** Affects all 7 non-demo backends. Inspect the actual `<img src=…>` URL in DevTools for one icon (e.g. Discord guild) and confirm the failure mode (CORS preflight failed, 401 from upstream, network error, image proxy not wired). Most likely fix: thread the auth token through the existing `client.fetch_image(url)` path instead of letting the browser fetch the URL directly.
-- [ ] **E3. Per-account settings ignore backend capabilities (R3).** In `crates/core/src/ui/account/settings/`, gate each settings section on `client_manager.capabilities(&account_id).has_voice()`, `has_friends()`, etc. The `BackendCapabilities` field exists (per Round-1 plan §H — D12 deferred); use it.
-- [ ] **E4. Issue / PR detail fails to load on click (Forgejo: "Failed to load detail", GitHub: stays on "Select an item").** [`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md), [`visual-github.md`](ui-polish-round-2/visual-github.md). Likely a `get_view_detail` plugin call returning the wrong shape; or the `detail.fetch_url` is constructed wrong for those backends.
-- [ ] **E5. Boot hang watchdog fires too eagerly on Dog (demo) account switch.** [`visual-demo.md`](ui-polish-round-2/visual-demo.md). The "App not responding" overlay appears ~18s after the avatar click and the Reload button doesn't clear it without a manual `page_reload`. Either bump `BOOT_HANG_TIMEOUT_MS` in `crates/core/src/wasm_crash_handler.rs` for demo accounts with many DMs, or fix the underlying slow account-switch path so it actually finishes in time.
+- [x] **E1. Direct URL navigation redirects to Settings on every non-demo backend (R1).** Investigate: the dx-fullstack server's catch-all may be falling through to `/settings` rather than serving `index.html` for unknown paths, OR the Dioxus router is missing a default-route hydration step on first paint. Repro via `curl http://localhost:3000/teams/localhost:9103/U001/dms` and checking the response. Fix at the router level, not per-backend.
+- [x] **E2. Server / repo / space icon images don't load (R2).** Affects all 7 non-demo backends. Inspect the actual `<img src=…>` URL in DevTools for one icon (e.g. Discord guild) and confirm the failure mode (CORS preflight failed, 401 from upstream, network error, image proxy not wired). Most likely fix: thread the auth token through the existing `client.fetch_image(url)` path instead of letting the browser fetch the URL directly.
+- [x] **E3. Per-account settings ignore backend capabilities (R3).** In `crates/core/src/ui/account/settings/`, gate each settings section on `client_manager.capabilities(&account_id).has_voice()`, `has_friends()`, etc. The `BackendCapabilities` field exists (per Round-1 plan §H — D12 deferred); use it.
+- [x] **E4. Issue / PR detail fails to load on click (Forgejo: "Failed to load detail", GitHub: stays on "Select an item").** [`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md), [`visual-github.md`](ui-polish-round-2/visual-github.md). Likely a `get_view_detail` plugin call returning the wrong shape; or the `detail.fetch_url` is constructed wrong for those backends.
+- [x] **E5. Boot hang watchdog fires too eagerly on Dog (demo) account switch.** [`visual-demo.md`](ui-polish-round-2/visual-demo.md). The "App not responding" overlay appears ~18s after the avatar click and the Reload button doesn't clear it without a manual `page_reload`. Either bump `BOOT_HANG_TIMEOUT_MS` in `crates/core/src/wasm_crash_handler.rs` for demo accounts with many DMs, or fix the underlying slow account-switch path so it actually finishes in time.
 - [x] **E6. Plugin sidebar fails to load intermittently on Discord first activation.** [`visual-discord.md`](ui-polish-round-2/visual-discord.md). "Plugin sidebar failed to load — showing channels" message appears in the channel list panel; transient (clears after navigating). Race between plugin init and first channel-list render.
 - [x] **E7. Hackernews test server fails to start.** Discovered while starting the test runner: `poly-test-hackernews` panics at `servers/test-hackernews/src/main.rs:243` with *"Path segments must not start with `:`. For capture groups, use `{capture}`."* — an axum 0.7 → 0.8 router-syntax regression that needs the `:id` → `{id}` migration applied to that file. Blocks any HN test data. — **shipped `5a692166`** (also added wrapper handlers because axum 0.8 disallows mixed literal+capture in `{id}.json`)
 
@@ -123,7 +123,7 @@ These are real backend gaps surfaced by the visual audit, not styling. Each is i
 
 #### F-Forgejo
 - [x] **F-FJ-1.** "forgejo doesn't support direct messages" renders as raw plain text in the main content area instead of a styled unsupported-feature empty state. ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #2) — **shipped as part of `729ca80070b0`** (the Forgejo unsupported-DM view was already rendering through `FeatureUnsupportedPlaceholder`; only the CSS for `.feature-unsupported-*` was missing — added in the F-LE-2 commit).
-- [ ] **F-FJ-2.** Repository icons render as letter-circles instead of repo avatars. (Subset of E2.) ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #4)
+- [x] **F-FJ-2.** Repository icons render as letter-circles instead of repo avatars. (Subset of E2.) ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #4)
 
 #### F-GitHub
 - [ ] **F-GH-1.** Repository cards show only icon + name; no description / star count / language / last update. Card design needs more info. ([`visual-github.md`](ui-polish-round-2/visual-github.md) #2)
@@ -131,10 +131,10 @@ These are real backend gaps surfaced by the visual audit, not styling. Each is i
 
 #### F-Matrix
 - [x] **F-MX-1.** Matrix DM contacts use `@username:server` MXID in some places and display name in others; pick one. ([`visual-matrix.md`](ui-polish-round-2/visual-matrix.md) #4) — **shipped `1b6c246511b5`**. `get_dm_channels()` now batches `fetch_profile()` calls via `futures::join_all` and uses Matrix `displayname` (with MXID fallback); also populates `avatar_url` from the profile.
-- [ ] **F-MX-2.** Spaces icons in second nav render as letter-circles instead of Matrix space thumbnails (subset of E2). ([`visual-matrix.md`](ui-polish-round-2/visual-matrix.md) #2)
+- [x] **F-MX-2.** Spaces icons in second nav render as letter-circles instead of Matrix space thumbnails (subset of E2). ([`visual-matrix.md`](ui-polish-round-2/visual-matrix.md) #2)
 
 #### F-Stoat
-- [ ] **F-ST-1.** Stoat server icons render as letter-circles. (Subset of E2.) ([`visual-stoat.md`](ui-polish-round-2/visual-stoat.md) #2)
+- [x] **F-ST-1.** Stoat server icons render as letter-circles. (Subset of E2.) ([`visual-stoat.md`](ui-polish-round-2/visual-stoat.md) #2)
 
 #### F-Demo
 - [ ] **F-DM-1.** Friends panel shows "No friends found" with no add-friend affordance for demo accounts. (Demo can't add friends to itself, so an empty state explaining that is fine.) ([`visual-demo.md`](ui-polish-round-2/visual-demo.md) #3)
