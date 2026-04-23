@@ -302,7 +302,18 @@ impl ClientBackend for TeamsClient {
             token,
             backend: BackendType::from("teams"),
             icon_emoji: Some("💼".to_string()),
-            instance_id: self.http.base_url().to_string(),
+            // Strip the URL scheme so `instance_id` is a bare "host:port"
+            // (e.g. "localhost:9103") instead of "http://localhost:9103".
+            // Route path segments cannot contain "://" — a scheme-inclusive
+            // instance_id causes the Dioxus router to parse every Teams route
+            // as PageNotFound, triggering an on_update redirect cascade that
+            // produces a burst of unconditional app_state.write() calls and
+            // hangs the WASM main thread (reproduced 5/5 times in visual audit).
+            instance_id: self.http.base_url()
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/')
+                .to_string(),
             backend_url: Some(self.http.base_url().to_string()),
         })
     }
