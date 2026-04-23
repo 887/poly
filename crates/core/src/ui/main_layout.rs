@@ -18,6 +18,7 @@ use super::account::{
     AccountServerBar, AttachmentContextMenu, ChannelContextMenu, ServerContextMenu,
     UserProfileModal,
 };
+use super::context_menu::host::ContextMenuStack;
 use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
@@ -308,6 +309,11 @@ pub fn MainLayout() -> Element {
                 if app_state.read().attachment_context_menu.is_some() {
                     app_state.write().attachment_context_menu = None;
                 }
+                // Clear the Phase-A context_menu_stack (ForumPostContextMenu,
+                // UserRowContextMenu, and future stack-based menus).
+                if !app_state.read().context_menu_stack.is_empty() {
+                    app_state.write().context_menu_stack.clear();
+                }
             },
             // Belt-and-suspenders: suppress native browser context menu app-wide.
             // Per-component `allow_default` surfaces opt back in via stop_propagation.
@@ -319,6 +325,11 @@ pub fn MainLayout() -> Element {
             ChannelContextMenu {}
             // Floating attachment (image) right-click context menu
             AttachmentContextMenu {}
+            // Phase-A stack-based context menus (ForumPostContextMenu,
+            // UserRowContextMenu, and future stack-based menus).
+            // D1: mounted here so existing menus actually render — previously
+            // the stack was populated but never rendered.
+            ContextMenuStack {}
             // Voice connection banner — spans full width when connected
             VoiceBanner {}
             // Main body: nav + sidebar + route content
