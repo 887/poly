@@ -906,6 +906,92 @@ impl StoatPresence {
     }
 }
 
+// ── Moderation API types (B-ST) ─────────────────────────────────────────────
+
+/// Payload sent to `PUT /servers/{server_id}/bans/{user_id}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StoatBanCreate {
+    /// Optional ban reason.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Number of seconds of recent messages to bulk-delete (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delete_message_seconds: Option<u64>,
+}
+
+/// A single ban entry returned in `GET /servers/{server_id}/bans`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatBan {
+    /// Ban composite key.
+    #[serde(rename = "_id")]
+    pub id: StoatBanId,
+    /// Optional ban reason.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Composite ban key.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatBanId {
+    /// Server ID.
+    pub server: String,
+    /// Banned user ID.
+    pub user: String,
+}
+
+/// The full bans-list response from `GET /servers/{server_id}/bans`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatBansResponse {
+    /// Ban records.
+    pub bans: Vec<StoatBan>,
+    /// Matching user records.
+    pub users: Vec<StoatUser>,
+}
+
+/// `DataMemberEdit` payload for `PATCH /servers/{server_id}/members/{member_id}`.
+///
+/// Both `timeout` and `remove` are optional; send only one at a time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+pub struct StoatMemberEdit {
+    /// ISO8601 datetime until which the member is timed out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<String>,
+    /// Fields to clear (e.g. `["Timeout"]` to lift an active timeout).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remove: Option<Vec<String>>,
+}
+
+/// `DataEditChannel` payload for `PATCH /channels/{channel_id}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+pub struct StoatChannelEdit {
+    /// New channel name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// New channel description / topic.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Slow-mode interval in seconds (0 = disabled, max 21600).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slowmode: Option<u32>,
+    /// NSFW flag.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nsfw: Option<bool>,
+}
+
+/// Server member info returned by `GET /servers/{server_id}/members/@me`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatServerMemberMe {
+    /// Composite member key.
+    #[serde(rename = "_id")]
+    pub key: StoatMemberCompositeKey,
+    /// Assigned role IDs.
+    #[serde(default)]
+    pub roles: Vec<String>,
+    /// Timeout expiry (ISO8601) if the member is currently timed out.
+    #[serde(default)]
+    pub timeout: Option<String>,
+}
+
 /// Build a stable reply preview from an already mapped Poly message.
 #[must_use]
 pub fn reply_preview_from_message(message: &Message) -> MessageReplyPreview {

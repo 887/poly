@@ -11,7 +11,11 @@ use dioxus::prelude::*;
 use poly_client::UpdateChannelParams;
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Edit channel dialog — name, topic, slow-mode, NSFW toggle.
+/// Edit channel dialog — name, topic, slow-mode (hidden for Teams), NSFW toggle (hidden for Teams).
+///
+/// When `backend_slug` is `"teams"`, only name and description fields are shown —
+/// Teams/Graph has no slow-mode or NSFW concept. Don't render disabled fields;
+/// hide them entirely per the "accurate to backend" UX decision.
 #[ui_action(inherit)]
 #[rustfmt::skip]
 #[context_menu(none)]
@@ -19,6 +23,9 @@ use poly_ui_macros::{context_menu, ui_action};
 pub fn EditChannelDialog(
     channel_id: String,
     account_id: String,
+    /// Backend slug (e.g. `"teams"`, `"discord"`) — drives per-backend field gating.
+    #[props(default)]
+    backend_slug: String,
     on_close: EventHandler<()>,
 ) -> Element {
     let mut name = use_signal(String::new);
@@ -27,6 +34,9 @@ pub fn EditChannelDialog(
     let mut submitting = use_signal(|| false);
     let mut error_msg = use_signal(String::new);
     let mut success = use_signal(|| false);
+
+    // Teams only supports name + description — hide slow-mode and nsfw entirely.
+    let show_slowmode = backend_slug != "teams";
 
     let client_manager: Signal<ClientManager> = use_context();
     let mut app_state: Signal<AppState> = use_context();
@@ -66,16 +76,18 @@ pub fn EditChannelDialog(
                             oninput: move |e| topic.set(e.value()),
                         }
                     }
-                    label { class: "modal-label",
-                        "{t(\"dialog-edit-channel-slowmode\")}"
-                        input {
-                            r#type: "number",
-                            class: "modal-input",
-                            min: "0",
-                            max: "21600",
-                            placeholder: "0",
-                            value: "{slowmode}",
-                            oninput: move |e| slowmode.set(e.value()),
+                    if show_slowmode {
+                        label { class: "modal-label",
+                            "{t(\"dialog-edit-channel-slowmode\")}"
+                            input {
+                                r#type: "number",
+                                class: "modal-input",
+                                min: "0",
+                                max: "21600",
+                                placeholder: "0",
+                                value: "{slowmode}",
+                                oninput: move |e| slowmode.set(e.value()),
+                            }
                         }
                     }
                     if !error_msg.read().is_empty() {
@@ -101,7 +113,12 @@ pub fn EditChannelDialog(
                                 if *submitting.read() { return; }
                                 let name_str = name.read().trim().to_string();
                                 let topic_str = topic.read().trim().to_string();
-                                let slow_mode = slowmode.read().trim().parse::<u32>().ok();
+                                // Only parse slow-mode when the field is shown (not Teams).
+                                let slow_mode = if show_slowmode {
+                                    slowmode.read().trim().parse::<u32>().ok()
+                                } else {
+                                    None
+                                };
 
                                 // At least one field must be non-empty to make the call.
                                 if name_str.is_empty() && topic_str.is_empty() && slow_mode.is_none() {

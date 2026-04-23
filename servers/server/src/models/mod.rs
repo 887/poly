@@ -85,6 +85,16 @@ pub struct Membership {
     pub user: String,
     pub server: String,
     pub joined_at: DateTime<Utc>,
+    /// Role string: "owner" | "admin" | "moderator" | "member".
+    #[serde(default = "default_member_role")]
+    pub role: String,
+    /// ISO8601 timestamp until which the member is timed out. None = not timed out.
+    #[serde(default)]
+    pub timeout_until: Option<String>,
+}
+
+fn default_member_role() -> String {
+    "member".to_string()
 }
 
 /// Channel category (groups channels inside a server).

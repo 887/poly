@@ -259,6 +259,50 @@ pub struct WireAttachment {
     pub created_at: DateTime<Utc>,
 }
 
+// ── Moderation wire types (B-PS) ─────────────────────────────────────────────
+
+/// Member permissions response from `GET /servers/{id}/members/@me/permissions`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WirePermissions {
+    pub role: String,
+    pub manage_server: bool,
+    pub manage_channels: bool,
+    pub manage_roles: bool,
+    pub kick_members: bool,
+    pub ban_members: bool,
+    pub manage_messages: bool,
+    pub timeout_members: bool,
+}
+
+/// A ban record from `GET /servers/{id}/bans`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WireBanRecord {
+    pub server_id: String,
+    pub user_id: String,
+    pub banned_by: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+    pub created_at: String,
+}
+
+/// A moderation log entry from `GET /servers/{id}/modlog`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WireModlogEntry {
+    pub id: serde_json::Value,
+    pub server_id: String,
+    pub actor_id: String,
+    #[serde(default)]
+    pub target_id: Option<String>,
+    pub action: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub channel_id: Option<String>,
+    pub timestamp: String,
+}
+
 // ── WebSocket events ─────────────────────────────────────────────────────────
 
 /// Events pushed from server → client over WebSocket.

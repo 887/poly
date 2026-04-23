@@ -40,10 +40,22 @@ fn expected(slug: &str) -> BackendCapabilities {
         },
         "stoat" => BackendCapabilities {
             voice: VoiceSupport::None,
+            has_roles: true,
+            has_kick: true,
+            has_ban: true,
+            has_timed_ban: true,
+            has_channel_mgmt: true,
+            has_moderation_log: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "teams" => BackendCapabilities {
             supports_typing_indicators: false,
+            has_roles: false,
+            has_kick: true,
+            has_ban: false,
+            has_timed_ban: false,
+            has_channel_mgmt: true,
+            has_moderation_log: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "discord" | "demo" | "poly" => BackendCapabilities {

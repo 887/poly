@@ -15,7 +15,7 @@ pub mod routes;
 pub mod state;
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post, put};
 use poly_test_common::health_handler;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
@@ -43,11 +43,17 @@ pub fn router(state: Arc<StoatState>) -> Router {
         // Servers
         .route("/servers/{id}", get(routes::get_server))
         .route("/servers/{id}/members", get(routes::get_server_members))
+        // Moderation — member management
+        .route("/servers/{server_id}/members/@me", get(routes::get_my_member))
+        .route("/servers/{server_id}/members/{member_id}", delete(routes::kick_member).patch(routes::edit_member))
+        // Moderation — bans
+        .route("/servers/{server_id}/bans", get(routes::list_bans))
+        .route("/servers/{server_id}/bans/{user_id}", put(routes::ban_member).delete(routes::unban_member))
         // Channels
-        .route("/channels/{id}", get(routes::get_channel))
+        .route("/channels/{id}", get(routes::get_channel).patch(routes::update_channel))
         .route("/channels/{id}/members", get(routes::get_channel_members))
         .route("/channels/{id}/messages", get(routes::get_messages).post(routes::send_message))
-        .route("/channels/{id}/messages/{message_id}", get(routes::get_message))
+        .route("/channels/{id}/messages/{message_id}", get(routes::get_message).delete(routes::delete_message))
         .route("/channels/{id}/typing", post(routes::channel_start_typing))
         // Bonfire WebSocket
         .route("/bonfire", get(routes::bonfire_ws))

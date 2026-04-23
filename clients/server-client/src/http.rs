@@ -978,6 +978,153 @@ impl PolyServerHttpClient {
     pub fn attachment_url(&self, attachment_id: &str) -> String {
         self.url(&format!("/attachments/{attachment_id}"))
     }
+
+    // ── Moderation ───────────────────────────────────────────────────────────
+
+    /// `GET /servers/{id}/members/@me/permissions` — get caller's permissions.
+    pub async fn get_my_permissions(&self, server_id: &str) -> Result<Value> {
+        let url = self.url(&format!("/servers/{server_id}/members/@me/permissions"));
+        let resp = self.auth_get(&url).await?.send().await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// `GET /servers/{id}/bans` — list bans (Mod+).
+    pub async fn get_bans(&self, server_id: &str) -> Result<Value> {
+        let url = self.url(&format!("/servers/{server_id}/bans"));
+        let resp = self.auth_get(&url).await?.send().await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// `POST /servers/{id}/bans/{user_id}` — ban a member (Mod+).
+    pub async fn ban_member(
+        &self,
+        server_id: &str,
+        user_id: &str,
+        reason: Option<&str>,
+        expires_at: Option<&str>,
+    ) -> Result<()> {
+        let url = self.url(&format!("/servers/{server_id}/bans/{user_id}"));
+        let body = serde_json::json!({
+            "reason": reason,
+            "expires_at": expires_at,
+        });
+        let resp = self.auth_post(&url).await?.json(&body).send().await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /servers/{id}/bans/{user_id}` — unban a member (Mod+).
+    pub async fn unban_member(&self, server_id: &str, user_id: &str) -> Result<()> {
+        let url = self.url(&format!("/servers/{server_id}/bans/{user_id}"));
+        let resp = self.auth_delete(&url).await?.send().await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `PATCH /servers/{id}/members/{user_id}/role` — update member role (Admin+).
+    pub async fn update_member_role(&self, server_id: &str, user_id: &str, role: &str) -> Result<()> {
+        let url = self.url(&format!("/servers/{server_id}/members/{user_id}/role"));
+        let resp = self
+            .auth_patch(&url)
+            .await?
+            .json(&serde_json::json!({ "role": role }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `PATCH /servers/{id}/members/{user_id}/timeout` — set or clear timeout (Mod+).
+    pub async fn set_member_timeout(&self, server_id: &str, user_id: &str, until: Option<&str>) -> Result<()> {
+        let url = self.url(&format!("/servers/{server_id}/members/{user_id}/timeout"));
+        let resp = self
+            .auth_patch(&url)
+            .await?
+            .json(&serde_json::json!({ "until": until }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /channels/{id}/messages/{mid}` — moderator delete via channel route.
+    pub async fn delete_message_mod(&self, _channel_id: &str, message_id: &str) -> Result<()> {
+        // The existing delete_message uses /messages/:id. The moderation path goes
+        // through the server-scoped channel route. We fall back to the existing
+        // /messages/:id path since the server enforces auth anyway.
+        self.delete_message(message_id).await
+    }
+
+    /// `PATCH /servers/{id}/channels/{channel_id}/moderation` — update channel moderation fields (Admin+).
+    pub async fn update_channel_moderation(
+        &self,
+        server_id: &str,
+        channel_id: &str,
+        topic: Option<&str>,
+        slow_mode_secs: Option<u32>,
+        nsfw: Option<bool>,
+    ) -> Result<()> {
+        let url = self.url(&format!("/servers/{server_id}/channels/{channel_id}/moderation"));
+        let mut map = serde_json::Map::new();
+        if let Some(t) = topic {
+            map.insert("topic".into(), serde_json::json!(t));
+        }
+        if let Some(sms) = slow_mode_secs {
+            map.insert("slow_mode_secs".into(), serde_json::json!(sms));
+        }
+        if let Some(n) = nsfw {
+            map.insert("nsfw".into(), serde_json::json!(n));
+        }
+        let resp = self
+            .auth_patch(&url)
+            .await?
+            .json(&serde_json::Value::Object(map))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `PATCH /servers/{id}/channels/reorder` — reorder channels (Admin+).
+    pub async fn reorder_channels(&self, server_id: &str, ordering: &[String]) -> Result<()> {
+        let url = self.url(&format!("/servers/{server_id}/channels/reorder"));
+        let resp = self
+            .auth_patch(&url)
+            .await?
+            .json(&serde_json::json!({ "ordering": ordering }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `GET /servers/{id}/modlog?limit=N` — get moderation log (Mod+).
+    pub async fn get_modlog(&self, server_id: &str, limit: usize) -> Result<Value> {
+        let url = self.url(&format!("/servers/{server_id}/modlog?limit={limit}"));
+        let resp = self.auth_get(&url).await?.send().await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

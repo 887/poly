@@ -22,6 +22,23 @@ pub use message::{GraphMessage, GraphMessageBody, GraphMessageFrom, GraphFromUse
 pub use team::GraphTeam;
 pub use user::GraphUser;
 
+/// A member entry returned by `GET /v1.0/teams/{id}/members`.
+///
+/// The `id` field here is the **membership ID** (base64-encoded composite),
+/// not the user's OID. Use this `id` for `DELETE /teams/{t}/members/{id}`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphMember {
+    /// Membership ID — use as the path segment for DELETE /members/{id}.
+    pub id: String,
+    /// AAD user object ID (OID).
+    pub user_id: Option<String>,
+    pub display_name: Option<String>,
+    /// `["owner"]` for owners, empty for regular members.
+    #[serde(default)]
+    pub roles: Vec<String>,
+}
+
 use poly_client::ClientError;
 use serde::Deserialize;
 

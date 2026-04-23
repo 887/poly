@@ -63,6 +63,10 @@ poly-test-stoat = { path = "../../servers/test-stoat" }
 poly-test-common = { path = "../../servers/test-common" }
 
 [[test]]
+name = "moderation"
+path = "tests/moderation.rs"
+
+[[test]]
 name = "integration"
 path = "tests/integration.rs"
 

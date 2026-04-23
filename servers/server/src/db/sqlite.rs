@@ -44,6 +44,16 @@ impl Db {
         // SQLite doesn't support "ADD COLUMN IF NOT EXISTS", so we ignore the
         // error if the column already exists (duplicate column error).
         let _ = conn.execute("ALTER TABLE server ADD COLUMN banner_url TEXT");
+        // Migration B-PS: add role column to membership if not present.
+        let _ = conn.execute("ALTER TABLE membership ADD COLUMN role TEXT NOT NULL DEFAULT 'member'");
+        // Migration B-PS: add timeout_until column to membership if not present.
+        let _ = conn.execute("ALTER TABLE membership ADD COLUMN timeout_until TEXT");
+        // Migration B-PS: add moderation columns to channel if not present.
+        let _ = conn.execute("ALTER TABLE channel ADD COLUMN topic TEXT");
+        let _ = conn.execute("ALTER TABLE channel ADD COLUMN slow_mode_secs INTEGER NOT NULL DEFAULT 0");
+        let _ = conn.execute("ALTER TABLE channel ADD COLUMN nsfw INTEGER NOT NULL DEFAULT 0");
+        // Migration B-PS: create bans and modlog tables.
+        conn.execute(MODERATION_SCHEMA)?;
 
         info!("SQLite schema applied");
         Ok(Self {
@@ -653,6 +663,152 @@ impl Db {
             .map(str::to_owned))
     }
 
+    // ── Moderation operations ────────────────────────────────────────────────
+
+    /// Get the role of a member in a server (None if not a member).
+    pub async fn get_member_role(&self, server_id: &str, user_id: &str) -> Result<Option<String>> {
+        let conn = self.inner.lock().await;
+        let raw: Option<serde_json::Value> = query_one(&conn,
+            "SELECT role FROM membership WHERE user = ?1 AND server = ?2 LIMIT 1",
+            &[user_id, server_id])?;
+        Ok(raw
+            .as_ref()
+            .and_then(|v| v.get("role"))
+            .and_then(|v| v.as_str())
+            .map(str::to_owned))
+    }
+
+    /// Set the role of a member in a server.
+    pub async fn set_member_role(&self, server_id: &str, user_id: &str, role: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        exec_bind(&conn,
+            "UPDATE membership SET role = ?1 WHERE user = ?2 AND server = ?3",
+            &[role, user_id, server_id])
+    }
+
+    /// Ban a member: insert into server_bans and remove from membership.
+    pub async fn ban_member(
+        &self,
+        server_id: &str,
+        user_id: &str,
+        banned_by: &str,
+        reason: Option<&str>,
+        expires_at: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        let reason_val = reason.unwrap_or("");
+        // Upsert — replace existing ban if present.
+        match expires_at {
+            Some(exp) => exec_bind(&conn,
+                "INSERT OR REPLACE INTO server_bans (server_id, user_id, banned_by, reason, expires_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                &[server_id, user_id, banned_by, reason_val, exp, &now])?,
+            None => exec_bind(&conn,
+                "INSERT OR REPLACE INTO server_bans (server_id, user_id, banned_by, reason, expires_at, created_at) VALUES (?1, ?2, ?3, ?4, NULL, ?5)",
+                &[server_id, user_id, banned_by, reason_val, &now])?,
+        }
+        // Remove from server membership.
+        let _ = exec_bind(&conn,
+            "DELETE FROM membership WHERE user = ?1 AND server = ?2",
+            &[user_id, server_id]);
+        Ok(())
+    }
+
+    /// Unban a member.
+    pub async fn unban_member(&self, server_id: &str, user_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        exec_bind(&conn,
+            "DELETE FROM server_bans WHERE server_id = ?1 AND user_id = ?2",
+            &[server_id, user_id])
+    }
+
+    /// Check if a user is currently banned from a server (respects expires_at).
+    pub async fn is_banned(&self, server_id: &str, user_id: &str) -> Result<bool> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        let sql = format!(
+            "SELECT server_id FROM server_bans WHERE server_id = ?1 AND user_id = ?2 AND (expires_at IS NULL OR expires_at > '{now}') LIMIT 1"
+        );
+        let raw: Option<serde_json::Value> = query_one(&conn, &sql, &[server_id, user_id])?;
+        Ok(raw.is_some())
+    }
+
+    /// List all active bans for a server (excluding expired).
+    pub async fn list_bans(&self, server_id: &str) -> Result<Vec<serde_json::Value>> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        let sql = format!(
+            "SELECT * FROM server_bans WHERE server_id = ?1 AND (expires_at IS NULL OR expires_at > '{now}') ORDER BY created_at DESC"
+        );
+        query_many(&conn, &sql, &[server_id])
+    }
+
+    /// Append a modlog entry.
+    pub async fn append_modlog(
+        &self,
+        server_id: &str,
+        actor_id: &str,
+        target_id: Option<&str>,
+        action: &str,
+        reason: Option<&str>,
+        channel_id: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        let target = target_id.unwrap_or("");
+        let reason_val = reason.unwrap_or("");
+        let channel = channel_id.unwrap_or("");
+        exec_bind(&conn,
+            "INSERT INTO server_modlog (server_id, actor_id, target_id, action, reason, channel_id, timestamp) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            &[server_id, actor_id, target, action, reason_val, channel, &now])
+    }
+
+    /// List modlog entries for a server, newest first.
+    pub async fn list_modlog(&self, server_id: &str, limit: usize) -> Result<Vec<serde_json::Value>> {
+        let conn = self.inner.lock().await;
+        let lim = limit.to_string();
+        let sql = format!(
+            "SELECT * FROM server_modlog WHERE server_id = ?1 ORDER BY timestamp DESC LIMIT {lim}"
+        );
+        query_many(&conn, &sql, &[server_id])
+    }
+
+    /// Set a timeout on a member (stores expires_at in membership row).
+    pub async fn set_member_timeout(&self, server_id: &str, user_id: &str, until: Option<&str>) -> Result<()> {
+        let conn = self.inner.lock().await;
+        match until {
+            Some(exp) => exec_bind(&conn,
+                "UPDATE membership SET timeout_until = ?1 WHERE user = ?2 AND server = ?3",
+                &[exp, user_id, server_id]),
+            None => exec_bind(&conn,
+                "UPDATE membership SET timeout_until = NULL WHERE user = ?1 AND server = ?2",
+                &[user_id, server_id]),
+        }
+    }
+
+    /// Update channel moderation fields (topic, slow_mode_secs, nsfw).
+    pub async fn update_channel_moderation(
+        &self,
+        channel_id: &str,
+        topic: Option<&str>,
+        slow_mode_secs: Option<u32>,
+        nsfw: Option<bool>,
+    ) -> Result<()> {
+        let conn = self.inner.lock().await;
+        if let Some(t) = topic {
+            let _ = exec_bind(&conn, "UPDATE channel SET topic = ?1 WHERE id = ?2", &[t, channel_id]);
+        }
+        if let Some(sms) = slow_mode_secs {
+            let s = sms.to_string();
+            let _ = exec_bind(&conn, "UPDATE channel SET slow_mode_secs = ?1 WHERE id = ?2", &[&s, channel_id]);
+        }
+        if let Some(n) = nsfw {
+            let n_str = if n { "1" } else { "0" };
+            let _ = exec_bind(&conn, "UPDATE channel SET nsfw = ?1 WHERE id = ?2", &[n_str, channel_id]);
+        }
+        Ok(())
+    }
+
     // ── Broadcast helpers ────────────────────────────────────────────────────
 
     pub async fn get_channel_member_ids(&self, channel_id: &str) -> Vec<String> {
@@ -826,13 +982,41 @@ fn row_to_json(stmt: &sqlite::Statement) -> serde_json::Value {
 
 /// Known boolean columns — stored as INTEGER 0/1 in SQLite.
 fn is_bool_column(name: &str) -> bool {
-    matches!(name, "used" | "revoked" | "deleted")
+    matches!(name, "used" | "revoked" | "deleted" | "nsfw")
 }
 
 // Suppress unused warnings.
 const _: fn() = || {
     let _: DateTime<Utc>;
 };
+
+/// Schema run on every startup after the base schema.
+/// Uses CREATE TABLE IF NOT EXISTS so it is idempotent.
+const MODERATION_SCHEMA: &str = "
+-- Server bans
+CREATE TABLE IF NOT EXISTS server_bans (
+    server_id   TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    banned_by   TEXT NOT NULL,
+    reason      TEXT,
+    expires_at  TEXT,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (server_id, user_id)
+);
+
+-- Moderation log
+CREATE TABLE IF NOT EXISTS server_modlog (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    server_id   TEXT NOT NULL,
+    actor_id    TEXT NOT NULL,
+    target_id   TEXT,
+    action      TEXT NOT NULL,
+    reason      TEXT,
+    channel_id  TEXT,
+    timestamp   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_modlog_server ON server_modlog(server_id, timestamp DESC);
+";
 
 const SCHEMA: &str = "
 -- Users

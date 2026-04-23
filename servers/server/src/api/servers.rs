@@ -211,14 +211,36 @@ async fn leave_server(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
-/// `DELETE /servers/:id/members/:user_id` — kick a member (owner only).
+/// `DELETE /servers/:id/members/:user_id` — kick a member (Mod+ required).
+///
+/// Delegates to the moderation tier system. Kept at this path for backward
+/// compatibility with the existing HTTP client.
 async fn kick_member(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
     Path((server_id, target_user_id)): Path<(String, String)>,
 ) -> Result<Json<serde_json::Value>> {
-    require_owner(&state, &auth.user_id, &server_id).await?;
+    use crate::api::moderation::RoleTier;
+
+    let caller_tier = crate::api::moderation::resolve_caller_tier(&state, &auth.user_id, &server_id).await?;
+    if caller_tier < RoleTier::Moderator {
+        return Err(AppError::Forbidden);
+    }
+
+    // Cannot kick owner; mods cannot kick admins.
+    let is_target_owner = state.db.get_server(&server_id).await?.map(|s| s.owner == target_user_id).unwrap_or(false);
+    if is_target_owner {
+        return Err(AppError::Forbidden);
+    }
+    if let Some(role_str) = state.db.get_member_role(&server_id, &target_user_id).await? {
+        let target_tier = RoleTier::from_str(&role_str);
+        if caller_tier <= target_tier {
+            return Err(AppError::Forbidden);
+        }
+    }
+
     state.db.delete_membership(&target_user_id, &server_id).await?;
+    state.db.append_modlog(&server_id, &auth.user_id, Some(&target_user_id), "kick", None, None).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

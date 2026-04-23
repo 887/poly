@@ -13,7 +13,7 @@ use std::time::Duration;
 use poly_client::ClientError;
 use poly_host_bridge::http::{HttpClient, RequestBuilder, Response};
 
-use crate::types::{GraphChannel, GraphChat, GraphCollection, GraphMessage, GraphTeam, GraphUser};
+use crate::types::{GraphChannel, GraphChat, GraphCollection, GraphMember, GraphMessage, GraphTeam, GraphUser};
 
 /// Max HTTP attempts per logical request (initial + 2 retries).
 const MAX_ATTEMPTS: u32 = 3;
@@ -380,6 +380,66 @@ impl TeamsHttpClient {
         self.patch_json_unit(
             "/v1.0/me/presence/setPresence",
             &serde_json::json!({ "availability": availability }),
+        )
+        .await
+    }
+
+    // ── Moderation ────────────────────────────────────────────────────────────
+
+    /// GET /v1.0/teams/{team_id}/members — returns team membership list.
+    pub async fn get_team_members(&self, team_id: &str) -> Result<Vec<GraphMember>, ClientError> {
+        let col: GraphCollection<GraphMember> =
+            self.get(&format!("/v1.0/teams/{team_id}/members")).await?;
+        Ok(col.value)
+    }
+
+    /// DELETE /v1.0/teams/{team_id}/members/{membership_id} — kick a member.
+    pub async fn delete_team_member(
+        &self,
+        team_id: &str,
+        membership_id: &str,
+    ) -> Result<(), ClientError> {
+        self.delete_unit(&format!(
+            "/v1.0/teams/{team_id}/members/{membership_id}"
+        ))
+        .await
+    }
+
+    /// POST /v1.0/teams/{team_id}/channels/{channel_id}/messages/{msg_id}/softDelete
+    pub async fn soft_delete_channel_message(
+        &self,
+        team_id: &str,
+        channel_id: &str,
+        message_id: &str,
+    ) -> Result<(), ClientError> {
+        self.post_json_unit(
+            &format!(
+                "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/softDelete"
+            ),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// PATCH /v1.0/teams/{team_id}/channels/{channel_id} — update channel name/description.
+    /// Ignores unsupported fields (slow_mode_secs, nsfw, position).
+    pub async fn patch_channel(
+        &self,
+        team_id: &str,
+        channel_id: &str,
+        display_name: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<(), ClientError> {
+        let mut body = serde_json::Map::new();
+        if let Some(name) = display_name {
+            body.insert("displayName".into(), serde_json::Value::String(name.into()));
+        }
+        if let Some(desc) = description {
+            body.insert("description".into(), serde_json::Value::String(desc.into()));
+        }
+        self.patch_json_unit(
+            &format!("/v1.0/teams/{team_id}/channels/{channel_id}"),
+            &serde_json::Value::Object(body),
         )
         .await
     }

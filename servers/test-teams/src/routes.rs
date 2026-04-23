@@ -12,7 +12,7 @@ use axum::Json;
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::state::{Message, Reaction, TeamsEvent, TeamsState};
+use crate::state::{Channel, Message, Reaction, TeamsEvent, TeamsState};
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -465,6 +465,122 @@ pub async fn delete_channel_message(
 }
 
 // ---------------------------------------------------------------------------
+// Moderation
+// ---------------------------------------------------------------------------
+
+/// GET /v1.0/teams/:team_id/members
+pub async fn get_team_members(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path(team_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => {
+            let members = state
+                .memberships
+                .get(&team_id)
+                .map(|v| v.clone())
+                .unwrap_or_default();
+            let value: Vec<serde_json::Value> = members
+                .iter()
+                .map(|m| membership_to_json(m))
+                .collect();
+            Json(serde_json::json!({ "value": value })).into_response()
+        }
+    }
+}
+
+/// DELETE /v1.0/teams/:team_id/members/:membership_id — kick a member.
+pub async fn delete_team_member(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((team_id, membership_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => {
+            let mut entry = match state.memberships.get_mut(&team_id) {
+                Some(e) => e,
+                None => return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Team not found").into_response(),
+            };
+            let before = entry.len();
+            entry.retain(|m| m.id != membership_id);
+            if entry.len() == before {
+                drop(entry);
+                return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Membership not found").into_response();
+            }
+            drop(entry);
+            // Mirror removal from the team's member list too (no-op in mock).
+            let _ = state.teams.get(&team_id);
+            StatusCode::NO_CONTENT.into_response()
+        }
+    }
+}
+
+/// POST /v1.0/teams/:team_id/channels/:channel_id/messages/:message_id/softDelete
+pub async fn soft_delete_channel_message(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((_team_id, channel_id, message_id)): Path<(String, String, String)>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => {
+            let mut entry = match state.messages.get_mut(&channel_id) {
+                Some(e) => e,
+                None => return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Channel not found").into_response(),
+            };
+            let Some(msg) = entry.iter_mut().find(|m| m.id == message_id) else {
+                return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Message not found").into_response();
+            };
+            msg.deleted_date_time = Some(chrono::Utc::now().to_rfc3339());
+            msg.body_content = String::new();
+            let msg_id = msg.id.clone();
+            drop(entry);
+            state.events.publish(TeamsEvent::MessageDeleted {
+                resource_id: channel_id,
+                message_id: msg_id,
+            });
+            StatusCode::NO_CONTENT.into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PatchChannelBody {
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
+    pub description: Option<String>,
+}
+
+/// PATCH /v1.0/teams/:team_id/channels/:channel_id — update name/description.
+pub async fn patch_channel(
+    State(state): State<Arc<TeamsState>>,
+    headers: HeaderMap,
+    Path((team_id, channel_id)): Path<(String, String)>,
+    Json(body): Json<PatchChannelBody>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => {
+            let mut ch = match state.channels.get_mut(&channel_id) {
+                Some(c) if c.team_id == team_id => c,
+                _ => return graph_error(StatusCode::NOT_FOUND, "ResourceNotFound", "Channel not found").into_response(),
+            };
+            if let Some(name) = body.display_name {
+                ch.display_name = name;
+            }
+            if let Some(desc) = body.description {
+                ch.description = Some(desc);
+            }
+            drop(ch);
+            StatusCode::NO_CONTENT.into_response()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Chats / DMs  (GET /v1.0/me/chats)
 // ---------------------------------------------------------------------------
 
@@ -597,6 +713,7 @@ fn channel_to_json(c: &crate::state::Channel) -> serde_json::Value {
     serde_json::json!({
         "id": c.id,
         "displayName": c.display_name,
+        "description": c.description,
         "membershipType": "standard",
     })
 }
@@ -642,6 +759,16 @@ fn event_to_json(e: &TeamsEvent) -> serde_json::Value {
             "availability": availability,
         }),
     }
+}
+
+fn membership_to_json(m: &crate::state::TeamMembership) -> serde_json::Value {
+    serde_json::json!({
+        "id": m.id,
+        "userId": m.user_id,
+        "displayName": m.display_name,
+        "roles": m.roles,
+        "@odata.type": "#microsoft.graph.aadUserConversationMember",
+    })
 }
 
 fn message_to_json(m: &Message, state: &TeamsState) -> serde_json::Value {

@@ -96,10 +96,22 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
         },
         "stoat" => BackendCapabilities {
             voice: VoiceSupport::None,
+            has_roles: true,
+            has_kick: true,
+            has_ban: true,
+            has_timed_ban: true,   // native timeout via DataMemberEdit.timeout (B-ST)
+            has_channel_mgmt: true,
+            has_moderation_log: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "teams" => BackendCapabilities {
             supports_typing_indicators: false,
+            has_roles: false,       // owner/member binary; no role concept
+            has_kick: true,
+            has_ban: false,         // Teams has no ban concept — hide entirely
+            has_timed_ban: false,
+            has_channel_mgmt: true, // name + description only
+            has_moderation_log: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "discord" | "demo" | "poly" => BackendCapabilities {

@@ -39,6 +39,10 @@ pub struct TeamsState {
     pub auth: AuthState,
     pub users: DashMap<String, User>,
     pub teams: DashMap<String, Team>,
+    /// Team memberships keyed by `"team_id"`. Each value is a list of
+    /// [`TeamMembership`] records; the `id` field is the membership ID used
+    /// by the kick (DELETE /teams/{t}/members/{membership_id}) endpoint.
+    pub memberships: DashMap<String, Vec<TeamMembership>>,
     pub channels: DashMap<String, Channel>,
     pub chats: DashMap<String, Chat>,
     pub messages: DashMap<String, Vec<Message>>,
@@ -63,11 +67,26 @@ pub struct Team {
     pub members: Vec<String>,
 }
 
+/// A team membership record — mirrors Graph's `aadUserConversationMember`.
+///
+/// `id` is the membership ID (used as the path segment for DELETE /members/{id}).
+/// `user_id` is the AAD object ID of the member.
+/// `roles` is empty for regular members, `["owner"]` for owners.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct TeamMembership {
+    pub id: String,
+    pub user_id: String,
+    pub display_name: String,
+    pub roles: Vec<String>,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Channel {
     pub id: String,
     pub display_name: String,
     pub team_id: String,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -111,6 +130,7 @@ impl TeamsState {
             auth: AuthState::new(),
             users: DashMap::new(),
             teams: DashMap::new(),
+            memberships: DashMap::new(),
             channels: DashMap::new(),
             chats: DashMap::new(),
             messages: DashMap::new(),
@@ -145,16 +165,19 @@ impl TeamsState {
             id: "CH001".into(),
             display_name: "General".into(),
             team_id: "T001".into(),
+            description: None,
         });
         self.channels.insert("CH002".into(), Channel {
             id: "CH002".into(),
             display_name: "Engineering".into(),
             team_id: "T001".into(),
+            description: None,
         });
         self.channels.insert("CH003".into(), Channel {
             id: "CH003".into(),
             display_name: "General".into(),
             team_id: "T002".into(),
+            description: None,
         });
 
         self.teams.insert("T001".into(), Team {
@@ -169,6 +192,30 @@ impl TeamsState {
             description: Some("Project Alpha team".into()),
             members: vec!["U001".into()],
         });
+
+        // Membership records for T001 — U001 is owner, U002 is member.
+        self.memberships.insert("T001".into(), vec![
+            TeamMembership {
+                id: "MEMB001".into(),
+                user_id: "U001".into(),
+                display_name: "Sheep".into(),
+                roles: vec!["owner".into()],
+            },
+            TeamMembership {
+                id: "MEMB002".into(),
+                user_id: "U002".into(),
+                display_name: "Walrus".into(),
+                roles: vec![],
+            },
+        ]);
+        self.memberships.insert("T002".into(), vec![
+            TeamMembership {
+                id: "MEMB003".into(),
+                user_id: "U001".into(),
+                display_name: "Sheep".into(),
+                roles: vec!["owner".into()],
+            },
+        ]);
 
         self.chats.insert("CHAT001".into(), Chat {
             id: "CHAT001".into(),
@@ -205,6 +252,7 @@ impl TeamsState {
         self.auth.clear();
         self.users.clear();
         self.teams.clear();
+        self.memberships.clear();
         self.channels.clear();
         self.chats.clear();
         self.messages.clear();

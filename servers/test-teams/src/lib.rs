@@ -16,7 +16,7 @@ pub mod state;
 
 pub use state::TeamsState;
 
-use axum::routing::{get, patch, post};
+use axum::routing::{delete, get, patch, post};
 use axum::Router;
 use poly_test_common::health_handler;
 use std::sync::Arc;
@@ -37,7 +37,7 @@ pub fn router(state: Arc<TeamsState>) -> Router {
         .route("/v1.0/teams/{team_id}/channels", get(routes::get_channels))
         .route(
             "/v1.0/teams/{team_id}/channels/{channel_id}",
-            get(routes::get_channel),
+            get(routes::get_channel).patch(routes::patch_channel),
         )
         .route(
             "/v1.0/teams/{team_id}/channels/{channel_id}/messages",
@@ -55,8 +55,21 @@ pub fn router(state: Arc<TeamsState>) -> Router {
             "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/unsetReaction",
             post(routes::unset_reaction),
         )
+        .route(
+            "/v1.0/teams/{team_id}/channels/{channel_id}/messages/{message_id}/softDelete",
+            post(routes::soft_delete_channel_message),
+        )
         .route("/v1.0/me/presence/setPresence", patch(routes::set_presence))
         .route("/test/events/poll", get(routes::long_poll_events))
+        // Team members (moderation)
+        .route(
+            "/v1.0/teams/{team_id}/members",
+            get(routes::get_team_members),
+        )
+        .route(
+            "/v1.0/teams/{team_id}/members/{membership_id}",
+            delete(routes::delete_team_member),
+        )
         // Chats / DMs
         .route("/v1.0/me/chats", get(routes::get_chats))
         .route(

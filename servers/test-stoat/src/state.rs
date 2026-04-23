@@ -40,6 +40,21 @@ pub enum StoatEvent {
     },
 }
 
+/// A server ban record.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct BanRecord {
+    pub server_id: String,
+    pub user_id: String,
+    pub reason: Option<String>,
+}
+
+/// Per-member moderation state (timeout).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Default)]
+pub struct MemberModState {
+    /// RFC3339 timeout expiry when the member is timed out.
+    pub timeout: Option<String>,
+}
+
 /// All mock Stoat state: users, servers, channels, messages, tokens, broadcast bus.
 #[derive(Clone)]
 pub struct StoatState {
@@ -57,6 +72,10 @@ pub struct StoatState {
     pub events: EventBus<StoatEvent>,
     /// Global counter for message IDs.
     msg_counter: std::sync::Arc<AtomicU64>,
+    /// "server_id/user_id" → BanRecord
+    pub bans: DashMap<String, BanRecord>,
+    /// "server_id/user_id" → MemberModState
+    pub member_mod: DashMap<String, MemberModState>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -146,7 +165,14 @@ impl StoatState {
             unreads: DashMap::new(),
             events: EventBus::new(),
             msg_counter: std::sync::Arc::new(AtomicU64::new(1)),
+            bans: DashMap::new(),
+            member_mod: DashMap::new(),
         }
+    }
+
+    /// Composite key for ban/member-mod maps.
+    pub fn member_key(server_id: &str, user_id: &str) -> String {
+        format!("{server_id}/{user_id}")
     }
 
     /// Get next unique message ID (ULID-like format).
@@ -359,6 +385,8 @@ impl StoatState {
         self.messages.clear();
         self.dm_channels.clear();
         self.unreads.clear();
+        self.bans.clear();
+        self.member_mod.clear();
         tracing::info!("reset Stoat state to empty");
     }
 

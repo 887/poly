@@ -4,6 +4,7 @@ use crate::AppState;
 
 pub mod channels;
 pub mod messages;
+pub mod moderation;
 pub mod servers;
 pub mod upload;
 pub mod users;
@@ -18,4 +19,5 @@ pub fn router() -> Router<AppState> {
         .merge(channels::router())
         .merge(messages::router())
         .merge(upload::router())
+        .merge(moderation::router())
 }

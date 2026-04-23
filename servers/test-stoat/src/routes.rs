@@ -369,6 +369,255 @@ pub async fn get_server_members(
 // Channels
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Moderation (B-ST) — kick, ban, unban, list-bans, member-edit, delete-message,
+//                     update-channel
+// ---------------------------------------------------------------------------
+
+/// DELETE /servers/:server_id/members/:member_id — kick a member from the server.
+pub async fn kick_member(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path((server_id, member_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    let mut srv = match state.servers.get_mut(&server_id) {
+        Some(s) => s,
+        None => return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
+    };
+
+    let before = srv.members.len();
+    srv.members.retain(|uid| uid != &member_id);
+    if srv.members.len() == before {
+        return revolt_error(StatusCode::NOT_FOUND, "NotMember").into_response();
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// PUT /servers/:server_id/bans/:user_id — ban a user.
+pub async fn ban_member(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path((server_id, user_id)): Path<(String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    if state.servers.get(&server_id).is_none() {
+        return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response();
+    }
+
+    let reason = body.get("reason").and_then(|r| r.as_str()).map(str::to_string);
+    let key = crate::state::StoatState::member_key(&server_id, &user_id);
+    state.bans.insert(key, crate::state::BanRecord {
+        server_id: server_id.clone(),
+        user_id: user_id.clone(),
+        reason,
+    });
+
+    // Also remove from server members if present.
+    if let Some(mut srv) = state.servers.get_mut(&server_id) {
+        srv.members.retain(|uid| uid != &user_id);
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// DELETE /servers/:server_id/bans/:user_id — unban a user.
+pub async fn unban_member(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path((server_id, user_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    let key = crate::state::StoatState::member_key(&server_id, &user_id);
+    if state.bans.remove(&key).is_none() {
+        return revolt_error(StatusCode::NOT_FOUND, "BanNotFound").into_response();
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// GET /servers/:server_id/bans — list all bans for a server.
+pub async fn list_bans(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    if state.servers.get(&server_id).is_none() {
+        return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response();
+    }
+
+    let bans: Vec<serde_json::Value> = state
+        .bans
+        .iter()
+        .filter(|entry| entry.value().server_id == server_id)
+        .map(|entry| {
+            let ban = entry.value();
+            serde_json::json!({
+                "_id": { "server": ban.server_id, "user": ban.user_id },
+                "reason": ban.reason,
+            })
+        })
+        .collect();
+
+    let user_ids: Vec<String> = bans
+        .iter()
+        .filter_map(|b| b.get("_id").and_then(|id| id.get("user")).and_then(|u| u.as_str()).map(str::to_string))
+        .collect();
+
+    let users: Vec<serde_json::Value> = user_ids
+        .iter()
+        .filter_map(|uid| state.users.get(uid).map(|u| user_to_json(&u)))
+        .collect();
+
+    Json(serde_json::json!({ "bans": bans, "users": users })).into_response()
+}
+
+/// PATCH /servers/:server_id/members/:member_id — edit member (timeout / clear timeout).
+pub async fn edit_member(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path((server_id, member_id)): Path<(String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    if state.servers.get(&server_id).is_none() {
+        return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response();
+    }
+
+    let key = crate::state::StoatState::member_key(&server_id, &member_id);
+
+    // Handle remove: ["Timeout"] to clear a timeout.
+    if let Some(remove) = body.get("remove").and_then(|r| r.as_array()) {
+        if remove.iter().any(|v| v.as_str() == Some("Timeout")) {
+            state.member_mod.entry(key.clone()).and_modify(|m| m.timeout = None);
+        }
+    }
+
+    // Handle timeout field to set a timeout.
+    if let Some(timeout) = body.get("timeout").and_then(|t| t.as_str()) {
+        state.member_mod.insert(key, crate::state::MemberModState {
+            timeout: Some(timeout.to_string()),
+        });
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// GET /servers/:server_id/members/@me — get my own member record.
+pub async fn get_my_member(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path(server_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = match session_user(&state, &headers) {
+        Ok(uid) => uid,
+        Err(e) => return e.into_response(),
+    };
+
+    let srv = match state.servers.get(&server_id) {
+        Some(s) => s,
+        None => return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
+    };
+
+    if !srv.members.contains(&user_id) {
+        return revolt_error(StatusCode::NOT_FOUND, "NotMember").into_response();
+    }
+
+    let key = crate::state::StoatState::member_key(&server_id, &user_id);
+    let mod_state = state.member_mod.get(&key).map(|m| m.clone()).unwrap_or_default();
+
+    Json(serde_json::json!({
+        "_id": { "server": server_id, "user": user_id },
+        "joined_at": "2026-01-01T00:00:00.000Z",
+        "roles": [],
+        "timeout": mod_state.timeout,
+    })).into_response()
+}
+
+/// DELETE /channels/:channel_id/messages/:message_id — delete a message.
+pub async fn delete_message(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path((channel_id, message_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    let mut timeline = match state.messages.get_mut(&channel_id) {
+        Some(t) => t,
+        None => return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
+    };
+
+    let before = timeline.len();
+    timeline.retain(|m| m.id != message_id);
+    if timeline.len() == before {
+        return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response();
+    }
+
+    // Broadcast delete event.
+    state.events.publish(StoatEvent::MessageDelete {
+        channel_id: channel_id.clone(),
+        message_id: message_id.clone(),
+    });
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+#[derive(serde::Deserialize)]
+pub struct ChannelEditBody {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub slowmode: Option<u32>,
+    pub nsfw: Option<bool>,
+}
+
+/// PATCH /channels/:channel_id — update channel settings.
+pub async fn update_channel(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+    Json(body): Json<ChannelEditBody>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    let mut ch = match state.channels.get_mut(&channel_id) {
+        Some(c) => c,
+        None => return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response(),
+    };
+
+    if let Some(name) = body.name {
+        ch.name = name;
+    }
+    if let Some(description) = body.description {
+        ch.description = Some(description);
+    }
+    // slowmode and nsfw are accepted but test-stoat doesn't store them yet; ignore for now.
+    let _ = (body.slowmode, body.nsfw);
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
 /// GET /channels/:id
 pub async fn get_channel(
     State(state): State<std::sync::Arc<StoatState>>,
