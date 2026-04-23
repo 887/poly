@@ -799,7 +799,8 @@ impl ClientBackend for MatrixClient {
             .await
             .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
 
-        let mut dms = Vec::new();
+        // F-MX-1: collect (room_id, user_id) pairs first, then fetch profiles concurrently.
+        let mut pairs: Vec<(String, String)> = Vec::new();
         if let Some(obj) = m_direct.as_object() {
             for (other_user_id, room_ids) in obj {
                 if let Some(room_id) = room_ids
@@ -807,22 +808,41 @@ impl ClientBackend for MatrixClient {
                     .and_then(|arr| arr.first())
                     .and_then(serde_json::Value::as_str)
                 {
-                    dms.push(DmChannel {
-                        id: room_id.to_string(),
-                        user: User {
-                            id: other_user_id.clone(),
-                            display_name: other_user_id.clone(),
-                            avatar_url: None,
-                            presence: PresenceStatus::Offline,
-                            backend: BackendType::from("matrix"),
-                        },
-                        last_message: None,
-                        unread_count: 0,
-                        backend: BackendType::from("matrix"),
-                        account_id: user_id.clone(),
-                    });
+                    pairs.push((room_id.to_string(), other_user_id.clone()));
                 }
             }
+        }
+
+        // Fetch profiles in parallel; fall back to MXID on any error.
+        let profile_futures: Vec<_> = pairs
+            .iter()
+            .map(|(_, uid)| self.http.fetch_profile(uid))
+            .collect();
+        let profiles = futures::future::join_all(profile_futures).await;
+
+        let mut dms = Vec::new();
+        for ((room_id, other_user_id), profile_result) in pairs.into_iter().zip(profiles) {
+            let (display_name, avatar_url) = match profile_result {
+                Ok(p) => (
+                    p.displayname.unwrap_or_else(|| other_user_id.clone()),
+                    p.avatar_url,
+                ),
+                Err(_) => (other_user_id.clone(), None),
+            };
+            dms.push(DmChannel {
+                id: room_id,
+                user: User {
+                    id: other_user_id,
+                    display_name,
+                    avatar_url,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::from("matrix"),
+                },
+                last_message: None,
+                unread_count: 0,
+                backend: BackendType::from("matrix"),
+                account_id: user_id.clone(),
+            });
         }
 
         Ok(dms)
