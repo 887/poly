@@ -333,7 +333,7 @@ pub(crate) fn emoji_shortcode_matches(emoji: &str, query: &str) -> bool {
 /// Compact picker: left sidebar icons + scrollable section list.
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn EmojiPicker(on_select: EventHandler<String>, on_close: EventHandler<()>) -> Element {
     let mut search_text = use_signal(String::new);
