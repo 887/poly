@@ -173,6 +173,14 @@ pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::Backend
             wit::LandingPage::ServerOverview => pc::LandingPage::ServerOverview,
         },
         supports_typing_indicators: c.supports_typing_indicators,
+        // WASM plugins using the legacy WIT interface default all moderation
+        // capability flags to false. Wave 2/3 will extend the WIT interface.
+        has_roles: false,
+        has_kick: false,
+        has_ban: false,
+        has_timed_ban: false,
+        has_channel_mgmt: false,
+        has_moderation_log: false,
     }
 }
 

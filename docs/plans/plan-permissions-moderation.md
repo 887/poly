@@ -229,7 +229,7 @@ https://pkg.go.dev/within.website/x/web/revolt):
 | Action               | Method  | Endpoint                                          | Key params                                        |
 |----------------------|---------|---------------------------------------------------|---------------------------------------------------|
 | Kick member          | DELETE  | `/servers/{server_id}/members/{member_id}`        | —                                                 |
-| Ban member           | PUT     | `/servers/{server_id}/bans/{user_id}`             | `{reason?: string}`                               |
+| Ban member           | PUT     | `/servers/{server_id}/bans/{user_id}`             | `{reason?: string, delete_message_seconds?: i64}` |
 | Unban member         | DELETE  | `/servers/{server_id}/bans/{user_id}`             | —                                                 |
 | List bans            | GET     | `/servers/{server_id}/bans`                       | —                                                 |
 | Delete message       | DELETE  | `/channels/{channel_id}/messages/{msg_id}`        | Requires `ManageMessages` or message authorship   |
@@ -243,11 +243,14 @@ API structure which Stoat inherits (Stoat was Revolt; the codebase is the same).
 should verify these against https://developers.stoat.chat/developers/api/reference.html/ before
 coding. If the endpoint paths changed in the Stoat rebranding, adjust accordingly.
 
-**Timeout:** `TimeoutMembers` permission exists (bit 8 = value 256) but the exact timeout
-endpoint URL was not verifiable from available documentation. Likely
-`PATCH /servers/{server_id}/members/{member_id}` with a `timeout` field. **TODO: verify.**
+**Timeout:** Verified. Endpoint is `PATCH /servers/{server_id}/members/{member_id}` with body
+`{"timeout": "<ISO8601 expiration datetime>"}`. Clear an active timeout via
+`{"remove": ["Timeout"]}` in the same endpoint. Permission flag: `TimeoutMembers`
+(bit 8, value 256). Source: `DataMemberEdit` in `revoltchat/api` schema.ts.
 
-**Slow mode:** Not confirmed available in Stoat API. **TODO: verify against reference docs.**
+**Slow mode:** Verified. `PATCH /channels/{channel_id}` with `{"slowmode": <seconds>}`.
+Field name is `slowmode` (uint64, max 21600 = 6 hours). Source: `DataEditChannel` in
+`revoltchat/api` schema.ts.
 
 **Reference UI:** https://stoat.chat (the official Stoat client app)
 
@@ -365,6 +368,14 @@ automatic expiration. This is the Lemmy equivalent of "timeout".
 maps to `PUT /api/v3/community` for community settings, not to a per-channel concept.
 
 **Reorder channels:** N/A — no sub-channels in Lemmy.
+
+**Modlog `type_` values (verified):** `"All"`, `"ModRemovePost"`, `"ModLockPost"`,
+`"ModFeaturePost"`, `"ModRemoveComment"`, `"ModRemoveCommunity"`, `"ModBanFromCommunity"`,
+`"ModAddCommunity"`, `"ModTransferCommunity"`, `"ModAdd"`, `"ModBan"`, `"ModHideCommunity"`,
+`"AdminPurgePerson"`, `"AdminPurgeCommunity"`, `"AdminPurgePost"`, `"AdminPurgeComment"`.
+Use `type_=ModBanFromCommunity` for community-level ban lists; `type_=ModBan` is site-wide
+admin bans only. The response is a `GetModlogResponse` object with separate arrays per type
+(e.g. `banned_from_community[]`, `removed_posts[]`, `removed_comments[]`).
 
 **v4 API note:** In Lemmy 1.0, v4 endpoints for modlog return combined data at
 `GET /api/v4/modlog`. The v3 endpoint remains compatible. Use v3 for now to avoid breakage.
@@ -928,7 +939,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 | GitHub    | Same as Forgejo. Collaborator removal maps loosely to `kick_member` for org repos but not personal repos.            |
 | Lemmy     | No kick concept (community membership is implicit) — `kick_member` returns `NotSupported`. `has_kick = false`.       |
 | Matrix    | No NSFW field in `update_channel` — ignore the `nsfw` param. No `slow_mode_secs` — return `NotSupported` for that specific sub-operation. |
-| Stoat     | `timeout_members` bit exists but exact API endpoint for timeout was unverifiable — implement as `ban_member` with short `expires_at` as fallback, mark FIXME. |
+| Stoat     | Native `timeout` field verified on `PATCH /servers/{id}/members/{id}` with ISO8601 expiration. Clear via `remove: ["Timeout"]`. Separate from `ban_member` (permanent only). No escape hatch needed. |
 
 ---
 
@@ -1107,9 +1118,10 @@ confirmed from documentation during research.
   Requires `KickMembers` permission (bit 6, value 64).
 
 - [ ] **B-ST-3** Plugin: implement `ban_member` via `PUT /servers/{server_id}/bans/{user_id}`
-  with `{reason: string?}`. Stoat bans are permanent at the API level. If `expires_at` is
-  provided, encode the intent in the reason string as "Expires: {iso8601}" with a TODO comment
-  for future temporary-ban support when Stoat adds the field.
+  with body `{reason?: string, delete_message_seconds?: i64}`. Stoat bans are permanent — there
+  is no `expires_at` field in the API. If `expires_at` is `Some`, return
+  `ClientError::NotSupported("Stoat bans are permanent; use timeout_member for timed restrictions")`.
+  Map `delete_message_history_secs` → `delete_message_seconds`.
 
 - [ ] **B-ST-4** Plugin: implement `unban_member` via `DELETE /servers/{server_id}/bans/{user_id}`.
 
@@ -1119,8 +1131,9 @@ confirmed from documentation during research.
   `DELETE /channels/{channel_id}/messages/{message_id}`.
 
 - [ ] **B-ST-7** Plugin: implement `update_channel` via `PATCH /channels/{channel_id}`.
-  Fields: `name`, `description` (→ `topic`), `nsfw` (→ `nsfw`), `active` for archiving.
-  No slow-mode in Stoat API — ignore `slow_mode_secs` with internal warning.
+  Fields: `name`, `description` (→ `topic`), `nsfw` (→ `nsfw`), `archived` (→ `active`),
+  `slow_mode_secs` → `slowmode` (Stoat's field name; uint64 seconds, max 21600).
+  Verified from `DataEditChannel` schema. Remove any internal "no slow-mode" warning.
 
 - [ ] **B-ST-8** Plugin: implement `reorder_channels` — verify if Stoat has a channel
   position/reorder endpoint. If not (Revolt did not have one), return `NotSupported` and set
@@ -1210,10 +1223,11 @@ confirmed from documentation during research.
   with `ban: false`.
 
 - [ ] **B-LE-5** Plugin: implement `get_bans` — Lemmy does not expose a `GET /community/bans`
-  endpoint as of v0.19/v1.0. The modlog shows ban events. Fetch from
-  `GET /api/v3/modlog?community_id={id}&type_=ModBan` and map to `BannedMember`.
-  **TODO:** Verify `type_=ModBan` filter works in Lemmy 1.0; if not, return `NotSupported`
-  with a clear error message.
+  endpoint. The modlog shows ban events. Fetch from
+  `GET /api/v3/modlog?community_id={id}&type_=ModBanFromCommunity` and map the
+  `banned_from_community[]` array in the `GetModlogResponse` to `Vec<BannedMember>`.
+  Note: `type_=ModBan` is site-wide admin bans; `type_=ModBanFromCommunity` is
+  community-level bans. Use `ModBanFromCommunity`. Verified from real Lemmy v1.0 API.
 
 - [ ] **B-LE-6** Plugin: implement `delete_message` by mapping to:
   - If `message_id` refers to a post: `POST /api/v3/post/remove` with `{post_id, removed: true, reason}`.
@@ -1228,9 +1242,14 @@ confirmed from documentation during research.
 
 - [ ] **B-LE-8** Plugin: `reorder_channels` → return `NotSupported`.
 
-- [ ] **B-LE-9** Plugin: implement `get_moderation_log` via `GET /api/v3/modlog?community_id={id}&limit={limit}`.
-  Map `ModRemovePost`, `ModRemoveComment`, `ModBanFromCommunity`, `ModAddCommunity` entries
-  to `ModerationLogEntry`.
+- [ ] **B-LE-9** Plugin: implement `get_moderation_log` via
+  `GET /api/v3/modlog?community_id={id}&limit={limit}` (no `type_` filter — use `All`).
+  Response is a `GetModlogResponse` object with separate arrays per action type:
+  - `removed_posts[]` → `ModerationAction::MessageDeleted` (with post context)
+  - `removed_comments[]` → `ModerationAction::MessageDeleted` (with comment context)
+  - `banned_from_community[]` → `ModerationAction::MemberBanned`
+  - `added_to_community[]` → `ModerationAction::MemberRoleUpdated`
+  Merge all arrays, sort by timestamp descending. Verified response shape from real Lemmy API.
 
 - [ ] **B-LE-10** Update `backend_capabilities()`:
   `has_roles: false, has_kick: false, has_ban: true, has_channel_mgmt: false, has_moderation_log: true`.

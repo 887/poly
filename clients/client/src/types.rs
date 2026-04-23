@@ -674,6 +674,41 @@ pub struct BackendCapabilities {
     /// When `true`, the `send_typing` MCP tool is advertised and callable.
     /// Read-only feeds and backends without real-time presence always set this to `false`.
     pub supports_typing_indicators: bool,
+
+    // ── Moderation / permissions capability flags ──────────────────────────
+    // All default to `false`. Backend Wave-2/3 agents set them to `true`.
+    // Gated by `#[serde(default)]` so older serialised capability structs
+    // from WASM plugins remain backwards-compatible.
+
+    /// Whether the backend exposes a role/permission system.
+    /// Gates the Roles tab in server settings.
+    #[serde(default)]
+    pub has_roles: bool,
+
+    /// Whether `kick_member` is supported.
+    /// Gates the Kick button in the member context menu.
+    #[serde(default)]
+    pub has_kick: bool,
+
+    /// Whether `ban_member` / `get_bans` / `unban_member` are supported.
+    /// Gates the Bans tab and Ban button.
+    #[serde(default)]
+    pub has_ban: bool,
+
+    /// Whether the backend supports timed bans / timeouts natively.
+    /// Gates the Timeout button.
+    #[serde(default)]
+    pub has_timed_ban: bool,
+
+    /// Whether `update_channel` and optionally `reorder_channels` are supported.
+    /// Gates the Edit Channel dialog and drag-handle in the channel list.
+    #[serde(default)]
+    pub has_channel_mgmt: bool,
+
+    /// Whether `get_moderation_log` is supported.
+    /// Gates the Mod Log tab in server settings.
+    #[serde(default)]
+    pub has_moderation_log: bool,
 }
 
 impl BackendCapabilities {
@@ -686,6 +721,12 @@ impl BackendCapabilities {
         voice: VoiceSupport::None,
         landing: LandingPage::FirstServer,
         supports_typing_indicators: false,
+        has_roles: false,
+        has_kick: false,
+        has_ban: false,
+        has_timed_ban: false,
+        has_channel_mgmt: false,
+        has_moderation_log: false,
     };
 
     /// Forum-style messaging with an inbox but no friends / DMs / voice (Lemmy).
@@ -697,6 +738,12 @@ impl BackendCapabilities {
         voice: VoiceSupport::None,
         landing: LandingPage::FirstServer,
         supports_typing_indicators: false,
+        has_roles: false,
+        has_kick: false,
+        has_ban: false,
+        has_timed_ban: false,
+        has_channel_mgmt: false,
+        has_moderation_log: false,
     };
 
     /// `true` if this backend should render with the forum-style UI layout:
@@ -756,7 +803,45 @@ impl BackendCapabilities {
         voice: VoiceSupport::Full,
         landing: LandingPage::DirectMessages,
         supports_typing_indicators: true,
+        has_roles: false,
+        has_kick: false,
+        has_ban: false,
+        has_timed_ban: false,
+        has_channel_mgmt: false,
+        has_moderation_log: false,
     };
+
+    // ── Moderation capability predicates ──────────────────────────────────
+
+    /// `true` if the Roles tab in server settings should be rendered.
+    pub const fn should_show_roles(&self) -> bool {
+        self.has_roles
+    }
+
+    /// `true` if the Bans tab and Ban button should be rendered.
+    pub const fn should_show_bans(&self) -> bool {
+        self.has_ban
+    }
+
+    /// `true` if the Mod Log tab in server settings should be rendered.
+    pub const fn should_show_modlog(&self) -> bool {
+        self.has_moderation_log
+    }
+
+    /// `true` if the Kick button in the member context menu should be rendered.
+    pub const fn should_show_kick(&self) -> bool {
+        self.has_kick
+    }
+
+    /// `true` if the Timeout button in the member context menu should be rendered.
+    pub const fn should_show_timeout(&self) -> bool {
+        self.has_timed_ban
+    }
+
+    /// `true` if the Edit Channel dialog and reorder drag-handle should be rendered.
+    pub const fn should_show_channel_mgmt(&self) -> bool {
+        self.has_channel_mgmt
+    }
 }
 
 impl Default for BackendCapabilities {
@@ -1403,6 +1488,117 @@ pub struct ChatCommand {
     pub usage: Option<String>,
     /// Scope in which this command is available.
     pub scope: CommandScope,
+}
+
+// ── Moderation types (Wave 1 — plan-permissions-moderation.md §3.2) ──────────
+
+/// The calling user's effective permissions in a server or channel.
+///
+/// Boolean flags — the host uses these to gate UI affordances without knowing
+/// which backend-specific role system produced them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct MemberPermissions {
+    /// Can manage the server itself (rename, change settings, delete).
+    pub manage_server: bool,
+    /// Can manage channels (create, rename, delete, reorder).
+    pub manage_channels: bool,
+    /// Can manage roles (create, edit, assign).
+    pub manage_roles: bool,
+    /// Can kick members from the server.
+    pub kick_members: bool,
+    /// Can ban members from the server.
+    pub ban_members: bool,
+    /// Can delete or suppress messages by other users.
+    pub manage_messages: bool,
+    /// Can put members in timeout / mute.
+    pub timeout_members: bool,
+    /// The user's display role (highest role name, or "Owner", "Admin", "Member").
+    pub display_role: String,
+    /// Numeric power level for backends that use one (Matrix, custom). `None` for
+    /// bitfield/enum backends that don't expose a numeric level.
+    pub power_level: Option<i64>,
+}
+
+/// Backend-specific role assignment for `update_member_role`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MemberRole {
+    /// Role represented by its backend-specific ID string (Discord role ID, poly-server role name).
+    ById(String),
+    /// Matrix power level integer.
+    PowerLevel(i64),
+}
+
+/// A currently banned member.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BannedMember {
+    pub user_id: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+    pub reason: Option<String>,
+    /// RFC3339 timestamp when the ban expires; `None` = permanent.
+    pub expires_at: Option<String>,
+    /// RFC3339 timestamp when the ban was applied.
+    pub banned_at: Option<String>,
+}
+
+/// Parameters for updating a channel.
+///
+/// All fields are optional. The backend ignores fields it doesn't support.
+/// `slow_mode_secs` uses `Option<Option<u32>>` — `None` = leave alone,
+/// `Some(None)` = clear / disable, `Some(Some(n))` = set to n seconds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateChannelParams {
+    pub name: Option<String>,
+    pub topic: Option<String>,
+    /// New position index for display ordering (0-based).
+    pub position: Option<u32>,
+    /// Slow-mode interval in seconds (0 = disabled).
+    pub slow_mode_secs: Option<u32>,
+    /// Whether the channel is NSFW / age-gated.
+    pub nsfw: Option<bool>,
+}
+
+/// A single entry in the server's moderation log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationLogEntry {
+    pub id: String,
+    pub action: ModerationAction,
+    pub moderator: User,
+    pub target_user_id: Option<String>,
+    pub target_display_name: Option<String>,
+    pub channel_id: Option<String>,
+    pub message_id: Option<String>,
+    pub reason: Option<String>,
+    /// RFC3339 timestamp.
+    pub timestamp: String,
+}
+
+/// What moderation action was taken.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ModerationAction {
+    MemberKicked,
+    MemberBanned,
+    MemberUnbanned,
+    MemberTimedOut,
+    MemberRoleUpdated,
+    MessageDeleted,
+    ChannelUpdated,
+    Other(String),
+}
+
+/// Read-only role descriptor (v1 — no editing, just display).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Role {
+    /// Backend-specific role ID.
+    pub id: String,
+    /// Display name.
+    pub name: String,
+    /// Optional hex colour string (e.g. `"#5865F2"`).
+    pub color: Option<String>,
+    /// Permissions this role grants.
+    pub permissions: MemberPermissions,
+    /// Sort position (lower = lower in hierarchy).
+    pub position: u32,
 }
 
 #[cfg(test)]

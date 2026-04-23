@@ -14,7 +14,7 @@ pub mod route_synced;
 pub use chat_data::{ChatData, DragSource};
 pub use route_synced::RouteSynced;
 
-use poly_client::BackendType;
+use poly_client::{BackendType, MemberPermissions};
 use poly_client::User;
 use serde::{Deserialize, Serialize};
 
@@ -496,6 +496,15 @@ pub struct AppState {
     /// dependency list so an increment forces a re-fetch of
     /// `get_sidebar_declaration`.
     pub sidebar_invalidated_tick: u32,
+    /// Last-known permissions for the currently active account in the
+    /// currently active server.
+    ///
+    /// Populated by Wave 2/3 backend agents as users navigate into server
+    /// channels. Used by `MessageContextMenu` and `UserRowContextMenu` to
+    /// gate moderation affordances without a blocking async lookup on every
+    /// right-click. `None` until the first successful `get_my_permissions`
+    /// call for the active server.
+    pub last_known_perms: Option<MemberPermissions>,
 }
 
 impl Default for AppState {
@@ -518,6 +527,7 @@ impl Default for AppState {
             avatar_context_menu: None,
             context_menu_stack: Vec::new(),
             sidebar_invalidated_tick: 0,
+            last_known_perms: None,
         }
     }
 }

@@ -13,17 +13,20 @@
 //! ## 150-line component rule
 //! Every `#[component]` fn body MUST stay under **150 lines** of RSX + logic.
 
+mod bans;
 mod general;
+mod modlog;
 mod notifications;
 mod overview;
 mod profile;
+mod roles;
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::AppState;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::PluginSettingsSection;
-use poly_client::{SettingsScope, SettingsSection as PluginSettingsSectionData};
+use poly_client::{BackendCapabilities, SettingsScope, SettingsSection as PluginSettingsSectionData};
 use poly_ui_macros::{context_menu, ui_action};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::main_layout::close_mobile_drawer;
@@ -33,12 +36,16 @@ use crate::ui::settings::scroll_spy::{
     SettingsScrollSpyConfig, install_settings_scroll_spy as install_shared_settings_scroll_spy,
 };
 use crate::ui::split_shell::SplitMenuShell;
+use bans::BansTab;
 use dioxus::prelude::*;
 use general::ServerGeneralSettings;
+use modlog::ModLogTab;
 use notifications::ServerNotificationsSettings;
 use overview::ServerOverviewSettings;
 use profile::ServerProfileSettings;
+use roles::RolesTab;
 
+/// Always-visible sections (no capability gate).
 const SERVER_SETTINGS_SECTIONS: [(&str, ServerSettingsSection); 4] = [
     ("server-settings-overview", ServerSettingsSection::Overview),
     (
@@ -48,6 +55,22 @@ const SERVER_SETTINGS_SECTIONS: [(&str, ServerSettingsSection); 4] = [
     ("server-settings-profile", ServerSettingsSection::Profile),
     ("server-settings-general", ServerSettingsSection::General),
 ];
+
+/// Capability-gated sections shown only when the backend supports them.
+/// Returns `(label_key, section)` pairs for the sections the backend supports.
+fn moderation_sections_for_caps(caps: BackendCapabilities) -> Vec<(&'static str, ServerSettingsSection)> {
+    let mut sections = Vec::new();
+    if caps.should_show_roles() {
+        sections.push(("settings-tab-roles", ServerSettingsSection::Roles));
+    }
+    if caps.should_show_bans() {
+        sections.push(("settings-tab-bans", ServerSettingsSection::Bans));
+    }
+    if caps.should_show_modlog() {
+        sections.push(("settings-tab-modlog", ServerSettingsSection::ModLog));
+    }
+    sections
+}
 
 fn matches_server_settings_search(filter: &str, label: &str) -> bool {
     filter.is_empty() || label.to_lowercase().contains(filter)
@@ -193,11 +216,14 @@ fn ServerSettingsContentHeader(search_text: Signal<String>, server_name: String)
 fn ServerSettingsNavigation(
     active_section: ServerSettingsSection,
     search_text: Signal<String>,
+    backend_slug: String,
     on_select: EventHandler<ServerSettingsSection>,
 ) -> Element {
     let filter = search_text.read().to_lowercase();
 
     let searching = !filter.is_empty();
+    let caps = poly_client::capabilities_for_slug(&backend_slug);
+    let mod_sections = moderation_sections_for_caps(caps);
 
     rsx! {
         nav { class: "settings-nav",
@@ -206,6 +232,23 @@ fn ServerSettingsNavigation(
                     let label = t(label_key);
                     let has_match = matches_server_settings_search(&filter, &label);
                     // Always render so scroll spy can find data-settings-slug; hide via CSS
+                    let hidden = searching && !has_match;
+                    rsx! {
+                        ServerSettingsNavItem {
+                            label,
+                            active: active_section == section,
+                            slug: section.to_slug().to_string(),
+                            show_match_badge: searching && has_match,
+                            hidden,
+                            onclick: move |_| on_select.call(section),
+                        }
+                    }
+                }
+            }
+            for (label_key, section) in mod_sections {
+                {
+                    let label = t(label_key);
+                    let has_match = matches_server_settings_search(&filter, &label);
                     let hidden = searching && !has_match;
                     rsx! {
                         ServerSettingsNavItem {
@@ -335,6 +378,54 @@ fn ServerSettingsContent(
                                             account_id: account_id.clone(),
                                         }
                                     },
+                                    // These are the capability-gated sections, which are handled
+                                    // in the second loop below. They never appear in this loop.
+                                    ServerSettingsSection::Roles | ServerSettingsSection::Bans | ServerSettingsSection::ModLog => rsx! {},
+                                }
+                            }
+                        }
+                    }
+                }
+                // Capability-gated moderation sections
+                {
+                    let caps = poly_client::capabilities_for_slug(&backend);
+                    let mod_sections = moderation_sections_for_caps(caps);
+                    rsx! {
+                        for (label_key, section) in mod_sections {
+                            {
+                                let label = t(label_key);
+                                let has_match = matches_server_settings_search(&filter, &label);
+                                let searching = !filter.is_empty();
+                                let id = format!("server-settings-section-{}", section.to_slug());
+                                let class = if searching && !has_match {
+                                    "settings-section-block settings-section-hidden"
+                                } else {
+                                    "settings-section-block"
+                                };
+                                rsx! {
+                                    div { id, class,
+                                        match section {
+                                            ServerSettingsSection::Roles => rsx! {
+                                                RolesTab {
+                                                    server_id: server_id.clone(),
+                                                    account_id: account_id.clone(),
+                                                }
+                                            },
+                                            ServerSettingsSection::Bans => rsx! {
+                                                BansTab {
+                                                    server_id: server_id.clone(),
+                                                    account_id: account_id.clone(),
+                                                }
+                                            },
+                                            ServerSettingsSection::ModLog => rsx! {
+                                                ModLogTab {
+                                                    server_id: server_id.clone(),
+                                                    account_id: account_id.clone(),
+                                                }
+                                            },
+                                            _ => rsx! {},
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -354,6 +445,12 @@ enum ServerSettingsSection {
     Notifications,
     Profile,
     General,
+    /// Roles tab — visible only when `BackendCapabilities::has_roles`.
+    Roles,
+    /// Bans tab — visible only when `BackendCapabilities::has_ban`.
+    Bans,
+    /// Audit / mod log tab — visible only when `BackendCapabilities::has_moderation_log`.
+    ModLog,
 }
 
 impl ServerSettingsSection {
@@ -363,6 +460,9 @@ impl ServerSettingsSection {
             Self::Notifications => "notifications",
             Self::Profile => "profile",
             Self::General => "general",
+            Self::Roles => "roles",
+            Self::Bans => "bans",
+            Self::ModLog => "modlog",
         }
     }
 
@@ -371,7 +471,23 @@ impl ServerSettingsSection {
             "notifications" => Self::Notifications,
             "profile" => Self::Profile,
             "general" => Self::General,
+            "roles" => Self::Roles,
+            "bans" => Self::Bans,
+            "modlog" => Self::ModLog,
             _ => Self::Overview,
+        }
+    }
+
+    /// Return the FTL label key for this section.
+    fn label_key(self) -> &'static str {
+        match self {
+            Self::Overview => "server-settings-overview",
+            Self::Notifications => "server-settings-notifications",
+            Self::Profile => "server-settings-profile",
+            Self::General => "server-settings-general",
+            Self::Roles => "settings-tab-roles",
+            Self::Bans => "settings-tab-bans",
+            Self::ModLog => "settings-tab-modlog",
         }
     }
 }
@@ -499,6 +615,7 @@ pub fn ServerSettingsPage(
                     ServerSettingsNavigation {
                         active_section: section(),
                         search_text,
+                        backend_slug: backend.clone(),
                         on_select: move |next| {
                             section.set(next);
                             close_mobile_drawer();

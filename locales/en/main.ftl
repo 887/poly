@@ -1033,3 +1033,44 @@ agent-draft-autosend-in = Auto-sending in { $secs }s
 agent-draft-cancel-autosend = Cancel auto-send
 agent-drafts-sidebar-title = Pending drafts
 agent-drafts-sidebar-empty = No pending drafts
+
+# Moderation actions — generic
+mod-action-kick = Kick member
+mod-action-ban = Ban member
+mod-action-unban = Unban member
+mod-action-timeout = Timeout
+mod-action-untimeout = Remove timeout
+mod-action-delete-message = Delete message
+mod-action-edit-channel = Edit channel
+
+# Backend-native overrides — used when nav.active_backend matches
+mod-action-discord-timeout = Timeout
+mod-action-discord-ban = Ban
+mod-action-matrix-redact = Redact
+mod-action-lemmy-ban = Ban from community
+mod-action-lemmy-timeout = Temporarily ban
+
+# Settings tabs — moderation
+settings-tab-roles = Roles
+settings-tab-bans = Bans
+settings-tab-modlog = Audit log
+
+# Kick dialog
+dialog-kick-title = Kick { $user } from this server?
+dialog-kick-reason = Reason (optional)
+dialog-kick-confirm = Kick
+
+# Ban dialog
+dialog-ban-title = Ban { $user }?
+dialog-ban-reason = Reason (optional)
+dialog-ban-delete-history = Delete message history
+dialog-ban-confirm = Ban
+
+# Timeout dialog
+dialog-timeout-title = Timeout { $user }
+dialog-timeout-duration = Duration
+dialog-timeout-reason = Reason (optional)
+dialog-timeout-confirm = Timeout
+
+# Edit channel dialog
+dialog-edit-channel-title = Edit channel

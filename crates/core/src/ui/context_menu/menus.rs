@@ -21,7 +21,7 @@ use crate::state::{ActiveContextMenu, AppState, MenuAnchor};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
-use poly_client::User;
+use poly_client::{capabilities_for_slug, User};
 use serde::{Deserialize, Serialize};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,6 +96,13 @@ pub struct UserRowCtx {
     pub user: User,
     pub group_id: String,
     pub account_id: String,
+    /// Server ID — populated when the menu is opened from a server member list.
+    /// Empty string when opened from a DM group list.
+    #[serde(default)]
+    pub server_id: String,
+    /// Backend slug for capability lookup (e.g. "discord", "matrix").
+    #[serde(default)]
+    pub backend_slug: String,
 }
 
 pub const USER_ROW_MENU_TYPE: &str = "user_row";
@@ -123,6 +130,28 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
     let copy_id = ctx.user.id.clone();
     let display_name = ctx.user.display_name.clone();
 
+    // Capability and permission gate for moderation actions.
+    let caps = capabilities_for_slug(&ctx.backend_slug);
+    let last_known_perms = app_state.read().last_known_perms.clone();
+    let has_server = !ctx.server_id.is_empty();
+
+    let show_kick = has_server
+        && caps.should_show_kick()
+        && last_known_perms.as_ref().is_some_and(|p| p.kick_members);
+    let show_ban = has_server
+        && caps.should_show_bans()
+        && last_known_perms.as_ref().is_some_and(|p| p.ban_members);
+    let show_timeout = has_server
+        && caps.should_show_timeout()
+        && last_known_perms.as_ref().is_some_and(|p| p.timeout_members);
+
+    let server_id_kick = ctx.server_id.clone();
+    let member_id_kick = ctx.user.id.clone();
+    let server_id_ban = ctx.server_id.clone();
+    let member_id_ban = ctx.user.id.clone();
+    let server_id_timeout = ctx.server_id.clone();
+    let member_id_timeout = ctx.user.id.clone();
+
     rsx! {
         div { class: "context-menu-items",
             div { class: "context-menu-label", "{display_name}" }
@@ -142,6 +171,53 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                     close.call(());
                 },
                 "{t(\"menu-copy-id\")}"
+            }
+            // Moderation actions — rendered only when capability + permission allows.
+            if show_kick || show_ban || show_timeout {
+                div { class: "context-menu-separator" }
+            }
+            if show_kick {
+                button {
+                    class: "context-menu-item context-menu-item-danger",
+                    onclick: {
+                        let server_id = server_id_kick.clone();
+                        let member_id = member_id_kick.clone();
+                        move |_| {
+                            // Wave 2/3: open KickMemberDialog. For now log and close.
+                            tracing::debug!("Kick {member_id} from {server_id} (stub — Wave 2 will open dialog)");
+                            close.call(());
+                        }
+                    },
+                    "{t(\"mod-action-kick\")}"
+                }
+            }
+            if show_ban {
+                button {
+                    class: "context-menu-item context-menu-item-danger",
+                    onclick: {
+                        let server_id = server_id_ban.clone();
+                        let member_id = member_id_ban.clone();
+                        move |_| {
+                            tracing::debug!("Ban {member_id} from {server_id} (stub — Wave 2 will open dialog)");
+                            close.call(());
+                        }
+                    },
+                    "{t(\"mod-action-ban\")}"
+                }
+            }
+            if show_timeout {
+                button {
+                    class: "context-menu-item",
+                    onclick: {
+                        let server_id = server_id_timeout.clone();
+                        let member_id = member_id_timeout.clone();
+                        move |_| {
+                            tracing::debug!("Timeout {member_id} in {server_id} (stub — Wave 2 will open dialog)");
+                            close.call(());
+                        }
+                    },
+                    "{t(\"mod-action-timeout\")}"
+                }
             }
         }
     }

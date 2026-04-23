@@ -5858,6 +5858,9 @@ fn MsgContextMenuOverlay(
         return rsx! {};
     };
 
+    let app_state: crate::state::AppState = use_context::<Signal<crate::state::AppState>>().read().clone();
+    let last_known_perms = app_state.last_known_perms.clone();
+
     let x = menu.x;
     let y = menu.y;
     let is_own = menu.is_own;
@@ -5899,7 +5902,7 @@ fn MsgContextMenuOverlay(
 
             div { class: "context-menu-separator" }
 
-            {render_context_menu_danger_item(is_own, msg_context_menu, chat_data, mid_delete)}
+            {render_context_menu_danger_item(is_own, last_known_perms, msg_context_menu, chat_data, mid_delete)}
             {render_context_menu_copy_id_item(msg_context_menu, mid_copy_id)}
         }
     }
@@ -5983,11 +5986,18 @@ fn render_context_menu_copy_text_item(
 
 fn render_context_menu_danger_item(
     is_own: bool,
+    last_known_perms: Option<poly_client::MemberPermissions>,
     mut msg_context_menu: Signal<Option<MsgContextMenu>>,
     mut chat_data: Signal<ChatData>,
     mid_delete: String,
 ) -> Element {
-    if !is_own {
+    // Show the delete action if the user owns the message OR has manage_messages.
+    let can_delete = is_own
+        || last_known_perms
+            .as_ref()
+            .is_some_and(|p| p.manage_messages);
+
+    if !can_delete {
         return rsx! {
             ContextMenuItemSimple {
                 label: t("msg-report"),
@@ -6002,7 +6012,7 @@ fn render_context_menu_danger_item(
 
     rsx! {
         ContextMenuItemSimple {
-            label: t("msg-delete"),
+            label: t("mod-action-delete-message"),
             danger: true,
             onclick: move |_| {
                 chat_data.write().messages.retain(|message| message.id != mid_delete);

@@ -855,3 +855,44 @@ agent-draft-autosend-in = Enviando automáticamente en { $secs }s
 agent-draft-cancel-autosend = Cancelar envío automático
 agent-drafts-sidebar-title = Borradores pendientes
 agent-drafts-sidebar-empty = No hay borradores pendientes
+
+# Acciones de moderación — genéricas
+mod-action-kick = Expulsar miembro
+mod-action-ban = Prohibir miembro
+mod-action-unban = Levantar prohibición
+mod-action-timeout = Silenciar
+mod-action-untimeout = Quitar silencio
+mod-action-delete-message = Eliminar mensaje
+mod-action-edit-channel = Editar canal
+
+# Variantes específicas del backend
+mod-action-discord-timeout = Silenciar
+mod-action-discord-ban = Prohibir
+mod-action-matrix-redact = Redactar
+mod-action-lemmy-ban = Prohibir en la comunidad
+mod-action-lemmy-timeout = Prohibir temporalmente
+
+# Pestañas de configuración — moderación
+settings-tab-roles = Roles
+settings-tab-bans = Prohibiciones
+settings-tab-modlog = Registro de moderación
+
+# Diálogo de expulsión
+dialog-kick-title = ¿Expulsar a { $user } del servidor?
+dialog-kick-reason = Motivo (opcional)
+dialog-kick-confirm = Expulsar
+
+# Diálogo de prohibición
+dialog-ban-title = ¿Prohibir a { $user }?
+dialog-ban-reason = Motivo (opcional)
+dialog-ban-delete-history = Eliminar historial de mensajes
+dialog-ban-confirm = Prohibir
+
+# Diálogo de silencio
+dialog-timeout-title = Silenciar a { $user }
+dialog-timeout-duration = Duración
+dialog-timeout-reason = Motivo (opcional)
+dialog-timeout-confirm = Silenciar
+
+# Editar canal
+dialog-edit-channel-title = Editar canal

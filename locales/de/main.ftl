@@ -855,3 +855,44 @@ agent-draft-autosend-in = Automatisches Senden in { $secs } s
 agent-draft-cancel-autosend = Automatisches Senden abbrechen
 agent-drafts-sidebar-title = Ausstehende Entwürfe
 agent-drafts-sidebar-empty = Keine ausstehenden Entwürfe
+
+# Moderationsaktionen — allgemein
+mod-action-kick = Mitglied entfernen
+mod-action-ban = Mitglied sperren
+mod-action-unban = Sperre aufheben
+mod-action-timeout = Timeout
+mod-action-untimeout = Timeout aufheben
+mod-action-delete-message = Nachricht löschen
+mod-action-edit-channel = Kanal bearbeiten
+
+# Backend-spezifische Überschreibungen
+mod-action-discord-timeout = Timeout
+mod-action-discord-ban = Sperren
+mod-action-matrix-redact = Zurückziehen
+mod-action-lemmy-ban = Aus Community sperren
+mod-action-lemmy-timeout = Vorübergehend sperren
+
+# Einstellungs-Tabs — Moderation
+settings-tab-roles = Rollen
+settings-tab-bans = Sperren
+settings-tab-modlog = Protokoll
+
+# Kick-Dialog
+dialog-kick-title = { $user } vom Server entfernen?
+dialog-kick-reason = Grund (optional)
+dialog-kick-confirm = Entfernen
+
+# Ban-Dialog
+dialog-ban-title = { $user } sperren?
+dialog-ban-reason = Grund (optional)
+dialog-ban-delete-history = Nachrichtenverlauf löschen
+dialog-ban-confirm = Sperren
+
+# Timeout-Dialog
+dialog-timeout-title = { $user } mit Timeout belegen
+dialog-timeout-duration = Dauer
+dialog-timeout-reason = Grund (optional)
+dialog-timeout-confirm = Timeout
+
+# Kanal bearbeiten
+dialog-edit-channel-title = Kanal bearbeiten

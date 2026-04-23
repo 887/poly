@@ -855,3 +855,44 @@ agent-draft-autosend-in = Envoi automatique dans { $secs }s
 agent-draft-cancel-autosend = Annuler l'envoi automatique
 agent-drafts-sidebar-title = Brouillons en attente
 agent-drafts-sidebar-empty = Aucun brouillon en attente
+
+# Actions de modération — génériques
+mod-action-kick = Expulser le membre
+mod-action-ban = Bannir le membre
+mod-action-unban = Lever le bannissement
+mod-action-timeout = Mettre en sourdine
+mod-action-untimeout = Retirer la sourdine
+mod-action-delete-message = Supprimer le message
+mod-action-edit-channel = Modifier le salon
+
+# Variantes spécifiques au backend
+mod-action-discord-timeout = Mettre en sourdine
+mod-action-discord-ban = Bannir
+mod-action-matrix-redact = Rédiger
+mod-action-lemmy-ban = Bannir de la communauté
+mod-action-lemmy-timeout = Bannir temporairement
+
+# Onglets de paramètres — modération
+settings-tab-roles = Rôles
+settings-tab-bans = Bannissements
+settings-tab-modlog = Journal d'audit
+
+# Dialogue d'expulsion
+dialog-kick-title = Expulser { $user } du serveur ?
+dialog-kick-reason = Raison (optionnelle)
+dialog-kick-confirm = Expulser
+
+# Dialogue de bannissement
+dialog-ban-title = Bannir { $user } ?
+dialog-ban-reason = Raison (optionnelle)
+dialog-ban-delete-history = Supprimer l'historique des messages
+dialog-ban-confirm = Bannir
+
+# Dialogue de sourdine
+dialog-timeout-title = Mettre { $user } en sourdine
+dialog-timeout-duration = Durée
+dialog-timeout-reason = Raison (optionnelle)
+dialog-timeout-confirm = Sourdine
+
+# Modifier le salon
+dialog-edit-channel-title = Modifier le salon

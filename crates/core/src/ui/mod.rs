@@ -62,6 +62,7 @@ mod agent;
 pub mod client_ui;
 pub use actions::{ActionCx, UiAction};
 pub(crate) mod code_explorer;
+pub mod dialogs;
 pub(crate) mod context_menu;
 pub(crate) mod create_channel;
 pub(crate) mod create_forum_post;
