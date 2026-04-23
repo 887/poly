@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-21
 > **Last updated:** 2026-04-23
-> **Status:** 🟧 IN PROGRESS — Phases A complete, B complete, C complete, D complete, E7 + 5 of 6 F-cluster items shipped. Remaining: E1–E6, F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 / F-FJ-2 / F-GH-1 / F-MX-2 / F-ST-1 / F-DM-1.
+> **Status:** 🟧 IN PROGRESS — Phases A, B, C, D, E complete. F-cluster shipped: E7, F-LE-2, F-DC-1, F-FJ-1, F-GH-2, F-MX-1, plus F-MX-2 and F-DC-icon-side closed by E2. Plus side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed. Remaining: F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 (settings ⚙ routing) / F-FJ-2 / F-GH-1 / F-ST-1 / F-DM-1.
 > **Audit data:** `docs/plans/ui-polish-round-2/`
 > **Predecessor:** `docs/plans/plan-client-ui-polish.md` (Round 1, ✅ shipped 2026-04-18)
 > **Trigger:** post-merge of test-account auto-signin + offline-account sidebar work, the user opened every animal account in the dev app and reported broken account-bar layout, native right-click menus everywhere, and a Teams crash. This plan covers the audit findings and the resulting fixes.
@@ -168,3 +168,11 @@ Every fix lands its test matrix per the policy from `docs/plans/plan-client-ui-p
 - **Phase E** functional fixes get integration tests at the lowest layer that reproduces the symptom (router test for E1, capability test for E3, plugin test for E4, etc.).
 
 Run TEST_HARNESS.md via a haiku subagent after each phase before merging.
+
+
+---
+
+## Side-quest plans landed alongside this round
+
+- **`docs/plans/plan-server-banners.md`** (172 lines) — server-banner spec + implementation plan for poly-server / Discord / Lemmy. **Implementation also shipped** in commit `0c76d236e93b` (24 files: WIT trait `update_server_banner`, plugin impls, host BannerPanel UI wired to it, test-server PATCH/PUT handlers, 9 integration tests in `clients/{discord,lemmy,server-client}/tests/banner.rs`).
+- **`docs/plans/plan-permissions-moderation.md`** (1598 lines) — exhaustive plan for permissions, ownership, moderation across all 8 backends (Discord, Matrix, Stoat, Teams, Lemmy, Forgejo, GitHub, poly-server). Plan only — no code. Top findings: Discord bans are permanent at API level (temp bans require bots), Teams has no ban/reorder endpoints in Graph, Stoat endpoints could not be live-verified.
