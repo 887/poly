@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-21
 > **Last updated:** 2026-04-23
-> **Status:** 🟧 IN PROGRESS — Phase A complete, B complete, C (1/3), E7, D2's `AttachmentContextMenu` shipped. Remaining: C2/C3, D1, D2 (3 of 4 menus), E1–E6, all of F.
+> **Status:** 🟧 IN PROGRESS — Phases A complete, B complete, C complete, D complete, E7 + 5 of 6 F-cluster items shipped. Remaining: E1–E6, F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 / F-FJ-2 / F-GH-1 / F-MX-2 / F-ST-1 / F-DM-1.
 > **Audit data:** `docs/plans/ui-polish-round-2/`
 > **Predecessor:** `docs/plans/plan-client-ui-polish.md` (Round 1, ✅ shipped 2026-04-18)
 > **Trigger:** post-merge of test-account auto-signin + offline-account sidebar work, the user opened every animal account in the dev app and reported broken account-bar layout, native right-click menus everywhere, and a Teams crash. This plan covers the audit findings and the resulting fixes.
@@ -80,19 +80,19 @@ The four highest-leverage one-line/few-line fixes. Land these first; they make t
 Per [`audit-context-menu-inherit.md` §1](ui-polish-round-2/audit-context-menu-inherit.md), 72 sites use `inherit` where `none` is the correct semantic. ~55 are a single batch in the settings subtree. After A2 they're already runtime-correct via the global guard; this phase is about *being explicit* so a future macro change doesn't silently regress them.
 
 - [x] **C1. Settings-tree mass-flip (~55 sites).** Single commit, single sed-style edit across `crates/core/src/ui/settings/`, `crates/core/src/ui/account/settings/`, `crates/core/src/ui/account/server/settings/`. Full list in [`audit-context-menu-inherit.md` §1.1–§1.4](ui-polish-round-2/audit-context-menu-inherit.md). — **shipped `bbe6701c`** (48 sites; audit had 49 named, recount reconciled to 48)
-- [ ] **C2. Modal / overlay / toast / wing host mass-flip (~10 sites).** [§1.5–§1.6](ui-polish-round-2/audit-context-menu-inherit.md): `LayoutToggleSwitch`, `WingShell`, `WingTabBar`, agent-panel sections, etc.
-- [ ] **C3. The remaining ~7 misc sites.** [§1.7](ui-polish-round-2/audit-context-menu-inherit.md): tutorial overlays, splash, error overlays.
+- [x] **C2. Modal / overlay / toast / wing host mass-flip (~10 sites).** [§1.5–§1.6](ui-polish-round-2/audit-context-menu-inherit.md): `LayoutToggleSwitch`, `WingShell`, `WingTabBar`, agent-panel sections, etc. — **shipped `e219d3392b2b`** (12 sites flipped: 7 settings subsections in §1.5 + 5 modals/overlays in §1.6 — `UserProfileModal`, `OutgoingDirectCallOverlay`, `MessageMediaViewerOverlay`, `CreateChannelPage`, `CreateServerPage`).
+- [x] **C3. The remaining ~7 misc sites.** [§1.7](ui-polish-round-2/audit-context-menu-inherit.md): tutorial overlays, splash, error overlays. — **shipped `ac0cd2c0d5d9`** (6 sites: `ChatUtilityRail`, `ChatSettingsPanel`, `SearchFilterPopup`, `TypingIndicator`, `DmContactListPanel`, `EmojiPicker`).
 
 ### Phase D — Genuine missing menus (the 20 sites that need a typed menu, not `none`)
 
 Per [`audit-context-menu-inherit.md` §2](ui-polish-round-2/audit-context-menu-inherit.md). A1–A3 of phase A handle the most urgent (`UserRowContextMenu`). The rest:
 
-- [ ] **D1. Wire existing menus to obvious sites:** `MessageContextMenu` to `MessageContentView`'s body wrapper (currently only the row container has it), `ChannelContextMenu` to `ChannelListItem` in forum-style channel lists, `ServerContextMenu` to all three server-icon variants (`AccountServerIcon`, `ServerIconDisplay`, `FavoriteServerIcon` already has it via raw handler — normalize via macro after B1).
+- [x] **D1. Wire existing menus to obvious sites:** `MessageContextMenu` to `MessageContentView`'s body wrapper (currently only the row container has it), `ChannelContextMenu` to `ChannelListItem` in forum-style channel lists, `ServerContextMenu` to all three server-icon variants (`AccountServerIcon`, `ServerIconDisplay`, `FavoriteServerIcon` already has it via raw handler — normalize via macro after B1). — **shipped `478c6b0ddf92`**. Big find from the agent: the `ContextMenuStack` host component was never mounted in `MainLayout`, so `ForumPostContextMenu` and `UserRowContextMenu` (from Phase A) were silently no-ops despite their state being populated. Mounting it makes those menus live too. The other "wirings" in D1 turned out to already be correct via event bubbling — adding redundant handlers would have caused double-opens.
 - [ ] **D2. Author 4 new typed menus** for surfaces with no current menu but real expected actions:
   - [x] **`AttachmentContextMenu`** — for in-chat image / video / file attachments (Open / Save as / Copy URL). — **shipped `66778ac0`** (initial), `a3660685` (z-index above media viewer), `d99bece5` (inline-image right-click now appends to message menu instead of standalone; standalone still used by full-screen viewer).
-  - [ ] **`ReactionContextMenu`** — for the reaction chips on messages (Show who reacted / Remove my reaction).
-  - [ ] **`AvatarContextMenu`** — for user avatars in message rows / member list (View profile / Send DM / Mention).
-  - [ ] **`ForumPostContextMenu`** — partially defined for `ForumComment` but missing for `ForumPostCard` and the `HnFeedView` post rows. Finish wiring per [`audit-native-rclick-leakage.md` §4.4](ui-polish-round-2/audit-native-rclick-leakage.md).
+  - [x] **`ReactionContextMenu`** — for the reaction chips on messages (Show who reacted / Remove my reaction). — **shipped `b37a3e79d03a`**
+  - [x] **`AvatarContextMenu`** — for user avatars in message rows / member list (View profile / Send DM / Mention). — **shipped `f12804a6c670`**. Decision: kept separate from `UserRowContextMenu` (sidebar rows offer Profile + Copy ID; avatar offers Profile + Send DM + Mention — different surfaces, different actions).
+  - [x] **`ForumPostContextMenu`** — partially defined for `ForumComment` but missing for `ForumPostCard` and the `HnFeedView` post rows. Finish wiring per [`audit-native-rclick-leakage.md` §4.4](ui-polish-round-2/audit-native-rclick-leakage.md). — **shipped `cfbfe0227585`** (post-P55 the wiring went into `ListBodyRow`'s forum-card branch, not the deleted `ForumPostCard`/`HnFeedView`).
 
 ### Phase E — Cross-backend functional bugs (R1, R2, R3, +)
 
@@ -110,7 +110,7 @@ These are real backend gaps surfaced by the visual audit, not styling. Each is i
 
 #### F-Lemmy
 - [ ] **F-LE-1.** Subscribed communities are not listed as icons in the second nav. The nav is nearly empty (just 🔔 + +). Wire `lemmy::list_subscribed_communities()` to populate the second nav like Discord guilds. ([`visual-lemmy.md`](ui-polish-round-2/visual-lemmy.md) #1)
-- [ ] **F-LE-2.** No way to browse / discover communities from the Poly UI. Add a "Browse Communities" entry — the existing "+" button currently shows a misleading "lemmy doesn't support creating servers" toast, repurpose it. ([`visual-lemmy.md`](ui-polish-round-2/visual-lemmy.md) #3)
+- [x] **F-LE-2.** No way to browse / discover communities from the Poly UI. Add a "Browse Communities" entry — the existing "+" button currently shows a misleading "lemmy doesn't support creating servers" toast, repurpose it. ([`visual-lemmy.md`](ui-polish-round-2/visual-lemmy.md) #3) — **shipped `729ca80070b0`**. Lemmy's `CreateServerRoute` now renders a "Browse Communities →" link to `https://{instance_id}/communities`. Also brought in the styled-empty-state CSS that F-FJ-1 was waiting on.
 
 #### F-Teams
 - [ ] **F-TE-1.** "Unknown" contact in Teams DMs list — contact resolution failure. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #3)
@@ -118,19 +118,19 @@ These are real backend gaps surfaced by the visual audit, not styling. Each is i
 - [ ] **F-TE-3.** Per-account ⚙ button on Teams account-bar opens global settings instead of per-account. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #6)
 
 #### F-Discord
-- [ ] **F-DC-1.** "You need the `VIEW_CHANNEL` permission" surfaces as an inline message instead of a styled empty-state. ([`visual-discord.md`](ui-polish-round-2/visual-discord.md) #2)
+- [x] **F-DC-1.** "You need the `VIEW_CHANNEL` permission" surfaces as an inline message instead of a styled empty-state. ([`visual-discord.md`](ui-polish-round-2/visual-discord.md) #2) — **shipped `da7ff5b87e11`**. HTTP 403 in Discord plugin now maps to `ClientError::PermissionDenied`; `restore_server_channel` propagates it into a new `ChatData.channel_load_error` field; chat view renders a 🔒 styled empty state.
 - [ ] **F-DC-2.** Account-bar ⚙ opens global settings (vs. per-account) — same as F-TE-3, fix once across backends.
 
 #### F-Forgejo
-- [ ] **F-FJ-1.** "forgejo doesn't support direct messages" renders as raw plain text in the main content area instead of a styled unsupported-feature empty state. ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #2)
+- [x] **F-FJ-1.** "forgejo doesn't support direct messages" renders as raw plain text in the main content area instead of a styled unsupported-feature empty state. ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #2) — **shipped as part of `729ca80070b0`** (the Forgejo unsupported-DM view was already rendering through `FeatureUnsupportedPlaceholder`; only the CSS for `.feature-unsupported-*` was missing — added in the F-LE-2 commit).
 - [ ] **F-FJ-2.** Repository icons render as letter-circles instead of repo avatars. (Subset of E2.) ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #4)
 
 #### F-GitHub
 - [ ] **F-GH-1.** Repository cards show only icon + name; no description / star count / language / last update. Card design needs more info. ([`visual-github.md`](ui-polish-round-2/visual-github.md) #2)
-- [ ] **F-GH-2.** "No items" empty state for issue panel is plain text. Style with icon + helpful messaging. ([`visual-github.md`](ui-polish-round-2/visual-github.md) #3)
+- [x] **F-GH-2.** "No items" empty state for issue panel is plain text. Style with icon + helpful messaging. ([`visual-github.md`](ui-polish-round-2/visual-github.md) #3) — **shipped `029f37a6a140`**. `client_ui::view::split_body` empty state now renders 📭 + "Nothing here" + helpful hint; CSS `.client-view-split-empty` etc.
 
 #### F-Matrix
-- [ ] **F-MX-1.** Matrix DM contacts use `@username:server` MXID in some places and display name in others; pick one. ([`visual-matrix.md`](ui-polish-round-2/visual-matrix.md) #4)
+- [x] **F-MX-1.** Matrix DM contacts use `@username:server` MXID in some places and display name in others; pick one. ([`visual-matrix.md`](ui-polish-round-2/visual-matrix.md) #4) — **shipped `1b6c246511b5`**. `get_dm_channels()` now batches `fetch_profile()` calls via `futures::join_all` and uses Matrix `displayname` (with MXID fallback); also populates `avatar_url` from the profile.
 - [ ] **F-MX-2.** Spaces icons in second nav render as letter-circles instead of Matrix space thumbnails (subset of E2). ([`visual-matrix.md`](ui-polish-round-2/visual-matrix.md) #2)
 
 #### F-Stoat
