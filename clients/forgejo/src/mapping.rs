@@ -108,7 +108,8 @@ pub fn server_from_repo(repo: &ForgejoRepo, account_id: &str, account_display_na
         description: None,
         star_count: None,
         language: None,
-        updated_at: None,
+        forks_count: None,
+        open_issues_count: None,
     }
 }
 

@@ -202,9 +202,15 @@ fn RepoCard(
                             "{stars}"
                         }
                     }
-                    if let Some(ts) = &server.updated_at {
-                        span { class: "repo-card-updated",
-                            "Updated {humanize_age(ts)}"
+                    if let Some(forks) = server.forks_count {
+                        span { class: "repo-card-forks",
+                            span { class: "repo-card-fork-icon", "⑂" }
+                            "{forks}"
+                        }
+                    }
+                    if let Some(open) = server.open_issues_count {
+                        span { class: "repo-card-open-issues",
+                            "{open} open"
                         }
                     }
                     if server.unread_count > 0 {

@@ -242,7 +242,8 @@ pub fn from_wit_server(s: wit::Server) -> pc::Server {
         description: None,
         star_count: None,
         language: None,
-        updated_at: None,
+        forks_count: None,
+        open_issues_count: None,
     }
 }
 

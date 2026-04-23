@@ -704,10 +704,16 @@ async fn test_get_servers_repo_card_fields() {
         "language should be Rust for iceberg-os"
     );
 
-    // updated_at (from pushed_at)
+    // forks_count
     assert!(
-        iceberg.updated_at.is_some(),
-        "updated_at should be populated"
+        iceberg.forks_count.is_some(),
+        "forks_count should be populated"
+    );
+
+    // open_issues_count
+    assert!(
+        iceberg.open_issues_count.is_some(),
+        "open_issues_count should be populated"
     );
 
     // fish-tracker has different language/stars

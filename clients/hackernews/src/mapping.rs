@@ -53,7 +53,8 @@ pub fn build_server(account_id: &str) -> Server {
         description: None,
         star_count: None,
         language: None,
-        updated_at: None,
+        forks_count: None,
+        open_issues_count: None,
     }
 }
 

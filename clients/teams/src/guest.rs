@@ -344,7 +344,8 @@ impl Guest for TeamsPlugin {
                 description: None,
                 star_count: None,
                 language: None,
-                updated_at: None,
+                forks_count: None,
+                open_issues_count: None,
             })
             .collect())
     }
@@ -376,7 +377,8 @@ impl Guest for TeamsPlugin {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         })
     }
 

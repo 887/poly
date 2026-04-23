@@ -112,7 +112,8 @@ pub fn server_from_repo(repo: &GhRepo, account_id: &str, account_display_name: &
         description: repo.description.clone(),
         star_count: Some(repo.stargazers_count),
         language: repo.language.clone(),
-        updated_at: repo.pushed_at.clone(),
+        forks_count: Some(repo.forks_count),
+        open_issues_count: Some(repo.open_issues_count),
     }
 }
 

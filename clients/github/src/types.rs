@@ -40,6 +40,12 @@ pub struct GhRepo {
     /// Primary programming language detected by GitHub.
     #[serde(default)]
     pub language: Option<String>,
+    /// Fork count.
+    #[serde(default)]
+    pub forks_count: u64,
+    /// Open issues + PRs count.
+    #[serde(default)]
+    pub open_issues_count: u64,
 }
 
 /// A GitHub user / org as embedded inside a repo or issue.

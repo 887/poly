@@ -585,7 +585,8 @@ impl ClientBackend for MatrixClient {
                     description: None,
                     star_count: None,
                     language: None,
-                    updated_at: None,
+                    forks_count: None,
+                    open_issues_count: None,
                 });
             }
         }
@@ -613,7 +614,8 @@ impl ClientBackend for MatrixClient {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
             account_display_name: display_name,
         })
     }

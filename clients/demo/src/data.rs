@@ -207,7 +207,8 @@ pub fn demo3_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
         Server {
             id: "comm-linux".to_string(),
@@ -232,7 +233,8 @@ pub fn demo3_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
         Server {
             id: "comm-programming".to_string(),
@@ -256,7 +258,8 @@ pub fn demo3_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
     ]
 }
@@ -1242,7 +1245,8 @@ pub fn demo_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
         Server {
             id: "server-gaming".to_string(),
@@ -1267,7 +1271,8 @@ pub fn demo_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
         Server {
             id: "server-music".to_string(),
@@ -1291,7 +1296,8 @@ pub fn demo_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
     ]
 }
@@ -1333,7 +1339,8 @@ pub fn demo2_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
         Server {
             id: "server-bookclub".to_string(),
@@ -1358,7 +1365,8 @@ pub fn demo2_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
         Server {
             id: "server-cooking".to_string(),
@@ -1383,7 +1391,8 @@ pub fn demo2_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
         Server {
             id: "server-fitness".to_string(),
@@ -1408,7 +1417,8 @@ pub fn demo2_servers() -> Vec<Server> {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         },
     ]
 }

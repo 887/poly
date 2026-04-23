@@ -710,7 +710,8 @@ impl ClientBackend for DiscordClient {
                 description: None,
                 star_count: None,
                 language: None,
-                updated_at: None,
+                forks_count: None,
+                open_issues_count: None,
             }
         }).collect())
     }
@@ -739,7 +740,8 @@ impl ClientBackend for DiscordClient {
             description: None,
             star_count: None,
             language: None,
-            updated_at: None,
+            forks_count: None,
+            open_issues_count: None,
         })
     }
 

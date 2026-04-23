@@ -421,10 +421,16 @@ pub struct Server {
     /// Always `None` for non-repo backends.
     #[serde(default)]
     pub language: Option<String>,
-    /// Last-updated timestamp (RFC 3339), used by repo backends (GitHub, Forgejo).
+    /// Fork count, used by repo backends (GitHub, Forgejo).
     /// Always `None` for non-repo backends.
     #[serde(default)]
-    pub updated_at: Option<String>,
+    pub forks_count: Option<u64>,
+    /// Open issues + PRs count, used by repo backends (GitHub, Forgejo).
+    /// Maps to "open issues in this repo" — Poly treats issues as channels,
+    /// so this number is informative on the repo card.
+    /// Always `None` for non-repo backends.
+    #[serde(default)]
+    pub open_issues_count: Option<u64>,
 }
 
 /// A category/folder that groups channels within a server.
