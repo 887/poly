@@ -147,10 +147,19 @@ pub fn route_targets_unknown_account(route: &Route, client_manager: &ClientManag
         return false;
     };
 
-    !client_manager
-        .active_account_ids()
-        .into_iter()
-        .any(|id| id == account_id)
+    let active = client_manager.active_account_ids();
+
+    // E1: on a full page reload to a non-demo deep link, the Router's first
+    // on_update fires before auto_signin_test_accounts (and any other startup
+    // backend init) has populated ClientManager.{backends,sessions}. Treating
+    // that initial empty state as "account unknown" caused a spurious redirect
+    // to SettingsRoute. While ClientManager is still empty, defer the verdict
+    // — the next on_update tick after init will reach the real check.
+    if active.is_empty() {
+        return false;
+    }
+
+    !active.into_iter().any(|id| id == account_id)
 }
 
 // ── Route enum ──────────────────────────────────────────────────────────────
