@@ -776,6 +776,16 @@ fn offline_session_from_entry(entry: &poly_client::TestAccountEntry) -> poly_cli
     }
 }
 
+/// Set to `true` after `auto_signin_test_accounts` has finished its loop
+/// (every entry attempted — whether the underlying authenticate succeeded or
+/// fell through to `register_offline_session`). Read by
+/// `route_targets_unknown_account` so deep-link navigation defers the
+/// "redirect to Settings on unknown account" verdict until the startup
+/// sign-in burst has had its chance.
+#[cfg(debug_assertions)]
+pub static AUTO_SIGNIN_DONE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 #[cfg(debug_assertions)]
 fn auto_signin_test_accounts(
     client_manager: Signal<ClientManager>,
@@ -784,6 +794,7 @@ fn auto_signin_test_accounts(
     let entries: Vec<poly_client::TestAccountEntry> =
         client_manager.read().test_account_entries.to_vec();
     if entries.is_empty() {
+        AUTO_SIGNIN_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
         return;
     }
     let mut client_manager_w = client_manager;
@@ -831,6 +842,9 @@ fn auto_signin_test_accounts(
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
         }
+        // Loop done — flip the flag so route_targets_unknown_account stops
+        // deferring on missing test accounts.
+        AUTO_SIGNIN_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
     });
 }
 

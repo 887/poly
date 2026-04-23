@@ -149,14 +149,25 @@ pub fn route_targets_unknown_account(route: &Route, client_manager: &ClientManag
 
     let active = client_manager.active_account_ids();
 
-    // E1: on a full page reload to a non-demo deep link, the Router's first
-    // on_update fires before auto_signin_test_accounts (and any other startup
-    // backend init) has populated ClientManager.{backends,sessions}. Treating
-    // that initial empty state as "account unknown" caused a spurious redirect
-    // to SettingsRoute. While ClientManager is still empty, defer the verdict
-    // — the next on_update tick after init will reach the real check.
+    // E1 (extended): defer the verdict during the startup auto-signin burst.
+    // Demo accounts sign in synchronously inside init_storage and land in
+    // ClientManager BEFORE the Router mounts; non-demo test accounts sign in
+    // asynchronously over ~1-2s. Without this guard, opening a deep link to
+    // a non-demo account (e.g. /teams/.../U001/dms) checks early, finds demo
+    // present + the target absent, and redirects to SettingsRoute permanently
+    // — the route never re-evaluates after the target finally lands.
+    //
+    // Empty-active is the literal "still booting" case. The atomic flag
+    // covers the partial-active case where the target's authenticate is
+    // still in flight in `auto_signin_test_accounts`'s spawn.
     if active.is_empty() {
         return false;
+    }
+    #[cfg(debug_assertions)]
+    {
+        if !crate::ui::AUTO_SIGNIN_DONE.load(std::sync::atomic::Ordering::SeqCst) {
+            return false;
+        }
     }
 
     !active.into_iter().any(|id| id == account_id)
