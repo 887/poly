@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-21
 > **Last updated:** 2026-04-23
-> **Status:** 🟧 IN PROGRESS — Phases A, B, C, D, E complete. F-cluster shipped: E7, F-LE-2, F-DC-1, F-FJ-1, F-GH-1, F-GH-2, F-MX-1, F-DM-1, plus F-MX-2 and F-DC-icon-side closed by E2. Plus side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed. Remaining: F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 (settings ⚙ routing) / F-FJ-2 / F-ST-1.
+> **Status:** ✅ SHIPPED — Phases A, B, C, D, E, F all complete. F-cluster: E7, F-LE-1, F-LE-2, F-TE-1, F-TE-2, F-TE-3, F-DC-1, F-DC-2, F-FJ-1, F-GH-1, F-GH-2, F-MX-1, F-DM-1 shipped; F-MX-2/F-FJ-2/F-ST-1 closed (subset of E2 / never-broken). Side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed.
 > **Audit data:** `docs/plans/ui-polish-round-2/`
 > **Predecessor:** `docs/plans/plan-client-ui-polish.md` (Round 1, ✅ shipped 2026-04-18)
 > **Trigger:** post-merge of test-account auto-signin + offline-account sidebar work, the user opened every animal account in the dev app and reported broken account-bar layout, native right-click menus everywhere, and a Teams crash. This plan covers the audit findings and the resulting fixes.
@@ -109,7 +109,7 @@ Per [`audit-context-menu-inherit.md` §2](ui-polish-round-2/audit-context-menu-i
 These are real backend gaps surfaced by the visual audit, not styling. Each is its own scoped commit (or sub-plan).
 
 #### F-Lemmy
-- [ ] **F-LE-1.** Subscribed communities are not listed as icons in the second nav. The nav is nearly empty (just 🔔 + +). Wire `lemmy::list_subscribed_communities()` to populate the second nav like Discord guilds. ([`visual-lemmy.md`](ui-polish-round-2/visual-lemmy.md) #1)
+- [x] **F-LE-1.** Subscribed communities are not listed as icons in the second nav. The nav is nearly empty (just 🔔 + +). Wire `lemmy::list_subscribed_communities()` to populate the second nav like Discord guilds. ([`visual-lemmy.md`](ui-polish-round-2/visual-lemmy.md) #1) — **shipped** (this commit). `LemmyClient::get_servers()` calls `GET /api/v3/community/list?type_=Subscribed&limit=50`, maps each `CommunityView` to a `Server` struct (id=`lemmy-community-{id}`, name=community title, icon/banner from API), and returns them; the signup flow extends `chat_data.servers` with these, so `AccountServerBar` renders one icon per community. `CommunitiesLayout` (Bar 3 Subscribed tab) independently calls `get_servers()` so both the second nav and the sidebar panel show subscribed communities. Test server seeds "Rust Programming" and "Programming" for Beaver/Hedgehog; `test_get_servers` integration test verifies ≥2 communities are returned. The visual audit observed an empty second nav because the test server was not running at audit time.
 - [x] **F-LE-2.** No way to browse / discover communities from the Poly UI. Add a "Browse Communities" entry — the existing "+" button currently shows a misleading "lemmy doesn't support creating servers" toast, repurpose it. ([`visual-lemmy.md`](ui-polish-round-2/visual-lemmy.md) #3) — **shipped `729ca80070b0`**. Lemmy's `CreateServerRoute` now renders a "Browse Communities →" link to `https://{instance_id}/communities`. Also brought in the styled-empty-state CSS that F-FJ-1 was waiting on.
 
 #### F-Teams
