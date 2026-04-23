@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-21
 > **Last updated:** 2026-04-23
-> **Status:** 🟧 IN PROGRESS — Phases A, B, C, D, E complete. F-cluster shipped: E7, F-LE-2, F-DC-1, F-FJ-1, F-GH-2, F-MX-1, F-DM-1, plus F-MX-2 and F-DC-icon-side closed by E2. Plus side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed. Remaining: F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 (settings ⚙ routing) / F-FJ-2 / F-GH-1 / F-ST-1.
+> **Status:** 🟧 IN PROGRESS — Phases A, B, C, D, E complete. F-cluster shipped: E7, F-LE-2, F-DC-1, F-FJ-1, F-GH-1, F-GH-2, F-MX-1, F-DM-1, plus F-MX-2 and F-DC-icon-side closed by E2. Plus side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed. Remaining: F-LE-1 / F-TE-1 / F-TE-2 / F-TE-3 / F-DC-2 (settings ⚙ routing) / F-FJ-2 / F-ST-1.
 > **Audit data:** `docs/plans/ui-polish-round-2/`
 > **Predecessor:** `docs/plans/plan-client-ui-polish.md` (Round 1, ✅ shipped 2026-04-18)
 > **Trigger:** post-merge of test-account auto-signin + offline-account sidebar work, the user opened every animal account in the dev app and reported broken account-bar layout, native right-click menus everywhere, and a Teams crash. This plan covers the audit findings and the resulting fixes.
@@ -126,7 +126,7 @@ These are real backend gaps surfaced by the visual audit, not styling. Each is i
 - [x] **F-FJ-2.** Repository icons render as letter-circles instead of repo avatars. (Subset of E2.) ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #4)
 
 #### F-GitHub
-- [ ] **F-GH-1.** Repository cards show only icon + name; no description / star count / language / last update. Card design needs more info. ([`visual-github.md`](ui-polish-round-2/visual-github.md) #2)
+- [x] **F-GH-1.** Repository cards show only icon + name; no description / star count / language / last update. Card design needs more info. ([`visual-github.md`](ui-polish-round-2/visual-github.md) #2) — shipped: extended `Server` struct with `description/star_count/language/updated_at`, populated in `server_from_repo()`, rendered in `RepoCard` with `humanize_age()`, CSS classes added, test server serializes new fields.
 - [x] **F-GH-2.** "No items" empty state for issue panel is plain text. Style with icon + helpful messaging. ([`visual-github.md`](ui-polish-round-2/visual-github.md) #3) — **shipped `029f37a6a140`**. `client_ui::view::split_body` empty state now renders 📭 + "Nothing here" + helpful hint; CSS `.client-view-split-empty` etc.
 
 #### F-Matrix

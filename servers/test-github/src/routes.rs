@@ -50,6 +50,8 @@ fn repo_json(r: &crate::state::Repo) -> Value {
         "pushed_at": r.pushed_at,
         "default_branch": r.default_branch,
         "html_url": r.html_url,
+        "stargazers_count": r.stargazers_count,
+        "language": r.language,
     })
 }
 
