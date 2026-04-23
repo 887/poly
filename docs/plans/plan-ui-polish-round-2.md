@@ -113,13 +113,13 @@ These are real backend gaps surfaced by the visual audit, not styling. Each is i
 - [x] **F-LE-2.** No way to browse / discover communities from the Poly UI. Add a "Browse Communities" entry — the existing "+" button currently shows a misleading "lemmy doesn't support creating servers" toast, repurpose it. ([`visual-lemmy.md`](ui-polish-round-2/visual-lemmy.md) #3) — **shipped `729ca80070b0`**. Lemmy's `CreateServerRoute` now renders a "Browse Communities →" link to `https://{instance_id}/communities`. Also brought in the styled-empty-state CSS that F-FJ-1 was waiting on.
 
 #### F-Teams
-- [ ] **F-TE-1.** "Unknown" contact in Teams DMs list — contact resolution failure. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #3)
-- [ ] **F-TE-2.** Teams server / channel icons render as colored letter-circles (C, P) without channel names. Wire the Teams channel-list `name` field through to the favorites sidebar. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #5)
-- [ ] **F-TE-3.** Per-account ⚙ button on Teams account-bar opens global settings instead of per-account. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #6)
+- [x] **F-TE-1.** "Unknown" contact in Teams DMs list — contact resolution failure. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #3)
+- [x] **F-TE-2.** Teams server / channel icons render as colored letter-circles (C, P) without channel names. Wire the Teams channel-list `name` field through to the favorites sidebar. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #5)
+- [x] **F-TE-3.** Per-account ⚙ button on Teams account-bar opens global settings instead of per-account. ([`visual-teams.md`](ui-polish-round-2/visual-teams.md) #6)
 
 #### F-Discord
 - [x] **F-DC-1.** "You need the `VIEW_CHANNEL` permission" surfaces as an inline message instead of a styled empty-state. ([`visual-discord.md`](ui-polish-round-2/visual-discord.md) #2) — **shipped `da7ff5b87e11`**. HTTP 403 in Discord plugin now maps to `ClientError::PermissionDenied`; `restore_server_channel` propagates it into a new `ChatData.channel_load_error` field; chat view renders a 🔒 styled empty state.
-- [ ] **F-DC-2.** Account-bar ⚙ opens global settings (vs. per-account) — same as F-TE-3, fix once across backends.
+- [x] **F-DC-2.** Account-bar ⚙ opens global settings (vs. per-account) — same as F-TE-3, fix once across backends.
 
 #### F-Forgejo
 - [x] **F-FJ-1.** "forgejo doesn't support direct messages" renders as raw plain text in the main content area instead of a styled unsupported-feature empty state. ([`visual-forgejo.md`](ui-polish-round-2/visual-forgejo.md) #2) — **shipped as part of `729ca80070b0`** (the Forgejo unsupported-DM view was already rendering through `FeatureUnsupportedPlaceholder`; only the CSS for `.feature-unsupported-*` was missing — added in the F-LE-2 commit).
