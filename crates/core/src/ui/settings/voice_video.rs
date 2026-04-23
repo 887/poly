@@ -180,7 +180,7 @@ fn EchoCancellationRow(enabled: bool, on_change: EventHandler<bool>) -> Element 
 /// Settings are loaded from and persisted to storage.
 #[rustfmt::skip]
 #[ui_action(VoiceVideoSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn VoiceVideoSettings() -> Element {
     let mut input_vol = use_signal(|| 80_u32);

@@ -369,7 +369,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 /// manage *which plugins are available and enabled*.
 #[rustfmt::skip]
 #[ui_action(PluginsSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn PluginsSettings() -> Element {
     let mut client_manager: Signal<crate::client_manager::ClientManager> = use_context();

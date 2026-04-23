@@ -460,7 +460,7 @@ fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>
 /// is now in one place.
 #[rustfmt::skip]
 #[ui_action(ThemeSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn ThemeSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

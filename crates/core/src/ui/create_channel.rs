@@ -41,7 +41,7 @@ impl crate::ui::actions::UiAction for CreateChannelAction {
 /// because this route is rendered inside `ServerLayout`'s `Outlet`.
 #[rustfmt::skip]
 #[ui_action(CreateChannelAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(crate) fn CreateChannelPage(
     backend: String,

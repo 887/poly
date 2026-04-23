@@ -17,7 +17,7 @@ use poly_ui_macros::{context_menu, ui_action};
 
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn OutgoingDirectCallOverlay(
     backend: String,

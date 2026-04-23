@@ -803,7 +803,7 @@ pub(super) fn AddServerWizard(servers: Signal<Vec<crate::storage::BackupServerRe
 // DECISION(DX-BACKUP-UI-2): Two-step wizard + background startup sync.
 #[rustfmt::skip]
 #[ui_action(BackupSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn BackupSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

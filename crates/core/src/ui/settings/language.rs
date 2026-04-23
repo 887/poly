@@ -130,7 +130,7 @@ fn LangRow(code: String, label: String, selected: bool, onclick: EventHandler<Mo
 /// Language settings section — flag+checkmark picker.
 #[rustfmt::skip]
 #[ui_action(LanguageSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn LanguageSettings() -> Element {
     let mut locale_sig = crate::i18n::use_locale();

@@ -102,7 +102,7 @@ fn close_modal(mut app_state: Signal<AppState>) {
 /// `AppState.nav.profile_modal_user` is `None`.
 #[ui_action(UserProfileModalAction)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn UserProfileModal() -> Element {
     let app_state: Signal<AppState> = use_context();

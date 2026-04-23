@@ -152,7 +152,7 @@ pub(super) fn MnemonicModal(
 /// - Create additional identities
 #[rustfmt::skip]
 #[ui_action(IdentitySettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn IdentitySettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();

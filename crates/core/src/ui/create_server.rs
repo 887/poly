@@ -39,7 +39,7 @@ impl crate::ui::actions::UiAction for CreateServerAction {
 /// `/:backend/:instance_id/:account_id/dms`.
 #[rustfmt::skip]
 #[ui_action(CreateServerAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(crate) fn CreateServerPage(
     backend: String,

@@ -20,7 +20,7 @@ pub struct MessageMediaViewerOverlayProps {
 
 #[ui_action(inherit)]
 #[rustfmt::skip]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
     let chat_data: Signal<ChatData> = use_context();

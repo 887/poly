@@ -144,7 +144,7 @@ fn ProviderTabs(active_tab: Signal<GifProviderKind>, providers: Vec<(GifProvider
 /// Media integrations settings section — provider tabs layout.
 #[rustfmt::skip]
 #[ui_action(MediaSettingsAction)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
 pub(super) fn MediaSettings() -> Element {
     let media = use_signal(MediaProviderSettings::default);
