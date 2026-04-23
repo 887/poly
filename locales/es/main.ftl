@@ -635,6 +635,10 @@ attachment-menu-save-image = Guardar imagen
 attachment-menu-copy-link = Copiar enlace del medio
 attachment-menu-open-link = Abrir enlace del medio
 
+# Reaction chip context menu (D2.b)
+reaction-menu-show-reactors = Ver quién reaccionó
+reaction-menu-remove = Eliminar mi reacción
+
 # Remove from favorites inline confirm
 remove-favorites-title = ¿Eliminar «{ $name }» de favoritos?
 remove-favorites-body = Puedes volver a agregarlo en cualquier momento arrastrándolo a la barra de favoritos o usando este menú.

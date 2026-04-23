@@ -372,6 +372,22 @@ pub struct ActiveContextMenu {
     pub dismiss_on_outside: bool,
 }
 
+/// State for the active right-click reaction chip context menu.
+///
+/// Opened by right-clicking an emoji reaction pill on a message.
+/// Cleared by a global click on the `MainLayout` root.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReactionContextMenuState {
+    /// Fixed X position (from `page_coordinates()`).
+    pub x: f64,
+    /// Fixed Y position (from `page_coordinates()`).
+    pub y: f64,
+    /// The message this reaction belongs to.
+    pub message_id: String,
+    /// The emoji of the reaction (e.g. "👍").
+    pub emoji: String,
+}
+
 /// State for the active right-click attachment (image) context menu.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttachmentContextMenuState {
@@ -441,6 +457,8 @@ pub struct AppState {
     pub channel_context_menu: Option<ChannelContextMenuState>,
     /// Active right-click attachment (image) context menu, if any.
     pub attachment_context_menu: Option<AttachmentContextMenuState>,
+    /// Active right-click reaction chip context menu, if any.
+    pub reaction_context_menu: Option<ReactionContextMenuState>,
     /// Stack of context menus for the new Phase A runtime (plan §4.1).
     ///
     /// Empty = no overlay. Pushing opens a submenu; popping closes it.
@@ -472,6 +490,7 @@ impl Default for AppState {
             context_menu: None,
             channel_context_menu: None,
             attachment_context_menu: None,
+            reaction_context_menu: None,
             context_menu_stack: Vec::new(),
             sidebar_invalidated_tick: 0,
         }

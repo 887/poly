@@ -819,6 +819,10 @@ attachment-menu-save-image = Save Image
 attachment-menu-copy-link = Copy Media Link
 attachment-menu-open-link = Open Media Link
 
+# Reaction chip context menu (D2.b)
+reaction-menu-show-reactors = Show who reacted
+reaction-menu-remove = Remove my reaction
+
 # Remove from favorites inline confirm
 remove-favorites-title = Remove "{ $name }" from Favorites?
 remove-favorites-body = You can add it back anytime by dragging it to the favorites bar or using this menu.

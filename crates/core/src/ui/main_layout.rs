@@ -15,8 +15,8 @@
 //! Extract sub-components rather than growing this file.
 
 use super::account::{
-    AccountServerBar, AttachmentContextMenu, ChannelContextMenu, ServerContextMenu,
-    UserProfileModal,
+    AccountServerBar, AttachmentContextMenu, ChannelContextMenu, ReactionContextMenu,
+    ServerContextMenu, UserProfileModal,
 };
 use super::context_menu::host::ContextMenuStack;
 use super::favorites_sidebar::FavoritesBar;
@@ -309,6 +309,9 @@ pub fn MainLayout() -> Element {
                 if app_state.read().attachment_context_menu.is_some() {
                     app_state.write().attachment_context_menu = None;
                 }
+                if app_state.read().reaction_context_menu.is_some() {
+                    app_state.write().reaction_context_menu = None;
+                }
                 // Clear the Phase-A context_menu_stack (ForumPostContextMenu,
                 // UserRowContextMenu, and future stack-based menus).
                 if !app_state.read().context_menu_stack.is_empty() {
@@ -325,6 +328,8 @@ pub fn MainLayout() -> Element {
             ChannelContextMenu {}
             // Floating attachment (image) right-click context menu
             AttachmentContextMenu {}
+            // Floating reaction chip right-click context menu (D2.b)
+            ReactionContextMenu {}
             // Phase-A stack-based context menus (ForumPostContextMenu,
             // UserRowContextMenu, and future stack-based menus).
             // D1: mounted here so existing menus actually render — previously

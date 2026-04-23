@@ -5569,13 +5569,14 @@ fn AttachmentsView(
     }
 }
 
-/// Render reaction pills (clickable to toggle).
+/// Render reaction pills (clickable to toggle, right-clickable for context menu).
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
 fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
+    let mut app_state: Signal<AppState> = use_context();
     rsx! {
         div { class: "message-reactions",
             for reaction in &reactions {
@@ -5584,13 +5585,31 @@ fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> E
                     let count = reaction.count;
                     let me_class = if reaction.me { "reaction-pill me" } else { "reaction-pill" };
                     let emoji_click = emoji.clone();
+                    let emoji_ctx = emoji.clone();
                     let mid = message_id.clone();
+                    let mid_ctx = message_id.clone();
 
                     rsx! {
                         button {
                             class: "{me_class}",
                             onclick: move |_| {
                                 toggle_reaction_on_message(&mut chat_data, &mid, &emoji_click);
+                            },
+                            oncontextmenu: {
+                                let e = emoji_ctx.clone();
+                                let m = mid_ctx.clone();
+                                move |evt: MouseEvent| {
+                                    evt.prevent_default();
+                                    evt.stop_propagation();
+                                    let coords = evt.client_coordinates();
+                                    app_state.write().reaction_context_menu =
+                                        Some(crate::state::ReactionContextMenuState {
+                                            x: coords.x,
+                                            y: coords.y,
+                                            message_id: m.clone(),
+                                            emoji: e.clone(),
+                                        });
+                                }
                             },
                             "{emoji} {count}"
                         }
@@ -5653,7 +5672,8 @@ fn TypingIndicator() -> Element {
 ///
 /// If the reaction already exists and we've reacted, remove our reaction.
 /// If it exists but we haven't reacted, add ours. Otherwise create a new reaction.
-fn toggle_reaction_on_message(chat_data: &mut Signal<ChatData>, message_id: &str, emoji: &str) {
+/// `pub(crate)` so `ReactionContextMenu` can call it without duplicating logic.
+pub(crate) fn toggle_reaction_on_message(chat_data: &mut Signal<ChatData>, message_id: &str, emoji: &str) {
     let mut cd = chat_data.write();
     if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
         if let Some(reaction) = msg.reactions.iter_mut().find(|r| r.emoji == emoji) {
