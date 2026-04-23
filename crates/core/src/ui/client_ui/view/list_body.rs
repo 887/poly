@@ -21,8 +21,10 @@
 //! non-forum backend (HN, GitHub, …) is unaffected.
 
 use crate::client_manager::ClientManager;
+use crate::state::AppState;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
+use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
 use dioxus::prelude::*;
 use poly_client::{ClientError, Cursor, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
 use poly_ui_macros::{context_menu, ui_action};
@@ -271,10 +273,14 @@ pub fn ListBody(
 /// inside the `for row in rows { { let ... ; rsx!{...} } }` block expression
 /// pattern — Dioxus 0.7 template tracking would drop these handlers in some
 /// cases, leaving row clicks as dead taps (see P3 selected-row bug).
+///
+/// D2.d: when the row carries a `SCORE:N` prefix (Lemmy-style forum post), the
+/// right-click opens `ForumPostContextMenu` via the stack host in `MainLayout`.
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
 pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
+    let mut app_state: Signal<AppState> = use_context();
     let id = row.id.clone();
     let id_for_click = id.clone();
     let primary = row.primary_text.clone();
@@ -289,11 +295,32 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
 
     if let Some(score) = maybe_score {
         let sc_class = score_class(score);
+        // Build ForumPostCtx from available row data for the right-click menu.
+        let ctx_id = id.clone();
+        let ctx_text = primary.clone();
+        let ctx_author_name = secondary.clone().unwrap_or_default();
         rsx! {
             div {
                 class: "forum-post-card",
                 role: "article",
                 onclick: move |_| on_click.call(id_for_click.clone()),
+                oncontextmenu: {
+                    let pid = ctx_id.clone();
+                    let text = ctx_text.clone();
+                    let aname = ctx_author_name.clone();
+                    move |evt: MouseEvent| {
+                        evt.prevent_default();
+                        evt.stop_propagation();
+                        let ctx = ForumPostCtx {
+                            post_id: pid.clone(),
+                            author_id: String::new(),
+                            author_name: aname.clone(),
+                            text: text.clone(),
+                        };
+                        let entry = forum_post_entry(ctx, &evt);
+                        app_state.write().context_menu_stack.push(entry);
+                    }
+                },
                 div { class: "forum-post-votes",
                     button {
                         class: "forum-vote-btn up",

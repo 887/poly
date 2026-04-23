@@ -86,7 +86,7 @@ pub fn AvatarContextMenu() -> Element {
                                 display_name: dname.clone(),
                                 avatar_url: None,
                                 presence: PresenceStatus::Offline,
-                                backend: poly_client::BackendType::Demo,
+                                backend: poly_client::BackendType::from("demo"),
                             };
                             open_user_profile(app_state, user);
                             close();

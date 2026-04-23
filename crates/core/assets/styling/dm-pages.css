@@ -284,6 +284,86 @@
     background: var(--bg-primary);
 }
 
+/* F-LE-2 / F-FJ-1 / F-DC-1 — styled unsupported-feature empty state */
+.special-page-content.feature-unsupported {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.feature-unsupported-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 360px;
+    text-align: center;
+    padding: 24px;
+}
+
+.feature-unsupported-message {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+.feature-unsupported-hint {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.feature-unsupported-cta-link {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 8px 16px;
+    background: var(--accent-primary, var(--brand-color, #5865f2));
+    color: #fff;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: opacity 0.15s;
+}
+
+.feature-unsupported-cta-link:hover {
+    opacity: 0.85;
+    color: #fff;
+}
+
+/* F-DC-1 — Discord (and any backend) permission-denied empty state */
+.message-empty.permission-denied-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+    padding: 24px;
+    text-align: center;
+}
+
+.permission-denied-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.permission-denied-title {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.permission-denied-message {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+    max-width: 320px;
+}
+
 /* Special account pages (People, Notifications, Saved Items) reuse the same
    shared footer geometry as account-view-main: the voice/account footer bleeds
    72px left so it visually covers Bar 2. The base split shell clips overflow,
