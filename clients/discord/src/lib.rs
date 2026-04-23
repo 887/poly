@@ -689,30 +689,42 @@ impl ClientBackend for DiscordClient {
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
         let account_id = self.account_id();
         let account_name = self.account_display_name();
-        Ok(self.http.get_guilds().await?.into_iter().map(|g| Server {
-            id: g.id.to_string(),
-            name: g.name,
-            icon_url: None,
-            banner_url: None,
-            categories: vec![],
-            backend: BackendType::from("discord"),
-            unread_count: 0,
-            mention_count: 0,
-            account_id: account_id.clone(),
-            account_display_name: account_name.clone(),
-            default_channel_id: g.system_channel_id,
+        let cdn_base = self.http.cdn_base_url();
+        Ok(self.http.get_guilds().await?.into_iter().map(|g| {
+            let icon_url = g.icon.as_deref()
+                .map(|hash| format!("{}/icons/{}/{}.png?size=128", cdn_base.trim_end_matches('/'), g.id, hash));
+            let banner_url = g.banner.as_deref()
+                .map(|hash| format!("{}/banners/{}/{}.png", cdn_base.trim_end_matches('/'), g.id, hash));
+            Server {
+                id: g.id.to_string(),
+                name: g.name,
+                icon_url,
+                banner_url,
+                categories: vec![],
+                backend: BackendType::from("discord"),
+                unread_count: 0,
+                mention_count: 0,
+                account_id: account_id.clone(),
+                account_display_name: account_name.clone(),
+                default_channel_id: g.system_channel_id,
+            }
         }).collect())
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
         let account_id = self.account_id();
         let account_name = self.account_display_name();
+        let cdn_base = self.http.cdn_base_url();
         let g = self.http.get_guild(id).await?;
+        let icon_url = g.icon.as_deref()
+            .map(|hash| format!("{}/icons/{}/{}.png?size=128", cdn_base.trim_end_matches('/'), g.id, hash));
+        let banner_url = g.banner.as_deref()
+            .map(|hash| format!("{}/banners/{}/{}.png", cdn_base.trim_end_matches('/'), g.id, hash));
         Ok(Server {
             id: g.id.to_string(),
             name: g.name,
-            icon_url: None,
-            banner_url: None,
+            icon_url,
+            banner_url,
             categories: vec![],
             backend: BackendType::from("discord"),
             unread_count: 0,
@@ -721,6 +733,22 @@ impl ClientBackend for DiscordClient {
             account_display_name: account_name,
             default_channel_id: g.system_channel_id,
         })
+    }
+
+    async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        // The Discord API accepts `banner` as a base64 data URI for real Discord.
+        // Our test server (Spacebar-compatible) accepts a URL string directly.
+        // We pass the value as-is — for test servers this is a URL; for real
+        // Discord the caller is responsible for encoding.
+        let body = serde_json::json!({ "banner": banner_url });
+        self.http
+            .patch_guild(server_id, body)
+            .await
+            .map(|_| ())
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {

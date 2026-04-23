@@ -222,6 +222,44 @@ pub async fn get_guild(
     }
 }
 
+/// `PATCH /api/v10/guilds/{guild_id}` — update guild fields.
+///
+/// Accepts partial JSON: `name`, `banner`. Returns the updated guild object.
+pub async fn patch_guild(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(guild_id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => e.into_response(),
+        Ok(_) => {
+            let parsed = guild_id
+                .parse::<u64>()
+                .ok()
+                .and_then(Id::<GuildMarker>::new_checked);
+            match parsed {
+                None => discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+                Some(id) => {
+                    let mut guild = match state.guilds.get_mut(&id) {
+                        Some(g) => g,
+                        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+                    };
+                    if let Some(name) = body.get("name").and_then(|v| v.as_str()) {
+                        guild.name = name.to_string();
+                    }
+                    // `banner` is accepted as a URL string (test convenience) or
+                    // null to clear. Real Discord expects a base64 data URI.
+                    if body.get("banner").is_some() {
+                        guild.banner = body["banner"].as_str().map(str::to_string);
+                    }
+                    Json(guild_to_json(&guild)).into_response()
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Channels
 // ---------------------------------------------------------------------------
@@ -752,6 +790,7 @@ fn guild_to_json(g: &crate::state::Guild) -> serde_json::Value {
         "name": g.name,
         "owner_id": g.owner_id.to_string(),
         "icon": null,
+        "banner": g.banner,
         "permissions": "0",
     })
 }

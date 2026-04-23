@@ -29,6 +29,17 @@ impl DiscordHttpClient {
         &self.base_url
     }
 
+    /// Return the CDN base URL for guild icons / attachments.
+    /// For real Discord, icon hashes are served from cdn.discordapp.com.
+    /// For self-hosted Spacebar / test servers, the base URL itself acts as CDN.
+    pub fn cdn_base_url(&self) -> String {
+        if self.base_url.contains("discord.com") || self.base_url.contains("discordapp.com") {
+            "https://cdn.discordapp.com".to_string()
+        } else {
+            self.base_url.trim_end_matches('/').to_string()
+        }
+    }
+
     pub fn set_token(&self, token: String) {
         if let Ok(mut lock) = self.token.lock() {
             *lock = Some(token);
@@ -190,6 +201,42 @@ impl DiscordHttpClient {
             "/api/v10/channels/{channel_id}/threads/archived/public?limit={limit}"
         ))
         .await
+    }
+
+    /// `PATCH /api/v10/guilds/{guild_id}` — update guild fields (partial update).
+    ///
+    /// The `body` argument is a partial JSON object (only the fields to update).
+    /// Returns the updated [`DiscordGuild`] object.
+    ///
+    /// For setting a banner, pass `banner` as a base64 data URI
+    /// (`data:image/png;base64,…`). The Discord API only accepts data URIs, not
+    /// remote URLs. The test server accepts a URL string for test convenience.
+    pub async fn patch_guild(
+        &self,
+        guild_id: &str,
+        body: serde_json::Value,
+    ) -> Result<DiscordGuild, ClientError> {
+        let path = format!("/api/v10/guilds/{guild_id}");
+        let resp = self
+            .http
+            .patch(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            if status == 403 {
+                return Err(ClientError::PermissionDenied(
+                    "Guild banner requires the BANNER feature (Boost Tier 2 or higher).".into(),
+                ));
+            }
+            return Err(ClientError::Network(format!("PATCH guild HTTP {status}")));
+        }
+        resp.json::<DiscordGuild>()
+            .await
+            .map_err(|e| ClientError::Internal(e.to_string()))
     }
 
     /// POST /api/v10/channels/{channel_id}/typing — trigger typing indicator.

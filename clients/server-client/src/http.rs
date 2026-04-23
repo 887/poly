@@ -531,6 +531,25 @@ impl PolyServerHttpClient {
         Ok(resp.json().await?)
     }
 
+    /// `PATCH /servers/:id` — update the server banner URL.
+    pub async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> Result<WireServer> {
+        let body = serde_json::json!({ "banner_url": banner_url });
+        let resp = self
+            .auth_patch(&self.url(&format!("/servers/{server_id}")))
+            .await?
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(resp.json().await?)
+    }
+
     /// `DELETE /servers/:id` — delete a server (owner only).
     pub async fn delete_server(&self, server_id: &str) -> Result<()> {
         let resp = self
@@ -996,6 +1015,11 @@ fn parse_wire_server(v: &Value) -> Option<WireServer> {
         .or_else(|| v.get("icon_url"))
         .and_then(|v| v.as_str())
         .map(String::from);
+    let banner_url = v
+        .get("server.banner_url")
+        .or_else(|| v.get("banner_url"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let owner = v
         .get("server.owner")
         .or_else(|| v.get("owner"))
@@ -1009,6 +1033,7 @@ fn parse_wire_server(v: &Value) -> Option<WireServer> {
         id,
         name,
         icon_url,
+        banner_url,
         owner,
         created_at,
     })

@@ -32,6 +32,7 @@ pub struct Community {
     pub title: String,
     pub description: Option<String>,
     pub icon: Option<String>,
+    pub banner: Option<String>,
     pub actor_id: String,
     pub subscribed: bool,
 }
@@ -113,6 +114,7 @@ impl LemmyState {
                 title: "Rust Programming".to_string(),
                 description: Some("All things Rust".to_string()),
                 icon: None,
+                banner: None,
                 actor_id: "https://lemmy.example.com/c/rust".to_string(),
                 subscribed: true,
             },
@@ -122,6 +124,7 @@ impl LemmyState {
                 title: "Programming".to_string(),
                 description: Some("General programming discussion".to_string()),
                 icon: None,
+                banner: None,
                 actor_id: "https://lemmy.example.com/c/programming".to_string(),
                 subscribed: true,
             },

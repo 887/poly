@@ -33,6 +33,10 @@ pub struct DiscordGuild {
     pub name: String,
     #[serde(default)]
     pub icon: Option<String>,
+    /// Guild banner hash. Present when the guild has the `BANNER` feature
+    /// (Boost Tier 2). Full URL: `https://cdn.discordapp.com/banners/{id}/{hash}.png`
+    #[serde(default)]
+    pub banner: Option<String>,
     /// Discord's designated system / welcome channel for the guild.
     /// Maps to `system_channel_id` in the Discord API (snake_case on the wire).
     #[serde(default)]

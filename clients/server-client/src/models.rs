@@ -67,6 +67,8 @@ pub struct WireServer {
     pub id: Option<String>,
     pub name: String,
     pub icon_url: Option<String>,
+    #[serde(default)]
+    pub banner_url: Option<String>,
     pub owner: String,
     pub created_at: DateTime<Utc>,
 }

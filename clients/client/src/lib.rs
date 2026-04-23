@@ -358,6 +358,31 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("create_channel".to_string()))
     }
 
+    /// Update the banner image URL for a server.
+    ///
+    /// `server_id` is the backend-specific server/guild/community ID.
+    /// `banner_url` is a URL string pointing to the new banner image, or `None`
+    /// to clear the banner.
+    ///
+    /// ## Format contract
+    ///
+    /// Pass a publicly accessible URL. For Discord, this must be a base64 data
+    /// URI (`data:image/png;base64,…`) because the Discord API does not accept
+    /// remote URLs; the real-Discord path is therefore not implementable without
+    /// a binary upload step (noted out-of-scope). The Spacebar/test-server path
+    /// accepts a URL string for test convenience.
+    ///
+    /// Backends that do not support banner updates return
+    /// [`ClientError::NotSupported`] — including backends where the banner is
+    /// a local-only `AppSettings` override (Matrix, Teams, Demo).
+    async fn update_server_banner(
+        &self,
+        _server_id: &str,
+        _banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("update_server_banner".to_string()))
+    }
+
     // --- Real-time events ---
 
     /// Get a stream of real-time events from the backend.

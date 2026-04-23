@@ -27,10 +27,14 @@ const CRASH_STATE_KEY: &str = "__polyCrashState";
 const BOOT_HANG_TIMEOUT_MS: u32 = 60_000;
 
 /// How long (ms) the main thread may be unresponsive before the interaction
-/// watchdog declares a hang and shows the crash overlay. 5 s is long enough
-/// to forgive one-off slow renders / GC pauses on low-end hardware but short
-/// enough that a real deadlock surfaces before the user force-quits.
-const INTERACTION_HANG_TIMEOUT_MS: u32 = 5_000;
+/// watchdog declares a hang and shows the crash overlay. 30 s avoids false
+/// positives when an account with many DMs / contacts triggers a large
+/// first-render pass (e.g. the Dog demo account). A real deadlock that lasts
+/// longer than 30 s is still caught before the user force-quits.
+///
+/// NOTE: The previous value of 5 s caused E5 (boot-hang overlay fires on Dog
+/// account switch). See `docs/plans/plan-ui-polish-round-2.md` E5.
+const INTERACTION_HANG_TIMEOUT_MS: u32 = 30_000;
 
 /// Install the shared browser/WASM crash handler once for the current page.
 pub fn install_wasm_crash_handler() {
@@ -427,13 +431,11 @@ fn report_crash(kind: &str, message: &str, location: Option<&str>) {
             "border: 0; border-radius: 10px; padding: 12px 16px; background: #4f8cff; color: white; font-size: 14px; font-weight: 600; cursor: pointer;",
         );
         button.set_text_content(Some(&reload_label));
-        let reload = Closure::<dyn FnMut(Event)>::wrap(Box::new(|_event: Event| {
-            if let Some(window) = web_sys::window() {
-                let _ = window.location().reload();
-            }
-        }));
-        let _ = button.add_event_listener_with_callback("click", reload.as_ref().unchecked_ref());
-        reload.forget();
+        // Use a plain JS inline onclick so the button works even after WASM
+        // has terminated (e.g. after a Rust panic). A wasm-bindgen Closure
+        // requires the WASM module to still be alive to dispatch the click,
+        // which is never true after the panic hook has run.
+        let _ = button.set_attribute("onclick", "window.location.reload()");
         let _ = card.append_child(&button);
     }
 

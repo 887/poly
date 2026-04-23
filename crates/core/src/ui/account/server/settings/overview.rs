@@ -11,10 +11,13 @@
 //! - [`IconPanel`] — icon URL input + preview
 //! - [`BannerPanel`] — banner URL input + preview
 
+use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::toast::{ToastMessage, push_toast};
 use dioxus::prelude::*;
+use poly_client::ToastTone;
 use poly_ui_macros::{context_menu, ui_action};
 
 pub enum IconPanelAction {
@@ -147,13 +150,21 @@ impl UiAction for BannerPanelAction {
 
 /// Banner URL input, live preview, and save button.
 ///
-/// Shown only for backends that support banner images (Demo, Stoat, Discord, Poly).
+/// Saves locally to `AppSettings` and also calls `ClientBackend::update_server_banner`
+/// so backends that support it (poly-server, Discord, Lemmy) persist the change
+/// remotely. Backends returning `NotSupported` are silently ignored.
 #[ui_action(BannerPanelAction)]
 #[rustfmt::skip]
 #[context_menu(none)]
 #[component]
-fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> Element {
+fn BannerPanel(
+    server_id: String,
+    server_name: String,
+    initial_url: String,
+    account_id: String,
+) -> Element {
     let mut chat_data: Signal<ChatData> = use_context();
+    let client_manager: Signal<ClientManager> = use_context();
     let mut url_input = use_signal(|| initial_url);
     let mut saved = use_signal(|| false);
     let preview_url = url_input.read().clone();
@@ -193,8 +204,10 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
                     class: "btn-primary",
                     onclick: {
                         let sid = server_id.clone();
+                        let aid = account_id.clone();
                         move |_| {
                             let url = url_input.read().clone();
+                            // Update in-memory chat_data immediately
                             {
                                 let mut cd = chat_data.write();
                                 if let Some(s) = cd.servers.iter_mut().find(|s| s.id == sid) {
@@ -211,16 +224,40 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
                                 }
                             }
                             let sid2 = sid.clone();
+                            let url2 = url.clone();
+                            let aid2 = aid.clone();
+                            let backend_arc = client_manager.read().get_backend(&aid2);
+                            let toast_queue = try_consume_context::<Signal<Vec<ToastMessage>>>();
                             spawn(async move {
+                                // 1. Persist local override
                                 if let Some(storage) = crate::STORAGE.get()
                                     && let Ok(mut settings) = storage.get_app_settings().await
                                 {
-                                    if url.is_empty() {
+                                    if url2.is_empty() {
                                         settings.server_banner_overrides.remove(&sid2);
                                     } else {
-                                        settings.server_banner_overrides.insert(sid2, url);
+                                        settings.server_banner_overrides.insert(sid2.clone(), url2.clone());
                                     }
                                     let _ = storage.set_app_settings(&settings).await;
+                                }
+                                // 2. Call backend API
+                                if let Some(arc) = backend_arc {
+                                    let banner_arg = if url2.is_empty() { None } else { Some(url2.as_str()) };
+                                    let result = arc.read().await.update_server_banner(&sid2, banner_arg).await;
+                                    match result {
+                                        Ok(()) => {
+                                            tracing::debug!("update_server_banner ok for {sid2}");
+                                        }
+                                        Err(poly_client::ClientError::NotSupported(_)) => {
+                                            // Backend doesn't support remote banner updates — local-only is fine
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!("update_server_banner failed: {e:?}");
+                                            if let Some(q) = toast_queue {
+                                                push_toast(q, ToastMessage::new("server-overview-banner-save-failed", ToastTone::Error));
+                                            }
+                                        }
+                                    }
                                 }
                             });
                             saved.set(true);
@@ -244,11 +281,8 @@ fn BannerPanel(server_id: String, server_name: String, initial_url: String) -> E
 /// Matrix/Teams) was removed in WP 3; plugin-declared `PerServer` settings
 /// sections handle backend-specific overrides now.
 ///
-/// # Phase 3 note
-/// <!-- TODO(phase-3): wire icon/banner saves to backend API calls -->
-/// Currently all saves are local-only (stored in `AppSettings`). Phase 3 will
-/// add `ClientBackend::update_server_icon` / `update_server_banner` for
-/// backends that support programmatic server-asset writes.
+/// `account_id` is forwarded to `BannerPanel` so it can call
+/// `ClientBackend::update_server_banner` after persisting the local override.
 #[ui_action(None)]
 #[context_menu(none)]
 #[component]
@@ -256,6 +290,7 @@ pub fn ServerOverviewSettings(
     server_id: String,
     server_name: String,
     backend_slug: String,
+    account_id: String,
 ) -> Element {
     let _ = backend_slug; // backend slug no longer gates rendering; kept for prop stability
     let chat_data: Signal<ChatData> = use_context();
@@ -292,6 +327,7 @@ pub fn ServerOverviewSettings(
             server_id: server_id.clone(),
             server_name: server_name.clone(),
             initial_url: current_banner,
+            account_id: account_id.clone(),
         }
     }
 }

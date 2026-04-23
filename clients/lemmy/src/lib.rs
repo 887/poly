@@ -271,6 +271,18 @@ impl ClientBackend for LemmyClient {
         Ok(map_community_to_server(&view, &account_id, &account_display_name))
     }
 
+    async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        let community_id = Self::parse_community_id(server_id)?;
+        self.http
+            .put_community(community_id, banner_url)
+            .await
+            .map(|_| ())
+    }
+
     // ── Channels ────────────────────────────────────────────────────────────
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {

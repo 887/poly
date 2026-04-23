@@ -317,6 +317,7 @@ fn ServerSettingsContent(
                                             server_id: server_id.clone(),
                                             server_name: server_name.clone(),
                                             backend_slug: backend.clone(),
+                                            account_id: account_id.clone(),
                                         }
                                     },
                                     ServerSettingsSection::Notifications => rsx! {

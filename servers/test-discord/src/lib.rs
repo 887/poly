@@ -35,7 +35,7 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         .route("/api/v10/users/@me/channels", get(routes::get_dms).post(routes::open_dm))
         .route("/api/v10/users/{user_id}", get(routes::get_user))
         // Guilds
-        .route("/api/v10/guilds/{guild_id}", get(routes::get_guild))
+        .route("/api/v10/guilds/{guild_id}", get(routes::get_guild).patch(routes::patch_guild))
         .route("/api/v10/guilds/{guild_id}/channels", get(routes::get_guild_channels))
         // Channels
         .route("/api/v10/channels/{channel_id}", get(routes::get_channel))

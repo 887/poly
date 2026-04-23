@@ -819,6 +819,48 @@ impl LemmyHttpClient {
             .map(|r| r.comment_view)
             .map_err(|e| ClientError::Network(e.to_string()))
     }
+
+    /// `PUT /api/v3/community` — update a community (EditCommunity).
+    ///
+    /// `banner` is a URL string pointing to a previously-uploaded pictrs image
+    /// (or any public URL for test purposes). Pass `None` to clear the banner.
+    pub async fn put_community(
+        &self,
+        community_id: i64,
+        banner: Option<&str>,
+    ) -> ClientResult<CommunityView> {
+        let jwt = self.jwt()?;
+        let body = serde_json::json!({
+            "community_id": community_id,
+            "banner": banner,
+            "auth": jwt,
+        });
+        let resp = self
+            .http
+            .put(self.url("/api/v3/community"))
+            .bearer_auth(&jwt)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "PUT /api/v3/community returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        #[derive(Deserialize)]
+        struct EditCommunityResponse {
+            community_view: CommunityView,
+        }
+
+        resp.json::<EditCommunityResponse>()
+            .await
+            .map(|r| r.community_view)
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
 }
 
 // ── Unit tests (Pack E.1 layer-a) ────────────────────────────────────────────

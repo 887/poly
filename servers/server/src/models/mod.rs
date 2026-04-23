@@ -71,6 +71,8 @@ pub struct Server {
     pub id: Option<String>,
     pub name: String,
     pub icon_url: Option<String>,
+    #[serde(default)]
+    pub banner_url: Option<String>,
     /// RecordId serialised as `"user:xxxx"`.
     pub owner: String,
     pub created_at: DateTime<Utc>,

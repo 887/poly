@@ -387,27 +387,43 @@ impl Db {
         )
     }
 
+    /// `banner_url`: `None` = don't touch; `Some(None)` = clear to NULL; `Some(Some(url))` = set.
     pub async fn update_server(
         &self,
         id: &str,
         name: Option<String>,
         icon_url: Option<String>,
+        banner_url: Option<Option<String>>,
     ) -> Result<Option<Server>> {
-        take_one(
-            &mut self.inner
-                .query(
-                    "UPDATE type::record($id) MERGE { \
-                      name: $name ?? name, \
-                      icon_url: $icon ?? icon_url \
-                    } RETURN *",
-                )
-                .bind(("id", id.to_owned()))
-                .bind(("name", name))
-                .bind(("icon", icon_url))
-                .await
-                .map_err(db_err)?,
-            0,
-        )
+        // SurrealDB MERGE with `??` keeps existing when value is NONE.
+        // To explicitly clear we need a separate branch.
+        let banner_surreal: Option<serde_json::Value> = match banner_url {
+            None => None,
+            Some(None) => Some(serde_json::Value::Null),
+            Some(Some(url)) => Some(serde_json::Value::String(url)),
+        };
+        // Build query dynamically: only touch banner_url if explicitly provided.
+        let banner_expr = if banner_surreal.is_some() {
+            "banner_url: $banner,"
+        } else {
+            ""
+        };
+        let query = format!(
+            "UPDATE type::record($id) MERGE {{ \
+              name: $name ?? name, \
+              icon_url: $icon ?? icon_url, \
+              {banner_expr} \
+            }} RETURN *"
+        );
+        let mut q = self.inner
+            .query(query)
+            .bind(("id", id.to_owned()))
+            .bind(("name", name))
+            .bind(("icon", icon_url));
+        if banner_surreal.is_some() {
+            q = q.bind(("banner", banner_surreal));
+        }
+        take_one(&mut q.await.map_err(db_err)?, 0)
     }
 
     pub async fn delete_server_cascade(&self, id: &str) -> Result<()> {
@@ -1272,6 +1288,7 @@ DEFINE FIELD OVERWRITE revoked     ON device TYPE bool DEFAULT false;
 DEFINE TABLE OVERWRITE server SCHEMAFULL;
 DEFINE FIELD OVERWRITE name        ON server TYPE string;
 DEFINE FIELD OVERWRITE icon_url    ON server TYPE option<string>;
+DEFINE FIELD OVERWRITE banner_url  ON server TYPE option<string>;
 DEFINE FIELD OVERWRITE owner       ON server TYPE record<user>;
 DEFINE FIELD OVERWRITE created_at  ON server TYPE datetime DEFAULT time::now();
 

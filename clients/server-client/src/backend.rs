@@ -120,7 +120,7 @@ impl PolyServerBackend {
             id,
             name: srv.name.clone(),
             icon_url: srv.icon_url.clone(),
-            banner_url: None, // Poly server protocol does not yet supply banner images
+            banner_url: srv.banner_url.clone(),
             categories: cats,
             backend: BackendType::from("poly"),
             unread_count: 0,
@@ -632,6 +632,18 @@ impl ClientBackend for PolyServerBackend {
         let account_id = self.account_id.clone().unwrap_or_default();
         let display_name = self.display_name.clone().unwrap_or_default();
         Ok(Self::map_server(&wire, &[], &account_id, &display_name))
+    }
+
+    async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        self.http
+            .update_server_banner(server_id, banner_url)
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 
     async fn create_channel(

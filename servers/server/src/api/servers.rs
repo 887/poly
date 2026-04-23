@@ -33,11 +33,6 @@ struct CreateServerRequest {
     icon_url: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateServerRequest {
-    name: Option<String>,
-    icon_url: Option<String>,
-}
 
 #[derive(Debug, Serialize)]
 struct ServerDetail {
@@ -127,13 +122,27 @@ async fn update_server(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
-    Json(req): Json<UpdateServerRequest>,
+    // Use raw Value so we can distinguish "field absent" vs "field = null".
+    Json(body): Json<serde_json::Value>,
 ) -> Result<Json<Server>> {
     require_owner(&state, &auth.user_id, &id).await?;
 
+    let name: Option<String> = body.get("name")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let icon_url: Option<String> = body.get("icon_url")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    // banner_url: field absent → None (no change); field present with null → Some(None) (clear);
+    //             field present with string → Some(Some(url)) (set).
+    let banner_url: Option<Option<String>> = body.get("banner_url").map(|v| {
+        if v.is_null() { None } else { v.as_str().map(str::to_string) }
+    });
+
     let server: Server = state
         .db
-        .update_server(&id, req.name, req.icon_url)
+        .update_server(&id, name, icon_url, banner_url)
         .await?
         .ok_or(AppError::NotFound)?;
     Ok(Json(server))

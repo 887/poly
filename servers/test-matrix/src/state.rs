@@ -106,7 +106,7 @@ impl MatrixState {
             UserProfile {
                 user_id: owl_id.clone(),
                 displayname: "Owl".into(),
-                avatar_url: Some("/avatars/owl.png".into()),
+                avatar_url: Some("mxc://localhost/owl_avatar".into()),
                 password: "testpass123".into(),
                 device_id: "OWLDEVICE01".into(),
             },
@@ -116,7 +116,7 @@ impl MatrixState {
             UserProfile {
                 user_id: axolotl_id.clone(),
                 displayname: "Axolotl".into(),
-                avatar_url: Some("/avatars/axolotl.svg".into()),
+                avatar_url: Some("mxc://localhost/axolotl_avatar".into()),
                 password: "testpass123".into(),
                 device_id: "AXOLDEVICE01".into(),
             },
@@ -133,6 +133,17 @@ impl MatrixState {
         self.create_room(&random1_id, "random", Some("Off-topic chat"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
         self.create_room(&announce1_id, "announcements", Some("Important updates"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
 
+        // Add avatar to Space 1
+        if let Some(mut room) = self.rooms.get_mut(&space1_id) {
+            room.state_events.push(serde_json::json!({
+                "type": "m.room.avatar",
+                "state_key": "",
+                "content": { "url": "mxc://localhost/hollow_tree_avatar" },
+                "sender": &*owl_id,
+                "event_id": self.next_event_id(),
+            }));
+        }
+
         // Space 2: Neon Reef
         let space2_id = "!space2:localhost".to_string();
         let gen2_id = "!general2:localhost".to_string();
@@ -143,6 +154,17 @@ impl MatrixState {
         self.create_room(&gen2_id, "general", Some("Main chat"), false, Some(&space2_id), &[&owl_id, &axolotl_id]);
         self.create_room(&memes_id, "memes", Some("Funny stuff"), false, Some(&space2_id), &[&owl_id, &axolotl_id]);
         self.create_room(&music_id, "music", Some("Share tunes"), false, Some(&space2_id), &[&owl_id, &axolotl_id]);
+
+        // Add avatar to Space 2
+        if let Some(mut room) = self.rooms.get_mut(&space2_id) {
+            room.state_events.push(serde_json::json!({
+                "type": "m.room.avatar",
+                "state_key": "",
+                "content": { "url": "mxc://localhost/neon_reef_avatar" },
+                "sender": &*axolotl_id,
+                "event_id": self.next_event_id(),
+            }));
+        }
 
         // DM room
         let dm_id = "!dm1:localhost".to_string();

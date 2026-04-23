@@ -107,6 +107,9 @@ pub struct Guild {
     pub owner_id: Id<UserMarker>,
     pub channels: Vec<Id<ChannelMarker>>,
     pub members: Vec<Id<UserMarker>>,
+    /// Banner URL / hash. Stored as-is (URL for test convenience, hash for
+    /// real Discord CDN URLs).
+    pub banner: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -448,6 +451,7 @@ impl DiscordState {
                 Id::new(510), Id::new(511),
             ],
             members: vec![Id::new(1), Id::new(2), Id::new(3)],
+            banner: None,
         });
         self.guilds.insert(Id::new(101), Guild {
             id: Id::new(101),
@@ -455,6 +459,7 @@ impl DiscordState {
             owner_id: Id::new(2),
             channels: vec![Id::new(202), Id::new(600), Id::new(601)],
             members: vec![Id::new(1), Id::new(2)],
+            banner: None,
         });
 
         // Messages in channel 200

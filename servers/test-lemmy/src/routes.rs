@@ -35,6 +35,7 @@ fn community_view(c: &crate::state::Community) -> Value {
             "title": c.title,
             "description": c.description,
             "icon": c.icon,
+            "banner": c.banner,
             "actor_id": c.actor_id,
             "local": true,
             "removed": false,
@@ -606,6 +607,74 @@ pub async fn register(
         "verify_email_sent": false,
     }))
     .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Community update
+// ---------------------------------------------------------------------------
+
+/// PUT /api/v3/community — update community (EditCommunity).
+///
+/// Accepts `banner` (string URL or JSON null to clear) and other optional
+/// fields. Uses raw `Value` extraction so that a JSON `null` value is
+/// distinguished from a field that is simply absent.
+/// Returns `{ community_view: … }`.
+pub async fn edit_community(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    let community_id = match body.get("community_id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "missing_community_id" })),
+            )
+                .into_response();
+        }
+    };
+
+    let key = community_id.to_string();
+    let mut entry = match state.communities.get_mut(&key) {
+        Some(e) => e,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "couldnt_find_community" })),
+            )
+                .into_response();
+        }
+    };
+
+    // Apply updates — field present (even as null) means "set to this value".
+    if let Some(banner_val) = body.get("banner") {
+        entry.banner = if banner_val.is_null() {
+            None
+        } else {
+            banner_val.as_str().map(str::to_string)
+        };
+    }
+    if let Some(icon_val) = body.get("icon") {
+        entry.icon = if icon_val.is_null() {
+            None
+        } else {
+            icon_val.as_str().map(str::to_string)
+        };
+    }
+    if let Some(title) = body.get("title").and_then(|v| v.as_str()) {
+        entry.title = title.to_string();
+    }
+    if let Some(desc) = body.get("description").and_then(|v| v.as_str()) {
+        entry.description = Some(desc.to_string());
+    }
+
+    let view = community_view(&entry);
+    Json(json!({ "community_view": view })).into_response()
 }
 
 // ---------------------------------------------------------------------------

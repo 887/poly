@@ -40,6 +40,10 @@ impl Db {
         }
         conn.execute("PRAGMA foreign_keys=ON")?;
         conn.execute(SCHEMA)?;
+        // Migration: add banner_url column if it doesn't exist yet.
+        // SQLite doesn't support "ADD COLUMN IF NOT EXISTS", so we ignore the
+        // error if the column already exists (duplicate column error).
+        let _ = conn.execute("ALTER TABLE server ADD COLUMN banner_url TEXT");
 
         info!("SQLite schema applied");
         Ok(Self {
@@ -255,11 +259,13 @@ impl Db {
         query_one(&conn, "SELECT * FROM server WHERE id = ?1", &[id])
     }
 
+    /// `banner_url`: `None` = don't touch; `Some(None)` = clear to NULL; `Some(Some(url))` = set.
     pub async fn update_server(
         &self,
         id: &str,
         name: Option<String>,
         icon_url: Option<String>,
+        banner_url: Option<Option<String>>,
     ) -> Result<Option<Server>> {
         let conn = self.inner.lock().await;
         if let Some(n) = &name {
@@ -267,6 +273,15 @@ impl Db {
         }
         if let Some(ic) = &icon_url {
             exec_bind(&conn, "UPDATE server SET icon_url = ?1 WHERE id = ?2", &[ic.as_str(), id])?;
+        }
+        match banner_url {
+            Some(Some(ref bn)) => {
+                exec_bind(&conn, "UPDATE server SET banner_url = ?1 WHERE id = ?2", &[bn.as_str(), id])?;
+            }
+            Some(None) => {
+                exec_bind(&conn, "UPDATE server SET banner_url = NULL WHERE id = ?1", &[id])?;
+            }
+            None => {}
         }
         query_one(&conn, "SELECT * FROM server WHERE id = ?1", &[id])
     }
