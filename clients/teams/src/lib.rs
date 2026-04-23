@@ -392,7 +392,12 @@ impl ClientBackend for TeamsClient {
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
         Ok(self.http.get_team_channels(server_id).await?.into_iter().map(|ch| Channel {
-            id: ch.id,
+            // Channel IDs are encoded as "team_id/channel_id" per the plugin's
+            // own contract (see module docs at top of file); every op splits on
+            // '/' to dispatch to the teams/channels endpoint vs the chats one.
+            // Without the team prefix `get_messages` falls back to /chats/{id}/
+            // messages (DM endpoint) and 404s on every team channel.
+            id: format!("{server_id}/{}", ch.id),
             name: ch.display_name,
             channel_type: ChannelType::Text,
             server_id: server_id.to_string(),
@@ -415,7 +420,8 @@ impl ClientBackend for TeamsClient {
             .into_iter()
             .find(|c| c.id == channel_id)
             .map(|ch| Channel {
-                id: ch.id,
+                // Keep the composite id for round-trip consistency.
+                id: format!("{team_id}/{}", ch.id),
                 name: ch.display_name,
                 channel_type: ChannelType::Text,
                 server_id: team_id.to_string(),

@@ -147,9 +147,11 @@ async fn test_get_channels() {
 async fn test_get_channel_by_compound_id() {
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("Sheep").await;
-    // Teams channels require "team_id/channel_id"
+    // Teams channels require "team_id/channel_id" round-tripped both ways so
+    // subsequent ops (get_messages, send_message, etc.) route to the correct
+    // Graph endpoint via the '/' split.
     let ch = client.get_channel("T001/CH001").await.expect("get_channel T001/CH001");
-    assert_eq!(ch.id, "CH001");
+    assert_eq!(ch.id, "T001/CH001");
     assert_eq!(ch.name, "General");
     assert_eq!(ch.server_id, "T001");
 }
