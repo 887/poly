@@ -138,24 +138,6 @@
     border-radius: 50%;
 }
 
-/* Short name label shown under the letter-circle fallback (no icon_url).
-   Absolutely positioned relative to .server-icon (which has overflow: visible). */
-.server-icon-name-label {
-    position: absolute;
-    bottom: -13px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 9px;
-    font-weight: 500;
-    color: var(--text-muted, #999);
-    white-space: nowrap;
-    max-width: 64px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    pointer-events: none;
-    line-height: 1;
-}
-
 .sidebar-separator {
     width: 32px;
     height: 2px;
