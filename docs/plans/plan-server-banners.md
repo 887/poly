@@ -7,7 +7,7 @@
 
 ---
 
-## §0 Status header
+## Section 0 Status header
 
 This plan tracks end-to-end server banner support (read + write) across three
 backends: **poly-server**, **discord**, and **lemmy**.
@@ -22,7 +22,7 @@ Phases:
 
 ---
 
-## §1 Backend research summary
+## Section 1 Backend research summary
 
 ### Discord
 
@@ -81,7 +81,7 @@ Source: `servers/server/src/` in this repo.
 
 ---
 
-## §2 Current state matrix
+## Section 2 Current state matrix
 
 | Aspect | poly-server | discord | lemmy |
 |---|---|---|---|
@@ -103,7 +103,7 @@ Gaps:
 
 ---
 
-## §3 Implementation plan
+## Section 3 Implementation plan
 
 ### Phase A — `ClientBackend` trait extension
 
@@ -146,7 +146,7 @@ Gaps:
 
 ---
 
-## §4 Out-of-scope
+## Section 4 Out-of-scope
 
 - **Animated GIF banners** (Discord ANIMATED_BANNER feature, Boost Tier 3). Noted for future.
 - **Premium-tier gating** (Discord requires BANNER feature at Tier 2). The implementation
@@ -162,7 +162,7 @@ Gaps:
 
 ---
 
-## §5 Test matrix
+## Section 5 Test matrix
 
 | Test | File | What it verifies |
 |---|---|---|

@@ -6,22 +6,22 @@
 
 ---
 
-## §0 Header
+## Section 0 Header
 
 This plan covers the full-stack implementation of permissions, ownership, and moderation
 across every Poly backend. It is the source of truth for a multi-week implementation push.
 The plan is structured so individual backend phases can be delegated to parallel worktree
-subagents once the shared host work (§5) lands.
+subagents once the shared host work (Section 5) lands.
 
 **Scope guard:** This plan does NOT cover SSO/SAML, federated cross-instance moderation
 (e.g. Matrix server ACLs propagating to other homeservers), or the Discord permission-overrides
-matrix editor. Those are future work with explicit notes in §7.
+matrix editor. Those are future work with explicit notes in Section 7.
 
 ---
 
-## §1 Backend Research Summaries
+## Section 1 Backend Research Summaries
 
-### §1.1 Discord
+### Section 1.1 Discord
 
 **Sources:**
 - https://docs.discord.com/developers/topics/permissions
@@ -90,7 +90,7 @@ and has all permissions regardless of roles. Ownership can be transferred via
 
 ---
 
-### §1.2 Matrix
+### Section 1.2 Matrix
 
 **Sources:**
 - https://spec.matrix.org/v1.11/client-server-api/ (room membership, power levels, redactions)
@@ -163,13 +163,13 @@ join rules or space membership, but there is no "nsfw" boolean on rooms.
 **Moderation Log:** Matrix has no server-side moderation log. Mjolnir/Draupnir (bots) maintain
 their own ban lists as room state events in a dedicated "policy room". Poly should surface
 the `m.ban` and `m.kick` events from the `m.room.power_levels` change history as a proxy
-moderation log. This is documented as a limitation in §7.
+moderation log. This is documented as a limitation in Section 7.
 
 **Reference UI:** https://matrix.org/docs/communities/moderation/ (Mjolnir/Draupnir setup)
 
 ---
 
-### §1.3 Stoat (formerly Revolt)
+### Section 1.3 Stoat (formerly Revolt)
 
 **Sources:**
 - https://developers.stoat.chat/developers/api/permissions/ (permission bitfield values)
@@ -253,7 +253,7 @@ endpoint URL was not verifiable from available documentation. Likely
 
 ---
 
-### §1.4 Microsoft Teams
+### Section 1.4 Microsoft Teams
 
 **Sources:**
 - https://learn.microsoft.com/en-us/graph/api/resources/channel?view=graph-rest-1.0
@@ -318,7 +318,7 @@ Microsoft 365 has compliance center audit logging (separate admin product) that 
 
 ---
 
-### §1.5 Lemmy
+### Section 1.5 Lemmy
 
 **Sources:**
 - https://mv-gh.github.io/lemmy_openapi_spec/ (unofficial OpenAPI spec for Lemmy v0.19/v1.0)
@@ -373,7 +373,7 @@ maps to `PUT /api/v3/community` for community settings, not to a per-channel con
 
 ---
 
-### §1.6 Forgejo
+### Section 1.6 Forgejo
 
 **Sources:**
 - https://forgejo.org/docs/next/user/repo-permissions/
@@ -434,7 +434,7 @@ panel UI has audit logs but they are not accessible via REST. Note as out-of-sco
 
 ---
 
-### §1.7 GitHub
+### Section 1.7 GitHub
 
 **Sources:**
 - https://docs.github.com/en/rest/collaborators/collaborators?apiVersion=2022-11-28
@@ -489,7 +489,7 @@ which Poly cannot reliably acquire. Note as out-of-scope.
 
 ---
 
-### §1.8 poly-server
+### Section 1.8 poly-server
 
 **Sources:** `clients/server-client/src/` (in-tree — we control the spec)
 
@@ -534,7 +534,7 @@ Since we control the API, these endpoints should be added to poly-server:
 
 ---
 
-## §2 Current State Matrix
+## Section 2 Current State Matrix
 
 | Backend      | Owner field exposed       | Roles type exposed       | `kick` impl | `ban` impl | `delete_message` impl | `update_channel` impl | UI for any of above |
 |--------------|---------------------------|--------------------------|-------------|------------|-----------------------|-----------------------|---------------------|
@@ -556,9 +556,9 @@ Since we control the API, these endpoints should be added to poly-server:
 
 ---
 
-## §3 Shared Abstraction Design
+## Section 3 Shared Abstraction Design
 
-### §3.1 New `ClientBackend` Trait Methods
+### Section 3.1 New `ClientBackend` Trait Methods
 
 Add the following methods to `ClientBackend` in `clients/client/src/lib.rs`. All have
 `NotSupported` default implementations so existing backends compile without change.
@@ -706,7 +706,7 @@ async fn get_moderation_log(
 }
 ```
 
-### §3.2 New Types for `clients/client/src/types.rs`
+### Section 3.2 New Types for `clients/client/src/types.rs`
 
 ```rust
 /// The calling user's effective permissions in a server or channel.
@@ -802,7 +802,7 @@ pub enum ModerationAction {
 }
 ```
 
-### §3.3 New `BackendCapabilities` Fields
+### Section 3.3 New `BackendCapabilities` Fields
 
 Add to `BackendCapabilities` in `clients/client/src/types.rs`:
 
@@ -861,7 +861,7 @@ Update `capabilities_for_slug` overrides:
 - `"stoat"` → `has_roles: true, has_kick: true, has_ban: true, has_channel_mgmt: true, has_moderation_log: false`
 - `"poly"` → `has_roles: true, has_kick: true, has_ban: true, has_channel_mgmt: true, has_moderation_log: true`
 
-### §3.4 WIT Interface Extension
+### Section 3.4 WIT Interface Extension
 
 Add a new WIT interface `client-moderation` to `wit/messenger-plugin.wit` for WASM plugin
 backends. Native backends use the Rust trait methods directly; WASM plugins use the WIT interface.
@@ -917,7 +917,7 @@ interface client-moderation {
 
 Add `export client-moderation;` to the `messenger-plugin` world.
 
-### §3.5 Escape Hatches for Non-Fitting Backends
+### Section 3.5 Escape Hatches for Non-Fitting Backends
 
 The following backends have special cases that do NOT fit the shared abstraction cleanly:
 
@@ -932,7 +932,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 ---
 
-## §4 Per-Backend Implementation Plan
+## Section 4 Per-Backend Implementation Plan
 
 ### Phase B-DS: Discord
 
@@ -949,7 +949,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 - [ ] **B-DS-3** Plugin: implement `ban_member` via `PUT /guilds/{guild.id}/bans/{user.id}`.
   Map `expires_at` → encode duration in reason (Discord bans are permanent; no native expiry API
   as of v10 — note this limitation explicitly, implement `expires_at` as `NotSupported` for now
-  OR use a background task approach — see §7 for out-of-scope note).
+  OR use a background task approach — see Section 7 for out-of-scope note).
   Map `delete_message_history_secs` → `delete_message_seconds`.
   In `clients/discord/src/lib.rs::DiscordClient::ban_member`.
 
@@ -985,7 +985,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 - [ ] **B-DS-12** Host UI: server-settings → **Roles** tab (gated on `has_roles`).
   File to create: `crates/core/src/ui/account/server/settings/roles.rs`.
-  Displays role list with name + permission summary. Read-only in v1; role editing is §7 future work.
+  Displays role list with name + permission summary. Read-only in v1; role editing is Section 7 future work.
 
 - [ ] **B-DS-13** Host UI: server-settings → **Bans** tab (gated on `has_ban`).
   File to create: `crates/core/src/ui/account/server/settings/bans.rs`.
@@ -1073,7 +1073,7 @@ The following backends have special cases that do NOT fit the shared abstraction
   configuration. Show a list of members with their current power level + a number input to
   change (requires `manage_roles = my_power_level >= state_default`).
 
-- [ ] **B-MX-13** Host UI: Bans tab (same as §B-DS-13 shared component).
+- [ ] **B-MX-13** Host UI: Bans tab (same as B-DS-13 shared component).
 
 - [ ] **B-MX-14** Host UI: Edit Channel dialog — name and topic fields only (no slow-mode, no NSFW).
 
@@ -1132,7 +1132,7 @@ confirmed from documentation during research.
 - [ ] **B-ST-10** Plugin tests: kick, ban, delete_message, update_channel, get_my_permissions.
 
 - [ ] **B-ST-11** Host UI: Roles, Bans, Edit Channel, Delete Message, Kick/Ban member context menu.
-  Same shared components as Discord (§B-DS-12 through B-DS-18).
+  Same shared components as Discord (B-DS-12 through B-DS-18).
 
 - [ ] **B-ST-12** Manual test via poly-web (Stoat/Raccoon accounts).
 
@@ -1265,7 +1265,7 @@ confirmed from documentation during research.
 
 - [ ] **B-FJ-3** Plugin: `ban_member` → return `NotSupported`.
   Forgejo has org-level blocking (`PUT /orgs/{org}/block/{username}`) but no repo-level ban.
-  Out-of-scope for v1 (see §7).
+  Out-of-scope for v1 (see Section 7).
 
 - [ ] **B-FJ-4** Plugin: implement `delete_message` — in Forgejo, "messages" are issue comments.
   Map to `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}`.
@@ -1336,7 +1336,7 @@ confirmed from documentation during research.
 - [ ] **B-PS-1** Server: Add `role` column (`owner | admin | moderator | member`) to the
   `server_members` table in poly-server. Add migration. In `servers/poly-server/`.
 
-- [ ] **B-PS-2** Server: Add REST endpoints (see §1.8 proposed endpoints) to poly-server's
+- [ ] **B-PS-2** Server: Add REST endpoints (see Section 1.8 proposed endpoints) to poly-server's
   axum router: `GET/POST/DELETE /api/servers/{id}/bans`, `PATCH /api/servers/{id}/members/{id}/role`,
   `DELETE /api/servers/{id}/members/{id}` (kick), `DELETE/PATCH /api/channels/{id}`,
   `PATCH /api/servers/{id}/channels/reorder`, `GET /api/servers/{id}/modlog`.
@@ -1366,7 +1366,7 @@ confirmed from documentation during research.
 
 ---
 
-## §5 Host-Side Shared Work (Lands First)
+## Section 5 Host-Side Shared Work (Lands First)
 
 This phase has no backend dependency and can be done in parallel with backend research.
 It must land before any per-backend phase to avoid merge conflicts.
@@ -1385,7 +1385,7 @@ It must land before any per-backend phase to avoid merge conflicts.
   `ban_member`, `unban_member`, `get_bans`, `delete_message`, `update_channel`,
   `reorder_channels`, `get_moderation_log`. All have `NotSupported` default implementations.
 
-- [ ] **H-4** Extend `wit/messenger-plugin.wit` with `client-moderation` interface (§3.4).
+- [ ] **H-4** Extend `wit/messenger-plugin.wit` with `client-moderation` interface (Section 3.4).
   Add `export client-moderation;` to the world. Re-generate WIT bindings for any WASM backends.
 
 - [ ] **H-5** Create shared server-settings tab framework additions:
@@ -1486,7 +1486,7 @@ It must land before any per-backend phase to avoid merge conflicts.
 
 ---
 
-## §6 Test Plan
+## Section 6 Test Plan
 
 ### Unit Tests Per Plugin
 
@@ -1515,7 +1515,7 @@ The following test servers need new fixtures or member accounts to enable modera
 
 ### Integration Tests
 
-After §5 (host work) lands:
+After Section 5 (host work) lands:
 
 - `crates/core/tests/permissions_gate.rs` — verifies that UI components do not render
   moderation affordances when `BackendCapabilities::has_kick = false` etc. Test each
@@ -1532,7 +1532,7 @@ Run `TEST_HARNESS.md` via a haiku-tier subagent after each phase lands:
 
 ---
 
-## §7 Out of Scope (Deliberate Exclusions)
+## Section 7 Out of Scope (Deliberate Exclusions)
 
 The following are explicitly NOT part of this plan. Each has a brief rationale.
 
@@ -1556,10 +1556,10 @@ The following are explicitly NOT part of this plan. Each has a brief rationale.
 
 ---
 
-## §8 Rollout Order Recommendation
+## Section 8 Rollout Order Recommendation
 
 ```
-§5 Host-side shared work (H-1 through H-14)
+Section 5 Host-side shared work (H-1 through H-14)
     ↓
     ├─── Phase B-DS (Discord) — most complete API, best for de-risking shared abstractions
     │       ↓
@@ -1569,25 +1569,25 @@ The following are explicitly NOT part of this plan. Each has a brief rationale.
     │
     └─── Phases B-MX, B-ST, B-TE, B-LE, B-FJ, B-GH  ← parallel-safe (disjoint files)
               ↓
-         Integration tests (§6)
+         Integration tests (Section 6)
               ↓
          TEST_HARNESS.md via haiku subagent
 ```
 
 **Dependency rules:**
-- `§5 → all backend phases` (trait methods must exist before backend implements them)
+- `Section 5 → all backend phases` (trait methods must exist before backend implements them)
 - `B-DS → B-MX, B-ST` (Discord validates the shared component design; iteration before parallel rollout reduces rework)
-- `B-FJ` and `B-GH` have the lowest blast radius and can be done at any time after §5
+- `B-FJ` and `B-GH` have the lowest blast radius and can be done at any time after Section 5
 - `B-PS` has a server-side component (`servers/poly-server/`) and should be coordinated with
   whoever owns the poly-server service; the client-side is otherwise independent
 
 **Parallelism notes for worktree subagents:**
 - Each backend phase touches only its `clients/{name}/src/` files. File overlap is minimal.
 - The three new `crates/core/src/ui/account/server/settings/` files (roles.rs, bans.rs, modlog.rs)
-  are created in §5, so backend phases only call them as props consumers — no overlap.
-- The `menus.rs` file IS shared across phases (Kick/Ban added once in §5 as gated items).
+  are created in Section 5, so backend phases only call them as props consumers — no overlap.
+- The `menus.rs` file IS shared across phases (Kick/Ban added once in Section 5 as gated items).
   Do NOT have multiple parallel agents edit `menus.rs` simultaneously.
-- FTL files (`locales/*/main.ftl`) are shared — add all keys in §5, one commit. Backend
+- FTL files (`locales/*/main.ftl`) are shared — add all keys in Section 5, one commit. Backend
   phases should NOT touch FTL files directly.
 
 ---
