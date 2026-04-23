@@ -2,14 +2,15 @@
 //!
 //! The `ClientSidebar` component reads the currently active account's
 //! [`SidebarDeclaration`] (via `ClientBackend::get_sidebar_declaration`) and
-//! dispatches to one of six layout sub-components:
+//! dispatches to one of five layout sub-components:
 //!
-//! - [`ChannelListLayout`] — Discord / Stoat / Teams / poly-native / demo.
+//! - [`ChannelListLayout`] — Discord / Stoat / Teams / Matrix / poly-native / demo.
 //!   A thin wrapper around the existing
 //!   [`crate::ui::account::common::ChannelList`] so backends that declare
 //!   `SidebarLayoutKind::ChannelList` keep their existing UI verbatim.
-//! - [`SpacesRoomsLayout`] — Matrix-style spaces + rooms (WP 4 follow-up
-//!   skeleton; currently renders the plugin's servers as a flat list).
+//!   `SpacesRooms` and `Custom` also fall through here (Matrix used `Custom`
+//!   for a spaces-tree experiment that broke the multi-column shell layout;
+//!   routing both to `ChannelListLayout` restores the standard column shape).
 //! - [`CommunitiesLayout`] — Lemmy-style subscribed communities.
 //! - [`FeedLayout`] — HN-style feed tabs (Top / New / Best / Ask / Show / Jobs).
 //! - [`RepoTreeLayout`] — GitHub / Forgejo repo list with Issues / PRs /
@@ -26,14 +27,12 @@ pub mod communities;
 pub mod custom;
 pub mod feed;
 pub mod repo_tree;
-pub mod spaces_rooms;
 
 pub use channel_list_layout::ChannelListLayout;
 pub use communities::CommunitiesLayout;
 pub use custom::CustomSidebar;
 pub use feed::FeedLayout;
 pub use repo_tree::RepoTreeLayout;
-pub use spaces_rooms::SpacesRoomsLayout;
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
@@ -131,12 +130,18 @@ pub fn ClientSidebar() -> Element {
         Some(Ok(decl)) => {
             let decl = decl.clone();
             match decl.layout {
-                SidebarLayoutKind::ChannelList => rsx! { ChannelListLayout {} },
-                SidebarLayoutKind::SpacesRooms => rsx! { SpacesRoomsLayout {} },
+                // Standard chat-style column layout (Discord / Stoat / Teams / Matrix / demo).
+                // SpacesRooms and Custom both fall through here: the Matrix
+                // plugin previously declared Custom for an experimental
+                // spaces-tree that took over the whole column and broke the
+                // multi-column shell. Routing both to ChannelListLayout
+                // restores the standard AccountServerBar + ChannelList split.
+                SidebarLayoutKind::ChannelList
+                | SidebarLayoutKind::SpacesRooms
+                | SidebarLayoutKind::Custom => rsx! { ChannelListLayout {} },
                 SidebarLayoutKind::Communities => rsx! { CommunitiesLayout {} },
                 SidebarLayoutKind::Feed => rsx! { FeedLayout {} },
                 SidebarLayoutKind::RepoTree => rsx! { RepoTreeLayout {} },
-                SidebarLayoutKind::Custom => rsx! { CustomSidebar { declaration: decl } },
             }
         }
     }

@@ -473,41 +473,6 @@
     border-color: var(--border-secondary);
 }
 
-/* P24 — SpacesRoomsLayout nested tree. */
-.spaces-rooms-space-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.spaces-rooms-space {
-    padding: 4px 8px;
-}
-
-.spaces-rooms-space-name {
-    font-weight: 600;
-    color: var(--text-primary);
-    padding: 4px 4px 2px 4px;
-}
-
-.spaces-rooms-room-list {
-    list-style: none;
-    padding: 0 0 0 16px;
-    margin: 0;
-}
-
-.spaces-rooms-room {
-    padding: 2px 6px;
-    color: var(--text-secondary);
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.spaces-rooms-room:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-}
-
 /* P25 — Communities list + placeholder states. */
 .communities-list {
     list-style: none;
@@ -530,9 +495,6 @@
 .communities-empty,
 .communities-loading,
 .communities-error,
-.spaces-rooms-empty,
-.spaces-rooms-loading,
-.spaces-rooms-error,
 .repo-tree-empty,
 .repo-tree-loading,
 .repo-tree-error {
