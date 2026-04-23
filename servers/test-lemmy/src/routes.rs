@@ -678,6 +678,465 @@ pub async fn edit_community(
 }
 
 // ---------------------------------------------------------------------------
+// Moderation: community/ban_user
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct BanFromCommunityRequest {
+    pub community_id: i64,
+    pub person_id: i64,
+    pub ban: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub expires: Option<i64>,
+    #[serde(default)]
+    pub remove_data: bool,
+}
+
+/// POST /api/v3/community/ban_user
+pub async fn community_ban_user(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Json(body): Json<BanFromCommunityRequest>,
+) -> impl IntoResponse {
+    let mod_username = match bearer_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+    let mod_user = match state.users.get(&mod_username) {
+        Some(u) => u.clone(),
+        None => return auth_error().into_response(),
+    };
+
+    // Look up the target person.
+    let target = match state
+        .users
+        .iter()
+        .find(|e| e.value().id == body.person_id)
+        .map(|e| e.value().clone())
+    {
+        Some(u) => u,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "couldnt_find_person" })),
+            )
+                .into_response();
+        }
+    };
+
+    let when_ = chrono::Utc::now().to_rfc3339();
+    let entry_id = state.next_modlog_id();
+
+    let ban_entry = crate::state::BanEntry {
+        id: entry_id,
+        community_id: body.community_id,
+        person_id: body.person_id,
+        person_name: target.name.clone(),
+        moderator_id: mod_user.id,
+        banned: body.ban,
+        reason: body.reason.clone(),
+        expires: body.expires,
+        when_: when_.clone(),
+    };
+
+    state
+        .bans
+        .entry(body.community_id.to_string())
+        .or_default()
+        .push(ban_entry);
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "banned_person": {
+                "person": {
+                    "id": target.id,
+                    "name": target.name,
+                    "display_name": target.display_name,
+                    "avatar": target.avatar,
+                    "banned": body.ban,
+                    "published": "2024-01-01T00:00:00Z",
+                    "actor_id": target.actor_id,
+                    "local": true,
+                    "deleted": false,
+                    "bot_account": false,
+                    "instance_id": 1,
+                },
+                "counts": { "id": target.id, "person_id": target.id, "post_count": 0, "comment_count": 0, "published": "2024-01-01T00:00:00Z" }
+            },
+            "banned": body.ban
+        })),
+    )
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Moderation: post/remove and comment/remove
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct RemovePostRequest {
+    pub post_id: i64,
+    pub removed: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// POST /api/v3/post/remove
+pub async fn post_remove(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Json(body): Json<RemovePostRequest>,
+) -> impl IntoResponse {
+    let mod_username = match bearer_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+    let mod_user = match state.users.get(&mod_username) {
+        Some(u) => u.clone(),
+        None => return auth_error().into_response(),
+    };
+
+    // Find the post.
+    let post = state
+        .posts
+        .iter()
+        .flat_map(|entry| entry.value().clone())
+        .find(|p| p.id == body.post_id);
+
+    let post = match post {
+        Some(p) => p,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "couldnt_find_post" })),
+            )
+                .into_response();
+        }
+    };
+
+    let when_ = chrono::Utc::now().to_rfc3339();
+    let entry_id = state.next_modlog_id();
+
+    let modlog_entry = crate::state::ModlogEntry {
+        id: entry_id,
+        community_id: post.community_id,
+        moderator_id: mod_user.id,
+        action: "ModRemovePost".to_string(),
+        post_id: Some(post.id),
+        post_name: Some(post.name.clone()),
+        comment_id: None,
+        comment_content: None,
+        commenter_id: None,
+        commenter_name: None,
+        reason: body.reason.clone(),
+        removed: body.removed,
+        when_: when_,
+    };
+
+    state
+        .modlog
+        .entry(post.community_id.to_string())
+        .or_default()
+        .push(modlog_entry);
+
+    (StatusCode::OK, Json(json!({ "post_view": post_view(&post) }))).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct RemoveCommentRequest {
+    pub comment_id: i64,
+    pub removed: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// POST /api/v3/comment/remove
+pub async fn comment_remove(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Json(body): Json<RemoveCommentRequest>,
+) -> impl IntoResponse {
+    let mod_username = match bearer_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+    let mod_user = match state.users.get(&mod_username) {
+        Some(u) => u.clone(),
+        None => return auth_error().into_response(),
+    };
+
+    // Find the comment.
+    let comment = state
+        .comments
+        .iter()
+        .flat_map(|entry| entry.value().clone())
+        .find(|c| c.id == body.comment_id);
+
+    let comment = match comment {
+        Some(c) => c,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "couldnt_find_comment" })),
+            )
+                .into_response();
+        }
+    };
+
+    let commenter = state
+        .users
+        .iter()
+        .find(|e| e.value().id == comment.creator_id)
+        .map(|e| e.value().clone());
+
+    let when_ = chrono::Utc::now().to_rfc3339();
+    let entry_id = state.next_modlog_id();
+
+    let modlog_entry = crate::state::ModlogEntry {
+        id: entry_id,
+        community_id: comment.community_id,
+        moderator_id: mod_user.id,
+        action: "ModRemoveComment".to_string(),
+        post_id: None,
+        post_name: None,
+        comment_id: Some(comment.id),
+        comment_content: Some(comment.content.clone()),
+        commenter_id: commenter.as_ref().map(|u| u.id),
+        commenter_name: commenter.as_ref().map(|u| u.name.clone()),
+        reason: body.reason.clone(),
+        removed: body.removed,
+        when_: when_,
+    };
+
+    state
+        .modlog
+        .entry(comment.community_id.to_string())
+        .or_default()
+        .push(modlog_entry);
+
+    (StatusCode::OK, Json(json!({ "comment_view": {
+        "comment": {
+            "id": comment.id,
+            "content": comment.content,
+            "published": comment.published,
+        },
+        "creator": {
+            "id": comment.creator_id,
+            "name": comment.creator_name,
+        }
+    }})))
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Moderation: modlog
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Default)]
+pub struct ModlogQuery {
+    pub community_id: Option<i64>,
+    #[serde(rename = "type_")]
+    pub type_: Option<String>,
+    #[allow(dead_code)]
+    pub limit: Option<i64>,
+    #[allow(dead_code)]
+    pub page: Option<i64>,
+}
+
+/// GET /api/v3/modlog
+pub async fn get_modlog(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(q): Query<ModlogQuery>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    // Build banned_from_community array from ban entries.
+    let build_ban_entry = |be: &crate::state::BanEntry| -> Value {
+        let person = state
+            .users
+            .iter()
+            .find(|e| e.value().id == be.person_id)
+            .map(|e| e.value().clone());
+        let mod_user = state
+            .users
+            .iter()
+            .find(|e| e.value().id == be.moderator_id)
+            .map(|e| e.value().clone());
+        json!({
+            "mod_ban_from_community": {
+                "id": be.id,
+                "when_": be.when_,
+                "reason": be.reason,
+                "banned": be.banned,
+                "expires": be.expires.map(|ts| {
+                    chrono::DateTime::from_timestamp(ts, 0)
+                        .map(|dt: chrono::DateTime<chrono::Utc>| dt.to_rfc3339())
+                }),
+            },
+            "moderator": mod_user.as_ref().map(|u| json!({
+                "id": u.id,
+                "name": u.name,
+                "display_name": u.display_name,
+                "avatar": u.avatar,
+            })),
+            "banned_person": person.as_ref().map(|u| json!({
+                "id": u.id,
+                "name": u.name,
+                "display_name": u.display_name,
+                "avatar": u.avatar,
+            })).unwrap_or(json!({
+                "id": be.person_id,
+                "name": be.person_name,
+                "display_name": null,
+                "avatar": null,
+            })),
+            "community": {
+                "id": be.community_id,
+                "title": "",
+                "icon": null,
+                "banner": null,
+            }
+        })
+    };
+
+    let build_remove_post_entry = |me: &crate::state::ModlogEntry| -> Value {
+        let mod_user = state
+            .users
+            .iter()
+            .find(|e| e.value().id == me.moderator_id)
+            .map(|e| e.value().clone());
+        json!({
+            "mod_remove_post": {
+                "id": me.id,
+                "when_": me.when_,
+                "reason": me.reason,
+                "removed": me.removed,
+            },
+            "moderator": mod_user.as_ref().map(|u| json!({
+                "id": u.id,
+                "name": u.name,
+                "display_name": u.display_name,
+            })),
+            "post": {
+                "id": me.post_id.unwrap_or(0),
+                "name": me.post_name.clone().unwrap_or_default(),
+                "body": null,
+                "url": null,
+                "published": me.when_,
+            },
+            "community": {
+                "id": me.community_id,
+                "title": "",
+                "icon": null,
+                "banner": null,
+            }
+        })
+    };
+
+    let build_remove_comment_entry = |me: &crate::state::ModlogEntry| -> Value {
+        let mod_user = state
+            .users
+            .iter()
+            .find(|e| e.value().id == me.moderator_id)
+            .map(|e| e.value().clone());
+        json!({
+            "mod_remove_comment": {
+                "id": me.id,
+                "when_": me.when_,
+                "reason": me.reason,
+                "removed": me.removed,
+            },
+            "moderator": mod_user.as_ref().map(|u| json!({
+                "id": u.id,
+                "name": u.name,
+                "display_name": u.display_name,
+            })),
+            "comment": {
+                "id": me.comment_id.unwrap_or(0),
+                "content": me.comment_content.clone().unwrap_or_default(),
+                "published": me.when_,
+            },
+            "commenter": {
+                "id": me.commenter_id.unwrap_or(0),
+                "name": me.commenter_name.clone().unwrap_or_default(),
+                "display_name": null,
+                "avatar": null,
+            },
+            "community": {
+                "id": me.community_id,
+                "title": "",
+                "icon": null,
+                "banner": null,
+            }
+        })
+    };
+
+    let type_filter = q.type_.as_deref().unwrap_or("All");
+
+    let mut banned_from_community: Vec<Value> = Vec::new();
+    let mut removed_posts: Vec<Value> = Vec::new();
+    let mut removed_comments: Vec<Value> = Vec::new();
+
+    // If community_id given, filter; else include all.
+    let community_ids: Vec<String> = if let Some(cid) = q.community_id {
+        vec![cid.to_string()]
+    } else {
+        state.communities.iter().map(|e| e.key().clone()).collect()
+    };
+
+    for cid in &community_ids {
+        if type_filter == "All" || type_filter == "ModBanFromCommunity" {
+            if let Some(entries) = state.bans.get(cid) {
+                for be in entries.iter() {
+                    banned_from_community.push(build_ban_entry(be));
+                }
+            }
+        }
+
+        if type_filter == "All" || type_filter == "ModRemovePost" {
+            if let Some(entries) = state.modlog.get(cid) {
+                for me in entries.iter().filter(|e| e.action == "ModRemovePost") {
+                    removed_posts.push(build_remove_post_entry(me));
+                }
+            }
+        }
+
+        if type_filter == "All" || type_filter == "ModRemoveComment" {
+            if let Some(entries) = state.modlog.get(cid) {
+                for me in entries.iter().filter(|e| e.action == "ModRemoveComment") {
+                    removed_comments.push(build_remove_comment_entry(me));
+                }
+            }
+        }
+    }
+
+    Json(json!({
+        "banned_from_community": banned_from_community,
+        "removed_posts": removed_posts,
+        "removed_comments": removed_comments,
+        "locked_posts": [],
+        "featured_posts": [],
+        "removed_communities": [],
+        "banned": [],
+        "added_to_community": [],
+        "transferred_to_community": [],
+        "added": [],
+        "admin_purged_persons": [],
+        "admin_purged_communities": [],
+        "admin_purged_posts": [],
+        "admin_purged_comments": [],
+        "hidden_communities": [],
+    }))
+    .into_response()
+}
+
+// ---------------------------------------------------------------------------
 // Test-only endpoints
 // ---------------------------------------------------------------------------
 

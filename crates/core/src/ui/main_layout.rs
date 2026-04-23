@@ -23,7 +23,8 @@ use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, SettingsSection};
+use crate::state::{AppState, ModerationDialog, SettingsSection};
+use crate::ui::dialogs::{BanMemberDialog, EditChannelDialog, KickMemberDialog, TimeoutMemberDialog};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
 use poly_ui_macros::{context_menu, ui_action};
@@ -351,9 +352,66 @@ pub fn MainLayout() -> Element {
             // Global user profile modal — now rendered inside router context
             // so action buttons can navigate safely.
             UserProfileModal {}
+            // Global moderation dialogs (kick/ban/timeout/edit-channel).
+            ModerationDialogOverlay {}
             // Pack B: global toast overlay (top-right corner) — reads the
             // Signal<Vec<ToastMessage>> provided by `App`.
             crate::ui::client_ui::ToastOverlay {}
         }
+    }
+}
+
+/// Renders the active moderation dialog (if any) as a global overlay.
+///
+/// Reads `AppState.active_moderation_dialog` and mounts the appropriate
+/// dialog component. The dialog clears the field on close.
+#[ui_action(None)]
+#[rustfmt::skip]
+#[context_menu(none)]
+#[component]
+fn ModerationDialogOverlay() -> Element {
+    let mut app_state: Signal<AppState> = use_context();
+    let dialog = app_state.read().active_moderation_dialog.clone();
+
+    let on_close = move |_| {
+        app_state.write().active_moderation_dialog = None;
+    };
+
+    match dialog {
+        None => rsx! {},
+        Some(ModerationDialog::Kick { server_id, member_id, member_name, account_id }) => rsx! {
+            KickMemberDialog {
+                server_id,
+                member_id,
+                member_name,
+                account_id,
+                on_close,
+            }
+        },
+        Some(ModerationDialog::Ban { server_id, member_id, member_name, account_id }) => rsx! {
+            BanMemberDialog {
+                server_id,
+                member_id,
+                member_name,
+                account_id,
+                on_close,
+            }
+        },
+        Some(ModerationDialog::Timeout { server_id, member_id, member_name, account_id }) => rsx! {
+            TimeoutMemberDialog {
+                server_id,
+                member_id,
+                member_name,
+                account_id,
+                on_close,
+            }
+        },
+        Some(ModerationDialog::EditChannel { channel_id, account_id }) => rsx! {
+            EditChannelDialog {
+                channel_id,
+                account_id,
+                on_close,
+            }
+        },
     }
 }

@@ -10,7 +10,7 @@
 //! Exposes [`router`] so integration tests can spin up the server in-process.
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use tower_http::cors::CorsLayer;
 
 mod routes;
@@ -48,6 +48,14 @@ pub fn router_with_state(state: Arc<ForgejoState>) -> Router {
         .route(
             "/api/v1/repos/{owner}/{repo}/issues/{number}/comments",
             get(routes::list_comments),
+        )
+        .route(
+            "/api/v1/repos/{owner}/{repo}",
+            get(routes::get_repo),
+        )
+        .route(
+            "/api/v1/repos/{owner}/{repo}/issues/comments/{id}",
+            delete(routes::delete_issue_comment),
         )
         .route(
             "/api/v1/repos/{owner}/{repo}/contents",

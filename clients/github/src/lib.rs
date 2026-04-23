@@ -36,7 +36,7 @@ use async_trait::async_trait;
 use futures::stream::{self, Stream};
 use poly_client::*;
 
-pub use api::{GhCli, GhError};
+pub use api::{GhCli, GhError, RepoPermissions};
 pub use mapping::{BACKEND_SLUG, issue_thread_channel_id};
 
 /// Number of years of `pushed_at` activity required for a repo to surface
@@ -397,6 +397,14 @@ impl ClientBackend for GitHubClient {
         BackendCapabilities {
             notifications: NotificationSupport::Activity,
             landing: poly_client::LandingPage::ServerOverview,
+            // GitHub moderation surface: only delete_message is supported.
+            // kick/ban/timeout/channel-mgmt/modlog are all NotSupported.
+            has_roles: false,
+            has_kick: false,
+            has_ban: false,
+            has_timed_ban: false,
+            has_channel_mgmt: false,
+            has_moderation_log: false,
             ..BackendCapabilities::READ_ONLY_FEED
         }
     }
@@ -732,6 +740,93 @@ impl ClientBackend for GitHubClient {
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
         // GitHub is a code-review/issue tracker — composer contributions are out of scope for this client.
         Ok(Vec::new())
+    }
+
+    // --- Moderation ---
+
+    /// Get the calling user's effective permissions in a repo.
+    ///
+    /// Calls `GET /repos/{owner}/{repo}` and maps the `permissions` sub-object
+    /// to [`MemberPermissions`]. GitHub vocabulary:
+    /// - `admin` → manage server + manage channels + ban + kick + manage messages
+    /// - `maintain` → manage channels + manage messages
+    /// - `push` → manage messages (can delete comments in issues/PRs)
+    async fn get_my_permissions(
+        &self,
+        server_id: &str,
+        _channel_id: Option<&str>,
+    ) -> ClientResult<MemberPermissions> {
+        let (owner, repo) = self
+            .resolve_owner_repo_from_server_id(server_id)
+            .await
+            .ok_or_else(|| ClientError::NotFound(format!("repo for server {server_id}")))?;
+
+        let perms = self
+            .cli
+            .get_repo_permissions(&owner, &repo)
+            .await
+            .map_err(Self::convert_err)?;
+
+        let display_role = if perms.admin {
+            "Admin".to_string()
+        } else if perms.maintain {
+            "Maintainer".to_string()
+        } else if perms.push {
+            "Collaborator".to_string()
+        } else if perms.triage {
+            "Triager".to_string()
+        } else {
+            "Read".to_string()
+        };
+
+        Ok(MemberPermissions {
+            manage_server: perms.admin,
+            manage_channels: perms.admin || perms.maintain,
+            manage_roles: perms.admin,
+            kick_members: perms.admin,
+            ban_members: perms.admin,
+            manage_messages: perms.admin || perms.maintain || perms.push,
+            timeout_members: false, // GitHub has no timeout concept
+            display_role,
+            power_level: None,
+        })
+    }
+
+    /// Delete a comment by ID.
+    ///
+    /// `message_id` prefix determines the endpoint:
+    /// - `"comment:{id}"` → `DELETE /repos/{owner}/{repo}/issues/comments/{id}`
+    /// - `"pr-comment:{id}"` → `DELETE /repos/{owner}/{repo}/pulls/comments/{id}`
+    ///
+    /// The `channel_id` must be an issues/pulls forum channel so that
+    /// `(owner, repo)` can be resolved.
+    async fn delete_message(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<()> {
+        let (owner, repo) = parse_forum_channel(channel_id)?;
+
+        if let Some(id_str) = message_id.strip_prefix("comment:") {
+            let comment_id: u64 = id_str.parse().map_err(|_| {
+                ClientError::NotFound(format!("invalid comment id: {id_str}"))
+            })?;
+            let endpoint =
+                format!("/repos/{owner}/{repo}/issues/comments/{comment_id}");
+            self.cli.api_delete(&endpoint).await.map_err(Self::convert_err)
+        } else if let Some(id_str) = message_id.strip_prefix("pr-comment:") {
+            let comment_id: u64 = id_str.parse().map_err(|_| {
+                ClientError::NotFound(format!("invalid pr-comment id: {id_str}"))
+            })?;
+            let endpoint =
+                format!("/repos/{owner}/{repo}/pulls/comments/{comment_id}");
+            self.cli.api_delete(&endpoint).await.map_err(Self::convert_err)
+        } else {
+            Err(ClientError::NotSupported(format!(
+                "GitHub: cannot delete message with unknown prefix in id '{message_id}'. \
+                 Expected 'comment:<id>' or 'pr-comment:<id>'"
+            )))
+        }
     }
 
     async fn get_message_actions(

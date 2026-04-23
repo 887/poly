@@ -18,6 +18,15 @@ use poly_client::{BackendType, MemberPermissions};
 use poly_client::User;
 use serde::{Deserialize, Serialize};
 
+/// Which moderation dialog (if any) is currently open.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ModerationDialog {
+    Kick { server_id: String, member_id: String, member_name: String, account_id: String },
+    Ban  { server_id: String, member_id: String, member_name: String, account_id: String },
+    Timeout { server_id: String, member_id: String, member_name: String, account_id: String },
+    EditChannel { channel_id: String, account_id: String },
+}
+
 /// How the member list groups its entries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum MemberListGrouping {
@@ -505,6 +514,11 @@ pub struct AppState {
     /// right-click. `None` until the first successful `get_my_permissions`
     /// call for the active server.
     pub last_known_perms: Option<MemberPermissions>,
+    /// Currently open moderation dialog (kick / ban / timeout / edit-channel).
+    ///
+    /// `None` = no dialog open. Set by context menu items; cleared by the
+    /// dialog's own `on_close` handler (which also resets to `None`).
+    pub active_moderation_dialog: Option<ModerationDialog>,
 }
 
 impl Default for AppState {
@@ -528,6 +542,7 @@ impl Default for AppState {
             context_menu_stack: Vec::new(),
             sidebar_invalidated_tick: 0,
             last_known_perms: None,
+            active_moderation_dialog: None,
         }
     }
 }

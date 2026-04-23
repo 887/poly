@@ -41,6 +41,9 @@ pub struct DiscordGuild {
     /// Maps to `system_channel_id` in the Discord API (snake_case on the wire).
     #[serde(default)]
     pub system_channel_id: Option<String>,
+    /// The user ID of the guild owner.
+    #[serde(default)]
+    pub owner_id: Option<String>,
 }
 
 /// A tag available in a Discord forum channel.
@@ -148,3 +151,67 @@ pub struct DiscordMessage {
     #[serde(default)]
     pub thread: Option<DiscordChannel>,
 }
+
+// ── Moderation wire types (B-DS) ──────────────────────────────────────────────
+
+/// A single role in a Discord guild.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DiscordRole {
+    pub id: Id<twilight_model::id::marker::RoleMarker>,
+    pub name: String,
+    /// Bitfield of permissions as a string-serialised i64.
+    pub permissions: String,
+    #[serde(default)]
+    pub position: u32,
+    /// RGB colour (0 = no colour set).
+    #[serde(default)]
+    pub color: u32,
+}
+
+/// The guild member object for the authenticated user (`GET /guilds/{id}/members/@me`).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DiscordGuildMember {
+    /// Role IDs assigned to this member.
+    #[serde(default)]
+    pub roles: Vec<Id<twilight_model::id::marker::RoleMarker>>,
+    /// ISO8601 timestamp — `Some` means the member is in timeout until this time.
+    #[serde(default)]
+    pub communication_disabled_until: Option<String>,
+}
+
+/// A banned member entry from `GET /guilds/{id}/bans`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DiscordBan {
+    #[serde(default)]
+    pub reason: Option<String>,
+    pub user: DiscordUser,
+}
+
+/// A single Discord audit-log entry.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DiscordAuditLogEntry {
+    pub id: Id<twilight_model::id::marker::GenericMarker>,
+    /// Numeric action type (20=kick, 22=ban, 23=unban, 12=channel_update, 72=msg_delete).
+    pub action_type: u32,
+    /// Moderator who performed the action.
+    #[serde(default)]
+    pub user_id: Option<Id<UserMarker>>,
+    /// Target (user, channel, message) that was acted upon.
+    #[serde(default)]
+    pub target_id: Option<String>,
+    /// Optional reason the moderator provided.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Response from `GET /guilds/{id}/audit-logs`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DiscordAuditLogResponse {
+    pub audit_log_entries: Vec<DiscordAuditLogEntry>,
+    #[serde(default)]
+    pub users: Vec<DiscordUser>,
+}
+
+/// Response from `PATCH /channels/{id}` — a partial channel object with updated fields.
+/// We reuse `DiscordChannel` for this since the shape is the same.
+pub type DiscordChannelUpdate = DiscordChannel;

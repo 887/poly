@@ -1,7 +1,6 @@
-//! Moderation dialog components (Wave 1 scaffolding).
+//! Moderation dialog components (Wave 2 implementation).
 //!
-//! All components in this module are empty stubs. Wave 2/3 backend agents
-//! will fill the dialog bodies once the per-backend moderation APIs land.
+//! All components are functional overlays that call backend moderation APIs.
 
 pub mod ban_member;
 pub mod edit_channel;

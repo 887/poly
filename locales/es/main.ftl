@@ -893,6 +893,54 @@ dialog-timeout-title = Silenciar a { $user }
 dialog-timeout-duration = Duración
 dialog-timeout-reason = Motivo (opcional)
 dialog-timeout-confirm = Silenciar
+dialog-timeout-5min = 5 minutos
+dialog-timeout-10min = 10 minutos
+dialog-timeout-1hr = 1 hora
+dialog-timeout-24hr = 24 horas
+dialog-timeout-1week = 1 semana
 
 # Editar canal
 dialog-edit-channel-title = Editar canal
+dialog-edit-channel-name = Nombre del canal
+dialog-edit-channel-topic = Tema
+dialog-edit-channel-slowmode = Modo lento (segundos, 0 = desactivado)
+dialog-edit-channel-nsfw = NSFW / Restricción de edad
+dialog-edit-channel-save = Guardar
+dialog-cancel = Cancelar
+
+# Resultados de acciones de moderación
+dialog-kick-success = Miembro expulsado.
+dialog-kick-error = Error al expulsar: { $error }
+dialog-ban-success = Miembro prohibido.
+dialog-ban-error = Error al prohibir: { $error }
+dialog-timeout-success = Silencio aplicado.
+dialog-timeout-error = Error al aplicar el silencio: { $error }
+dialog-edit-channel-success = Canal actualizado.
+dialog-edit-channel-error = Error al actualizar el canal: { $error }
+
+# Pestaña de prohibiciones
+bans-tab-empty = No hay prohibiciones.
+bans-tab-unban = Levantar prohibición
+bans-tab-reason-none = (sin motivo)
+bans-tab-unban-success = Prohibición levantada.
+bans-tab-unban-error = Error al levantar la prohibición: { $error }
+bans-tab-loading = Cargando prohibiciones…
+
+# Pestaña de roles
+roles-tab-empty = No hay roles definidos.
+roles-tab-loading = Cargando roles…
+
+# Pestaña del registro de moderación
+modlog-tab-empty = No hay entradas en el registro de moderación.
+modlog-tab-loading = Cargando registro de auditoría…
+modlog-tab-moderator = Moderador
+modlog-tab-target = Objetivo
+modlog-tab-reason = Motivo
+modlog-action-kicked = Expulsado
+modlog-action-banned = Prohibido
+modlog-action-unbanned = Prohibición levantada
+modlog-action-timed-out = Silenciado
+modlog-action-role-updated = Rol actualizado
+modlog-action-message-deleted = Mensaje eliminado
+modlog-action-channel-updated = Canal actualizado
+modlog-action-other = Otro: { $detail }

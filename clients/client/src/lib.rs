@@ -473,6 +473,15 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("get_moderation_log".to_string()))
     }
 
+    /// Fetch the role list for a server.
+    ///
+    /// Returns roles sorted by position (ascending). Backends that do not
+    /// expose roles return `NotSupported`.
+    async fn get_server_roles(&self, server_id: &str) -> ClientResult<Vec<Role>> {
+        let _ = server_id;
+        Err(ClientError::NotSupported("get_server_roles".to_string()))
+    }
+
     // --- Server management (optional capability) ---
 
     /// Create a new server/guild in this backend.

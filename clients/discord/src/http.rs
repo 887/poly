@@ -6,8 +6,9 @@ use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
 
 use crate::api::{
-    DiscordActiveThreadsResponse, DiscordArchivedThreadsResponse, DiscordChannel, DiscordGuild,
-    DiscordMessage, DiscordUser,
+    DiscordActiveThreadsResponse, DiscordArchivedThreadsResponse, DiscordAuditLogResponse,
+    DiscordBan, DiscordChannel, DiscordGuild, DiscordGuildMember, DiscordMessage, DiscordRole,
+    DiscordUser,
 };
 
 pub struct DiscordHttpClient {
@@ -271,6 +272,242 @@ impl DiscordHttpClient {
         if let Some(a) = after {
             path.push_str(&format!("&after={a}"));
         }
+        self.get(&path).await
+    }
+
+    // ── Moderation endpoints (B-DS) ────────────────────────────────────────
+
+    /// `GET /guilds/{id}/members/@me` — get the authenticated user's guild member
+    /// object (includes role IDs and `communication_disabled_until`).
+    pub async fn get_guild_member_me(
+        &self,
+        guild_id: &str,
+    ) -> Result<DiscordGuildMember, ClientError> {
+        self.get(&format!("/api/v10/guilds/{guild_id}/members/@me")).await
+    }
+
+    /// `GET /guilds/{id}/roles` — list all roles in the guild.
+    pub async fn get_guild_roles(&self, guild_id: &str) -> Result<Vec<DiscordRole>, ClientError> {
+        self.get(&format!("/api/v10/guilds/{guild_id}/roles")).await
+    }
+
+    /// `DELETE /guilds/{guild_id}/members/{user_id}` — kick a member.
+    /// Discord returns 204 No Content on success.
+    pub async fn kick_member(
+        &self,
+        guild_id: &str,
+        user_id: &str,
+        reason: Option<&str>,
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/guilds/{guild_id}/members/{user_id}");
+        let mut req = self
+            .http
+            .delete(self.api_url(&path))
+            .header("Authorization", self.token_header());
+        if let Some(r) = reason {
+            req = req.header("X-Audit-Log-Reason", r);
+        }
+        let resp = req.send().await.map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            204 | 200 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied("Missing KICK_MEMBERS permission".into())),
+            _ => Err(ClientError::Network(format!("kick_member HTTP {status}"))),
+        }
+    }
+
+    /// `PUT /guilds/{guild_id}/bans/{user_id}` — permanently ban a member.
+    /// `delete_message_seconds`: 0-604800 (0 = don't delete history).
+    /// Discord returns 204 on success.
+    pub async fn ban_member(
+        &self,
+        guild_id: &str,
+        user_id: &str,
+        reason: Option<&str>,
+        delete_message_seconds: Option<u64>,
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/guilds/{guild_id}/bans/{user_id}");
+        let mut body = serde_json::json!({});
+        if let Some(secs) = delete_message_seconds {
+            body["delete_message_seconds"] = serde_json::json!(secs.min(604800));
+        }
+        let mut req = self
+            .http
+            .put(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&body);
+        if let Some(r) = reason {
+            req = req.header("X-Audit-Log-Reason", r);
+        }
+        let resp = req.send().await.map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            204 | 200 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied("Missing BAN_MEMBERS permission".into())),
+            _ => Err(ClientError::Network(format!("ban_member HTTP {status}"))),
+        }
+    }
+
+    /// `DELETE /guilds/{guild_id}/bans/{user_id}` — unban a member.
+    /// Discord returns 204 on success.
+    pub async fn unban_member(
+        &self,
+        guild_id: &str,
+        user_id: &str,
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/guilds/{guild_id}/bans/{user_id}");
+        let resp = self
+            .http
+            .delete(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            204 | 200 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied("Missing BAN_MEMBERS permission".into())),
+            _ => Err(ClientError::Network(format!("unban_member HTTP {status}"))),
+        }
+    }
+
+    /// `GET /guilds/{guild_id}/bans` — list all bans (paginated; fetches first page).
+    pub async fn get_bans(&self, guild_id: &str) -> Result<Vec<DiscordBan>, ClientError> {
+        self.get(&format!("/api/v10/guilds/{guild_id}/bans?limit=1000")).await
+    }
+
+    /// `PATCH /guilds/{guild_id}/members/{user_id}` — set `communication_disabled_until`.
+    /// Pass `None` to clear an active timeout.
+    pub async fn set_member_timeout(
+        &self,
+        guild_id: &str,
+        user_id: &str,
+        until_iso8601: Option<&str>,
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/guilds/{guild_id}/members/{user_id}");
+        let body = serde_json::json!({ "communication_disabled_until": until_iso8601 });
+        let resp = self
+            .http
+            .patch(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            200 | 204 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied(
+                "Missing MODERATE_MEMBERS permission".into(),
+            )),
+            _ => Err(ClientError::Network(format!("set_member_timeout HTTP {status}"))),
+        }
+    }
+
+    /// `DELETE /channels/{channel_id}/messages/{message_id}` — delete a single message.
+    /// Discord returns 204 on success.
+    pub async fn delete_message(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/channels/{channel_id}/messages/{message_id}");
+        let resp = self
+            .http
+            .delete(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            204 | 200 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied(
+                "Missing MANAGE_MESSAGES permission".into(),
+            )),
+            404 => Err(ClientError::NotFound("message not found".into())),
+            _ => Err(ClientError::Network(format!("delete_message HTTP {status}"))),
+        }
+    }
+
+    /// `PATCH /channels/{channel_id}` — update channel metadata.
+    /// Returns the updated channel object.
+    pub async fn patch_channel(
+        &self,
+        channel_id: &str,
+        body: serde_json::Value,
+    ) -> Result<DiscordChannel, ClientError> {
+        let path = format!("/api/v10/channels/{channel_id}");
+        let resp = self
+            .http
+            .patch(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            if status == 403 {
+                return Err(ClientError::PermissionDenied(
+                    "Missing MANAGE_CHANNELS permission".into(),
+                ));
+            }
+            return Err(ClientError::Network(format!("patch_channel HTTP {status}")));
+        }
+        resp.json::<DiscordChannel>()
+            .await
+            .map_err(|e| ClientError::Internal(e.to_string()))
+    }
+
+    /// `PATCH /guilds/{guild_id}/channels` — reorder channels.
+    /// `ordering` is `[{id, position}]`. Discord returns 204.
+    pub async fn reorder_channels(
+        &self,
+        guild_id: &str,
+        ordering: &[serde_json::Value],
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/guilds/{guild_id}/channels");
+        let resp = self
+            .http
+            .patch(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(ordering)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            204 | 200 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied(
+                "Missing MANAGE_CHANNELS permission".into(),
+            )),
+            _ => Err(ClientError::Network(format!("reorder_channels HTTP {status}"))),
+        }
+    }
+
+    /// `GET /guilds/{guild_id}/audit-logs` — fetch recent audit log entries.
+    ///
+    /// Filters to moderation-relevant action types:
+    /// - 20 = MEMBER_KICK
+    /// - 22 = MEMBER_BAN_ADD
+    /// - 23 = MEMBER_BAN_REMOVE
+    /// - 12 = CHANNEL_UPDATE
+    /// - 72 = MESSAGE_DELETE
+    pub async fn get_audit_log(
+        &self,
+        guild_id: &str,
+        limit: usize,
+    ) -> Result<DiscordAuditLogResponse, ClientError> {
+        let limit = limit.min(100);
+        // Fetch without action_type filter — the caller maps relevant entries.
+        let path = format!("/api/v10/guilds/{guild_id}/audit-logs?limit={limit}");
         self.get(&path).await
     }
 }

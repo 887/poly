@@ -8,7 +8,10 @@ use poly_client::{ClientError, ClientResult};
 use poly_host_bridge::http::HttpClient;
 use serde::de::DeserializeOwned;
 
-use crate::types::{ForgejoComment, ForgejoContentEntry, ForgejoIssue, ForgejoRepo, ForgejoUser};
+use crate::types::{
+    ForgejoComment, ForgejoContentEntry, ForgejoIssue, ForgejoRepo, ForgejoRepoResponse,
+    ForgejoUser,
+};
 
 /// Low-level Forgejo REST API v1 client.
 pub struct ForgejoApi {
@@ -198,5 +201,48 @@ impl ForgejoApi {
     ) -> ClientResult<ForgejoContentEntry> {
         let api_path = format!("/repos/{owner}/{repo}/contents/{path}");
         self.get(&api_path).await
+    }
+
+    /// `GET /repos/{owner}/{repo}` — fetch repo-level permissions for the caller.
+    pub async fn get_repo_permissions(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> ClientResult<ForgejoRepoResponse> {
+        let path = format!("/repos/{owner}/{repo}");
+        self.get(&path).await
+    }
+
+    /// `DELETE /repos/{owner}/{repo}/issues/comments/{id}` — delete one issue comment.
+    pub async fn delete_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> ClientResult<()> {
+        let url = self.url(&format!(
+            "/repos/{owner}/{repo}/issues/comments/{comment_id}"
+        ));
+        let mut req = self.http.delete(url);
+        if let Some(token) = &self.token {
+            req = req.header("Authorization", format!("token {token}"));
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        match resp.status().as_u16() {
+            204 | 200 => Ok(()),
+            401 | 403 => Err(ClientError::PermissionDenied(
+                "delete_issue_comment: not authorized".to_string(),
+            )),
+            404 => Err(ClientError::NotFound(format!(
+                "comment {comment_id} not found"
+            ))),
+            code => Err(ClientError::Network(format!(
+                "DELETE /repos/{owner}/{repo}/issues/comments/{comment_id} returned HTTP {code}"
+            ))),
+        }
     }
 }

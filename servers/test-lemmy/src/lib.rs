@@ -53,6 +53,11 @@ pub fn router_with_state(state: Arc<LemmyState>) -> Router {
         .route("/api/v3/user", get(routes::get_user))
         // Site info
         .route("/api/v3/site", get(routes::get_site))
+        // Moderation
+        .route("/api/v3/community/ban_user", post(routes::community_ban_user))
+        .route("/api/v3/post/remove", post(routes::post_remove))
+        .route("/api/v3/comment/remove", post(routes::comment_remove))
+        .route("/api/v3/modlog", get(routes::get_modlog))
         // Test-only bypass: get a token without a password
         .route("/test/auth/token", post(routes::test_auth_token))
         .with_state(state)

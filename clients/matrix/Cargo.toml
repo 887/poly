@@ -61,5 +61,9 @@ poly-test-common = { path = "../../servers/test-common" }
 name = "integration"
 path = "tests/integration.rs"
 
+[[test]]
+name = "moderation"
+path = "tests/moderation.rs"
+
 [lints]
 workspace = true

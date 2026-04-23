@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
+use poly_client::{AuthCredentials, ClientBackend, ClientError, MessageQuery};
 use poly_forgejo::ForgejoClient;
 use tokio::net::TcpListener;
 
@@ -571,6 +571,81 @@ async fn test_context_menu_unstarred() {
         "plugin-forgejo-menu-star-repo-label",
         "unstarred repo should show star label"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2 / Phase B-FJ — moderation tests
+// ---------------------------------------------------------------------------
+
+/// `get_my_permissions` for a repo owner returns `manage_messages = true`.
+#[tokio::test]
+async fn test_get_my_permissions_admin() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    let servers = client.get_servers().await.unwrap();
+
+    // otter owns dam-builder → should get admin permissions
+    let server = servers.iter().find(|s| s.name == "otter/dam-builder").unwrap();
+    let perms = client
+        .get_my_permissions(&server.id, None)
+        .await
+        .expect("get_my_permissions should succeed");
+
+    assert!(perms.manage_messages, "repo owner should have manage_messages");
+    assert!(perms.manage_server, "repo owner should have manage_server");
+    assert_eq!(perms.display_role, "Admin");
+    // Forgejo has no kick/ban/timeout
+    assert!(!perms.kick_members);
+    assert!(!perms.ban_members);
+    assert!(!perms.timeout_members);
+}
+
+/// `delete_message` with a `fj-comment-{id}` message ID calls the API correctly.
+#[tokio::test]
+async fn test_delete_comment_via_message_id_prefix() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    // Comment 1001 is on issue #1 of otter/dam-builder
+    // channel_id = fj-issue-otter-dam-builder-1, message_id = fj-comment-1001
+    let result = client
+        .delete_message("fj-issue-otter-dam-builder-1", "fj-comment-1001")
+        .await;
+
+    assert!(result.is_ok(), "delete_message should succeed for owner: {:?}", result);
+
+    // Confirm comment is no longer returned
+    let messages = client
+        .get_messages("fj-issue-otter-dam-builder-1", MessageQuery::default())
+        .await
+        .expect("get_messages should still work after delete");
+    assert_eq!(messages.len(), 1, "one comment should remain after deleting comment 1001");
+}
+
+/// `kick_member` returns NotSupported.
+#[tokio::test]
+async fn test_kick_member_returns_not_supported() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    let servers = client.get_servers().await.unwrap();
+
+    let server = servers.iter().find(|s| s.name == "otter/dam-builder").unwrap();
+    let result = client.kick_member(&server.id, "flamingo", None).await;
+
+    match result {
+        Err(ClientError::NotSupported(_)) => {}
+        other => panic!("expected NotSupported, got {:?}", other),
+    }
 }
 
 /// State-aware menu: starred repo shows "unstar-repo" label key.

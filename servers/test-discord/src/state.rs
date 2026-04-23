@@ -9,7 +9,7 @@ use poly_test_common::{AuthState, EventBus};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use twilight_model::channel::ChannelType;
-use twilight_model::id::marker::{ChannelMarker, GuildMarker, MessageMarker, UserMarker};
+use twilight_model::id::marker::{ChannelMarker, GuildMarker, MessageMarker, RoleMarker, UserMarker};
 use twilight_model::id::Id;
 
 /// Events dispatched to Gateway WebSocket clients.
@@ -43,6 +43,38 @@ pub enum DiscordEvent {
     ThreadUpdate { thread: serde_json::Value },
     ThreadDelete { thread_id: String, guild_id: String, parent_id: String },
     ThreadListSync { guild_id: String, threads: Vec<serde_json::Value> },
+}
+
+/// A guild role.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Role {
+    pub id: Id<RoleMarker>,
+    pub name: String,
+    /// Permission bitfield (matches Discord wire format: string-encoded i64).
+    pub permissions: String,
+    pub position: u32,
+    pub color: u32,
+}
+
+/// A ban record.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Ban {
+    pub user_id: Id<UserMarker>,
+    pub reason: Option<String>,
+}
+
+/// An audit log entry for moderation actions.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AuditLogEntry {
+    /// Snowflake-style ID (we use incrementing u64 for test purposes).
+    pub id: u64,
+    /// Action type: 20=kick, 22=ban_add, 23=ban_remove, 12=channel_update, 72=msg_delete.
+    pub action_type: u32,
+    /// Moderator user ID.
+    pub user_id: Option<Id<UserMarker>>,
+    /// Target ID (user_id for kick/ban, channel_id for channel_update, message_id for msg_delete).
+    pub target_id: Option<String>,
+    pub reason: Option<String>,
 }
 
 /// A tag available in a forum channel.
@@ -89,6 +121,16 @@ pub struct DiscordState {
     /// Gateway WebSocket URL returned by `GET /api/v10/gateway`.
     /// Set after the server binds so tests can use the actual port.
     pub gateway_url: Arc<RwLock<String>>,
+    /// Roles per guild (guild_id → Vec<Role>).
+    pub guild_roles: DashMap<Id<GuildMarker>, Vec<Role>>,
+    /// Member roles per (guild, user) — role IDs assigned to that member.
+    pub member_roles: DashMap<(Id<GuildMarker>, Id<UserMarker>), Vec<Id<RoleMarker>>>,
+    /// Bans per guild (guild_id → Vec<Ban>).
+    pub bans: DashMap<Id<GuildMarker>, Vec<Ban>>,
+    /// Audit log per guild (guild_id → Vec<AuditLogEntry>), newest first.
+    pub audit_log: DashMap<Id<GuildMarker>, Vec<AuditLogEntry>>,
+    /// Next audit log entry ID (incrementing counter).
+    pub next_audit_id: Arc<std::sync::atomic::AtomicU64>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -166,6 +208,11 @@ impl DiscordState {
             messages: DashMap::new(),
             events: EventBus::new(),
             gateway_url: Arc::new(RwLock::new("ws://localhost:9102".to_string())),
+            guild_roles: DashMap::new(),
+            member_roles: DashMap::new(),
+            bans: DashMap::new(),
+            audit_log: DashMap::new(),
+            next_audit_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),
         }
     }
 
@@ -626,17 +673,98 @@ impl DiscordState {
         ]);
     }
 
+    /// Seed roles and member-role assignments.
+    ///
+    /// Guild 100 (Australiana): koala (user 1) is owner + has "Admin" role (id 10).
+    /// Guild 101 (Wildlife Chat): kangaroo (user 2) is owner.
+    pub fn seed_moderation(&self) {
+        if !self.guild_roles.is_empty() {
+            return;
+        }
+
+        // Roles for guild 100.
+        // Permission bits: ADMINISTRATOR (1<<3=8) covers all.
+        self.guild_roles.insert(Id::new(100), vec![
+            Role {
+                id: Id::new(100), // @everyone role shares guild ID
+                name: "@everyone".into(),
+                permissions: "0".into(),
+                position: 0,
+                color: 0,
+            },
+            Role {
+                id: Id::new(10),
+                name: "Admin".into(),
+                // ADMINISTRATOR = 1<<3 = 8; represented as string per Discord wire format.
+                permissions: "8".into(),
+                position: 1,
+                color: 0xFF5765,
+            },
+        ]);
+
+        // Roles for guild 101.
+        self.guild_roles.insert(Id::new(101), vec![
+            Role {
+                id: Id::new(101), // @everyone
+                name: "@everyone".into(),
+                permissions: "0".into(),
+                position: 0,
+                color: 0,
+            },
+        ]);
+
+        // koala (user 1) has the Admin role in guild 100.
+        self.member_roles
+            .insert((Id::new(100), Id::new(1)), vec![Id::new(10)]);
+
+        // kangaroo (user 2) has no extra roles in guild 100 (non-owner member).
+        self.member_roles
+            .insert((Id::new(100), Id::new(2)), vec![]);
+
+        // Seed audit log with some test entries for guild 100.
+        let next_id = self.next_audit_id.fetch_add(3, std::sync::atomic::Ordering::Relaxed);
+        self.audit_log.insert(Id::new(100), vec![
+            AuditLogEntry {
+                id: next_id + 2,
+                action_type: 22, // ban_add
+                user_id: Some(Id::new(1)),
+                target_id: Some("3".to_string()),
+                reason: Some("spamming".into()),
+            },
+            AuditLogEntry {
+                id: next_id + 1,
+                action_type: 20, // kick
+                user_id: Some(Id::new(1)),
+                target_id: Some("2".to_string()),
+                reason: None,
+            },
+            AuditLogEntry {
+                id: next_id,
+                action_type: 72, // msg_delete
+                user_id: Some(Id::new(1)),
+                target_id: Some("400".to_string()),
+                reason: None,
+            },
+        ]);
+    }
+
     pub fn reset(&self) {
         self.auth.clear();
         self.users.clear();
         self.guilds.clear();
         self.channels.clear();
         self.messages.clear();
+        self.guild_roles.clear();
+        self.member_roles.clear();
+        self.bans.clear();
+        self.audit_log.clear();
+        self.next_audit_id.store(1, std::sync::atomic::Ordering::Relaxed);
         tracing::info!("reset Discord state to empty");
     }
 
     pub fn reseed(&self) {
         self.reset();
         self.seed();
+        self.seed_moderation();
     }
 }

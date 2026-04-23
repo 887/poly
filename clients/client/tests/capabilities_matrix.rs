@@ -20,14 +20,22 @@ use poly_client::{
 fn expected(slug: &str) -> BackendCapabilities {
     match slug {
         "hackernews" => BackendCapabilities::READ_ONLY_FEED,
-        "github" => BackendCapabilities {
+        "github" | "forgejo" => BackendCapabilities {
             notifications: NotificationSupport::Activity,
             landing: LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         },
-        "lemmy" | "demo_forum" => BackendCapabilities::MESSAGING_NO_SOCIAL,
+        "lemmy" | "demo_forum" => BackendCapabilities {
+            has_ban: true,
+            has_timed_ban: true,
+            has_moderation_log: true,
+            ..BackendCapabilities::MESSAGING_NO_SOCIAL
+        },
         "matrix" => BackendCapabilities {
             voice: VoiceSupport::None,
+            has_kick: true,
+            has_ban: true,
+            has_channel_mgmt: true,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "stoat" => BackendCapabilities {
@@ -38,7 +46,15 @@ fn expected(slug: &str) -> BackendCapabilities {
             supports_typing_indicators: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
-        "discord" | "demo" | "poly" => BackendCapabilities::FULL_SOCIAL_CHAT,
+        "discord" | "demo" | "poly" => BackendCapabilities {
+            has_roles: true,
+            has_kick: true,
+            has_ban: true,
+            has_timed_ban: true,
+            has_channel_mgmt: true,
+            has_moderation_log: true,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
         _ => BackendCapabilities::READ_ONLY_FEED,
     }
 }

@@ -503,3 +503,230 @@ async fn test_settings_storage_round_trip() {
         .expect("get_setting_value should succeed");
     assert_eq!(got, "true");
 }
+
+// ---------------------------------------------------------------------------
+// B-LE moderation tests (Wave 2 / Phase B-LE)
+// ---------------------------------------------------------------------------
+
+/// Helper: authenticate as testuser (community moderator by convention in test server).
+async fn auth_client(base_url: &str) -> LemmyClient {
+    let mut client = LemmyClient::new(base_url);
+    client
+        .authenticate(AuthCredentials::EmailPassword {
+            email: "testuser".to_string(),
+            password: "password123".to_string(),
+        })
+        .await
+        .expect("authenticate should succeed");
+    client
+}
+
+/// `ban_member` (permanent — no expires) → POST /api/v3/community/ban_user with ban:true.
+#[tokio::test]
+async fn test_ban_member_permanent() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    // community 1, user id 2 (beaver)
+    let result = client
+        .ban_member("lemmy-community-1", "lemmy-user-2", Some("spam"), None)
+        .await;
+
+    assert!(result.is_ok(), "ban_member should succeed, got: {:?}", result);
+
+    // Verify the ban appears in get_bans.
+    let bans = client
+        .get_bans("lemmy-community-1")
+        .await
+        .expect("get_bans should succeed");
+    assert!(!bans.is_empty(), "at least one ban should exist");
+    let ban = bans.iter().find(|b| b.user_id == "lemmy-user-2");
+    assert!(ban.is_some(), "user 2 (beaver) should appear in bans");
+    let ban = ban.unwrap();
+    assert_eq!(ban.reason.as_deref(), Some("spam"));
+    assert!(ban.expires_at.is_none(), "permanent ban must have no expiry");
+}
+
+/// `ban_member` with `expires_at` (timed ban) → POST with Unix timestamp in expires.
+#[tokio::test]
+async fn test_ban_member_with_expires() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    let expires = chrono::Utc::now() + chrono::Duration::hours(24);
+    // Use timeout_member which wraps ban with an expiry.
+    let result = client
+        .timeout_member("lemmy-community-1", "lemmy-user-3", expires, Some("temp ban"))
+        .await;
+
+    assert!(result.is_ok(), "timeout_member should succeed, got: {:?}", result);
+
+    // Should appear in get_bans.
+    let bans = client
+        .get_bans("lemmy-community-1")
+        .await
+        .expect("get_bans should succeed");
+    let ban = bans.iter().find(|b| b.user_id == "lemmy-user-3");
+    assert!(ban.is_some(), "user 3 (hedgehog) should appear as timed ban");
+    assert!(
+        ban.unwrap().expires_at.is_some(),
+        "timed ban must have expires_at"
+    );
+}
+
+/// `unban_member` → POST /api/v3/community/ban_user with ban:false.
+#[tokio::test]
+async fn test_unban_member() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    // Ban first.
+    client
+        .ban_member("lemmy-community-1", "lemmy-user-2", None, None)
+        .await
+        .expect("ban should succeed");
+
+    // Unban.
+    let result = client.unban_member("lemmy-community-1", "lemmy-user-2").await;
+    assert!(result.is_ok(), "unban_member should succeed, got: {:?}", result);
+
+    // After unban, user-2 should not appear in get_bans
+    // (unban creates a new entry with banned:false which is excluded).
+    let bans = client
+        .get_bans("lemmy-community-1")
+        .await
+        .expect("get_bans should succeed");
+    let still_banned = bans.iter().any(|b| b.user_id == "lemmy-user-2");
+    assert!(!still_banned, "unbanned user must not appear in get_bans");
+}
+
+/// `get_bans` uses modlog filter ModBanFromCommunity — returns only active bans.
+#[tokio::test]
+async fn test_get_bans_via_modlog() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    // Start clean — no bans seeded.
+    let bans = client
+        .get_bans("lemmy-community-1")
+        .await
+        .expect("get_bans on empty community should succeed");
+    assert!(bans.is_empty(), "no bans seeded for community 1");
+
+    // Ban two users.
+    client
+        .ban_member("lemmy-community-1", "lemmy-user-2", Some("test"), None)
+        .await
+        .unwrap();
+    client
+        .ban_member("lemmy-community-1", "lemmy-user-3", None, None)
+        .await
+        .unwrap();
+
+    let bans = client
+        .get_bans("lemmy-community-1")
+        .await
+        .expect("get_bans should succeed");
+    assert_eq!(bans.len(), 2, "two bans expected, got {:?}", bans);
+}
+
+/// `delete_message` with `post:{id}` prefix → POST /api/v3/post/remove.
+#[tokio::test]
+async fn test_delete_post_via_remove() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    // Seeded post id=1 is in community 1.
+    let result = client
+        .delete_message("lemmy-feed-1", "lemmy-post-1")
+        .await;
+    assert!(result.is_ok(), "delete post should succeed, got: {:?}", result);
+}
+
+/// `delete_message` with `comment:{id}` prefix → POST /api/v3/comment/remove.
+#[tokio::test]
+async fn test_delete_comment_via_remove() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    // Seeded comment id=1 is in community 1.
+    let result = client
+        .delete_message("lemmy-post-1", "lemmy-comment-1")
+        .await;
+    assert!(result.is_ok(), "delete comment should succeed, got: {:?}", result);
+}
+
+/// `delete_message` with an unrecognised prefix returns NotFound.
+#[tokio::test]
+async fn test_delete_message_bad_id() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    let result = client.delete_message("channel", "unknown-id-42").await;
+    assert!(
+        matches!(result, Err(poly_client::ClientError::NotFound(_))),
+        "bad message id should return NotFound, got: {:?}",
+        result
+    );
+}
+
+/// `kick_member` always returns NotSupported for Lemmy.
+#[tokio::test]
+async fn test_kick_member_not_supported() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    let result = client
+        .kick_member("lemmy-community-1", "lemmy-user-2", None)
+        .await;
+    assert!(
+        matches!(result, Err(poly_client::ClientError::NotSupported(_))),
+        "kick_member must return NotSupported for Lemmy"
+    );
+}
+
+/// `backend_capabilities` reports the correct moderation flags for Lemmy.
+#[tokio::test]
+async fn test_backend_capabilities_moderation_flags() {
+    let client = LemmyClient::new("https://lemmy.example");
+    let caps = client.backend_capabilities();
+    assert!(!caps.has_kick, "Lemmy has no kick");
+    assert!(caps.has_ban, "Lemmy supports ban");
+    assert!(caps.has_timed_ban, "Lemmy supports timed ban via native expires");
+    assert!(!caps.has_roles, "Lemmy has no roles");
+    assert!(!caps.has_channel_mgmt, "Lemmy channel mgmt is admin-only");
+    assert!(caps.has_moderation_log, "Lemmy has a moderation log");
+}
+
+/// `get_moderation_log` returns entries for removed posts and bans.
+#[tokio::test]
+async fn test_get_moderation_log() {
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    // Create some modlog entries.
+    client
+        .ban_member("lemmy-community-1", "lemmy-user-2", Some("spam"), None)
+        .await
+        .expect("ban should succeed");
+    client
+        .delete_message("lemmy-feed-1", "lemmy-post-1")
+        .await
+        .expect("delete post should succeed");
+
+    let entries = client
+        .get_moderation_log("lemmy-community-1", 50)
+        .await
+        .expect("get_moderation_log should succeed");
+
+    assert!(!entries.is_empty(), "should have at least one entry");
+    // Should have at least a ban entry and a remove-post entry.
+    let has_ban = entries
+        .iter()
+        .any(|e| matches!(e.action, poly_client::ModerationAction::MemberBanned));
+    let has_remove = entries
+        .iter()
+        .any(|e| matches!(e.action, poly_client::ModerationAction::MessageDeleted));
+    assert!(has_ban, "ban entry should appear in modlog");
+    assert!(has_remove, "post-remove entry should appear in modlog");
+}

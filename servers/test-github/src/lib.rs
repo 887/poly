@@ -28,10 +28,16 @@ pub fn router() -> Router {
 
 /// Build the router with explicit state (used by `main.rs` for seeded startup).
 pub fn router_with_state(state: Arc<GitHubState>) -> Router {
+    use axum::routing::delete;
+
     Router::new()
         .route("/health", get(routes::health))
         .route("/user", get(routes::get_user))
         .route("/user/repos", get(routes::list_user_repos))
+        .route(
+            "/repos/{owner}/{repo}",
+            get(routes::get_repo),
+        )
         .route(
             "/repos/{owner}/{repo}/issues",
             get(routes::list_issues),
@@ -43,6 +49,14 @@ pub fn router_with_state(state: Arc<GitHubState>) -> Router {
         .route(
             "/repos/{owner}/{repo}/issues/{number}/comments",
             get(routes::list_comments),
+        )
+        .route(
+            "/repos/{owner}/{repo}/issues/comments/{comment_id}",
+            delete(routes::delete_issue_comment),
+        )
+        .route(
+            "/repos/{owner}/{repo}/pulls/comments/{comment_id}",
+            delete(routes::delete_pr_comment),
         )
         .route(
             "/user/starred/{owner}/{repo}",

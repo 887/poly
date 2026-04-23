@@ -893,6 +893,54 @@ dialog-timeout-title = Mettre { $user } en sourdine
 dialog-timeout-duration = Durée
 dialog-timeout-reason = Raison (optionnelle)
 dialog-timeout-confirm = Sourdine
+dialog-timeout-5min = 5 minutes
+dialog-timeout-10min = 10 minutes
+dialog-timeout-1hr = 1 heure
+dialog-timeout-24hr = 24 heures
+dialog-timeout-1week = 1 semaine
 
 # Modifier le salon
 dialog-edit-channel-title = Modifier le salon
+dialog-edit-channel-name = Nom du salon
+dialog-edit-channel-topic = Sujet
+dialog-edit-channel-slowmode = Mode lent (secondes, 0 = désactivé)
+dialog-edit-channel-nsfw = NSFW / Restriction d'âge
+dialog-edit-channel-save = Enregistrer
+dialog-cancel = Annuler
+
+# Résultats des actions de modération
+dialog-kick-success = Membre expulsé.
+dialog-kick-error = Échec de l'expulsion : { $error }
+dialog-ban-success = Membre banni.
+dialog-ban-error = Échec du bannissement : { $error }
+dialog-timeout-success = Sourdine appliquée.
+dialog-timeout-error = Échec de la sourdine : { $error }
+dialog-edit-channel-success = Salon mis à jour.
+dialog-edit-channel-error = Échec de la mise à jour du salon : { $error }
+
+# Onglet des bannissements
+bans-tab-empty = Aucun bannissement.
+bans-tab-unban = Lever le bannissement
+bans-tab-reason-none = (aucune raison)
+bans-tab-unban-success = Bannissement levé.
+bans-tab-unban-error = Échec de la levée du bannissement : { $error }
+bans-tab-loading = Chargement des bannissements…
+
+# Onglet des rôles
+roles-tab-empty = Aucun rôle défini.
+roles-tab-loading = Chargement des rôles…
+
+# Onglet du journal de modération
+modlog-tab-empty = Aucune entrée dans le journal de modération.
+modlog-tab-loading = Chargement du journal d'audit…
+modlog-tab-moderator = Modérateur
+modlog-tab-target = Cible
+modlog-tab-reason = Raison
+modlog-action-kicked = Expulsé
+modlog-action-banned = Banni
+modlog-action-unbanned = Bannissement levé
+modlog-action-timed-out = Sourdine
+modlog-action-role-updated = Rôle mis à jour
+modlog-action-message-deleted = Message supprimé
+modlog-action-channel-updated = Salon mis à jour
+modlog-action-other = Autre : { $detail }

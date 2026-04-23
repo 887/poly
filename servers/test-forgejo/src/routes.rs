@@ -327,6 +327,101 @@ pub async fn check_starred(
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/repos/{owner}/{repo} — single repo (includes permissions)
+// ---------------------------------------------------------------------------
+
+pub async fn get_repo(
+    State(state): State<Arc<ForgejoState>>,
+    headers: HeaderMap,
+    Path((owner, repo)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = match token_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+
+    let full_name = format!("{owner}/{repo}");
+    match state.repos.get(&full_name) {
+        Some(r) => {
+            // The authenticated user gets admin+push if they own the repo,
+            // push if they're a collaborator, read-only otherwise.
+            let is_owner = r.owner.login == user_id;
+            let repo_json = json!({
+                "id": r.id,
+                "full_name": r.full_name,
+                "name": r.name,
+                "permissions": {
+                    "admin": is_owner,
+                    "push": is_owner,
+                    "pull": true,
+                }
+            });
+            Json(repo_json).into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "message": "repo not found" })),
+        )
+            .into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/v1/repos/{owner}/{repo}/issues/comments/{id}
+// ---------------------------------------------------------------------------
+
+pub async fn delete_issue_comment(
+    State(state): State<Arc<ForgejoState>>,
+    headers: HeaderMap,
+    Path((owner, repo, comment_id)): Path<(String, String, i64)>,
+) -> impl IntoResponse {
+    let user_id = match token_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+
+    let full_name = format!("{owner}/{repo}");
+
+    // Check whether the user is the repo owner (admin) — only owners can
+    // delete any comment in the mock server. Others get 403.
+    let is_owner = state
+        .repos
+        .get(&full_name)
+        .map(|r| r.owner.login == user_id)
+        .unwrap_or(false);
+
+    if !is_owner {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "message": "not authorized" })),
+        )
+            .into_response();
+    }
+
+    // Search all issue comment lists for this repo and remove the comment.
+    let mut found = false;
+    for mut entry in state.comments.iter_mut() {
+        if entry.key().starts_with(&format!("{full_name}/")) {
+            if let Some(pos) = entry.value().iter().position(|c| c.id == comment_id) {
+                entry.value_mut().remove(pos);
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if found {
+        (StatusCode::NO_CONTENT, "").into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "message": "comment not found" })),
+        )
+            .into_response()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // POST /test/auth/token — test-only bypass
 // ---------------------------------------------------------------------------
 

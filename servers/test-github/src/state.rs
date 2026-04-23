@@ -4,6 +4,18 @@ use base64::Engine as _;
 use dashmap::DashMap;
 use poly_test_common::AuthState;
 
+/// Permission flags for a repo as seen by the authenticated user.
+///
+/// Stored as `"{user}/{owner}/{repo}"` → `RepoPermissions`.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct RepoPermissions {
+    pub admin: bool,
+    pub maintain: bool,
+    pub push: bool,
+    pub triage: bool,
+    pub pull: bool,
+}
+
 /// All mock GitHub state: users, repos, issues, comments, contents.
 pub struct GitHubState {
     pub auth: AuthState,
@@ -22,6 +34,12 @@ pub struct GitHubState {
     pub file_contents: DashMap<String, ContentEntry>,
     /// "{user}/{owner}/{repo}" keys for starred repos
     pub starred: dashmap::DashSet<String>,
+    /// "{user}/{owner}/{repo}" → RepoPermissions — what each user can do in a repo.
+    pub repo_permissions: DashMap<String, RepoPermissions>,
+    /// "owner/repo/issues/comments/{id}" → deleted flag (for DELETE endpoint tracking)
+    pub deleted_issue_comments: dashmap::DashSet<String>,
+    /// "owner/repo/pulls/comments/{id}" → deleted flag
+    pub deleted_pr_comments: dashmap::DashSet<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -101,6 +119,9 @@ impl GitHubState {
             subdir_contents: DashMap::new(),
             file_contents: DashMap::new(),
             starred: dashmap::DashSet::new(),
+            repo_permissions: DashMap::new(),
+            deleted_issue_comments: dashmap::DashSet::new(),
+            deleted_pr_comments: dashmap::DashSet::new(),
         }
     }
 
@@ -259,6 +280,18 @@ impl GitHubState {
         // --- Seed a starred repo for penguin: penguin/iceberg-os ---
         self.starred
             .insert("penguin/penguin/iceberg-os".to_string());
+
+        // --- Repo permissions ---
+        // penguin is admin on their own repos
+        let admin_perms = RepoPermissions { admin: true, maintain: true, push: true, triage: true, pull: true };
+        self.repo_permissions.insert("penguin/penguin/iceberg-os".to_string(), admin_perms.clone());
+        self.repo_permissions.insert("penguin/penguin/fish-tracker".to_string(), admin_perms.clone());
+        // chameleon is admin on their own repo
+        let chameleon_admin = RepoPermissions { admin: true, maintain: true, push: true, triage: true, pull: true };
+        self.repo_permissions.insert("chameleon/chameleon/color-shift".to_string(), chameleon_admin);
+        // penguin has push (collaborator) access on chameleon/color-shift
+        let collab_perms = RepoPermissions { admin: false, maintain: false, push: true, triage: true, pull: true };
+        self.repo_permissions.insert("penguin/chameleon/color-shift".to_string(), collab_perms);
         self.issues
             .insert("chameleon/color-shift".to_string(), color_issues);
 
@@ -399,6 +432,9 @@ impl GitHubState {
         self.subdir_contents.clear();
         self.file_contents.clear();
         self.starred.clear();
+        self.repo_permissions.clear();
+        self.deleted_issue_comments.clear();
+        self.deleted_pr_comments.clear();
     }
 }
 

@@ -1071,6 +1071,54 @@ dialog-timeout-title = Timeout { $user }
 dialog-timeout-duration = Duration
 dialog-timeout-reason = Reason (optional)
 dialog-timeout-confirm = Timeout
+dialog-timeout-5min = 5 minutes
+dialog-timeout-10min = 10 minutes
+dialog-timeout-1hr = 1 hour
+dialog-timeout-24hr = 24 hours
+dialog-timeout-1week = 1 week
 
 # Edit channel dialog
 dialog-edit-channel-title = Edit channel
+dialog-edit-channel-name = Channel name
+dialog-edit-channel-topic = Topic
+dialog-edit-channel-slowmode = Slow mode (seconds, 0 = off)
+dialog-edit-channel-nsfw = NSFW / Age-gated
+dialog-edit-channel-save = Save
+dialog-cancel = Cancel
+
+# Moderation action results
+dialog-kick-success = Member kicked.
+dialog-kick-error = Failed to kick: { $error }
+dialog-ban-success = Member banned.
+dialog-ban-error = Failed to ban: { $error }
+dialog-timeout-success = Timeout applied.
+dialog-timeout-error = Failed to apply timeout: { $error }
+dialog-edit-channel-success = Channel updated.
+dialog-edit-channel-error = Failed to update channel: { $error }
+
+# Bans tab
+bans-tab-empty = No bans yet.
+bans-tab-unban = Unban
+bans-tab-reason-none = (no reason)
+bans-tab-unban-success = Unbanned.
+bans-tab-unban-error = Failed to unban: { $error }
+bans-tab-loading = Loading bans…
+
+# Roles tab
+roles-tab-empty = No roles defined.
+roles-tab-loading = Loading roles…
+
+# Mod log tab
+modlog-tab-empty = No moderation log entries.
+modlog-tab-loading = Loading audit log…
+modlog-tab-moderator = Moderator
+modlog-tab-target = Target
+modlog-tab-reason = Reason
+modlog-action-kicked = Kicked
+modlog-action-banned = Banned
+modlog-action-unbanned = Unbanned
+modlog-action-timed-out = Timed out
+modlog-action-role-updated = Role updated
+modlog-action-message-deleted = Message deleted
+modlog-action-channel-updated = Channel updated
+modlog-action-other = Other: { $detail }

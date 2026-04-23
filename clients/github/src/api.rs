@@ -30,6 +30,22 @@ use crate::types::{
     GraphQlResponse,
 };
 
+/// The authenticated user's permission flags for a single GitHub repo,
+/// as returned by `GET /repos/{owner}/{repo}` under the `permissions` key.
+#[derive(Debug, Clone, Default)]
+pub struct RepoPermissions {
+    /// Full admin access (repo settings, delete, transfer).
+    pub admin: bool,
+    /// Maintain-level access (push + triage + manage issues/PRs).
+    pub maintain: bool,
+    /// Write access (push commits).
+    pub push: bool,
+    /// Triage access (manage issues without push).
+    pub triage: bool,
+    /// Read access.
+    pub pull: bool,
+}
+
 /// All errors the gh CLI wrapper can return.
 #[derive(Debug, Error)]
 pub enum GhError {
@@ -454,6 +470,123 @@ impl GhCli {
         }
 
         Ok(bytes.to_vec())
+    }
+
+    /// Send an HTTP DELETE to `endpoint` (no response body expected).
+    ///
+    /// Returns `Ok(())` on 204 No Content or any 2xx status.
+    /// Used for deleting issue comments and PR review comments.
+    pub async fn api_delete(&self, endpoint: &str) -> Result<(), GhError> {
+        // In HTTP mode route through the HTTP transport.
+        if let Some(base_url) = &self.http_base_url {
+            return self.api_delete_http(base_url, endpoint).await;
+        }
+        // In CLI mode we cannot use `api_raw` (which calls `gh api` without a
+        // method flag) — pass `-X DELETE` explicitly.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use std::process::Stdio;
+            use tokio::process::Command;
+
+            let mut cmd = Command::new("gh");
+            cmd.arg("api").arg("-X").arg("DELETE");
+            if let Some(host) = &self.hostname {
+                cmd.arg("--hostname").arg(host);
+            }
+            cmd.arg(endpoint);
+            cmd.stdin(Stdio::null());
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
+
+            let output = cmd.output().await.map_err(|e| GhError::Spawn(e.to_string()))?;
+            if !output.status.success() {
+                return Err(GhError::Exit {
+                    code: output.status.code().unwrap_or(-1),
+                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                });
+            }
+            return Ok(());
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            use poly_host_bridge::{BridgeError, Client};
+            let mut args: Vec<String> = vec!["api".into(), "-X".into(), "DELETE".into()];
+            if let Some(host) = &self.hostname {
+                args.push("--hostname".into());
+                args.push(host.clone());
+            }
+            args.push(endpoint.to_string());
+            let client = Client::new();
+            let (exit_code, _stdout, stderr) =
+                client.exec("gh", args).await.map_err(|e| match e {
+                    BridgeError::Unreachable { url, source } => GhError::Spawn(format!(
+                        "host bridge unreachable at {url}: {source}"
+                    )),
+                    other => GhError::Spawn(other.to_string()),
+                })?;
+            if exit_code != 0 {
+                return Err(GhError::Exit {
+                    code: exit_code,
+                    stderr: String::from_utf8_lossy(&stderr).into_owned(),
+                });
+            }
+            Ok(())
+        }
+    }
+
+    /// HTTP DELETE transport used in test mode.
+    async fn api_delete_http(&self, base_url: &str, endpoint: &str) -> Result<(), GhError> {
+        use poly_host_bridge::http::HttpClient;
+
+        let url = format!("{}{}", base_url, endpoint);
+        let http = HttpClient::new();
+        let mut req = http.delete(&url);
+        if let Some(token) = &self.http_token {
+            req = req.header("Authorization", format!("token {}", token));
+        }
+        let response = req
+            .send()
+            .await
+            .map_err(|e| GhError::Spawn(format!("HTTP DELETE failed: {e}")))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let bytes = response
+                .bytes()
+                .await
+                .unwrap_or_default();
+            return Err(GhError::Exit {
+                code: status.as_u16() as i32,
+                stderr: String::from_utf8_lossy(&bytes).into_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Fetch the authenticated user's permission flags for a repo.
+    ///
+    /// Calls `GET /repos/{owner}/{repo}` and returns the `permissions` sub-object.
+    /// Returns a tuple `(admin, push, pull, maintain, triage)`.
+    pub async fn get_repo_permissions(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<RepoPermissions, GhError> {
+        let endpoint = format!("/repos/{owner}/{repo}");
+        let v: serde_json::Value = self.api_get(&endpoint, &[]).await?;
+        let p = v.get("permissions").and_then(|p| p.as_object());
+        let bool_field = |obj: Option<&serde_json::Map<String, serde_json::Value>>, key: &str| {
+            obj.and_then(|o| o.get(key))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        };
+        Ok(RepoPermissions {
+            admin: bool_field(p, "admin"),
+            maintain: bool_field(p, "maintain"),
+            push: bool_field(p, "push"),
+            triage: bool_field(p, "triage"),
+            pull: bool_field(p, "pull"),
+        })
     }
 
     /// List GitHub Discussions for a repo, ordered by last-updated descending.

@@ -5,9 +5,10 @@
 //! resume after interruptions.
 
 use crate::api::{
-    JoinedRoomsResponse, LoginIdentifier, LoginRequest, LoginResponse, MessagesResponse,
-    ProfileResponse, RoomEvent, RoomMembersResponse, SendEventResponse,
-    SendMessageRequest, SpaceHierarchyResponse, SyncResponse, WhoAmIResponse,
+    BanRequest, JoinedRoomsResponse, KickRequest, LoginIdentifier, LoginRequest,
+    LoginResponse, MessagesResponse, PowerLevelsContent, ProfileResponse, RedactRequest,
+    RoomEvent, RoomMembersResponse, RoomNameRequest, RoomTopicRequest, SendEventResponse,
+    SendMessageRequest, SpaceHierarchyResponse, SyncResponse, UnbanRequest, WhoAmIResponse,
 };
 use crate::config::MatrixConfig;
 use poly_client::{ClientError, ClientResult};
@@ -368,6 +369,192 @@ impl MatrixHttpClient {
         }
 
         response.json().await.map_err(Self::network_error)
+    }
+
+    // -----------------------------------------------------------------------
+    // Moderation endpoints (B-MX)
+    // -----------------------------------------------------------------------
+
+    /// Kick a member via `POST /_matrix/client/v3/rooms/{roomId}/kick`.
+    pub async fn kick_member(
+        &self,
+        room_id: &str,
+        user_id: &str,
+        reason: Option<&str>,
+    ) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::POST,
+                &format!("/_matrix/client/v3/rooms/{room_id}/kick"),
+            )?
+            .json(&KickRequest {
+                user_id: user_id.to_string(),
+                reason: reason.map(str::to_string),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Ban a member via `POST /_matrix/client/v3/rooms/{roomId}/ban`.
+    pub async fn ban_member(
+        &self,
+        room_id: &str,
+        user_id: &str,
+        reason: Option<&str>,
+    ) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::POST,
+                &format!("/_matrix/client/v3/rooms/{room_id}/ban"),
+            )?
+            .json(&BanRequest {
+                user_id: user_id.to_string(),
+                reason: reason.map(str::to_string),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Unban a member via `POST /_matrix/client/v3/rooms/{roomId}/unban`.
+    pub async fn unban_member(&self, room_id: &str, user_id: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::POST,
+                &format!("/_matrix/client/v3/rooms/{room_id}/unban"),
+            )?
+            .json(&UnbanRequest {
+                user_id: user_id.to_string(),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Redact an event via `PUT /_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}`.
+    pub async fn redact_event(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        txn_id: &str,
+        reason: Option<&str>,
+    ) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::PUT,
+                &format!(
+                    "/_matrix/client/v3/rooms/{room_id}/redact/{event_id}/{txn_id}"
+                ),
+            )?
+            .json(&RedactRequest {
+                reason: reason.map(str::to_string),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Fetch the `m.room.power_levels` state event content for a room.
+    ///
+    /// Returns default power levels if the event is absent (new rooms before
+    /// the first explicit power_levels event use Matrix spec defaults).
+    pub async fn fetch_power_levels(&self, room_id: &str) -> ClientResult<PowerLevelsContent> {
+        let response = self
+            .authenticated_request(
+                Method::GET,
+                &format!("/_matrix/client/v3/rooms/{room_id}/state/m.room.power_levels"),
+            )?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if response.status().as_u16() == 404 {
+            // Room has no explicit power_levels state event — use spec defaults.
+            return Ok(PowerLevelsContent::default());
+        }
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Fetch banned members via `GET /_matrix/client/v3/rooms/{roomId}/members?membership=ban`.
+    pub async fn fetch_banned_members(&self, room_id: &str) -> ClientResult<RoomMembersResponse> {
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/members?membership=ban");
+        let response = self
+            .authenticated_request(Method::GET, &path)?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Update a room's name via `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.name`.
+    pub async fn set_room_name(&self, room_id: &str, name: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::PUT,
+                &format!("/_matrix/client/v3/rooms/{room_id}/state/m.room.name"),
+            )?
+            .json(&RoomNameRequest {
+                name: name.to_string(),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Update a room's topic via `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.topic`.
+    pub async fn set_room_topic(&self, room_id: &str, topic: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::PUT,
+                &format!("/_matrix/client/v3/rooms/{room_id}/state/m.room.topic"),
+            )?
+            .json(&RoomTopicRequest {
+                topic: topic.to_string(),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
     }
 
     /// Log out the current session via `POST /_matrix/client/v3/logout`.

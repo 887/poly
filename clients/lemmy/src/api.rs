@@ -31,6 +31,39 @@ pub struct CreateCommentRequest {
     pub parent_id: Option<i64>,
 }
 
+/// `POST /api/v3/community/ban_user` — ban or unban a person from a community.
+#[derive(Debug, Clone, Serialize)]
+pub struct BanFromCommunityRequest {
+    pub community_id: i64,
+    pub person_id: i64,
+    /// `true` to ban, `false` to unban.
+    pub ban: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Unix timestamp (i64) when the ban expires. `None` = permanent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires: Option<i64>,
+    pub remove_data: bool,
+}
+
+/// `POST /api/v3/post/remove` — remove a post as moderator.
+#[derive(Debug, Clone, Serialize)]
+pub struct RemovePostRequest {
+    pub post_id: i64,
+    pub removed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// `POST /api/v3/comment/remove` — remove a comment as moderator.
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoveCommentRequest {
+    pub comment_id: i64,
+    pub removed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
 // ── Response bodies ─────────────────────────────────────────────────────────
 
 /// Response from `POST /api/v3/user/login`.
@@ -184,6 +217,99 @@ pub struct MyUserInfo {
 #[derive(Debug, Clone, Deserialize)]
 pub struct LocalUserView {
     pub person: LemmyPerson,
+}
+
+/// Response from `POST /api/v3/community/ban_user`.
+///
+/// Fields kept for full protocol fidelity — `banned_person` is decoded but
+/// not currently consumed by the caller (the return value is discarded).
+#[derive(Debug, Clone, Deserialize)]
+pub struct BanFromCommunityResponse {
+    pub banned_person: PersonView,
+    pub banned: bool,
+}
+
+/// A person view (person + counts).
+#[derive(Debug, Clone, Deserialize)]
+pub struct PersonView {
+    pub person: LemmyPerson,
+}
+
+/// A single `ModBanFromCommunity` entry in the modlog.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModBanFromCommunityView {
+    pub mod_ban_from_community: ModBanFromCommunity,
+    pub moderator: Option<LemmyPerson>,
+    pub banned_person: LemmyPerson,
+    /// Community context decoded for completeness; not currently read.
+    pub community: LemmyCommunity,
+}
+
+/// The core modlog record for a community ban event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModBanFromCommunity {
+    pub id: i64,
+    pub when_: DateTime<Utc>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub banned: bool,
+    #[serde(default)]
+    pub expires: Option<DateTime<Utc>>,
+}
+
+/// A single `ModRemovePost` entry in the modlog.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModRemovePostView {
+    pub mod_remove_post: ModRemovePost,
+    pub moderator: Option<LemmyPerson>,
+    pub post: LemmyPost,
+    pub community: LemmyCommunity,
+}
+
+/// Core modlog record for a post-remove event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModRemovePost {
+    pub id: i64,
+    pub when_: DateTime<Utc>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub removed: bool,
+}
+
+/// A single `ModRemoveComment` entry in the modlog.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModRemoveCommentView {
+    pub mod_remove_comment: ModRemoveComment,
+    pub moderator: Option<LemmyPerson>,
+    pub comment: LemmyComment,
+    pub commenter: LemmyPerson,
+    pub community: LemmyCommunity,
+}
+
+/// Core modlog record for a comment-remove event.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModRemoveComment {
+    pub id: i64,
+    pub when_: DateTime<Utc>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub removed: bool,
+}
+
+/// Response from `GET /api/v3/modlog`.
+///
+/// Only the arrays we consume are decoded; unknown keys are ignored.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct GetModlogResponse {
+    #[serde(default)]
+    pub banned_from_community: Vec<ModBanFromCommunityView>,
+    #[serde(default)]
+    pub removed_posts: Vec<ModRemovePostView>,
+    #[serde(default)]
+    pub removed_comments: Vec<ModRemoveCommentView>,
 }
 
 // ── Conversion helpers ───────────────────────────────────────────────────────
@@ -822,6 +948,164 @@ impl LemmyHttpClient {
         resp.json::<CommentResponse>()
             .await
             .map(|r| r.comment_view)
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    /// `POST /api/v3/community/ban_user` — ban or unban a person from a community.
+    pub async fn ban_from_community(
+        &self,
+        req: BanFromCommunityRequest,
+    ) -> ClientResult<BanFromCommunityResponse> {
+        let jwt = self.jwt()?;
+        let resp = self
+            .http
+            .post(self.url("/api/v3/community/ban_user"))
+            .bearer_auth(&jwt)
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if resp.status() == StatusCode::FORBIDDEN {
+            return Err(ClientError::PermissionDenied(
+                "ban_from_community: permission denied".to_string(),
+            ));
+        }
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "POST /api/v3/community/ban_user returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        resp.json::<BanFromCommunityResponse>()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    /// `POST /api/v3/post/remove` — remove a post as moderator.
+    pub async fn remove_post(
+        &self,
+        post_id: i64,
+        reason: Option<&str>,
+    ) -> ClientResult<()> {
+        let jwt = self.jwt()?;
+        let body = RemovePostRequest {
+            post_id,
+            removed: true,
+            reason: reason.map(str::to_string),
+        };
+        let resp = self
+            .http
+            .post(self.url("/api/v3/post/remove"))
+            .bearer_auth(&jwt)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if resp.status() == StatusCode::FORBIDDEN {
+            return Err(ClientError::PermissionDenied(
+                "remove_post: permission denied".to_string(),
+            ));
+        }
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "POST /api/v3/post/remove returned HTTP {}",
+                resp.status()
+            )));
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v3/comment/remove` — remove a comment as moderator.
+    pub async fn remove_comment(
+        &self,
+        comment_id: i64,
+        reason: Option<&str>,
+    ) -> ClientResult<()> {
+        let jwt = self.jwt()?;
+        let body = RemoveCommentRequest {
+            comment_id,
+            removed: true,
+            reason: reason.map(str::to_string),
+        };
+        let resp = self
+            .http
+            .post(self.url("/api/v3/comment/remove"))
+            .bearer_auth(&jwt)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if resp.status() == StatusCode::FORBIDDEN {
+            return Err(ClientError::PermissionDenied(
+                "remove_comment: permission denied".to_string(),
+            ));
+        }
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "POST /api/v3/comment/remove returned HTTP {}",
+                resp.status()
+            )));
+        }
+        Ok(())
+    }
+
+    /// `GET /api/v3/modlog?community_id={id}&type_=ModBanFromCommunity` — ban history only.
+    pub async fn get_modlog_bans(
+        &self,
+        community_id: i64,
+    ) -> ClientResult<Vec<ModBanFromCommunityView>> {
+        let jwt = self.jwt()?;
+        let url = self.url(&format!(
+            "/api/v3/modlog?community_id={community_id}&type_=ModBanFromCommunity"
+        ));
+        let resp = self
+            .http
+            .get(url)
+            .bearer_auth(&jwt)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "GET /api/v3/modlog (bans) returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        resp.json::<GetModlogResponse>()
+            .await
+            .map(|r| r.banned_from_community)
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    /// `GET /api/v3/modlog?community_id={id}` — fetch moderation log for a community.
+    pub async fn get_modlog(&self, community_id: i64) -> ClientResult<GetModlogResponse> {
+        let jwt = self.jwt()?;
+        let url = self.url(&format!(
+            "/api/v3/modlog?community_id={community_id}&type_=All"
+        ));
+        let resp = self
+            .http
+            .get(url)
+            .bearer_auth(&jwt)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "GET /api/v3/modlog returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        resp.json::<GetModlogResponse>()
+            .await
             .map_err(|e| ClientError::Network(e.to_string()))
     }
 

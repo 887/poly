@@ -88,6 +88,29 @@ pub struct ForgejoComment {
     pub html_url: String,
 }
 
+/// Repo-level permissions for the authenticated user, as returned by
+/// `GET /api/v1/repos/{owner}/{repo}` inside the `permissions` object.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ForgejoRepoPermissions {
+    /// User has admin access to the repo.
+    #[serde(default)]
+    pub admin: bool,
+    /// User has push (write) access.
+    #[serde(default)]
+    pub push: bool,
+    /// User has pull (read) access.
+    #[serde(default)]
+    pub pull: bool,
+}
+
+/// Minimal repo response from `GET /api/v1/repos/{owner}/{repo}` — only the
+/// `permissions` block is needed for `get_my_permissions`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ForgejoRepoResponse {
+    #[serde(default)]
+    pub permissions: ForgejoRepoPermissions,
+}
+
 /// One file/dir entry from the contents API
 /// (`GET /api/v1/repos/{owner}/{repo}/contents/{path}`).
 #[derive(Debug, Clone, Deserialize)]

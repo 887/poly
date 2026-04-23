@@ -15,7 +15,7 @@ pub mod state;
 
 pub use state::DiscordState;
 
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post, put};
 use axum::Router;
 use poly_test_common::health_handler;
 use std::sync::Arc;
@@ -36,10 +36,45 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         .route("/api/v10/users/{user_id}", get(routes::get_user))
         // Guilds
         .route("/api/v10/guilds/{guild_id}", get(routes::get_guild).patch(routes::patch_guild))
-        .route("/api/v10/guilds/{guild_id}/channels", get(routes::get_guild_channels))
+        .route(
+            "/api/v10/guilds/{guild_id}/channels",
+            get(routes::get_guild_channels).patch(routes::reorder_guild_channels),
+        )
+        // Moderation — guild member + roles
+        .route(
+            "/api/v10/guilds/{guild_id}/members/@me",
+            get(routes::get_guild_member_me),
+        )
+        .route(
+            "/api/v10/guilds/{guild_id}/members/{user_id}",
+            delete(routes::kick_member).patch(routes::patch_guild_member),
+        )
+        .route("/api/v10/guilds/{guild_id}/roles", get(routes::get_guild_roles))
+        // Moderation — bans
+        .route(
+            "/api/v10/guilds/{guild_id}/bans",
+            get(routes::get_bans),
+        )
+        .route(
+            "/api/v10/guilds/{guild_id}/bans/{user_id}",
+            put(routes::ban_member).delete(routes::unban_member),
+        )
+        // Moderation — audit log
+        .route("/api/v10/guilds/{guild_id}/audit-logs", get(routes::get_audit_log))
         // Channels
-        .route("/api/v10/channels/{channel_id}", get(routes::get_channel))
-        .route("/api/v10/channels/{channel_id}/messages", get(routes::get_messages).post(routes::send_message))
+        .route(
+            "/api/v10/channels/{channel_id}",
+            get(routes::get_channel).patch(routes::patch_channel),
+        )
+        .route(
+            "/api/v10/channels/{channel_id}/messages",
+            get(routes::get_messages).post(routes::send_message),
+        )
+        // Moderation — delete message
+        .route(
+            "/api/v10/channels/{channel_id}/messages/{message_id}",
+            delete(routes::delete_message),
+        )
         // Threads
         .route("/api/v10/guilds/{guild_id}/threads/active", get(routes::get_guild_active_threads))
         .route("/api/v10/channels/{channel_id}/threads/archived/public", get(routes::get_channel_archived_threads))

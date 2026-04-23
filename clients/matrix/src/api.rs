@@ -276,3 +276,81 @@ pub struct MessagesResponse {
     pub chunk: Vec<RoomEvent>,
 }
 
+// ---------------------------------------------------------------------------
+// Moderation (B-MX — plan-permissions-moderation.md §1.2)
+// ---------------------------------------------------------------------------
+
+/// Request body for `POST /_matrix/client/v3/rooms/{roomId}/kick`.
+#[derive(Debug, Serialize)]
+pub struct KickRequest {
+    pub user_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Request body for `POST /_matrix/client/v3/rooms/{roomId}/ban`.
+#[derive(Debug, Serialize)]
+pub struct BanRequest {
+    pub user_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Request body for `POST /_matrix/client/v3/rooms/{roomId}/unban`.
+#[derive(Debug, Serialize)]
+pub struct UnbanRequest {
+    pub user_id: String,
+}
+
+/// Request body for `PUT /_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}`.
+#[derive(Debug, Serialize)]
+pub struct RedactRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Request body for `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.name`.
+#[derive(Debug, Serialize)]
+pub struct RoomNameRequest {
+    pub name: String,
+}
+
+/// Request body for `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.topic`.
+#[derive(Debug, Serialize)]
+pub struct RoomTopicRequest {
+    pub topic: String,
+}
+
+/// The `m.room.power_levels` content — only the fields needed for `get_my_permissions`.
+///
+/// Subset of the full Matrix spec content; extra fields are deserialised-and-dropped
+/// (serde ignores unknown fields by default). All fields use Matrix spec defaults when
+/// absent: `ban=50`, `kick=50`, `redact=50`, `state_default=50`, `users_default=0`.
+#[derive(Debug, Default, Deserialize)]
+pub struct PowerLevelsContent {
+    #[serde(default = "default_50")]
+    pub ban: i64,
+    #[serde(default = "default_50")]
+    pub kick: i64,
+    #[serde(default = "default_50")]
+    pub redact: i64,
+    #[serde(default = "default_50")]
+    pub state_default: i64,
+    #[serde(default)]
+    pub users_default: i64,
+    /// Per-user overrides: user_id → power level.
+    #[serde(default)]
+    pub users: std::collections::HashMap<String, i64>,
+}
+
+fn default_50() -> i64 {
+    50
+}
+
+impl PowerLevelsContent {
+    /// Return the power level for the given user_id (falls back to `users_default`).
+    pub fn user_level(&self, user_id: &str) -> i64 {
+        self.users.get(user_id).copied().unwrap_or(self.users_default)
+    }
+}
+

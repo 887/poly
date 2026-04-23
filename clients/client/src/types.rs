@@ -80,9 +80,18 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
             landing: LandingPage::ServerOverview,
             ..BackendCapabilities::READ_ONLY_FEED
         },
-        "lemmy" | "demo_forum" => BackendCapabilities::MESSAGING_NO_SOCIAL,
+        "lemmy" | "demo_forum" => BackendCapabilities {
+            has_ban: true,
+            has_timed_ban: true,
+            has_moderation_log: true,
+            ..BackendCapabilities::MESSAGING_NO_SOCIAL
+        },
         "matrix" => BackendCapabilities {
             voice: VoiceSupport::None,
+            // B-MX moderation flags
+            has_kick: true,
+            has_ban: true,
+            has_channel_mgmt: true,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
         "stoat" => BackendCapabilities {
@@ -93,7 +102,15 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
             supports_typing_indicators: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
-        "discord" | "demo" | "poly" => BackendCapabilities::FULL_SOCIAL_CHAT,
+        "discord" | "demo" | "poly" => BackendCapabilities {
+            has_roles: true,
+            has_kick: true,
+            has_ban: true,
+            has_timed_ban: true,
+            has_channel_mgmt: true,
+            has_moderation_log: true,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
         _ => BackendCapabilities::READ_ONLY_FEED,
     }
 }

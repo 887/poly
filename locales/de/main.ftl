@@ -893,6 +893,54 @@ dialog-timeout-title = { $user } mit Timeout belegen
 dialog-timeout-duration = Dauer
 dialog-timeout-reason = Grund (optional)
 dialog-timeout-confirm = Timeout
+dialog-timeout-5min = 5 Minuten
+dialog-timeout-10min = 10 Minuten
+dialog-timeout-1hr = 1 Stunde
+dialog-timeout-24hr = 24 Stunden
+dialog-timeout-1week = 1 Woche
 
 # Kanal bearbeiten
 dialog-edit-channel-title = Kanal bearbeiten
+dialog-edit-channel-name = Kanalname
+dialog-edit-channel-topic = Thema
+dialog-edit-channel-slowmode = Langsamer Modus (Sekunden, 0 = aus)
+dialog-edit-channel-nsfw = NSFW / Altersbeschränkung
+dialog-edit-channel-save = Speichern
+dialog-cancel = Abbrechen
+
+# Ergebnisse von Moderationsaktionen
+dialog-kick-success = Mitglied entfernt.
+dialog-kick-error = Entfernen fehlgeschlagen: { $error }
+dialog-ban-success = Mitglied gesperrt.
+dialog-ban-error = Sperren fehlgeschlagen: { $error }
+dialog-timeout-success = Timeout angewendet.
+dialog-timeout-error = Timeout fehlgeschlagen: { $error }
+dialog-edit-channel-success = Kanal aktualisiert.
+dialog-edit-channel-error = Kanalaktualisierung fehlgeschlagen: { $error }
+
+# Sperren-Tab
+bans-tab-empty = Keine Sperren vorhanden.
+bans-tab-unban = Sperre aufheben
+bans-tab-reason-none = (kein Grund)
+bans-tab-unban-success = Sperre aufgehoben.
+bans-tab-unban-error = Sperre aufheben fehlgeschlagen: { $error }
+bans-tab-loading = Sperren werden geladen…
+
+# Rollen-Tab
+roles-tab-empty = Keine Rollen definiert.
+roles-tab-loading = Rollen werden geladen…
+
+# Moderationsprotokoll-Tab
+modlog-tab-empty = Keine Einträge im Moderationsprotokoll.
+modlog-tab-loading = Audit-Protokoll wird geladen…
+modlog-tab-moderator = Moderator
+modlog-tab-target = Ziel
+modlog-tab-reason = Grund
+modlog-action-kicked = Entfernt
+modlog-action-banned = Gesperrt
+modlog-action-unbanned = Sperre aufgehoben
+modlog-action-timed-out = Timeout
+modlog-action-role-updated = Rolle aktualisiert
+modlog-action-message-deleted = Nachricht gelöscht
+modlog-action-channel-updated = Kanal aktualisiert
+modlog-action-other = Sonstiges: { $detail }

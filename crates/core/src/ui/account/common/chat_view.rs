@@ -5858,8 +5858,22 @@ fn MsgContextMenuOverlay(
         return rsx! {};
     };
 
-    let app_state: crate::state::AppState = use_context::<Signal<crate::state::AppState>>().read().clone();
+    let app_state_sig: Signal<crate::state::AppState> = use_context();
+    let app_state = app_state_sig.read().clone();
     let last_known_perms = app_state.last_known_perms.clone();
+    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+
+    // Resolve account_id and channel_id for the delete_message backend call.
+    let account_id_for_delete = app_state.nav.active_account_id
+        .as_deref()
+        .unwrap_or("")
+        .to_string();
+    let channel_id_for_delete = chat_data
+        .read()
+        .current_channel
+        .as_ref()
+        .map(|c| c.id.clone())
+        .unwrap_or_default();
 
     let x = menu.x;
     let y = menu.y;
@@ -5902,7 +5916,7 @@ fn MsgContextMenuOverlay(
 
             div { class: "context-menu-separator" }
 
-            {render_context_menu_danger_item(is_own, last_known_perms, msg_context_menu, chat_data, mid_delete)}
+            {render_context_menu_danger_item(is_own, last_known_perms, msg_context_menu, chat_data, mid_delete, channel_id_for_delete, account_id_for_delete, client_manager)}
             {render_context_menu_copy_id_item(msg_context_menu, mid_copy_id)}
         }
     }
@@ -5990,6 +6004,9 @@ fn render_context_menu_danger_item(
     mut msg_context_menu: Signal<Option<MsgContextMenu>>,
     mut chat_data: Signal<ChatData>,
     mid_delete: String,
+    channel_id: String,
+    account_id: String,
+    client_manager: Signal<crate::client_manager::ClientManager>,
 ) -> Element {
     // Show the delete action if the user owns the message OR has manage_messages.
     let can_delete = is_own
@@ -6015,8 +6032,23 @@ fn render_context_menu_danger_item(
             label: t("mod-action-delete-message"),
             danger: true,
             onclick: move |_| {
+                // Optimistic local removal.
                 chat_data.write().messages.retain(|message| message.id != mid_delete);
                 msg_context_menu.set(None);
+                // Fire backend delete_message (best-effort; local removal already applied).
+                if !channel_id.is_empty() && !account_id.is_empty() {
+                    let backend_opt = client_manager.read().get_backend(&account_id);
+                    if let Some(backend_arc) = backend_opt {
+                        let cid = channel_id.clone();
+                        let mid = mid_delete.clone();
+                        spawn(async move {
+                            let guard = backend_arc.read().await;
+                            if let Err(e) = guard.delete_message(&cid, &mid).await {
+                                tracing::warn!("delete_message failed: {e}");
+                            }
+                        });
+                    }
+                }
             },
         }
     }

@@ -19,6 +19,7 @@ use poly_test_common::health_handler;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
+
 pub use state::MatrixState;
 
 /// Build the Matrix mock server router wired to the given state.
@@ -49,6 +50,14 @@ pub fn router(state: Arc<MatrixState>) -> Router {
         .route("/_matrix/client/v3/join/{roomIdOrAlias}", post(routes::join_room))
         // Account data
         .route("/_matrix/client/v3/user/{userId}/account_data/{dataType}", get(routes::get_account_data))
+        // Moderation (B-MX)
+        .route("/_matrix/client/v3/rooms/{roomId}/kick", post(routes::kick_member))
+        .route("/_matrix/client/v3/rooms/{roomId}/ban", post(routes::ban_member))
+        .route("/_matrix/client/v3/rooms/{roomId}/unban", post(routes::unban_member))
+        .route("/_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}", put(routes::redact_event))
+        .route("/_matrix/client/v3/rooms/{roomId}/state/m.room.power_levels", get(routes::get_power_levels))
+        .route("/_matrix/client/v3/rooms/{roomId}/state/m.room.name", put(routes::set_room_name))
+        .route("/_matrix/client/v3/rooms/{roomId}/state/m.room.topic", put(routes::set_room_topic))
         // Lifecycle
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))

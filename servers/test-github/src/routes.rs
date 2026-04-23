@@ -346,6 +346,82 @@ pub async fn graphql(
 }
 
 // ---------------------------------------------------------------------------
+// GET /repos/{owner}/{repo} — single repo with permissions
+// ---------------------------------------------------------------------------
+
+pub async fn get_repo(
+    State(state): State<Arc<GitHubState>>,
+    headers: HeaderMap,
+    Path((owner, repo)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = match token_user_id(&state, &headers) {
+        Some(u) => u,
+        None => return auth_error().into_response(),
+    };
+    let full_name = format!("{owner}/{repo}");
+    match state.repos.get(&full_name) {
+        Some(r) => {
+            let perm_key = format!("{user_id}/{full_name}");
+            let perms = state.repo_permissions.get(&perm_key);
+            let permissions = if let Some(p) = perms {
+                json!({
+                    "admin": p.admin,
+                    "maintain": p.maintain,
+                    "push": p.push,
+                    "triage": p.triage,
+                    "pull": p.pull,
+                })
+            } else {
+                // Default: read-only for unknown users
+                json!({ "admin": false, "maintain": false, "push": false, "triage": false, "pull": true })
+            };
+            let mut repo_val = repo_json(r.value());
+            repo_val["permissions"] = permissions;
+            Json(repo_val).into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "message": "Not Found" })),
+        )
+            .into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}
+// ---------------------------------------------------------------------------
+
+pub async fn delete_issue_comment(
+    State(state): State<Arc<GitHubState>>,
+    headers: HeaderMap,
+    Path((owner, repo, comment_id)): Path<(String, String, i64)>,
+) -> impl IntoResponse {
+    if token_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+    let key = format!("{owner}/{repo}/issues/comments/{comment_id}");
+    state.deleted_issue_comments.insert(key);
+    StatusCode::NO_CONTENT.into_response()
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}
+// ---------------------------------------------------------------------------
+
+pub async fn delete_pr_comment(
+    State(state): State<Arc<GitHubState>>,
+    headers: HeaderMap,
+    Path((owner, repo, comment_id)): Path<(String, String, i64)>,
+) -> impl IntoResponse {
+    if token_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+    let key = format!("{owner}/{repo}/pulls/comments/{comment_id}");
+    state.deleted_pr_comments.insert(key);
+    StatusCode::NO_CONTENT.into_response()
+}
+
+// ---------------------------------------------------------------------------
 // POST /test/auth/token — test-only bypass
 // ---------------------------------------------------------------------------
 

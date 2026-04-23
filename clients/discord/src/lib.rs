@@ -944,6 +944,325 @@ impl ClientBackend for DiscordClient {
         Ok(())
     }
 
+    // ── Moderation (B-DS) ─────────────────────────────────────────────────────
+
+    /// B-DS-1: Compute effective permissions for the authenticated user.
+    ///
+    /// Fetches `GET /guilds/{id}/members/@me` to get role IDs, then
+    /// `GET /guilds/{id}/roles` for the permission bitfields. Combines via OR.
+    /// Guild owner gets all flags true regardless of roles.
+    async fn get_my_permissions(
+        &self,
+        server_id: &str,
+        _channel_id: Option<&str>,
+    ) -> ClientResult<MemberPermissions> {
+        use twilight_model::id::marker::RoleMarker;
+        use twilight_model::id::Id as TwilightId;
+
+        // Discord permission bit constants.
+        const KICK_MEMBERS: i64 = 1 << 1;
+        const BAN_MEMBERS: i64 = 1 << 2;
+        const ADMINISTRATOR: i64 = 1 << 3;
+        const MANAGE_CHANNELS: i64 = 1 << 4;
+        const MANAGE_GUILD: i64 = 1 << 5;
+        const MANAGE_MESSAGES: i64 = 1 << 13;
+        const MANAGE_ROLES: i64 = 1 << 28;
+        const MODERATE_MEMBERS: i64 = 1 << 40;
+
+        let member = self.http.get_guild_member_me(server_id).await?;
+        let all_roles = self.http.get_guild_roles(server_id).await?;
+        let guild = self.http.get_guild(server_id).await?;
+
+        // Determine if caller is the guild owner.
+        let caller_id = self.account_id();
+        let is_owner = guild
+            .owner_id
+            .as_deref()
+            .map(|oid| oid == caller_id)
+            .unwrap_or(false);
+
+        if is_owner {
+            return Ok(MemberPermissions {
+                manage_server: true,
+                manage_channels: true,
+                manage_roles: true,
+                kick_members: true,
+                ban_members: true,
+                manage_messages: true,
+                timeout_members: true,
+                display_role: "Owner".to_string(),
+                power_level: None,
+            });
+        }
+
+        // Build a set of the caller's role IDs for fast lookup.
+        let member_role_ids: std::collections::HashSet<TwilightId<RoleMarker>> =
+            member.roles.into_iter().collect();
+
+        // Find @everyone role (same ID as the guild).
+        let everyone_id: u64 = server_id.parse().unwrap_or(0);
+
+        // Combine permission bits: start with @everyone, then OR in member roles.
+        let mut effective: i64 = 0;
+        let mut highest_role_name = "Member".to_string();
+        let mut highest_position = 0u32;
+
+        for role in &all_roles {
+            let role_id_u64 = role.id.get();
+            let is_everyone = role_id_u64 == everyone_id;
+            let is_member_role = member_role_ids.contains(&role.id);
+
+            if is_everyone || is_member_role {
+                let bits: i64 = role.permissions.parse().unwrap_or(0);
+                effective |= bits;
+                if is_member_role && role.position > highest_position {
+                    highest_position = role.position;
+                    highest_role_name = role.name.clone();
+                }
+            }
+        }
+
+        let has = |flag: i64| (effective & ADMINISTRATOR != 0) || (effective & flag != 0);
+
+        Ok(MemberPermissions {
+            manage_server: has(MANAGE_GUILD),
+            manage_channels: has(MANAGE_CHANNELS),
+            manage_roles: has(MANAGE_ROLES),
+            kick_members: has(KICK_MEMBERS),
+            ban_members: has(BAN_MEMBERS),
+            manage_messages: has(MANAGE_MESSAGES),
+            timeout_members: has(MODERATE_MEMBERS),
+            display_role: highest_role_name,
+            power_level: None,
+        })
+    }
+
+    /// B-DS-2: Kick a member from the guild.
+    async fn kick_member(
+        &self,
+        server_id: &str,
+        member_id: &str,
+        reason: Option<&str>,
+    ) -> ClientResult<()> {
+        self.http.kick_member(server_id, member_id, reason).await
+    }
+
+    /// B-DS-3: Permanently ban a member.
+    ///
+    /// Discord bans are always permanent — `timeout_member` handles timed
+    /// suspensions via `communication_disabled_until`.
+    async fn ban_member(
+        &self,
+        server_id: &str,
+        member_id: &str,
+        reason: Option<&str>,
+        delete_message_history_secs: Option<u64>,
+    ) -> ClientResult<()> {
+        self.http
+            .ban_member(server_id, member_id, reason, delete_message_history_secs)
+            .await
+    }
+
+    /// B-DS-4: Unban a member.
+    async fn unban_member(&self, server_id: &str, member_id: &str) -> ClientResult<()> {
+        self.http.unban_member(server_id, member_id).await
+    }
+
+    /// B-DS-5: List current bans.
+    async fn get_bans(&self, server_id: &str) -> ClientResult<Vec<BannedMember>> {
+        let bans = self.http.get_bans(server_id).await?;
+        Ok(bans
+            .into_iter()
+            .map(|b| BannedMember {
+                user_id: b.user.id.to_string(),
+                display_name: b.user.global_name.unwrap_or(b.user.username),
+                avatar_url: None,
+                reason: b.reason,
+                expires_at: None, // Discord bans are permanent
+                banned_at: None,
+            })
+            .collect())
+    }
+
+    /// B-DS (timeout): Temporarily suspend a member via `communication_disabled_until`.
+    async fn timeout_member(
+        &self,
+        server_id: &str,
+        member_id: &str,
+        until: chrono::DateTime<chrono::Utc>,
+        _reason: Option<&str>,
+    ) -> ClientResult<()> {
+        let iso = until.to_rfc3339();
+        self.http
+            .set_member_timeout(server_id, member_id, Some(&iso))
+            .await
+    }
+
+    /// B-DS (untimeout): Clear an active timeout.
+    async fn untimeout_member(&self, server_id: &str, member_id: &str) -> ClientResult<()> {
+        self.http.set_member_timeout(server_id, member_id, None).await
+    }
+
+    /// B-DS-6: Delete a single message.
+    async fn delete_message(&self, channel_id: &str, message_id: &str) -> ClientResult<()> {
+        self.http.delete_message(channel_id, message_id).await
+    }
+
+    /// B-DS-7: Update channel metadata.
+    async fn update_channel(
+        &self,
+        channel_id: &str,
+        update: UpdateChannelParams,
+    ) -> ClientResult<()> {
+        let mut body = serde_json::json!({});
+        if let Some(name) = &update.name {
+            body["name"] = serde_json::json!(name);
+        }
+        if let Some(topic) = &update.topic {
+            body["topic"] = serde_json::json!(topic);
+        }
+        if let Some(slow) = update.slow_mode_secs {
+            body["rate_limit_per_user"] = serde_json::json!(slow);
+        }
+        if let Some(nsfw) = update.nsfw {
+            body["nsfw"] = serde_json::json!(nsfw);
+        }
+        if let Some(pos) = update.position {
+            body["position"] = serde_json::json!(pos);
+        }
+        self.http.patch_channel(channel_id, body).await.map(|_| ())
+    }
+
+    /// B-DS-8: Reorder channels within a guild.
+    async fn reorder_channels(
+        &self,
+        server_id: &str,
+        ordering: Vec<String>,
+    ) -> ClientResult<()> {
+        let payload: Vec<serde_json::Value> = ordering
+            .into_iter()
+            .enumerate()
+            .map(|(pos, id)| serde_json::json!({ "id": id, "position": pos }))
+            .collect();
+        self.http.reorder_channels(server_id, &payload).await
+    }
+
+    /// B-DS-9: Fetch moderation log from Discord audit log.
+    ///
+    /// Maps action types: 20=kick, 22=ban_add, 23=ban_remove, 12=channel_update, 72=msg_delete.
+    async fn get_moderation_log(
+        &self,
+        server_id: &str,
+        limit: usize,
+    ) -> ClientResult<Vec<ModerationLogEntry>> {
+        const MODERATION_ACTION_TYPES: &[u32] = &[20, 22, 23, 12, 72];
+
+        let resp = self.http.get_audit_log(server_id, limit).await?;
+
+        // Build a user lookup map from the embedded users array.
+        let user_map: std::collections::HashMap<String, api::DiscordUser> = resp
+            .users
+            .into_iter()
+            .map(|u| (u.id.to_string(), u))
+            .collect();
+
+        let entries = resp
+            .audit_log_entries
+            .into_iter()
+            .filter(|e| MODERATION_ACTION_TYPES.contains(&e.action_type))
+            .map(|entry| {
+                let action = match entry.action_type {
+                    20 => ModerationAction::MemberKicked,
+                    22 => ModerationAction::MemberBanned,
+                    23 => ModerationAction::MemberUnbanned,
+                    12 => ModerationAction::ChannelUpdated,
+                    72 => ModerationAction::MessageDeleted,
+                    _ => ModerationAction::Other(entry.action_type.to_string()),
+                };
+
+                // Resolve moderator user from the map.
+                let moderator_id = entry
+                    .user_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_default();
+                let moderator = user_map
+                    .get(&moderator_id)
+                    .map(|u| self.discord_user_to_poly(u.clone()))
+                    .unwrap_or_else(|| User {
+                        id: moderator_id.clone(),
+                        display_name: moderator_id.clone(),
+                        avatar_url: None,
+                        presence: PresenceStatus::Offline,
+                        backend: BackendType::from("discord"),
+                    });
+
+                // The audit log entry's snowflake ID encodes the timestamp.
+                // Discord snowflake epoch: 2015-01-01T00:00:00.000Z = 1420070400000ms
+                let entry_id_u64 = entry.id.get();
+                let discord_epoch_ms: u64 = 1_420_070_400_000;
+                let ts_ms = (entry_id_u64 >> 22) + discord_epoch_ms;
+                let timestamp = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
+                    ts_ms as i64,
+                )
+                .map(|dt| dt.to_rfc3339())
+                .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+
+                ModerationLogEntry {
+                    id: entry.id.to_string(),
+                    action,
+                    moderator,
+                    target_user_id: entry.target_id.clone(),
+                    target_display_name: None,
+                    channel_id: None,
+                    message_id: None,
+                    reason: entry.reason,
+                    timestamp,
+                }
+            })
+            .collect();
+
+        Ok(entries)
+    }
+
+    async fn get_server_roles(&self, server_id: &str) -> ClientResult<Vec<Role>> {
+        let discord_roles = self.http.get_guild_roles(server_id).await?;
+
+        let mut roles: Vec<Role> = discord_roles
+            .into_iter()
+            .map(|dr| {
+                let perms_bits: i64 = dr.permissions.parse().unwrap_or(0);
+                // Derive display_role name as the role's own name.
+                let permissions = MemberPermissions {
+                    manage_server: perms_bits & (1 << 5) != 0 || perms_bits & (1 << 3) != 0,
+                    manage_channels: perms_bits & (1 << 4) != 0 || perms_bits & (1 << 3) != 0,
+                    manage_roles: perms_bits & (1 << 28) != 0 || perms_bits & (1 << 3) != 0,
+                    kick_members: perms_bits & (1 << 1) != 0 || perms_bits & (1 << 3) != 0,
+                    ban_members: perms_bits & (1 << 2) != 0 || perms_bits & (1 << 3) != 0,
+                    manage_messages: perms_bits & (1 << 13) != 0 || perms_bits & (1 << 3) != 0,
+                    timeout_members: perms_bits & (1 << 40) != 0 || perms_bits & (1 << 3) != 0,
+                    display_role: dr.name.clone(),
+                    power_level: None,
+                };
+                let color = if dr.color == 0 {
+                    None
+                } else {
+                    Some(format!("#{:06X}", dr.color))
+                };
+                Role {
+                    id: dr.id.to_string(),
+                    name: dr.name,
+                    color,
+                    permissions,
+                    position: dr.position,
+                }
+            })
+            .collect();
+
+        // Sort by position descending (highest rank first).
+        roles.sort_by(|a, b| b.position.cmp(&a.position));
+        Ok(roles)
+    }
+
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         #[cfg(feature = "gateway")]
         {
@@ -971,7 +1290,15 @@ impl ClientBackend for DiscordClient {
     }
 
     fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::FULL_SOCIAL_CHAT
+        BackendCapabilities {
+            has_roles: true,
+            has_kick: true,
+            has_ban: true,
+            has_timed_ban: true,
+            has_channel_mgmt: true,
+            has_moderation_log: true,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        }
     }
 
     // ── WP 1 / F10 — state-aware context menus ──────────────────────────────

@@ -2,6 +2,7 @@
 
 use dashmap::DashMap;
 use poly_test_common::AuthState;
+use std::sync::Arc;
 
 /// All mock Lemmy state: users, communities, posts, tokens.
 #[derive(Clone)]
@@ -12,6 +13,14 @@ pub struct LemmyState {
     pub communities: DashMap<String, Community>,
     /// community_id → Vec<Post>
     pub posts: DashMap<String, Vec<Post>>,
+    /// community_id → Vec<Comment>
+    pub comments: DashMap<String, Vec<Comment>>,
+    /// community_id → Vec<BanEntry>  (ban + unban history in insertion order)
+    pub bans: DashMap<String, Vec<BanEntry>>,
+    /// community_id → Vec<ModlogEntry>
+    pub modlog: DashMap<String, Vec<ModlogEntry>>,
+    /// auto-increment id counter for modlog entries
+    pub modlog_seq: Arc<std::sync::atomic::AtomicI64>,
     /// username → password
     pub passwords: DashMap<String, String>,
 }
@@ -51,6 +60,51 @@ pub struct Post {
     pub comment_count: i32,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Comment {
+    pub id: i64,
+    pub content: String,
+    pub creator_id: i64,
+    pub creator_name: String,
+    pub post_id: i64,
+    pub community_id: i64,
+    pub published: String,
+}
+
+/// A ban or unban record for a community member.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct BanEntry {
+    pub id: i64,
+    pub community_id: i64,
+    pub person_id: i64,
+    pub person_name: String,
+    pub moderator_id: i64,
+    /// `true` = banned, `false` = unbanned.
+    pub banned: bool,
+    pub reason: Option<String>,
+    /// Unix timestamp for expiry (None = permanent).
+    pub expires: Option<i64>,
+    pub when_: String,
+}
+
+/// A generic modlog entry (for non-ban events).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ModlogEntry {
+    pub id: i64,
+    pub community_id: i64,
+    pub moderator_id: i64,
+    pub action: String,
+    pub post_id: Option<i64>,
+    pub post_name: Option<String>,
+    pub comment_id: Option<i64>,
+    pub comment_content: Option<String>,
+    pub commenter_id: Option<i64>,
+    pub commenter_name: Option<String>,
+    pub reason: Option<String>,
+    pub removed: bool,
+    pub when_: String,
+}
+
 impl LemmyState {
     pub fn new() -> Self {
         Self {
@@ -58,6 +112,10 @@ impl LemmyState {
             users: DashMap::new(),
             communities: DashMap::new(),
             posts: DashMap::new(),
+            comments: DashMap::new(),
+            bans: DashMap::new(),
+            modlog: DashMap::new(),
+            modlog_seq: Arc::new(std::sync::atomic::AtomicI64::new(1)),
             passwords: DashMap::new(),
         }
     }
@@ -180,6 +238,25 @@ impl LemmyState {
                 comment_count: 5,
             }],
         );
+
+        // Comments for post 1 (in community 1)
+        self.comments.insert(
+            "1".to_string(),
+            vec![Comment {
+                id: 1,
+                content: "Great post about Rust!".to_string(),
+                creator_id: 2,
+                creator_name: "beaver".to_string(),
+                post_id: 1,
+                community_id: 1,
+                published: "2025-01-01T01:00:00Z".to_string(),
+            }],
+        );
+    }
+
+    /// Allocate the next auto-increment modlog id.
+    pub fn next_modlog_id(&self) -> i64 {
+        self.modlog_seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn reset(&self) {
@@ -187,6 +264,11 @@ impl LemmyState {
         self.users.clear();
         self.communities.clear();
         self.posts.clear();
+        self.comments.clear();
+        self.bans.clear();
+        self.modlog.clear();
+        self.modlog_seq.store(1, std::sync::atomic::Ordering::Relaxed);
+
         self.passwords.clear();
     }
 }

@@ -17,7 +17,10 @@ use twilight_model::channel::ChannelType;
 use twilight_model::id::marker::{ChannelMarker, GuildMarker, UserMarker};
 use twilight_model::id::Id;
 
-use crate::state::{Attachment, Channel, DiscordEvent, DiscordState, ForumTag, Message, ThreadMetadata};
+use crate::state::{
+    AuditLogEntry, Attachment, Ban, Channel, DiscordEvent, DiscordState, ForumTag, Message,
+    Role, ThreadMetadata,
+};
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -563,6 +566,7 @@ pub async fn open_dm(
 
 pub async fn seed(State(state): State<Arc<DiscordState>>) -> impl IntoResponse {
     state.seed();
+    state.seed_moderation();
     Json(serde_json::json!({ "ok": true }))
 }
 
@@ -771,8 +775,431 @@ pub async fn emit_thread_event(
 }
 
 // ---------------------------------------------------------------------------
+// Moderation routes (B-DS)
+// ---------------------------------------------------------------------------
+
+/// `GET /api/v10/guilds/{guild_id}/members/@me` — member object for the caller.
+pub async fn get_guild_member_me(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(guild_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = match auth_user(&state, &headers) {
+        Ok(id) => id,
+        Err(e) => return e.into_response(),
+    };
+    let guild_id_parsed = match guild_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<GuildMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+    };
+    // Get role IDs for this member.
+    let roles = state
+        .member_roles
+        .get(&(guild_id_parsed, user_id))
+        .map(|v| v.clone())
+        .unwrap_or_default();
+    let role_ids: Vec<String> = roles.iter().map(|r| r.to_string()).collect();
+    Json(serde_json::json!({
+        "user": { "id": user_id.to_string() },
+        "roles": role_ids,
+        "communication_disabled_until": null,
+    }))
+    .into_response()
+}
+
+/// `GET /api/v10/guilds/{guild_id}/roles` — list all roles in the guild.
+pub async fn get_guild_roles(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(guild_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let guild_id_parsed = match guild_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<GuildMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+    };
+    let roles = state
+        .guild_roles
+        .get(&guild_id_parsed)
+        .map(|v| v.clone())
+        .unwrap_or_default();
+    let json: Vec<serde_json::Value> = roles.iter().map(role_to_json).collect();
+    Json(json).into_response()
+}
+
+/// `DELETE /api/v10/guilds/{guild_id}/members/{user_id}` — kick a member.
+pub async fn kick_member(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path((guild_id, user_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let moderator_id = match auth_user(&state, &headers) {
+        Ok(id) => id,
+        Err(e) => return e.into_response(),
+    };
+    let guild_id_parsed = match guild_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<GuildMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+    };
+    let target_id_parsed = match user_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<UserMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response(),
+    };
+    // Remove target from guild members list.
+    if let Some(mut guild) = state.guilds.get_mut(&guild_id_parsed) {
+        guild.members.retain(|&m| m != target_id_parsed);
+    }
+    // Log to audit log.
+    let entry_id = state.next_audit_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    state
+        .audit_log
+        .entry(guild_id_parsed)
+        .or_default()
+        .insert(0, AuditLogEntry {
+            id: entry_id,
+            action_type: 20,
+            user_id: Some(moderator_id),
+            target_id: Some(user_id),
+            reason: None,
+        });
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `PUT /api/v10/guilds/{guild_id}/bans/{user_id}` — ban a member.
+pub async fn ban_member(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path((guild_id, user_id)): Path<(String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let moderator_id = match auth_user(&state, &headers) {
+        Ok(id) => id,
+        Err(e) => return e.into_response(),
+    };
+    let guild_id_parsed = match guild_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<GuildMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+    };
+    let target_id_parsed = match user_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<UserMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response(),
+    };
+    let reason = body.get("reason").and_then(|v| v.as_str()).map(str::to_string);
+    // Add to bans list.
+    let mut bans = state.bans.entry(guild_id_parsed).or_default();
+    if !bans.iter().any(|b| b.user_id == target_id_parsed) {
+        bans.push(Ban { user_id: target_id_parsed, reason });
+    }
+    drop(bans);
+    // Remove from guild members.
+    if let Some(mut guild) = state.guilds.get_mut(&guild_id_parsed) {
+        guild.members.retain(|&m| m != target_id_parsed);
+    }
+    // Log.
+    let entry_id = state.next_audit_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    state
+        .audit_log
+        .entry(guild_id_parsed)
+        .or_default()
+        .insert(0, AuditLogEntry {
+            id: entry_id,
+            action_type: 22,
+            user_id: Some(moderator_id),
+            target_id: Some(user_id),
+            reason: None,
+        });
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `DELETE /api/v10/guilds/{guild_id}/bans/{user_id}` — unban a member.
+pub async fn unban_member(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path((guild_id, user_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let moderator_id = match auth_user(&state, &headers) {
+        Ok(id) => id,
+        Err(e) => return e.into_response(),
+    };
+    let guild_id_parsed = match guild_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<GuildMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+    };
+    let target_id_parsed = match user_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<UserMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response(),
+    };
+    if let Some(mut bans) = state.bans.get_mut(&guild_id_parsed) {
+        bans.retain(|b| b.user_id != target_id_parsed);
+    }
+    // Log.
+    let entry_id = state.next_audit_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    state
+        .audit_log
+        .entry(guild_id_parsed)
+        .or_default()
+        .insert(0, AuditLogEntry {
+            id: entry_id,
+            action_type: 23,
+            user_id: Some(moderator_id),
+            target_id: Some(user_id),
+            reason: None,
+        });
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `GET /api/v10/guilds/{guild_id}/bans` — list bans.
+pub async fn get_bans(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(guild_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let guild_id_parsed = match guild_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<GuildMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+    };
+    let bans = state
+        .bans
+        .get(&guild_id_parsed)
+        .map(|v| v.clone())
+        .unwrap_or_default();
+    let json: Vec<serde_json::Value> = bans
+        .iter()
+        .map(|b| {
+            let user = state.users.get(&b.user_id).map(|u| user_to_json(&u)).unwrap_or_else(|| {
+                serde_json::json!({
+                    "id": b.user_id.to_string(),
+                    "username": b.user_id.to_string(),
+                    "discriminator": "0000",
+                })
+            });
+            serde_json::json!({
+                "reason": b.reason,
+                "user": user,
+            })
+        })
+        .collect();
+    Json(json).into_response()
+}
+
+/// `PATCH /api/v10/guilds/{guild_id}/members/{user_id}` — set timeout.
+pub async fn patch_guild_member(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path((guild_id, user_id)): Path<(String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    // For the test server we just acknowledge the request.
+    // A real implementation would store the timeout on the member record.
+    let _ = (guild_id, user_id, body, state);
+    StatusCode::OK.into_response()
+}
+
+/// `DELETE /api/v10/channels/{channel_id}/messages/{message_id}` — delete a message.
+pub async fn delete_message(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path((channel_id, message_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let ch_id = match channel_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<ChannelMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => {
+            return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel").into_response()
+        }
+    };
+    let msg_id = match message_id
+        .parse::<u64>()
+        .ok()
+        .and_then(twilight_model::id::Id::<twilight_model::id::marker::MessageMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => {
+            return discord_error(StatusCode::NOT_FOUND, 10008, "Unknown Message").into_response()
+        }
+    };
+    if let Some(mut msgs) = state.messages.get_mut(&ch_id) {
+        msgs.retain(|m| m.id != msg_id);
+    }
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `PATCH /api/v10/channels/{channel_id}` — update channel metadata.
+pub async fn patch_channel(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let ch_id = match channel_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<ChannelMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => {
+            return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel").into_response()
+        }
+    };
+    let mut ch = match state.channels.get_mut(&ch_id) {
+        Some(c) => c,
+        None => {
+            return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel").into_response()
+        }
+    };
+    if let Some(name) = body.get("name").and_then(|v| v.as_str()) {
+        ch.name = name.to_string();
+    }
+    let result = channel_to_json(&ch);
+    drop(ch);
+    Json(result).into_response()
+}
+
+/// `PATCH /api/v10/guilds/{guild_id}/channels` — reorder channels.
+pub async fn reorder_guild_channels(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(guild_id): Path<String>,
+    Json(body): Json<Vec<serde_json::Value>>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let _ = (guild_id, body, state);
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `GET /api/v10/guilds/{guild_id}/audit-logs` — moderation log.
+pub async fn get_audit_log(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(guild_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let guild_id_parsed = match guild_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<GuildMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => return discord_error(StatusCode::NOT_FOUND, 10004, "Unknown Guild").into_response(),
+    };
+    let entries = state
+        .audit_log
+        .get(&guild_id_parsed)
+        .map(|v| v.clone())
+        .unwrap_or_default();
+
+    // Collect unique user IDs from entries to embed in the response.
+    let mut seen_users: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    for e in &entries {
+        if let Some(uid) = e.user_id {
+            seen_users.insert(uid.get());
+        }
+    }
+    let users: Vec<serde_json::Value> = seen_users
+        .iter()
+        .filter_map(|&uid| {
+            let id = Id::<UserMarker>::new_checked(uid)?;
+            state.users.get(&id).map(|u| user_to_json(&u))
+        })
+        .collect();
+
+    let audit_log_entries: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "id": e.id.to_string(),
+                "action_type": e.action_type,
+                "user_id": e.user_id.map(|id| id.to_string()),
+                "target_id": e.target_id,
+                "reason": e.reason,
+            })
+        })
+        .collect();
+
+    Json(serde_json::json!({
+        "audit_log_entries": audit_log_entries,
+        "users": users,
+    }))
+    .into_response()
+}
+
+// ---------------------------------------------------------------------------
 // JSON serializers
 // ---------------------------------------------------------------------------
+
+fn role_to_json(r: &Role) -> serde_json::Value {
+    serde_json::json!({
+        "id": r.id.to_string(),
+        "name": r.name,
+        "permissions": r.permissions,
+        "position": r.position,
+        "color": r.color,
+    })
+}
 
 fn user_to_json(u: &crate::state::User) -> serde_json::Value {
     serde_json::json!({

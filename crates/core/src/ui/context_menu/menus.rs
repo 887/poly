@@ -17,7 +17,7 @@
 use super::host::register_menu;
 use super::ContextMenuFor;
 use crate::i18n::t;
-use crate::state::{ActiveContextMenu, AppState, MenuAnchor};
+use crate::state::{ActiveContextMenu, AppState, MenuAnchor, ModerationDialog};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
@@ -125,7 +125,7 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
     let Ok(ctx) = serde_json::from_value::<UserRowCtx>(ctx_json.clone()) else {
         return rsx! {};
     };
-    let app_state: Signal<AppState> = use_context();
+    let mut app_state: Signal<AppState> = use_context();
     let user_for_profile = ctx.user.clone();
     let copy_id = ctx.user.id.clone();
     let display_name = ctx.user.display_name.clone();
@@ -147,10 +147,16 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
 
     let server_id_kick = ctx.server_id.clone();
     let member_id_kick = ctx.user.id.clone();
+    let member_name_kick = ctx.user.display_name.clone();
+    let account_id_kick = ctx.account_id.clone();
     let server_id_ban = ctx.server_id.clone();
     let member_id_ban = ctx.user.id.clone();
+    let member_name_ban = ctx.user.display_name.clone();
+    let account_id_ban = ctx.account_id.clone();
     let server_id_timeout = ctx.server_id.clone();
     let member_id_timeout = ctx.user.id.clone();
+    let member_name_timeout = ctx.user.display_name.clone();
+    let account_id_timeout = ctx.account_id.clone();
 
     rsx! {
         div { class: "context-menu-items",
@@ -182,9 +188,15 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                     onclick: {
                         let server_id = server_id_kick.clone();
                         let member_id = member_id_kick.clone();
+                        let member_name = member_name_kick.clone();
+                        let account_id = account_id_kick.clone();
                         move |_| {
-                            // Wave 2/3: open KickMemberDialog. For now log and close.
-                            tracing::debug!("Kick {member_id} from {server_id} (stub — Wave 2 will open dialog)");
+                            app_state.write().active_moderation_dialog = Some(ModerationDialog::Kick {
+                                server_id: server_id.clone(),
+                                member_id: member_id.clone(),
+                                member_name: member_name.clone(),
+                                account_id: account_id.clone(),
+                            });
                             close.call(());
                         }
                     },
@@ -197,8 +209,15 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                     onclick: {
                         let server_id = server_id_ban.clone();
                         let member_id = member_id_ban.clone();
+                        let member_name = member_name_ban.clone();
+                        let account_id = account_id_ban.clone();
                         move |_| {
-                            tracing::debug!("Ban {member_id} from {server_id} (stub — Wave 2 will open dialog)");
+                            app_state.write().active_moderation_dialog = Some(ModerationDialog::Ban {
+                                server_id: server_id.clone(),
+                                member_id: member_id.clone(),
+                                member_name: member_name.clone(),
+                                account_id: account_id.clone(),
+                            });
                             close.call(());
                         }
                     },
@@ -211,8 +230,15 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                     onclick: {
                         let server_id = server_id_timeout.clone();
                         let member_id = member_id_timeout.clone();
+                        let member_name = member_name_timeout.clone();
+                        let account_id = account_id_timeout.clone();
                         move |_| {
-                            tracing::debug!("Timeout {member_id} in {server_id} (stub — Wave 2 will open dialog)");
+                            app_state.write().active_moderation_dialog = Some(ModerationDialog::Timeout {
+                                server_id: server_id.clone(),
+                                member_id: member_id.clone(),
+                                member_name: member_name.clone(),
+                                account_id: account_id.clone(),
+                            });
                             close.call(());
                         }
                     },

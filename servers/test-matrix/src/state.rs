@@ -35,6 +35,14 @@ pub struct MatrixState {
     pub events: EventBus<MatrixEvent>,
     /// Global event counter for sync tokens and event IDs.
     event_counter: std::sync::Arc<AtomicU64>,
+    /// room_id → power_levels content (m.room.power_levels state event body).
+    ///
+    /// Absent = use Matrix spec defaults (ban/kick/redact/state_default = 50,
+    /// events_default = 0, users_default = 0).
+    pub power_levels: DashMap<String, serde_json::Value>,
+    /// room_id → Vec<banned user_ids>  (tracked separately from state_events for
+    /// easy membership=ban filter in the /members?membership=ban route).
+    pub banned_members: DashMap<String, Vec<BannedEntry>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -44,6 +52,13 @@ pub struct UserProfile {
     pub avatar_url: Option<String>,
     pub password: String,
     pub device_id: String,
+}
+
+/// A banned member record.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct BannedEntry {
+    pub user_id: String,
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -75,6 +90,8 @@ impl MatrixState {
             account_data: DashMap::new(),
             events: EventBus::new(),
             event_counter: std::sync::Arc::new(AtomicU64::new(1)),
+            power_levels: DashMap::new(),
+            banned_members: DashMap::new(),
         }
     }
 
@@ -133,6 +150,23 @@ impl MatrixState {
         self.create_room(&random1_id, "random", Some("Off-topic chat"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
         self.create_room(&announce1_id, "announcements", Some("Important updates"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
 
+        // Power levels for Space 1: Owl is admin (100), Axolotl is moderator (50).
+        self.power_levels.insert(
+            space1_id.clone(),
+            serde_json::json!({
+                "ban": 50,
+                "kick": 50,
+                "redact": 50,
+                "state_default": 50,
+                "events_default": 0,
+                "users_default": 0,
+                "users": {
+                    "@owl:localhost": 100,
+                    "@axolotl:localhost": 50,
+                }
+            }),
+        );
+
         // Add avatar to Space 1
         if let Some(mut room) = self.rooms.get_mut(&space1_id) {
             room.state_events.push(serde_json::json!({
@@ -154,6 +188,23 @@ impl MatrixState {
         self.create_room(&gen2_id, "general", Some("Main chat"), false, Some(&space2_id), &[&owl_id, &axolotl_id]);
         self.create_room(&memes_id, "memes", Some("Funny stuff"), false, Some(&space2_id), &[&owl_id, &axolotl_id]);
         self.create_room(&music_id, "music", Some("Share tunes"), false, Some(&space2_id), &[&owl_id, &axolotl_id]);
+
+        // Power levels for Space 2: Axolotl is admin (100), Owl is moderator (50).
+        self.power_levels.insert(
+            space2_id.clone(),
+            serde_json::json!({
+                "ban": 50,
+                "kick": 50,
+                "redact": 50,
+                "state_default": 50,
+                "events_default": 0,
+                "users_default": 0,
+                "users": {
+                    "@axolotl:localhost": 100,
+                    "@owl:localhost": 50,
+                }
+            }),
+        );
 
         // Add avatar to Space 2
         if let Some(mut room) = self.rooms.get_mut(&space2_id) {
@@ -208,6 +259,8 @@ impl MatrixState {
         self.rooms.clear();
         self.timelines.clear();
         self.account_data.clear();
+        self.power_levels.clear();
+        self.banned_members.clear();
         tracing::info!("reset Matrix state to empty");
     }
 

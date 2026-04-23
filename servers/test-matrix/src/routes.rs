@@ -198,13 +198,49 @@ pub async fn room_state(
 }
 
 /// GET /_matrix/client/v3/rooms/:room_id/members
+/// Supports optional `?membership=<value>` filter.
 pub async fn room_members(
     State(state): State<std::sync::Arc<MatrixState>>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
+    Query(params): Query<RoomMembersQuery>,
 ) -> impl IntoResponse {
     if bearer_user(&state, &headers).is_err() {
         return matrix_error(StatusCode::UNAUTHORIZED, "M_UNKNOWN_TOKEN", "Invalid token").into_response();
+    }
+
+    let membership_filter = params.membership.as_deref();
+
+    // When membership=ban, return banned_members table as m.room.member events.
+    if membership_filter == Some("ban") {
+        let banned = state
+            .banned_members
+            .get(&room_id)
+            .map(|b| b.clone())
+            .unwrap_or_default();
+
+        let chunk: Vec<serde_json::Value> = banned
+            .iter()
+            .map(|entry| {
+                let displayname = state
+                    .users
+                    .get(&entry.user_id)
+                    .map(|u| u.displayname.clone());
+                serde_json::json!({
+                    "type": "m.room.member",
+                    "state_key": entry.user_id,
+                    "sender": "@server:localhost",
+                    "event_id": format!("$ban-{}", entry.user_id),
+                    "content": {
+                        "membership": "ban",
+                        "displayname": displayname,
+                        "reason": entry.reason,
+                    },
+                })
+            })
+            .collect();
+
+        return Json(serde_json::json!({ "chunk": chunk })).into_response();
     }
 
     let room = match state.rooms.get(&room_id) {
@@ -216,10 +252,25 @@ pub async fn room_members(
         .state_events
         .iter()
         .filter(|ev| ev.get("type").and_then(|t| t.as_str()) == Some("m.room.member"))
+        .filter(|ev| {
+            if let Some(filter) = membership_filter {
+                ev.get("content")
+                    .and_then(|c| c.get("membership"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some(filter)
+            } else {
+                true
+            }
+        })
         .cloned()
         .collect();
 
     Json(serde_json::json!({ "chunk": member_events })).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct RoomMembersQuery {
+    pub membership: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -635,6 +686,293 @@ pub async fn join_room(
     }
 
     Json(serde_json::json!({ "room_id": room_id })).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Moderation (B-MX)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct KickBanRequest {
+    pub user_id: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct UnbanRequest {
+    pub user_id: String,
+}
+
+/// POST /_matrix/client/v3/rooms/:room_id/kick
+pub async fn kick_member(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    headers: HeaderMap,
+    Path(room_id): Path<String>,
+    Json(body): Json<KickBanRequest>,
+) -> impl IntoResponse {
+    let actor = match bearer_user(&state, &headers) {
+        Ok(uid) => uid,
+        Err(e) => return e.into_response(),
+    };
+
+    let mut room = match state.rooms.get_mut(&room_id) {
+        Some(r) => r,
+        None => return matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "Room not found").into_response(),
+    };
+
+    if !room.members.contains(&actor) {
+        return matrix_error(StatusCode::FORBIDDEN, "M_FORBIDDEN", "Not a member of this room").into_response();
+    }
+
+    room.members.retain(|m| *m != body.user_id);
+
+    // Update existing m.room.member state event in-place (state events are keyed by
+    // state_key; in-place update ensures /members returns a single authoritative event).
+    let event_id = state.next_event_id();
+    let mut found = false;
+    for ev in room.state_events.iter_mut() {
+        if ev.get("type").and_then(serde_json::Value::as_str) == Some("m.room.member")
+            && ev.get("state_key").and_then(serde_json::Value::as_str)
+                == Some(body.user_id.as_str())
+        {
+            if let Some(obj) = ev.as_object_mut() {
+                obj.insert(
+                    "content".to_string(),
+                    serde_json::json!({ "membership": "leave", "reason": body.reason }),
+                );
+                obj.insert("event_id".to_string(), serde_json::json!(&event_id));
+            }
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        room.state_events.push(serde_json::json!({
+            "type": "m.room.member",
+            "state_key": body.user_id,
+            "content": { "membership": "leave", "reason": body.reason },
+            "sender": actor,
+            "event_id": event_id,
+        }));
+    }
+
+    Json(serde_json::json!({})).into_response()
+}
+
+/// POST /_matrix/client/v3/rooms/:room_id/ban
+pub async fn ban_member(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    headers: HeaderMap,
+    Path(room_id): Path<String>,
+    Json(body): Json<KickBanRequest>,
+) -> impl IntoResponse {
+    let actor = match bearer_user(&state, &headers) {
+        Ok(uid) => uid,
+        Err(e) => return e.into_response(),
+    };
+
+    {
+        let mut room = match state.rooms.get_mut(&room_id) {
+            Some(r) => r,
+            None => return matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "Room not found").into_response(),
+        };
+
+        if !room.members.contains(&actor) {
+            return matrix_error(StatusCode::FORBIDDEN, "M_FORBIDDEN", "Not a member of this room").into_response();
+        }
+
+        // Remove from active members.
+        room.members.retain(|m| *m != body.user_id);
+
+        let event_id = state.next_event_id();
+        room.state_events.push(serde_json::json!({
+            "type": "m.room.member",
+            "state_key": body.user_id,
+            "content": { "membership": "ban", "reason": body.reason },
+            "sender": actor,
+            "event_id": event_id,
+        }));
+    }
+
+    // Store in banned_members for the membership=ban filter.
+    state
+        .banned_members
+        .entry(room_id)
+        .or_default()
+        .push(crate::state::BannedEntry {
+            user_id: body.user_id,
+            reason: body.reason,
+        });
+
+    Json(serde_json::json!({})).into_response()
+}
+
+/// POST /_matrix/client/v3/rooms/:room_id/unban
+pub async fn unban_member(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    headers: HeaderMap,
+    Path(room_id): Path<String>,
+    Json(body): Json<UnbanRequest>,
+) -> impl IntoResponse {
+    if bearer_user(&state, &headers).is_err() {
+        return matrix_error(StatusCode::UNAUTHORIZED, "M_UNKNOWN_TOKEN", "Invalid token").into_response();
+    }
+
+    // Remove from banned_members list.
+    if let Some(mut banned) = state.banned_members.get_mut(&room_id) {
+        banned.retain(|b| b.user_id != body.user_id);
+    }
+
+    // Update room state membership to leave.
+    if let Some(mut room) = state.rooms.get_mut(&room_id) {
+        let event_id = state.next_event_id();
+        room.state_events.push(serde_json::json!({
+            "type": "m.room.member",
+            "state_key": body.user_id,
+            "content": { "membership": "leave" },
+            "sender": "@server:localhost",
+            "event_id": event_id,
+        }));
+    }
+
+    Json(serde_json::json!({})).into_response()
+}
+
+/// PUT /_matrix/client/v3/rooms/:room_id/redact/:event_id/:txn_id
+pub async fn redact_event(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    headers: HeaderMap,
+    Path((room_id, event_id, _txn_id)): Path<(String, String, String)>,
+    Json(_body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    if bearer_user(&state, &headers).is_err() {
+        return matrix_error(StatusCode::UNAUTHORIZED, "M_UNKNOWN_TOKEN", "Invalid token").into_response();
+    }
+
+    // Mark the event as redacted in the timeline.
+    if let Some(mut timeline) = state.timelines.get_mut(&room_id) {
+        for ev in timeline.iter_mut() {
+            if ev.get("event_id").and_then(serde_json::Value::as_str) == Some(&event_id) {
+                if let Some(obj) = ev.as_object_mut() {
+                    obj.insert("redacted".to_string(), serde_json::json!(true));
+                    obj.insert("content".to_string(), serde_json::json!({}));
+                }
+            }
+        }
+    }
+
+    let redaction_id = state.next_event_id();
+    Json(serde_json::json!({ "event_id": redaction_id })).into_response()
+}
+
+/// GET /_matrix/client/v3/rooms/:room_id/state/m.room.power_levels
+pub async fn get_power_levels(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    headers: HeaderMap,
+    Path(room_id): Path<String>,
+) -> impl IntoResponse {
+    if bearer_user(&state, &headers).is_err() {
+        return matrix_error(StatusCode::UNAUTHORIZED, "M_UNKNOWN_TOKEN", "Invalid token").into_response();
+    }
+
+    if !state.rooms.contains_key(&room_id) {
+        return matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "Room not found").into_response();
+    }
+
+    match state.power_levels.get(&room_id) {
+        Some(pl) => Json(pl.clone()).into_response(),
+        // No explicit power_levels event → return 404 so the client uses spec defaults.
+        None => matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "No power_levels state event").into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RoomNameBody {
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct RoomTopicBody {
+    pub topic: String,
+}
+
+/// PUT /_matrix/client/v3/rooms/:room_id/state/m.room.name
+pub async fn set_room_name(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    headers: HeaderMap,
+    Path(room_id): Path<String>,
+    Json(body): Json<RoomNameBody>,
+) -> impl IntoResponse {
+    if bearer_user(&state, &headers).is_err() {
+        return matrix_error(StatusCode::UNAUTHORIZED, "M_UNKNOWN_TOKEN", "Invalid token").into_response();
+    }
+
+    let mut room = match state.rooms.get_mut(&room_id) {
+        Some(r) => r,
+        None => return matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "Room not found").into_response(),
+    };
+
+    room.name = body.name.clone();
+
+    // Update the m.room.name state event.
+    for ev in room.state_events.iter_mut() {
+        if ev.get("type").and_then(serde_json::Value::as_str) == Some("m.room.name") {
+            if let Some(content) = ev.get_mut("content").and_then(|c| c.as_object_mut()) {
+                content.insert("name".to_string(), serde_json::json!(body.name));
+            }
+            let event_id = state.next_event_id();
+            return Json(serde_json::json!({ "event_id": event_id })).into_response();
+        }
+    }
+
+    // No existing event — push new one.
+    let event_id = state.next_event_id();
+    room.state_events.push(serde_json::json!({
+        "type": "m.room.name",
+        "state_key": "",
+        "content": { "name": body.name },
+        "event_id": event_id,
+    }));
+    Json(serde_json::json!({ "event_id": event_id })).into_response()
+}
+
+/// PUT /_matrix/client/v3/rooms/:room_id/state/m.room.topic
+pub async fn set_room_topic(
+    State(state): State<std::sync::Arc<MatrixState>>,
+    headers: HeaderMap,
+    Path(room_id): Path<String>,
+    Json(body): Json<RoomTopicBody>,
+) -> impl IntoResponse {
+    if bearer_user(&state, &headers).is_err() {
+        return matrix_error(StatusCode::UNAUTHORIZED, "M_UNKNOWN_TOKEN", "Invalid token").into_response();
+    }
+
+    let mut room = match state.rooms.get_mut(&room_id) {
+        Some(r) => r,
+        None => return matrix_error(StatusCode::NOT_FOUND, "M_NOT_FOUND", "Room not found").into_response(),
+    };
+
+    room.topic = Some(body.topic.clone());
+
+    // Update the m.room.topic state event if present.
+    for ev in room.state_events.iter_mut() {
+        if ev.get("type").and_then(serde_json::Value::as_str) == Some("m.room.topic") {
+            if let Some(content) = ev.get_mut("content").and_then(|c| c.as_object_mut()) {
+                content.insert("topic".to_string(), serde_json::json!(body.topic));
+            }
+            let event_id = state.next_event_id();
+            return Json(serde_json::json!({ "event_id": event_id })).into_response();
+        }
+    }
+
+    let event_id = state.next_event_id();
+    room.state_events.push(serde_json::json!({
+        "type": "m.room.topic",
+        "state_key": "",
+        "content": { "topic": body.topic },
+        "event_id": event_id,
+    }));
+    Json(serde_json::json!({ "event_id": event_id })).into_response()
 }
 
 // ---------------------------------------------------------------------------
