@@ -394,9 +394,6 @@ fn AccountServerIcon(
 
 /// Renders the visual content of a server icon: image (or letter fallback) plus notification badges.
 ///
-/// When there is no icon URL, shows a colored letter-circle AND a short truncated
-/// name label below it so the server is identifiable without hovering for the tooltip.
-///
 /// Shows a red `@{mention}` badge for direct @mentions, and a small unread dot
 /// when there are unread messages but no direct mentions.
 #[rustfmt::skip]
