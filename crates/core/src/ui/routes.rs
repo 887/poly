@@ -2130,6 +2130,32 @@ fn CreateServerRoute(backend: String, instance_id: String, account_id: String) -
     // render an unsupported-feature placeholder instead of redirecting —
     // redirect chains from use_effect caused main-thread deadlocks.
     if !poly_client::slug_supports_creating_server(&backend) {
+        // F-LE-2: Lemmy gets a "Browse Communities" CTA that opens the instance
+        // communities page in a new tab — more useful than a generic error.
+        if backend == "lemmy" {
+            let communities_url = format!("https://{instance_id}/communities");
+            return rsx! {
+                div {
+                    class: "special-page-content feature-unsupported",
+                    "data-testid": "lemmy-browse-communities",
+                    div { class: "feature-unsupported-inner",
+                        p { class: "feature-unsupported-message",
+                            "Browse and subscribe to communities on your Lemmy instance."
+                        }
+                        p { class: "feature-unsupported-hint",
+                            "Subscribed communities will appear in the sidebar after you subscribe."
+                        }
+                        a {
+                            class: "feature-unsupported-cta-link",
+                            href: "{communities_url}",
+                            target: "_blank",
+                            rel: "noopener noreferrer",
+                            "Browse Communities →"
+                        }
+                    }
+                }
+            };
+        }
         return rsx! {
             FeatureUnsupportedPlaceholder {
                 backend_slug: backend.clone(),
