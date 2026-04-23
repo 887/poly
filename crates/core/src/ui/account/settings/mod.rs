@@ -386,12 +386,12 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                         div {
                             id: "acct-section-notifications",
                             class: if sf.is_empty() || acct_section_has_match("notifications", &sf) { "settings-section-block" } else { "settings-section-block settings-section-hidden" },
-                            NotificationsSettings { account_id: account_id.clone() }
+                            NotificationsSettings { account_id: account_id.clone(), backend: backend.clone() }
                         }
                         div {
                             id: "acct-section-content-social",
                             class: if sf.is_empty() || acct_section_has_match("content-social", &sf) { "settings-section-block" } else { "settings-section-block settings-section-hidden" },
-                            ContentSocialSettings { _account_id: account_id.clone() }
+                            ContentSocialSettings { _account_id: account_id.clone(), backend: backend.clone() }
                         }
                     }
                 }

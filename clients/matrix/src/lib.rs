@@ -63,6 +63,24 @@ pub fn plugin_translations(locale: &str) -> String {
     }
 }
 
+/// Convert a Matrix `mxc://` URI to an HTTP thumbnail URL.
+///
+/// Matrix room/user avatars are always stored as `mxc://{server}/{media_id}`.
+/// Browsers cannot load these directly — they require a Matrix media API call.
+/// This function maps the MXC URI to:
+/// `{homeserver_url}/_matrix/media/v3/thumbnail/{server}/{media_id}?width=64&height=64&method=scale`
+///
+/// If `mxc_uri` does not start with `mxc://` (e.g. a plain HTTP URL in test data),
+/// it is returned unchanged so the test suite works without a media endpoint.
+#[cfg(feature = "native")]
+pub(crate) fn mxc_to_http_thumbnail(mxc_uri: &str, homeserver_url: &str) -> String {
+    let Some(rest) = mxc_uri.strip_prefix("mxc://") else {
+        return mxc_uri.to_string();
+    };
+    let base = homeserver_url.trim_end_matches('/');
+    format!("{base}/_matrix/media/v3/thumbnail/{rest}?width=64&height=64&method=scale")
+}
+
 /// Matrix messenger client.
 #[cfg(feature = "native")]
 pub struct MatrixClient {
@@ -136,12 +154,16 @@ impl MatrixClient {
             .clone()
             .unwrap_or_else(|| session_state.user_id.clone());
 
+        let avatar_url = profile
+            .avatar_url
+            .as_deref()
+            .map(|url| mxc_to_http_thumbnail(url, self.homeserver_url()));
         Session {
             id: session_state.device_id.clone(),
             user: User {
                 id: session_state.user_id.clone(),
                 display_name,
-                avatar_url: profile.avatar_url.clone(),
+                avatar_url,
                 presence: PresenceStatus::Online,
                 backend: BackendType::from("matrix"),
             },
@@ -215,13 +237,21 @@ impl MatrixClient {
             .to_string()
     }
 
-    fn extract_avatar_url(state: &[api::RoomEvent]) -> Option<String> {
-        state
+    /// Extract and resolve the room avatar URL from state events.
+    ///
+    /// The `m.room.avatar` content `url` field is always an `mxc://` URI per
+    /// the Matrix spec.  Browsers cannot load `mxc://` directly, so we convert
+    /// it to an HTTP thumbnail URL via `mxc_to_http_thumbnail`.
+    ///
+    /// Non-`mxc://` values (e.g. direct HTTP URLs in test data) are returned
+    /// as-is so the test suite works without a media endpoint.
+    fn extract_avatar_url(state: &[api::RoomEvent], homeserver_url: &str) -> Option<String> {
+        let raw = state
             .iter()
             .find(|ev| ev.event_type == "m.room.avatar")
             .and_then(|ev| ev.content.get("url"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string)
+            .and_then(serde_json::Value::as_str)?;
+        Some(mxc_to_http_thumbnail(raw, homeserver_url))
     }
 
     fn is_space_room(state: &[api::RoomEvent]) -> bool {
@@ -536,13 +566,14 @@ impl ClientBackend for MatrixClient {
         let display_name = self.current_user_id().unwrap_or_else(|_| account_id.clone());
         let mut servers = Vec::new();
 
+        let homeserver_url = self.homeserver_url().to_string();
         for room_id in &joined.joined_rooms {
             let state = self.http.fetch_room_state(room_id).await.unwrap_or_default();
             if Self::is_space_room(&state) {
                 servers.push(Server {
                     id: room_id.clone(),
                     name: Self::extract_room_name(&state, "Unnamed Space"),
-                    icon_url: Self::extract_avatar_url(&state),
+                    icon_url: Self::extract_avatar_url(&state, &homeserver_url),
                     banner_url: None,
                     unread_count: 0,
                     mention_count: 0,
@@ -562,11 +593,12 @@ impl ClientBackend for MatrixClient {
         let state = self.http.fetch_room_state(id).await?;
         let account_id = self.current_account_id()?;
         let display_name = self.current_user_id().unwrap_or_else(|_| account_id.clone());
+        let homeserver_url = self.homeserver_url().to_string();
 
         Ok(Server {
             id: id.to_string(),
             name: Self::extract_room_name(&state, "Unnamed Space"),
-            icon_url: Self::extract_avatar_url(&state),
+            icon_url: Self::extract_avatar_url(&state, &homeserver_url),
             banner_url: None,
             unread_count: 0,
             mention_count: 0,
@@ -734,10 +766,14 @@ impl ClientBackend for MatrixClient {
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
         let profile = self.http.fetch_profile(id).await?;
+        let avatar_url = profile
+            .avatar_url
+            .as_deref()
+            .map(|url| mxc_to_http_thumbnail(url, self.homeserver_url()));
         Ok(User {
             id: id.to_string(),
             display_name: profile.displayname.unwrap_or_else(|| id.to_string()),
-            avatar_url: profile.avatar_url,
+            avatar_url,
             presence: PresenceStatus::Offline,
             backend: BackendType::from("matrix"),
         })

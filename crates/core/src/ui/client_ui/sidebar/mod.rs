@@ -68,6 +68,14 @@ pub fn ClientSidebar() -> Element {
             // P28 — subscribe to sidebar_invalidated_tick so plugin-emitted
             // `ClientEvent::SidebarInvalidated` events force a refetch.
             let _tick = app_state.read().sidebar_invalidated_tick;
+            // E6 — subscribe to client_manager so the resource re-runs when a
+            // backend is committed after first account activation (Discord and
+            // other native backends may be committed after the route sets
+            // `active_account_id`, causing a transient NotFound error). The
+            // reactive subscription here means that when `commit_backend_account`
+            // writes to `client_manager`, this resource re-runs and finds the
+            // backend on the second attempt.
+            let _ = client_manager.read();
             let account_id = account_id.clone();
             async move {
                 let Some(account_id) = account_id else {

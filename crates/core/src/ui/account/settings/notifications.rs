@@ -18,6 +18,7 @@
 use crate::i18n::t;
 use crate::storage::AccountNotificationSettings;
 use dioxus::prelude::*;
+use poly_client::capabilities_for_slug;
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Typed actions for the per-account notification settings panel.
@@ -95,12 +96,15 @@ fn load_account_notif_settings(account_id: String, mut signals: NotifSignals) {
 
 /// Notification settings panel for a single account.
 ///
+/// `backend` is the backend slug (e.g. `"discord"`, `"lemmy"`) used to gate
+/// toggles that only apply to certain backends (voice, friends, etc.).
+///
 /// Loads saved settings on mount and persists any toggle change immediately.
 /// Rendered by [`crate::ui::account::settings::AccountSettingsPage`].
 #[ui_action(NotificationsSettingsAction)]
 #[context_menu(none)]
 #[component]
-pub fn NotificationsSettings(account_id: String) -> Element {
+pub fn NotificationsSettings(account_id: String, backend: String) -> Element {
     let notif_streams = use_signal(|| true);
     let notif_friends_voice = use_signal(|| true);
     let notif_reactions = use_signal(|| true);
@@ -118,6 +122,7 @@ pub fn NotificationsSettings(account_id: String) -> Element {
         badge_unread,
     };
     let account_id_for_load = account_id.clone();
+    let caps = capabilities_for_slug(&backend);
 
     let _load = use_future(move || {
         let aid = account_id_for_load.clone();
@@ -127,7 +132,7 @@ pub fn NotificationsSettings(account_id: String) -> Element {
     });
 
     rsx! {
-        AccountNotifSignalsSection { account_id, signals }
+        AccountNotifSignalsSection { account_id, signals, caps }
     }
 }
 
@@ -135,7 +140,7 @@ pub fn NotificationsSettings(account_id: String) -> Element {
 #[ui_action(inherit)]
 #[context_menu(none)]
 #[component]
-fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Element {
+fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals, caps: poly_client::BackendCapabilities) -> Element {
     let make_settings = move || current_notif_settings(signals);
 
     rsx! {
@@ -148,6 +153,8 @@ fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Elem
             sound_dm: *signals.sound_dm.read(),
             sound_ring: *signals.sound_ring.read(),
             badge_unread: *signals.badge_unread.read(),
+            show_friends_voice: caps.should_show_voice() && caps.should_show_friends(),
+            show_ring_sound: caps.should_show_voice(),
             on_streams: {
                 let aid = account_id.clone();
                 move |v: bool| {
@@ -203,6 +210,9 @@ fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals) -> Elem
 
 /// Inner presentation component for an account's notification toggles.
 ///
+/// `show_friends_voice` gates the "Friends join voice channels" toggle.
+/// `show_ring_sound` gates the "Incoming Ring" sound toggle.
+///
 /// Split out so `NotificationsSettings` stays under the 150-line limit.
 #[ui_action(inherit)]
 #[context_menu(none)]
@@ -216,6 +226,10 @@ fn AccountNotifSectionInner(
     sound_dm: bool,
     sound_ring: bool,
     badge_unread: bool,
+    /// Show the "Friends join voice channels" toggle (needs voice + friends).
+    show_friends_voice: bool,
+    /// Show the "Incoming Ring" sound toggle (needs voice).
+    show_ring_sound: bool,
     on_streams: EventHandler<bool>,
     on_friends_voice: EventHandler<bool>,
     on_reactions: EventHandler<bool>,
@@ -235,10 +249,12 @@ fn AccountNotifSectionInner(
                     checked: notif_streams,
                     on_toggle: move |v| on_streams.call(v),
                 }
-                NotifToggleRow {
-                    label: t("notif-friends-voice"),
-                    checked: notif_friends_voice,
-                    on_toggle: move |v| on_friends_voice.call(v),
+                if show_friends_voice {
+                    NotifToggleRow {
+                        label: t("notif-friends-voice"),
+                        checked: notif_friends_voice,
+                        on_toggle: move |v| on_friends_voice.call(v),
+                    }
                 }
                 NotifToggleRow {
                     label: t("notif-reactions"),
@@ -256,10 +272,12 @@ fn AccountNotifSectionInner(
                     checked: sound_dm,
                     on_toggle: move |v| on_sound_dm.call(v),
                 }
-                NotifToggleRow {
-                    label: t("notif-sounds-ring"),
-                    checked: sound_ring,
-                    on_toggle: move |v| on_sound_ring.call(v),
+                if show_ring_sound {
+                    NotifToggleRow {
+                        label: t("notif-sounds-ring"),
+                        checked: sound_ring,
+                        on_toggle: move |v| on_sound_ring.call(v),
+                    }
                 }
                 h4 { class: "notif-subsection-header", "{t(\"notif-badges\")}" }
                 NotifToggleRow {

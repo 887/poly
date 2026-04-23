@@ -25,7 +25,7 @@ use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_client::{DmSpamFilterLevel, SensitiveContentLevel};
+use poly_client::{DmSpamFilterLevel, SensitiveContentLevel, capabilities_for_slug};
 use poly_ui_macros::{context_menu, ui_action};
 
 // ─── sub-components ─────────────────────────────────────────────────────────
@@ -101,11 +101,20 @@ impl UiAction for SensitiveMediaSectionAction {
 }
 
 /// Sensitive Media section — three select rows.
+///
+/// `show_dm_rows` gates the two DM-related rows (needs `dms` capability).
+/// `show_dm_friends_row` additionally requires the `friends` capability.
 #[rustfmt::skip]
 #[ui_action(SensitiveMediaSectionAction)]
 #[context_menu(none)]
 #[component]
-fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
+fn SensitiveMediaSection(
+    mut chat_data: Signal<ChatData>,
+    /// Show DM-related rows (dm-friends and dm-others). Requires `dms` capability.
+    show_dm_rows: bool,
+    /// Show the dm-friends row specifically. Requires `dms && friends`.
+    show_dm_friends_row: bool,
+) -> Element {
     let policy = chat_data.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
@@ -113,19 +122,23 @@ fn SensitiveMediaSection(mut chat_data: Signal<ChatData>) -> Element {
                 h3 { class: "content-social-section-title", "{t(\"content-social-sensitive-media\")}" }
                 p { class: "content-social-section-desc", "{t(\"content-social-sensitive-media-desc\")}" }
             }
-            SensitiveMediaRow {
-                label: t("content-social-dm-friends"),
-                value: policy.sensitive_content_dm_friends,
-                on_change: move |level| {
-                    chat_data.write().content_policy.sensitive_content_dm_friends = level;
-                },
+            if show_dm_rows && show_dm_friends_row {
+                SensitiveMediaRow {
+                    label: t("content-social-dm-friends"),
+                    value: policy.sensitive_content_dm_friends,
+                    on_change: move |level| {
+                        chat_data.write().content_policy.sensitive_content_dm_friends = level;
+                    },
+                }
             }
-            SensitiveMediaRow {
-                label: t("content-social-dm-others"),
-                value: policy.sensitive_content_dm_others,
-                on_change: move |level| {
-                    chat_data.write().content_policy.sensitive_content_dm_others = level;
-                },
+            if show_dm_rows {
+                SensitiveMediaRow {
+                    label: t("content-social-dm-others"),
+                    value: policy.sensitive_content_dm_others,
+                    on_change: move |level| {
+                        chat_data.write().content_policy.sensitive_content_dm_others = level;
+                    },
+                }
             }
             SensitiveMediaRow {
                 label: t("content-social-server-channels"),
@@ -346,6 +359,10 @@ impl UiAction for ContentSocialSettingsAction {
 
 /// Content & Social settings page for a single account.
 ///
+/// `backend` is the backend slug used to gate sections on `BackendCapabilities`.
+/// Sections that require DMs, friends, or voice are hidden for backends that
+/// don't support those features (e.g. Lemmy, Forgejo, GitHub, HackerNews).
+///
 /// Reads policy from `ChatData::content_policy`. All writes go directly back to `ChatData`.
 ///
 /// Blocked users are managed in the People page, not here.
@@ -356,15 +373,28 @@ impl UiAction for ContentSocialSettingsAction {
 #[ui_action(ContentSocialSettingsAction)]
 #[context_menu(none)]
 #[component]
-pub fn ContentSocialSettings(_account_id: String) -> Element {
+pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
     let chat_data = use_context::<Signal<ChatData>>();
+    let caps = capabilities_for_slug(&backend);
+    let has_dms = caps.should_show_dms();
+    let has_friends = caps.should_show_friends();
     rsx! {
         div { class: "settings-section-content",
             h2 { class: "settings-section-title", "{t(\"content-social-title\")}" }
-            SensitiveMediaSection { chat_data }
-            SpamFilterSection { chat_data }
-            SocialPermissionsSection { chat_data }
-            FriendRequestsSection { chat_data }
+            SensitiveMediaSection {
+                chat_data,
+                show_dm_rows: has_dms,
+                show_dm_friends_row: has_dms && has_friends,
+            }
+            if has_dms {
+                SpamFilterSection { chat_data }
+            }
+            if has_dms || has_friends {
+                SocialPermissionsSection { chat_data }
+            }
+            if has_friends {
+                FriendRequestsSection { chat_data }
+            }
             AgeRestrictedSection { chat_data }
         }
     }
