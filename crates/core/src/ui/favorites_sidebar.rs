@@ -1369,12 +1369,32 @@ pub async fn restore_server_channel(
                 | poly_client::ChannelType::HackerNews
         ) {
             let guard = backend.read().await;
-            if let Ok(messages) = guard
+            // F-DC-1: handle PermissionDenied explicitly so the UI can render
+            // a styled empty state instead of silently showing 0 messages.
+            match guard
                 .get_messages(&ch.id, initial_message_query(ch.unread_count))
                 .await
             {
-                chat_data.write().messages = messages;
-                request_restore_scroll_position_or_bottom(&ch.id);
+                Ok(messages) => {
+                    let mut w = chat_data.write();
+                    w.messages = messages;
+                    w.channel_load_error = None;
+                    request_restore_scroll_position_or_bottom(&ch.id);
+                }
+                Err(poly_client::ClientError::PermissionDenied(msg)) => {
+                    tracing::info!(
+                        "get_messages permission denied for channel {}: {}",
+                        ch.id,
+                        msg
+                    );
+                    let mut w = chat_data.write();
+                    w.messages = Vec::new();
+                    w.channel_load_error = Some(msg);
+                }
+                Err(err) => {
+                    tracing::warn!("get_messages failed for channel {}: {}", ch.id, err);
+                    chat_data.write().channel_load_error = None;
+                }
             }
             if let Ok(members) = guard.get_channel_members(&ch.id).await {
                 chat_data.write().members = members;

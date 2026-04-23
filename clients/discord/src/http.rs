@@ -58,6 +58,13 @@ impl DiscordHttpClient {
             .map_err(|e| ClientError::Network(e.to_string()))?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
+            // F-DC-1: Map 403 to PermissionDenied so the UI can render a
+            // styled empty state instead of silently swallowing the error.
+            if status == 403 {
+                return Err(ClientError::PermissionDenied(
+                    "You need the VIEW_CHANNEL permission to read this channel.".into(),
+                ));
+            }
             return Err(ClientError::Network(format!("HTTP {status}")));
         }
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))

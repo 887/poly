@@ -118,6 +118,13 @@ pub struct ChatData {
     pub dragging_server_id: Option<String>,
     /// Source of the current drag operation.
     pub drag_source: DragSource,
+    /// F-DC-1 — Permission-denied error for the currently selected channel.
+    ///
+    /// Set when a channel load fails with `ClientError::PermissionDenied`.
+    /// Cleared when the channel changes. Drives a styled permission-denied
+    /// empty state in `render_message_list_content` instead of the generic
+    /// "no messages" wave.
+    pub channel_load_error: Option<String>,
     /// ID of the element currently being hovered over as a drop target.
     ///
     /// Set on `ondragover` of individual items so the parent can determine

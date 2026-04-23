@@ -3566,6 +3566,18 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
         };
     }
 
+    // F-DC-1: permission-denied empty state (e.g. Discord VIEW_CHANNEL missing)
+    let channel_load_error = ctx.chat_data.read().channel_load_error.clone();
+    if let Some(err_msg) = channel_load_error {
+        return rsx! {
+            div { class: "message-empty permission-denied-empty",
+                div { class: "permission-denied-icon", "🔒" }
+                h3 { class: "permission-denied-title", "No access to this channel" }
+                p { class: "permission-denied-message", "{err_msg}" }
+            }
+        };
+    }
+
     if ctx.messages.is_empty() {
         return rsx! {
             div { class: "message-empty",
