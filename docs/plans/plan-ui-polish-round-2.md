@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-21
 > **Last updated:** 2026-04-23
-> **Status:** ✅ SHIPPED — Phases A, B, C, D, E, F all complete. F-cluster: E7, F-LE-1, F-LE-2, F-TE-1, F-TE-2, F-TE-3, F-DC-1, F-DC-2, F-FJ-1, F-GH-1, F-GH-2, F-MX-1, F-DM-1 shipped; F-MX-2/F-FJ-2/F-ST-1 closed (subset of E2 / never-broken). Side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed.
+> **Status:** ✅ DONE — Phases A, B, C, D, E, F all complete. F-cluster: E7, F-LE-1, F-LE-2, F-TE-1, F-TE-2, F-TE-3, F-DC-1, F-DC-2, F-FJ-1, F-GH-1 (+ follow-up swapping `updated_at` for `forks_count`/`open_issues_count`), F-GH-2, F-MX-1, F-DM-1 shipped; F-MX-2/F-FJ-2/F-ST-1 closed (subset of E2 / never-broken). Side-quest: server-banner end-to-end (poly-server / Discord / Lemmy) + permissions/moderation plan landed. Successor plans: `plan-server-banners.md` (impl shipped), `plan-permissions-moderation.md` (impl pending).
 > **Audit data:** `docs/plans/ui-polish-round-2/`
 > **Predecessor:** `docs/plans/plan-client-ui-polish.md` (Round 1, ✅ shipped 2026-04-18)
 > **Trigger:** post-merge of test-account auto-signin + offline-account sidebar work, the user opened every animal account in the dev app and reported broken account-bar layout, native right-click menus everywhere, and a Teams crash. This plan covers the audit findings and the resulting fixes.
