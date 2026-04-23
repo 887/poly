@@ -394,6 +394,9 @@ fn AccountServerIcon(
 
 /// Renders the visual content of a server icon: image (or letter fallback) plus notification badges.
 ///
+/// When there is no icon URL, shows a colored letter-circle AND a short truncated
+/// name label below it so the server is identifiable without hovering for the tooltip.
+///
 /// Shows a red `@{mention}` badge for direct @mentions, and a small unread dot
 /// when there are unread messages but no direct mentions.
 #[rustfmt::skip]
@@ -414,6 +417,8 @@ fn ServerIconDisplay(
         .map(|c| c.to_string())
         .unwrap_or_default();
     let icon_color = user_color(&server_id);
+    // Truncate the name to 8 chars for the label so it fits under the icon circle.
+    let short_name: String = server_name.chars().take(8).collect();
     rsx! {
         if let Some(ref url) = icon_url {
             img {
@@ -427,6 +432,8 @@ fn ServerIconDisplay(
                 style: "background-color: {icon_color};",
                 "{first_letter}"
             }
+            // Short name label under the letter-circle, visible without hover.
+            span { class: "server-icon-name-label", "{short_name}" }
         }
         // @mention badge (red): only for direct @mentions.
         if mention > 0 {
