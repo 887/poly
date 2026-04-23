@@ -326,6 +326,39 @@
     color: var(--text-muted);
 }
 
+/* F-GH-2 — styled "no items" empty state for split-view list panel */
+.client-view-split-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 100%;
+    min-height: 120px;
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.split-empty-icon {
+    font-size: 1.75rem;
+    line-height: 1;
+    display: block;
+}
+
+.split-empty-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.split-empty-hint {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
 /* ────────────────────────────────────────────────────────────
    Pack B — Toast overlay (P11)
 

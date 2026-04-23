@@ -89,7 +89,16 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                     Some(Ok(page)) => {
                         let rows = page.rows.clone();
                         if rows.is_empty() {
-                            rsx! { div { class: "client-view-split-empty", "No items" } }
+                            // F-GH-2: styled empty state with icon and helpful messaging
+                            rsx! {
+                                div { class: "client-view-split-empty",
+                                    span { class: "split-empty-icon", "📭" }
+                                    p { class: "split-empty-title", "Nothing here" }
+                                    p { class: "split-empty-hint",
+                                        "No open issues or pull requests found."
+                                    }
+                                }
+                            }
                         } else {
                             rsx! {
                                 for row in rows {
