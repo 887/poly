@@ -372,6 +372,28 @@ pub struct ActiveContextMenu {
     pub dismiss_on_outside: bool,
 }
 
+/// State for the active right-click avatar context menu.
+///
+/// Opened by right-clicking a user avatar `<img>` in message rows.
+/// Cleared by a global click on the `MainLayout` root.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AvatarContextMenuState {
+    /// Fixed X position (from `page_coordinates()`).
+    pub x: f64,
+    /// Fixed Y position (from `page_coordinates()`).
+    pub y: f64,
+    /// The user ID of the avatar owner.
+    pub user_id: String,
+    /// Display name of the user.
+    pub user_display_name: String,
+    /// The account ID currently active (used for routing).
+    pub account_id: String,
+    /// Backend slug ("demo", "matrix", etc.).
+    pub backend_slug: String,
+    /// Federated instance ID (mirrors `:instance_id` URL segment).
+    pub instance_id: String,
+}
+
 /// State for the active right-click reaction chip context menu.
 ///
 /// Opened by right-clicking an emoji reaction pill on a message.
@@ -459,6 +481,8 @@ pub struct AppState {
     pub attachment_context_menu: Option<AttachmentContextMenuState>,
     /// Active right-click reaction chip context menu, if any.
     pub reaction_context_menu: Option<ReactionContextMenuState>,
+    /// Active right-click avatar context menu, if any.
+    pub avatar_context_menu: Option<AvatarContextMenuState>,
     /// Stack of context menus for the new Phase A runtime (plan §4.1).
     ///
     /// Empty = no overlay. Pushing opens a submenu; popping closes it.
@@ -491,6 +515,7 @@ impl Default for AppState {
             channel_context_menu: None,
             attachment_context_menu: None,
             reaction_context_menu: None,
+            avatar_context_menu: None,
             context_menu_stack: Vec::new(),
             sidebar_invalidated_tick: 0,
         }

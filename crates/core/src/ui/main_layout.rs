@@ -15,8 +15,8 @@
 //! Extract sub-components rather than growing this file.
 
 use super::account::{
-    AccountServerBar, AttachmentContextMenu, ChannelContextMenu, ReactionContextMenu,
-    ServerContextMenu, UserProfileModal,
+    AccountServerBar, AttachmentContextMenu, AvatarContextMenu, ChannelContextMenu,
+    ReactionContextMenu, ServerContextMenu, UserProfileModal,
 };
 use super::context_menu::host::ContextMenuStack;
 use super::favorites_sidebar::FavoritesBar;

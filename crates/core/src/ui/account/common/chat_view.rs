@@ -5665,7 +5665,8 @@ fn TypingIndicator() -> Element {
 ///
 /// If the reaction already exists and we've reacted, remove our reaction.
 /// If it exists but we haven't reacted, add ours. Otherwise create a new reaction.
-fn toggle_reaction_on_message(chat_data: &mut Signal<ChatData>, message_id: &str, emoji: &str) {
+/// `pub(crate)` so `ReactionContextMenu` can call it without duplicating logic.
+pub(crate) fn toggle_reaction_on_message(chat_data: &mut Signal<ChatData>, message_id: &str, emoji: &str) {
     let mut cd = chat_data.write();
     if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
         if let Some(reaction) = msg.reactions.iter_mut().find(|r| r.emoji == emoji) {
