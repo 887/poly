@@ -151,8 +151,28 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                             }
                         },
                         Some(Err(err)) => {
-                            tracing::debug!("SplitBody: get_view_detail failed: {err:?}");
-                            rsx! { div { class: "client-view-split-error", "Failed to load detail" } }
+                            // Guard against the stale sentinel: detail_res resolves to
+                            // Err("no row selected") synchronously on mount (before any
+                            // row is clicked). After the first click, selected_id is
+                            // Some(_) but detail_res hasn't reset to None yet — it still
+                            // holds the old sentinel Err. Treat that transient state as
+                            // "loading" so the user sees the spinner, not "Failed to
+                            // load detail".
+                            let is_sentinel = matches!(err, ClientError::NotFound(msg) if msg == "no row selected");
+                            if is_sentinel {
+                                rsx! {
+                                    div {
+                                        class: "client-view-split-loading view-row-detail-loading",
+                                        "aria-busy": "true",
+                                        role: "status",
+                                        span { class: "view-row-detail-spinner", "" }
+                                        span { "Loading…" }
+                                    }
+                                }
+                            } else {
+                                tracing::debug!("SplitBody: get_view_detail failed: {err:?}");
+                                rsx! { div { class: "client-view-split-error", "Failed to load detail" } }
+                            }
                         }
                         Some(Ok(detail)) => {
                             let body = detail.body_block.clone();
