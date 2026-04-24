@@ -7,7 +7,7 @@
 use crate::state::BatchedSignal;
 use super::VoiceAccountFooter;
 use super::chat_view::{highlight_message, open_message_hit};
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, ChatData};
 use crate::ui::split_shell::SplitMenuShell;
@@ -149,7 +149,13 @@ pub fn SavedItemsView() -> Element {
                 return Vec::<SavedPinnedItem>::new();
             };
 
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("saved_items: backend read timed out");
+                    return Vec::new();
+                }
+            };
             let mut items = Vec::new();
 
             for dm in dm_channels {

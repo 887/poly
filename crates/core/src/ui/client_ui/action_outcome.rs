@@ -21,7 +21,7 @@
 //! `invoke_*_action` future only — the handler itself schedules its own
 //! async work via `spawn` and returns immediately.
 
-use crate::client_manager::{BackendHandle, ClientManager};
+use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager};
 use crate::nav;
 use crate::ui::client_ui::toast::{
     dismiss_toast, push_toast, ToastMessage,
@@ -185,7 +185,13 @@ async fn poll_until_resolved(
         };
 
         let outcome = {
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("action_outcome: backend read timed out polling action");
+                    return;
+                }
+            };
             guard.poll_action(handle.clone()).await
         };
 

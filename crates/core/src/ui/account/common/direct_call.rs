@@ -5,7 +5,7 @@
 //! rather than real server voice channels.
 
 use crate::state::BatchedSignal;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, PendingDirectCallRequest};
 use crate::ui::routes::Route;
@@ -83,7 +83,13 @@ async fn resolve_direct_message_for_active_account(
 
     let backend = client_manager.read().get_backend(&account_id)?;
     let opened_dm = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("direct_call: backend read timed out opening DM channel");
+                return None;
+            }
+        };
         guard.open_direct_message_channel(&user_id).await.ok()?
     };
 

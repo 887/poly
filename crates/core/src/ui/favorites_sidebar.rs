@@ -1149,7 +1149,14 @@ async fn load_server_data_internal(
 
     // Load channels
     let channels = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("favorites_sidebar: backend read timed out loading channels");
+                chat_data.batch(|cd| cd.loading = false);
+                return;
+            }
+        };
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
@@ -1197,7 +1204,14 @@ async fn load_server_data_internal(
         pending.set(move |cd| cd.current_channel = Some(ch_for_current));
 
         // Load messages for first channel
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("favorites_sidebar: backend read timed out loading first-channel messages");
+                chat_data.batch(|cd| cd.loading = false);
+                return;
+            }
+        };
         if let Ok(messages) = guard
             .get_messages(&ch.id, initial_message_query(ch.unread_count))
             .await
@@ -1344,13 +1358,27 @@ pub async fn restore_server_channel(
 
     // Load server details
     let loaded_server = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("favorites_sidebar: backend read timed out loading server details");
+                chat_data.batch(|cd| cd.loading = false);
+                return None;
+            }
+        };
         guard.get_server(&server_id).await.ok()
     };
 
     // Load all channels for the sidebar
     let channels = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("favorites_sidebar: backend read timed out loading channels");
+                chat_data.batch(|cd| cd.loading = false);
+                return None;
+            }
+        };
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
@@ -1410,7 +1438,14 @@ pub async fn restore_server_channel(
                 | poly_client::ChannelType::Forum
                 | poly_client::ChannelType::HackerNews
         ) {
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("favorites_sidebar: backend read timed out loading channel messages");
+                    chat_data.batch(|cd| cd.loading = false);
+                    return None;
+                }
+            };
             // F-DC-1: handle PermissionDenied explicitly so the UI can render
             // a styled empty state instead of silently showing 0 messages.
             match guard
@@ -1443,7 +1478,14 @@ pub async fn restore_server_channel(
             ch.channel_type,
             poly_client::ChannelType::Voice | poly_client::ChannelType::Video
         ) {
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("favorites_sidebar: backend read timed out loading voice participants");
+                    chat_data.batch(|cd| cd.loading = false);
+                    return None;
+                }
+            };
             if let Ok(participants) = guard.get_voice_participants(&ch.id).await {
                 loaded_voice = Some((ch.id.clone(), participants));
             }

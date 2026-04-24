@@ -14,7 +14,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 
 use crate::state::BatchedSignal;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
@@ -166,7 +166,13 @@ async fn remove_member(
     let Some(backend) = client_manager.read().get_backend(&account_id) else {
         return;
     };
-    let guard = backend.read().await;
+    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!("dm_user_sidebar: backend read timed out in remove_group_member");
+            return;
+        }
+    };
     if guard.remove_group_member(&group_id, &user_id).await.is_ok() {
         // Remove the member from local state immediately for instant feedback.
         chat_data.batch(|cd| {

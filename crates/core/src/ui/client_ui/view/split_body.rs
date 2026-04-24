@@ -1,7 +1,7 @@
 //! Split body engine — list on the left, detail on the right. Clicking a
 //! row fetches `get_view_detail` for the selected row id.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
 use dioxus::prelude::*;
@@ -43,7 +43,13 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("split_body: backend read timed out loading view rows");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard
                     .get_view_rows(&channel_id, None, None, None, None)
                     .await
@@ -69,7 +75,13 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("split_body: backend read timed out loading view detail");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard.get_view_detail(&channel_id, &row_id).await
             }
         })

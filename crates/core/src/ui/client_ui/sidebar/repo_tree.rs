@@ -12,7 +12,7 @@
 //! renders the tree uniformly and this host-side file can disappear. Tracked
 //! as a later pack so we don't block Pack D on a plugin WIT touch.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, BatchedSignal};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
@@ -57,7 +57,13 @@ pub fn RepoTreeLayout() -> Element {
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("repo_tree: backend read timed out loading servers");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard.get_servers().await
             }
         })
@@ -167,7 +173,13 @@ async fn dispatch_repo_action(
         return;
     };
     let outcome = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("repo_tree: backend read timed out invoking sidebar action");
+                return;
+            }
+        };
         guard.invoke_sidebar_action(&action_id).await
     };
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {

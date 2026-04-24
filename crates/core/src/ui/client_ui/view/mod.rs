@@ -27,7 +27,7 @@ pub use split_body::SplitBody;
 pub use toolbar::ViewToolbar;
 pub use tree_body::TreeBody;
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use dioxus::prelude::*;
 use poly_client::{ClientError, ViewBody, ViewDescriptor};
 use poly_ui_macros::{context_menu, ui_action};
@@ -52,7 +52,13 @@ pub fn ClientView(channel_id: String, account_id: String) -> Element {
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("view: backend read timed out loading channel view");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard.get_channel_view(&channel_id).await
             }
         })

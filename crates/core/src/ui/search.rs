@@ -10,6 +10,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
+use crate::client_manager::BackendHandleExt;
 use crate::state::BatchedSignal;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
@@ -346,7 +347,13 @@ fn ServerNode(
         async move {
             let backend_info = cm.read().get_backend_for_server(&sid);
             if let Some((_aid, backend)) = backend_info {
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("search: backend read timed out fetching channels");
+                        return Vec::new();
+                    }
+                };
                 guard.get_channels(&sid).await.unwrap_or_default()
             } else {
                 Vec::new()

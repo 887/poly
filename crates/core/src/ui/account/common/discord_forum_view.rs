@@ -30,7 +30,7 @@
 //! | `NewPostModal` | compose dialog (title + tags + body + submit) |
 
 use crate::state::BatchedSignal;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::state::{AppState, ChatData};
 use crate::ui::routes::Route;
 use chrono::{DateTime, Utc};
@@ -156,7 +156,13 @@ pub fn DiscordForumView() -> Element {
             let cur_sort = *sort.read();
             async move {
                 let backend = client_manager.read().get_backend(&aid)?;
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("discord_forum_view: backend read timed out");
+                        return None;
+                    }
+                };
                 match guard.get_forum_posts(&cid, cur_sort, Some(50)).await {
                     Ok(posts) => Some(posts),
                     Err(err) => {

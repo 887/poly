@@ -200,10 +200,14 @@ async fn load_dm_messages(
     };
 
     tracing::info!(channel_id = %channel_id, "load_dm_messages: backend acquired, fetching messages");
-    // NOTE: previously wrapped in tokio::time::timeout(5s, …) but that panics
-    // on wasm32-unknown-unknown — `Instant::now()` is unimplemented. Plain
-    // .await it; on WASM the executor is single-threaded so this is fine.
-    let guard = backend.read().await;
+    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!("channel_list: backend read timed out in load_dm_messages");
+            chat_data.batch(|cd| cd.loading = false);
+            return;
+        }
+    };
     let messages = guard
         .get_messages(&channel_id, initial_message_query(unread_count))
         .await
@@ -367,13 +371,14 @@ pub(crate) fn open_direct_message_from_active_account(
             account_id = %account_id,
             "open_direct_message_from_active_account: spawned, awaiting open_direct_message_channel"
         );
-        // NOTE: previously wrapped in tokio::time::timeout — that panics on
-        // wasm32-unknown-unknown because tokio::time needs Instant::now() which
-        // is unimplemented for that target. Plain .await; WASM is single-threaded
-        // anyway so a stalled writer would manifest as the page appearing to
-        // hang rather than a deadlock the timeout could rescue.
         let opened_dm = {
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("channel_list: backend read timed out opening DM channel");
+                    return;
+                }
+            };
             match guard.open_direct_message_channel(&user_id).await {
                 Ok(dm) => dm,
                 Err(err) => {

@@ -34,7 +34,7 @@ pub use custom::CustomSidebar;
 pub use feed::FeedLayout;
 pub use repo_tree::RepoTreeLayout;
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, BatchedSignal};
 use dioxus::prelude::*;
@@ -92,7 +92,13 @@ pub fn ClientSidebar() -> Element {
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("sidebar: backend read timed out loading sidebar declaration");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard.get_sidebar_declaration().await
             }
         })

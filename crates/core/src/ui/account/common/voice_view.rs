@@ -17,7 +17,7 @@
 
 use crate::state::BatchedSignal;
 use super::direct_call::disconnect_active_call;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::state::{AppState, ChatData};
@@ -188,7 +188,13 @@ async fn join_voice_channel(
 
     // Fetch current participants from backend
     let mut participants = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("voice_view: backend read timed out fetching participants");
+                return;
+            }
+        };
         guard
             .get_voice_participants(&channel_id)
             .await

@@ -27,7 +27,7 @@
 //! `plugin-section-header`, `settings-toggle-row`, `toggle-switch`, …) so the
 //! plugin-declared panels match the host-owned panels visually.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::{has_key, t};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::toast::{push_toast, ToastMessage};
@@ -484,7 +484,13 @@ async fn load_value(
     key: &str,
 ) -> Result<String, ClientError> {
     let backend = resolve_backend(client_manager, account_id)?;
-    let guard = backend.read().await;
+    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!("settings_section: backend read timed out in load_value");
+            return Err(ClientError::Internal("backend read timed out".into()));
+        }
+    };
     guard.get_setting_value(scope, scope_id, key).await
 }
 
@@ -522,7 +528,13 @@ async fn save_value(
         }
         return;
     };
-    let guard = backend.read().await;
+    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!("settings_section: backend read timed out in save_value");
+            return;
+        }
+    };
     match guard.set_setting_value(scope, scope_id, key, value_json).await {
         Ok(()) => {
             if let Some(q) = toast_queue {

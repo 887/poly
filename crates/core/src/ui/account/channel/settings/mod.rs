@@ -11,7 +11,7 @@
 //! empty-state message (`channel-settings-no-plugin-sections`).
 
 use crate::state::BatchedSignal;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::account::common::VoiceAccountFooter;
@@ -66,7 +66,13 @@ fn ChannelSettingsContent(
                 let Some(backend) = client_manager.read().get_backend(&account_id) else {
                     return Vec::new();
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("channel_settings: backend read timed out loading plugin sections");
+                        return Vec::new();
+                    }
+                };
                 guard
                     .get_settings_sections()
                     .await

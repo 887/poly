@@ -1462,7 +1462,13 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
             });
             return;
         };
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("chat_view: backend read timed out in get_channel_members");
+                return;
+            }
+        };
         match guard.get_channel_members(&active_channel_id).await {
             Ok(members) => {
                 chat_data.batch(move |cd| {
@@ -1538,7 +1544,14 @@ fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx
                     search_hits.set(Vec::new());
                     return;
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("chat_view: backend read timed out in search_messages");
+                        search_hits.set(Vec::new());
+                        return;
+                    }
+                };
                 match guard.search_messages(parsed_query).await {
                     Ok(hits) => search_hits.set(hits),
                     Err(err) => {
@@ -1588,7 +1601,14 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
                 pinned_messages.set(Vec::new());
                 return;
             };
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("chat_view: backend read timed out in get_pinned_messages");
+                    pinned_messages.set(Vec::new());
+                    return;
+                }
+            };
             match guard.get_pinned_messages(&target_channel_id).await {
                 Ok(messages) => pinned_messages.set(messages),
                 Err(err) => {
@@ -1704,7 +1724,13 @@ fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<Str
         let Some(backend) = backend else {
             return;
         };
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("chat_view: backend read timed out in get_channel_commands");
+                return;
+            }
+        };
         match guard.get_channel_commands(&cid).await {
             Ok(cmds) => command_suggestions.set(cmds),
             Err(err) => tracing::warn!("get_channel_commands failed: {err}"),
@@ -3466,7 +3492,14 @@ async fn load_older_messages(
     let anchor_snapshot = read_message_list_anchor().await;
 
     let older_messages = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("chat_view: backend read timed out in load_older_messages");
+                history_state.batch(|h| h.loading_before = false);
+                return;
+            }
+        };
         guard
             .get_messages(
                 &active_channel_id,
@@ -4612,7 +4645,13 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
                 None
             };
             let Some(backend) = backend else { return };
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("chat_view: backend read timed out in get_available_emojis");
+                    return;
+                }
+            };
             if let Ok(emojis) = guard.get_available_emojis(cid).await {
                 custom_emojis.set(emojis);
             }
@@ -5825,7 +5864,13 @@ async fn send_message(ctx: SendMessageCtx) {
         return;
     };
 
-    let guard = backend.read().await;
+    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!("chat_view: backend read timed out in send_message");
+            return;
+        }
+    };
     let content = if attachments.is_empty() {
         MessageContent::Text(text)
     } else {

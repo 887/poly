@@ -7,7 +7,7 @@
 //! "coming soon" placeholder until the backend grows `get_local_communities`
 //! / `get_federated_communities` methods.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -85,7 +85,13 @@ pub fn CommunitiesLayout() -> Element {
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("communities: backend read timed out loading servers");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard.get_servers().await
             }
         })

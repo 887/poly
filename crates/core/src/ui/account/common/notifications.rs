@@ -13,7 +13,7 @@
 // TODO(phase-2.5.8): Wire notifications to backend data
 
 use crate::state::BatchedSignal;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::backend_badge;
@@ -664,7 +664,13 @@ async fn handle_friend_request_action(
         return;
     };
 
-    let guard = backend.read().await;
+    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!("notifications: backend read timed out in respond_to_friend_request");
+            return;
+        }
+    };
     if let Err(err) = guard.respond_to_friend_request(&user_id, accept).await {
         tracing::warn!(
             "respond_to_friend_request failed for account {} user {}: {}",

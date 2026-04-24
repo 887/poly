@@ -13,7 +13,7 @@
 //! knowledge of which specific accounts the demo client creates.
 
 use crate::state::BatchedSignal;
-use crate::client_manager::{BackendHandle, ClientManager, PluginSettingsEntry};
+use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
@@ -316,7 +316,13 @@ pub(crate) async fn toggle_demo(
             // Load all servers.
             let mut servers = Vec::new();
             for (_, backend) in &backend_handles {
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("demo: backend read timed out in load_all_servers loop");
+                        continue;
+                    }
+                };
                 if let Ok(mut s) = guard.get_servers().await {
                     servers.append(&mut s);
                 }
@@ -337,7 +343,13 @@ pub(crate) async fn toggle_demo(
 
             // Load DMs, groups, notifications, friends from all demo accounts.
             for (aid, backend) in &backend_handles {
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("demo: backend read timed out in load_dm_groups_friends loop");
+                        continue;
+                    }
+                };
                 let dms = guard.get_dm_channels().await.ok();
                 let groups = guard.get_groups().await.ok();
                 let is_forum = chat_data.read().account_sessions.get(aid)
@@ -520,7 +532,13 @@ pub(crate) fn spawn_event_stream_listener(
     spawn(async move {
         // Acquire the stream without holding the lock for the duration of polling.
         let stream = {
-            let guard = backend.read().await;
+            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("demo: backend read timed out acquiring event_stream");
+                    return;
+                }
+            };
             guard.event_stream()
         };
         let mut stream = stream;

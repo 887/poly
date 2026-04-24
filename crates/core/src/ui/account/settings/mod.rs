@@ -21,7 +21,7 @@ mod notifications;
 #[cfg(feature = "server")]
 mod profile;
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::client_ui::PluginSettingsSection;
@@ -255,7 +255,13 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                 let Some(backend) = client_manager.read().get_backend(&account_id) else {
                     return Vec::new();
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("account_settings: backend read timed out loading plugin sections");
+                        return Vec::new();
+                    }
+                };
                 guard
                     .get_settings_sections()
                     .await

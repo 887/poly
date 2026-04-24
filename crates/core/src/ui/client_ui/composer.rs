@@ -12,7 +12,7 @@
 //! silently logged and the component renders nothing — the host-universal
 //! items in the surrounding chat view continue to work.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::ui::account::server::context_menu::ContextMenuItem;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -118,7 +118,13 @@ pub fn ComposerHooks(
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("composer: backend read timed out loading composer buttons");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard.get_composer_buttons(&channel_id).await
             }
         })
@@ -221,7 +227,13 @@ pub fn MessageActions(
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("composer: backend read timed out loading message actions");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
                 guard
                     .get_message_actions(&channel_id, &message_id)
                     .await
@@ -313,7 +325,13 @@ async fn invoke_composer(account_id: &str, action_id: &str, channel_id: &str) {
     };
 
     let outcome = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("composer: backend read timed out invoking composer action");
+                return;
+            }
+        };
         guard.invoke_composer_action(action_id, channel_id).await
     };
 
@@ -340,7 +358,13 @@ async fn invoke_message(
     };
 
     let outcome = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("composer: backend read timed out invoking message action");
+                return;
+            }
+        };
         guard
             .invoke_message_action(action_id, channel_id, message_id)
             .await

@@ -13,7 +13,7 @@
 //! That moves the feed list from host-hardcoded to plugin-declared and lets
 //! alternate HN-style backends (e.g. Lobste.rs) declare their own feeds.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, BatchedSignal};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
@@ -109,7 +109,13 @@ async fn dispatch_feed_action(
         return;
     };
     let outcome = {
-        let guard = backend.read().await;
+        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("feed: backend read timed out invoking sidebar action");
+                return;
+            }
+        };
         guard.invoke_sidebar_action(&action_id).await
     };
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
