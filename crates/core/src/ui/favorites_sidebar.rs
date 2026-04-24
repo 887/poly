@@ -1297,6 +1297,11 @@ pub async fn restore_server_channel(
     client_manager: Signal<ClientManager>,
     mut chat_data: Signal<ChatData>,
 ) -> Option<String> {
+    // One initial cascade so the UI can paint a loading state while we
+    // fetch. Every other mutation is deferred to a single terminal write
+    // at the end — individual per-field writes were starving the WASM
+    // scheduler on Teams (CLAUDE.md hang #1, same class as AccountIcon
+    // onclick batching fix in commit a761fe01).
     chat_data.write().loading = true;
 
     let backend_info = client_manager.read().get_backend_for_server(&server_id);
@@ -1306,12 +1311,10 @@ pub async fn restore_server_channel(
     };
 
     // Load server details
-    {
+    let loaded_server = {
         let guard = backend.read().await;
-        if let Ok(server) = guard.get_server(&server_id).await {
-            chat_data.write().current_server = Some(server);
-        }
-    }
+        guard.get_server(&server_id).await.ok()
+    };
 
     // Load all channels for the sidebar
     let channels = {
@@ -1331,13 +1334,11 @@ pub async fn restore_server_channel(
     // truth for the field.
     let fallback = if exact.is_none() {
         // 1. Backend-designated default channel (Discord system_channel_id, etc.)
-        let default_id = {
-            let guard = chat_data.read();
-            guard
-                .current_server
-                .as_ref()
-                .and_then(|s| s.default_channel_id.clone())
-        };
+        // Read from the just-loaded server, not from chat_data — chat_data
+        // hasn't been updated yet in this batched flow.
+        let default_id = loaded_server
+            .as_ref()
+            .and_then(|s| s.default_channel_id.clone());
         let by_default = default_id.and_then(|id| channels.iter().find(|c| c.id == id).cloned());
         // 2. First text/forum/hackernews channel
         by_default.or_else(|| {
@@ -1356,17 +1357,21 @@ pub async fn restore_server_channel(
     } else {
         None
     };
-
-    chat_data.write().channels = channels;
     let _ = &mut app_state;
 
     // Use the exact match for content load if it exists, otherwise the
     // fallback. The caller still needs the resolved id to nav.replace.
-    let target = exact.as_ref().or(fallback.as_ref());
+    let target = exact.or(fallback);
 
-    if let Some(ch) = target {
-        chat_data.write().current_channel = Some(ch.clone());
+    // Pre-fetch per-channel content WITHOUT touching chat_data. All mutations
+    // batched into the single terminal write below.
+    let mut loaded_messages: Option<Vec<poly_client::Message>> = None;
+    let mut loaded_channel_load_error: Option<String> = None;
+    let mut loaded_members: Option<Vec<poly_client::User>> = None;
+    let mut loaded_voice: Option<(String, Vec<poly_client::VoiceParticipant>)> = None;
+    let mut request_scroll_for: Option<String> = None;
 
+    if let Some(ref ch) = target {
         if matches!(
             ch.channel_type,
             poly_client::ChannelType::Text
@@ -1381,10 +1386,9 @@ pub async fn restore_server_channel(
                 .await
             {
                 Ok(messages) => {
-                    let mut w = chat_data.write();
-                    w.messages = messages;
-                    w.channel_load_error = None;
-                    request_restore_scroll_position_or_bottom(&ch.id);
+                    loaded_messages = Some(messages);
+                    loaded_channel_load_error = None;
+                    request_scroll_for = Some(ch.id.clone());
                 }
                 Err(poly_client::ClientError::PermissionDenied(msg)) => {
                     tracing::info!(
@@ -1392,17 +1396,16 @@ pub async fn restore_server_channel(
                         ch.id,
                         msg
                     );
-                    let mut w = chat_data.write();
-                    w.messages = Vec::new();
-                    w.channel_load_error = Some(msg);
+                    loaded_messages = Some(Vec::new());
+                    loaded_channel_load_error = Some(msg);
                 }
                 Err(err) => {
                     tracing::warn!("get_messages failed for channel {}: {}", ch.id, err);
-                    chat_data.write().channel_load_error = None;
+                    loaded_channel_load_error = None;
                 }
             }
             if let Ok(members) = guard.get_channel_members(&ch.id).await {
-                chat_data.write().members = members;
+                loaded_members = Some(members);
             }
         } else if matches!(
             ch.channel_type,
@@ -1410,19 +1413,44 @@ pub async fn restore_server_channel(
         ) {
             let guard = backend.read().await;
             if let Ok(participants) = guard.get_voice_participants(&ch.id).await {
-                chat_data
-                    .write()
-                    .voice_channel_participants
-                    .insert(ch.id.clone(), participants);
+                loaded_voice = Some((ch.id.clone(), participants));
             }
         }
     }
 
-    chat_data.write().loading = false;
+    // Single terminal cascade — everything that was read above lands in one
+    // write-guard drop, so subscribers see one consistent state update
+    // instead of 5-7 intermediate ones.
+    {
+        let mut cd = chat_data.write();
+        if let Some(server) = loaded_server {
+            cd.current_server = Some(server);
+        }
+        cd.channels = channels;
+        if let Some(ref ch) = target {
+            cd.current_channel = Some(ch.clone());
+        }
+        if let Some(messages) = loaded_messages {
+            cd.messages = messages;
+        }
+        cd.channel_load_error = loaded_channel_load_error;
+        if let Some(members) = loaded_members {
+            cd.members = members;
+        }
+        if let Some((id, participants)) = loaded_voice {
+            cd.voice_channel_participants.insert(id, participants);
+        }
+        cd.loading = false;
+    }
+
+    if let Some(ch_id) = request_scroll_for {
+        request_restore_scroll_position_or_bottom(&ch_id);
+    }
+
     // Apply any user-defined icon/banner overrides from storage.
     apply_server_icon_overrides(&mut chat_data).await;
 
-    target.map(|channel| channel.id.clone())
+    target.map(|channel| channel.id)
 }
 
 #[cfg(test)]

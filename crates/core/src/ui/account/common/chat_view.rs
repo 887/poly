@@ -756,11 +756,16 @@ pub(crate) async fn open_message_hit(
         .unwrap_or(BackendType::from("demo"));
     drop(guard);
 
-    chat_data.write().loading = false;
-    chat_data.write().messages = target_messages;
-    chat_data.write().members = target_members;
-    chat_data.write().current_channel = target_channel.clone();
-    chat_data.write().current_server = target_server.clone();
+    // Batch 5 cascades into one — separate writes each schedule a full
+    // Dioxus reactive pass and starve the WASM scheduler (CLAUDE.md hang #1).
+    {
+        let mut cd = chat_data.write();
+        cd.loading = false;
+        cd.messages = target_messages;
+        cd.members = target_members;
+        cd.current_channel = target_channel.clone();
+        cd.current_server = target_server.clone();
+    }
 
     Some(build_message_hit_route(
         &mut app_state,
