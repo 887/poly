@@ -389,17 +389,80 @@ queued before the wedge are recoverable on the next session.
 
 ### Common WASM-hang causes (ranked by frequency in this codebase)
 
-1. **`Signal::write()` chains in a click handler.** Every `.write()` guard drop schedules a Dioxus reactive re-render. 7 consecutive writes → 7 cascades on the WASM single-thread → scheduler starves. Batch into one `let mut x = sig.write(); x.field1 = …; x.field2 = …;` block.
+Each hang class is paired with the active countermeasure — the prescribed
+pattern that makes it mechanically impossible (or very hard) to reintroduce.
+When a new hang matches class #N, check the countermeasure status first:
+if the plan ships as claimed, the bug should be uncatchable — so a fresh
+recurrence means either a missed migration site, an escape-hatch
+`#[allow]`, or a genuinely new hang class worth documenting below.
 
-2. **Live `Signal::read()` guard across a `.write()` of the same signal.** WASM panics → no panic_hook unwinding → tight loop / unreachable. Wrap reads in tightly-scoped `{ … }` so the guard drops before any write.
+1. **`Signal::write()` chains in a click handler / loader.** Every `.write()`
+   guard drop schedules a Dioxus reactive re-render. 5–7 consecutive writes
+   → 5–7 cascades on the WASM single-thread → scheduler starves. Historical
+   incidents: commit `a761fe01` (AccountIcon.onclick), the `chat_view.rs`
+   `open_message_hit` batches, `restore_server_channel` PendingUpdate
+   conversion, plus 3 more.
+   **Countermeasure (in progress): `BatchedSignal<T>` newtype.** Shipped
+   Phases 1-3 (commits `e091281c`, `33b18d4d`, `828f9584`) covering
+   `Signal<ChatData>` and `Signal<AppState>` — 271 `.write()` sites
+   collapsed to `.batch(|v| …)` / `.pending_update()`. The deprecated
+   shadow `BatchedSignal::write()` fails `#[deny(deprecated)]` so the
+   bug is now a compile error on the migrated signals. See
+   `docs/plans/plan-batched-signal.md` for the remaining Phase 4–6
+   work (other hot-path signals, clippy/dylint).
 
-3. **`.write()` inside a `use_effect` whose body is also a subscriber to that signal.** Causes infinite re-render loop. The boot-hang watchdog catches it after the timeout. Move the write to a `use_future` or guard with a "did this already" flag.
+2. **Live `Signal::read()` guard across a `.write()` of the same signal.**
+   WASM panics → no panic_hook unwinding → tight loop / unreachable. Wrap
+   reads in tightly-scoped `{ … }` so the guard drops before any write.
+   **Countermeasure (partial):** `BatchedSignal::batch(|v| …)` forces the
+   mutation through a closure, so no outer read can live alongside the
+   write guard on the same signal. Cross-signal read-across-write (read
+   signal A, write signal B with a handler that also reads A) is still
+   possible and not type-gated. No plan yet; add one if incidents recur.
 
-4. **`tokio::sync::RwLock::read().await` on a backend that has a perpetual writer.** Single-threaded WASM scheduler can starve readers. Wrap with `tokio::time::timeout(Duration::from_secs(5), backend.read())` and bail with a warning on timeout.
+3. **`.write()` inside a `use_effect` whose body is also a subscriber to
+   that signal** (including indirectly via a spawned async task that
+   writes the signal). Causes infinite re-render loop. Historical
+   incidents: Teams Sheep wedge (fix `904920b9`, ServerHome missing
+   `spawned_for` guard) — the SQLite-persisted BISECT trace captured
+   ~1.2M iterations before sampling.
+   **Countermeasure (in progress): `use_spawn_once<K>(key, async_fn)`
+   hook.** Phase 1 in flight at plan-authoring time; the hook bakes the
+   `spawned_for: Signal<Option<K>>` guard into the call-site API so it
+   can't be forgotten. Phase 5 is a clippy/dylint ban on the raw
+   `use_effect` + `spawn(async move { … signal.batch(…) })` triple.
+   See `docs/plans/plan-use-spawn-once.md`.
 
-5. **A spawned async task that writes Signals while the spawning closure still holds a guard.** Same root cause as #2 but indirect. Drop the guard before `spawn(async move { … })`.
+4. **`tokio::sync::RwLock::read().await` on a backend that has a perpetual
+   writer.** Single-threaded WASM scheduler can starve readers. Wrap with
+   `tokio::time::timeout(Duration::from_secs(5), backend.read())` and bail
+   with a warning on timeout.
+   **Countermeasure: none yet.** Low incident rate (one confirmed case).
+   If another hits, draft a plan for a `read_with_timeout` helper that's
+   the only allowed `backend.read().await` surface.
 
-When the bug doesn't match any of the above, the freeze is likely in
+5. **A spawned async task that writes Signals while the spawning closure
+   still holds a guard.** Same root cause as #2 but indirect. Drop the
+   guard before `spawn(async move { … })`.
+   **Countermeasure: same as #2** — `BatchedSignal::batch` closure scope
+   prevents the outer closure from holding a guard across the spawn. Fully
+   gated on migrated signals; unmigrated plain `Signal<T>` locals still
+   susceptible.
+
+**Last-resort diagnostic path — the out-of-band trace sink.** When a hang
+starves CDP (`evaluate_script` and `list_console_messages` time out), raw
+`tracing::warn!` goes nowhere in WASM (no subscriber wired) and
+`console.warn` overrides don't intercept `web_sys::console::warn_1`. The
+pattern that worked for the Teams Sheep bisect:
+`fn bisect_log(msg) { window.fetch('/host/kv/set', { body: {key: 'bisect:<counter>', value: msg} }); doc.set_title(msg); }`.
+Persists to SQLite via the host bridge even when the main thread wedges
+immediately after (fetch dispatches to the network thread before JS
+continues). Query via `sqlite3 ~/.local/share/poly/storage.sqlite3
+"SELECT payload, COUNT(*) FROM poly_kv WHERE key LIKE 'bisect:%' GROUP BY
+payload ORDER BY COUNT(*) DESC"` — top-count rows pinpoint the cascading
+call site.
+
+When the bug doesn't match classes #1–#5, the freeze is likely in
 generated code (Dioxus interpreter, `wit_bindgen` bridge) and you'll
 need a real DevTools session — `chrome-devtools-mcp` if it's loaded,
 or ask the user to paste a stack trace from the Sources panel.
