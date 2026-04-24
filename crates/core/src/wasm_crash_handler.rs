@@ -180,15 +180,27 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
         countdown.style.cssText = 'margin:0 0 18px 0;color:#d8dee9;font-size:13px;';
         var remaining = Math.round(AUTO_RELOAD_MS / 1000);
         countdown.textContent = 'Auto-reloading in ' + remaining + 's\u2026';
+        var btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:10px;';
+        var dismissBtn = document.createElement('button');
+        dismissBtn.style.cssText = 'border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:12px 16px;background:transparent;color:#d8dee9;font-size:14px;font-weight:600;cursor:pointer;';
+        dismissBtn.textContent = 'Dismiss (cancel auto-reload)';
+        dismissBtn.onclick = function() {{
+            clearInterval(ticker);
+            var o = document.getElementById(OVERLAY_ID);
+            if (o && o.parentNode) o.parentNode.removeChild(o);
+        }};
         var btn = document.createElement('button');
         btn.style.cssText = 'border:0;border-radius:10px;padding:12px 16px;background:#4f8cff;color:white;font-size:14px;font-weight:600;cursor:pointer;';
         btn.textContent = 'Reload now';
         btn.onclick = function() {{ window.location.reload(); }};
+        btnRow.appendChild(dismissBtn);
+        btnRow.appendChild(btn);
         card.appendChild(h1);
         card.appendChild(p1);
         card.appendChild(p2);
         card.appendChild(countdown);
-        card.appendChild(btn);
+        card.appendChild(btnRow);
         overlay.appendChild(card);
         document.body && document.body.appendChild(overlay);
         console.error('Poly interaction hang: main thread blocked for ' + gapMs + 'ms');
@@ -213,11 +225,16 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
 /// Inject a JS `setTimeout` that shows the crash overlay if the startup
 /// overlay has not dismissed after `timeout_ms` milliseconds.
 ///
-/// The check reads `data-poly-startup-phase` from `<html>`, which the App
-/// component sets to `"revealed"` once the startup overlay hides.  If it is
-/// still `"booting"` (or absent) when the timer fires, the app is stuck —
-/// typically due to an infinite Dioxus render loop or a data-loading deadlock
-/// that prevented the overlay from hiding.
+/// Two-layer check (any one of these = "the app is fine, do NOT alert"):
+///   1. `data-poly-startup-phase === "revealed"` — the App component sets
+///      this when the startup overlay hides.
+///   2. The favourites sidebar has rendered at least one account icon
+///      (`.server-sidebar img[alt]`) — proves the UI is alive even if the
+///      phase attribute slipped through (false-positive guard).
+///
+/// Both checks fail → app may be wedged. Overlay shows TWO buttons:
+/// "Dismiss" (close, leave the app alone — useful for false positives)
+/// and "Reload".
 fn install_boot_hang_watchdog(timeout_ms: u32) {
     // language=JavaScript
     let js = format!(
@@ -226,6 +243,15 @@ fn install_boot_hang_watchdog(timeout_ms: u32) {
     window.__polyBootWatchdog = setTimeout(function() {{
         var phase = document.documentElement.getAttribute('data-poly-startup-phase');
         if (phase === 'revealed') {{ return; }}
+        // Second-chance probe: even if the phase attribute didn't flip,
+        // the app is healthy as long as the sidebar mounted SOMETHING.
+        var sidebarIcons = document.querySelectorAll('.server-sidebar img[alt]');
+        if (sidebarIcons.length > 0) {{
+            console.warn('Poly boot watchdog: phase=' + phase + ' but ' + sidebarIcons.length + ' sidebar icons rendered, suppressing false-positive overlay');
+            // Mark phase revealed so we don't keep checking.
+            document.documentElement.setAttribute('data-poly-startup-phase', 'revealed');
+            return;
+        }}
         var OVERLAY_ID = 'poly-wasm-crash-overlay';
         if (document.getElementById(OVERLAY_ID)) {{ return; }}
         var overlay = document.createElement('div');
@@ -235,24 +261,38 @@ fn install_boot_hang_watchdog(timeout_ms: u32) {
         card.style.cssText = 'max-width:920px;margin:0 auto;background:#1a1f2b;border:1px solid rgba(255,255,255,0.14);border-radius:16px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,0.45);';
         var h1 = document.createElement('h1');
         h1.style.cssText = 'margin:0 0 8px 0;font-size:28px;line-height:1.2;';
-        h1.textContent = 'App not responding';
+        h1.textContent = 'App may be stuck';
         var p1 = document.createElement('p');
         p1.style.cssText = 'margin:0 0 12px 0;color:#d8dee9;font-size:15px;line-height:1.5;';
-        p1.textContent = 'Poly is stuck on the loading screen (\u201cbooting\u201d phase never completed). This usually means a render loop or missing data prevented the app from starting.';
+        p1.textContent = 'Poly\u2019s loading screen has been visible for over ' + (t/1000) + ' seconds. This usually means a render loop or missing data prevented startup, but it can also be a slow first boot. If the UI looks fine behind this overlay, just dismiss it.';
         var p2 = document.createElement('p');
         p2.style.cssText = 'margin:0 0 18px 0;color:#8fbcff;font-size:14px;font-weight:600;';
         p2.textContent = 'Type: boot-hang (startup overlay not dismissed after ' + (t/1000) + 's)';
-        var btn = document.createElement('button');
-        btn.style.cssText = 'border:0;border-radius:10px;padding:12px 16px;background:#4f8cff;color:white;font-size:14px;font-weight:600;cursor:pointer;';
-        btn.textContent = 'Reload';
-        btn.onclick = function() {{ window.location.reload(); }};
+        var btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:10px;';
+        var dismissBtn = document.createElement('button');
+        dismissBtn.style.cssText = 'border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:12px 16px;background:transparent;color:#d8dee9;font-size:14px;font-weight:600;cursor:pointer;';
+        dismissBtn.textContent = 'Dismiss';
+        dismissBtn.onclick = function() {{
+            var o = document.getElementById(OVERLAY_ID);
+            if (o && o.parentNode) o.parentNode.removeChild(o);
+            // Mark the phase as revealed so the watchdog (or any sibling
+            // observer) doesn't immediately re-fire after dismiss.
+            document.documentElement.setAttribute('data-poly-startup-phase', 'revealed');
+        }};
+        var reloadBtn = document.createElement('button');
+        reloadBtn.style.cssText = 'border:0;border-radius:10px;padding:12px 16px;background:#4f8cff;color:white;font-size:14px;font-weight:600;cursor:pointer;';
+        reloadBtn.textContent = 'Reload';
+        reloadBtn.onclick = function() {{ window.location.reload(); }};
+        btnRow.appendChild(dismissBtn);
+        btnRow.appendChild(reloadBtn);
         card.appendChild(h1);
         card.appendChild(p1);
         card.appendChild(p2);
-        card.appendChild(btn);
+        card.appendChild(btnRow);
         overlay.appendChild(card);
         document.body && document.body.appendChild(overlay);
-        console.error('Poly boot hang: startup overlay still visible after ' + t + 'ms (phase=' + phase + ')');
+        console.error('Poly boot hang: startup overlay still visible after ' + t + 'ms (phase=' + phase + ', sidebar icons=' + sidebarIcons.length + ')');
     }}, t);
 }})();"#,
         timeout = timeout_ms,
