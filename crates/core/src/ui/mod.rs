@@ -1516,6 +1516,27 @@ pub fn App() -> Element {
                 ))
                 .recv::<bool>()
                 .await;
+
+                // Wait for auto_signin_test_accounts loop to finish so the
+                // overlay doesn't dismiss while accounts are still popping in
+                // (visible as icons appearing one-by-one in Bar 1). Cap the
+                // wait at 8 s so a stalled sign-in doesn't trap the user
+                // behind the overlay forever — slow accounts will pop in
+                // after the overlay vanishes, which is acceptable degradation.
+                #[cfg(debug_assertions)]
+                {
+                    use std::sync::atomic::Ordering;
+                    let deadline_ms = js_sys::Date::now() + 8000.0;
+                    while !AUTO_SIGNIN_DONE.load(Ordering::SeqCst)
+                        && js_sys::Date::now() < deadline_ms
+                    {
+                        let _ = document::eval(
+                            "setTimeout(() => dioxus.send(true), 100);",
+                        )
+                        .recv::<bool>()
+                        .await;
+                    }
+                }
             }
             startup_overlay_visible.set(false);
             startup_overlay_finished.set(true);
