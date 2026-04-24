@@ -132,7 +132,7 @@ fn score_class(score: i64) -> &'static str {
 #[context_menu(None)]
 #[component]
 pub fn ForumView() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Channel id resolution (fixes back-button + server-switch bugs):
@@ -217,7 +217,7 @@ pub fn ForumView() -> Element {
 #[component]
 pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     let mut thread_comments: Signal<Vec<Message>> = use_signal(Vec::new);
@@ -400,7 +400,7 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
 #[rustfmt::skip]
 #[component]
 fn ForumComment(node: ForumCommentNode) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let msg = &node.msg;
     let depth = node.depth;
     let children = node.children.clone();
@@ -458,7 +458,7 @@ fn ForumComment(node: ForumCommentNode) -> Element {
                     text: ctx_text.clone(),
                 };
                 let entry = forum_post_entry(ctx, &evt);
-                app_state.write().context_menu_stack.push(entry);
+                app_state.batch(|st| st.context_menu_stack.push(entry));
             },
             div { class: "forum-comment-header",
                 button {

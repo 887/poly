@@ -106,7 +106,7 @@ fn HighlightedName(name: String, query: String) -> Element {
 #[component]
 pub fn UserSidebar() -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let members = chat_data.read().members.clone();
     let mut filter_open = use_signal(|| false);
     let mut filter_text = use_signal(String::new);

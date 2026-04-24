@@ -9,7 +9,7 @@
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{ClientError, Server};
@@ -66,7 +66,7 @@ impl CommunitiesTab {
 #[context_menu(inherit)]
 #[component]
 pub fn CommunitiesLayout() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     let account_id = app_state.read().nav.active_account_id.cloned();

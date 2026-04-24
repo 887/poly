@@ -22,7 +22,7 @@
 //! annotations on sidebar rows are left untouched.
 
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
@@ -36,7 +36,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn AvatarContextMenu() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     let Some(menu) = app_state.read().avatar_context_menu.clone() else {
         return rsx! {};
@@ -48,7 +48,7 @@ pub fn AvatarContextMenu() -> Element {
     let display_name = menu.user_display_name.clone();
 
     let close = move || {
-        app_state.write().avatar_context_menu = None;
+        app_state.batch(|st| st.avatar_context_menu = None);
     };
 
     rsx! {
@@ -56,7 +56,7 @@ pub fn AvatarContextMenu() -> Element {
         div {
             class: "context-menu-backdrop",
             onclick: move |_| {
-                app_state.write().avatar_context_menu = None;
+                app_state.batch(|st| st.avatar_context_menu = None);
             },
             oncontextmenu: move |evt| evt.prevent_default(),
         }

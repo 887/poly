@@ -170,7 +170,7 @@ fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<Strin
 #[context_menu(inherit)]
 #[component]
 pub fn ConversationSearchView() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let query = use_signal(String::new);
     let enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {

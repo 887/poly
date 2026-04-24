@@ -51,7 +51,7 @@ pub(crate) fn CreateChannelPage(
     server_id: String,
 ) -> Element {
     let client_manager: Signal<ClientManager> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let mut channel_name = use_signal(String::new);
@@ -147,7 +147,7 @@ pub(crate) fn CreateChannelPage(
 /// Bundle of mutable signals passed to the create-channel async task.
 struct CreateChannelSignals {
     client_manager: Signal<ClientManager>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
     creating: Signal<bool>,
     error_msg: Signal<String>,

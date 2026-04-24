@@ -3,7 +3,7 @@
 //! See `docs/plans/plan-ui-action-types.md`.
 
 use crate::ui::dioxus_router::Navigator;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 
 /// Context available to every `UiAction::apply()` call.
 pub struct ActionCx<'a> {
@@ -36,7 +36,7 @@ pub trait UiAction: Sized + 'static {
 ///
 /// # Example
 /// ```ignore
-/// let mut state = use_context::<Signal<AppState>>();
+/// let mut state = use_context::<BatchedSignal<AppState>>();
 /// let nav = use_navigator();
 /// onclick: move |_| dispatch_action!(MyAction::Save, state, nav),
 /// ```

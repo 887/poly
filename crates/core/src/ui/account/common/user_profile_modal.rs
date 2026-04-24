@@ -65,8 +65,8 @@ impl UiAction for UserProfileModalAction {
 /// Stores the user in `AppState.nav.profile_modal_user` and, on WASM,
 /// pushes `#poly-profile` to the browser history so the native back
 /// gesture closes the modal.
-pub fn open_user_profile(mut app_state: Signal<AppState>, user: User) {
-    app_state.write().nav.profile_modal_user = Some(user);
+pub fn open_user_profile(app_state: BatchedSignal<AppState>, user: User) {
+    app_state.batch(|st| st.nav.profile_modal_user = Some(user));
     #[cfg(target_arch = "wasm32")]
     {
         let _ = document::eval(
@@ -84,8 +84,8 @@ pub fn open_user_profile(mut app_state: Signal<AppState>, user: User) {
 ///
 /// Uses `history.back()` so the hashchange event fires and the async back-gesture
 /// listener (if running) resolves cleanly without a second write.
-fn close_modal(mut app_state: Signal<AppState>) {
-    app_state.write().nav.profile_modal_user = None;
+fn close_modal(app_state: BatchedSignal<AppState>) {
+    app_state.batch(|st| st.nav.profile_modal_user = None);
     #[cfg(target_arch = "wasm32")]
     {
         let _ = document::eval(
@@ -106,7 +106,7 @@ fn close_modal(mut app_state: Signal<AppState>) {
 #[context_menu(none)]
 #[component]
 pub fn UserProfileModal() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let user = app_state.read().nav.profile_modal_user.clone();

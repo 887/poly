@@ -105,7 +105,7 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
 #[context_menu(inherit)]
 #[component]
 pub fn SavedItemsView() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();

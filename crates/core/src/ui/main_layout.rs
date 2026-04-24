@@ -23,7 +23,7 @@ use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, ModerationDialog, SettingsSection};
+use crate::state::{AppState, BatchedSignal, ModerationDialog, SettingsSection};
 use crate::ui::dialogs::{BanMemberDialog, EditChannelDialog, KickMemberDialog, TimeoutMemberDialog};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
@@ -211,7 +211,7 @@ fn NavBar() -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn MainLayout() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     // DECISION(DX-ROUTER-3): Dioxus 0.7 web router does not fire on_update for the
@@ -241,15 +241,16 @@ pub fn MainLayout() -> Element {
         crate::ui::preserve_layout_override_query_in_url();
         close_mobile_right_wing();
         if runtime_mobile_ui_active() {
-            let mut state = app_state.write();
-            state.nav.right_sidebar_visible = false;
-            state.nav.dm_right_sidebar_visible = false;
+            app_state.batch(|st| {
+                st.nav.right_sidebar_visible = false;
+                st.nav.dm_right_sidebar_visible = false;
+            });
         }
     });
 
     use_effect(move || {
         if route_targets_unknown_account(&route, &client_manager.read()) {
-            app_state.write().settings_section = SettingsSection::Accounts;
+            app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
             navigator().replace(Route::SettingsRoute);
         }
     });
@@ -301,22 +302,27 @@ pub fn MainLayout() -> Element {
             class: "main-layout",
             // Dismiss context menu when clicking outside of it
             onclick: move |_| {
-                if app_state.read().context_menu.is_some() {
-                    app_state.write().context_menu = None;
-                }
-                if app_state.read().channel_context_menu.is_some() {
-                    app_state.write().channel_context_menu = None;
-                }
-                if app_state.read().attachment_context_menu.is_some() {
-                    app_state.write().attachment_context_menu = None;
-                }
-                if app_state.read().reaction_context_menu.is_some() {
-                    app_state.write().reaction_context_menu = None;
-                }
-                // Clear the Phase-A context_menu_stack (ForumPostContextMenu,
-                // UserRowContextMenu, and future stack-based menus).
-                if !app_state.read().context_menu_stack.is_empty() {
-                    app_state.write().context_menu_stack.clear();
+                // Collapse the 5 context-menu-clear writes into ONE batch —
+                // previously each .write() triggered a separate Dioxus reactive
+                // cascade. See CLAUDE.md § Common WASM-hang causes #1.
+                let (has_ctx, has_chan, has_att, has_react, has_stack) = {
+                    let st = app_state.read();
+                    (
+                        st.context_menu.is_some(),
+                        st.channel_context_menu.is_some(),
+                        st.attachment_context_menu.is_some(),
+                        st.reaction_context_menu.is_some(),
+                        !st.context_menu_stack.is_empty(),
+                    )
+                };
+                if has_ctx || has_chan || has_att || has_react || has_stack {
+                    app_state.batch(|st| {
+                        if has_ctx { st.context_menu = None; }
+                        if has_chan { st.channel_context_menu = None; }
+                        if has_att { st.attachment_context_menu = None; }
+                        if has_react { st.reaction_context_menu = None; }
+                        if has_stack { st.context_menu_stack.clear(); }
+                    });
                 }
             },
             // Belt-and-suspenders: suppress native browser context menu app-wide.
@@ -370,11 +376,11 @@ pub fn MainLayout() -> Element {
 #[context_menu(none)]
 #[component]
 fn ModerationDialogOverlay() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let dialog = app_state.read().active_moderation_dialog.clone();
 
     let on_close = move |_| {
-        app_state.write().active_moderation_dialog = None;
+        app_state.batch(|st| st.active_moderation_dialog = None);
     };
 
     match dialog {

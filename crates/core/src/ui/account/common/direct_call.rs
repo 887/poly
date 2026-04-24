@@ -46,7 +46,7 @@ const JS_START_CAMERA: &str = r#"
 "#;
 
 fn active_account_context(
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Option<(String, String)> {
     let account_id = app_state.read().nav.active_account_id.cloned()?;
@@ -62,7 +62,7 @@ fn active_account_context(
 
 async fn resolve_direct_message_for_active_account(
     user_id: String,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) -> Option<(DmChannel, String)> {
@@ -103,7 +103,7 @@ async fn resolve_direct_message_for_active_account(
 /// Resolve/open the DM for a target user and navigate to the pending direct-call route.
 pub(crate) fn navigate_to_pending_direct_call_from_active_account(
     request: DirectCallRequest,
-    mut app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
@@ -147,12 +147,14 @@ pub(crate) fn navigate_to_pending_direct_call_from_active_account(
             },
         };
 
-        app_state.write().nav.pending_direct_call = Some(PendingDirectCallRequest {
-            account_id: dm.account_id.clone(),
-            dm_id: dm.id.clone(),
-            target_user: request.target_user,
-            start_video: request.start_video,
-            allow_add_to_active_temporary: request.allow_add_to_active_temporary,
+        app_state.batch(|st| {
+            st.nav.pending_direct_call = Some(PendingDirectCallRequest {
+                account_id: dm.account_id.clone(),
+                dm_id: dm.id.clone(),
+                target_user: request.target_user,
+                start_video: request.start_video,
+                allow_add_to_active_temporary: request.allow_add_to_active_temporary,
+            });
         });
         nav.push(route);
     });
@@ -318,7 +320,7 @@ async fn maybe_start_video_camera(start_video: bool, mut chat_data: BatchedSigna
 /// instead of parking the current call and creating a new one.
 pub(crate) fn start_direct_call_from_active_account(
     request: DirectCallRequest,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) {

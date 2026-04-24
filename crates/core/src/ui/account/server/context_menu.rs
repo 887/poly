@@ -38,7 +38,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn ServerContextMenu() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let Some(menu) = app_state.read().context_menu.clone() else {
@@ -75,7 +75,7 @@ pub fn ServerContextMenu() -> Element {
     }
 
     let close = move || {
-        app_state.write().context_menu = None;
+        app_state.batch(|st| st.context_menu = None);
     };
 
     let x = menu.x;
@@ -86,7 +86,7 @@ pub fn ServerContextMenu() -> Element {
         div {
             class: "context-menu-backdrop",
             onclick: move |_| {
-                app_state.write().context_menu = None;
+                app_state.batch(|st| st.context_menu = None);
             },
             oncontextmenu: move |evt| {
                 // Prevent browser's native context menu from appearing
@@ -315,7 +315,7 @@ fn RemoveFavoritesConfirm(
     server_id: String,
     oncancel: EventHandler<MouseEvent>,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Pre-compute the title using t_args so the Fluent {$name} placeholder is filled
@@ -344,7 +344,7 @@ fn RemoveFavoritesConfirm(
                                 .await;
                         });
                         // Close menu
-                        app_state.write().context_menu = None;
+                        app_state.batch(|st| st.context_menu = None);
                     },
                     "{t(\"remove-favorites-confirm\")}"
                 }

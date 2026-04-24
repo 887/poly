@@ -517,7 +517,7 @@ pub fn ServerSettingsPage(
     let _locale = crate::i18n::use_locale().read().clone();
     let search_text = use_signal(String::new);
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let mut published_section = use_signal(String::new);
 
     #[cfg(target_arch = "wasm32")]

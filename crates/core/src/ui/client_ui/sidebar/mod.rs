@@ -36,7 +36,7 @@ pub use repo_tree::RepoTreeLayout;
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use dioxus::prelude::*;
 use poly_client::{ClientError, SidebarDeclaration, SidebarLayoutKind};
 use poly_ui_macros::{context_menu, ui_action};
@@ -51,7 +51,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn ClientSidebar() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     // Resolve the current account. `active_account_id` is populated by the

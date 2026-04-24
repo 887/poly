@@ -161,7 +161,7 @@ async fn join_voice_channel(
     current_server: Option<poly_client::Server>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    mut app_state: Signal<AppState>,
+    mut app_state: BatchedSignal<AppState>,
 ) {
     // Step 1: Request microphone permission so browser shows the prompt now.
     let mut perm_eval = document::eval(JS_REQUEST_AUDIO_PERMISSION);
@@ -259,12 +259,14 @@ async fn join_voice_channel(
     if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
         remember_message_list_scroll_position(&previous_channel_id);
     }
-    app_state.write().nav.selected_channel.unsafe_presync_override(
-        Some(channel_id),
-        "voice_view: pre-set selected_channel inside join_voice_channel so ChatView \
-         renders against the new voice channel synchronously rather than the outgoing \
-         text channel — no nav.push follows because voice joins don't change the URL",
-    );
+    app_state.batch(|st| {
+        st.nav.selected_channel.unsafe_presync_override(
+            Some(channel_id),
+            "voice_view: pre-set selected_channel inside join_voice_channel so ChatView \
+             renders against the new voice channel synchronously rather than the outgoing \
+             text channel — no nav.push follows because voice joins don't change the URL",
+        );
+    });
 }
 
 // ─── Public component ─────────────────────────────────────────────────────────
@@ -280,7 +282,7 @@ async fn join_voice_channel(
 pub fn VoiceChannelView() -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     let current_channel = chat_data.read().current_channel.clone();
     let current_server = chat_data.read().current_server.clone();
@@ -488,7 +490,7 @@ fn VoiceParticipantGrid(
 #[component]
 fn VoiceTile(participant: VoiceParticipant) -> Element {
     let user = &participant.user;
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let color = user_color(&user.id);
     let first_char: String = user
         .display_name
@@ -581,7 +583,7 @@ fn VoiceJoinButton(
     channel_type: ChannelType,
     chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
 ) -> Element {
     rsx! {
         div { class: "voice-controls",

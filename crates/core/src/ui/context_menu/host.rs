@@ -19,7 +19,7 @@
 //! directly). New menus — `ForumPostContextMenu`, `UserRowContextMenu`,
 //! and eventually the migrated originals — target this host.
 
-use crate::state::{ActiveContextMenu, AppState, MenuAnchor};
+use crate::state::{ActiveContextMenu, AppState, BatchedSignal, MenuAnchor};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use std::cell::RefCell;
@@ -59,7 +59,7 @@ fn lookup(menu_type: &str) -> Option<RenderFn> {
 #[context_menu(None)]
 #[component]
 pub fn ContextMenuStack() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let stack = app_state.read().context_menu_stack.clone();
 
     if stack.is_empty() {
@@ -88,14 +88,11 @@ pub fn ContextMenuStack() -> Element {
 #[context_menu(None)]
 #[component]
 fn ContextMenuStackEntry(entry: ActiveContextMenu, depth: usize, is_mobile: bool) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     let menu_id = entry.id;
     let close = use_callback(move |()| {
-        app_state
-            .write()
-            .context_menu_stack
-            .retain(|m| m.id != menu_id);
+        app_state.batch(|st| st.context_menu_stack.retain(|m| m.id != menu_id));
     });
 
     let Some(render) = lookup(entry.menu_type) else {

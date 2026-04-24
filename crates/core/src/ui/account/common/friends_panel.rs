@@ -207,7 +207,7 @@ fn FriendsFilterBar(
 #[ui_action(inherit)]
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();

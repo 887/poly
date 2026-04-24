@@ -6,7 +6,7 @@
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -39,7 +39,7 @@ pub fn TimeoutMemberDialog(
     let mut success = use_signal(|| false);
 
     let client_manager: Signal<ClientManager> = use_context();
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
 
     let title = t("dialog-timeout-title")
         .replace("{ $user }", &member_name)
@@ -131,7 +131,7 @@ pub fn TimeoutMemberDialog(
                                         Ok(()) => {
                                             submitting.set(false);
                                             success.set(true);
-                                            app_state.write().active_moderation_dialog = None;
+                                            app_state.batch(|st| st.active_moderation_dialog = None);
                                         }
                                         Err(e) => {
                                             submitting.set(false);

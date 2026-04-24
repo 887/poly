@@ -113,7 +113,7 @@ fn ElectronWindowControls() -> Element {
 #[component]
 pub fn ElectronTitleBar() -> Element {
     let mut is_electron = use_signal(|| false);
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     use_future(move || async move {

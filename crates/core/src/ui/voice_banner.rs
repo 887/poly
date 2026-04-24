@@ -122,7 +122,7 @@ fn VoiceBannerChannelLink(
     account_id: String,
     connection_kind: VoiceConnectionKind,
     dm_id: Option<String>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
 ) -> Element {
     rsx! {
         button {
@@ -248,7 +248,7 @@ fn VoiceBannerControls(
 #[ui_action(VoiceBannerAction)]
 #[component]
 pub fn VoiceBanner() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let voice_conn = chat_data.read().voice_connection.clone();

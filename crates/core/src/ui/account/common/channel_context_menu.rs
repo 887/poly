@@ -30,7 +30,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn ChannelContextMenu() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let Some(menu) = app_state.read().channel_context_menu.clone() else {
@@ -44,7 +44,7 @@ pub fn ChannelContextMenu() -> Element {
     let y = menu.y;
 
     let close = move || {
-        app_state.write().channel_context_menu = None;
+        app_state.batch(|st| st.channel_context_menu = None);
     };
 
     rsx! {
@@ -52,7 +52,7 @@ pub fn ChannelContextMenu() -> Element {
         div {
             class: "context-menu-backdrop",
             onclick: move |_| {
-                app_state.write().channel_context_menu = None;
+                app_state.batch(|st| st.channel_context_menu = None);
             },
             oncontextmenu: move |evt| evt.prevent_default(),
         }

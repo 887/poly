@@ -25,7 +25,7 @@ pub struct MessageMediaViewerOverlayProps {
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
     let mut zoom = use_signal(|| 1.0_f32);
     let mut pan_x = use_signal(|| 0.0_f32);
@@ -266,11 +266,13 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                             evt.prevent_default();
                             evt.stop_propagation();
                             let coords = evt.client_coordinates();
-                            app_state.write().attachment_context_menu = Some(AttachmentContextMenuState {
-                                x: coords.x,
-                                y: coords.y,
-                                url: ctx_url.clone(),
-                                filename: ctx_name.clone(),
+                            app_state.batch(|st| {
+                                st.attachment_context_menu = Some(AttachmentContextMenuState {
+                                    x: coords.x,
+                                    y: coords.y,
+                                    url: ctx_url.clone(),
+                                    filename: ctx_name.clone(),
+                                });
                             });
                         }
                     },

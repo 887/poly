@@ -17,7 +17,7 @@
 use super::host::register_menu;
 use super::ContextMenuFor;
 use crate::i18n::t;
-use crate::state::{ActiveContextMenu, AppState, MenuAnchor, ModerationDialog};
+use crate::state::{ActiveContextMenu, AppState, BatchedSignal, MenuAnchor, ModerationDialog};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
@@ -125,7 +125,7 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
     let Ok(ctx) = serde_json::from_value::<UserRowCtx>(ctx_json.clone()) else {
         return rsx! {};
     };
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let user_for_profile = ctx.user.clone();
     let copy_id = ctx.user.id.clone();
     let display_name = ctx.user.display_name.clone();
@@ -191,11 +191,13 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                         let member_name = member_name_kick.clone();
                         let account_id = account_id_kick.clone();
                         move |_| {
-                            app_state.write().active_moderation_dialog = Some(ModerationDialog::Kick {
-                                server_id: server_id.clone(),
-                                member_id: member_id.clone(),
-                                member_name: member_name.clone(),
-                                account_id: account_id.clone(),
+                            app_state.batch(|st| {
+                                st.active_moderation_dialog = Some(ModerationDialog::Kick {
+                                    server_id: server_id.clone(),
+                                    member_id: member_id.clone(),
+                                    member_name: member_name.clone(),
+                                    account_id: account_id.clone(),
+                                });
                             });
                             close.call(());
                         }
@@ -212,11 +214,13 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                         let member_name = member_name_ban.clone();
                         let account_id = account_id_ban.clone();
                         move |_| {
-                            app_state.write().active_moderation_dialog = Some(ModerationDialog::Ban {
-                                server_id: server_id.clone(),
-                                member_id: member_id.clone(),
-                                member_name: member_name.clone(),
-                                account_id: account_id.clone(),
+                            app_state.batch(|st| {
+                                st.active_moderation_dialog = Some(ModerationDialog::Ban {
+                                    server_id: server_id.clone(),
+                                    member_id: member_id.clone(),
+                                    member_name: member_name.clone(),
+                                    account_id: account_id.clone(),
+                                });
                             });
                             close.call(());
                         }
@@ -233,11 +237,13 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                         let member_name = member_name_timeout.clone();
                         let account_id = account_id_timeout.clone();
                         move |_| {
-                            app_state.write().active_moderation_dialog = Some(ModerationDialog::Timeout {
-                                server_id: server_id.clone(),
-                                member_id: member_id.clone(),
-                                member_name: member_name.clone(),
-                                account_id: account_id.clone(),
+                            app_state.batch(|st| {
+                                st.active_moderation_dialog = Some(ModerationDialog::Timeout {
+                                    server_id: server_id.clone(),
+                                    member_id: member_id.clone(),
+                                    member_name: member_name.clone(),
+                                    account_id: account_id.clone(),
+                                });
                             });
                             close.call(());
                         }

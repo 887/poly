@@ -82,7 +82,7 @@ pub fn ViewThreadButton(
     /// The `ThreadInfo` attached to the parent message.
     thread: ThreadInfo,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
     let thread_id = thread.thread_id.clone();
     let count = thread.message_count;
@@ -126,10 +126,15 @@ pub fn ViewThreadButton(
                     });
                 } else {
                     // Side-panel on desktop.
-                    let mut s = app_state.write();
-                    let currently_open = s.nav.thread_panel_open.as_deref() == Some(&thread_id);
-                    s.nav.thread_panel_open =
-                        if currently_open { None } else { Some(thread_id.clone()) };
+                    app_state.batch(|s| {
+                        let currently_open =
+                            s.nav.thread_panel_open.as_deref() == Some(&thread_id);
+                        s.nav.thread_panel_open = if currently_open {
+                            None
+                        } else {
+                            Some(thread_id.clone())
+                        };
+                    });
                 }
             },
             "{label}"
@@ -148,7 +153,7 @@ pub fn ViewThreadButton(
 #[context_menu(inherit)]
 #[component]
 pub fn ActiveThreadsBar() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -202,7 +207,7 @@ pub fn ActiveThreadsBar() -> Element {
 #[context_menu(inherit)]
 #[component]
 fn ActiveThreadChip(thread: ThreadInfo) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
     let thread_id = thread.thread_id.clone();
     let count = thread.message_count;
@@ -230,11 +235,15 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
                         thread_id: thread_id.clone(),
                     });
                 } else {
-                    let mut s = app_state.write();
-                    let currently_open =
-                        s.nav.thread_panel_open.as_deref() == Some(&thread_id);
-                    s.nav.thread_panel_open =
-                        if currently_open { None } else { Some(thread_id.clone()) };
+                    app_state.batch(|s| {
+                        let currently_open =
+                            s.nav.thread_panel_open.as_deref() == Some(&thread_id);
+                        s.nav.thread_panel_open = if currently_open {
+                            None
+                        } else {
+                            Some(thread_id.clone())
+                        };
+                    });
                 }
             },
             "🧵 {thread_id} ({count})"
@@ -252,7 +261,7 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn ThreadPanel() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     let thread_id = app_state.read().nav.thread_panel_open.clone();
@@ -330,7 +339,7 @@ pub fn ThreadPanelHeader(
     /// Fallback thread ID shown when the channel name is not yet loaded.
     thread_id: String,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
 
     let name = channel
         .as_ref()
@@ -362,7 +371,7 @@ pub fn ThreadPanelHeader(
                 class: "thread-panel-close",
                 title: t("action-close"),
                 onclick: move |_| {
-                    app_state.write().nav.thread_panel_open = None;
+                    app_state.batch(|st| st.nav.thread_panel_open = None);
                 },
                 "✕"
             }
@@ -420,7 +429,7 @@ fn ThreadMessageRow(message: Message) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn ThreadFullView(thread_id: String) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
 

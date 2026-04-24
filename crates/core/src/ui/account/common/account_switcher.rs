@@ -25,7 +25,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn AccountSwitcher() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
 
@@ -39,7 +39,7 @@ pub fn AccountSwitcher() -> Element {
                 class: "account-switcher-main-btn",
                 title: "{t(\"account-switch\")}",
                 onclick: move |_| {
-                    app_state.write().settings_section = SettingsSection::Accounts;
+                    app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
                     crate::nav!(Route::SettingsRoute);
                 },
                 "👥"
@@ -86,7 +86,7 @@ pub fn AccountSwitcher() -> Element {
                 class: "account-switcher-setting-btn",
                 title: "{t(\"nav-settings\")}",
                 onclick: move |_| {
-                    app_state.write().settings_section = SettingsSection::General;
+                    app_state.batch(|st| st.settings_section = SettingsSection::General);
                     crate::nav!(Route::SettingsRoute);
                 },
                 "⚙"

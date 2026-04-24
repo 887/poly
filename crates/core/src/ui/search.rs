@@ -495,7 +495,7 @@ pub fn SearchPage(
     /// When `None`, all accounts start enabled (global search).
     locked_account_id: Option<String>,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let query = use_signal(String::new);
@@ -529,7 +529,7 @@ pub fn SearchPage(
         let seed = app_state.read().search_type_seed.clone();
         if let Some(seed) = seed {
             enabled_types.set(seed.into_iter().collect());
-            app_state.write().search_type_seed = None;
+            app_state.batch(|st| st.search_type_seed = None);
         }
     });
 

@@ -17,7 +17,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX + logic.
 
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, BatchedSignal, ChatData};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -221,7 +221,7 @@ pub fn AgentPanel(
     chat_id: String,
     chat_name: String,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
 
     // Access toggle — load persisted value from KV.
     let mut access_enabled = use_signal(|| false);

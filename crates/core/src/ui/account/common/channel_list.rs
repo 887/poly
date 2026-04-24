@@ -72,7 +72,7 @@ async fn load_channel_data(
     channel_id: String,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
 ) {
     // Fire an initial spinner cascade so the UI paints "loading" before we
     // start awaiting.  Every subsequent mutation is deferred into a single
@@ -235,7 +235,7 @@ async fn load_dm_messages(
 fn activate_dm_channel(
     dm: DmChannel,
     instance_id: String,
-    mut app_state: Signal<AppState>,
+    mut app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
@@ -273,7 +273,7 @@ fn activate_dm_channel(
 }
 
 fn active_account_context(
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Option<(String, String)> {
     let account_id = app_state.read().nav.active_account_id.cloned()?;
@@ -291,7 +291,7 @@ fn active_account_context(
 /// navigate using the real DM channel ID returned by the backend.
 pub(crate) fn open_direct_message_from_active_account(
     user_id: String,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
@@ -416,7 +416,7 @@ pub(crate) fn open_direct_message_from_active_account(
 #[ui_action(ChannelListAction)]
 #[component]
 pub fn ChannelList() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let current_view = *app_state.read().nav.view;
     let current_server = chat_data.read().current_server.clone();
@@ -469,7 +469,7 @@ fn ServerBanner(
     current_server: Option<Server>,
     visible_category_ids: Signal<Vec<String>>,
 ) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let mut dropdown_open = use_signal(|| false);
     let mut channels_roles_open = use_signal(|| false);
 
@@ -655,7 +655,7 @@ fn ServerBanner(
 #[ui_action(inherit)]
 #[component]
 fn DMFriendsView() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Only show DMs and groups belonging to the currently active account.
@@ -821,7 +821,7 @@ fn DMFriendsView() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let _client_manager: Signal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -1095,7 +1095,7 @@ fn DMChannelItem(
 ) -> Element {
     use crate::state::chat_data::user_color;
     use poly_client::PresenceStatus;
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
@@ -1137,7 +1137,7 @@ fn DMChannelItem(
                     cd.current_channel = Some(cur_chan);
                     cd.current_server = None;
                 });
-                app_state.write().nav.dm_right_sidebar_visible = false;
+                app_state.batch(|st| st.nav.dm_right_sidebar_visible = false);
                 let cid = channel_id.clone();
                 let aid = account_id.clone();
                 spawn(async move {
@@ -1192,7 +1192,7 @@ fn GroupChannelItem(
     /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
     instance_id: String,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
@@ -1260,7 +1260,7 @@ fn GroupChannelItem(
 fn FriendItem(display_name: String, user_id: String) -> Element {
     use crate::state::chat_data::user_color;
 
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
@@ -1341,7 +1341,7 @@ fn CategorySection(
 #[ui_action(inherit)]
 #[component]
 fn ChannelItemRow(channel: Channel) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
@@ -1404,15 +1404,17 @@ fn ChannelItemRow(channel: Channel) -> Element {
         let instance_id = instance_id_for_menu.clone();
         let backend_slug = backend_slug_for_menu.clone();
         crate::ui::context_menu::long_press::LongPress::default_500ms(move |x, y| {
-            app_state.write().channel_context_menu = Some(ChannelContextMenuState {
-                x,
-                y,
-                channel_id: ch_id.clone(),
-                channel_name: ch_name.clone(),
-                account_id: account_id.clone(),
-                server_id: server_id.clone(),
-                instance_id: instance_id.clone(),
-                backend_slug: backend_slug.clone(),
+            app_state.batch(|st| {
+                st.channel_context_menu = Some(ChannelContextMenuState {
+                    x,
+                    y,
+                    channel_id: ch_id.clone(),
+                    channel_name: ch_name.clone(),
+                    account_id: account_id.clone(),
+                    server_id: server_id.clone(),
+                    instance_id: instance_id.clone(),
+                    backend_slug: backend_slug.clone(),
+                });
             });
         })
     };
@@ -1424,15 +1426,17 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 evt.prevent_default();
                 evt.stop_propagation();
                 let coords = evt.client_coordinates();
-                app_state.write().channel_context_menu = Some(ChannelContextMenuState {
-                    x: coords.x,
-                    y: coords.y,
-                    channel_id: ch_id_for_menu.clone(),
-                    channel_name: ch_name_for_menu.clone(),
-                    account_id: account_id_for_menu.clone(),
-                    server_id: server_id_for_menu.clone(),
-                    instance_id: instance_id_for_menu.clone(),
-                    backend_slug: backend_slug_for_menu.clone(),
+                app_state.batch(|st| {
+                    st.channel_context_menu = Some(ChannelContextMenuState {
+                        x: coords.x,
+                        y: coords.y,
+                        channel_id: ch_id_for_menu.clone(),
+                        channel_name: ch_name_for_menu.clone(),
+                        account_id: account_id_for_menu.clone(),
+                        server_id: server_id_for_menu.clone(),
+                        instance_id: instance_id_for_menu.clone(),
+                        backend_slug: backend_slug_for_menu.clone(),
+                    });
                 });
             },
             ontouchstart: long_press.on_touch_start(),

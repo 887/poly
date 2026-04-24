@@ -60,7 +60,7 @@ mod translation;
 mod voice_video;
 
 use crate::i18n::t;
-use crate::state::{AppState, SettingsSection};
+use crate::state::{AppState, BatchedSignal, SettingsSection};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
@@ -242,7 +242,7 @@ fn SettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 fn install_settings_scroll_spy(
-    _app_state: Signal<AppState>,
+    _app_state: BatchedSignal<AppState>,
     _plugin_section_ids: Vec<String>,
     _active_plugin_slug: Signal<Option<String>>,
 ) {
@@ -283,13 +283,13 @@ fn install_settings_scroll_spy(
                     active_plugin_slug.set(Some(plugin_slug.to_string()));
                 }
                 if app_state.read().settings_section != SettingsSection::Plugins {
-                    app_state.write().settings_section = SettingsSection::Plugins;
+                    app_state.batch(|st| st.settings_section = SettingsSection::Plugins);
                 }
             } else {
                 active_plugin_slug.set(None);
                 let next = SettingsSection::from_slug(&slug);
                 if app_state.read().settings_section != next {
-                    app_state.write().settings_section = next;
+                    app_state.batch(|st| st.settings_section = next);
                 }
             }
         });
@@ -326,7 +326,7 @@ fn SettingsNavigation(
 ) -> Element {
     let filter = search_text.read().to_lowercase();
     let active_plugin = active_plugin_slug.read().clone();
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     // Snapshot the registered plugin settings pages so we don't hold the read
     // guard across the RSX macro expansion.
@@ -356,7 +356,7 @@ fn SettingsNavigation(
                             class,
                             onclick: move |_| {
                                 active_plugin_slug.set(None);
-                                app_state.write().settings_section = section;
+                                app_state.batch(|st| st.settings_section = section);
                                 on_select.call(section);
                                 close_mobile_drawer();
                             },
@@ -398,7 +398,7 @@ fn SettingsNavigation(
                             "data-settings-slug": "plugin-{slug}",
                             onclick: move |_| {
                                 active_plugin_slug.set(Some(slug.to_string()));
-                                app_state.write().settings_section = SettingsSection::Plugins;
+                                app_state.batch(|st| st.settings_section = SettingsSection::Plugins);
                                 scroll_to_section_anchor(&format!("plugin-{slug}"));
                                 close_mobile_drawer();
                             },
@@ -548,7 +548,7 @@ fn SettingsAllSections(search_query: String) -> Element {
 #[ui_action(inherit)]
 #[component]
 pub fn SettingsPage() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let locale_key = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
     let active_plugin_slug = use_signal(|| None::<String>);
@@ -617,7 +617,7 @@ pub fn SettingsPage() -> Element {
                     active_plugin_slug,
                     on_select: move |next: SettingsSection| {
                         *search_text.write() = String::new();
-                        app_state.write().settings_section = next;
+                        app_state.batch(|st| st.settings_section = next);
                         nav.push(Route::SettingsSectionRoute { section: next.to_slug().to_string() });
                     },
                 }

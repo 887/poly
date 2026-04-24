@@ -285,7 +285,7 @@ fn AccountProfilePopup(
 fn AccountBarControls(
     is_muted: bool,
     is_deafened: bool,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Element {
     let nav = app_state.read().nav.clone();
@@ -365,7 +365,7 @@ fn AccountBarControls(
 #[context_menu(inherit)]
 #[component]
 pub fn AccountBar() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
     let user = current_account_bar_user(&app_state.read(), &chat_data.read());

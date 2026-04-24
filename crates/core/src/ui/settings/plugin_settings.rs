@@ -47,7 +47,7 @@ impl UiAction for DemoPluginSettingsAction {
 #[ui_action(DemoPluginSettingsAction)]
 #[component]
 pub fn DemoPluginSettings() -> Element {
-    let mut app_state: Signal<crate::state::AppState> = use_context();
+    let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let demo_active = client_manager.read().demo_active;
@@ -90,7 +90,7 @@ pub fn DemoPluginSettings() -> Element {
                                     client_manager, chat_data, app_state,
                                 ).await;
                                 if !was_active {
-                                    app_state.write().is_setup_complete = true;
+                                    app_state.batch(|st| st.is_setup_complete = true);
                                 }
                             });
                         },

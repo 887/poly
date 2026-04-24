@@ -21,7 +21,7 @@
 //! non-forum backend (HN, GitHub, …) is unaffected.
 
 use crate::client_manager::ClientManager;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
@@ -280,7 +280,7 @@ pub fn ListBody(
 #[context_menu(inherit)]
 #[component]
 pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let id = row.id.clone();
     let id_for_click = id.clone();
     let primary = row.primary_text.clone();
@@ -318,7 +318,7 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
                             text: text.clone(),
                         };
                         let entry = forum_post_entry(ctx, &evt);
-                        app_state.write().context_menu_stack.push(entry);
+                        app_state.batch(|st| st.context_menu_stack.push(entry));
                     }
                 },
                 div { class: "forum-post-votes",

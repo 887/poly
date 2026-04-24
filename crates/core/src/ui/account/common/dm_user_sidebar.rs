@@ -42,7 +42,7 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 #[context_menu(inherit)]
 #[component]
 pub fn DmUserSidebar() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
@@ -63,7 +63,7 @@ pub fn DmUserSidebar() -> Element {
                     class: "dm-sidebar-close",
                     title: "Close member list",
                     onclick: move |_| {
-                        app_state.write().nav.dm_right_sidebar_visible = false;
+                        app_state.batch(|st| st.nav.dm_right_sidebar_visible = false);
                     },
                     "×"
                 }
@@ -100,7 +100,7 @@ fn DmMemberRow(
     account_id: String,
     chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
 ) -> Element {
     let color = user_color(&member.id);
     let first_char: String = member

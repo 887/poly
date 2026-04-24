@@ -1081,7 +1081,7 @@ async fn restore_poly_accounts(
 async fn init_storage(
     mut theme_config: Signal<crate::theme::ThemeConfig>,
     mut storage_ready: Signal<bool>,
-    mut app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     mut locale_sig: Signal<String>,
     mut client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
@@ -1101,18 +1101,27 @@ async fn init_storage(
                     tracing::info!("Storage: setup complete, going to main layout");
                     crate::i18n::set_locale(&settings.locale);
                     *locale_sig.write() = settings.locale.clone();
-                    app_state.write().is_setup_complete = true;
                     client_manager
                         .write()
                         .set_disabled_native_backends(settings.disabled_native_backends.clone());
                     let restored_layout_mode =
                         effective_layout_mode(settings.layout_mode, settings.force_mobile_layout);
-                    app_state.write().layout_mode = restored_layout_mode;
-                    app_state.write().mirror_menu_layout = settings.mirror_menu_layout;
-                    app_state.write().mirror_chat_messages = settings.mirror_chat_messages;
-                    app_state.write().member_list_grouping = settings.member_list_grouping;
-                    app_state.write().member_list_sort_order = settings.member_list_sort_order;
-                    app_state.write().member_list_show_offline = settings.member_list_show_offline;
+                    // Collapse the 7-write cascade into ONE batch — see
+                    // CLAUDE.md § Common WASM-hang causes #1.
+                    let mirror_menu_layout = settings.mirror_menu_layout;
+                    let mirror_chat_messages = settings.mirror_chat_messages;
+                    let member_list_grouping = settings.member_list_grouping;
+                    let member_list_sort_order = settings.member_list_sort_order;
+                    let member_list_show_offline = settings.member_list_show_offline;
+                    app_state.batch(|st| {
+                        st.is_setup_complete = true;
+                        st.layout_mode = restored_layout_mode;
+                        st.mirror_menu_layout = mirror_menu_layout;
+                        st.mirror_chat_messages = mirror_chat_messages;
+                        st.member_list_grouping = member_list_grouping;
+                        st.member_list_sort_order = member_list_sort_order;
+                        st.member_list_show_offline = member_list_show_offline;
+                    });
                     // nav.view is written by sync_route_to_app_state on the next nav.push
                     // Restore favorited servers so Bar 1 repopulates immediately
                     // on launch — before the server list is fetched from the network.
@@ -1132,17 +1141,21 @@ async fn init_storage(
                     if settings.demo_active {
                         demo::toggle_demo(client_manager, chat_data, app_state).await;
                     }
-                    app_state.write().nav.right_sidebar_visible = settings.server_member_list_open;
-                    app_state.write().nav.dm_right_sidebar_visible = settings.dm_member_list_open;
-                    if layout_mode_is_mobile(restored_layout_mode) {
-                        app_state.write().nav.right_sidebar_visible = false;
-                        app_state.write().nav.dm_right_sidebar_visible = false;
-                    }
+                    // Collapse the 4-write nav.* cascade into ONE batch. When
+                    // mobile layout is active, both sidebar visibility bits are
+                    // forced false regardless of persisted values.
+                    let is_mobile = layout_mode_is_mobile(restored_layout_mode);
+                    let server_list_open = settings.server_member_list_open && !is_mobile;
+                    let dm_list_open = settings.dm_member_list_open && !is_mobile;
+                    app_state.batch(|st| {
+                        st.nav.right_sidebar_visible = server_list_open;
+                        st.nav.dm_right_sidebar_visible = dm_list_open;
+                    });
                     // Restore per-account last-visited routes so account-switching
                     // returns to the correct page even after a page reload.
                     match storage.get_account_last_routes().await {
                         Ok(stored_routes) if !stored_routes.is_empty() => {
-                            app_state.write().nav.account_last_routes = stored_routes;
+                            app_state.batch(|st| st.nav.account_last_routes = stored_routes);
                             tracing::info!("Restored per-account last routes from storage");
                         }
                         Ok(_) => {}
@@ -1150,7 +1163,7 @@ async fn init_storage(
                     }
                     match storage.get_account_last_dm_routes().await {
                         Ok(stored_routes) if !stored_routes.is_empty() => {
-                            app_state.write().nav.account_last_dm_routes = stored_routes;
+                            app_state.batch(|st| st.nav.account_last_dm_routes = stored_routes);
                             tracing::info!("Restored per-account last DM routes from storage");
                         }
                         Ok(_) => {}
@@ -1223,7 +1236,7 @@ async fn persist_setup_completion(account_id: String) {
 }
 
 fn router_config(
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
 ) -> dioxus_router::RouterConfig<Route> {
     dioxus_router::RouterConfig::default().on_update(
@@ -1233,8 +1246,7 @@ fn router_config(
             preserve_layout_override_query_in_url();
 
             if route_targets_unknown_account(&route, &client_manager.read()) {
-                let mut next_app_state = app_state;
-                next_app_state.write().settings_section = SettingsSection::Accounts;
+                app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
                 return Some(NavigationTarget::Internal(Route::SettingsRoute));
             }
 
@@ -1257,8 +1269,7 @@ fn router_config(
                     }));
                 }
                 drop(cm);
-                let mut next_app_state = app_state;
-                next_app_state.write().settings_section = SettingsSection::Accounts;
+                app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
                 return Some(NavigationTarget::Internal(Route::SettingsRoute));
             }
 
@@ -1271,7 +1282,7 @@ fn router_config(
 #[ui_action(None)]
 #[context_menu(inherit)]
 #[component]
-fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
+fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<AppState>) -> Element {
     // Pull context signals so we can activate demo after setup completes.
     let client_manager: Signal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
@@ -1296,7 +1307,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState
                         // Only now flip is_setup_complete — this mounts the Router
                         // with demo already active, so on_update's initial redirect
                         // lands on DmsHome.
-                        app_state.write().is_setup_complete = true;
+                        app_state.batch(|st| st.is_setup_complete = true);
                     });
                 },
             }
@@ -1408,7 +1419,8 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn App() -> Element {
-    let app_state = use_signal(AppState::default);
+    let app_state: BatchedSignal<AppState> =
+        BatchedSignal::from_signal(use_signal(AppState::default));
     let storage_ready = use_signal(|| false);
     let startup_overlay_config = startup_overlay_config_from_query();
     let startup_overlay_enabled = startup_overlay_config.enabled;

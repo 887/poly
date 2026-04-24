@@ -15,7 +15,7 @@
 //! - Open Media Link — `window.open(url, '_blank')`
 
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -27,7 +27,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn AttachmentContextMenu() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     let Some(menu) = app_state.read().attachment_context_menu.clone() else {
         return rsx! {};
@@ -39,7 +39,7 @@ pub fn AttachmentContextMenu() -> Element {
     let filename = menu.filename.clone();
 
     let close = move || {
-        app_state.write().attachment_context_menu = None;
+        app_state.batch(|st| st.attachment_context_menu = None);
     };
 
     rsx! {
@@ -50,7 +50,7 @@ pub fn AttachmentContextMenu() -> Element {
             // the viewer and the user sees no menu at all.
             style: "z-index: 2199;",
             onclick: move |_| {
-                app_state.write().attachment_context_menu = None;
+                app_state.batch(|st| st.attachment_context_menu = None);
             },
             oncontextmenu: move |evt| evt.prevent_default(),
         }

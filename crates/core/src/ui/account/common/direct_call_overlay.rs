@@ -27,7 +27,7 @@ pub fn OutgoingDirectCallOverlay(
     start_video: bool,
     allow_add_to_active_temporary: bool,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     #[cfg(not(target_arch = "wasm32"))]
     let client_manager: Signal<ClientManager> = use_context();
@@ -143,7 +143,7 @@ pub fn OutgoingDirectCallOverlay(
         div {
             class: "direct-call-overlay",
             onclick: move |_| {
-                app_state.write().nav.pending_direct_call = None;
+                app_state.batch(|st| st.nav.pending_direct_call = None);
                 #[cfg(target_arch = "wasm32")]
                 {
                     let _ = document::eval("window.__polyPendingDirectCallReady = false;");
@@ -157,7 +157,7 @@ pub fn OutgoingDirectCallOverlay(
                     class: "direct-call-close-btn",
                     title: t("action-close"),
                     onclick: move |_| {
-                        app_state.write().nav.pending_direct_call = None;
+                        app_state.batch(|st| st.nav.pending_direct_call = None);
                         #[cfg(target_arch = "wasm32")]
                         {
                             let _ = document::eval("window.__polyPendingDirectCallReady = false;");
@@ -189,7 +189,7 @@ pub fn OutgoingDirectCallOverlay(
                     button {
                         class: "direct-call-cancel-btn",
                         onclick: move |_| {
-                            app_state.write().nav.pending_direct_call = None;
+                            app_state.batch(|st| st.nav.pending_direct_call = None);
                             #[cfg(target_arch = "wasm32")]
                             {
                                 let _ = document::eval("window.__polyPendingDirectCallReady = false;");

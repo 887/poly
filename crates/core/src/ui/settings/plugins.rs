@@ -375,7 +375,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 pub fn PluginsSettings() -> Element {
     let mut client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
-    let app_state: Signal<crate::state::AppState> = use_context();
+    let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
     let mut disabled: Signal<Vec<String>> = use_signal(Vec::new);

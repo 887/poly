@@ -153,7 +153,7 @@ fn LayoutModeButton(label: String, active: bool, onclick: EventHandler<MouseEven
 #[context_menu(inherit)]
 #[component]
 fn LayoutModeSelector() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let mut settings_sig = use_signal(AppSettings::default);
     let mut loaded = use_signal(|| false);
 
@@ -183,7 +183,7 @@ fn LayoutModeSelector() -> Element {
                     active: selected_mode == LayoutMode::AutoWidth,
                     onclick: move |_| {
                         settings_sig.write().layout_mode = LayoutMode::AutoWidth;
-                        app_state.write().layout_mode = LayoutMode::AutoWidth;
+                        app_state.batch(|st| st.layout_mode = LayoutMode::AutoWidth);
                         spawn(async move { persist_layout_mode(LayoutMode::AutoWidth).await; });
                     },
                 }
@@ -192,7 +192,7 @@ fn LayoutModeSelector() -> Element {
                     active: selected_mode == LayoutMode::AutoPortrait,
                     onclick: move |_| {
                         settings_sig.write().layout_mode = LayoutMode::AutoPortrait;
-                        app_state.write().layout_mode = LayoutMode::AutoPortrait;
+                        app_state.batch(|st| st.layout_mode = LayoutMode::AutoPortrait);
                         spawn(async move { persist_layout_mode(LayoutMode::AutoPortrait).await; });
                     },
                 }
@@ -201,7 +201,7 @@ fn LayoutModeSelector() -> Element {
                     active: selected_mode == LayoutMode::ForceDesktop,
                     onclick: move |_| {
                         settings_sig.write().layout_mode = LayoutMode::ForceDesktop;
-                        app_state.write().layout_mode = LayoutMode::ForceDesktop;
+                        app_state.batch(|st| st.layout_mode = LayoutMode::ForceDesktop);
                         spawn(async move { persist_layout_mode(LayoutMode::ForceDesktop).await; });
                     },
                 }
@@ -210,7 +210,7 @@ fn LayoutModeSelector() -> Element {
                     active: selected_mode == LayoutMode::ForceMobile,
                     onclick: move |_| {
                         settings_sig.write().layout_mode = LayoutMode::ForceMobile;
-                        app_state.write().layout_mode = LayoutMode::ForceMobile;
+                        app_state.batch(|st| st.layout_mode = LayoutMode::ForceMobile);
                         spawn(async move { persist_layout_mode(LayoutMode::ForceMobile).await; });
                     },
                 }
@@ -224,7 +224,7 @@ fn LayoutModeSelector() -> Element {
 #[context_menu(inherit)]
 #[component]
 fn MirrorMenuToggle() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let enabled = app_state.read().mirror_menu_layout;
 
     rsx! {
@@ -239,7 +239,7 @@ fn MirrorMenuToggle() -> Element {
                     checked: enabled,
                     onchange: move |evt| {
                         let next = evt.checked();
-                        app_state.write().mirror_menu_layout = next;
+                        app_state.batch(|st| st.mirror_menu_layout = next);
                         spawn(async move { persist_mirror_menu_layout(next).await; });
                     },
                 }
@@ -254,7 +254,7 @@ fn MirrorMenuToggle() -> Element {
 #[context_menu(inherit)]
 #[component]
 fn MirrorChatMessagesToggle() -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let enabled = app_state.read().mirror_chat_messages;
 
     rsx! {
@@ -269,7 +269,7 @@ fn MirrorChatMessagesToggle() -> Element {
                     checked: enabled,
                     onchange: move |evt| {
                         let next = evt.checked();
-                        app_state.write().mirror_chat_messages = next;
+                        app_state.batch(|st| st.mirror_chat_messages = next);
                         spawn(async move { persist_mirror_chat_messages(next).await; });
                     },
                 }
@@ -297,7 +297,7 @@ async fn run_reset_flow(
     kind: ResetKind,
     mut client_manager: Signal<crate::client_manager::ClientManager>,
     chat_data: BatchedSignal<crate::state::ChatData>,
-    mut app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
 ) -> Result<(), String> {
     let account_ids = client_manager.read().active_account_ids();
     for account_id in account_ids {
@@ -316,11 +316,10 @@ async fn run_reset_flow(
         view: crate::state::RouteSynced::new(crate::state::View::Setup),
         ..Default::default()
     };
-    {
-        let mut state = app_state.write();
+    app_state.batch(|state| {
         state.is_setup_complete = false;
         state.nav = nav;
-    }
+    });
 
     let Some(storage) = crate::STORAGE.get() else {
         return Err(t("settings-reset-error-no-storage"));
@@ -347,7 +346,7 @@ async fn run_reset_flow(
 #[context_menu(inherit)]
 #[component]
 fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let mut busy_signal = use_signal(|| *busy.read());

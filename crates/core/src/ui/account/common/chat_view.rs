@@ -682,7 +682,7 @@ pub(crate) async fn open_message_hit(
     current_server_id: Option<String>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    mut app_state: Signal<AppState>,
+    mut app_state: BatchedSignal<AppState>,
 ) -> Option<(Route, String)> {
     let target_message_id = hit.message.id.clone();
     let target_channel_id = hit.channel_id.clone();
@@ -810,7 +810,7 @@ struct MessageHitRouteCtx {
 }
 
 fn build_message_hit_route(
-    app_state: &mut Signal<AppState>,
+    app_state: &mut BatchedSignal<AppState>,
     ctx: MessageHitRouteCtx,
 ) -> (Route, String) {
     let MessageHitRouteCtx {
@@ -910,7 +910,7 @@ fn render_chat_view() -> Element {
 }
 
 struct ChatViewSignals {
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     message_input: Signal<String>,
@@ -1140,7 +1140,7 @@ fn build_unread_banner_fields(
 }
 
 fn current_self_user_id(
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
 ) -> String {
     let state = app_state.read();
@@ -1632,7 +1632,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
     });
 }
 
-fn use_member_list_preferences_effect(app_state: Signal<AppState>) {
+fn use_member_list_preferences_effect(app_state: BatchedSignal<AppState>) {
     use_effect(move || {
         let server_member_list_open = app_state.read().nav.right_sidebar_visible;
         let dm_member_list_open = app_state.read().nav.dm_right_sidebar_visible;
@@ -1761,7 +1761,7 @@ fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
 
 #[derive(Clone)]
 struct ChatViewMarkupCtx {
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     channel_id: Option<String>,
@@ -2064,7 +2064,7 @@ struct MessageListScrollWorkCtx {
     unread_count: u32,
     search_query_value: String,
     virtual_window: Signal<MessageVirtualWindowState>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     top_edge_armed: Arc<AtomicBool>,
@@ -2378,7 +2378,7 @@ fn mobile_server_right_wing_active(ctx: &ChatViewMarkupCtx) -> bool {
 }
 
 fn close_chat_side_column_state(
-    mut app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
     mut show_search_filters: Signal<bool>,
     is_group_channel: bool,
@@ -2395,12 +2395,15 @@ fn close_chat_side_column_state(
         return;
     }
 
-    if is_group_channel || is_dm_channel {
-        app_state.write().nav.dm_right_sidebar_visible = false;
-        app_state.write().nav.mobile_dm_contact_detail_visible = false;
-    } else {
-        app_state.write().nav.right_sidebar_visible = false;
-    }
+    // Collapse 2-3 writes into ONE batch — see CLAUDE.md § Common WASM-hang causes #1.
+    app_state.batch(|st| {
+        if is_group_channel || is_dm_channel {
+            st.nav.dm_right_sidebar_visible = false;
+            st.nav.mobile_dm_contact_detail_visible = false;
+        } else {
+            st.nav.right_sidebar_visible = false;
+        }
+    });
 }
 
 fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
@@ -2519,12 +2522,14 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
 
                     if is_opening {
                         show_search_filters.set(false);
-                        if is_dm_channel || is_group_channel {
-                            app_state.write().nav.dm_right_sidebar_visible = true;
-                            app_state.write().nav.mobile_dm_contact_detail_visible = false;
-                        } else {
-                            app_state.write().nav.right_sidebar_visible = true;
-                        }
+                        app_state.batch(|st| {
+                            if is_dm_channel || is_group_channel {
+                                st.nav.dm_right_sidebar_visible = true;
+                                st.nav.mobile_dm_contact_detail_visible = false;
+                            } else {
+                                st.nav.right_sidebar_visible = true;
+                            }
+                        });
                     } else {
                         close_chat_side_column_state(
                             app_state,
@@ -2589,7 +2594,7 @@ fn HeaderOverflowItem(
 #[context_menu(inherit)]
 #[component]
 fn ChatHeaderActions(
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     utility_panel: Signal<Option<ChatUtilityPanel>>,
     notifications_muted: Signal<bool>,
     show_search_filters: Signal<bool>,
@@ -2729,11 +2734,13 @@ fn ChatHeaderActions(
                         };
                         utility_panel.set(next);
                         if next.is_some() {
-                            if is_dm_channel || is_group_channel {
-                                app_state.write().nav.dm_right_sidebar_visible = false;
-                            } else {
-                                app_state.write().nav.right_sidebar_visible = false;
-                            }
+                            app_state.batch(|st| {
+                                if is_dm_channel || is_group_channel {
+                                    st.nav.dm_right_sidebar_visible = false;
+                                } else {
+                                    st.nav.right_sidebar_visible = false;
+                                }
+                            });
                         }
                     },
                     span { class: "chat-settings-btn-icon",
@@ -2808,13 +2815,12 @@ fn ChatHeaderActions(
                                 onclick: move |_| {
                                     header_actions_menu_open.set(false);
                                     let current = false;
-                                    {
-                                        let mut w = app_state.write();
-                                        if !current {
-                                            // opening agent panel: close members
-                                            w.nav.dm_right_sidebar_visible = false;
-                                            w.nav.right_sidebar_visible = false;
-                                        }
+                                    if !current {
+                                        // opening agent panel: close members
+                                        app_state.batch(|st| {
+                                            st.nav.dm_right_sidebar_visible = false;
+                                            st.nav.right_sidebar_visible = false;
+                                        });
                                     }
                                     utility_panel.set(None);
                                     show_search_filters.set(false);
@@ -2831,12 +2837,14 @@ fn ChatHeaderActions(
                                     } else {
                                         app_state.read().nav.right_sidebar_visible
                                     };
-                                    if is_dm_channel || is_group_channel {
-                                        app_state.write().nav.dm_right_sidebar_visible = !current;
-                                        app_state.write().nav.mobile_dm_contact_detail_visible = false;
-                                    } else {
-                                        app_state.write().nav.right_sidebar_visible = !current;
-                                    }
+                                    app_state.batch(|st| {
+                                        if is_dm_channel || is_group_channel {
+                                            st.nav.dm_right_sidebar_visible = !current;
+                                            st.nav.mobile_dm_contact_detail_visible = false;
+                                        } else {
+                                            st.nav.right_sidebar_visible = !current;
+                                        }
+                                    });
                                     // Opening members: close agent panel
                                     utility_panel.set(None);
                                     show_search_filters.set(false);
@@ -2886,11 +2894,13 @@ fn ChatHeaderActions(
                                     };
                                     utility_panel.set(next);
                                     if next.is_some() {
-                                        if is_dm_channel || is_group_channel {
-                                            app_state.write().nav.dm_right_sidebar_visible = false;
-                                        } else {
-                                            app_state.write().nav.right_sidebar_visible = false;
-                                        }
+                                        app_state.batch(|st| {
+                                            if is_dm_channel || is_group_channel {
+                                                st.nav.dm_right_sidebar_visible = false;
+                                            } else {
+                                                st.nav.right_sidebar_visible = false;
+                                            }
+                                        });
                                     }
                                 },
                             }
@@ -2908,11 +2918,13 @@ fn ChatHeaderActions(
                                     };
                                     utility_panel.set(next);
                                     if next.is_some() {
-                                        if is_dm_channel || is_group_channel {
-                                            app_state.write().nav.dm_right_sidebar_visible = false;
-                                        } else {
-                                            app_state.write().nav.right_sidebar_visible = false;
-                                        }
+                                        app_state.batch(|st| {
+                                            if is_dm_channel || is_group_channel {
+                                                st.nav.dm_right_sidebar_visible = false;
+                                            } else {
+                                                st.nav.right_sidebar_visible = false;
+                                            }
+                                        });
                                     }
                                 },
                             }
@@ -2933,7 +2945,7 @@ fn render_search_tab_button(
     mobile_tools: bool,
     is_group_channel: bool,
     is_dm_channel: bool,
-    mut app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
 ) -> Element {
     let active = *utility_panel.read() == Some(ChatUtilityPanel::Search);
 
@@ -2950,11 +2962,13 @@ fn render_search_tab_button(
                 };
                 utility_panel.set(next);
                 if mobile_tools || next.is_some() {
-                    if is_dm_channel || is_group_channel {
-                        app_state.write().nav.dm_right_sidebar_visible = false;
-                    } else {
-                        app_state.write().nav.right_sidebar_visible = false;
-                    }
+                    app_state.batch(|st| {
+                        if is_dm_channel || is_group_channel {
+                            st.nav.dm_right_sidebar_visible = false;
+                        } else {
+                            st.nav.right_sidebar_visible = false;
+                        }
+                    });
                 }
             },
             span { class: "chat-search-tab-icon",
@@ -2966,7 +2980,7 @@ fn render_search_tab_button(
 }
 
 fn render_agent_toggle_button(
-    _app_state: Signal<AppState>,
+    _app_state: BatchedSignal<AppState>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
     mut show_search_filters: Signal<bool>,
     is_dm_channel: bool,
@@ -2997,7 +3011,7 @@ fn render_agent_toggle_button(
 }
 
 fn render_member_toggle_button(
-    mut app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
     mut show_search_filters: Signal<bool>,
     is_group_channel: bool,
@@ -3010,7 +3024,7 @@ fn render_member_toggle_button(
                 title: t("chat-toggle-members"),
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
-                    app_state.write().nav.dm_right_sidebar_visible = !current;
+                    app_state.batch(|st| st.nav.dm_right_sidebar_visible = !current);
                     // Opening members: close agent panel
                     utility_panel.set(None);
                     show_search_filters.set(false);
@@ -3027,7 +3041,7 @@ fn render_member_toggle_button(
                 title: t("chat-toggle-contact"),
                 onclick: move |_| {
                     let current = app_state.read().nav.dm_right_sidebar_visible;
-                    app_state.write().nav.dm_right_sidebar_visible = !current;
+                    app_state.batch(|st| st.nav.dm_right_sidebar_visible = !current);
                     // Opening contact panel: close agent panel
                     utility_panel.set(None);
                     show_search_filters.set(false);
@@ -3043,7 +3057,7 @@ fn render_member_toggle_button(
             title: t("chat-toggle-members"),
             onclick: move |_| {
                 let current = app_state.read().nav.right_sidebar_visible;
-                app_state.write().nav.right_sidebar_visible = !current;
+                app_state.batch(|st| st.nav.right_sidebar_visible = !current);
                 // Opening members: close agent panel
                 utility_panel.set(None);
                 show_search_filters.set(false);
@@ -3382,7 +3396,7 @@ fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 async fn load_older_messages(
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
@@ -3467,7 +3481,7 @@ async fn load_older_messages(
 }
 
 async fn load_newer_messages(
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
@@ -4323,7 +4337,7 @@ struct ComposerRuntimeCtx {
     reply_target: Signal<Option<MessageReplyPreview>>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     new_messages_while_scrolled_up: Signal<u32>,
 }
 
@@ -4645,7 +4659,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                                 Some(ChatUtilityPanel::Settings)
                             };
                             utility_panel.set(next);
-                            app_state.write().nav.right_sidebar_visible = false;
+                            app_state.batch(|st| st.nav.right_sidebar_visible = false);
                         },
                         span { class: "chat-settings-btn-icon",
                             span { class: "chat-settings-btn-icon-cog", "⚙️" }
@@ -4665,7 +4679,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                                 Some(ChatUtilityPanel::Threads)
                             };
                             utility_panel.set(next);
-                            app_state.write().nav.right_sidebar_visible = false;
+                            app_state.batch(|st| st.nav.right_sidebar_visible = false);
                         },
                         "🧵"
                     }
@@ -4680,7 +4694,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                                 Some(ChatUtilityPanel::Pinned)
                             };
                             utility_panel.set(next);
-                            app_state.write().nav.right_sidebar_visible = false;
+                            app_state.batch(|st| st.nav.right_sidebar_visible = false);
                         },
                         "📌"
                     }
@@ -4703,14 +4717,16 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                         onclick: move |_| {
                             utility_panel.set(None);
                             show_search_filters.set(false);
-                            // Opening members: close agent panel
-                            if is_dm_channel || is_group_channel {
-                                app_state.write().nav.dm_right_sidebar_visible = true;
-                                app_state.write().nav.mobile_dm_contact_detail_visible = false;
-                            } else {
-                                let current = app_state.read().nav.right_sidebar_visible;
-                                app_state.write().nav.right_sidebar_visible = !current;
-                            }
+                            // Opening members: close agent panel — collapse 2 writes to 1 batch.
+                            app_state.batch(|st| {
+                                if is_dm_channel || is_group_channel {
+                                    st.nav.dm_right_sidebar_visible = true;
+                                    st.nav.mobile_dm_contact_detail_visible = false;
+                                } else {
+                                    let current = st.nav.right_sidebar_visible;
+                                    st.nav.right_sidebar_visible = !current;
+                                }
+                            });
                         },
                         "👥"
                     }
@@ -5009,7 +5025,7 @@ fn ChatUtilityRail(
             } else if panel == ChatUtilityPanel::Drafts {
                 // B.5 — Pending drafts across all chats for the active account.
                 {
-                    let rail_app_state: Signal<AppState> = use_context();
+                    let rail_app_state: BatchedSignal<AppState> = use_context();
                     let active_account_id = rail_app_state.read().nav.active_account_id
                         .as_deref()
                         .unwrap_or("")
@@ -5028,7 +5044,7 @@ fn ChatUtilityRail(
                 // wing-takeover used to mount, just rendered inside the
                 // utility-rail tab so Search/Members/etc remain accessible.
                 {
-                    let rail_app_state: Signal<AppState> = use_context();
+                    let rail_app_state: BatchedSignal<AppState> = use_context();
                     let active_account_id = rail_app_state.read().nav.active_account_id
                         .as_deref()
                         .unwrap_or("")
@@ -5065,7 +5081,7 @@ fn ChatUtilityRail(
 #[component]
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     use crate::ui::settings::common::{PolySelect, SelectOption};
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let muted    = *notifications_muted.read();
     let grouping = app_state.read().member_list_grouping;
     let sort     = app_state.read().member_list_sort_order;
@@ -5117,9 +5133,8 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                         value: grouping.as_str().to_string(),
                         onchange: move |v: String| {
                             let g = crate::state::MemberListGrouping::from_slug(&v);
-                            let s = app_state.read().member_list_sort_order;
-                            let o = app_state.read().member_list_show_offline;
-                            app_state.write().member_list_grouping = g;
+                            let (s, o) = app_state.map(|st| (st.member_list_sort_order, st.member_list_show_offline));
+                            app_state.batch(|st| st.member_list_grouping = g);
                             spawn(async move { persist_member_list_display_settings(g, s, o).await; });
                         },
                     }
@@ -5133,9 +5148,8 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                         value: sort.as_str().to_string(),
                         onchange: move |v: String| {
                             let s = crate::state::MemberListSortOrder::from_slug(&v);
-                            let g = app_state.read().member_list_grouping;
-                            let o = app_state.read().member_list_show_offline;
-                            app_state.write().member_list_sort_order = s;
+                            let (g, o) = app_state.map(|st| (st.member_list_grouping, st.member_list_show_offline));
+                            app_state.batch(|st| st.member_list_sort_order = s);
                             spawn(async move { persist_member_list_display_settings(g, s, o).await; });
                         },
                     }
@@ -5147,10 +5161,9 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                     button {
                         class: if show_off { "chat-settings-toggle-btn chat-settings-toggle-btn-on" } else { "chat-settings-toggle-btn" },
                         onclick: move |_| {
-                            let new_val = !app_state.read().member_list_show_offline;
-                            let g = app_state.read().member_list_grouping;
-                            let s = app_state.read().member_list_sort_order;
-                            app_state.write().member_list_show_offline = new_val;
+                            let (prev, g, s) = app_state.map(|st| (st.member_list_show_offline, st.member_list_grouping, st.member_list_sort_order));
+                            let new_val = !prev;
+                            app_state.batch(|st| st.member_list_show_offline = new_val);
                             spawn(async move { persist_member_list_display_settings(g, s, new_val).await; });
                         },
                         span { class: "chat-settings-toggle-track",
@@ -5499,7 +5512,7 @@ fn AttachmentsView(
     message_text: String,
     is_own: bool,
 ) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
 
     rsx! {
@@ -5722,7 +5735,7 @@ struct SendMessageCtx {
     reply_to_message_id: Option<String>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     /// Reset to 0 after sending so the Jump to Present badge clears.
     new_messages_while_scrolled_up: Signal<u32>,
 }
@@ -6296,7 +6309,7 @@ fn SlashCommandPopup(
 #[component]
 fn DmContactListPanel(channel_id: String) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     let active_account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
 
@@ -6342,7 +6355,7 @@ fn DmContactListPanel(channel_id: String) -> Element {
 #[ui_action(inherit)]
 #[context_menu(UserRowContextMenu)]
 #[component]
-fn DmContactRow(user: User, app_state: Signal<AppState>) -> Element {
+fn DmContactRow(user: User, app_state: BatchedSignal<AppState>) -> Element {
     let color = user_color(&user.id);
     let first_char: String = user
         .display_name

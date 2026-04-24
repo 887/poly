@@ -15,7 +15,7 @@
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
 use crate::ui::client_ui::toast::ToastMessage;
 use dioxus::prelude::*;
@@ -38,7 +38,7 @@ const FEEDS: &[(&str, &str)] = &[
 #[context_menu(inherit)]
 #[component]
 pub fn FeedLayout() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     // Track which feed the user selected most recently. Used only for
     // visual feedback; the routing side-effect is driven by the

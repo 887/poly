@@ -481,14 +481,14 @@ pub enum Route {
 ///
 /// Called from [`RouterConfig::on_update`] *before* dependent components
 /// re-render.
-pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
+pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>) {
     #[cfg(debug_assertions)]
     record_route_visit(route);
 
     // Compute the URL string before borrowing app_state mutably.
     // Routable derives Display, so format!("{route}") gives the URL path.
     let route_url = format!("{route}");
-    let mut s = app_state.write();
+    app_state.batch(|s| {
     match route {
         Route::DmsHome {
             backend,
@@ -970,6 +970,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
             s.nav.selected_channel.set(None);
         }
     }
+    });
 }
 
 fn restore_dm_chat(
@@ -1160,7 +1161,7 @@ fn ServerLayout() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
     // Capability guard: backends without DMs (HN, Lemmy, GitHub) render an
     // unsupported-feature placeholder in place. We must NOT redirect here:
@@ -1245,7 +1246,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 #[ui_action(inherit)]
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let dm_id_for_pending = dm_id.clone();
@@ -1279,7 +1280,7 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
                 }
             }
 
-            let Some(pending) = app_state.write().nav.pending_direct_call.take() else {
+            let Some(pending) = app_state.batch(|st| st.nav.pending_direct_call.take()) else {
                 return;
             };
             start_direct_call_from_active_account(
@@ -1459,7 +1460,7 @@ fn ServerMediaViewerRoute(
     attachment_index: usize,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
     let overlay_channel_id = channel_id.clone();
@@ -1566,7 +1567,7 @@ fn ServerHome(
     server_id: String,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     // URL-restore: server data is absent after a hard reload. Load it now.
@@ -1667,7 +1668,7 @@ fn ServerChat(
     channel_id: String,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
     let route_channel_id = channel_id.clone();

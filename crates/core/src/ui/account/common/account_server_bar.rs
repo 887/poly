@@ -108,7 +108,7 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
 #[context_menu(inherit)]
 #[component]
 pub fn AccountServerBar() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let nav = app_state.read().nav.clone();
@@ -241,7 +241,7 @@ fn AccountServerIcon(
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -263,14 +263,16 @@ fn AccountServerIcon(
         evt.prevent_default();
         evt.stop_propagation();
         let coords = evt.client_coordinates();
-        app_state.write().context_menu = Some(ContextMenuState {
-            x: coords.x,
-            y: coords.y,
-            server_id: sid_ctx.clone(),
-            server_name: sname_ctx.clone(),
-            account_id: aid_ctx.clone(),
-            instance_id: iid_ctx.clone(),
-            backend_slug: bslug_ctx.clone(),
+        app_state.batch(|st| {
+            st.context_menu = Some(ContextMenuState {
+                x: coords.x,
+                y: coords.y,
+                server_id: sid_ctx.clone(),
+                server_name: sname_ctx.clone(),
+                account_id: aid_ctx.clone(),
+                instance_id: iid_ctx.clone(),
+                backend_slug: bslug_ctx.clone(),
+            });
         });
     };
 
@@ -497,7 +499,7 @@ fn AccountBarFriendsButton(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     rsx! {
@@ -536,7 +538,7 @@ fn AccountBarFriendsButton(
 #[context_menu(inherit)]
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let backend_slug = app_state
         .read()
@@ -600,7 +602,7 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
 #[context_menu(inherit)]
 #[component]
 fn CreateServerButton(account_id: String) -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let backend_slug = app_state
         .read()
         .nav

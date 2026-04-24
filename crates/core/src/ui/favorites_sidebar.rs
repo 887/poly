@@ -114,7 +114,7 @@ pub(crate) fn SidebarTooltip(
 #[component]
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let current_view = *app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
@@ -397,7 +397,7 @@ pub fn FavoritesBar() -> Element {
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     // Read connection and presence statuses for this account.
     let conn_class: &'static str = client_manager
@@ -811,7 +811,7 @@ fn FavoriteServerIcon(
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
 ) -> Element {
-    let mut app_state: Signal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -909,14 +909,16 @@ fn FavoriteServerIcon(
                     evt.prevent_default();
                     evt.stop_propagation();
                     let coords = evt.client_coordinates();
-                    app_state.write().context_menu = Some(ContextMenuState {
-                        x: coords.x,
-                        y: coords.y,
-                        server_id: sid.clone(),
-                        server_name: sname.clone(),
-                        account_id: aid.clone(),
-                        instance_id: iid.clone(),
-                        backend_slug: bslug.clone(),
+                    app_state.batch(|st| {
+                        st.context_menu = Some(ContextMenuState {
+                            x: coords.x,
+                            y: coords.y,
+                            server_id: sid.clone(),
+                            server_name: sname.clone(),
+                            account_id: aid.clone(),
+                            instance_id: iid.clone(),
+                            backend_slug: bslug.clone(),
+                        });
                     });
                 }
             },
@@ -1089,7 +1091,7 @@ fn FavoriteServerIcon(
 /// Load channels and select the first text channel for a server.
 pub async fn load_server_data(
     server_id: String,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
@@ -1098,7 +1100,7 @@ pub async fn load_server_data(
 
 pub async fn load_server_shell_data(
     server_id: String,
-    app_state: Signal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
@@ -1107,7 +1109,7 @@ pub async fn load_server_shell_data(
 
 async fn load_server_data_internal(
     server_id: String,
-    mut app_state: Signal<AppState>,
+    mut app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     auto_select_first_text_channel: bool,
@@ -1171,13 +1173,16 @@ async fn load_server_data_internal(
     // taps a favorites/account-server icon, we keep them at the server shell
     // so only an explicit channel tap opens content and closes the drawer.
     if auto_select_first_text_channel && let Some(ch) = first_text_channel {
-        app_state.write().nav.selected_channel.unsafe_presync_override(
-            Some(ch.id.clone()),
-            "favorites_sidebar::load_server_data_internal: auto-select first \
-             text channel when landing on /channels/{server}; the URL stays at \
-             ServerHome so no nav.push follows — we need current_channel set \
-             synchronously or ChatView renders blank between click and effect",
-        );
+        let ch_id_for_presync = ch.id.clone();
+        app_state.batch(|st| {
+            st.nav.selected_channel.unsafe_presync_override(
+                Some(ch_id_for_presync),
+                "favorites_sidebar::load_server_data_internal: auto-select first \
+                 text channel when landing on /channels/{server}; the URL stays at \
+                 ServerHome so no nav.push follows — we need current_channel set \
+                 synchronously or ChatView renders blank between click and effect",
+            );
+        });
         let ch_for_current = ch.clone();
         pending.set(move |cd| cd.current_channel = Some(ch_for_current));
 
@@ -1196,12 +1201,14 @@ async fn load_server_data_internal(
         }
     }
     if !auto_select_first_text_channel {
-        app_state.write().nav.selected_channel.unsafe_presync_override(
-            None,
-            "favorites_sidebar::load_server_data_internal: clear selected_channel \
-             when loading server shell only (mobile drawer context) — must be \
-             synchronous so ChatView doesn't briefly render a stale channel",
-        );
+        app_state.batch(|st| {
+            st.nav.selected_channel.unsafe_presync_override(
+                None,
+                "favorites_sidebar::load_server_data_internal: clear selected_channel \
+                 when loading server shell only (mobile drawer context) — must be \
+                 synchronous so ChatView doesn't briefly render a stale channel",
+            );
+        });
         pending.set(|cd| {
             cd.current_channel = None;
             cd.messages.clear();
@@ -1308,7 +1315,7 @@ pub(crate) async fn persist_favorites(ids: Vec<String>) {
 pub async fn restore_server_channel(
     server_id: String,
     channel_id: String,
-    mut app_state: Signal<AppState>,
+    mut app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Option<String> {

@@ -14,7 +14,7 @@
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{AppState, BatchedSignal};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
 use crate::ui::client_ui::toast::ToastMessage;
 use dioxus::prelude::*;
@@ -39,7 +39,7 @@ fn repo_action_id(repo_id: &str, tab_suffix: &str) -> String {
 #[context_menu(inherit)]
 #[component]
 pub fn RepoTreeLayout() -> Element {
-    let app_state: Signal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     let account_id = app_state.read().nav.active_account_id.cloned();
