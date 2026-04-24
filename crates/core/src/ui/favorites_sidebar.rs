@@ -1115,7 +1115,7 @@ async fn load_server_data_internal(
     auto_select_first_text_channel: bool,
 ) {
     // Show the spinner immediately so the content area doesn't render a
-    // stale server while we fetch the new one.  Keep this as its own
+    // stale server while we fetch the new one. Keep this as its own
     // cascade — the UI needs to react before we start awaiting.
     chat_data.batch(|cd| cd.loading = true);
 

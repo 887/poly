@@ -1575,6 +1575,16 @@ fn ServerHome(
     // Guard against double-loading: if `current_server` already matches (click
     // navigation already ran `load_server_data`), or a load is already in flight
     // (`loading == true`), skip spawning a second concurrent load.
+    //
+    // Additionally: track `spawned_for` to prevent RE-spawning after a previous
+    // load finished without populating current_server (e.g. backend not found
+    // for this server_id because the URL id doesn't map to any plugin's server
+    // — Teams' team_id is not a backend key). Without this guard,
+    // `load_server_data_internal` toggles loading=true→loading=false, the
+    // `already_loading` guard releases, the effect re-fires, server_already_loaded
+    // is still false (no backend → never populates current_server), and we spawn
+    // forever. See Teams channels/T001 wedge, 2026-04-24.
+    let mut spawned_for: Signal<Option<String>> = use_signal(|| None);
     let server_id_for_effect = server_id.clone();
     use_effect(move || {
         let sid = server_id_for_effect.clone();
@@ -1587,9 +1597,11 @@ fn ServerHome(
         // spawn is still running (i.e. loading is already true).
         let already_loading = snapshot.loading;
         drop(snapshot);
-        if server_already_loaded || already_loading {
+        let already_spawned = spawned_for.read().as_deref() == Some(sid.as_str());
+        if server_already_loaded || already_loading || already_spawned {
             return;
         }
+        spawned_for.set(Some(sid.clone()));
         let preserve_drawer_context = crate::ui::main_layout::mobile_left_drawer_open();
         spawn(async move {
             if preserve_drawer_context {
