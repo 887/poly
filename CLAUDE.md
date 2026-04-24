@@ -417,11 +417,18 @@ recurrence means either a missed migration site, an escape-hatch
 2. **Live `Signal::read()` guard across a `.write()` of the same signal.**
    WASM panics → no panic_hook unwinding → tight loop / unreachable. Wrap
    reads in tightly-scoped `{ … }` so the guard drops before any write.
-   **Countermeasure (partial):** `BatchedSignal::batch(|v| …)` forces the
-   mutation through a closure, so no outer read can live alongside the
-   write guard on the same signal. Cross-signal read-across-write (read
-   signal A, write signal B with a handler that also reads A) is still
-   possible and not type-gated. No plan yet; add one if incidents recur.
+   **Countermeasure (shipped with CI gate, Phases 1+2+5 of `docs/plans/plan-read-guard-scoping.md`):**
+   `BatchedSignal::batch(|v| …)` forces the mutation through a closure
+   (no outer same-signal read can live alongside the write guard), AND
+   `BatchedSignal::with(|v| …)` is the documented preferred read API for
+   multi-statement scopes. Phase 5 lint
+   (commit `5c1e13c7` — `tools/scripts/forbid-long-read-guard.sh`) flags
+   long-scoped raw `.read()` bindings followed by `.batch()`/`.write()`
+   calls within 30 lines on the same signal. Inline-allowlist syntax:
+   `// poly-lint: allow long-read-guard — <reason>`. Audit found zero
+   live HIGH incidents (BatchedSignal Phases 2-3 disciplined the
+   codebase); the lint protects against future regressions. Dev-doc
+   canonical patterns at `docs/dev/reactive-state.md`.
 
 3. **`.write()` inside a `use_effect` whose body is also a subscriber to
    that signal** (including indirectly via a spawned async task that
