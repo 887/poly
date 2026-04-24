@@ -462,10 +462,14 @@ recurrence means either a missed migration site, an escape-hatch
 5. **A spawned async task that writes Signals while the spawning closure
    still holds a guard.** Same root cause as #2 but indirect. Drop the
    guard before `spawn(async move { … })`.
-   **Countermeasure: same as #2** — `BatchedSignal::batch` closure scope
-   prevents the outer closure from holding a guard across the spawn. Fully
-   gated on migrated signals; unmigrated plain `Signal<T>` locals still
-   susceptible.
+   **Countermeasure (closed by #1's type contract):** `BatchedSignal::batch`
+   takes a closure and drops the guard at closure exit, so the outer code
+   cannot hold a guard across a `spawn()` call. `PendingUpdate::apply()`
+   similarly acquires-and-drops its guard atomically. For all migrated
+   signals (post BatchedSignal Phases 1-4), this class is structurally
+   impossible. Unmigrated plain `Signal<T>` locals remain susceptible but
+   are single-component-scoped by definition (no subscribers outside),
+   so the cross-task failure mode doesn't apply.
 
 **Last-resort diagnostic path — the out-of-band trace sink.** When a hang
 starves CDP (`evaluate_script` and `list_console_messages` time out), raw
