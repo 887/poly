@@ -5990,7 +5990,7 @@ fn MsgContextMenuOverlay(
         return rsx! {};
     };
 
-    let app_state_sig: Signal<crate::state::AppState> = use_context();
+    let app_state_sig: BatchedSignal<crate::state::AppState> = use_context();
     let app_state = app_state_sig.read().clone();
     let last_known_perms = app_state.last_known_perms.clone();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();

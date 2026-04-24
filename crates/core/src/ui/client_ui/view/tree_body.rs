@@ -135,7 +135,7 @@ pub fn TreeBody(
                 let _unused_selected = selected_row_id.read().clone();
                 // Pull route params — forum post click routes to full-page
                 // ForumPostView (matches the old LemmyForumView behavior).
-                let app_state: Signal<crate::state::AppState> = use_context();
+                let app_state: BatchedSignal<crate::state::AppState> = use_context();
                 let snap = app_state.read();
                 let backend_slug_for_click = snap
                     .nav

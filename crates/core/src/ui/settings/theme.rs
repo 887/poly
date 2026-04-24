@@ -5,6 +5,7 @@
 //! Extract sub-components rather than growing this file.
 
 use crate::i18n::t;
+use crate::state::BatchedSignal;
 use crate::theme::{ThemeConfig, ThemePreset};
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
@@ -62,12 +63,13 @@ async fn persist_theme(config: ThemeConfig) {
 }
 
 fn update_theme_config(
-    mut theme_config: Signal<ThemeConfig>,
+    theme_config: BatchedSignal<ThemeConfig>,
     update: impl FnOnce(&mut ThemeConfig),
 ) {
     let mut cfg = theme_config.read().clone();
     update(&mut cfg);
-    theme_config.set(cfg.clone());
+    let cfg_clone = cfg.clone();
+    theme_config.batch(move |v| *v = cfg_clone);
     spawn(async move {
         persist_theme(cfg).await;
     });
@@ -97,7 +99,7 @@ fn initial_editor_css(config: &ThemeConfig) -> String {
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
+pub(super) fn ThemePresetPicker(theme_config: BatchedSignal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let current = theme_config.read().preset.canonical();
     const PRESETS: &[(ThemePreset, &str, &str)] = &[
@@ -124,7 +126,8 @@ pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
                                 onclick: move |_| {
                                     let mut cfg = theme_config.read().clone();
                                     cfg.preset = preset;
-                                    theme_config.set(cfg.clone());
+                                    let cfg_clone = cfg.clone();
+                                    theme_config.batch(move |v| *v = cfg_clone);
                                     spawn(async move {
                                         persist_theme(cfg).await;
                                     });
@@ -144,7 +147,7 @@ pub(super) fn ThemePresetPicker(theme_config: Signal<ThemeConfig>) -> Element {
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Element {
+pub(super) fn ThemeColorModeSelector(theme_config: BatchedSignal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let current = theme_config.read().color_mode;
     const MODES: &[(crate::theme::ColorMode, &str)] = &[
@@ -170,7 +173,8 @@ pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Eleme
                                 onclick: move |_| {
                                     let mut cfg = theme_config.read().clone();
                                     cfg.color_mode = mode;
-                                    theme_config.set(cfg.clone());
+                                    let cfg_clone = cfg.clone();
+                                    theme_config.batch(move |v| *v = cfg_clone);
                                     spawn(async move {
                                         persist_theme(cfg).await;
                                     });
@@ -194,7 +198,7 @@ pub(super) fn ThemeColorModeSelector(theme_config: Signal<ThemeConfig>) -> Eleme
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub(super) fn ThemeColorCustomizer(theme_config: Signal<ThemeConfig>) -> Element {
+pub(super) fn ThemeColorCustomizer(theme_config: BatchedSignal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let vars: Vec<(&str, String)> = vec![
         ("--accent-primary", t("color-accent")),
@@ -269,7 +273,7 @@ fn ColorOverridesToggleRow(colors_enabled: bool, on_toggle: EventHandler<bool>) 
 fn ColorOverridesGrid(
     entries: Vec<(String, String, String)>,
     colors_enabled: bool,
-    theme_config: Signal<ThemeConfig>,
+    theme_config: BatchedSignal<ThemeConfig>,
 ) -> Element {
     rsx! {
         div { class: "color-overrides-grid",
@@ -332,7 +336,7 @@ fn ResetColorsButton(on_reset: EventHandler<MouseEvent>) -> Element {
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub(super) fn ThemeCssEditor(theme_config: Signal<ThemeConfig>) -> Element {
+pub(super) fn ThemeCssEditor(theme_config: BatchedSignal<ThemeConfig>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let config = theme_config.read().clone();
     let local_css = use_signal(|| initial_editor_css(&config));
@@ -380,7 +384,7 @@ fn CssEditorToggleRow(css_enabled: bool, on_toggle: EventHandler<bool>) -> Eleme
 fn CssEditorArea(
     css_enabled: bool,
     local_css: Signal<String>,
-    theme_config: Signal<ThemeConfig>,
+    theme_config: BatchedSignal<ThemeConfig>,
 ) -> Element {
     rsx! {
         textarea {
@@ -400,7 +404,7 @@ fn CssEditorArea(
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>) -> Element {
+fn CssEditorActions(local_css: Signal<String>, theme_config: BatchedSignal<ThemeConfig>) -> Element {
     rsx! {
         div { class: "theme-actions",
             button {
@@ -435,7 +439,8 @@ fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>
                         {
                             let imported = crate::theme::import_theme(s);
                             local_css.set(initial_editor_css(&imported));
-                            theme_config.set(imported.clone());
+                            let imp_clone = imported.clone();
+                            theme_config.batch(move |v| *v = imp_clone);
                             persist_theme(imported).await;
                         }
                     });
@@ -464,7 +469,7 @@ fn CssEditorActions(local_css: Signal<String>, theme_config: Signal<ThemeConfig>
 #[component]
 pub(super) fn ThemeSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-    let theme_config = use_context::<Signal<ThemeConfig>>();
+    let theme_config = use_context::<BatchedSignal<ThemeConfig>>();
     rsx! {
         div { class: "settings-section theme-settings",
             h2 { "{t(\"settings-theme\")}" }

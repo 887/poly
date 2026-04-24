@@ -18,18 +18,18 @@
 # `.write()` is `#[deprecated] -> !`, so those sites CAN'T appear here
 # even if someone tries. The entries below cover:
 #   * the shadow `write` definition itself (meta — doesn't mutate anything)
-#   * `Signal<ClientManager>` (not migrated — Phase 4 deferred; mutations
-#     are coarse, low frequency, and not a cascade vector in practice)
 #   * component-scoped `use_signal` locals (list/set state, filter toggles,
 #     modal visibility) where multi-write cascades don't apply because the
 #     signal has one subscriber
-#   * `Signal<Locale>` (`locale_sig`) mutations — Phase 4 defers locale to
+#   * `Signal<Locale>` (`locale_sig`) mutations — Phase 4b defers locale to
 #     a later pass; low frequency, not a cascade vector.
 #
 # Phase 4 migrated `Signal<ChatHistoryUiState>` (`history_state`) and
-# `Signal<AppSettings>` (`settings_sig`) to `BatchedSignal<T>` — their
-# former allowlist entries have been removed (the shadow `.write()`
-# would now reject at compile time anyway).
+# `Signal<AppSettings>` (`settings_sig`) to `BatchedSignal<T>`.
+# Phase 4b migrated `Signal<ClientManager>` and `Signal<ThemeConfig>` —
+# all 9 former `client_manager` allowlist entries have been removed (the
+# shadow `.write()` now rejects at compile time).
+# Former allowlist entries are removed; shadow `.write()` rejects them.
 
 # ── Meta: batched_signal.rs itself defines the shadow `write`. ─────────────
 crates/core/src/state/batched_signal.rs  # defines the shadow `fn write() -> !`
@@ -39,19 +39,6 @@ crates/core/src/state/batched_signal.rs  # defines the shadow `fn write() -> !`
 # If/when it's used with a BatchedSignal<AppState> the expansion fails at
 # compile time on the deprecated shadow, which is the desired fate.
 crates/core/src/ui/actions.rs:state  # dispatch_action! macro body; unused today
-
-# ── Signal<ClientManager> — Phase 4 deferred (plan §3 Phase 4). ────────────
-# Low-frequency registration-time mutations; no reactive-pass cascade
-# observed in practice. Migrate when an incident proves otherwise.
-crates/core/src/ui/account/common/account_bar.rs:client_manager  # presence-status insert
-crates/core/src/ui/account/settings/profile.rs:client_manager  # profile edits
-crates/core/src/ui/create_server.rs:client_manager  # register_server on create
-crates/core/src/ui/demo.rs:client_manager  # demo activation / commit backend account
-crates/core/src/ui/mod.rs:client_manager  # test-account + signup-entry registration
-crates/core/src/ui/mod.rs:client_manager_w  # same signal, local rename inside spawn
-crates/core/src/ui/settings/general.rs:client_manager  # clear_all_backends on sign-out
-crates/core/src/ui/settings/plugins.rs:client_manager  # register plugin settings
-crates/core/src/ui/signup/mod.rs:client_manager  # commit_backend_account on signup
 
 # ── Signal<Locale> — settings-only, not a cascade vector. ──────────────────
 crates/core/src/ui/mod.rs:locale_sig  # locale swap on boot

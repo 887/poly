@@ -160,7 +160,7 @@ pub fn ListBody(
                 let _unused_selected = selected_row_id.read().clone();
                 // Pull the route params once — forum post click routes to
                 // a full-page ForumPostView like the old LemmyForumView did.
-                let app_state: Signal<crate::state::AppState> = use_context();
+                let app_state: BatchedSignal<crate::state::AppState> = use_context();
                 let snap = app_state.read();
                 let backend_slug_for_click = snap
                     .nav
