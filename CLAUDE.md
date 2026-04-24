@@ -426,12 +426,14 @@ recurrence means either a missed migration site, an escape-hatch
    incidents: Teams Sheep wedge (fix `904920b9`, ServerHome missing
    `spawned_for` guard) — the SQLite-persisted BISECT trace captured
    ~1.2M iterations before sampling.
-   **Countermeasure (in progress): `use_spawn_once<K>(key, async_fn)`
-   hook.** Phase 1 in flight at plan-authoring time; the hook bakes the
-   `spawned_for: Signal<Option<K>>` guard into the call-site API so it
-   can't be forgotten. Phase 5 is a clippy/dylint ban on the raw
-   `use_effect` + `spawn(async move { … signal.batch(…) })` triple.
-   See `docs/plans/plan-use-spawn-once.md`.
+   **Countermeasure (Phase 1 shipped; migrations pending): `use_spawn_once<K>(key, async_fn)`
+   hook** (commit `50da1841`). The hook bakes the `spawned_for: Signal<Option<K>>`
+   guard into the call-site API so it can't be forgotten — ~15 lines of
+   preamble collapse to ~3. Phase 2 migrates the 2 HIGH-severity sites
+   (`ServerMediaViewerRoute`, `ForumPostView`) + the 6 MEDIUM sites from
+   the audit. Phase 5 is a clippy/dylint ban on the raw `use_effect` +
+   `spawn(async move { … signal.batch(…) })` triple. See
+   `docs/plans/plan-use-spawn-once.md` for the full checklist.
 
 4. **`tokio::sync::RwLock::read().await` on a backend that has a perpetual
    writer.** Single-threaded WASM scheduler can starve readers. Wrap with
