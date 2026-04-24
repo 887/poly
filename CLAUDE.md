@@ -442,12 +442,21 @@ recurrence means either a missed migration site, an escape-hatch
    comments. See `docs/plans/plan-use-spawn-once.md`.
 
 4. **`tokio::sync::RwLock::read().await` on a backend that has a perpetual
-   writer.** Single-threaded WASM scheduler can starve readers. Wrap with
-   `tokio::time::timeout(Duration::from_secs(5), backend.read())` and bail
-   with a warning on timeout.
-   **Countermeasure: none yet.** Low incident rate (one confirmed case).
-   If another hits, draft a plan for a `read_with_timeout` helper that's
-   the only allowed `backend.read().await` surface.
+   writer.** Single-threaded WASM scheduler can starve readers. **WARNING:**
+   the naive `tokio::time::timeout(Duration::from_secs(5), backend.read())`
+   wrap **panics on WASM** because `Instant::now()` is unimplemented on
+   `wasm32-unknown-unknown`. Four in-tree comments document removed prior
+   attempts (`channel_list.rs:193-195`, `channel_list.rs:360-364`,
+   `routes.rs:1067-1069`, `draft_banner.rs:168-170`).
+   **Countermeasure (shipped, Phases 1-2 of `docs/plans/plan-backend-read-timeout.md`):**
+   `BackendHandleExt::read_with_timeout(dur)` (commit `66810bd1`) — a
+   cfg-gated helper that uses `tokio::time::timeout` on native and
+   `gloo_timers::future::TimeoutFuture` raced via `futures::select` on
+   WASM. Phase 2 (`a935f2a8`) migrated the 8 FRAGILE sites the audit
+   flagged (5s default for UI interactions, 30s for the
+   `MAX_CHAINED_NEWER_HISTORY_PAGES` chain loop). Phase 3 (remaining 46
+   SAFE sites for uniformity) + Phase 5 (lint ban on raw
+   `backend.read().await`) pending.
 
 5. **A spawned async task that writes Signals while the spawning closure
    still holds a guard.** Same root cause as #2 but indirect. Drop the
