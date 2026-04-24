@@ -87,7 +87,7 @@ fn is_media_channel(ch: &Channel) -> bool {
 pub fn DiscordForumView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Resolve channel + account from nav/chat_data (same pattern as ForumView).
     let account_id = app_state
@@ -610,7 +610,7 @@ fn NewPostModal(
     tags: Vec<ForumTag>,
     show_modal: Signal<bool>,
 ) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let mut title = use_signal(String::new);
     let mut body = use_signal(String::new);

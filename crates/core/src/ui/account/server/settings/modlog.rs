@@ -4,6 +4,7 @@
 //! Gated by `BackendCapabilities::has_moderation_log`.
 
 use crate::client_manager::ClientManager;
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::{ModerationAction, ModerationLogEntry};
@@ -17,7 +18,7 @@ const MODLOG_LIMIT: usize = 50;
 #[context_menu(none)]
 #[component]
 pub fn ModLogTab(server_id: String, account_id: String) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let log_resource = {
         let server_id = server_id.clone();

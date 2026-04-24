@@ -680,7 +680,7 @@ pub(crate) async fn open_message_hit(
     hit: MessageSearchHit,
     current_channel_id: Option<String>,
     current_server_id: Option<String>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     mut app_state: BatchedSignal<AppState>,
 ) -> Option<(Route, String)> {
@@ -810,7 +810,7 @@ fn message_hit_already_rendered(
 }
 
 struct MessageHitRouteCtx {
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     active_instance_id: Option<String>,
     account_id: String,
     target_server_id: Option<String>,
@@ -921,7 +921,7 @@ fn render_chat_view() -> Element {
 
 struct ChatViewSignals {
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     message_input: Signal<String>,
     show_input_emoji: Signal<bool>,
@@ -1151,7 +1151,7 @@ fn build_unread_banner_fields(
 
 fn current_self_user_id(
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) -> String {
     let state = app_state.read();
     let cm = client_manager.read();
@@ -1820,7 +1820,7 @@ fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
 #[derive(Clone)]
 struct ChatViewMarkupCtx {
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     channel_id: Option<String>,
     messages: Vec<Message>,
@@ -2123,7 +2123,7 @@ struct MessageListScrollWorkCtx {
     search_query_value: String,
     virtual_window: Signal<MessageVirtualWindowState>,
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     top_edge_armed: Arc<AtomicBool>,
     bottom_edge_armed: Arc<AtomicBool>,
@@ -2659,7 +2659,7 @@ fn ChatHeaderActions(
     header_actions_menu_open: Signal<bool>,
     header_actions_overflow: Signal<bool>,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     mobile_layout_resize_tick: Signal<u64>,
     is_group_channel: bool,
     is_dm_channel: bool,
@@ -3455,7 +3455,7 @@ fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
 
 async fn load_older_messages(
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     history_state: BatchedSignal<ChatHistoryUiState>,
 ) {
@@ -3553,7 +3553,7 @@ async fn load_older_messages(
 
 async fn load_newer_messages(
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     history_state: BatchedSignal<ChatHistoryUiState>,
 ) {
@@ -4420,7 +4420,7 @@ struct ComposerRuntimeCtx {
     show_command_popup: Signal<bool>,
     pending_attachments: Signal<Vec<PendingAttachmentPreview>>,
     reply_target: Signal<Option<MessageReplyPreview>>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     app_state: BatchedSignal<AppState>,
     new_messages_while_scrolled_up: Signal<u32>,
@@ -5824,7 +5824,7 @@ struct SendMessageCtx {
     text: String,
     attachments: Vec<Attachment>,
     reply_to_message_id: Option<String>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     app_state: BatchedSignal<AppState>,
     /// Reset to 0 after sending so the Jump to Present badge clears.
@@ -5993,7 +5993,7 @@ fn MsgContextMenuOverlay(
     let app_state_sig: Signal<crate::state::AppState> = use_context();
     let app_state = app_state_sig.read().clone();
     let last_known_perms = app_state.last_known_perms.clone();
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
 
     // Resolve account_id and channel_id for the delete_message backend call.
     let account_id_for_delete = app_state.nav.active_account_id
@@ -6138,7 +6138,7 @@ fn render_context_menu_danger_item(
     mid_delete: String,
     channel_id: String,
     account_id: String,
-    client_manager: Signal<crate::client_manager::ClientManager>,
+    client_manager: BatchedSignal<crate::client_manager::ClientManager>,
 ) -> Element {
     // Show the delete action if the user owns the message OR has manage_messages.
     let can_delete = is_own

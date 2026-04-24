@@ -248,7 +248,7 @@ fn install_settings_scroll_spy(
 ) {
     #[cfg(target_arch = "wasm32")]
     {
-        let mut app_state = _app_state;
+        let app_state = _app_state;
         let mut active_plugin_slug = _active_plugin_slug;
         let config = SettingsScrollSpyConfig {
             runtime_flag: "__polySettingsScrollSpyInstalled",
@@ -327,7 +327,7 @@ fn SettingsNavigation(
     let filter = search_text.read().to_lowercase();
     let active_plugin = active_plugin_slug.read().clone();
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     // Snapshot the registered plugin settings pages so we don't hold the read
     // guard across the RSX macro expansion.
     let plugin_entries: Vec<_> = client_manager.read().plugin_settings.to_vec();
@@ -423,7 +423,7 @@ fn SettingsNavigation(
 #[component]
 fn SettingsAllSections(search_query: String) -> Element {
     let q = search_query.to_lowercase();
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     // Snapshot plugin settings pages so the read lock is released before RSX.
     let plugin_entries: Vec<_> = client_manager.read().plugin_settings.to_vec();
     rsx! {
@@ -553,7 +553,7 @@ pub fn SettingsPage() -> Element {
     let mut search_text = use_signal(String::new);
     let active_plugin_slug = use_signal(|| None::<String>);
     let nav = use_navigator();
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
 
     // Memo: stabilize plugin_section_ids so scroll spy effect doesn't re-run on every render.
     // Effect only re-runs when plugins actually change, not on unrelated state updates.

@@ -51,7 +51,7 @@ const AUTO_SCROLL_THRESHOLD_PX: f64 = 60.0;
 /// Never call `signal.write().async_method().await` — the `SignalMut` write
 /// guard must never be held across an await boundary.
 pub(crate) async fn toggle_demo(
-    mut client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     app_state: BatchedSignal<AppState>,
 ) {
@@ -95,7 +95,7 @@ pub(crate) async fn toggle_demo(
             // Phase 2: synchronous state writes — batched into the fewest possible
             // `write()` guards to minimise dirty notifications.
             // No `.await` may appear between the first write and the end of this block.
-            client_manager.write().deactivate_demo();
+            client_manager.batch(|cm| cm.deactivate_demo());
             {
                 let new_fav_ids_c = new_fav_ids.clone();
                 let demo_ids_c = demo_ids.clone();
@@ -266,22 +266,20 @@ pub(crate) async fn toggle_demo(
                 ("demo-dog".to_string(), dog_session, dog_handle),
                 ("demo-platypus".to_string(), platypus_session, platypus_handle),
             ];
-            client_manager
-                .write()
-                .commit_demo_activation(entries, server_map);
-
-            // Register the demo settings page in the nav sidebar.
-            // This mirrors what the WASM plugin host does via the `plugin-metadata`
-            // WIT interface — the host calls `register_plugin_settings` so the settings
-            // UI is entirely decoupled from knowing about any specific plugin.
-            client_manager
-                .write()
-                .register_plugin_settings(PluginSettingsEntry {
+            // Batch both sync writes — one guard, one cascade.
+            client_manager.batch(move |cm| {
+                cm.commit_demo_activation(entries, server_map);
+                // Register the demo settings page in the nav sidebar.
+                // This mirrors what the WASM plugin host does via the `plugin-metadata`
+                // WIT interface — the host calls `register_plugin_settings` so the settings
+                // UI is entirely decoupled from knowing about any specific plugin.
+                cm.register_plugin_settings(PluginSettingsEntry {
                     slug: "demo",
                     nav_label_key: "plugin-demo-title",
                     nav_icon: "🧪",
                     render: crate::ui::demo_settings_render_fn,
                 });
+            });
 
             // ── Phase 3: load data from the committed backends ───────────────────────────
             //
@@ -441,7 +439,7 @@ pub(crate) async fn toggle_demo(
 /// inactive — it only touches the `demo-platypus` entry.
 #[cfg(feature = "demo")]
 pub(crate) async fn toggle_demo_forum_on(
-    mut client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     // Guard: bail if platypus is already registered.
@@ -484,12 +482,12 @@ pub(crate) async fn toggle_demo_forum_on(
         .collect();
 
     // Phase 2: commit synchronously (brief write, no await).
-    client_manager.write().commit_backend_account(
-        "demo-platypus".to_string(),
-        session.clone(),
-        handle,
-        server_map,
-    );
+    {
+        let sess = session.clone();
+        client_manager.batch(move |cm| {
+            cm.commit_backend_account("demo-platypus".to_string(), sess, handle, server_map);
+        });
+    }
     chat_data.batch(move |cd| {
         cd.account_sessions.insert("demo-platypus".to_string(), session);
         // Populate servers + favorites.
@@ -524,7 +522,7 @@ pub(crate) fn spawn_event_stream_listener(
     backend: BackendHandle,
     mut app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) {
     use futures::StreamExt as _;
     use poly_client::ClientEvent;

@@ -95,7 +95,7 @@ impl UiAction for ReauthAccountPageAction {
 ///
 /// Used by both the normal per-backend signup flow and the quick test-account panel.
 pub(crate) fn build_on_complete(
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
     build_on_complete_inner(client_manager, chat_data, true)
@@ -107,14 +107,14 @@ pub(crate) fn build_on_complete(
 /// `unreachable`. Auto-signin doesn't need a route change anyway; the user
 /// is already on whatever route they restored to at startup.
 pub(crate) fn build_on_complete_no_nav(
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
     build_on_complete_inner(client_manager, chat_data, false)
 }
 
 fn build_on_complete_inner(
-    mut client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     nav_on_complete: bool,
 ) -> Callback<SignupCompleted> {
@@ -178,12 +178,12 @@ fn build_on_complete_inner(
                 }
             }
             // Phase 2: sync Signal writes — no await while lock is held.
-            client_manager.write().commit_backend_account(
-                account_id.clone(),
-                session.clone(),
-                backend_handle.clone(),
-                server_map,
-            );
+            {
+                let aid = account_id.clone();
+                let sess = session.clone();
+                let bh = backend_handle.clone();
+                client_manager.batch(move |cm| cm.commit_backend_account(aid, sess, bh, server_map));
+            }
             {
                 let aid = account_id.clone();
                 chat_data.batch(move |cd| { cd.account_sessions.insert(aid, session); });
@@ -305,7 +305,7 @@ fn build_on_complete_inner(
 /// 4. Navigates back to the account's natural landing page.
 fn build_on_complete_reauth(
     target_account_id: String,
-    mut client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
     Callback::new(move |completed: SignupCompleted| {
@@ -349,12 +349,12 @@ fn build_on_complete_reauth(
                     }
                 }
             }
-            client_manager.write().commit_backend_account(
-                account_id.clone(),
-                session.clone(),
-                backend_handle.clone(),
-                server_map,
-            );
+            {
+                let aid = account_id.clone();
+                let sess = session.clone();
+                let bh = backend_handle.clone();
+                client_manager.batch(move |cm| cm.commit_backend_account(aid, sess, bh, server_map));
+            }
             {
                 let aid = account_id.clone();
                 chat_data.batch(move |cd| { cd.account_sessions.insert(aid, session); });
@@ -403,10 +403,11 @@ fn build_on_complete_reauth(
 async fn remove_backend_account_now(
     account_id: String,
     backend_slug: String,
-    mut client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
-    let handle = client_manager.write().take_account(&account_id);
+    let aid = account_id.clone();
+    let handle = client_manager.batch(move |cm| cm.take_account(&aid));
     if let Some(h) = handle {
         let mut g = h.write().await;
         let _ = g.logout().await;
@@ -473,7 +474,7 @@ fn navigate_back_to_settings() {
 #[component]
 fn AddAccountNav(selected_slug: Option<String>) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-    let client_manager = use_context::<Signal<ClientManager>>();
+    let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let manager = client_manager.read();
     let disabled = manager.disabled_native_backends.clone();
     let entries: Vec<(String, String, String, String)> = manager
@@ -540,7 +541,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 #[ui_action(inherit)]
 #[component]
 fn TestAccountsPanel() -> Element {
-    let client_manager = use_context::<Signal<ClientManager>>();
+    let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let chat_data = use_context::<BatchedSignal<ChatData>>();
     let on_complete = build_on_complete(client_manager, chat_data);
     let entries: Vec<poly_client::TestAccountEntry> = client_manager
@@ -663,7 +664,7 @@ pub(crate) fn SignupPickerPage() -> Element {
 #[component]
 pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-    let client_manager = use_context::<Signal<ClientManager>>();
+    let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let chat_data      = use_context::<BatchedSignal<ChatData>>();
 
     // Load private key async — hooks must run unconditionally before any returns.
@@ -757,7 +758,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
 #[component]
 fn ReauthNav(backend_slug: String, display_name: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-    let client_manager = use_context::<Signal<ClientManager>>();
+    let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let entry = client_manager
         .read()
         .signup_entries
@@ -803,7 +804,7 @@ pub(crate) fn ReauthAccountPage(
 ) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let _ = instance_id; // carried in the URL for /:backend/:instance_id/:account_id symmetry
-    let client_manager = use_context::<Signal<ClientManager>>();
+    let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let chat_data      = use_context::<BatchedSignal<ChatData>>();
 
     let display_name = chat_data

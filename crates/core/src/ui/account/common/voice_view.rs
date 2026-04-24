@@ -159,7 +159,7 @@ async fn join_voice_channel(
     channel_id: String,
     current_channel: Option<poly_client::Channel>,
     current_server: Option<poly_client::Server>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     mut app_state: BatchedSignal<AppState>,
 ) {
@@ -287,7 +287,7 @@ async fn join_voice_channel(
 #[component]
 pub fn VoiceChannelView() -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
 
     let current_channel = chat_data.read().current_channel.clone();
@@ -588,7 +588,7 @@ fn VoiceJoinButton(
     current_server: Option<poly_client::Server>,
     channel_type: ChannelType,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     app_state: BatchedSignal<AppState>,
 ) -> Element {
     rsx! {

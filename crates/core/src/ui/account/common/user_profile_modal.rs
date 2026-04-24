@@ -108,7 +108,7 @@ fn close_modal(app_state: BatchedSignal<AppState>) {
 pub fn UserProfileModal() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let user = app_state.read().nav.profile_modal_user.clone();
     let Some(user) = user else {
         return rsx! {};

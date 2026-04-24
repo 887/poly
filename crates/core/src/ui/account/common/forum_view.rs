@@ -218,7 +218,7 @@ pub fn ForumView() -> Element {
 pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let mut thread_comments: Signal<Vec<Message>> = use_signal(Vec::new);
     let mut thread_loading: Signal<bool> = use_signal(|| true);

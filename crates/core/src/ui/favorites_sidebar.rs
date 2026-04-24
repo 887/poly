@@ -116,7 +116,7 @@ pub(crate) fn SidebarTooltip(
 pub fn FavoritesBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let current_view = *app_state.read().nav.view;
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let servers = chat_data.read().servers.clone();
@@ -396,7 +396,7 @@ pub fn FavoritesBar() -> Element {
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
 
     // Read connection and presence statuses for this account.
@@ -812,7 +812,7 @@ fn FavoriteServerIcon(
     icon_url: Option<String>,
 ) -> Element {
     let mut app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Get account's connection and presence status
@@ -1092,7 +1092,7 @@ fn FavoriteServerIcon(
 pub async fn load_server_data(
     server_id: String,
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     load_server_data_internal(server_id, app_state, client_manager, chat_data, true).await;
@@ -1101,7 +1101,7 @@ pub async fn load_server_data(
 pub async fn load_server_shell_data(
     server_id: String,
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     load_server_data_internal(server_id, app_state, client_manager, chat_data, false).await;
@@ -1110,7 +1110,7 @@ pub async fn load_server_shell_data(
 async fn load_server_data_internal(
     server_id: String,
     mut app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     auto_select_first_text_channel: bool,
 ) {
@@ -1340,7 +1340,7 @@ pub async fn restore_server_channel(
     server_id: String,
     channel_id: String,
     mut app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Option<String> {
     // One initial cascade so the UI can paint a loading state while we

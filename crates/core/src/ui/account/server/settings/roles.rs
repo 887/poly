@@ -4,6 +4,7 @@
 //! Gated by `BackendCapabilities::has_roles`.
 
 use crate::client_manager::ClientManager;
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::Role;
@@ -15,7 +16,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(none)]
 #[component]
 pub fn RolesTab(server_id: String, account_id: String) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let roles_resource = {
         let server_id = server_id.clone();

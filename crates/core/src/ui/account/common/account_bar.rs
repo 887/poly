@@ -49,7 +49,7 @@ struct AccountBarUserState {
 
 fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> AccountBarUserState {
     let aid = app_state.nav.active_account_id.as_deref();
-    let client_manager = use_context::<Signal<ClientManager>>();
+    let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let cm = client_manager.read();
 
     let conn_class: &'static str = aid
@@ -193,7 +193,7 @@ fn AccountProfilePopup(
     account_id: String,
     on_close: EventHandler<()>,
 ) -> Element {
-    let mut client_manager: Signal<ClientManager> = use_context();
+    let mut client_manager: BatchedSignal<ClientManager> = use_context();
     let options: &[AccountPresence] = &[
         AccountPresence::Online,
         AccountPresence::Away,
@@ -263,7 +263,8 @@ fn AccountProfilePopup(
                                 button {
                                     class: if is_current { "presence-picker-item active" } else { "presence-picker-item" },
                                     onclick: move |_| {
-                                        client_manager.write().presence_statuses.insert(aid.clone(), presence);
+                                        let aid_c = aid.clone();
+                                        client_manager.batch(move |cm| { cm.presence_statuses.insert(aid_c, presence); });
                                         on_close.call(());
                                     },
                                     span { class: "status-dot {css}" }

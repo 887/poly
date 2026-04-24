@@ -337,7 +337,7 @@ fn ServerNode(
     query: String,
     highlight_terms: Vec<String>,
 ) -> Element {
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let q_lower = query.to_lowercase();
 
     let sid = server_id.clone();
@@ -504,7 +504,7 @@ pub fn SearchPage(
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let query = use_signal(String::new);
     let initial_type_seed = app_state.read().search_type_seed.clone();
     let mut enabled_accounts: Signal<std::collections::HashSet<String>> = use_signal(|| {

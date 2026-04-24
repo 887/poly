@@ -2,6 +2,7 @@
 //! row fetches `get_view_detail` for the selected row id.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::state::BatchedSignal;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
 use dioxus::prelude::*;
@@ -29,7 +30,7 @@ impl UiAction for ClientViewSplitAction {
 #[component]
 pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Element {
     let _ = spec;
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let rows_res: Resource<Result<ViewRowsPage, ClientError>> = {
         let account_id = account_id.clone();

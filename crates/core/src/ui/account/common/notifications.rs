@@ -193,7 +193,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
 
     // Detect whether the active account's stored token is rejected (401).
     // Only surface the reauth CTA in that case — hidden otherwise.
-    let client_manager_sig: Signal<ClientManager> = use_context();
+    let client_manager_sig: BatchedSignal<ClientManager> = use_context();
     let needs_reauth = client_manager_sig
         .read()
         .connection_statuses
@@ -361,7 +361,7 @@ fn NotificationFilter(
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     rsx! {
         div { class: "notification-list",
@@ -409,7 +409,7 @@ fn NotificationItemContent(
     preview: String,
     time_ago: String,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) -> Element {
     let (kind_icon, kind_label) = match &kind {
         NotificationKind::Mention { .. } => ("💬", "Mention"),
@@ -649,7 +649,7 @@ fn format_time_ago(ts: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 async fn handle_friend_request_action(
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     account_id: String,
     user_id: String,

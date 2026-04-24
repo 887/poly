@@ -37,6 +37,7 @@
 //! open and close the currently-focused submenu.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
@@ -106,7 +107,7 @@ pub fn ClientMenu(
     target_id: String,
     account_id: String,
 ) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // D24: fresh fetch on every mount.
     let items_res = {
@@ -596,7 +597,7 @@ async fn dispatch_action(
     target: MenuTargetKind,
     target_id: String,
 ) {
-    let client_manager: Signal<ClientManager> = match try_consume_context() {
+    let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
         Some(cm) => cm,
         None => {
             tracing::warn!("ClientMenu: no ClientManager in context during dispatch");

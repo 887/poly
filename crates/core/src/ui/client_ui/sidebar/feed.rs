@@ -39,7 +39,7 @@ const FEEDS: &[(&str, &str)] = &[
 #[component]
 pub fn FeedLayout() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     // Track which feed the user selected most recently. Used only for
     // visual feedback; the routing side-effect is driven by the
     // `invoke_sidebar_action` → `ActionOutcome::Navigate` path.
@@ -100,7 +100,7 @@ pub fn FeedLayout() -> Element {
 /// Invoke `invoke_sidebar_action` on the backend and route the outcome
 /// through the shared [`handle_action_outcome`] handler.
 async fn dispatch_feed_action(
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     account_id: String,
     action_id: String,
 ) {

@@ -16,6 +16,7 @@
 
 use super::list_body::{fetch_first_page, parse_score_meta, score_class, ViewRowDetail};
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::state::BatchedSignal;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{Cursor, TreeSpec, ViewRow};
@@ -192,7 +193,7 @@ pub fn TreeBody(
                                     let cursor = next_cursor.read().clone();
                                     loading_more.set(true);
                                     spawn(async move {
-                                        let client_manager: Signal<ClientManager> = match try_consume_context() {
+                                        let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
                                             Some(cm) => cm,
                                             None => {
                                                 loading_more.set(false);

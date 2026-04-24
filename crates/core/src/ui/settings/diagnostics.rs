@@ -7,6 +7,7 @@
 //! This component MUST stay under 150 lines. Extract sub-components if needed.
 
 use crate::client_manager::ClientManager;
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
@@ -18,7 +19,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[ui_action(None)]
 #[component]
 pub fn DiagnosticsPage() -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let account_ids: Vec<String> = client_manager
         .read()
@@ -73,7 +74,7 @@ pub fn DiagnosticsPage() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn AccountDiagnosticsRow(account_id: String) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let conn = client_manager
         .read()

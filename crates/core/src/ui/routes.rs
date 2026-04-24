@@ -977,7 +977,7 @@ fn restore_dm_chat(
     dm_id: String,
     account_id: String,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) {
     let already_set = chat_data
         .read()
@@ -1248,7 +1248,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let dm_id_for_pending = dm_id.clone();
     let account_id_for_pending = account_id.clone();
 
@@ -1387,7 +1387,7 @@ fn DmPendingCallInner(
     allow_add_to_active_temporary: bool,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let dm_id_for_effect = dm_id.clone();
     let account_id_for_effect = account_id.clone();
 
@@ -1426,7 +1426,7 @@ fn DmMediaViewerRoute(
     attachment_index: usize,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let overlay_channel_id = dm_id.clone();
     let overlay_message_id = message_id.clone();
     let dm_id_for_effect = dm_id.clone();
@@ -1466,7 +1466,7 @@ fn ServerMediaViewerRoute(
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
     let overlay_channel_id = channel_id.clone();
     let overlay_message_id = message_id.clone();
@@ -1580,7 +1580,7 @@ fn ServerHome(
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // URL-restore: server data is absent after a hard reload. Load it now.
     //
@@ -1682,7 +1682,7 @@ fn ServerChat(
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
     let route_channel_id = channel_id.clone();
     // `use_spawn_once` keys on the URL channel id and refuses to re-spawn
@@ -2050,7 +2050,7 @@ fn ChannelSettingsRoute(
 #[ui_action(inherit)]
 #[component]
 fn Root() -> Element {
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     use_effect(move || {
         let cm = client_manager.read();
         if cm.demo_active {

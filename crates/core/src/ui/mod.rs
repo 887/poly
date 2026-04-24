@@ -1417,7 +1417,7 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 /// ## Context provided to children
 /// - `Signal<String>` — current locale (from [`crate::i18n::provide_locale_context`])
 /// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
-/// - `Signal<ClientManager>` — client manager for active backends
+/// - `BatchedSignal<ClientManager>` — client manager for active backends
 /// - `BatchedSignal<ChatData>` — reactive chat data store
 #[rustfmt::skip]
 #[ui_action(None)]

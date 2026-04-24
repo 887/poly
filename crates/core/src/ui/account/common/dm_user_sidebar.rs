@@ -44,7 +44,7 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 pub fn DmUserSidebar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let members = if chat_data.read().members.is_empty() {
         chat_data.read().active_group_members.clone()
@@ -99,7 +99,7 @@ fn DmMemberRow(
     group_id: String,
     account_id: String,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     app_state: BatchedSignal<AppState>,
 ) -> Element {
     let color = user_color(&member.id);
@@ -160,7 +160,7 @@ async fn remove_member(
     group_id: String,
     user_id: String,
     account_id: String,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     let Some(backend) = client_manager.read().get_backend(&account_id) else {

@@ -70,7 +70,7 @@ fn group_last_incoming_timestamp(
 /// Load messages, members, and voice participants for a channel.
 async fn load_channel_data(
     channel_id: String,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     app_state: BatchedSignal<AppState>,
 ) {
@@ -170,7 +170,7 @@ async fn load_channel_data(
 async fn load_dm_messages(
     channel_id: String,
     account_id: String,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     tracing::info!(
@@ -251,7 +251,7 @@ fn activate_dm_channel(
     instance_id: String,
     mut app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
     tracing::info!(
@@ -307,7 +307,7 @@ pub(crate) fn open_direct_message_from_active_account(
     user_id: String,
     app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
     tracing::info!(user_id = %user_id, "open_direct_message_from_active_account: start");
@@ -837,7 +837,7 @@ fn DMFriendsView() -> Element {
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let _client_manager: Signal<ClientManager> = use_context();
+    let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let channels = chat_data.read().channels.clone();
@@ -1112,7 +1112,7 @@ fn DMChannelItem(
     use poly_client::PresenceStatus;
     let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let color = user_color(&user_id);
     let first_char: String = display_name
@@ -1209,7 +1209,7 @@ fn GroupChannelItem(
 ) -> Element {
     let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let display_name = group_name.unwrap_or_else(|| {
         members
@@ -1277,7 +1277,7 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
 
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
 
     let color = user_color(&user_id);
@@ -1358,7 +1358,7 @@ fn CategorySection(
 fn ChannelItemRow(channel: Channel) -> Element {
     let mut app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let selected_channel = app_state.read().nav.selected_channel.clone();
     let ch_id = channel.id.clone();

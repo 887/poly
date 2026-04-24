@@ -48,7 +48,7 @@ impl UiAction for DemoPluginSettingsAction {
 #[component]
 pub fn DemoPluginSettings() -> Element {
     let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let demo_active = client_manager.read().demo_active;
 

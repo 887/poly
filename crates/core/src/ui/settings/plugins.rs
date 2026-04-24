@@ -373,7 +373,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 #[context_menu(none)]
 #[component]
 pub fn PluginsSettings() -> Element {
-    let mut client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
 
@@ -456,17 +456,17 @@ pub fn PluginsSettings() -> Element {
                                                 let bt = backend_type;
                                                 // Phase 1 (sync): take handles + clear
                                                 // ClientManager state. No await held.
+                                                let bt_c = bt.clone();
                                                 let (removed_ids, handles) = client_manager
-                                                    .write()
-                                                    .take_accounts_by_backend(bt.clone());
+                                                    .batch(move |cm| cm.take_accounts_by_backend(bt_c));
                                                 let backend_slug = bt.slug().to_string();
                                                 // Update local disabled signal immediately for
                                                 // instant UI feedback.
                                                 disabled.write().push(toggled.clone());
                                                 let new_disabled = disabled.read().clone();
+                                                let nd = new_disabled.clone();
                                                 client_manager
-                                                    .write()
-                                                    .set_disabled_native_backends(new_disabled.clone());
+                                                    .batch(move |cm| cm.set_disabled_native_backends(nd));
                                                 let wasm = wasm_plugins.read().clone();
                                                 spawn(async move {
                                                     // Phase 2: async logout (no signal lock).
@@ -539,9 +539,9 @@ pub fn PluginsSettings() -> Element {
                                             // Toggling ON — re-enable the backend option.
                                             disabled.write().retain(|s| s != &toggled);
                                             let new_disabled = disabled.read().clone();
+                                            let nd = new_disabled.clone();
                                             client_manager
-                                                .write()
-                                                .set_disabled_native_backends(new_disabled.clone());
+                                                .batch(move |cm| cm.set_disabled_native_backends(nd));
                                             let wasm = wasm_plugins.read().clone();
                                             spawn(async move {
                                                 let mut s = load_settings().await;

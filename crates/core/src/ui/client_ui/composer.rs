@@ -13,6 +13,7 @@
 //! items in the surrounding chat view continue to work.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::ui::account::server::context_menu::ContextMenuItem;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -104,7 +105,7 @@ pub fn ComposerHooks(
     channel_id: String,
     slot: ComposerSlot,
 ) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let buttons_res = {
         let account_id = account_id.clone();
@@ -211,7 +212,7 @@ pub fn MessageActions(
     channel_id: String,
     message_id: String,
 ) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let items_res = {
         let account_id = account_id.clone();
@@ -311,7 +312,7 @@ fn render_message_action_item(
 // ─── Dispatch helpers ───────────────────────────────────────────────
 
 async fn invoke_composer(account_id: &str, action_id: &str, channel_id: &str) {
-    let client_manager: Signal<ClientManager> = match try_consume_context() {
+    let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
         Some(cm) => cm,
         None => {
             tracing::warn!("ComposerHooks: no ClientManager in context during dispatch");
@@ -344,7 +345,7 @@ async fn invoke_message(
     channel_id: &str,
     message_id: &str,
 ) {
-    let client_manager: Signal<ClientManager> = match try_consume_context() {
+    let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
         Some(cm) => cm,
         None => {
             tracing::warn!("MessageActions: no ClientManager in context during dispatch");
@@ -380,7 +381,7 @@ async fn invoke_message(
 fn dispatch_outcome(
     account_id: &str,
     outcome: Result<ActionOutcome, ClientError>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) {
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
         tracing::info!(

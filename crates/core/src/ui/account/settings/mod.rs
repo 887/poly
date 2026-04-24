@@ -22,6 +22,7 @@ mod notifications;
 mod profile;
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::client_ui::PluginSettingsSection;
@@ -248,7 +249,7 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
         use_resource(move || {
             let account_id = account_id.clone();
             async move {
-                let client_manager: Signal<ClientManager> = match try_consume_context() {
+                let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
                     Some(cm) => cm,
                     None => return Vec::<PluginSettingsSectionData>::new(),
                 };

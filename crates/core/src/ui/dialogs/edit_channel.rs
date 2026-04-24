@@ -38,7 +38,7 @@ pub fn EditChannelDialog(
     // Teams only supports name + description — hide slow-mode and nsfw entirely.
     let show_slowmode = backend_slug != "teams";
 
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let mut app_state: BatchedSignal<AppState> = use_context();
 
     rsx! {

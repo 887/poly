@@ -40,7 +40,7 @@ fn repo_action_id(repo_id: &str, tab_suffix: &str) -> String {
 #[component]
 pub fn RepoTreeLayout() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let account_id = app_state.read().nav.active_account_id.cloned();
 
@@ -128,7 +128,7 @@ pub fn RepoTreeLayout() -> Element {
 fn RepoTabs(
     repo_id: String,
     account_id: Option<String>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) -> Element {
     rsx! {
         ul { class: "repo-tree-tabs",
@@ -164,7 +164,7 @@ fn RepoTabs(
 }
 
 async fn dispatch_repo_action(
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     account_id: String,
     action_id: String,
 ) {

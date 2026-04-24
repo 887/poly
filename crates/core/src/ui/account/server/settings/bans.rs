@@ -4,6 +4,7 @@
 //! Gated by `BackendCapabilities::has_ban`.
 
 use crate::client_manager::ClientManager;
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_client::BannedMember;
@@ -15,7 +16,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(none)]
 #[component]
 pub fn BansTab(server_id: String, account_id: String) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let bans_resource = {
         let server_id = server_id.clone();
@@ -64,7 +65,7 @@ fn render_ban_row(
     ban: BannedMember,
     server_id: String,
     account_id: String,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     mut bans_resource: Resource<Result<Vec<BannedMember>, String>>,
 ) -> Element {
     let mut unban_error = use_signal(String::new);

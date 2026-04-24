@@ -220,7 +220,7 @@ pub fn ListBody(
                                     let cursor = next_cursor.read().clone();
                                     loading_more.set(true);
                                     spawn(async move {
-                                        let client_manager: Signal<ClientManager> = match try_consume_context() {
+                                        let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
                                             Some(cm) => cm,
                                             None => {
                                                 loading_more.set(false);
@@ -397,7 +397,7 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn ViewRowDetail(channel_id: String, account_id: String, row_id: String) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let detail_res: Resource<Result<ViewDetail, ClientError>> = {
         let account_id = account_id.clone();
         let channel_id = channel_id.clone();
@@ -762,7 +762,7 @@ pub(super) fn fetch_first_page(
     filter_id: Option<String>,
     tab_id: Option<String>,
 ) -> Resource<Result<ViewRowsPage, ClientError>> {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     use_resource(move || {
         let account_id = account_id.clone();
         let channel_id = channel_id.clone();

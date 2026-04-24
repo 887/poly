@@ -38,7 +38,7 @@ pub fn TimeoutMemberDialog(
     let mut error_msg = use_signal(String::new);
     let mut success = use_signal(|| false);
 
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let mut app_state: BatchedSignal<AppState> = use_context();
 
     let title = t("dialog-timeout-title")

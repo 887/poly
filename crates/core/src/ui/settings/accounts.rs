@@ -138,7 +138,7 @@ fn AccountRow(
 #[component]
 pub(super) fn AccountsSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let _chat_data: BatchedSignal<ChatData> = use_context();
 
     let account_ids = client_manager.read().active_account_ids();

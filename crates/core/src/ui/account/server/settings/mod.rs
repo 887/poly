@@ -289,7 +289,7 @@ fn ServerSettingsContent(
         use_resource(move || {
             let account_id = account_id.clone();
             async move {
-                let client_manager: Signal<ClientManager> = match try_consume_context() {
+                let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
                     Some(cm) => cm,
                     None => return Vec::<PluginSettingsSectionData>::new(),
                 };
@@ -574,7 +574,7 @@ pub fn ServerSettingsPage(
         use_resource(move || {
             let account_id = account_id.clone();
             async move {
-                let client_manager: Signal<ClientManager> = match try_consume_context() {
+                let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
                     Some(cm) => cm,
                     None => return Vec::<String>::new(),
                 };

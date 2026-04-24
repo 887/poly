@@ -30,7 +30,7 @@ pub fn OutgoingDirectCallOverlay(
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     #[cfg(not(target_arch = "wasm32"))]
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
 
     let target_user = chat_data

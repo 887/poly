@@ -28,6 +28,7 @@ pub use toolbar::ViewToolbar;
 pub use tree_body::TreeBody;
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::state::BatchedSignal;
 use dioxus::prelude::*;
 use poly_client::{ClientError, ViewBody, ViewDescriptor};
 use poly_ui_macros::{context_menu, ui_action};
@@ -38,7 +39,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn ClientView(channel_id: String, account_id: String) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let desc_res = {
         let account_id = account_id.clone();

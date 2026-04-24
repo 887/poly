@@ -19,7 +19,7 @@ use poly_ui_macros::{context_menu, ui_action};
 pub fn NewConversationView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
 
     let mut search_filter = use_signal(String::new);

@@ -49,7 +49,7 @@ impl crate::ui::actions::UiAction for PolyProfileSettingsAction {
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let mut client_manager: Signal<ClientManager> = use_context();
+    let mut client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Read session info for display name and avatar.
     let (display_name, avatar_url, first_char, color) = {
@@ -140,7 +140,8 @@ pub fn PolyProfileSettings(account_id: String) -> Element {
                                 button {
                                     class: if is_selected { "profile-status-option profile-status-selected" } else { "profile-status-option" },
                                     onclick: move |_| {
-                                        client_manager.write().presence_statuses.insert(aid.clone(), presence);
+                                        let aid_c = aid.clone();
+                                        client_manager.batch(move |cm| { cm.presence_statuses.insert(aid_c, presence); });
                                     },
                                     span { class: "status-dot {css}" }
                                     span { "{label}" }

@@ -154,7 +154,7 @@ pub fn ViewThreadButton(
 #[component]
 pub fn ActiveThreadsBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let server_id = chat_data
@@ -262,7 +262,7 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
 #[component]
 pub fn ThreadPanel() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let thread_id = app_state.read().nav.thread_panel_open.clone();
     let Some(thread_id) = thread_id else {
@@ -429,7 +429,7 @@ fn ThreadMessageRow(message: Message) -> Element {
 #[component]
 pub fn ThreadFullView(thread_id: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
 
     // Resolve channel metadata.

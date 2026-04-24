@@ -209,7 +209,7 @@ fn FriendsFilterBar(
 fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
     let message_label = t("friends-management-message");
     let is_demo = backend_slug == "demo" || backend_slug == "demo_forum";

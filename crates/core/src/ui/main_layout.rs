@@ -212,7 +212,7 @@ fn NavBar() -> Element {
 #[component]
 pub fn MainLayout() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // DECISION(DX-ROUTER-3): Dioxus 0.7 web router does not fire on_update for the
     // initial browser URL when the Router component first mounts — only for subsequent

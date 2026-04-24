@@ -64,7 +64,7 @@ async fn resolve_direct_message_for_active_account(
     user_id: String,
     app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) -> Option<(DmChannel, String)> {
     let (account_id, instance_id) = active_account_context(app_state, chat_data)?;
 
@@ -111,7 +111,7 @@ pub(crate) fn navigate_to_pending_direct_call_from_active_account(
     request: DirectCallRequest,
     app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
     spawn(async move {
@@ -328,7 +328,7 @@ pub(crate) fn start_direct_call_from_active_account(
     request: DirectCallRequest,
     app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) {
     spawn(async move {
         let _ = document::eval(JS_REQUEST_AUDIO_PERMISSION)

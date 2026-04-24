@@ -295,7 +295,7 @@ enum ResetKind {
 // backends can be logged out before storage is wiped.
 async fn run_reset_flow(
     kind: ResetKind,
-    mut client_manager: Signal<crate::client_manager::ClientManager>,
+    mut client_manager: BatchedSignal<crate::client_manager::ClientManager>,
     chat_data: BatchedSignal<crate::state::ChatData>,
     app_state: BatchedSignal<AppState>,
 ) -> Result<(), String> {
@@ -309,7 +309,7 @@ async fn run_reset_flow(
             }
         }
     }
-    client_manager.write().clear_all_backends();
+    client_manager.batch(|cm| cm.clear_all_backends());
 
     chat_data.batch(|cd| *cd = crate::state::ChatData::default());
     let nav = crate::state::NavigationState {
@@ -347,7 +347,7 @@ async fn run_reset_flow(
 #[component]
 fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let mut busy_signal = use_signal(|| *busy.read());
 

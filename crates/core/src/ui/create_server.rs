@@ -47,7 +47,7 @@ pub(crate) fn CreateServerPage(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let mut server_name = use_signal(String::new);
@@ -137,7 +137,7 @@ pub(crate) fn CreateServerPage(
 
 /// Bundle of mutable signals passed to the create-server async task.
 struct CreateSignals {
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     creating: Signal<bool>,
     error_msg: Signal<String>,
@@ -173,9 +173,9 @@ fn do_create_server(
             Ok(server) => {
                 let server_id = server.id.clone();
                 // Register so load_server_data can match backend.
-                client_manager
-                    .write()
-                    .register_server(server_id.clone(), account_id.clone());
+                let sid = server_id.clone();
+                let aid = account_id.clone();
+                client_manager.batch(move |cm| cm.register_server(sid, aid));
                 // Only add to servers, NOT to favorited_server_ids.
                 chat_data.batch(move |cd| cd.servers.push(server));
                 creating.set(false);

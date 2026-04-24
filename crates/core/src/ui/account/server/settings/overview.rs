@@ -168,7 +168,7 @@ fn BannerPanel(
     account_id: String,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let mut url_input = use_signal(|| initial_url);
     let mut saved = use_signal(|| false);
     let preview_url = url_input.read().clone();

@@ -24,7 +24,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
     let chat_data = use_context::<BatchedSignal<ChatData>>();
-    let client_manager = use_context::<Signal<crate::client_manager::ClientManager>>();
+    let client_manager = use_context::<BatchedSignal<crate::client_manager::ClientManager>>();
 
     let (channel_id, server_id) = {
         let cd = chat_data.read();

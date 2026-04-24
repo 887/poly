@@ -52,7 +52,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn ClientSidebar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Resolve the current account. `active_account_id` is populated by the
     // router's `on_update`. When we're on a DM / friends / app-level route

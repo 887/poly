@@ -21,6 +21,7 @@
 //! `invoke_*_action` future only — the handler itself schedules its own
 //! async work via `spawn` and returns immediately.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager};
 use crate::nav;
 use crate::ui::client_ui::toast::{
@@ -49,7 +50,7 @@ pub struct ActionOutcomeCx {
     /// Per-surface refresh counter (optional).
     pub refresh_target: Option<Signal<u32>>,
     /// Needed to call `poll_action` on the backend.
-    pub client_manager: Signal<ClientManager>,
+    pub client_manager: BatchedSignal<ClientManager>,
     /// Account whose backend invoked the action.
     pub account_id: String,
 }

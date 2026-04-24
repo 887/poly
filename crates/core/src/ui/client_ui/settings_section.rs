@@ -28,6 +28,7 @@
 //! plugin-declared panels match the host-owned panels visually.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::state::BatchedSignal;
 use crate::i18n::{has_key, t};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::toast::{push_toast, ToastMessage};
@@ -179,7 +180,7 @@ fn PluginSettingField(
     scope: SettingsScope,
     scope_id: String,
 ) -> Element {
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let field_key = field.key.clone();
     // Resolve both FTL keys through the host i18n store. `t()` returns the
@@ -477,7 +478,7 @@ fn render_info_label(label_key: String, desc_opt: Option<String>, current_json: 
 
 /// Load the current JSON-encoded value for a single field via the plugin.
 async fn load_value(
-    client_manager: &Signal<ClientManager>,
+    client_manager: &BatchedSignal<ClientManager>,
     account_id: &str,
     scope: SettingsScope,
     scope_id: &str,
@@ -506,7 +507,7 @@ async fn save_value(
     key: &str,
     value_json: &str,
 ) {
-    let client_manager: Signal<ClientManager> = match try_consume_context() {
+    let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {
         Some(cm) => cm,
         None => {
             tracing::warn!(
@@ -556,7 +557,7 @@ async fn save_value(
 }
 
 fn resolve_backend(
-    client_manager: &Signal<ClientManager>,
+    client_manager: &BatchedSignal<ClientManager>,
     account_id: &str,
 ) -> Result<Arc<RwLock<Box<dyn ClientBackend>>>, ClientError> {
     client_manager

@@ -242,7 +242,7 @@ fn AccountServerIcon(
     icon_url: Option<String>,
 ) -> Element {
     let mut app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
