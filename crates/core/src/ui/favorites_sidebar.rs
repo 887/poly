@@ -636,11 +636,16 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 }
 
                 // Clear server/channel state — the target route will reload what's needed.
-                chat_data.write().current_server = None;
-                chat_data.write().current_channel = None;
-                chat_data.write().channels.clear();
-                chat_data.write().messages.clear();
-                chat_data.write().members.clear();
+                // Batch into one write guard so only a single Dioxus re-render cascade
+                // is scheduled (5 separate writes → 5 cascades → WASM scheduler freeze).
+                {
+                    let mut cd = chat_data.write();
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
+                }
 
                 // If we have a stored last route for this account, restore it.
                 // This makes account-switching feel like a true tab switch.

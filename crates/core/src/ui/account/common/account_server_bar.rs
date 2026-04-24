@@ -459,11 +459,14 @@ fn AccountBarDmsButton(
                 if current_view == View::DmsFriends {
                     return;
                 }
-                chat_data.write().current_server = None;
-                chat_data.write().current_channel = None;
-                chat_data.write().channels.clear();
-                chat_data.write().messages.clear();
-                chat_data.write().members.clear();
+                {
+                    let mut cd = chat_data.write();
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
+                }
                 navigator()
                     .push(Route::DmsHome {
                         backend: backend_slug.clone(),
@@ -502,11 +505,14 @@ fn AccountBarFriendsButton(
                 if current_view == View::Friends {
                     return;
                 }
-                chat_data.write().current_server = None;
-                chat_data.write().current_channel = None;
-                chat_data.write().channels.clear();
-                chat_data.write().messages.clear();
-                chat_data.write().members.clear();
+                {
+                    let mut cd = chat_data.write();
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
+                }
                 crate::nav!(Route::FriendsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
